@@ -9,153 +9,342 @@
 [![License][license-shield]](LICENSE)
 [![hacs][hacsbadge]][hacs]
 
-**Turn your solar panels, battery, and EV charger into one intelligent system.**
+**Intelligent solar energy orchestration for Home Assistant** — maximize self-consumption, manage EV charging, and track energy costs automatically.
 
-SEM automatically maximizes your solar self-consumption, dynamically controls EV charging current, coordinates battery and EV priorities, and protects you from peak demand charges — all running locally inside Home Assistant. No cloud, no subscription.
+SEM monitors your solar production, battery, grid, and EV charger every 10 seconds and distributes surplus power across your devices by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
+
+![SEM Dashboard Overview](docs/images/sem_dashboard_overview.png)
+
+<p align="center">
+  <img src="docs/images/sem_system_diagram_animated.gif" alt="System Diagram Animation" width="400">
+</p>
 
 ---
 
-## What SEM Does That Home Assistant Doesn't
+## Features
 
-Home Assistant's Energy Dashboard shows you data. **SEM acts on it.**
+- **Smart EV charging** — dynamic 6-32A current control based on real-time solar surplus
+- **Three charging modes** — pure solar, Min+PV (guaranteed minimum + solar top-up), overnight grid charging
+- **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
+- **Night charging with battery protection** — charges EV from grid overnight without draining home battery
+- **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority
+- **Peak load management** — automatic device shedding to stay under your grid limit
+- **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
+- **Dynamic tariff support** — Tibber, Nordpool, aWATTar price-responsive charging
+- **70+ sensors** — power, energy, flows, costs, performance, forecasts, and more
+- **Built-in dashboard** — glassmorphism dark theme with animated system diagram, Sankey, and native HA energy cards
+- **PV performance analytics** — specific yield, forecast accuracy, degradation tracking
+- **Smart recommendations** — forecast-aware tips ("Best window for appliances: 11:00-14:00", "Low solar tomorrow — charge EV tonight")
+- **Push notifications** — battery full, daily summary, forecast alerts, EV charging events (with spam cooldown)
+- **Brand icons** — native HA 2026.3+ brand support (no submission to home-assistant/brands needed)
 
-| Problem | SEM Solution |
+---
+
+## Installation
+
+### Via HACS (Recommended)
+
+1. Open **HACS** > **Integrations** > **Custom repositories**
+2. Add `https://github.com/traktore-org/sem-community` as an **Integration**
+3. Search for **Solar Energy Management** and click **Download**
+4. **Restart Home Assistant**
+
+### Manual Installation
+
+1. Download the [latest release](https://github.com/traktore-org/sem-community/releases)
+2. Copy the `custom_components/solar_energy_management/` folder to your Home Assistant `config/custom_components/` directory
+3. **Restart Home Assistant**
+
+---
+
+## Prerequisites
+
+Before setting up SEM, make sure you have:
+
+- **Home Assistant 2024.1.0** or newer
+- **Energy Dashboard configured** — SEM reads your solar and grid sensors from the HA Energy Dashboard (Settings > Energy). You need at least:
+  - A solar production sensor (W)
+  - A grid consumption sensor (W)
+- **Optional but recommended:**
+  - Battery SOC (%) and power (W) sensors
+  - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, etc.)
+  - [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar) or [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) for solar forecasts
+  - Tibber, Nordpool, or aWATTar integration for dynamic tariffs
+
+---
+
+## Setup
+
+### Step 1: Add the Integration
+
+1. Go to **Settings** > **Devices & Services** > **Add Integration**
+2. Search for **Solar Energy Management**
+3. Follow the setup wizard
+
+### Step 2: Energy Dashboard Verification
+
+SEM auto-detects your solar, grid, and battery sensors from the HA Energy Dashboard. If they are not configured yet, the wizard will ask you to set up the Energy Dashboard first.
+
+SEM also uses the Energy Dashboard's import/export energy counters to automatically detect your grid power sensor's sign convention — no manual configuration needed. This works with all inverter brands (Huawei, SolarEdge, Fronius, etc.).
+
+### Step 3: EV Charger Configuration
+
+Select the sensors for your EV charger:
+
+| Setting | Description |
 |---------|-------------|
-| EV charges from grid even when solar is available | **Solar EV charging** — dynamically adjusts current (6-32A) to match real-time surplus |
-| Battery and EV compete for solar | **4-zone SOC strategy** — battery charges first to priority level, then EV gets surplus |
-| Night charging wastes money when tomorrow is sunny | **Forecast reduction** — checks tomorrow's solar forecast and reduces overnight grid charging |
-| Grid demand peaks cause expensive charges | **Peak shaving** — tracks 15-min rolling average, sheds devices before exceeding limit |
-| Solar surplus goes to grid at low feed-in rates | **Surplus distribution** — routes excess power to EV, heat pump, hot water by priority |
-| No visibility into real savings | **Cost tracking** — daily/monthly costs, savings, export revenue in your local currency |
+| Connected sensor | Binary sensor showing if the EV is plugged in |
+| Charging sensor | Binary sensor showing if charging is active |
+| Charging power sensor | Power sensor (W) for current charging power |
+| Charger service | Service to set charging current (e.g., `keba.set_current`) |
+| Total energy sensor | Cumulative energy sensor (kWh) — optional |
+
+SEM supports any charger that exposes these sensors in HA: KEBA, Wallbox Pulsar, go-eCharger, Easee, Tesla Wall Connector, Zaptec, OpenWB, Myenergi Zappi, ChargePoint, Heidelberg.
+
+### Step 4: Notifications (Optional)
+
+- **KEBA display messages** — show charging status on the charger's built-in display
+- **Mobile notifications** — push notifications via HA Companion App
+
+### Step 5: Optimization Settings
+
+Key settings you can adjust (all have sensible defaults):
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Update interval | 10s | How often SEM reads sensors and adjusts |
+| Daily EV target | 10 kWh | How much energy to charge overnight |
+| Battery priority SOC | 30% | Below this, all solar goes to battery first |
+| Battery buffer SOC | 70% | Above this, battery can help charge the EV |
+| Battery auto-start SOC | 90% | Above this, EV starts even without solar surplus |
+| Min solar power | 500W | Minimum surplus before solar EV charging starts |
+| Observer mode | Off | Read-only mode for test systems (no hardware control) |
+
+For detailed explanations of all settings, see the [User Guide](USER_GUIDE.md).
+
+### Step 6: Load Management (Optional)
+
+Enable peak load management if your utility bills based on peak demand:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Target peak limit | 5 kW | SEM sheds loads above this threshold |
+| Warning level | — | Early warning threshold |
+| Emergency level | — | All non-critical loads shed |
+
+![SEM Integration Page](docs/images/sem_integration.png)
 
 ---
 
-## Key Features
+## User Controls
 
-### Smart EV Charging
-SEM reads your solar production every 10 seconds and adjusts the EV charging current between 6A and 32A to match the available surplus. When clouds pass, charging pauses. When sun returns, it resumes. No manual intervention needed.
+SEM is designed to be mostly automatic. There are only 3 switches to manage:
 
-- **Solar mode** — pure solar surplus charging during the day
-- **Night mode** — grid charging during off-peak hours with configurable window
-- **Battery assist** — when battery is above buffer SOC, it supplements solar through cloudy moments
-- **Forecast reduction** — if tomorrow's forecast is sunny, tonight's grid charge target is reduced
-
-### Battery-EV Coordination
-The 4-zone SOC model ensures your battery and EV work together, not against each other:
-
-| Zone | SOC Range | What Happens |
-|------|-----------|-------------|
-| **Priority** | 0% → 80% | Battery charges first, EV waits |
-| **Buffer** | 80% → 70% | EV gets solar, battery assists through clouds |
-| **Normal** | 70% → 30% | Standard solar operation |
-| **Protection** | Below 20% | EV pauses to protect battery |
-
-All thresholds are configurable.
-
-### Peak Load Management
-SEM tracks your 15-minute rolling grid import average and automatically sheds non-critical loads before you exceed your contractual limit. Drag-and-drop device priority ordering — critical devices are never shed.
-
-### 3 Switches, Everything Else Automatic
-| Switch | Default | What It Does |
+| Switch | Default | What it does |
 |--------|---------|-------------|
-| `switch.sem_night_charging` | ON | Grid-charge EV overnight to daily target |
-| `switch.sem_observer_mode` | OFF | Read-only — monitors but doesn't control hardware |
-| `switch.sem_forecast_night_reduction` | OFF | Reduce night target when tomorrow is sunny |
+| `switch.sem_night_charging` | ON | Enable/disable overnight grid charging |
+| `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware |
+| `switch.sem_forecast_night_reduction` | OFF | Reduce night charging target based on tomorrow's solar forecast |
+
+Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.
+
+---
+
+## Charging Modes
+
+### Solar Charging (default)
+
+During the day, SEM dynamically adjusts the EV charging current (6-32A) to match real-time solar surplus. If surplus drops below the minimum threshold, charging pauses until surplus returns. The battery's SOC determines how aggressively SEM uses stored energy to help the EV (see [User Guide — SOC Zones](USER_GUIDE.md#soc-zone-strategy)).
+
+### Min+PV (Minimum + Solar)
+
+Guarantees a minimum charging current (6A) from the grid and adds solar surplus on top. Use this when you need the car charged by a deadline but still want to maximize solar usage.
+
+Set via integration options: `ev_charging_mode = "minpv"`.
+
+### Night Charging
+
+Overnight grid charging starts automatically after sunset. SEM charges at a peak-managed rate to avoid demand spikes and stops when the daily EV target is reached. Battery discharge protection prevents the home battery from powering the EV overnight.
+
+Enable/disable with `switch.sem_night_charging`.
+
+### Battery-Assisted Charging
+
+When the battery SOC is above the buffer threshold (default 70%), SEM supplements solar with battery power to maintain EV charging during cloudy moments. This is automatic — no switch needed.
+
+---
+
+## Dashboard
+
+SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark theme:
+
+| View | Description |
+|------|-------------|
+| **Home** | Animated system diagram with device nodes, solar summary card, 7-day chart, weather, smart recommendations |
+| **Energy** | Sankey diagram, self-consumption/autarky gauges, donut chart, 24h power, CO2 avoided, trees saved |
+| **Battery** | SOC radial gauge, 24h charge/discharge chart, zone configuration |
+| **EV** | Charging status, session stats, solar share gauge, lifetime totals |
+| **Control** | Load priority drag-and-drop, surplus allocation, battery/EV/tariff settings |
+| **Costs** | Today/month/year KPIs, period selector, cost & savings charts, demand charge, tariff rates |
+| **System** | Health diagnostics, sensor status, charging state, peak management |
+
+| | |
+|---|---|
+| ![Energy](docs/images/sem_energy_flows.png) | ![Costs](docs/images/sem_costs_tab.png) |
+| ![Battery](docs/images/sem_battery_tab.png) | ![EV](docs/images/sem_ev_tab.png) |
+| ![Control](docs/images/sem_control_panel.png) | ![System](docs/images/sem_system_tab.png) |
+
+### Dashboard Features
+- **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects
+- **Animated system diagram** — custom SVG card with glow rings, flow animations, individual device nodes
+- **Custom SEM cards** — solar summary (glow ring), weather (clock + forecast), chart card (Chart.js), period selector
+- **Drag-and-drop load priority** — reorder device shedding priorities visually
+- **Environmental impact** — CO2 avoided and trees-equivalent with growing icon (sprout/tree/pine/forest)
+- **Yearly KPIs** — year-to-date costs, savings, revenue on the Costs tab
+
+For dashboard setup instructions, see the [Dashboard Guide](docs/DASHBOARD_GUIDE.md).
+
+---
+
+## Sensors
+
+SEM creates 60+ sensors organized by category:
+
+| Category | Examples |
+|----------|---------|
+| **Power** | Solar, grid, battery, EV, home consumption (W) |
+| **Energy** | Daily/monthly totals for all sources (kWh) |
+| **Flows** | Solar-to-home, solar-to-EV, grid-to-EV, battery-to-home (W and kWh) |
+| **Costs** | Daily/monthly import costs, export revenue, savings |
+| **Performance** | Self-consumption rate, autarky rate, solar efficiency (%) |
+| **Charging** | State, strategy, available power, calculated current |
+| **Surplus** | Total, distributable, allocated, active devices |
+| **Forecast** | Today/tomorrow kWh, remaining today, peak time, next hour, surplus window |
+| **Tariff** | Current import/export rate, price level, next cheap window |
+| **PV Analytics** | Specific yield, forecast accuracy, degradation trend |
+| **Smart Tips** | Optimization score, forecast-aware recommendations, best surplus window |
+| **Load Mgmt** | Peak margin, 15-min average, devices shed, trend |
+| **Notifications** | Battery full, high grid import, daily summary, forecast alerts |
 
 ---
 
 ## Supported Hardware
 
-| Type | Brands |
-|------|--------|
-| **Inverters** | Huawei SUN2000, SolarEdge, Fronius, and any with HA integration |
-| **Batteries** | Huawei LUNA2000, BYD, Tesla Powerwall, and others |
-| **EV Chargers** | KEBA P30, Easee, go-eCharger, Wallbox, Tesla Wall Connector |
-| **Grid Meters** | Any smart meter with power and energy sensors in HA |
+**Solar Inverters:** Huawei Solar, SolarEdge, Fronius, SMA, Enphase, or any inverter with HA sensors
 
-SEM auto-detects your hardware from the HA Energy Dashboard configuration. Grid sign convention (positive/negative for import/export) is detected automatically — works with any inverter brand.
+**Batteries:** Huawei LUNA2000, Tesla Powerwall, LG Chem, BYD, Sonnen
 
----
+**EV Chargers:** KEBA P30, Wallbox Pulsar, go-eCharger, Easee, Tesla Wall Connector, Zaptec, OpenWB, Myenergi Zappi, ChargePoint, Heidelberg
 
-## Installation (5 minutes)
+**Heat Pumps:** Any SG-Ready compatible heat pump controllable via HA
 
-### Prerequisites
-- **Home Assistant 2025.3+**
-- **HA Energy Dashboard** configured (solar + grid sensors)
-- **EV charger integration** installed
-- **HACS**: `mushroom` and `apexcharts-card` frontend cards
-
-### Install
-1. **HACS** > Integrations > Custom repositories
-2. Add: `https://github.com/traktore-org/sem-community` (Integration)
-3. Download **Solar Energy Management**, restart HA
-4. **Settings** > Devices & Services > Add Integration > Solar Energy Management
-5. 3-step wizard: auto-detects sensors → configure EV charger → set battery capacity
-
-SEM auto-generates a 5-tab monitoring dashboard on first install.
+**Smart Meters:** Shelly EM/Pro, Discovergy, or any HA-compatible meter
 
 ---
 
-## What You Get
+## Automation Examples
 
-### 150+ Sensors
-| Category | What It Tracks |
-|----------|---------------|
-| **Power** | Solar, grid import/export, battery charge/discharge, EV, home (W) |
-| **Energy** | Daily and monthly totals for all sources (kWh) |
-| **Flows** | Where energy goes: solar→home, solar→EV, grid→battery, etc. |
-| **Costs** | Import costs, solar savings, export revenue, net cost (CHF/EUR) |
-| **Performance** | Self-consumption rate, autarky rate (%) |
-| **Charging** | State, strategy, session energy, solar share |
-| **Peak** | 15-min rolling peak, monthly maximum, demand charge |
+### Notify when daily solar exceeds target
 
-### 5-Tab Dashboard
-| Tab | Content |
-|-----|---------|
-| **Home** | Power gauges, daily summary, charging status, controls |
-| **Energy** | Self-consumption/autarky, 24h power chart, 7-day trend |
-| **Costs** | Daily/monthly financials, peak load status |
-| **Battery** | SOC gauge, charge/discharge chart, zone configuration |
-| **EV** | Charging state, session progress, controls, power chart |
+```yaml
+automation:
+  - alias: "SEM: Daily solar target reached"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.sem_daily_solar_energy
+        above: 30  # kWh
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Solar Target Reached"
+          message: >
+            Daily solar production exceeded 30 kWh
+            ({{ states('sensor.sem_daily_solar_energy') }} kWh)
+```
 
-### 6 Languages
-English, German, French, Italian, Spanish, Dutch
+### Force charge EV when electricity is cheap
+
+```yaml
+automation:
+  - alias: "SEM: Cheap price EV charging"
+    trigger:
+      - platform: state
+        entity_id: sensor.sem_tariff_price_level
+        to: "cheap"
+    condition:
+      - condition: state
+        entity_id: binary_sensor.sem_ev_connected
+        state: "on"
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id: switch.sem_night_charging
+```
+
+### Alert when grid peak approaches limit
+
+```yaml
+automation:
+  - alias: "SEM: Peak alert"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.sem_peak_margin
+        below: 0.5  # kW remaining before target
+    action:
+      - service: notify.mobile_app
+        data:
+          title: "Peak Protection"
+          message: >
+            Grid peak approaching limit
+            ({{ states('sensor.sem_peak_margin') }} kW margin)
+```
 
 ---
 
-## Configuration
+## Use Cases
 
-All settings via **Settings > Devices & Services > Solar Energy Management > Configure**:
+**Maximize solar self-consumption for EV charging** — Plug in during the day and SEM adjusts current to match surplus. Battery priority ensures the home battery charges first, then the EV gets the rest.
 
-| Category | Settings |
-|----------|----------|
-| **EV Charger** | Sensors, charger service, current control |
-| **SOC Zones** | Priority, buffer, auto-start, protection thresholds |
-| **EV Charging** | Daily target, min/night current, phases, cooldown |
-| **Tariff** | Import/export rates, demand charge, update interval |
-| **Load Mgmt** | Peak limit, shedding margin, device priority |
-| **Notifications** | KEBA display, mobile push alerts |
+**Reduce peak load charges** — SEM monitors rolling 15-minute averages and sheds non-critical loads to stay under your target peak limit.
+
+**Battery-assisted EV charging on cloudy days** — When forecast shows insufficient production but battery SOC is above the buffer, SEM supplements solar with battery discharge.
+
+**Price-optimized night charging** — With dynamic tariff integration, SEM charges the EV during the cheapest overnight hours while protecting the home battery.
 
 ---
 
 ## Documentation
 
-- [Installation Guide](docs/QUICK_START.md) — step-by-step setup
-- [Dashboard Guide](docs/DASHBOARD_GUIDE.md) — all 5 tabs explained
-- [User Guide](USER_GUIDE.md) — complete feature reference
-- [Troubleshooting](TROUBLESHOOTING.md) — common issues and fixes
+| Guide | Description |
+|-------|-------------|
+| [Quick Start](docs/QUICK_START.md) | 5-minute setup guide |
+| [User Guide](USER_GUIDE.md) | Complete feature reference |
+| [Dashboard Guide](docs/DASHBOARD_GUIDE.md) | Dashboard setup & customization |
+| [Architecture](docs/ARCHITECTURE.md) | Developer documentation |
+| [Troubleshooting](TROUBLESHOOTING.md) | Common issues & fixes |
+| [Known Limitations](KNOWN_LIMITATIONS.md) | Platform constraints |
+
+---
+
+## Removal
+
+1. Go to **Settings** > **Devices & Services** > **Solar Energy Management**
+2. Click the three-dot menu and select **Delete**
+3. Restart Home Assistant
+4. If installed via HACS: open HACS > Integrations, find SEM, click **Remove**
+5. If installed manually: delete the `custom_components/solar_energy_management/` directory
+
+All SEM entities are removed automatically. Your Energy Dashboard and hardware sensors are not affected.
 
 ---
 
 ## Contributing
 
-Contributions welcome! Fork, create a branch, submit a PR.
-
-If you find SEM useful, consider [becoming a sponsor](https://github.com/sponsors/traktore-org).
+Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request.
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
