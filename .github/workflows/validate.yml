@@ -5,15 +5,26 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions: {}
 
 jobs:
+  validate-hacs:
+    name: HACS Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: HACS validation
+        uses: "hacs/action@main"
+        with:
+          category: "integration"
+
   hassfest:
     name: Hassfest
     runs-on: ubuntu-latest
-    # Hassfest pulls ghcr.io/home-assistant/hassfest on every run; that
-    # registry rate-limits anonymous pulls and we hit it intermittently.
-    # The validation itself almost always passes, so a transient infra
-    # failure shouldn't block the whole workflow.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
