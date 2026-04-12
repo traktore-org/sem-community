@@ -883,8 +883,6 @@ async def _async_register_services(
 
 async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
     """Register frontend resources for the SEM dashboard cards."""
-    # Community edition: no custom cards to register
-    return
     try:
         import os
 

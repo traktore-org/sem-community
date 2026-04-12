@@ -18,11 +18,17 @@ class DashboardGenerator:
         """Initialize dashboard generator."""
         self.hass = hass
         self._config_dir = hass.config.config_dir
-        self._dashboard_template_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "dashboard",
-            "basic_template.yaml"
-        )
+        dashboard_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dashboard")
+        premium_path = os.path.join(dashboard_dir, "sem_dashboard_template.yaml")
+        basic_path = os.path.join(dashboard_dir, "basic_template.yaml")
+
+        # Use premium template if available, otherwise basic
+        if os.path.exists(premium_path):
+            self._dashboard_template_path = premium_path
+            self._is_premium = True
+        else:
+            self._dashboard_template_path = basic_path
+            self._is_premium = False
 
     async def _load_comprehensive_dashboard_template(self) -> Optional[Dict[str, Any]]:
         """Load the comprehensive dashboard template from YAML file."""
@@ -46,7 +52,7 @@ class DashboardGenerator:
         dashboard_title: str = "Solar Energy Management",
         dashboard_path: str = "sem-dashboard",
     ) -> Dict[str, Any]:
-        """Generate complete SEM Community dashboard configuration.
+        """Generate complete SEM v6.0 dashboard configuration.
 
         Args:
             dashboard_title: Title for the dashboard
@@ -76,6 +82,8 @@ class DashboardGenerator:
                     _LOGGER.info("Updating Peak Load Management view with dynamic device cards")
                     await self._update_peak_load_management_view(view)
 
+            # Update power-flow-card-plus with individual devices from load management
+            await self._update_power_flow_individual_devices(template)
 
             # Inject individual devices into picture-elements system diagram
             await self._update_system_diagram_devices(template)
@@ -280,7 +288,7 @@ class DashboardGenerator:
         chosen = non_forecast or states
         weather_id = chosen[0].entity_id if chosen else None
 
-        weather_card_types = ("custom:clock-weather-card",)
+        weather_card_types = ("custom:clock-weather-card", "custom:sem-weather-card")
 
         def walk(node):
             if isinstance(node, list):

@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 550" style="background:#1a1a2e">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="solarGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFD54F"/>
+      <stop offset="100%" stop-color="#F9A825"/>
+    </linearGradient>
+    <linearGradient id="battGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#66BB6A"/>
+      <stop offset="100%" stop-color="#2E7D32"/>
+    </linearGradient>
+    <linearGradient id="gridGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#EF5350"/>
+      <stop offset="100%" stop-color="#C62828"/>
+    </linearGradient>
+    <linearGradient id="homeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4DD0E1"/>
+      <stop offset="100%" stop-color="#00838F"/>
+    </linearGradient>
+    <linearGradient id="evGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#81C784"/>
+      <stop offset="100%" stop-color="#388E3C"/>
+    </linearGradient>
+    <linearGradient id="inverterGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#90CAF9"/>
+      <stop offset="100%" stop-color="#42A5F5"/>
+    </linearGradient>
+
+    <!-- Glow filters -->
+    <filter id="glowSolar" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feFlood flood-color="#FFD54F" flood-opacity="0.3"/>
+      <feComposite in2="blur" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowGreen" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feFlood flood-color="#4CAF50" flood-opacity="0.3"/>
+      <feComposite in2="blur" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowRed" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feFlood flood-color="#EF5350" flood-opacity="0.3"/>
+      <feComposite in2="blur" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feFlood flood-color="#4DD0E1" flood-opacity="0.3"/>
+      <feComposite in2="blur" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowBlue" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feFlood flood-color="#42A5F5" flood-opacity="0.3"/>
+      <feComposite in2="blur" operator="in"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <style>
+      text { font-family: 'Segoe UI', 'Roboto', sans-serif; fill: #e0e0e0; }
+      .label { font-size: 12px; fill: #aaa; letter-spacing: 0.5px; }
+      .value { font-size: 15px; font-weight: 600; }
+      .title { font-size: 13px; font-weight: 700; letter-spacing: 0.8px; }
+      .line { stroke-width: 2.5; fill: none; opacity: 0.5; }
+    </style>
+  </defs>
+
+  <!-- ═══ Solar Panels (top center) ═══ -->
+  <g transform="translate(400, 15)" filter="url(#glowSolar)">
+    <rect x="0" y="0" width="200" height="90" rx="8" ry="8" fill="rgba(255,213,79,0.12)" stroke="#FFD54F" stroke-width="1.5"/>
+    <!-- Panel cells -->
+    <g opacity="0.4" stroke="#FFD54F" stroke-width="0.8">
+      <rect x="8" y="6" width="40" height="24" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="54" y="6" width="40" height="24" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="100" y="6" width="40" height="24" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="146" y="6" width="40" height="24" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="8" y="34" width="40" height="24" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="54" y="34" width="40" height="24" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="100" y="34" width="40" height="24" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="146" y="34" width="40" height="24" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="8" y="62" width="40" height="22" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="54" y="62" width="40" height="22" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="100" y="62" width="40" height="22" rx="2" fill="rgba(255,213,79,0.15)"/>
+      <rect x="146" y="62" width="40" height="22" rx="2" fill="rgba(255,213,79,0.15)"/>
+    </g>
+    <!-- Sun icon -->
+    <circle cx="100" cy="45" r="14" fill="none" stroke="#FFD54F" stroke-width="1.5" opacity="0.6"/>
+    <g stroke="#FFD54F" stroke-width="1.5" opacity="0.4">
+      <line x1="100" y1="26" x2="100" y2="22"/>
+      <line x1="100" y1="68" x2="100" y2="64"/>
+      <line x1="81" y1="45" x2="77" y2="45"/>
+      <line x1="123" y1="45" x2="119" y2="45"/>
+      <line x1="87" y1="32" x2="84" y2="29"/>
+      <line x1="113" y1="32" x2="116" y2="29"/>
+      <line x1="87" y1="58" x2="84" y2="61"/>
+      <line x1="113" y1="58" x2="116" y2="61"/>
+    </g>
+    <text x="100" y="108" text-anchor="middle" class="title" fill="#FFD54F">Solar Panels</text>
+  </g>
+
+  <!-- ═══ Inverter (center) ═══ -->
+  <g transform="translate(420, 180)" filter="url(#glowBlue)">
+    <rect x="0" y="0" width="160" height="70" rx="10" ry="10" fill="rgba(66,165,245,0.1)" stroke="#42A5F5" stroke-width="1.5"/>
+    <!-- Inverter wave icon -->
+    <path d="M60,30 Q70,18 80,30 Q90,42 100,30" fill="none" stroke="#90CAF9" stroke-width="2" opacity="0.5"/>
+    <text x="80" y="25" text-anchor="middle" class="title" fill="#90CAF9">SUN2000</text>
+    <text x="80" y="48" text-anchor="middle" class="label" fill="#90CAF9">Inverter 10kW</text>
+  </g>
+
+  <!-- ═══ Battery (left) ═══ -->
+  <g transform="translate(80, 180)" filter="url(#glowGreen)">
+    <rect x="0" y="0" width="160" height="120" rx="12" ry="12" fill="rgba(76,175,80,0.1)" stroke="#4CAF50" stroke-width="1.5"/>
+    <!-- Battery icon -->
+    <rect x="55" y="15" width="50" height="70" rx="6" fill="none" stroke="#66BB6A" stroke-width="2" opacity="0.6"/>
+    <rect x="68" y="10" width="24" height="8" rx="3" fill="#66BB6A" opacity="0.5"/>
+    <!-- Battery level bars -->
+    <rect x="62" y="58" width="36" height="8" rx="2" fill="#66BB6A" opacity="0.3"/>
+    <rect x="62" y="46" width="36" height="8" rx="2" fill="#66BB6A" opacity="0.3"/>
+    <rect x="62" y="34" width="36" height="8" rx="2" fill="#66BB6A" opacity="0.3"/>
+    <!-- Lightning bolt inside -->
+    <path d="M76,28 L72,44 L78,44 L74,60" fill="none" stroke="#A5D6A7" stroke-width="1.5" opacity="0.4"/>
+    <text x="80" y="108" text-anchor="middle" class="title" fill="#66BB6A">LUNA2000</text>
+  </g>
+
+  <!-- ═══ Grid (right) ═══ -->
+  <g transform="translate(760, 180)" filter="url(#glowRed)">
+    <rect x="0" y="0" width="160" height="100" rx="12" ry="12" fill="rgba(239,83,80,0.1)" stroke="#EF5350" stroke-width="1.5"/>
+    <!-- Power pylon icon -->
+    <line x1="80" y1="15" x2="80" y2="70" stroke="#EF9A9A" stroke-width="3" opacity="0.5"/>
+    <line x1="80" y1="18" x2="60" y2="30" stroke="#EF9A9A" stroke-width="2" opacity="0.4"/>
+    <line x1="80" y1="18" x2="100" y2="30" stroke="#EF9A9A" stroke-width="2" opacity="0.4"/>
+    <line x1="80" y1="35" x2="65" y2="45" stroke="#EF9A9A" stroke-width="1.5" opacity="0.4"/>
+    <line x1="80" y1="35" x2="95" y2="45" stroke="#EF9A9A" stroke-width="1.5" opacity="0.4"/>
+    <!-- Power lines -->
+    <line x1="55" y1="28" x2="35" y2="28" stroke="#EF9A9A" stroke-width="1" opacity="0.3"/>
+    <line x1="105" y1="28" x2="125" y2="28" stroke="#EF9A9A" stroke-width="1" opacity="0.3"/>
+    <text x="80" y="88" text-anchor="middle" class="title" fill="#EF9A9A">Grid</text>
+  </g>
+
+  <!-- ═══ House (bottom center) ═══ -->
+  <g transform="translate(370, 340)" filter="url(#glowCyan)">
+    <rect x="0" y="30" width="260" height="130" rx="12" ry="12" fill="rgba(77,208,225,0.08)" stroke="#4DD0E1" stroke-width="1.5"/>
+    <!-- Roof -->
+    <polygon points="130,-5 -5,32 265,32" fill="none" stroke="#4DD0E1" stroke-width="1.5" opacity="0.4"/>
+    <!-- House details -->
+    <rect x="105" y="100" width="50" height="55" rx="3" fill="none" stroke="#4DD0E1" stroke-width="1" opacity="0.2"/>
+    <rect x="30" y="55" width="35" height="30" rx="2" fill="none" stroke="#4DD0E1" stroke-width="0.8" opacity="0.15"/>
+    <rect x="195" y="55" width="35" height="30" rx="2" fill="none" stroke="#4DD0E1" stroke-width="0.8" opacity="0.15"/>
+    <text x="130" y="60" text-anchor="middle" class="title" fill="#4DD0E1">House</text>
+  </g>
+
+  <!-- ═══ EV Charger (bottom left) ═══ -->
+  <g transform="translate(80, 380)" filter="url(#glowGreen)">
+    <rect x="0" y="0" width="160" height="100" rx="12" ry="12" fill="rgba(76,175,80,0.1)" stroke="#4CAF50" stroke-width="1.5"/>
+    <!-- Charging station icon -->
+    <rect x="55" y="12" width="40" height="55" rx="5" fill="none" stroke="#81C784" stroke-width="2" opacity="0.5"/>
+    <rect x="60" y="17" width="30" height="20" rx="3" fill="rgba(129,199,132,0.15)" stroke="#81C784" stroke-width="1" opacity="0.4"/>
+    <!-- Lightning bolt -->
+    <path d="M73,22 L69,33 L77,33 L73,44" fill="none" stroke="#A5D6A7" stroke-width="2" opacity="0.6"/>
+    <!-- Cable -->
+    <path d="M75,67 Q75,75 85,75 Q100,75 100,85" fill="none" stroke="#81C784" stroke-width="1.5" opacity="0.3"/>
+    <circle cx="100" cy="87" r="3" fill="#81C784" opacity="0.3"/>
+    <text x="80" y="88" text-anchor="middle" class="title" fill="#81C784">KEBA P30</text>
+  </g>
+
+  <!-- ═══ Connection Lines ═══ -->
+  <!-- Solar → Inverter -->
+  <line x1="500" y1="115" x2="500" y2="180" class="line" stroke="#FFD54F" stroke-dasharray="8,4">
+    <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- Inverter → Battery -->
+  <line x1="420" y1="215" x2="240" y2="240" class="line" stroke="#4CAF50" stroke-dasharray="8,4">
+    <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.5s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- Inverter → Grid -->
+  <line x1="580" y1="215" x2="760" y2="230" class="line" stroke="#EF5350" stroke-dasharray="8,4">
+    <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.5s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- Inverter → House -->
+  <line x1="500" y1="250" x2="500" y2="340" class="line" stroke="#4DD0E1" stroke-dasharray="8,4">
+    <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- House → EV -->
+  <line x1="370" y1="430" x2="240" y2="430" class="line" stroke="#4CAF50" stroke-dasharray="8,4">
+    <animate attributeName="stroke-dashoffset" from="0" to="-24" dur="1.2s" repeatCount="indefinite"/>
+  </line>
+
+  <!-- Subtle grid pattern background -->
+  <g opacity="0.03" stroke="#fff" stroke-width="0.5">
+    <line x1="0" y1="100" x2="1000" y2="100"/>
+    <line x1="0" y1="200" x2="1000" y2="200"/>
+    <line x1="0" y1="300" x2="1000" y2="300"/>
+    <line x1="0" y1="400" x2="1000" y2="400"/>
+    <line x1="200" y1="0" x2="200" y2="550"/>
+    <line x1="400" y1="0" x2="400" y2="550"/>
+    <line x1="600" y1="0" x2="600" y2="550"/>
+    <line x1="800" y1="0" x2="800" y2="550"/>
+  </g>
+</svg>

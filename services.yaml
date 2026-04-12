@@ -1,9 +1,9 @@
 generate_dashboard:
   name: Generate SEM Dashboard
   description: >
-    Generate and install the SEM Community dashboard with 5 views:
-    Home (gauges + status), Energy (24h power + 7-day),
-    Battery (SOC + charts), EV (session + controls), Costs.
+    Generate and install the SEM v6.0 dashboard with 7 views:
+    Home (system diagram + solar summary), Energy (Sankey + gauges),
+    Battery (SOC zones), EV (session tracking), Control, Costs, System.
 
     Installs the SVG system diagram, registers the dashboard in the
     sidebar, and restarts HA to apply changes.

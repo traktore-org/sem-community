@@ -1,0 +1,2203 @@
+# ============================================================
+# SEM Dashboard v6.1 — Solar Energy Management
+# ============================================================
+# Version: 6.1 (2026-04)
+#
+# 7 views: Home, Energy, Battery, EV, Control, Costs, System
+# Dark glassmorphism theme, mobile-first responsive design
+#
+# Required HACS cards (only 5):
+#   mushroom         — chips, entity, template, number, title cards
+#   card-mod         — *glass_card YAML anchor for unified styling
+#   apexcharts-card  — all trend / power / cost charts
+#   sankey-chart     — Energy flow diagram on Energy tab
+#   fold-entity-row  — collapsible Welcome intro on Home tab
+#
+# Bundled SEM cards (auto-registered, no HACS needed):
+#   sem-system-diagram-card  — animated power flow diagram with device nodes
+#   sem-solar-summary-card   — solar yield summary
+#   sem-weather-card         — weather + clock header
+#   sem-chart-card           — cost / savings charts
+#   sem-period-selector-card — period selector for Costs tab
+#   sem-load-priority-card   — drag-and-drop device priority (inlined SortableJS)
+#
+# Removed in v2.6.x (replaced by bundled SEM cards or native HA):
+#   power-flow-card-plus → sem-system-diagram-card
+#   mini-graph-card      → apexcharts-card
+#   solar-card           → sem-solar-summary-card
+#   clock-weather-card   → sem-weather-card
+#   bar-card             → native HA gauge
+#   bubble-card, button-card → mushroom standardization
+# ============================================================
+
+title: Solar Energy Management
+views:
+  # ============================================================
+  # VIEW 0: HOME — At-a-glance power flow & status
+  # ============================================================
+  - title: Home
+    path: home
+    icon: mdi:home-lightning-bolt
+    cards:
+          # ── Welcome Intro (collapsed) ──
+          - type: entities
+            card_mod:
+              style: |
+                ha-card {
+                  background:
+                    radial-gradient(ellipse 70% 60% at 50% 40%, rgba(200,220,240,0.07) 0%, transparent 100%),
+                    radial-gradient(circle at 2px 2px, rgba(128,128,128,0.06) 0.7px, transparent 0.7px) !important;
+                  background-size: 100% 100%, 50px 50px !important;
+                  backdrop-filter: blur(18px) saturate(160%) !important;
+                  -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+                  border: 1px solid rgba(255,255,255,0.08) !important;
+                  border-radius: 16px !important;
+                  box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+                  font-family: 'Segoe UI','Roboto',sans-serif !important;
+                  transition: box-shadow 0.3s cubic-bezier(0.4,0,0.2,1), border-color 0.3s cubic-bezier(0.4,0,0.2,1) !important;
+                }
+                ha-card:hover {
+                  border-color: rgba(255,255,255,0.14) !important;
+                  box-shadow: 0 6px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+                }
+            entities:
+              - type: custom:fold-entity-row
+                head:
+                  type: section
+                  label: "Welcome to SEM"
+                open: false
+                entities:
+                  - type: custom:mushroom-template-card
+                    primary: Solar Energy Management
+                    secondary: >-
+                      Monitoring solar, battery, grid & EV.
+                      Use the tabs above to explore energy flows, costs, and controls.
+                    icon: mdi:solar-power-variant
+                    icon_color: amber
+
+          # ── Status Chips Bar ──
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:solar-power-variant
+                icon_color: amber
+                content: >-
+                  {{ states('sensor.sem_solar_power') | float(0) | round(0) }}W
+                tap_action:
+                  action: more-info
+                  entity: sensor.sem_solar_power
+              - type: template
+                icon: >-
+                  {% set soc = states('sensor.sem_battery_soc') | float(0) %}
+                  {% if soc > 80 %}mdi:battery-high
+                  {% elif soc > 40 %}mdi:battery-medium
+                  {% elif soc > 10 %}mdi:battery-low
+                  {% else %}mdi:battery-alert{% endif %}
+                icon_color: >-
+                  {% set soc = states('sensor.sem_battery_soc') | float(0) %}
+                  {% if soc > 70 %}green{% elif soc > 30 %}amber{% else %}red{% endif %}
+                content: >-
+                  {{ states('sensor.sem_battery_soc') | float(0) | round(0) }}%
+                tap_action:
+                  action: navigate
+                  navigation_path: /sem-dashboard/battery
+              - type: template
+                icon: mdi:leaf
+                icon_color: green
+                content: >-
+                  {{ states('sensor.sem_autarky_rate') | float(0) | round(0) }}%
+                tap_action:
+                  action: more-info
+                  entity: sensor.sem_autarky_rate
+              - type: template
+                icon: >-
+                  {% if is_state('binary_sensor.sem_ev_charging', 'on') %}mdi:car-electric
+                  {% elif is_state('binary_sensor.sem_ev_connected', 'on') %}mdi:car-connected
+                  {% else %}mdi:car{% endif %}
+                icon_color: >-
+                  {% if is_state('binary_sensor.sem_ev_charging', 'on') %}green
+                  {% elif is_state('binary_sensor.sem_ev_connected', 'on') %}cyan
+                  {% else %}disabled{% endif %}
+                content: >-
+                  {% if is_state('binary_sensor.sem_ev_charging', 'on') %}
+                  {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W
+                  {% elif is_state('binary_sensor.sem_ev_connected', 'on') %}Connected
+                  {% else %}—{% endif %}
+              - type: template
+                icon: mdi:star-circle
+                icon_color: >-
+                  {% set s = states('sensor.sem_energy_optimization_score') | float(0) %}
+                  {% if s >= 80 %}green{% elif s >= 50 %}amber{% else %}red{% endif %}
+                content: >-
+                  {{ states('sensor.sem_energy_optimization_score') | float(0) | round(0) }}
+            card_mod:
+              style: &glass_card |
+                ha-card {
+                  background:
+                    radial-gradient(ellipse 70% 60% at 50% 40%, rgba(200,220,240,0.07) 0%, transparent 100%),
+                    radial-gradient(circle at 2px 2px, rgba(128,128,128,0.06) 0.7px, transparent 0.7px) !important;
+                  background-size: 100% 100%, 50px 50px !important;
+                  backdrop-filter: blur(18px) saturate(160%) !important;
+                  -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+                  border: 1px solid rgba(255,255,255,0.08) !important;
+                  border-radius: 16px !important;
+                  box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+                  font-family: 'Segoe UI','Roboto',sans-serif !important;
+                  transition: box-shadow 0.3s cubic-bezier(0.4,0,0.2,1), border-color 0.3s cubic-bezier(0.4,0,0.2,1) !important;
+                  --chip-background: rgba(255, 255, 255, 0.06);
+                  --primary-font-family: 'Segoe UI','Roboto',sans-serif;
+                }
+                ha-card:hover {
+                  border-color: rgba(255,255,255,0.14) !important;
+                  box-shadow: 0 6px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+                }
+
+          # ── System Diagram (dynamic power flow, full-width) ──
+          - type: custom:sem-system-diagram-card
+            entity_prefix: sensor.sem_
+            view_layout:
+              position: main
+            card_mod:
+              style: *glass_card
+
+          # ── Solar Summary (Lumina-styled, replaces solar-card) ──
+          - type: custom:sem-solar-summary-card
+            entity_prefix: sensor.sem_
+            card_mod:
+              style: *glass_card
+
+          # ── 7-Day Summary (moved from Overview) ──
+          - type: custom:apexcharts-card
+            header:
+              title: Last 7 Days
+              show: true
+            graph_span: 7d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 160
+                stacked: false
+                background: transparent
+                foreColor: var(--primary-text-color)
+              grid:
+                borderColor: "rgba(255,255,255,0.06)"
+              legend:
+                show: true
+                position: top
+                labels:
+                  colors: "#9e9e9e"
+              plotOptions:
+                bar:
+                  columnWidth: 55%
+              tooltip:
+                theme: dark
+                x:
+                  format: ddd dd MMM
+              yaxis:
+                - title:
+                    text: kWh
+                    style:
+                      color: "#757575"
+                  decimalsInFloat: 1
+                  labels:
+                    style:
+                      colors: "#757575"
+            series:
+              - entity: sensor.sem_daily_solar_energy
+                name: Solar
+                type: column
+                color: "#ff9800"
+                statistics:
+                  type: state
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: sensor.sem_daily_home_energy
+                name: Home
+                type: column
+                color: "#5BC8D8"
+                statistics:
+                  type: state
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: sensor.sem_daily_grid_import_energy
+                name: Grid
+                type: column
+                color: "#488fc2"
+                statistics:
+                  type: state
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+            card_mod:
+              style: *glass_card
+
+          # power-sources-graph removed — redundant with system diagram + 7-day chart
+
+          # ── Smart Recommendation ──
+          - type: custom:mushroom-template-card
+            primary: >-
+              {% set tip = states('sensor.sem_energy_tip') %}
+              {% if 'window' in tip | lower or 'surplus' in tip | lower or 'tomorrow' in tip | lower or 'tonight' in tip | lower %}
+              {{ tip[:60] }}{% if tip | length > 60 %}…{% endif %}
+              {% else %}{{ tip[:60] }}{% if tip | length > 60 %}…{% endif %}{% endif %}
+            secondary: >-
+              {% set window = states('sensor.sem_best_surplus_window') %}
+              {% set surplus = states('sensor.sem_forecast_surplus_kwh') | float(0) %}
+              {% if window != '' and window != 'unknown' %}
+              Best window: {{ window }} · Surplus: {{ surplus | round(1) }} kWh
+              {% elif surplus > 0 %}
+              Forecast surplus: {{ surplus | round(1) }} kWh remaining
+              {% else %}
+              Score: {{ states('sensor.sem_energy_optimization_score') | float(0) | round(0) }}/100
+              {% endif %}
+            icon: mdi:lightbulb-on-outline
+            icon_color: >-
+              {% set cat = states('sensor.sem_energy_tip_category') %}
+              {% if cat == 'forecast' %}amber
+              {% elif cat == 'price' %}green
+              {% elif cat == 'warning' %}red
+              {% else %}cyan{% endif %}
+            multiline_secondary: true
+            card_mod:
+              style: *glass_card
+
+          # ── Peak Load & Energy Tip (moved from Overview) ──
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Peak Load
+                secondary: >-
+                  {{ states('sensor.sem_consecutive_peak_15min') | float(0) | round(2) }} / {{ states('sensor.sem_target_peak_limit') | float(0) | round(1) }} kW
+                  ({{ states('sensor.sem_current_vs_peak_percentage') | float(0) | round(0) }}%)
+                icon: mdi:flash-alert
+                icon_color: >-
+                  {% set p = states('sensor.sem_current_vs_peak_percentage') | float(0) %}
+                  {% if p > 90 %}red{% elif p > 70 %}orange{% else %}green{% endif %}
+                tap_action:
+                  action: more-info
+                  entity: sensor.sem_consecutive_peak_15min
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Energy Tip
+                secondary: >-
+                  {{ states('sensor.sem_energy_tip') }}
+                icon: mdi:lightbulb-on
+                icon_color: amber
+                card_mod:
+                  style: *glass_card
+
+          # ── Quick Controls ──
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.sem_forecast_night_reduction
+                name: Forecast
+                icon: mdi:crystal-ball
+                icon_color: amber
+                tap_action:
+                  action: toggle
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-entity-card
+                entity: switch.sem_observer_mode
+                name: Observer
+                icon: mdi:eye-outline
+                icon_color: red
+                tap_action:
+                  action: toggle
+                card_mod:
+                  style: *glass_card
+
+          # ── EV Status Bar (hidden when disconnected) ──
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.sem_ev_connected
+                state: "on"
+            card:
+              type: custom:mushroom-template-card
+              primary: >-
+                {{ states('sensor.sem_charging_state') }}
+              secondary: >-
+                {{ states('sensor.keba_p30_max_current') | float(0) | round(0) }}A · {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }} kWh
+                {% set remaining = (states('number.sem_daily_ev_target') | float(10)) - (states('sensor.sem_daily_ev_energy') | float(0)) %}
+                {% set power = states('sensor.sem_ev_power') | float(0) %}
+                {% if power > 100 and remaining > 0 %} · ~{{ (remaining / (power / 1000)) | round(1) }}h left{% endif %}
+              icon: mdi:ev-station
+              icon_color: >-
+                {% if is_state('binary_sensor.sem_ev_charging', 'on') %}green
+                {% else %}cyan{% endif %}
+              tap_action:
+                action: navigate
+                navigation_path: /sem-dashboard/ev
+              card_mod:
+                style: |
+                  ha-card {
+                    background:
+                      radial-gradient(ellipse 70% 60% at 50% 40%, rgba(200,220,240,0.07) 0%, transparent 100%),
+                      radial-gradient(circle at 2px 2px, rgba(128,128,128,0.06) 0.7px, transparent 0.7px) !important;
+                    background-size: 100% 100%, 50px 50px !important;
+                    backdrop-filter: blur(18px) saturate(160%) !important;
+                    -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+                    border: 1px solid rgba(255,255,255,0.08) !important;
+                    border-radius: 16px !important;
+                    box-shadow: 0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+                    font-family: 'Segoe UI','Roboto',sans-serif !important;
+                    transition: box-shadow 0.3s cubic-bezier(0.4,0,0.2,1), border-color 0.3s cubic-bezier(0.4,0,0.2,1) !important;
+                    {% if is_state('binary_sensor.sem_ev_charging', 'on') %}
+                    animation: ev-charge-pulse 3s ease-in-out infinite;
+                    border-color: rgba(141,200,146,0.3) !important;
+                    {% endif %}
+                  }
+                  ha-card:hover {
+                    border-color: rgba(255,255,255,0.14) !important;
+                    box-shadow: 0 6px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+                  }
+                  @keyframes ev-charge-pulse {
+                    0%, 100% { box-shadow: 0 0 8px rgba(141,200,146,0.2), 0 4px 24px rgba(0,0,0,0.35); }
+                    50% { box-shadow: 0 0 20px rgba(141,200,146,0.4), 0 4px 24px rgba(0,0,0,0.35); }
+                  }
+
+          # ── Weather & Clock (moved from Overview) ──
+          - type: custom:sem-weather-card
+            entity: weather.home
+            forecast_rows: 5
+            card_mod:
+              style: *glass_card
+
+  # ============================================================
+  # VIEW 1: ENERGY — Sankey, charts, daily breakdown
+  # ============================================================
+  - title: Energy
+    path: energy
+    icon: mdi:lightning-bolt
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          # ── Sankey Energy Flow ──
+          - type: custom:sankey-chart
+            show_names: true
+            show_icons: true
+            show_states: true
+            wide: true
+            height: 300
+            unit_prefix: k
+            round: 2
+            sections:
+              - entities:
+                  - entity_id: sensor.sem_daily_solar_energy
+                    color: "#ff9800"
+                    name: Solar
+                    children:
+                      - sensor.sem_flow_solar_to_home_energy
+                      - sensor.sem_flow_solar_to_ev_energy
+                      - sensor.sem_flow_solar_to_battery_energy
+                      - sensor.sem_flow_solar_to_grid_energy
+                  - entity_id: sensor.sem_daily_grid_import_energy
+                    color: "#488fc2"
+                    name: Grid
+                    children:
+                      - sensor.sem_flow_grid_to_home_energy
+                      - sensor.sem_flow_grid_to_ev_energy
+                      - sensor.sem_flow_grid_to_battery_energy
+                  - entity_id: sensor.sem_daily_battery_discharge_energy
+                    color: "#4db6ac"
+                    name: Battery
+                    children:
+                      - sensor.sem_flow_battery_to_home_energy
+                      - sensor.sem_flow_battery_to_ev_energy
+              - entities:
+                  - entity_id: sensor.sem_flow_solar_to_home_energy
+                    color: "#ff9800"
+                    name: Sol>Home
+                    children:
+                      - sensor.sem_daily_home_energy
+                  - entity_id: sensor.sem_flow_solar_to_ev_energy
+                    color: "#ff9800"
+                    name: Sol>EV
+                    children:
+                      - sensor.sem_daily_ev_energy
+                  - entity_id: sensor.sem_flow_solar_to_battery_energy
+                    color: "#ff9800"
+                    name: Sol>Bat
+                    children:
+                      - sensor.sem_daily_battery_charge_energy
+                  - entity_id: sensor.sem_flow_solar_to_grid_energy
+                    color: "#ff9800"
+                    name: Sol>Grid
+                    children:
+                      - sensor.sem_daily_grid_export_energy
+                  - entity_id: sensor.sem_flow_grid_to_home_energy
+                    color: "#488fc2"
+                    name: Grid>Home
+                    children:
+                      - sensor.sem_daily_home_energy
+                  - entity_id: sensor.sem_flow_grid_to_ev_energy
+                    color: "#488fc2"
+                    name: Grid>EV
+                    children:
+                      - sensor.sem_daily_ev_energy
+                  - entity_id: sensor.sem_flow_grid_to_battery_energy
+                    color: "#488fc2"
+                    name: Grid>Bat
+                    children:
+                      - sensor.sem_daily_battery_charge_energy
+                  - entity_id: sensor.sem_flow_battery_to_home_energy
+                    color: "#4db6ac"
+                    name: Bat>Home
+                    children:
+                      - sensor.sem_daily_home_energy
+                  - entity_id: sensor.sem_flow_battery_to_ev_energy
+                    color: "#4db6ac"
+                    name: Bat>EV
+                    children:
+                      - sensor.sem_daily_ev_energy
+              - entities:
+                  - entity_id: sensor.sem_daily_home_energy
+                    color: "#5BC8D8"
+                    name: House
+                  - entity_id: sensor.sem_daily_ev_energy
+                    color: "#8DC892"
+                    name: EV
+                  - entity_id: sensor.sem_daily_battery_charge_energy
+                    color: "#f06292"
+                    name: Battery
+                  - entity_id: sensor.sem_daily_grid_export_energy
+                    color: "#8353d1"
+                    name: Export
+            card_mod:
+              style: *glass_card
+
+          # ── Self-Consumption & Autarky Gauges (moved from Overview) ──
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                entity: sensor.sem_self_consumption_rate
+                name: Self-consumption
+                min: 0
+                max: 100
+                severity:
+                  green: 75
+                  yellow: 50
+                  red: 0
+                card_mod:
+                  style: *glass_card
+              - type: gauge
+                entity: sensor.sem_autarky_rate
+                name: Autarky
+                min: 0
+                max: 100
+                severity:
+                  green: 80
+                  yellow: 60
+                  red: 0
+                card_mod:
+                  style: *glass_card
+
+          # ── Energy Distribution Donut ──
+          - type: custom:apexcharts-card
+            header:
+              title: Today's Energy Distribution
+              show: true
+            chart_type: donut
+            series:
+              - entity: sensor.sem_flow_solar_to_home_energy
+                name: Solar > Home
+                color: "#ff9800"
+              - entity: sensor.sem_flow_grid_to_home_energy
+                name: Grid > Home
+                color: "#488fc2"
+              - entity: sensor.sem_flow_battery_to_home_energy
+                name: Battery > Home
+                color: "#4db6ac"
+              - entity: sensor.sem_daily_ev_energy
+                name: EV Charging
+                color: "#8DC892"
+              - entity: sensor.sem_daily_grid_export_energy
+                name: Export
+                color: "#8353d1"
+            apex_config:
+              chart:
+                background: transparent
+                foreColor: var(--primary-text-color)
+              legend:
+                show: true
+                position: bottom
+                labels:
+                  colors: "#9e9e9e"
+              dataLabels:
+                enabled: false
+              tooltip:
+                theme: dark
+              plotOptions:
+                pie:
+                  donut:
+                    labels:
+                      show: true
+                      total:
+                        show: true
+                        label: Total
+                        color: "#9e9e9e"
+                      value:
+                        color: "#e0e0e0"
+            card_mod:
+              style: *glass_card
+
+          # ── 24h Power Curves ──
+          - type: custom:apexcharts-card
+            header:
+              title: 24h Power
+              show: true
+            graph_span: 24h
+            series:
+              - entity: sensor.sem_solar_power
+                name: Solar
+                color: "#ff9800"
+                type: area
+                opacity: 0.3
+                stroke_width: 2
+                group_by:
+                  func: avg
+                  duration: 5m
+              - entity: sensor.sem_home_consumption_power
+                name: Home
+                color: "#5BC8D8"
+                type: line
+                stroke_width: 2
+                group_by:
+                  func: avg
+                  duration: 5m
+              - entity: sensor.sem_grid_power
+                name: Grid
+                color: "#488fc2"
+                type: line
+                stroke_width: 1
+                group_by:
+                  func: avg
+                  duration: 5m
+            apex_config:
+              chart:
+                height: 200
+                background: transparent
+                foreColor: var(--primary-text-color)
+              grid:
+                borderColor: "rgba(255,255,255,0.06)"
+              yaxis:
+                - title:
+                    text: Watts
+                    style:
+                      color: "#757575"
+                  decimalsInFloat: 0
+                  labels:
+                    style:
+                      colors: "#757575"
+              tooltip:
+                theme: dark
+                x:
+                  format: HH:mm
+              legend:
+                labels:
+                  colors: "#9e9e9e"
+            card_mod:
+              style: *glass_card
+
+          # ── Today vs Yesterday Solar ──
+          - type: custom:apexcharts-card
+            header:
+              title: Solar — Today vs Yesterday
+              show: true
+            graph_span: 24h
+            span:
+              start: day
+            series:
+              - entity: sensor.sem_solar_power
+                name: Today
+                color: "#ff9800"
+                type: area
+                opacity: 0.3
+                stroke_width: 2
+                group_by:
+                  func: avg
+                  duration: 10m
+              - entity: sensor.sem_solar_power
+                name: Yesterday
+                color: "#999"
+                type: line
+                stroke_width: 1
+                opacity: 0.6
+                offset: "-1d"
+                group_by:
+                  func: avg
+                  duration: 10m
+            apex_config:
+              chart:
+                height: 180
+                background: transparent
+                foreColor: var(--primary-text-color)
+              grid:
+                borderColor: "rgba(255,255,255,0.06)"
+              yaxis:
+                - title:
+                    text: Watts
+                    style:
+                      color: "#757575"
+                  decimalsInFloat: 0
+                  labels:
+                    style:
+                      colors: "#757575"
+              tooltip:
+                theme: dark
+                x:
+                  format: HH:mm
+              legend:
+                labels:
+                  colors: "#9e9e9e"
+            card_mod:
+              style: *glass_card
+
+          # ── Carbon Avoided ──
+          - type: custom:mushroom-template-card
+            primary: Carbon Avoided Today
+            secondary: >-
+              {% set solar_self = states('sensor.sem_flow_solar_to_home_energy') | float(0) + states('sensor.sem_flow_solar_to_ev_energy') | float(0) %}
+              {{ (solar_self * 0.128) | round(1) }} kg CO2
+              ({{ solar_self | round(1) }} kWh self-consumed × 128 g/kWh)
+            icon: mdi:leaf
+            icon_color: green
+            card_mod:
+              style: *glass_card
+
+          # ── Trees Saved (environmental impact) ──
+          - type: custom:mushroom-template-card
+            primary: >-
+              {% set trees = states('sensor.sem_trees_equivalent_this_year') | float(0) %}
+              {% if trees >= 10 %}{{ trees | round(0) }} Trees Equivalent
+              {% else %}{{ trees | round(1) }} Trees Equivalent{% endif %}
+            secondary: >-
+              {{ states('sensor.sem_co2_avoided_this_year') | float(0) | round(1) }} kg CO₂ avoided this year
+              · Lifetime: {{ states('sensor.sem_lifetime_co2_avoided') | float(0) | round(0) }} kg
+            icon: >-
+              {% set trees = states('sensor.sem_trees_equivalent_this_year') | float(0) %}
+              {% if trees >= 50 %}mdi:forest
+              {% elif trees >= 10 %}mdi:pine-tree
+              {% elif trees >= 1 %}mdi:tree
+              {% else %}mdi:sprout{% endif %}
+            icon_color: green
+            multiline_secondary: true
+            card_mod:
+              style: *glass_card
+
+          # ── Self-Consumption Trend (30 days) ──
+          - type: custom:apexcharts-card
+            header:
+              title: Self-Consumption — 30 Day Trend
+              show: true
+            graph_span: 30d
+            span:
+              end: day
+            apex_config:
+              chart:
+                height: 160
+                background: transparent
+                foreColor: var(--primary-text-color)
+              grid:
+                borderColor: "rgba(255,255,255,0.06)"
+              yaxis:
+                - title:
+                    text: "%"
+                    style:
+                      color: "#757575"
+                  min: 0
+                  max: 100
+                  decimalsInFloat: 0
+                  labels:
+                    style:
+                      colors: "#757575"
+              tooltip:
+                theme: dark
+                x:
+                  format: dd MMM
+              legend:
+                labels:
+                  colors: "#9e9e9e"
+            series:
+              - entity: sensor.sem_self_consumption_rate
+                name: Self-consumption
+                type: area
+                color: "#ff9800"
+                opacity: 0.3
+                stroke_width: 2
+                statistics:
+                  type: mean
+                  period: day
+                group_by:
+                  func: avg
+                  duration: 1d
+              - entity: sensor.sem_autarky_rate
+                name: Autarky
+                type: line
+                color: "#5BC8D8"
+                stroke_width: 2
+                statistics:
+                  type: mean
+                  period: day
+                group_by:
+                  func: avg
+                  duration: 1d
+            card_mod:
+              style: *glass_card
+
+          # ── Forecast Accuracy ──
+          - type: custom:mushroom-template-card
+            primary: >-
+              Forecast Accuracy: {{ states('sensor.sem_forecast_accuracy_7d') | float(0) | round(0) }}%
+            secondary: >-
+              Today: {{ states('sensor.sem_forecast_accuracy_today') | float(0) | round(0) }}%
+              · Factor: {{ states('sensor.sem_forecast_correction_factor') | float(1) | round(2) }}×
+              · Deviation: {{ states('sensor.sem_forecast_deviation_kwh') | float(0) | round(1) }} kWh
+              · History: {{ states('sensor.sem_forecast_history_days') | int(0) }}d
+            icon: >-
+              {% set acc = states('sensor.sem_forecast_accuracy_7d') | float(0) %}
+              {% if acc > 90 %}mdi:check-circle
+              {% elif acc > 70 %}mdi:alert-circle
+              {% elif acc > 0 %}mdi:close-circle
+              {% else %}mdi:help-circle{% endif %}
+            icon_color: >-
+              {% set acc = states('sensor.sem_forecast_accuracy_7d') | float(0) %}
+              {% if acc > 90 %}green{% elif acc > 70 %}amber{% elif acc > 0 %}red{% else %}grey{% endif %}
+            multiline_secondary: true
+            card_mod:
+              style: *glass_card
+
+          # ── Solar Forecast (today + tomorrow) ──
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Today
+                secondary: >-
+                  {{ states('sensor.sem_forecast_today_kwh') | float(0) | round(1) }} kWh
+                  {% set peak = states('sensor.sem_forecast_peak_time_today') %}
+                  {% if peak and peak != 'unknown' and peak != '' %}· Peak {{ peak }}{% endif %}
+                icon: mdi:weather-sunny
+                icon_color: amber
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Tomorrow
+                secondary: >-
+                  {{ states('sensor.sem_forecast_tomorrow_kwh') | float(0) | round(1) }} kWh
+                  {% set today = states('sensor.sem_forecast_today_kwh') | float(0) %}
+                  {% set tomorrow = states('sensor.sem_forecast_tomorrow_kwh') | float(0) %}
+                  {% if today > 0 %}
+                  · {% if tomorrow > today %}+{% endif %}{{ ((tomorrow - today) / today * 100) | round(0) }}% vs today
+                  {% endif %}
+                icon: >-
+                  {% set t = states('sensor.sem_forecast_tomorrow_kwh') | float(0) %}
+                  {% if t > 15 %}mdi:weather-sunny{% elif t > 5 %}mdi:weather-partly-cloudy{% else %}mdi:weather-cloudy{% endif %}
+                icon_color: >-
+                  {% set t = states('sensor.sem_forecast_tomorrow_kwh') | float(0) %}
+                  {% if t > 15 %}amber{% elif t > 5 %}cyan{% else %}grey{% endif %}
+                card_mod:
+                  style: *glass_card
+
+          # ── Monthly Trends ──
+          - type: custom:apexcharts-card
+            header:
+              title: 30-Day Energy
+              show: true
+            graph_span: 30d
+            series:
+              - entity: sensor.sem_solar_power
+                name: Solar
+                color: "#ff9800"
+                type: column
+                statistics:
+                  type: max
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+              - entity: sensor.sem_home_consumption_power
+                name: Home
+                color: "#5BC8D8"
+                type: column
+                statistics:
+                  type: max
+                  period: day
+                group_by:
+                  func: max
+                  duration: 1d
+            apex_config:
+              chart:
+                height: 180
+                stacked: false
+                background: transparent
+                foreColor: var(--primary-text-color)
+              grid:
+                borderColor: "rgba(255,255,255,0.06)"
+              plotOptions:
+                bar:
+                  columnWidth: 60%
+              tooltip:
+                theme: dark
+                x:
+                  format: dd MMM
+              legend:
+                labels:
+                  colors: "#9e9e9e"
+            card_mod:
+              style: *glass_card
+
+  # ============================================================
+  # VIEW 2: BATTERY — SOC zones, charge/discharge, health
+  # ============================================================
+  - title: Battery
+    path: battery
+    icon: mdi:battery-charging-80
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          # ── Battery SOC ──
+          - type: custom:mushroom-template-card
+            primary: >-
+              {{ states('sensor.sem_battery_soc') | float(0) | round(0) }}%
+            secondary: >-
+              {% set b = states('sensor.sem_battery_power') | float(0) %}
+              {% if b > 50 %}Charging {{ (b / 1000) | round(1) }} kW
+              {% elif b < -50 %}Discharging {{ (b | abs / 1000) | round(1) }} kW
+              {% else %}Idle{% endif %}
+            icon: >-
+              {% set soc = states('sensor.sem_battery_soc') | float(0) %}
+              {% if soc >= 90 %}mdi:battery
+              {% elif soc >= 70 %}mdi:battery-80
+              {% elif soc >= 50 %}mdi:battery-60
+              {% elif soc >= 30 %}mdi:battery-40
+              {% elif soc >= 10 %}mdi:battery-20
+              {% else %}mdi:battery-outline{% endif %}
+            icon_color: >-
+              {% set soc = states('sensor.sem_battery_soc') | float(0) %}
+              {% if soc >= 70 %}green{% elif soc >= 30 %}amber{% else %}red{% endif %}
+            layout: vertical
+            tap_action:
+              action: more-info
+              entity: sensor.sem_battery_soc
+            card_mod:
+              style: *glass_card
+          - type: gauge
+            entity: sensor.sem_battery_soc
+            name: ""
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              green: 70
+              yellow: 30
+              red: 0
+            card_mod:
+              style: *glass_card
+
+          # ── Battery Power & Status ──
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {% set b = states('sensor.sem_battery_power') | float(0) %}
+                  {% if b > 50 %}Charging {{ b | round(0) }}W
+                  {% elif b < -50 %}Discharging {{ (-b) | round(0) }}W
+                  {% else %}Idle{% endif %}
+                secondary: >-
+                  {{ states('sensor.sem_battery_status') }}
+                  · {{ states('sensor.sem_battery_temperature') | float(0) | round(1) }}°C
+                icon: >-
+                  {% set b = states('sensor.sem_battery_power') | float(0) %}
+                  {% if b > 50 %}mdi:battery-charging
+                  {% elif b < -50 %}mdi:battery-minus
+                  {% else %}mdi:battery{% endif %}
+                icon_color: >-
+                  {% set b = states('sensor.sem_battery_power') | float(0) %}
+                  {% if b > 50 %}green{% elif b < -50 %}orange{% else %}grey{% endif %}
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: SOC Strategy
+                secondary: >-
+                  {{ states('sensor.sem_battery_priority_status') }}
+                  · Floor {{ states('number.sem_battery_assist_floor_soc') | float(0) | round(0) }}%
+                icon: mdi:shield-half-full
+                icon_color: cyan
+                card_mod:
+                  style: *glass_card
+
+          # ── Daily Battery Energy ──
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:battery-plus
+                icon_color: green
+                content: >-
+                  +{{ states('sensor.sem_daily_battery_charge_energy') | float(0) | round(1) }} kWh
+              - type: template
+                icon: mdi:battery-minus
+                icon_color: orange
+                content: >-
+                  -{{ states('sensor.sem_daily_battery_discharge_energy') | float(0) | round(1) }} kWh
+              - type: template
+                icon: mdi:piggy-bank
+                icon_color: cyan
+                content: >-
+                  {{ states('sensor.sem_daily_battery_savings') | float(0) | round(2) }} saved
+            card_mod:
+              style: *glass_card
+
+          # ── Battery 24h Chart (charge/discharge + SOC) ──
+          - type: custom:apexcharts-card
+            header:
+              title: Battery 24h
+              show: true
+            graph_span: 24h
+            series:
+              - entity: sensor.sem_battery_power
+                name: Power
+                color: "#4db6ac"
+                type: area
+                opacity: 0.3
+                stroke_width: 2
+                group_by:
+                  func: avg
+                  duration: 5m
+              - entity: sensor.sem_battery_soc
+                name: SOC
+                color: "#5BC8D8"
+                type: line
+                stroke_width: 2
+                group_by:
+                  func: avg
+                  duration: 5m
+                yaxis_id: soc
+            apex_config:
+              chart:
+                height: 200
+                background: transparent
+                foreColor: var(--primary-text-color)
+              grid:
+                borderColor: "rgba(255,255,255,0.06)"
+              yaxis:
+                - title:
+                    text: Watts
+                    style:
+                      color: "#9e9e9e"
+                  seriesName: Power
+                  decimalsInFloat: 0
+                  labels:
+                    style:
+                      colors: "#9e9e9e"
+                - id: soc
+                  opposite: true
+                  title:
+                    text: SOC %
+                    style:
+                      color: "#5BC8D8"
+                  seriesName: SOC
+                  min: 0
+                  max: 100
+                  decimalsInFloat: 0
+                  labels:
+                    style:
+                      colors: "#5BC8D8"
+              xaxis:
+                labels:
+                  style:
+                    colors: "#757575"
+              tooltip:
+                theme: dark
+                x:
+                  format: HH:mm
+              legend:
+                labels:
+                  colors: "#9e9e9e"
+              annotations:
+                yaxis:
+                  - y: 0
+                    borderColor: "rgba(255,255,255,0.1)"
+                    strokeDashArray: 4
+            card_mod:
+              style: *glass_card
+
+          # ── SOC Zone Settings ──
+          - type: custom:mushroom-title-card
+            title: SOC Zone Configuration
+            subtitle: >-
+              Priority < {{ states('number.sem_battery_priority_soc') | float(0) | round(0) }}% ·
+              Buffer {{ states('number.sem_battery_buffer_soc') | float(0) | round(0) }}% ·
+              Auto-start {{ states('number.sem_battery_auto_start_soc') | float(0) | round(0) }}%
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_battery_priority_soc
+                name: Priority SOC
+                icon: mdi:shield-alert
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_battery_buffer_soc
+                name: Buffer SOC
+                icon: mdi:shield-half-full
+                card_mod:
+                  style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_battery_auto_start_soc
+                name: Auto-start SOC
+                icon: mdi:play-circle
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_battery_assist_floor_soc
+                name: Assist Floor
+                icon: mdi:arrow-collapse-down
+                card_mod:
+                  style: *glass_card
+
+          # ── Monthly Battery Stats ──
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:battery-plus
+                icon_color: green
+                content: >-
+                  Mo +{{ states('sensor.sem_monthly_battery_charge_energy') | float(0) | round(0) }} kWh
+              - type: template
+                icon: mdi:battery-minus
+                icon_color: orange
+                content: >-
+                  Mo -{{ states('sensor.sem_monthly_battery_discharge_energy') | float(0) | round(0) }} kWh
+              - type: template
+                icon: mdi:piggy-bank
+                icon_color: cyan
+                content: >-
+                  Mo {{ states('sensor.sem_monthly_battery_savings') | float(0) | round(2) }} saved
+            card_mod:
+              style: *glass_card
+
+  # ============================================================
+  # VIEW 3: EV — Charging session, lifetime, schedule
+  # ============================================================
+  - title: EV
+    path: ev
+    icon: mdi:car-electric
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          # ── EV Hero Card ──
+          - type: custom:mushroom-template-card
+            primary: >-
+              {% if is_state('binary_sensor.sem_ev_charging', 'on') %}Charging
+              {% elif is_state('binary_sensor.sem_ev_connected', 'on') %}Connected
+              {% else %}Disconnected{% endif %}
+            secondary: >-
+              {% if is_state('binary_sensor.sem_ev_charging', 'on') %}
+              {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_calculated_current') | float(0) | round(0) }}A
+              {% set remaining = (states('number.sem_daily_ev_target') | float(10)) - (states('sensor.sem_daily_ev_energy') | float(0)) %}
+              {% set power = states('sensor.sem_ev_power') | float(0) %}
+              {% if power > 100 and remaining > 0 %}
+              · ~{{ (remaining / (power / 1000)) | round(1) }}h remaining
+              {% endif %}
+              {% elif is_state('binary_sensor.sem_ev_connected', 'on') %}
+              {{ states('sensor.sem_charging_state') }} · {{ states('sensor.sem_charging_strategy') }}
+              {% else %}
+              No vehicle connected
+              {% endif %}
+            icon: >-
+              {% if is_state('binary_sensor.sem_ev_charging', 'on') %}mdi:car-electric
+              {% elif is_state('binary_sensor.sem_ev_connected', 'on') %}mdi:car-connected
+              {% else %}mdi:car{% endif %}
+            icon_color: >-
+              {% if is_state('binary_sensor.sem_ev_charging', 'on') %}green
+              {% elif is_state('binary_sensor.sem_ev_connected', 'on') %}cyan
+              {% else %}disabled{% endif %}
+            layout: horizontal
+            multiline_secondary: true
+            card_mod:
+              style: *glass_card
+
+          # ── Vehicle SOC (conditional) ──
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.sem_vehicle_soc
+                above: 0
+            card:
+              type: gauge
+              entity: sensor.sem_vehicle_soc
+              name: Vehicle Battery
+              min: 0
+              max: 100
+              needle: true
+              severity:
+                green: 60
+                yellow: 30
+                red: 0
+              card_mod:
+                style: *glass_card
+
+          # ── EV Daily Progress ──
+          - type: gauge
+            entity: sensor.sem_daily_ev_energy
+            name: Daily Target
+            min: 0
+            max: 10
+            needle: true
+            severity:
+              green: 7
+              yellow: 3
+              red: 0
+            card_mod:
+              style: *glass_card
+
+          # ── Session Stats ──
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Session
+                secondary: >-
+                  {{ states('sensor.sem_session_energy') | float(0) | round(1) }} kWh
+                  · {{ states('sensor.sem_session_duration') | float(0) | round(0) }} min
+                icon: mdi:lightning-bolt
+                icon_color: green
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Solar Share
+                secondary: >-
+                  {{ states('sensor.sem_session_solar_share') | float(0) | round(0) }}%
+                  · {{ states('sensor.sem_session_cost') | float(0) | round(2) }} CHF
+                icon: mdi:white-balance-sunny
+                icon_color: amber
+                card_mod:
+                  style: *glass_card
+
+          # ── EV Power Chart ──
+          - type: custom:apexcharts-card
+            header:
+              title: EV Charging Power
+              show: true
+            graph_span: 24h
+            series:
+              - entity: sensor.sem_ev_power
+                name: EV Power
+                color: "#8DC892"
+                type: area
+                opacity: 0.4
+                stroke_width: 2
+                group_by:
+                  func: avg
+                  duration: 5m
+              - entity: sensor.sem_flow_solar_to_ev_power
+                name: Solar > EV
+                color: "#ff9800"
+                type: area
+                opacity: 0.3
+                stroke_width: 1
+                group_by:
+                  func: avg
+                  duration: 5m
+            apex_config:
+              chart:
+                height: 180
+                background: transparent
+                foreColor: var(--primary-text-color)
+              grid:
+                borderColor: "rgba(255,255,255,0.06)"
+              tooltip:
+                theme: dark
+                x:
+                  format: HH:mm
+              legend:
+                labels:
+                  colors: "#9e9e9e"
+            card_mod:
+              style: *glass_card
+
+          # ── EV Solar Share Gauge ──
+          - type: gauge
+            entity: sensor.sem_energy_ev_solar_percentage
+            name: EV Solar Share
+            min: 0
+            max: 100
+            severity:
+              green: 70
+              yellow: 40
+              red: 0
+            card_mod:
+              style: *glass_card
+
+          # ── Charging Controls ──
+          - type: custom:mushroom-title-card
+            title: Charging Settings
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.sem_night_charging
+                name: Night Charging
+                icon: mdi:weather-night
+                icon_color: indigo
+                tap_action:
+                  action: toggle
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_daily_ev_target
+                name: Night Target
+                icon: mdi:bullseye-arrow
+                card_mod:
+                  style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_ev_night_initial_current
+                name: Start Amps
+                icon: mdi:current-ac
+                card_mod:
+                  style: *glass_card
+              - type: conditional
+                conditions:
+                  - condition: numeric_state
+                    entity: number.sem_ev_minimum_current
+                    above: -1
+                card:
+                  type: custom:mushroom-number-card
+                  entity: number.sem_ev_minimum_current
+                  name: Min Amps
+                  icon: mdi:speedometer-slow
+                  card_mod:
+                    style: *glass_card
+
+          # ── Lifetime Stats ──
+          - type: custom:mushroom-title-card
+            title: Lifetime EV Statistics
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:lightning-bolt
+                icon_color: green
+                content: >-
+                  {{ states('sensor.sem_lifetime_ev_energy') | float(0) | round(0) }} kWh
+              - type: template
+                icon: mdi:white-balance-sunny
+                icon_color: amber
+                content: >-
+                  {{ states('sensor.sem_lifetime_ev_solar_share') | float(0) | round(0) }}% solar
+              - type: template
+                icon: mdi:cash
+                icon_color: cyan
+                content: >-
+                  {{ states('sensor.sem_lifetime_ev_cost') | float(0) | round(2) }} CHF
+              - type: template
+                icon: mdi:counter
+                icon_color: purple
+                content: >-
+                  {{ states('sensor.sem_lifetime_ev_sessions') | float(0) | round(0) }} sessions
+            card_mod:
+              style: *glass_card
+
+  # ============================================================
+  # VIEW 4: CONTROL — Settings & device management
+  # ============================================================
+  - title: Control
+    path: control
+    icon: mdi:tune-vertical
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          # ── Observer Mode Warning ──
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: switch.sem_observer_mode
+                state: "on"
+            card:
+              type: custom:mushroom-template-card
+              primary: Observer Mode Active
+              secondary: SEM is read-only — no device commands sent
+              icon: mdi:eye-outline
+              icon_color: red
+              card_mod:
+                style: |
+                  ha-card {
+                    background:
+                      radial-gradient(ellipse 60% 50% at 50% 40%, rgba(244,67,54,0.12) 0%, transparent 100%),
+                      radial-gradient(circle at 2px 2px, rgba(244,67,54,0.05) 0.7px, transparent 0.7px) !important;
+                    background-size: 100% 100%, 50px 50px !important;
+                    border: 1px solid rgba(244,67,54,0.35) !important;
+                    border-radius: 16px !important;
+                    box-shadow: 0 0 16px rgba(244,67,54,0.1), 0 4px 24px rgba(0,0,0,0.35) !important;
+                    font-family: 'Segoe UI','Roboto',sans-serif !important;
+                  }
+
+          # ── EV Charging ──
+          - type: custom:mushroom-title-card
+            title: EV Charging
+            subtitle: >-
+              {{ states('sensor.sem_charging_state') }} · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }} kWh
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.sem_night_charging
+                name: Night Charging
+                tap_action:
+                  action: toggle
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-entity-card
+                entity: switch.sem_forecast_night_reduction
+                name: Forecast Reduction
+                tap_action:
+                  action: toggle
+                card_mod:
+                  style: *glass_card
+          - type: custom:mushroom-number-card
+            entity: number.sem_daily_ev_target
+            name: Night Charge Target (kWh)
+            icon: mdi:bullseye-arrow
+            card_mod:
+              style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_ev_night_initial_current
+                name: Night Start (A)
+                card_mod:
+                  style: *glass_card
+              - type: conditional
+                conditions:
+                  - condition: numeric_state
+                    entity: number.sem_ev_minimum_current
+                    above: 0
+                card:
+                  type: custom:mushroom-number-card
+                  entity: number.sem_ev_minimum_current
+                  name: Min Current (A)
+                  card_mod:
+                    style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_ev_stall_cooldown
+                name: Stall Cooldown (sec)
+                icon: mdi:timer-sand
+                card_mod:
+                  style: *glass_card
+              - type: conditional
+                conditions:
+                  - condition: numeric_state
+                    entity: number.sem_ev_phases
+                    above: 0
+                card:
+                  type: custom:mushroom-number-card
+                  entity: number.sem_ev_phases
+                  name: Charger Phases
+                  icon: mdi:sine-wave
+                  card_mod:
+                    style: *glass_card
+
+          # ── Surplus Control ──
+          - type: custom:mushroom-title-card
+            title: Surplus Control
+            subtitle: >-
+              {{ states('sensor.sem_surplus_active_devices') | float(0) | round(0) }}/{{ states('sensor.sem_surplus_total_devices') | float(0) | round(0) }} devices · {{ states('sensor.sem_surplus_allocated_w') | float(0) | round(0) }}W allocated
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Surplus Available
+                secondary: >-
+                  {{ states('sensor.sem_surplus_total_w') | float(0) | round(0) }}W total
+                  · {{ states('sensor.sem_surplus_distributable_w') | float(0) | round(0) }}W distributable
+                icon: mdi:solar-power
+                icon_color: amber
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Allocation
+                secondary: >-
+                  {{ states('sensor.sem_surplus_allocated_w') | float(0) | round(0) }}W used
+                  · {{ states('sensor.sem_surplus_unallocated_w') | float(0) | round(0) }}W free
+                icon: mdi:chart-pie
+                icon_color: green
+                card_mod:
+                  style: *glass_card
+          - type: custom:mushroom-number-card
+            entity: number.sem_regulation_offset
+            name: Regulation Offset (W)
+            icon: mdi:tune
+            card_mod:
+              style: *glass_card
+
+          # ── Battery Settings ──
+          - type: custom:mushroom-title-card
+            title: Battery Management
+            subtitle: >-
+              SOC {{ states('sensor.sem_battery_soc') | float(0) | round(0) }}% · {{ states('sensor.sem_battery_status') }}
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_battery_priority_soc
+                name: Priority SOC
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_battery_minimum_soc
+                name: Minimum SOC
+                card_mod:
+                  style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_battery_resume_soc
+                name: Resume SOC
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_battery_capacity
+                name: Capacity (kWh)
+                card_mod:
+                  style: *glass_card
+
+          # ── Heat Pump & Hot Water ──
+          - type: custom:mushroom-title-card
+            title: Heat Pump & Hot Water
+            subtitle: >-
+              {{ states('sensor.sem_heat_pump_mode') }} · SG-Ready {{ states('sensor.sem_heat_pump_sg_ready_state') }}
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: SG-Ready State
+                secondary: >-
+                  {{ states('sensor.sem_heat_pump_sg_ready_state') }}
+                icon: mdi:heat-pump
+                icon_color: >-
+                  {% set sg = states('sensor.sem_heat_pump_sg_ready_state') | int(1) %}
+                  {% if sg == 4 %}red{% elif sg == 3 %}orange{% elif sg == 2 %}green{% else %}grey{% endif %}
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Mode
+                secondary: >-
+                  {{ states('sensor.sem_heat_pump_mode') }}
+                icon: mdi:thermostat
+                icon_color: cyan
+                card_mod:
+                  style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_heat_pump_boost_offset
+                name: Boost Offset
+                icon: mdi:thermometer-plus
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_hot_water_max_temperature
+                name: Hot Water Max
+                icon: mdi:water-boiler
+                card_mod:
+                  style: *glass_card
+
+          # ── Solar & Power ──
+          - type: custom:mushroom-title-card
+            title: Solar & Power
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_minimum_solar_power
+                name: Min Solar (W)
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_maximum_grid_import
+                name: Max Grid Import (W)
+                card_mod:
+                  style: *glass_card
+
+          # ── Tariff & Pricing ──
+          - type: custom:mushroom-title-card
+            title: Tariff & Pricing
+            subtitle: >-
+              {{ states('sensor.sem_tariff_provider') }} · {{ states('sensor.sem_tariff_price_level') }}
+          - type: custom:mushroom-entity-card
+            entity: sensor.sem_tariff_current_import_rate
+            name: Current Electricity Price
+            icon: mdi:flash
+            card_mod:
+              style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_cheap_price_threshold
+                name: Cheap Threshold
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_expensive_price_threshold
+                name: Expensive Threshold
+                card_mod:
+                  style: *glass_card
+
+          # ── Load Priority (drag-and-drop device management) ──
+          - type: custom:mushroom-title-card
+            title: Load Management
+            subtitle: >-
+              Device priority · {{ states('sensor.sem_controllable_devices_count') }} devices
+          - type: custom:sem-load-priority-card
+            entity_prefix: sensor.sem_
+
+          # ── Peak / Load Management ──
+          - type: custom:mushroom-title-card
+            title: Peak & Load Management
+            subtitle: >-
+              Peak {{ states('sensor.sem_consecutive_peak_15min') | float(0) | round(2) }} kW · Monthly {{ states('sensor.sem_monthly_consecutive_peak') | float(0) | round(2) }} kW
+          - type: custom:mushroom-template-card
+            primary: >-
+              {{ states('sensor.sem_current_vs_peak_percentage') | float(0) | round(0) }}% of limit
+            secondary: >-
+              {{ states('sensor.sem_load_management_status') }} · {{ states('sensor.sem_load_management_recommendation') }}
+            icon: mdi:flash-alert
+            icon_color: >-
+              {% set p = states('sensor.sem_current_vs_peak_percentage') | float(0) %}
+              {% if p > 90 %}red{% elif p > 70 %}orange{% else %}green{% endif %}
+            card_mod:
+              style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Peak Margin
+                secondary: >-
+                  {{ states('sensor.sem_peak_margin') | float(0) | round(2) }} kW
+                icon: mdi:shield-check
+                icon_color: green
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Sheddable
+                secondary: >-
+                  {{ states('sensor.sem_available_load_reduction') | float(0) | round(2) }} kW · {{ states('sensor.sem_controllable_devices_count') }} devices
+                icon: mdi:power-plug-off
+                icon_color: orange
+                card_mod:
+                  style: *glass_card
+
+          # ── System Mode ──
+          - type: custom:mushroom-title-card
+            title: System
+          - type: custom:mushroom-entity-card
+            entity: switch.sem_observer_mode
+            name: Observer Mode (Read-Only)
+            icon: mdi:eye-outline
+            icon_color: red
+            tap_action:
+              action: toggle
+            card_mod:
+              style: *glass_card
+
+  # ============================================================
+  # VIEW 5: COSTS — Financial tracking
+  # ============================================================
+  - title: Costs
+    path: costs
+    icon: mdi:cash-multiple
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+
+          # ══════════════════════════════════════════════════════
+          # 1. HEADER & KPI
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-title-card
+            title: Cost Tracking
+            subtitle: >-
+              {{ states('sensor.sem_tariff_provider') }} · {{ states('sensor.sem_tariff_price_level') }} · {{ states('sensor.sem_tariff_current_import_rate') | float(0) | round(2) }}/kWh
+
+          - type: horizontal-stack
+            cards:
+              - type: vertical-stack
+                cards:
+                  - type: custom:mushroom-title-card
+                    title: Today
+                  - type: custom:mushroom-chips-card
+                    alignment: center
+                    chips:
+                      - type: template
+                        icon: mdi:cash-minus
+                        icon_color: red
+                        content: >-
+                          {{ states('sensor.sem_daily_costs') | float(0) | round(2) }}
+                        tap_action:
+                          action: more-info
+                          entity: sensor.sem_daily_costs
+                      - type: template
+                        icon: mdi:cash-plus
+                        icon_color: green
+                        content: >-
+                          +{{ states('sensor.sem_daily_export_revenue') | float(0) | round(2) }}
+                        tap_action:
+                          action: more-info
+                          entity: sensor.sem_daily_export_revenue
+                      - type: template
+                        icon: mdi:sigma
+                        icon_color: >-
+                          {% if states('sensor.sem_daily_net_cost') | float(0) <= 0 %}green{% else %}amber{% endif %}
+                        content: >-
+                          Net {{ states('sensor.sem_daily_net_cost') | float(0) | round(2) }}
+                        tap_action:
+                          action: more-info
+                          entity: sensor.sem_daily_net_cost
+                      - type: template
+                        icon: mdi:piggy-bank
+                        icon_color: amber
+                        content: >-
+                          Saved {{ (states('sensor.sem_daily_savings') | float(0) + states('sensor.sem_daily_battery_savings') | float(0)) | round(2) }}
+                    card_mod:
+                      style: *glass_card
+              - type: vertical-stack
+                cards:
+                  - type: custom:mushroom-title-card
+                    title: This Month
+                  - type: custom:mushroom-chips-card
+                    alignment: center
+                    chips:
+                      - type: template
+                        icon: mdi:cash-minus
+                        icon_color: red
+                        content: >-
+                          {{ states('sensor.sem_monthly_costs') | float(0) | round(2) }}
+                        tap_action:
+                          action: more-info
+                          entity: sensor.sem_monthly_costs
+                      - type: template
+                        icon: mdi:cash-plus
+                        icon_color: green
+                        content: >-
+                          +{{ states('sensor.sem_monthly_export_revenue') | float(0) | round(2) }}
+                        tap_action:
+                          action: more-info
+                          entity: sensor.sem_monthly_export_revenue
+                      - type: template
+                        icon: mdi:sigma
+                        icon_color: >-
+                          {% if states('sensor.sem_monthly_net_cost') | float(0) <= 0 %}green{% else %}amber{% endif %}
+                        content: >-
+                          Net {{ states('sensor.sem_monthly_net_cost') | float(0) | round(2) }}
+                        tap_action:
+                          action: more-info
+                          entity: sensor.sem_monthly_net_cost
+                      - type: template
+                        icon: mdi:piggy-bank
+                        icon_color: amber
+                        content: >-
+                          Saved {{ (states('sensor.sem_monthly_savings') | float(0) + states('sensor.sem_monthly_battery_savings') | float(0)) | round(2) }}
+                    card_mod:
+                      style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 2. THIS YEAR
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-title-card
+            title: This Year
+            subtitle: >-
+              Net {{ states('sensor.sem_yearly_net_cost') | float(0) | round(2) }} CHF
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Costs
+                secondary: >-
+                  {{ states('sensor.sem_yearly_costs') | float(0) | round(2) }} CHF
+                icon: mdi:cash-minus
+                icon_color: red
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Revenue
+                secondary: >-
+                  {{ states('sensor.sem_yearly_export_revenue') | float(0) | round(2) }} CHF
+                icon: mdi:cash-plus
+                icon_color: green
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Savings
+                secondary: >-
+                  {{ states('sensor.sem_yearly_savings') | float(0) | round(2) }} CHF
+                icon: mdi:piggy-bank
+                icon_color: amber
+                card_mod:
+                  style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 3. PERIOD SELECTOR
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-period-selector-card
+            default_period: week
+            card_mod:
+              style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 3. COSTS CHART (reacts to period selector)
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-chart-card
+            preset: costs
+            card_mod:
+              style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 3. SAVINGS CHART (reacts to period selector)
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-chart-card
+            preset: savings
+            card_mod:
+              style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 6. EV CHARGING ECONOMICS
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-template-card
+            primary: EV Charging Economics
+            secondary: >-
+              {% set total = states('sensor.sem_lifetime_ev_energy') | float(0.001) %}
+              {% set cost = states('sensor.sem_lifetime_ev_cost') | float(0) %}
+              {% set solar = states('sensor.sem_lifetime_ev_solar_share') | float(0) %}
+              Cost/kWh: {{ (cost / total) | round(3) }} CHF ·
+              Cost/100km: {{ (cost / total * 18) | round(2) }} CHF ·
+              Solar: {{ solar | round(0) }}%
+              {% if cost > 0 %}
+              · vs public (~0.55/kWh): saved {{ ((0.55 * total) - cost) | round(0) }} CHF
+              {% endif %}
+            icon: mdi:car-electric
+            icon_color: green
+            multiline_secondary: true
+            card_mod:
+              style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 7. ROI — RETURN ON INVESTMENT
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-title-card
+            title: Return on Investment
+            subtitle: >-
+              {% set roi = states('sensor.sem_roi_percentage') | float(0) %}
+              {% set cost = states('number.sem_system_investment_cost') | float(0) %}
+              {% if cost > 0 %}{{ roi | round(1) }}% of {{ cost | round(0) }} CHF recovered{% else %}Set investment cost on Control tab{% endif %}
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.sem_roi_percentage
+                above: 0
+            card:
+              type: vertical-stack
+              cards:
+                # ── ROI KPI Row ──
+                - type: horizontal-stack
+                  cards:
+                    - type: custom:mushroom-template-card
+                      primary: >-
+                        {{ states('sensor.sem_lifetime_total_savings') | float(0) | round(0) }} CHF
+                      secondary: Lifetime Savings
+                      icon: mdi:cash-check
+                      icon_color: green
+                      card_mod:
+                        style: *glass_card
+                    - type: custom:mushroom-template-card
+                      primary: >-
+                        {{ states('sensor.sem_roi_annual_savings') | float(0) | round(0) }} CHF/yr
+                      secondary: Annual Savings
+                      icon: mdi:cash-fast
+                      icon_color: amber
+                      card_mod:
+                        style: *glass_card
+                    - type: custom:mushroom-template-card
+                      primary: >-
+                        {% set yrs = states('sensor.sem_roi_payback_years') | float(0) %}
+                        {% if yrs > 0 %}{{ yrs | round(1) }} years{% else %}—{% endif %}
+                      secondary: Payback
+                      icon: mdi:calendar-clock
+                      icon_color: cyan
+                      card_mod:
+                        style: *glass_card
+                    - type: custom:mushroom-template-card
+                      primary: >-
+                        {{ states('sensor.sem_roi_percentage') | float(0) | round(1) }}%
+                      secondary: ROI
+                      icon: >-
+                        {% set roi = states('sensor.sem_roi_percentage') | float(0) %}
+                        {% if roi >= 100 %}mdi:check-decagram
+                        {% elif roi >= 50 %}mdi:progress-check
+                        {% else %}mdi:progress-clock{% endif %}
+                      icon_color: >-
+                        {% set roi = states('sensor.sem_roi_percentage') | float(0) %}
+                        {% if roi >= 100 %}green{% elif roi >= 50 %}amber{% else %}cyan{% endif %}
+                      card_mod:
+                        style: *glass_card
+                # ── Savings Breakdown (collapsed) ──
+                - type: entities
+                  card_mod:
+                    style: *glass_card
+                  entities:
+                    - type: custom:fold-entity-row
+                      head:
+                        type: section
+                        label: "How Savings Are Calculated"
+                      open: false
+                      entities:
+                        - type: custom:mushroom-template-card
+                          primary: >-
+                            {% set import_rate = states('number.sem_electricity_import_rate') | float(0.36) %}
+                            {% set export_rate = states('number.sem_electricity_export_rate') | float(0.075) %}
+                            {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
+                            {% set annual = states('sensor.sem_roi_annual_savings') | float(0) %}
+                            {% set invest = states('number.sem_system_investment_cost') | float(0) %}
+                            {% set payback = states('sensor.sem_roi_payback_years') | float(0) %}
+                            {% set co2 = states('sensor.sem_lifetime_co2_avoided') | float(0) %}
+                            {% set trees = states('sensor.sem_lifetime_trees_equivalent') | float(0) %}
+                            Lifetime Savings: {{ savings | round(0) }} CHF
+                          secondary: >-
+                            {% set import_rate = states('number.sem_electricity_import_rate') | float(0.36) %}
+                            {% set export_rate = states('number.sem_electricity_export_rate') | float(0.075) %}
+                            {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
+                            {% set annual = states('sensor.sem_roi_annual_savings') | float(0) %}
+                            {% set invest = states('number.sem_system_investment_cost') | float(0) %}
+                            {% set payback = states('sensor.sem_roi_payback_years') | float(0) %}
+                            {% set co2 = states('sensor.sem_lifetime_co2_avoided') | float(0) %}
+                            {% set trees = states('sensor.sem_lifetime_trees_equivalent') | float(0) %}
+                            Solar self-consumed × {{ import_rate }} CHF/kWh
+                            · Grid export × {{ export_rate }} CHF/kWh
+                            = {{ savings | round(0) }} CHF total savings
+                            ÷ system age = {{ annual | round(0) }} CHF/year
+                            {{ invest | round(0) }} CHF ÷ {{ annual | round(0) }} CHF/yr = {{ payback | round(1) }} yr payback
+                            {{ co2 | round(0) }} kg CO₂ avoided = {{ trees | round(0) }} trees
+                          icon: mdi:calculator
+                          icon_color: purple
+                          multiline_secondary: true
+
+          # 8. DEMAND CHARGE
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-title-card
+            title: Demand Charge
+            subtitle: >-
+              Monthly peak: {{ states('sensor.sem_monthly_consecutive_peak') | float(0) | round(2) }} kW
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {{ states('sensor.sem_monthly_consecutive_peak') | float(0) | round(2) }} kW
+                secondary: Monthly Peak
+                icon: mdi:flash-triangle
+                icon_color: orange
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {{ states('sensor.sem_power_charge_cost') | float(0) | round(2) }}
+                secondary: Power Charge
+                icon: mdi:cash-fast
+                icon_color: deep-orange
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_demand_charge_rate
+                name: Rate
+                card_mod:
+                  style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 8. TARIFF RATES
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-title-card
+            title: Tariff Rates
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {{ states('sensor.sem_tariff_current_import_rate') | float(0) | round(4) }}
+                secondary: Import Rate
+                icon: mdi:transmission-tower-import
+                icon_color: red
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {{ states('sensor.sem_tariff_current_export_rate') | float(0) | round(4) }}
+                secondary: Export Rate
+                icon: mdi:transmission-tower-export
+                icon_color: green
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: >-
+                  {{ states('sensor.sem_tariff_price_level') }}
+                secondary: Price Level
+                icon: mdi:gauge
+                icon_color: amber
+                card_mod:
+                  style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: conditional
+                conditions:
+                  - condition: numeric_state
+                    entity: number.sem_electricity_import_rate
+                    above: -1
+                card:
+                  type: custom:mushroom-number-card
+                  entity: number.sem_electricity_import_rate
+                  name: Import Rate
+                  icon: mdi:cash-minus
+                  card_mod:
+                    style: *glass_card
+              - type: conditional
+                conditions:
+                  - condition: numeric_state
+                    entity: number.sem_electricity_export_rate
+                    above: -1
+                card:
+                  type: custom:mushroom-number-card
+                  entity: number.sem_electricity_export_rate
+                  name: Export Rate
+                  icon: mdi:cash-plus
+                  card_mod:
+                    style: *glass_card
+
+  # ============================================================
+  # VIEW 6: SYSTEM HEALTH — Diagnostics & debug
+  # ============================================================
+  - title: System
+    path: system
+    icon: mdi:heart-pulse
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+
+          # ══════════════════════════════════════════════════════
+          # 1. HEALTH OVERVIEW — traffic light + sensor status
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-title-card
+            title: System Health
+            subtitle: >-
+              {% set critical = [
+                'sensor.sem_solar_power', 'sensor.sem_grid_power',
+                'sensor.sem_battery_power', 'sensor.sem_battery_soc',
+                'sensor.sem_home_consumption_power'
+              ] %}
+              {% set bad = critical | select('is_state', 'unavailable') | list
+                         + critical | select('is_state', 'unknown') | list %}
+              {% if bad | length > 0 %}{{ bad | length }} sensor{{ 's' if bad | length > 1 }} offline
+              {% else %}All sensors reporting
+              {% endif %}
+
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: >-
+                  {% set s = states('sensor.sem_solar_power') %}
+                  {% if s in ['unavailable','unknown'] %}mdi:alert-circle{% else %}mdi:solar-power-variant{% endif %}
+                icon_color: >-
+                  {% set s = states('sensor.sem_solar_power') %}
+                  {% if s in ['unavailable','unknown'] %}red{% else %}amber{% endif %}
+                content: "Solar {{ states('sensor.sem_solar_power') | float(0) | round(0) }}W"
+                entity: sensor.sem_solar_power
+              - type: template
+                icon: >-
+                  {% set s = states('sensor.sem_grid_power') %}
+                  {% if s in ['unavailable','unknown'] %}mdi:alert-circle{% else %}mdi:transmission-tower{% endif %}
+                icon_color: >-
+                  {% set s = states('sensor.sem_grid_power') %}
+                  {% if s in ['unavailable','unknown'] %}red{% else %}blue{% endif %}
+                content: "Grid {{ states('sensor.sem_grid_power') | float(0) | round(0) }}W"
+                entity: sensor.sem_grid_power
+              - type: template
+                icon: >-
+                  {% set s = states('sensor.sem_battery_power') %}
+                  {% if s in ['unavailable','unknown'] %}mdi:alert-circle{% else %}mdi:battery-high{% endif %}
+                icon_color: >-
+                  {% set s = states('sensor.sem_battery_power') %}
+                  {% if s in ['unavailable','unknown'] %}red{% else %}teal{% endif %}
+                content: "Batt {{ states('sensor.sem_battery_soc') | float(0) | round(0) }}%"
+                entity: sensor.sem_battery_power
+              - type: template
+                icon: >-
+                  {% set s = states('sensor.sem_ev_power') %}
+                  {% if s in ['unavailable','unknown'] %}mdi:alert-circle{% else %}mdi:car-electric{% endif %}
+                icon_color: >-
+                  {% set s = states('sensor.sem_ev_power') %}
+                  {% if s in ['unavailable','unknown'] %}red{% elif s | float(0) > 50 %}green{% else %}grey{% endif %}
+                content: "EV {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W"
+                entity: sensor.sem_ev_power
+              - type: template
+                icon: >-
+                  {% set s = states('sensor.sem_forecast_today_kwh') %}
+                  {% if s in ['unavailable','unknown'] %}mdi:alert-circle{% else %}mdi:weather-sunny{% endif %}
+                icon_color: >-
+                  {% set s = states('sensor.sem_forecast_today_kwh') %}
+                  {% if s in ['unavailable','unknown'] %}red{% else %}amber{% endif %}
+                content: "Fcst {{ states('sensor.sem_forecast_today_kwh') | float(0) | round(1) }}kWh"
+                entity: sensor.sem_forecast_today_kwh
+              - type: template
+                icon: >-
+                  {% set s = states('sensor.sem_tariff_current_import_rate') %}
+                  {% if s in ['unavailable','unknown'] %}mdi:alert-circle{% else %}mdi:currency-usd{% endif %}
+                icon_color: >-
+                  {% set s = states('sensor.sem_tariff_current_import_rate') %}
+                  {% if s in ['unavailable','unknown'] %}red{% else %}cyan{% endif %}
+                content: "Tariff {{ states('sensor.sem_tariff_current_import_rate') }}"
+                entity: sensor.sem_tariff_current_import_rate
+            card_mod:
+              style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 2. SOURCE SENSORS
+          # ══════════════════════════════════════════════════════
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Source Sensors
+                secondary: >-
+                  Solar {{ states('sensor.sem_solar_power') | float(0) | round(0) }}W · Grid {{ states('sensor.sem_grid_power') | float(0) | round(0) }}W · Battery {{ states('sensor.sem_battery_power') | float(0) | round(0) }}W · SOC {{ states('sensor.sem_battery_soc') | float(0) | round(0) }}% · EV {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W
+                icon: mdi:database-eye
+                icon_color: amber
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Derived Values
+                secondary: >-
+                  Home {{ states('sensor.sem_home_consumption_power') | float(0) | round(0) }}W · Grid import {{ states('sensor.sem_grid_import_power') | float(0) | round(0) }}W · Grid export {{ states('sensor.sem_grid_export_power') | float(0) | round(0) }}W · Batt charge {{ states('sensor.sem_battery_charge_power') | float(0) | round(0) }}W · Batt disch {{ states('sensor.sem_battery_discharge_power') | float(0) | round(0) }}W · Autarky {{ states('sensor.sem_autarky_rate') | float(0) | round(1) }}% · Self cons {{ states('sensor.sem_self_consumption_rate') | float(0) | round(1) }}%
+                icon: mdi:calculator-variant
+                icon_color: cyan
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 3. CHARGING STATE & MODE STATUS
+          # ══════════════════════════════════════════════════════
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: EV Charging
+                secondary: >-
+                  {{ states('sensor.sem_charging_state') }} · {{ states('sensor.sem_charging_strategy') }}
+
+                  {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_calculated_current') | float(0) | round(0) }}A · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }}kWh
+
+                  Plug: {{ states('binary_sensor.sem_ev_connected') }} · Charging: {{ states('binary_sensor.sem_ev_charging') }}
+                icon: mdi:car-electric
+                icon_color: green
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Mode Status
+                secondary: >-
+                  Night: {{ states('sensor.sem_night_charging_status') }}
+
+                  Solar: {{ states('sensor.sem_solar_charging_status') }}
+
+                  Battery: {{ states('sensor.sem_battery_priority_status') }} · {{ states('sensor.sem_battery_status') }}
+
+                  Grid: {{ states('sensor.sem_grid_status') }}
+                icon: mdi:state-machine
+                icon_color: blue
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 4. CONFIGURATION
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-template-card
+            primary: Configuration
+            secondary: >-
+              Observer: {{ states('switch.sem_observer_mode') }} · Night: {{ states('switch.sem_night_charging') }} · Fcst adjust: {{ states('switch.sem_forecast_night_reduction') }}
+
+              Night {{ states('number.sem_ev_night_initial_current') }}A · Min {{ states('number.sem_ev_minimum_current') }}A · Cooldown {{ states('number.sem_ev_stall_cooldown') }}s · Target {{ states('number.sem_daily_ev_target') }}kWh · Peak {{ states('sensor.sem_target_peak_limit') }}kW
+            icon: mdi:cog
+            icon_color: grey
+            multiline_secondary: true
+            card_mod:
+              style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 5. PEAK & LOAD MANAGEMENT
+          # ══════════════════════════════════════════════════════
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Peak Management
+                secondary: >-
+                  15 min: {{ states('sensor.sem_consecutive_peak_15min') }} kW · Monthly: {{ states('sensor.sem_monthly_consecutive_peak') }} kW
+
+                  Margin {{ states('sensor.sem_peak_margin') }} kW · Usage {{ states('sensor.sem_current_vs_peak_percentage') }}%
+                icon: mdi:flash-triangle
+                icon_color: orange
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Load Management
+                secondary: >-
+                  Status: {{ states('sensor.sem_load_management_status') }}
+
+                  Shed: {{ states('sensor.sem_loads_currently_shed') }} · Devices: {{ states('sensor.sem_controllable_devices_count') }}
+                icon: mdi:power-plug-off
+                icon_color: red
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 6. FORECAST & SURPLUS
+          # ══════════════════════════════════════════════════════
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Solar Forecast
+                secondary: >-
+                  Today: {{ states('sensor.sem_forecast_today_kwh') }} kWh · Tomorrow: {{ states('sensor.sem_forecast_tomorrow_kwh') }} kWh
+
+                  Remaining {{ states('sensor.sem_forecast_remaining_today_kwh') }} kWh · Now {{ states('sensor.sem_forecast_power_now_w') }} W
+
+                  Source: {{ states('sensor.sem_forecast_source') }}
+                icon: mdi:weather-sunny
+                icon_color: amber
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Surplus Allocation
+                secondary: >-
+                  Total: {{ states('sensor.sem_surplus_total_w') }}W · Free: {{ states('sensor.sem_surplus_unallocated_w') }}W
+
+                  Distributable {{ states('sensor.sem_surplus_distributable_w') }}W · Allocated {{ states('sensor.sem_surplus_allocated_w') }}W
+
+                  Active: {{ states('sensor.sem_surplus_active_devices') }}/{{ states('sensor.sem_surplus_total_devices') }}
+                icon: mdi:chart-donut
+                icon_color: green
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
