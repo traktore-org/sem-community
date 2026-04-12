@@ -1,0 +1,1 @@
+"""EMS Solar Optimizer tests."""

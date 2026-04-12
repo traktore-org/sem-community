@@ -1,0 +1,932 @@
+"""Config flow for Solar Energy Management integration."""
+import logging
+from typing import Any, Dict
+
+import voluptuous as vol
+from homeassistant.helpers import selector
+from homeassistant.core import callback
+
+from homeassistant import config_entries
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResult
+
+from .const import (
+    DOMAIN,
+    DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_POWER_DELTA,
+    DEFAULT_CURRENT_DELTA,
+    DEFAULT_SOC_DELTA,
+    DEFAULT_BATTERY_PRIORITY_SOC,
+    DEFAULT_BATTERY_MINIMUM_SOC,
+    DEFAULT_BATTERY_RESUME_SOC,
+    DEFAULT_BATTERY_BUFFER_SOC,
+    DEFAULT_BATTERY_AUTO_START_SOC,
+    DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
+    DEFAULT_MIN_SOLAR_POWER,
+    DEFAULT_MAX_GRID_IMPORT,
+    DEFAULT_DAILY_EV_TARGET,
+    DEFAULT_BATTERY_ASSIST_MAX_POWER,
+    DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED,
+    DEFAULT_BATTERY_MAX_DISCHARGE_POWER,
+    DEFAULT_BATTERY_DISCHARGE_CONTROL_ENTITY,
+    DEFAULT_EV_CHARGER_SERVICE,
+    DEFAULT_EV_CHARGER_SERVICE_ENTITY_ID,
+    DEFAULT_PREFER_HARDWARE_ENERGY,
+    DEFAULT_ENERGY_SOURCE_AUTO,
+    DEFAULT_TARGET_PEAK_LIMIT,
+    DEFAULT_WARNING_PEAK_LEVEL,
+    DEFAULT_EMERGENCY_PEAK_LEVEL,
+    DEFAULT_LOAD_MANAGEMENT_ENABLED,
+    DEFAULT_CRITICAL_DEVICE_PROTECTION,
+    DEFAULT_OBSERVER_MODE,
+)
+from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
+from .hardware_detection import (
+    HardwareDetector,
+    discover_ev_charger_from_registry,
+    discover_inverter_from_registry,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Solar Energy Management."""
+
+    VERSION = 2
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
+        """Get the options flow for this handler."""
+        return OptionsFlowHandler(config_entry)
+
+    def __init__(self):
+        """Initialize the config flow."""
+        self._data = {}
+        self._errors = {}
+        self._energy_dashboard_config: EnergyDashboardConfig | None = None
+        self._detector = None
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle the initial step - check Energy Dashboard configuration."""
+        errors: dict[str, str] = {}
+
+        # Read Energy Dashboard configuration
+        self._energy_dashboard_config = await read_energy_dashboard_config(self.hass)
+
+        if self._energy_dashboard_config is None:
+            # Energy Dashboard not configured at all
+            return self.async_abort(
+                reason="energy_dashboard_not_configured",
+                description_placeholders={
+                    "url": "/config/energy"
+                }
+            )
+
+        if not self._energy_dashboard_config.is_minimally_configured():
+            # Energy Dashboard missing required components
+            missing = self._energy_dashboard_config.get_missing_components()
+            return self.async_abort(
+                reason="energy_dashboard_incomplete",
+                description_placeholders={
+                    "missing": ", ".join(missing),
+                    "url": "/config/energy"
+                }
+            )
+
+        # Energy Dashboard is configured - show summary and continue
+        if user_input is not None:
+            # Store Energy Dashboard sensor config + the observer_mode toggle
+            self._data.update(self._energy_dashboard_config.to_dict())
+            self._data["observer_mode"] = user_input.get("observer_mode", False)
+            return await self.async_step_ev_charger()
+
+        # Show Energy Dashboard summary — list every sensor SEM picked up so the
+        # user can verify the auto-detection at a glance.
+        cfg = self._energy_dashboard_config
+        summary_lines: list[str] = []
+
+        def _add(category: str, fields: list[tuple[str, str | None]]) -> None:
+            present = [(label, eid) for label, eid in fields if eid]
+            if not present:
+                return
+            summary_lines.append(f"**{category}**")
+            for label, eid in present:
+                summary_lines.append(f"  • {label}: `{eid}`")
+            summary_lines.append("")
+
+        if cfg.has_solar:
+            _add("Solar", [
+                ("Power", cfg.solar_power),
+                ("Energy", cfg.solar_energy),
+            ])
+        if cfg.has_grid:
+            _add("Grid", [
+                ("Power", cfg.grid_import_power),
+                ("Import energy", cfg.grid_import_energy),
+                ("Export energy", cfg.grid_export_energy),
+            ])
+        if cfg.has_battery:
+            _add("Battery", [
+                ("Power", cfg.battery_power),
+                ("Charge energy", cfg.battery_charge_energy),
+                ("Discharge energy", cfg.battery_discharge_energy),
+            ])
+        if cfg.has_ev:
+            _add("EV", [
+                ("Power", cfg.ev_power),
+                ("Energy", cfg.ev_energy),
+            ])
+
+        # Trim trailing blank line for tidy rendering
+        if summary_lines and summary_lines[-1] == "":
+            summary_lines.pop()
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema({
+                # Single safety toggle. Defaulted OFF so a real install
+                # actually controls hardware. Set to ON for test/staging
+                # instances that mirror a production HA — observer mode
+                # blocks every outbound service call from SEM.
+                vol.Optional(
+                    "observer_mode",
+                    default=False,
+                ): selector.BooleanSelector(),
+            }),
+            description_placeholders={
+                "summary": "\n".join(summary_lines)
+            },
+            errors=errors
+        )
+
+    async def async_step_ev_charger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle the EV charger control configuration step."""
+        errors: dict[str, str] = {}
+
+        # Initialize hardware detector for EV control entity detection
+        if self._detector is None:
+            self._detector = HardwareDetector(self.hass)
+
+        if user_input is not None:
+            # Validate EV charger entities
+            validation_errors = self._detector.validate_ev_configuration(user_input)
+            if validation_errors:
+                errors.update(validation_errors)
+                _LOGGER.error(f"EV validation failed: {validation_errors}")
+
+            if not errors:
+                # Store EV charger entities and continue to the hardware step
+                self._data.update(user_input)
+                return await self.async_step_hardware()
+
+        # Primary: integration-aware registry discovery (KEBA, Easee, go-eCharger, Wallbox).
+        # This filters by entity registry platform and device_class, so it never matches
+        # unrelated devices like generic smart plugs.
+        suggestions = discover_ev_charger_from_registry(self.hass)
+
+        # Fallback: pattern-based detection only fills keys the registry didn't already set,
+        # so a stray generic match can never override a confident registry match.
+        pattern_suggestions = self._detector.get_suggested_ev_defaults() if self._detector else {}
+        for key, value in pattern_suggestions.items():
+            if value and not suggestions.get(key):
+                suggestions[key] = value
+
+        # Pre-fill from Energy Dashboard if available
+        if self._energy_dashboard_config and self._energy_dashboard_config.has_ev:
+            if self._energy_dashboard_config.ev_power and not suggestions.get("ev_charging_power_sensor"):
+                suggestions["ev_charging_power_sensor"] = self._energy_dashboard_config.ev_power
+            if self._energy_dashboard_config.ev_energy and not suggestions.get("ev_total_energy_sensor"):
+                suggestions["ev_total_energy_sensor"] = self._energy_dashboard_config.ev_energy
+
+        # Helper for optional EntitySelector fields: HA rejects default="" because
+        # an empty string is neither a valid entity_id nor None. Use suggested_value
+        # via the field description so the prefill is shown without becoming a
+        # hard default.
+        def _opt_entity_default(key: str):
+            v = suggestions.get(key)
+            return v if v else None
+
+        return self.async_show_form(
+            step_id="ev_charger",
+            data_schema=vol.Schema({
+                # EV Charger Control Entities (Required for solar optimization)
+                vol.Required(
+                    "ev_connected_sensor",
+                    default=suggestions.get("ev_connected_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="binary_sensor")
+                ),
+                vol.Required(
+                    "ev_charging_sensor",
+                    default=suggestions.get("ev_charging_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="binary_sensor")
+                ),
+                vol.Required(
+                    "ev_charging_power_sensor",
+                    default=suggestions.get("ev_charging_power_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor",
+                        device_class="power"
+                    )
+                ),
+
+                # EV Charger Control (Optional - for chargers without number entity)
+                vol.Optional(
+                    "ev_charger_service",
+                    default=suggestions.get("ev_charger_service", ""),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.TEXT
+                    )
+                ),
+                vol.Optional(
+                    "ev_charger_service_entity_id",
+                    description={"suggested_value": _opt_entity_default("ev_charger_service_entity_id")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
+                ),
+
+                # Optional EV sensors
+                vol.Optional(
+                    "ev_current_sensor",
+                    description={"suggested_value": _opt_entity_default("ev_current_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor",
+                        device_class="current"
+                    )
+                ),
+                vol.Optional(
+                    "ev_total_energy_sensor",
+                    description={"suggested_value": _opt_entity_default("ev_total_energy_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor",
+                        device_class="energy"
+                    )
+                ),
+                # Vehicle SOC fields moved to OptionsFlow — they only matter
+                # when the user has a real vehicle SOC sensor, which most
+                # cars don't expose. Asking on install creates dead inputs.
+            }),
+            errors=errors
+        )
+
+    @staticmethod
+    def _install_defaults() -> dict[str, Any]:
+        """Return the default values for fields the install flow no longer asks.
+
+        These keys are read by the coordinator (and various sub-modules) at
+        startup. Asking the user for every one of them is overwhelming, so the
+        slim install flow stores sensible defaults silently and lets advanced
+        users tune them later via the OptionsFlow or the runtime number
+        entities. Keep this in sync with the OptionsFlowHandler so the same
+        keys are editable post-install.
+        """
+        return {
+            # Coordinator deltas / loop
+            "update_interval": DEFAULT_UPDATE_INTERVAL,
+            "power_delta": DEFAULT_POWER_DELTA,
+            "current_delta": DEFAULT_CURRENT_DELTA,
+            "soc_delta": DEFAULT_SOC_DELTA,
+            # 4-zone SOC strategy thresholds (see docs/ARCHITECTURE.md)
+            "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
+            "battery_buffer_soc": DEFAULT_BATTERY_BUFFER_SOC,
+            "battery_auto_start_soc": DEFAULT_BATTERY_AUTO_START_SOC,
+            "battery_assist_floor_soc": DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
+            # Legacy 3-zone hard-stop / resume — kept for the safety gates
+            # in coordinator.py that haven't been migrated to the 4-zone
+            # strategy yet (battery_too_low check, hysteresis resume).
+            "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
+            "battery_resume_soc": DEFAULT_BATTERY_RESUME_SOC,
+            # Solar / power gates
+            "min_solar_power": DEFAULT_MIN_SOLAR_POWER,
+            "max_grid_import": DEFAULT_MAX_GRID_IMPORT,
+            # Daily target & battery assist
+            "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
+            "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
+            # Battery discharge protection (entity is auto-detected separately)
+            "battery_discharge_protection_enabled": DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED,
+            "battery_max_discharge_power": DEFAULT_BATTERY_MAX_DISCHARGE_POWER,
+            # Energy source selection
+            "prefer_hardware_energy": DEFAULT_PREFER_HARDWARE_ENERGY,
+            "energy_source_auto": DEFAULT_ENERGY_SOURCE_AUTO,
+            # Optional / opt-in feature
+            "forecast_night_reduction": False,
+            # Notifications — sensible defaults; tune in OptionsFlow
+            "enable_keba_notifications": True,
+            "enable_mobile_notifications": False,
+            "mobile_notification_service": "",
+            # Load management — only target_peak_limit is asked at install,
+            # everything else uses safe defaults that the user can tune later.
+            "load_management_enabled": DEFAULT_LOAD_MANAGEMENT_ENABLED,
+            "warning_peak_level": DEFAULT_WARNING_PEAK_LEVEL,
+            "emergency_peak_level": DEFAULT_EMERGENCY_PEAK_LEVEL,
+            "critical_device_protection": DEFAULT_CRITICAL_DEVICE_PROTECTION,
+        }
+
+    async def async_step_hardware(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Final install step: ask only the genuinely hardware-dependent values.
+
+        Asks the user for the home battery capacity and the grid peak limit
+        (both vary by install and have no universal default). Auto-detects
+        the inverter's battery discharge control entity from the entity
+        registry. All other tunables are filled from ``_install_defaults()``
+        so the coordinator boots with a complete config dict.
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                await self.async_set_unique_id(DOMAIN)
+                self._abort_if_unique_id_configured()
+
+                # Apply silent defaults first, then layer the user's hardware
+                # answers + auto-detected discharge entity on top.
+                merged: dict[str, Any] = {}
+                merged.update(self._install_defaults())
+                merged.update(self._data)
+                merged.update(user_input)
+
+                discharge_entity = discover_inverter_from_registry(
+                    self.hass, self._energy_dashboard_config
+                )
+                if discharge_entity:
+                    merged["battery_discharge_control_entity"] = discharge_entity
+                else:
+                    # Coordinator fallback expects the key to be present even
+                    # if empty so config.get() returns "".
+                    merged.setdefault("battery_discharge_control_entity", "")
+
+                self._data = merged
+                return self.async_create_entry(
+                    title="Solar Energy Management",
+                    data=self._data,
+                )
+            except Exception:
+                _LOGGER.exception("Unexpected exception creating entry")
+                errors["base"] = "unknown"
+
+        # Best-effort preview of the auto-detected discharge entity for the
+        # description placeholder so the user can see what was found.
+        detected_discharge = discover_inverter_from_registry(
+            self.hass, self._energy_dashboard_config
+        )
+        discharge_summary = (
+            f"`{detected_discharge}`" if detected_discharge else "(not auto-detected)"
+        )
+
+        return self.async_show_form(
+            step_id="hardware",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "battery_capacity_kwh",
+                    default=DEFAULT_BATTERY_CAPACITY_KWH,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=100, step=1, unit_of_measurement="kWh", mode="box"
+                    )
+                ),
+                vol.Required(
+                    "target_peak_limit",
+                    default=DEFAULT_TARGET_PEAK_LIMIT,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=2.0, max=20.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                    )
+                ),
+                # Opt-in: generate the SEM Lovelace dashboard right after the
+                # config entry is created. The post-setup hook in __init__.py
+                # consumes this flag exactly once and clears it from
+                # entry.data so the dashboard isn't regenerated on every
+                # restart.
+                vol.Optional(
+                    "generate_dashboard_on_install",
+                    default=True,
+                ): selector.BooleanSelector(),
+            }),
+            description_placeholders={
+                "discharge_entity": discharge_summary,
+            },
+            errors=errors,
+        )
+
+
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration of the integration."""
+        errors: dict[str, str] = {}
+
+        reconfigure_entry = self._get_reconfigure_entry()
+        current_config = {**reconfigure_entry.data, **reconfigure_entry.options}
+
+        if user_input is not None:
+            # Validate EV charger entities if provided
+            if self._detector is None:
+                self._detector = HardwareDetector(self.hass)
+
+            validation_errors = self._detector.validate_ev_configuration(user_input)
+            if validation_errors:
+                errors.update(validation_errors)
+
+            # Validate notification service if provided
+            mobile_service = user_input.get("mobile_notification_service", "").strip()
+            if user_input.get("enable_mobile_notifications", False) and mobile_service:
+                if not self.hass.services.has_service("notify", mobile_service.replace("notify.", "")):
+                    errors["mobile_notification_service"] = "service_not_found"
+
+            if not errors:
+                return self.async_update_reload_and_abort(
+                    reconfigure_entry,
+                    data_updates=user_input,
+                )
+
+        # Get available notification services
+        notify_services = [{"value": "", "label": "None"}]
+        try:
+            services_dict = self.hass.services.async_services()
+            if "notify" in services_dict:
+                for service in services_dict["notify"].keys():
+                    notify_services.append({
+                        "value": service,
+                        "label": f"notify.{service}"
+                    })
+                notify_services[1:] = sorted(notify_services[1:], key=lambda x: x["label"])
+        except Exception:
+            pass
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "ev_connected_sensor",
+                    default=current_config.get("ev_connected_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="binary_sensor")
+                ),
+                vol.Required(
+                    "ev_charging_sensor",
+                    default=current_config.get("ev_charging_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="binary_sensor")
+                ),
+                vol.Required(
+                    "ev_charging_power_sensor",
+                    default=current_config.get("ev_charging_power_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
+                ),
+                vol.Optional(
+                    "ev_charger_service",
+                    default=current_config.get("ev_charger_service", ""),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                ),
+                vol.Optional(
+                    "ev_charger_service_entity_id",
+                    default=current_config.get("ev_charger_service_entity_id", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
+                ),
+                vol.Optional(
+                    "ev_total_energy_sensor",
+                    default=current_config.get("ev_total_energy_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="energy")
+                ),
+                vol.Optional(
+                    "enable_keba_notifications",
+                    default=current_config.get("enable_keba_notifications", True),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "enable_mobile_notifications",
+                    default=current_config.get("enable_mobile_notifications", False),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "mobile_notification_service",
+                    default=current_config.get("mobile_notification_service", ""),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=notify_services,
+                        mode=selector.SelectSelectorMode.DROPDOWN
+                    )
+                ),
+            }),
+            errors=errors,
+        )
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options flow for Solar Energy Management."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow.
+
+        On HA 2024.12+ the framework auto-injects `self.config_entry` via
+        a property on the OptionsFlow base — explicitly assigning it raises
+        a deprecation warning. We just initialise our own state.
+        """
+        self._data: dict[str, Any] = {}
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        return await self.async_step_ev_charger()
+
+    async def async_step_ev_charger(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle EV charger options."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_settings()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+
+        # Same suggested_value pattern as the install ev_charger step:
+        # optional EntitySelector fields cannot use default="" — HA rejects
+        # empty strings as invalid entity IDs.
+        def _opt(key: str):
+            v = current_config.get(key)
+            return v if v else None
+
+        return self.async_show_form(
+            step_id="ev_charger",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "ev_connected_sensor",
+                    default=current_config.get("ev_connected_sensor", "")
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="binary_sensor")
+                ),
+                vol.Required(
+                    "ev_charging_sensor",
+                    default=current_config.get("ev_charging_sensor", "")
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="binary_sensor")
+                ),
+                vol.Required(
+                    "ev_charging_power_sensor",
+                    default=current_config.get("ev_charging_power_sensor", "")
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional(
+                    "ev_charger_service",
+                    default=current_config.get("ev_charger_service", ""),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                ),
+                vol.Optional(
+                    "ev_charger_service_entity_id",
+                    description={"suggested_value": _opt("ev_charger_service_entity_id")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
+                ),
+                vol.Optional(
+                    "ev_total_energy_sensor",
+                    description={"suggested_value": _opt("ev_total_energy_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                # Vehicle SOC fields — moved here from the install flow.
+                # Only meaningful when a vehicle SOC sensor is exposed in HA;
+                # see issues #97 and #98.
+                vol.Optional(
+                    "vehicle_soc_entity",
+                    description={"suggested_value": _opt("vehicle_soc_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="battery")
+                ),
+                vol.Optional(
+                    "ev_battery_capacity_kwh",
+                    default=current_config.get("ev_battery_capacity_kwh", 40),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=10, max=120, step=5, unit_of_measurement="kWh", mode="box"
+                    )
+                ),
+                vol.Optional(
+                    "ev_target_soc",
+                    default=current_config.get("ev_target_soc", 80),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
+                    )
+                ),
+            }),
+            errors=errors
+        )
+
+    async def async_step_settings(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """SOC Zone Strategy — battery thresholds for the 4-zone model."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_settings_ev()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+
+        return self.async_show_form(
+            step_id="settings",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "battery_priority_soc",
+                    default=current_config.get("battery_priority_soc", DEFAULT_BATTERY_PRIORITY_SOC),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=5, max=60, step=5, unit_of_measurement="%", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_buffer_soc",
+                    default=current_config.get("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=50, max=95, step=5, unit_of_measurement="%", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_auto_start_soc",
+                    default=current_config.get("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=70, max=100, step=5, unit_of_measurement="%", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_assist_floor_soc",
+                    default=current_config.get("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=30, max=80, step=5, unit_of_measurement="%", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_capacity_kwh",
+                    default=current_config.get("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=5, max=100, step=1, unit_of_measurement="kWh", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_assist_max_power",
+                    default=current_config.get("battery_assist_max_power",
+                        current_config.get("super_charger_power", DEFAULT_BATTERY_ASSIST_MAX_POWER)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1000, max=10000, step=500, unit_of_measurement="W", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_discharge_protection_enabled",
+                    default=current_config.get("battery_discharge_protection_enabled", DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "battery_max_discharge_power",
+                    default=current_config.get("battery_max_discharge_power", DEFAULT_BATTERY_MAX_DISCHARGE_POWER),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=500, max=10000, step=250, unit_of_measurement="W", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_discharge_control_entity",
+                    description={"suggested_value": current_config.get("battery_discharge_control_entity") or None},
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_settings_ev(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """EV Charging & Solar settings."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_settings_tariff()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+
+        return self.async_show_form(
+            step_id="settings_ev",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "daily_ev_target",
+                    default=current_config.get("daily_ev_target", DEFAULT_DAILY_EV_TARGET),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0, max=100, step=1, unit_of_measurement="kWh", mode="slider")
+                ),
+                vol.Optional(
+                    "min_solar_power",
+                    default=current_config.get("min_solar_power", DEFAULT_MIN_SOLAR_POWER),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0, max=5000, step=100, unit_of_measurement="W", mode="slider")
+                ),
+                vol.Optional(
+                    "max_grid_import",
+                    default=current_config.get("max_grid_import", DEFAULT_MAX_GRID_IMPORT),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0, max=2000, step=100, unit_of_measurement="W", mode="slider")
+                ),
+                vol.Optional(
+                    "observer_mode",
+                    default=current_config.get("observer_mode", DEFAULT_OBSERVER_MODE),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "forecast_night_reduction",
+                    default=current_config.get("forecast_night_reduction", False),
+                ): selector.BooleanSelector(),
+            }),
+        )
+
+    async def async_step_settings_tariff(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Tariff & Advanced settings."""
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_load_management()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+        currency = self.hass.config.currency
+
+        return self.async_show_form(
+            step_id="settings_tariff",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "electricity_import_rate",
+                    default=current_config.get("electricity_import_rate", 0.3387),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.0001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                ),
+                vol.Optional(
+                    "electricity_nt_rate",
+                    default=current_config.get("electricity_nt_rate", 0.3387),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.0001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                ),
+                vol.Optional(
+                    "electricity_export_rate",
+                    default=current_config.get("electricity_export_rate", 0.075),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.01, max=0.50, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                ),
+                vol.Optional(
+                    "demand_charge_rate",
+                    default=current_config.get("demand_charge_rate", 4.32),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.0, max=20.0, step=0.5, unit_of_measurement=f"{currency}/kW/Mt", mode="box")
+                ),
+                vol.Optional(
+                    "update_interval",
+                    default=current_config.get("update_interval", DEFAULT_UPDATE_INTERVAL),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="s", mode="slider")
+                ),
+                vol.Optional(
+                    "power_delta",
+                    default=current_config.get("power_delta", DEFAULT_POWER_DELTA),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=50, max=3000, step=50, unit_of_measurement="W", mode="slider")
+                ),
+                vol.Optional(
+                    "current_delta",
+                    default=current_config.get("current_delta", DEFAULT_CURRENT_DELTA),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=10, step=1, unit_of_measurement="A", mode="slider")
+                ),
+                vol.Optional(
+                    "soc_delta",
+                    default=current_config.get("soc_delta", DEFAULT_SOC_DELTA),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=20, step=1, unit_of_measurement="%", mode="slider")
+                ),
+            }),
+        )
+
+    async def async_step_load_management(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle load management options."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_notifications()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+
+        data_defaults = {
+            "load_management_enabled": current_config.get("load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED),
+            "target_peak_limit": current_config.get("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT),
+            "warning_peak_level": current_config.get("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
+            "emergency_peak_level": current_config.get("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
+            "critical_device_protection": current_config.get("critical_device_protection", DEFAULT_CRITICAL_DEVICE_PROTECTION),
+        }
+
+        return self.async_show_form(
+            step_id="load_management",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "load_management_enabled",
+                    default=data_defaults["load_management_enabled"],
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    "target_peak_limit",
+                    default=data_defaults["target_peak_limit"],
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1.0, max=15.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                    )
+                ),
+                vol.Required(
+                    "warning_peak_level",
+                    default=data_defaults["warning_peak_level"],
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1.0, max=15.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                    )
+                ),
+                vol.Required(
+                    "emergency_peak_level",
+                    default=data_defaults["emergency_peak_level"],
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1.0, max=20.0, step=0.5, unit_of_measurement="kW", mode="slider"
+                    )
+                ),
+                vol.Required(
+                    "critical_device_protection",
+                    default=data_defaults["critical_device_protection"],
+                ): selector.BooleanSelector(),
+            }),
+            errors=errors
+        )
+
+    async def async_step_notifications(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle notification options."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            mobile_service = user_input.get("mobile_notification_service", "").strip()
+            if user_input.get("enable_mobile_notifications", False) and mobile_service:
+                if not self.hass.services.has_service("notify", mobile_service.replace("notify.", "")):
+                    errors["mobile_notification_service"] = "service_not_found"
+
+            if not errors:
+                self._data.update(user_input)
+                return self.async_create_entry(data=self._data)
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+
+        suggestions = {
+            "enable_keba_notifications": current_config.get("enable_keba_notifications", True),
+            "enable_mobile_notifications": current_config.get("enable_mobile_notifications", False),
+            "mobile_notification_service": current_config.get("mobile_notification_service", ""),
+        }
+
+        notify_services = [{"value": "", "label": "None"}]
+        try:
+            services_dict = self.hass.services.async_services()
+            if "notify" in services_dict:
+                for service in services_dict["notify"].keys():
+                    notify_services.append({
+                        "value": service,
+                        "label": f"notify.{service}"
+                    })
+                notify_services[1:] = sorted(notify_services[1:], key=lambda x: x["label"])
+        except Exception as e:
+            _LOGGER.warning(f"Failed to get notification services: {e}")
+
+        return self.async_show_form(
+            step_id="notifications",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "enable_keba_notifications",
+                    default=suggestions.get("enable_keba_notifications", True),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "enable_mobile_notifications",
+                    default=suggestions.get("enable_mobile_notifications", False),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "mobile_notification_service",
+                    default=suggestions.get("mobile_notification_service", ""),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=notify_services,
+                        mode=selector.SelectSelectorMode.DROPDOWN
+                    )
+                ),
+            }),
+            errors=errors
+        )

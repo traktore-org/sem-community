@@ -1,0 +1,253 @@
+generate_dashboard:
+  name: Generate SEM Dashboard
+  description: >
+    Generate and install the SEM Community dashboard with 5 views:
+    Home (gauges + status), Energy (24h power + 7-day),
+    Battery (SOC + charts), EV (session + controls), Costs.
+
+    Installs the SVG system diagram, registers the dashboard in the
+    sidebar, and restarts HA to apply changes.
+  fields:
+    dashboard_title:
+      name: Dashboard Title
+      description: "Display name shown in sidebar"
+      required: false
+      default: "Solar Energy Management"
+      example: "Solar Energy Management"
+      selector:
+        text:
+    dashboard_path:
+      name: Dashboard URL Path
+      description: "URL path for the dashboard (lowercase, use dashes)"
+      required: false
+      default: "sem-dashboard"
+      example: "sem-dashboard"
+      selector:
+        text:
+
+sync_priorities_from_dashboard:
+  name: Sync Priorities from Dashboard
+  description: Automatically sync device priorities from dashboard card order (drag-and-drop)
+  fields:
+    dashboard_storage_key:
+      name: Dashboard Storage Key
+      description: Dashboard file name (default lovelace.dashboard_test)
+      required: false
+      default: "lovelace.dashboard_test"
+      selector:
+        text:
+    view_path:
+      name: View Path
+      description: Dashboard view path containing device cards (default peak-load-management)
+      required: false
+      default: "peak-load-management"
+      selector:
+        text:
+
+update_device_priorities:
+  name: Update Device Priorities
+  description: Batch update device priorities from drag-and-drop reorder in the load priority card.
+  fields:
+    priorities:
+      name: Priorities
+      description: "List of {device_id, priority} objects representing the new order"
+      required: true
+      selector:
+        object:
+
+update_device_config:
+  name: Update Device Config
+  description: Toggle a device property (controllable or critical status).
+  fields:
+    device_id:
+      name: Device ID
+      description: The device to update
+      required: true
+      selector:
+        text:
+    property:
+      name: Property
+      description: "Which property to change: 'controllable' or 'critical'"
+      required: true
+      selector:
+        select:
+          options:
+            - controllable
+            - critical
+    value:
+      name: Value
+      description: New boolean value
+      required: true
+      selector:
+        boolean:
+
+update_target_peak:
+  name: Update Target Peak
+  description: Set the target peak limit for load management (kW).
+  fields:
+    target_peak_limit:
+      name: Target Peak Limit
+      description: New target peak limit in kW (1.0 – 20.0)
+      required: true
+      selector:
+        number:
+          min: 1.0
+          max: 20.0
+          step: 0.1
+          unit_of_measurement: kW
+
+configure_energy_dashboard:
+  name: Configure Energy Dashboard
+  description: Automatically configure Home Assistant Energy Dashboard with SEM sensors (Grid, Solar, Battery, EV Charger)
+
+set_device_control_mapping:
+  name: Set Device Control Mapping
+  description: Manually map a control entity to an Energy Dashboard device when auto-discovery fails. The mapping is persisted and survives restarts.
+  fields:
+    energy_sensor:
+      name: Energy Sensor
+      description: "The energy sensor entity from the Energy Dashboard (e.g., sensor.heizband_energy)"
+      required: true
+      selector:
+        entity:
+          domain: sensor
+    control_entity:
+      name: Control Entity
+      description: "The entity to use for control (e.g., switch.towelheater_men or number.keba_current)"
+      required: true
+      selector:
+        entity:
+    control_type:
+      name: Control Type
+      description: "How the entity is controlled: switch (on/off), current (set amperage), or service (call a service)"
+      required: false
+      default: "switch"
+      selector:
+        select:
+          options:
+            - switch
+            - current
+            - service
+
+register_surplus_device:
+  name: Register Surplus Device
+  description: Register a device (switch, relay, smart plug) for solar surplus control. The device will be activated when surplus power is available, based on its priority.
+  fields:
+    device_id:
+      name: Device ID
+      description: Unique identifier for the device (e.g., "hot_water_relay")
+      required: true
+      selector:
+        text:
+    entity_id:
+      name: Entity ID
+      description: The switch entity to control (e.g., "switch.shelly_hot_water")
+      required: true
+      selector:
+        entity:
+          domain: switch
+    name:
+      name: Display Name
+      description: Friendly name for the device
+      required: false
+      selector:
+        text:
+    priority:
+      name: Priority
+      description: "Device priority (1=highest, 10=lowest). Lower priority devices get surplus first."
+      required: false
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1
+    rated_power:
+      name: Rated Power (W)
+      description: Device rated power consumption in watts
+      required: false
+      default: 1000
+      selector:
+        number:
+          min: 100
+          max: 20000
+          unit_of_measurement: W
+    power_entity_id:
+      name: Power Sensor
+      description: Optional power monitoring sensor for the device
+      required: false
+      selector:
+        entity:
+          domain: sensor
+          device_class: power
+
+schedule_appliance:
+  name: Schedule Appliance
+  description: Schedule a household appliance (dishwasher, washer) to run before a deadline. The system will start it when solar surplus is available, or start from grid if the deadline approaches.
+  fields:
+    device_id:
+      name: Device ID
+      description: Unique identifier for the appliance (e.g., "dishwasher")
+      required: true
+      selector:
+        text:
+    entity_id:
+      name: Entity ID
+      description: The switch entity to start the appliance
+      required: true
+      selector:
+        entity:
+          domain: switch
+    deadline:
+      name: Deadline
+      description: "When the appliance must finish (ISO format, e.g., '2026-03-19T18:00:00')"
+      required: true
+      selector:
+        text:
+    name:
+      name: Display Name
+      description: Friendly name for the appliance
+      required: false
+      selector:
+        text:
+    estimated_runtime_minutes:
+      name: Estimated Runtime (minutes)
+      description: How long the appliance typically runs
+      required: false
+      default: 120
+      selector:
+        number:
+          min: 15
+          max: 480
+          unit_of_measurement: min
+    estimated_energy_kwh:
+      name: Estimated Energy (kWh)
+      description: How much energy the appliance typically uses
+      required: false
+      default: 1.0
+      selector:
+        number:
+          min: 0.1
+          max: 10
+          step: 0.1
+          unit_of_measurement: kWh
+    rated_power:
+      name: Rated Power (W)
+      description: Appliance rated power consumption
+      required: false
+      default: 1000
+      selector:
+        number:
+          min: 100
+          max: 5000
+          unit_of_measurement: W
+    priority:
+      name: Priority
+      description: "Scheduling priority (1=highest, 10=lowest)"
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 10
+          step: 1

@@ -1,0 +1,423 @@
+{
+  "entity": {
+    "sensor": {
+      "solar_power": {
+        "default": "mdi:solar-power"
+      },
+      "home_consumption_power": {
+        "default": "mdi:home-lightning-bolt"
+      },
+      "grid_power": {
+        "default": "mdi:transmission-tower"
+      },
+      "grid_import_power": {
+        "default": "mdi:transmission-tower-import"
+      },
+      "grid_export_power": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "battery_power": {
+        "default": "mdi:battery-charging"
+      },
+      "ev_power": {
+        "default": "mdi:ev-station"
+      },
+      "available_power": {
+        "default": "mdi:flash"
+      },
+      "battery_soc": {
+        "default": "mdi:battery"
+      },
+      "battery_status": {
+        "default": "mdi:battery-heart"
+      },
+      "battery_temperature": {
+        "default": "mdi:thermometer"
+      },
+      "calculated_current": {
+        "default": "mdi:current-ac"
+      },
+      "charging_state": {
+        "default": "mdi:state-machine"
+      },
+      "grid_status": {
+        "default": "mdi:transmission-tower"
+      },
+      "solar_charging_status": {
+        "default": "mdi:solar-power"
+      },
+      "night_charging_status": {
+        "default": "mdi:weather-night"
+      },
+      "battery_priority_status": {
+        "default": "mdi:battery-arrow-up"
+      },
+      "charging_strategy": {
+        "default": "mdi:strategy"
+      },
+      "daily_solar_energy": {
+        "default": "mdi:solar-panel"
+      },
+      "daily_home_energy": {
+        "default": "mdi:home"
+      },
+      "daily_grid_import_energy": {
+        "default": "mdi:transmission-tower-import"
+      },
+      "daily_grid_export_energy": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "daily_battery_charge_energy": {
+        "default": "mdi:battery-plus"
+      },
+      "daily_battery_discharge_energy": {
+        "default": "mdi:battery-minus"
+      },
+      "daily_ev_energy": {
+        "default": "mdi:counter"
+      },
+      "monthly_solar_yield_energy": {
+        "default": "mdi:solar-panel"
+      },
+      "monthly_grid_import_energy": {
+        "default": "mdi:transmission-tower-import"
+      },
+      "monthly_grid_export_energy": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "monthly_battery_charge_energy": {
+        "default": "mdi:battery-plus"
+      },
+      "monthly_battery_discharge_energy": {
+        "default": "mdi:battery-minus"
+      },
+      "monthly_home_consumption_energy": {
+        "default": "mdi:home"
+      },
+      "flow_solar_to_home_power": {
+        "default": "mdi:home-solar-panel"
+      },
+      "flow_solar_to_battery_power": {
+        "default": "mdi:battery-charging"
+      },
+      "flow_solar_to_grid_power": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "flow_solar_to_ev_power": {
+        "default": "mdi:car-electric"
+      },
+      "flow_battery_to_home_power": {
+        "default": "mdi:home-battery"
+      },
+      "flow_battery_to_ev_power": {
+        "default": "mdi:car-battery"
+      },
+      "flow_grid_to_home_power": {
+        "default": "mdi:home-import-outline"
+      },
+      "flow_grid_to_ev_power": {
+        "default": "mdi:car-electric"
+      },
+      "flow_grid_to_battery_power": {
+        "default": "mdi:transmission-tower-import"
+      },
+      "flow_solar_to_home_energy": {
+        "default": "mdi:home-solar-panel"
+      },
+      "flow_solar_to_ev_energy": {
+        "default": "mdi:solar-panel-large"
+      },
+      "flow_solar_to_battery_energy": {
+        "default": "mdi:battery-charging"
+      },
+      "flow_solar_to_grid_energy": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "flow_grid_to_home_energy": {
+        "default": "mdi:home-import-outline"
+      },
+      "flow_grid_to_ev_energy": {
+        "default": "mdi:car-electric"
+      },
+      "flow_grid_to_battery_energy": {
+        "default": "mdi:battery-charging"
+      },
+      "flow_battery_to_home_energy": {
+        "default": "mdi:home-battery"
+      },
+      "flow_battery_to_ev_energy": {
+        "default": "mdi:car-battery"
+      },
+      "self_consumption_rate": {
+        "default": "mdi:home-percent"
+      },
+      "autarky_rate": {
+        "default": "mdi:home-solar-panel"
+      },
+      "daily_savings": {
+        "default": "mdi:piggy-bank"
+      },
+      "daily_battery_savings": {
+        "default": "mdi:battery-plus"
+      },
+      "daily_costs": {
+        "default": "mdi:cash-minus"
+      },
+      "daily_export_revenue": {
+        "default": "mdi:cash-plus"
+      },
+      "daily_net_cost": {
+        "default": "mdi:calculator"
+      },
+      "monthly_savings": {
+        "default": "mdi:piggy-bank"
+      },
+      "monthly_battery_savings": {
+        "default": "mdi:battery-plus"
+      },
+      "monthly_costs": {
+        "default": "mdi:cash-minus"
+      },
+      "monthly_export_revenue": {
+        "default": "mdi:cash-plus"
+      },
+      "monthly_net_cost": {
+        "default": "mdi:calculator"
+      },
+      "power_charge_cost": {
+        "default": "mdi:currency-chf"
+      },
+      "consecutive_peak_15min": {
+        "default": "mdi:chart-bell-curve-cumulative"
+      },
+      "monthly_consecutive_peak": {
+        "default": "mdi:chart-timeline-variant"
+      },
+      "current_vs_peak_percentage": {
+        "default": "mdi:percent"
+      },
+      "target_peak_limit": {
+        "default": "mdi:gauge"
+      },
+      "peak_margin": {
+        "default": "mdi:margin"
+      },
+      "load_management_status": {
+        "default": "mdi:power-plug"
+      },
+      "load_management_recommendation": {
+        "default": "mdi:lightbulb-on"
+      },
+      "loads_currently_shed": {
+        "default": "mdi:power-plug-off"
+      },
+      "available_load_reduction": {
+        "default": "mdi:flash-off"
+      },
+      "controllable_devices_count": {
+        "default": "mdi:devices"
+      },
+      "surplus_total_w": {
+        "default": "mdi:lightning-bolt"
+      },
+      "surplus_distributable_w": {
+        "default": "mdi:lightning-bolt-outline"
+      },
+      "surplus_allocated_w": {
+        "default": "mdi:share-variant"
+      },
+      "surplus_unallocated_w": {
+        "default": "mdi:share-variant-outline"
+      },
+      "surplus_active_devices": {
+        "default": "mdi:devices"
+      },
+      "surplus_total_devices": {
+        "default": "mdi:format-list-numbered"
+      },
+      "forecast_today_kwh": {
+        "default": "mdi:weather-sunny-alert"
+      },
+      "forecast_tomorrow_kwh": {
+        "default": "mdi:weather-sunny-alert"
+      },
+      "forecast_remaining_today_kwh": {
+        "default": "mdi:sun-clock"
+      },
+      "forecast_power_now_w": {
+        "default": "mdi:sun-wireless"
+      },
+      "forecast_source": {
+        "default": "mdi:cloud-search"
+      },
+      "charging_recommendation": {
+        "default": "mdi:strategy"
+      },
+      "tariff_current_import_rate": {
+        "default": "mdi:cash"
+      },
+      "tariff_current_export_rate": {
+        "default": "mdi:cash-refund"
+      },
+      "tariff_price_level": {
+        "default": "mdi:tag-outline"
+      },
+      "tariff_provider": {
+        "default": "mdi:domain"
+      },
+      "tariff_next_cheap_start": {
+        "default": "mdi:clock-check-outline"
+      },
+      "heat_pump_mode": {
+        "default": "mdi:heat-pump"
+      },
+      "heat_pump_sg_ready_state": {
+        "default": "mdi:state-machine"
+      },
+      "pv_daily_specific_yield": {
+        "default": "mdi:solar-panel-large"
+      },
+      "pv_performance_vs_forecast": {
+        "default": "mdi:chart-timeline-variant-shimmer"
+      },
+      "pv_estimated_annual_degradation": {
+        "default": "mdi:trending-down"
+      },
+      "pv_degradation_trend": {
+        "default": "mdi:chart-line"
+      },
+      "energy_optimization_score": {
+        "default": "mdi:gauge"
+      },
+      "energy_tip": {
+        "default": "mdi:lightbulb-on-outline"
+      },
+      "energy_tip_category": {
+        "default": "mdi:tag"
+      },
+      "energy_ev_solar_percentage": {
+        "default": "mdi:ev-plug-type2"
+      },
+      "utility_signal_source": {
+        "default": "mdi:broadcast"
+      },
+      "utility_signal_count_today": {
+        "default": "mdi:counter"
+      }
+    },
+    "binary_sensor": {
+      "ev_connected": {
+        "default": "mdi:ev-plug-type2"
+      },
+      "ev_charging": {
+        "default": "mdi:ev-station"
+      },
+      "battery_charging": {
+        "default": "mdi:battery-charging"
+      },
+      "battery_discharging": {
+        "default": "mdi:battery-minus"
+      },
+      "grid_export_active": {
+        "default": "mdi:transmission-tower-export"
+      },
+      "solar_active": {
+        "default": "mdi:solar-power"
+      },
+      "forecast_available": {
+        "default": "mdi:weather-sunny-alert"
+      },
+      "tariff_is_dynamic": {
+        "default": "mdi:cash-sync"
+      },
+      "heat_pump_solar_boost": {
+        "default": "mdi:heat-pump-outline"
+      },
+      "utility_signal_active": {
+        "default": "mdi:broadcast"
+      }
+    },
+    "switch": {
+      "charging_control": {
+        "default": "mdi:ev-station"
+      },
+      "force_charge": {
+        "default": "mdi:flash"
+      },
+      "night_charging": {
+        "default": "mdi:weather-night"
+      },
+      "keba_notifications": {
+        "default": "mdi:message-processing"
+      },
+      "mobile_notifications": {
+        "default": "mdi:cellphone-message"
+      },
+      "surplus_control": {
+        "default": "mdi:lightning-bolt-circle"
+      },
+      "price_responsive_mode": {
+        "default": "mdi:cash-sync"
+      },
+      "heat_pump_solar_boost": {
+        "default": "mdi:heat-pump-outline"
+      },
+      "hot_water_solar_control": {
+        "default": "mdi:water-boiler"
+      }
+    },
+    "number": {
+      "update_interval": {
+        "default": "mdi:timer"
+      },
+      "power_delta": {
+        "default": "mdi:flash"
+      },
+      "current_delta": {
+        "default": "mdi:current-ac"
+      },
+      "soc_delta": {
+        "default": "mdi:battery"
+      },
+      "battery_priority_soc": {
+        "default": "mdi:battery-high"
+      },
+      "battery_minimum_soc": {
+        "default": "mdi:battery-low"
+      },
+      "battery_resume_soc": {
+        "default": "mdi:battery-medium"
+      },
+      "minimum_solar_power": {
+        "default": "mdi:solar-panel"
+      },
+      "maximum_grid_import": {
+        "default": "mdi:transmission-tower"
+      },
+      "daily_ev_target": {
+        "default": "mdi:target"
+      },
+      "battery_assist_max_power": {
+        "default": "mdi:battery-heart-variant"
+      },
+      "regulation_offset": {
+        "default": "mdi:tune-vertical"
+      },
+      "cheap_price_threshold": {
+        "default": "mdi:cash-minus"
+      },
+      "expensive_price_threshold": {
+        "default": "mdi:cash-plus"
+      },
+      "heat_pump_boost_offset": {
+        "default": "mdi:thermometer-plus"
+      },
+      "hot_water_max_temperature": {
+        "default": "mdi:water-thermometer"
+      },
+      "system_size_kwp": {
+        "default": "mdi:solar-panel"
+      }
+    }
+  }
+}

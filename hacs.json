@@ -1,0 +1,6 @@
+{
+  "name": "Solar Energy Management",
+  "render_readme": true,
+  "homeassistant": "2025.3.0",
+  "content_in_root": true
+}

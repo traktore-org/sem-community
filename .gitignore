@@ -1,0 +1,91 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Backups
+*.backup
+*.bak
+*~
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+current_battery_analysis.json
+winter_data.json
+*.json.bak
+
+# Test outputs
+test_*.txt
+*_debug_output.txt
+
+# Recreation/migration artifacts
+recreation/
+extract_*.py
+backfill_*.py
+*_recreation*.py
+cleanup_*.py
+standalone_*.py
+fix_*.py
+find_*.py
+sankey_diagnostic.py
+trigger_*.py
+update_*.py
+
+# Debug scripts
+debug_*.sh
+debug_*.py
+*_debug.py
+# Ignore root-level test scripts (not tests/ directory)
+/test_*.py
+
+# Service call test files
+service_call_*.yaml
+trigger_*.yaml
+*_test*.yaml
+
+# Temporary dashboard files
+dashboard_temp/
+*_improved.yaml
+sankey_*.yaml
+
+# Documentation artifacts
+*.zip
+*.sh
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude settings (keep local only)
+.claude/
+CLAUDE.md
+
+# Logo source assets (large files, only sized outputs in root)
+logo/
+
+# Development/Utility folders (not needed for module runtime)
+migration/
+deployment/
+dashboard_generator.py
+run_tests.sh
+n8n_workflow_improved.json
+
+# Temporary screenshots
+tmp/
