@@ -101,26 +101,6 @@ class TestDashboardTemplate:
 class TestWeatherSubstitution:
     """Test weather entity substitution in the dashboard generator."""
 
-    def test_weather_entity_substituted(self, hass, generator):
-        """Weather card entity should be replaced with actual weather entity."""
-        # Mock weather entity
-        weather_state = MagicMock()
-        weather_state.entity_id = "weather.home_assistant"
-        hass.states.async_all.return_value = [weather_state]
-
-        template = {
-            "views": [
-                {
-                    "cards": [
-                    ]
-                }
-            ]
-        }
-
-        generator._substitute_weather_entity(template)
-        card = template["views"][0]["cards"][0]
-        assert card["entity"] == "weather.home_assistant"
-
     def test_weather_card_removed_if_no_entity(self, hass, generator):
         """Weather card should be removed if no weather entity exists."""
         hass.states.async_all.return_value = []
@@ -130,6 +110,7 @@ class TestWeatherSubstitution:
                 {
                     "cards": [
                         {"type": "custom:mushroom-template-card"},
+                        {"type": "custom:clock-weather-card", "entity": "weather.home"},
                     ]
                 }
             ]
@@ -139,23 +120,3 @@ class TestWeatherSubstitution:
         cards = template["views"][0]["cards"]
         assert len(cards) == 1
         assert cards[0]["type"] == "custom:mushroom-template-card"
-
-    def test_forecast_entity_filtered(self, hass, generator):
-        """weather.forecast_* entities should be filtered out."""
-        forecast = MagicMock()
-        forecast.entity_id = "weather.forecast_home"
-        real = MagicMock()
-        real.entity_id = "weather.openweathermap"
-        hass.states.async_all.return_value = [forecast, real]
-
-        template = {
-            "views": [
-                {
-                    "cards": [
-                    ]
-                }
-            ]
-        }
-
-        generator._substitute_weather_entity(template)
-        assert template["views"][0]["cards"][0]["entity"] == "weather.openweathermap"
