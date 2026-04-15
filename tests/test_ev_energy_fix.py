@@ -314,12 +314,12 @@ class TestLayer3HardwareReconciliation:
 class TestKebaAutoDetection:
     """SensorReader auto-detects KEBA daily energy sensor from power sensor name."""
 
-    def test_keba_power_sensor_auto_detects_daily(self):
-        """KEBA power sensor → auto-detect sensor.keba_p30_charging_daily."""
+    def test_keba_power_sensor_no_auto_detect(self):
+        """KEBA auto-detection removed — daily energy must be explicitly configured."""
         config = {"ev_charging_power_sensor": "sensor.keba_p30_charging_power"}
         hass = _make_hass()
         reader = SensorReader(hass, config)
-        assert reader.config.ev_daily_energy_sensor == "sensor.keba_p30_charging_daily"
+        assert reader.config.ev_daily_energy_sensor is None
 
     def test_non_keba_power_sensor_no_auto_detect(self):
         """Non-KEBA power sensor → no auto-detection."""

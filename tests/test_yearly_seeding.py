@@ -94,18 +94,13 @@ class TestYearlySeeding:
         stats = _make_full_stats(solar=500, grid_import=300, grid_export=200,
                                  batt_charge=150, batt_discharge=120, ev=80)
 
-        with patch(
-            "custom_components.solar_energy_management.coordinator.energy_calculator.statistics_during_period",
-            new_callable=AsyncMock,
-            return_value=stats,
-        ):
-            # Patch the import inside the method
-            with patch.dict("sys.modules", {
-                "homeassistant.components.recorder.statistics": MagicMock(
-                    statistics_during_period=AsyncMock(return_value=stats)
-                )
-            }):
-                await calculator.seed_yearly_from_statistics(hass, ed_config)
+        mock_module = MagicMock()
+        mock_module.statistics_during_period = AsyncMock(return_value=stats)
+        with patch.dict("sys.modules", {
+            "homeassistant.components.recorder": MagicMock(),
+            "homeassistant.components.recorder.statistics": mock_module,
+        }):
+            await calculator.seed_yearly_from_statistics(hass, ed_config)
 
         assert calculator._yearly_seeded is True
         year = str(datetime.now().year)
@@ -165,10 +160,11 @@ class TestYearlySeeding:
         stats = _make_full_stats(solar=100, grid_import=50, grid_export=200,
                                  batt_charge=100, batt_discharge=30, ev=0)
 
+        mock_module = MagicMock()
+        mock_module.statistics_during_period = AsyncMock(return_value=stats)
         with patch.dict("sys.modules", {
-            "homeassistant.components.recorder.statistics": MagicMock(
-                statistics_during_period=AsyncMock(return_value=stats)
-            )
+            "homeassistant.components.recorder": MagicMock(),
+            "homeassistant.components.recorder.statistics": mock_module,
         }):
             await calculator.seed_yearly_from_statistics(hass, ed_config)
 

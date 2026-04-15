@@ -15,6 +15,7 @@ def hass():
     """Create a mock Home Assistant instance."""
     hass = MagicMock()
     hass.config.config_dir = "/config"
+    hass.data = {}
     hass.states.async_all.return_value = []
     hass.async_add_executor_job = AsyncMock(side_effect=lambda fn, *a: fn(*a))
     return hass
