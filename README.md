@@ -231,7 +231,9 @@ SEM creates 60+ sensors organized by category:
 
 ## Supported Hardware
 
-**Solar Inverters:** Huawei Solar, SolarEdge, Fronius, SMA, Enphase, or any inverter with HA sensors
+**Solar Inverters:** Huawei Solar, SolAX, DEYE, Sunsynk, SolArk, Growatt, Sofar, Solis, KSTAR, Fronius, SMA, SolarEdge, Enphase, or any inverter with HA sensors
+
+**Battery discharge control auto-detected for:** Huawei Solar, SolAX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis
 
 **Batteries:** Huawei LUNA2000, Tesla Powerwall, LG Chem, BYD, Sonnen
 
