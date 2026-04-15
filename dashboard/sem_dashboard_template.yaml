@@ -2129,7 +2129,25 @@ views:
                   style: *glass_card
 
           # ══════════════════════════════════════════════════════
-          # 4. CONFIGURATION
+          # 4. BATTERY HEALTH
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-template-card
+            primary: Battery Health
+            secondary: >-
+              Health: {{ states('sensor.sem_battery_health_score') | float(100) | round(1) }}%  ·  Cycles: {{ states('sensor.sem_battery_cycles_estimated') | float(0) | round(1) }}
+
+              Charge today: {{ states('sensor.sem_daily_battery_charge_energy') | float(0) | round(1) }} kWh  ·  Discharge: {{ states('sensor.sem_daily_battery_discharge_energy') | float(0) | round(1) }} kWh
+
+              Temperature: {{ states('sensor.sem_battery_temperature') | float(0) | round(1) }}°C  ·  SOC: {{ states('sensor.sem_battery_soc') | float(0) | round(0) }}%
+            icon: mdi:battery-heart-variant
+            icon_color: >-
+              {% if states('sensor.sem_battery_health_score') | float(100) > 80 %}green{% elif states('sensor.sem_battery_health_score') | float(100) > 60 %}amber{% else %}red{% endif %}
+            multiline_secondary: true
+            card_mod:
+              style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 5. CONFIGURATION
           # ══════════════════════════════════════════════════════
           - type: custom:mushroom-template-card
             primary: Configuration

@@ -641,6 +641,12 @@
       },
       "forecast_surplus_kwh": {
         "name": "Forecast Surplus"
+      },
+      "battery_cycles_estimated": {
+        "name": "Battery Cycles (Estimated)"
+      },
+      "battery_health_score": {
+        "name": "Battery Health Score"
       }
     },
     "binary_sensor": {

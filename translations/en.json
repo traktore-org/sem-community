@@ -231,6 +231,12 @@
       "battery_temperature": {
         "name": "Battery Temperature"
       },
+      "battery_cycles_estimated": {
+        "name": "Battery Cycles (Estimated)"
+      },
+      "battery_health_score": {
+        "name": "Battery Health Score"
+      },
       "calculated_current": {
         "name": "Calculated Current"
       },

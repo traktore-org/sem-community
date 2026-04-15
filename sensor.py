@@ -130,8 +130,19 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
     ),
-    # Removed: Battery details not populated from hardware
-    # battery_voltage (hardcoded 48V), battery_current, battery_cycles, battery_health, battery_efficiency
+    SensorEntityDescription(
+        key="battery_cycles_estimated",
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=1,
+        icon="mdi:battery-sync",
+    ),
+    SensorEntityDescription(
+        key="battery_health_score",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+        icon="mdi:battery-heart-variant",
+    ),
 
     # ============================================================================
     # EV CHARGING CONTROL & STATUS

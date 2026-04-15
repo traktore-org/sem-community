@@ -395,6 +395,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 except Exception as e:
                     _LOGGER.warning("Yearly seeding from statistics failed (will retry): %s", e)
 
+            # Step 9c: Calculate battery health metrics
+            battery_capacity = self.config.get("battery_capacity_kwh", 15.0)
+            if battery_capacity > 0:
+                lifetime_charge = self._energy_calculator._get_lifetime("battery_charge")
+                lifetime_discharge = self._energy_calculator._get_lifetime("battery_discharge")
+                total_throughput = (lifetime_charge + lifetime_discharge) / 2
+                power.battery_cycles_estimated = round(total_throughput / battery_capacity, 1)
+                # Estimate health: assume 0.02% degradation per cycle (typical Li-ion)
+                degradation = min(30, power.battery_cycles_estimated * 0.02)
+                power.battery_health_score = round(100 - degradation, 1)
+
             # Step 10: Read forecast data (Phase 0.3)
             forecast_data = ForecastSensorData()
             try:
