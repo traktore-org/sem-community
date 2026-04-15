@@ -26,14 +26,14 @@ Before installing SEM, make sure you have:
 
 1. Open **HACS** > **Integrations**
 2. Click the 3-dot menu > **Custom repositories**
-3. Add URL: `https://github.com/traktore-org/sem-community`
+3. Add URL: `https://github.com/traktore-org/solar_energy_management`
 4. Set category: **Integration** > Click **Add**
 5. Search for **Solar Energy Management** > Click **Download**
 6. **Restart Home Assistant**
 
 ### Option B: Manual Install
 
-1. Download the [latest release](https://github.com/traktore-org/sem-community/releases)
+1. Download the [latest release](https://github.com/traktore-org/solar_energy_management/releases)
 2. Copy the `solar_energy_management/` folder to `config/custom_components/`
 3. **Restart Home Assistant**
 

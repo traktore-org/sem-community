@@ -307,6 +307,7 @@ class SEMStorage:
             "yearly_accumulators": dict(self._daily_data.get("yearly_accumulators", {})),
             "lifetime_accumulators": dict(self._daily_data.get("lifetime_accumulators", {})),
             "last_update": self._energy_data.get("last_update"),
+            "yearly_seeded": self._daily_data.get("yearly_seeded", False),
         }
 
     def import_energy_calculator_state(self, state: Dict[str, Any]) -> None:
@@ -319,6 +320,8 @@ class SEMStorage:
             self._daily_data["yearly_accumulators"] = state["yearly_accumulators"]
         if "lifetime_accumulators" in state:
             self._daily_data["lifetime_accumulators"] = state["lifetime_accumulators"]
+        if "yearly_seeded" in state:
+            self._daily_data["yearly_seeded"] = state["yearly_seeded"]
 
     def export_forecast_tracker_state(self) -> Dict[str, Any]:
         """Export state for ForecastTracker."""

@@ -14,7 +14,8 @@
 #   fold-entity-row  — collapsible Welcome intro on Home tab
 #
 # Bundled SEM cards (auto-registered, no HACS needed):
-#   sem-system-diagram-card  — animated power flow diagram with device nodes
+#   sem-flow-card            — animated power flow with daily energy, autarky, config editor
+#   sem-system-diagram-card  — animated power flow diagram (legacy, kept for compat)
 #   sem-solar-summary-card   — solar yield summary
 #   sem-weather-card         — weather + clock header
 #   sem-chart-card           — cost / savings charts
@@ -22,7 +23,7 @@
 #   sem-load-priority-card   — drag-and-drop device priority (inlined SortableJS)
 #
 # Removed in v2.6.x (replaced by bundled SEM cards or native HA):
-#   power-flow-card-plus → sem-system-diagram-card
+#   power-flow-card-plus → sem-system-diagram-card → sem-flow-card
 #   mini-graph-card      → apexcharts-card
 #   solar-card           → sem-solar-summary-card
 #   clock-weather-card   → sem-weather-card
@@ -153,8 +154,8 @@ views:
                   box-shadow: 0 6px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08) !important;
                 }
 
-          # ── System Diagram (dynamic power flow, full-width) ──
-          - type: custom:sem-system-diagram-card
+          # ── Flow Card (animated power flow with daily energy + autarky) ──
+          - type: custom:sem-flow-card
             entity_prefix: sensor.sem_
             view_layout:
               position: main

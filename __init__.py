@@ -475,13 +475,46 @@ async def _async_register_services(
             if installed_cards:
                 _LOGGER.info("Installed %d card(s) to %s: %s", len(installed_cards), card_www_dir, installed_cards)
 
+            # Step 1b: Clean up stale card copies in /config/www/ root
+            # Old standalone installs may leave files that conflict with
+            # the component-managed copies (double customElements.define).
+            def _cleanup_stale_www():
+                www_dir = os.path.join(hass.config.config_dir, "www")
+                removed = []
+                for fname in os.listdir(www_dir) if os.path.isdir(www_dir) else []:
+                    if fname.startswith("sem-") and fname.endswith(".js"):
+                        stale = os.path.join(www_dir, fname)
+                        os.remove(stale)
+                        removed.append(fname)
+                return removed
+
+            stale_removed = await hass.async_add_executor_job(_cleanup_stale_www)
+            if stale_removed:
+                _LOGGER.info("Removed %d stale card(s) from /config/www/: %s", len(stale_removed), stale_removed)
+
             # Step 1c: Register cards as Lovelace resources (idempotent)
             # Compare by base URL (without ?v= query) to avoid duplicates
             # when _async_register_frontend_resources already added versioned URLs.
+            # Also remove stale /local/sem-*.js entries (old standalone installs).
             resources_store = Store(hass, 1, "lovelace_resources")
             resources_data = await resources_store.async_load() or {"items": []}
             if "items" not in resources_data:
                 resources_data["items"] = []
+
+            # Remove stale standalone resource entries (/local/sem-*.js)
+            component_prefix = f"/local/custom_components/{DOMAIN}/"
+            before_count = len(resources_data["items"])
+            resources_data["items"] = [
+                item for item in resources_data["items"]
+                if not (
+                    item.get("url", "").startswith("/local/sem-")
+                    and component_prefix not in item.get("url", "")
+                )
+            ]
+            stale_count = before_count - len(resources_data["items"])
+            if stale_count:
+                _LOGGER.info("Removed %d stale Lovelace resource(s)", stale_count)
+
             existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
             added_resources = []
             for fname in installed_cards:
@@ -494,9 +527,10 @@ async def _async_register_services(
                         "type": "module",
                     })
                     added_resources.append(base_url)
-            if added_resources:
+            if added_resources or stale_count:
                 await resources_store.async_save(resources_data)
-                _LOGGER.info("Registered %d new Lovelace resource(s): %s", len(added_resources), added_resources)
+                if added_resources:
+                    _LOGGER.info("Registered %d new Lovelace resource(s): %s", len(added_resources), added_resources)
 
             # Step 2: Generate dashboard config
             generator = DashboardGenerator(hass)
@@ -926,12 +960,14 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         chart_base = f"{static_path}/card/sem-chart-card.js"
         solar_summary_base = f"{static_path}/card/sem-solar-summary-card.js"
         weather_base = f"{static_path}/card/sem-weather-card.js"
+        flow_base = f"{static_path}/card/sem-flow-card.js"
         card_url = f"{card_base}?v={version}"
         diagram_url = f"{diagram_base}?v={version}"
         period_url = f"{period_base}?v={version}"
         chart_url = f"{chart_base}?v={version}"
         solar_summary_url = f"{solar_summary_base}?v={version}"
         weather_url = f"{weather_base}?v={version}"
+        flow_url = f"{flow_base}?v={version}"
         try:
             from homeassistant.components.lovelace.resources import ResourceStorageCollection
             resources: ResourceStorageCollection = hass.data["lovelace"].resources
@@ -951,11 +987,12 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 (chart_base, chart_url),
                 (solar_summary_base, solar_summary_url),
                 (weather_base, weather_url),
+                (flow_base, flow_url),
             ):
                 item = existing_by_base.get(base)
                 if item is None:
                     # Not registered yet — create
-                    await resources.async_create_item({"res_type": "js", "url": versioned_url})
+                    await resources.async_create_item({"res_type": "module", "url": versioned_url})
                     _LOGGER.info("Registered SEM Lovelace resource: %s", versioned_url)
                 elif item["url"] != versioned_url:
                     # Registered but with old version — update to bust cache

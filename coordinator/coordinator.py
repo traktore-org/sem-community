@@ -386,6 +386,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self.hass, self._energy_dashboard_config
                 )
 
+            # Step 9b: Seed yearly accumulators from recorder statistics (runs once)
+            if self._energy_dashboard_config and not self._energy_calculator._yearly_seeded:
+                try:
+                    await self._energy_calculator.seed_yearly_from_statistics(
+                        self.hass, self._energy_dashboard_config
+                    )
+                except Exception as e:
+                    _LOGGER.warning("Yearly seeding from statistics failed (will retry): %s", e)
+
             # Step 10: Read forecast data (Phase 0.3)
             forecast_data = ForecastSensorData()
             try:

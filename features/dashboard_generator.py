@@ -85,6 +85,9 @@ class DashboardGenerator:
             # Update power-flow-card-plus with individual devices from load management
             await self._update_power_flow_individual_devices(template)
 
+            # Inject individual devices into sem-flow-card
+            await self._update_flow_card_devices(template)
+
             # Inject individual devices into picture-elements system diagram
             await self._update_system_diagram_devices(template)
 
@@ -380,6 +383,84 @@ class DashboardGenerator:
 
         # Find the power-flow-card-plus card in the template and update its individual list
         self._inject_individual_devices(template.get("views", []), new_individuals)
+
+    async def _update_flow_card_devices(self, template: Dict[str, Any]) -> None:
+        """Inject individual devices into sem-flow-card from load management.
+
+        Finds the sem-flow-card in the template and populates the entities.individual
+        section with up to 6 devices from load management, sorted by priority.
+        """
+        from ..const import DOMAIN
+
+        coordinator = None
+        if DOMAIN in self.hass.data:
+            for entry_id, coord in self.hass.data[DOMAIN].items():
+                if hasattr(coord, "_load_manager"):
+                    coordinator = coord
+                    break
+
+        if not coordinator or not coordinator._load_manager:
+            _LOGGER.debug("Load manager not available for flow card device injection")
+            return
+
+        devices = coordinator._load_manager._devices
+        if not devices:
+            return
+
+        # Sort by priority, exclude EV (already a core node), max 6
+        ev_power_entity = coordinator.config.get("ev_charging_power_sensor", "")
+        sorted_devices = sorted(devices.items(), key=lambda x: x[1].get("priority", 5))
+        non_ev_devices = [
+            (did, info) for did, info in sorted_devices
+            if not info.get("is_ev", False)
+            and info.get("power_entity")
+            and info.get("power_entity") != ev_power_entity
+        ][:6]
+
+        if not non_ev_devices:
+            return
+
+        colors = ["#FF8A65", "#AED581", "#CE93D8", "#64B5F6", "#ff9800", "#96CAEE"]
+
+        individual = []
+        for idx, (device_id, device_info) in enumerate(non_ev_devices):
+            entry = {
+                "entity": device_info["power_entity"],
+                "name": device_info.get("friendly_name", device_id),
+                "icon": self._get_device_icon(device_info.get("device_type", "unknown")),
+                "color": colors[idx % len(colors)],
+            }
+            # Add daily energy sensor if available
+            daily_entity = device_info.get("daily_energy_entity")
+            if daily_entity:
+                entry["daily_energy"] = daily_entity
+            individual.append(entry)
+
+        # Find sem-flow-card and inject devices
+        # Skip injection if card uses entity_prefix — prefix mode reads devices
+        # from sensor.sem_controllable_devices_count attributes at runtime.
+        # Only inject for explicit entities mode (no entity_prefix).
+        for view in template.get("views", []):
+            for card in self._iter_cards(view):
+                if isinstance(card, dict) and card.get("type") == "custom:sem-flow-card":
+                    if card.get("entity_prefix"):
+                        _LOGGER.debug(
+                            "sem-flow-card uses entity_prefix, skipping individual device injection"
+                        )
+                        return
+                    if "entities" not in card:
+                        card["entities"] = {}
+                    existing = card.get("entities", {}).get("individual", [])
+                    existing_entities = {d.get("entity") for d in existing}
+                    for device in individual:
+                        if device["entity"] not in existing_entities:
+                            existing.append(device)
+                    card["entities"]["individual"] = existing[:6]
+                    _LOGGER.info(
+                        "Injected %d individual devices into sem-flow-card",
+                        len(card["entities"]["individual"]),
+                    )
+                    return
 
     async def _update_system_diagram_devices(self, template: Dict[str, Any]) -> None:
         """Inject individual device labels into the picture-elements system diagram.

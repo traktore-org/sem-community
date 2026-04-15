@@ -8,6 +8,7 @@
 [![GitHub Activity][commits-shield]][commits]
 [![License][license-shield]](LICENSE)
 [![hacs][hacsbadge]][hacs]
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/O5O11XNXL1)
 
 **Intelligent solar energy orchestration for Home Assistant** — maximize self-consumption, manage EV charging, and track energy costs automatically.
 
@@ -45,13 +46,13 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 ### Via HACS (Recommended)
 
 1. Open **HACS** > **Integrations** > **Custom repositories**
-2. Add `https://github.com/traktore-org/sem-community` as an **Integration**
+2. Add `https://github.com/traktore-org/solar_energy_management` as an **Integration**
 3. Search for **Solar Energy Management** and click **Download**
 4. **Restart Home Assistant**
 
 ### Manual Installation
 
-1. Download the [latest release](https://github.com/traktore-org/sem-community/releases)
+1. Download the [latest release](https://github.com/traktore-org/solar_energy_management/releases)
 2. Copy the `custom_components/solar_energy_management/` folder to your Home Assistant `config/custom_components/` directory
 3. **Restart Home Assistant**
 
@@ -196,11 +197,11 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 
 ### Dashboard Features
 - **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects
-- **Animated system diagram** — custom SVG card with glow rings, flow animations, individual device nodes
-- **Custom SEM cards** — solar summary (glow ring), weather (clock + forecast), chart card (Chart.js), period selector
+- **Animated energy flow** — sem-flow-card with real-time power flows, daily energy totals, autarky gauge, config editor, tap/hold/double-tap actions
+- **Custom SEM cards** — flow card, solar summary (glow ring), weather (clock + forecast), chart card (Chart.js), period selector
 - **Drag-and-drop load priority** — reorder device shedding priorities visually
 - **Environmental impact** — CO2 avoided and trees-equivalent with growing icon (sprout/tree/pine/forest)
-- **Yearly KPIs** — year-to-date costs, savings, revenue on the Costs tab
+- **Yearly KPIs** — year-to-date costs, savings, revenue on the Costs tab (auto-seeded from HA recorder on mid-year install)
 
 For dashboard setup instructions, see the [Dashboard Guide](docs/DASHBOARD_GUIDE.md).
 
@@ -348,10 +349,10 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-[releases-shield]: https://img.shields.io/github/release/traktore-org/sem-community.svg?style=for-the-badge
-[releases]: https://github.com/traktore-org/sem-community/releases
-[commits-shield]: https://img.shields.io/github/commit-activity/y/traktore-org/sem-community.svg?style=for-the-badge
-[commits]: https://github.com/traktore-org/sem-community/commits/main
-[license-shield]: https://img.shields.io/github/license/traktore-org/sem-community.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/traktore-org/solar_energy_management.svg?style=for-the-badge
+[releases]: https://github.com/traktore-org/solar_energy_management/releases
+[commits-shield]: https://img.shields.io/github/commit-activity/y/traktore-org/solar_energy_management.svg?style=for-the-badge
+[commits]: https://github.com/traktore-org/solar_energy_management/commits/main
+[license-shield]: https://img.shields.io/github/license/traktore-org/solar_energy_management.svg?style=for-the-badge
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
 [hacs]: https://github.com/custom-components/hacs

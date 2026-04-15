@@ -171,7 +171,8 @@ These ship with the integration — no HACS installation needed:
 
 | Card | Purpose |
 |------|---------|
-| `sem-system-diagram-card` | Animated SVG power flow with glow rings, flow dots, device nodes, responsive layout |
+| `sem-flow-card` | Animated SVG power flow with daily energy, autarky gauge, visual config editor, tap actions, up to 6 individual devices |
+| `sem-system-diagram-card` | Legacy animated power flow (kept for backward compatibility) |
 | `sem-solar-summary-card` | Solar production metrics with animated glow ring and forecast |
 | `sem-weather-card` | Live clock, weather conditions, colored temperature forecast bars |
 | `sem-chart-card` | Chart.js-powered charts with 6 presets (costs, savings, energy, power, battery, EV) |
@@ -180,13 +181,13 @@ These ship with the integration — no HACS installation needed:
 
 Resource URLs include `?v={version}` for automatic cache busting.
 
-### Cards Removed in v2.6 (replaced by SEM cards)
+### Cards Removed in v2.6+ (replaced by SEM cards)
 
 These HACS cards are no longer required:
 
 | Removed | Replaced by |
 |---------|-------------|
-| `power-flow-card-plus` | `sem-system-diagram-card` |
+| `power-flow-card-plus` | `sem-flow-card` (was `sem-system-diagram-card`) |
 | `mini-graph-card` | `apexcharts-card` |
 | `solar-card` | `sem-solar-summary-card` |
 | `clock-weather-card` | `sem-weather-card` |
