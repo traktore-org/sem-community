@@ -83,7 +83,6 @@ logo/
 # Development/Utility folders (not needed for module runtime)
 migration/
 deployment/
-dashboard_generator.py
 run_tests.sh
 n8n_workflow_improved.json
 
