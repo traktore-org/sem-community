@@ -1168,17 +1168,27 @@ views:
               card_mod:
                 style: *glass_card
 
-          # ── EV Daily Progress ──
-          - type: gauge
-            entity: sensor.sem_daily_ev_energy
-            name: Daily Target
-            min: 0
-            max: 10
-            needle: true
-            severity:
-              green: 7
-              yellow: 3
-              red: 0
+          # ── EV Daily Progress (max auto-scales to 1.5× target) ──
+          - type: custom:mushroom-template-card
+            primary: >-
+              {% set daily = states('sensor.sem_daily_ev_energy') | float(0) %}
+              {% set target = states('number.sem_daily_ev_target') | float(10) %}
+              {{ daily | round(1) }} / {{ target | round(1) }} kWh
+            secondary: >-
+              {% set daily = states('sensor.sem_daily_ev_energy') | float(0) %}
+              {% set target = states('number.sem_daily_ev_target') | float(10) %}
+              {% if target > 0 %}{{ (daily / target * 100) | round(0) }}% of target{% else %}No target set{% endif %}
+            icon: mdi:car-electric
+            icon_color: >-
+              {% set daily = states('sensor.sem_daily_ev_energy') | float(0) %}
+              {% set target = states('number.sem_daily_ev_target') | float(10) %}
+              {% if target == 0 %}disabled
+              {% elif daily >= target %}green
+              {% elif daily >= target * 0.7 %}amber
+              {% else %}red{% endif %}
+            tap_action:
+              action: more-info
+              entity: sensor.sem_daily_ev_energy
             card_mod:
               style: *glass_card
 
@@ -1795,12 +1805,14 @@ views:
               {% set total = states('sensor.sem_lifetime_ev_energy') | float(0) %}
               {% set cost = states('sensor.sem_lifetime_ev_cost') | float(0) %}
               {% set solar = states('sensor.sem_lifetime_ev_solar_share') | float(0) %}
+              {% set kmkwh = states('number.sem_ev_km_per_kwh') | float(5.5) %}
+              {% set pub = states('number.sem_public_charging_rate') | float(0.55) %}
               {% if total > 0 %}
               Cost/kWh: {{ (cost / total) | round(3) }} CHF ·
-              Cost/100km: {{ (cost / total * 18) | round(2) }} CHF ·
+              Cost/100km: {{ (cost / total * 100 / kmkwh) | round(2) }} CHF ·
               Solar: {{ solar | round(0) }}%
               {% if cost > 0 %}
-              · vs public (~0.55/kWh): saved {{ ((0.55 * total) - cost) | round(0) }} CHF
+              · vs public ({{ pub }}/kWh): saved {{ ((pub * total) - cost) | round(0) }} CHF
               {% endif %}
               {% else %}
               No EV charging data yet

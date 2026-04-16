@@ -723,6 +723,12 @@
       "daily_ev_target": {
         "name": "Daily EV Target"
       },
+      "ev_km_per_kwh": {
+        "name": "EV Efficiency (km/kWh)"
+      },
+      "public_charging_rate": {
+        "name": "Public Charging Rate (CHF/kWh)"
+      },
       "battery_assist_max_power": {
         "name": "Battery Assist Max Power"
       },
