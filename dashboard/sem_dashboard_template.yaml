@@ -40,6 +40,35 @@ views:
     path: home
     icon: mdi:home-lightning-bolt
     cards:
+          # ── Observer Mode Warning (only when active) ──
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: switch.sem_observer_mode
+                state: "on"
+            card:
+              type: custom:mushroom-template-card
+              primary: Observer Mode Active
+              secondary: SEM is read-only — no device commands are being sent
+              icon: mdi:eye-outline
+              icon_color: red
+              tap_action:
+                action: navigate
+                navigation_path: /sem-dashboard/control
+              card_mod:
+                style: |
+                  ha-card {
+                    background:
+                      radial-gradient(ellipse 60% 50% at 50% 40%, rgba(244,67,54,0.12) 0%, transparent 100%),
+                      radial-gradient(circle at 2px 2px, rgba(244,67,54,0.05) 0.7px, transparent 0.7px) !important;
+                    background-size: 100% 100%, 50px 50px !important;
+                    border: 1px solid rgba(244,67,54,0.35) !important;
+                    border-radius: 16px !important;
+                    backdrop-filter: blur(18px) saturate(160%) !important;
+                    -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+                    box-shadow: 0 4px 24px rgba(244,67,54,0.18), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+                  }
+
           # ── Welcome Intro (collapsed) ──
           - type: entities
             card_mod:
@@ -396,7 +425,7 @@ views:
             show_icons: true
             show_states: true
             wide: true
-            height: 300
+            height: 280
             unit_prefix: k
             round: 2
             sections:
@@ -647,7 +676,7 @@ views:
                   duration: 10m
             apex_config:
               chart:
-                height: 180
+                height: 200
                 background: transparent
                 foreColor: var(--primary-text-color)
               grid:
@@ -845,7 +874,7 @@ views:
                   duration: 1d
             apex_config:
               chart:
-                height: 180
+                height: 200
                 stacked: false
                 background: transparent
                 foreColor: var(--primary-text-color)
@@ -1241,7 +1270,7 @@ views:
                   duration: 5m
             apex_config:
               chart:
-                height: 180
+                height: 200
                 background: transparent
                 foreColor: var(--primary-text-color)
               grid:

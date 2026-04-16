@@ -799,10 +799,10 @@
         "name": "Battery Capacity"
       },
       "ev_km_per_kwh": {
-        "name": "EV Efficiency (km/kWh)"
+        "name": "EV Efficiency"
       },
       "public_charging_rate": {
-        "name": "Public Charging Rate (CHF/kWh)"
+        "name": "Public Charging Rate"
       }
     }
   }
