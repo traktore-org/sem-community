@@ -107,7 +107,7 @@ views:
 
           # ── Status Chips Bar ──
           - type: custom:mushroom-chips-card
-            alignment: center
+            alignment: justify
             chips:
               - type: template
                 icon: mdi:solar-power-variant
