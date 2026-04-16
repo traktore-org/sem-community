@@ -1920,7 +1920,7 @@ views:
                       head:
                         type: section
                         label: "How Savings Are Calculated"
-                      open: false
+                      open: true
                       entities:
                         - type: custom:mushroom-template-card
                           primary: >-
@@ -1992,7 +1992,7 @@ views:
               - type: custom:mushroom-template-card
                 primary: >-
                   {{ states('sensor.sem_tariff_current_import_rate') | float(0) | round(4) }}
-                secondary: Import Rate
+                secondary: Current Import Rate
                 icon: mdi:transmission-tower-import
                 icon_color: red
                 card_mod:
@@ -2000,7 +2000,7 @@ views:
               - type: custom:mushroom-template-card
                 primary: >-
                   {{ states('sensor.sem_tariff_current_export_rate') | float(0) | round(4) }}
-                secondary: Export Rate
+                secondary: Current Export Rate
                 icon: mdi:transmission-tower-export
                 icon_color: green
                 card_mod:
@@ -2023,7 +2023,7 @@ views:
                 card:
                   type: custom:mushroom-number-card
                   entity: number.sem_electricity_import_rate
-                  name: Import Rate
+                  name: Static Import Rate
                   icon: mdi:cash-minus
                   card_mod:
                     style: *glass_card
@@ -2035,7 +2035,7 @@ views:
                 card:
                   type: custom:mushroom-number-card
                   entity: number.sem_electricity_export_rate
-                  name: Export Rate
+                  name: Static Export Rate
                   icon: mdi:cash-plus
                   card_mod:
                     style: *glass_card
