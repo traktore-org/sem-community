@@ -1042,7 +1042,7 @@ class SEMFlowCard extends HTMLElement {
                 text { font-variant-numeric: tabular-nums; }
                 @keyframes socPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
                 @keyframes socDrain { 0%,100%{opacity:0.75} 50%{opacity:0.4} }
-                .clickable-node { cursor: pointer; }
+                .clickable-node { cursor: pointer; pointer-events: bounding-box; }
                 .clickable-node:hover { opacity: 0.85; }
                 .device-clickable { cursor: pointer; }
                 .device-clickable:hover { opacity: 0.85; }
@@ -1113,14 +1113,14 @@ class SEMFlowCard extends HTMLElement {
                     </g>
                     <text x="${S.cx}" y="${S.cy + S.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="${solarColor}">${this._getNodeName('solar')}</text>
                     <text id="val-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${solarColor}">0 W</text>
-                    <text id="val-today-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${solarColor}" opacity="0.55"></text>` : ''}
+                    <text id="val-today-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${solarColor}" opacity="0.55">\u00A0</text>` : ''}
 
                     ${hasInverter ? `<!-- INVERTER -->
                     <g id="node-inverter" filter="url(#glowInverter)">
                         <circle cx="${I.cx}" cy="${I.cy}" r="${I.r}" fill="${this._hexToRgba(inverterColor, 0.07)}" stroke="${inverterColor}" stroke-width="1"/>
                         <path d="M${I.cx - 10},${I.cy} Q${I.cx - 4},${I.cy - 8} ${I.cx},${I.cy} Q${I.cx + 4},${I.cy + 8} ${I.cx + 10},${I.cy}" fill="none" stroke="${inverterColor}" stroke-width="1.8" opacity="0.7"/>
                     </g>
-                    <text id="val-inverter-status" x="${I.cx}" y="${I.cy + I.r + 14}" text-anchor="middle" font-family="${F}" font-size="${this._compact ? 11 : 10}" fill="var(--secondary-text-color, #5a7a9a)" opacity="0.7"></text>` : ''}
+                    <text id="val-inverter-status" x="${I.cx}" y="${I.cy + I.r + 14}" text-anchor="middle" font-family="${F}" font-size="${this._compact ? 11 : 10}" fill="var(--secondary-text-color, #5a7a9a)" opacity="0.7">\u00A0</text>` : ''}
 
                     ${hasBattery ? `<!-- BATTERY -->
                     <g id="node-battery" filter="url(#glowBattery)">
@@ -1139,7 +1139,7 @@ class SEMFlowCard extends HTMLElement {
                     <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${batteryColor}">0%</text>
                     <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="${batteryColor}" opacity="0.7">0 W</text>
                     <text id="label-battery-state" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${batteryColor}" opacity="0.5"></text>
-                    <text id="val-today-battery" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${batteryColor}" opacity="0.45"></text>` : ''}
+                    <text id="val-today-battery" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${batteryColor}" opacity="0.45">\u00A0</text>` : ''}
 
                     ${hasGrid ? `<!-- GRID -->
                     <g id="node-grid" filter="url(#glowGridImport)">
@@ -1156,7 +1156,7 @@ class SEMFlowCard extends HTMLElement {
                     <text x="${G.cx}" y="${G.cy + G.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="${gridImportColor}">${this._getNodeName('grid')}</text>
                     <text id="val-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${gridImportColor}">0 W</text>
                     <text id="label-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fs}" font-weight="500" fill="${gridImportColor}" opacity="0.5">GRID</text>
-                    <text id="val-today-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fl + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${gridImportColor}" opacity="0.45"></text>` : ''}
+                    <text id="val-today-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fl + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${gridImportColor}" opacity="0.45">\u00A0</text>` : ''}
 
                     <!-- HOME (central hub — always visible) -->
                     <g id="node-home" filter="url(#glowHome)">
@@ -1175,8 +1175,8 @@ class SEMFlowCard extends HTMLElement {
                     </g>
                     <text x="${H.cx}" y="${H.cy + H.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl + 1}" font-weight="600" fill="${homeColor}">${this._getNodeName('home')}</text>
                     <text id="val-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fhv}" font-weight="700" fill="${homeColor}">0 W</text>
-                    <text id="val-autarky" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${homeColor}" opacity="0.5"></text>
-                    <text id="val-today-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + (fs + 4) * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${homeColor}" opacity="0.45"></text>
+                    <text id="val-autarky" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${homeColor}" opacity="0.5">\u00A0</text>
+                    <text id="val-today-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + (fs + 4) * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${homeColor}" opacity="0.45">\u00A0</text>
 
                     ${hasEv ? `<!-- EV -->
                     <g id="node-ev" filter="url(#glowEV)">
@@ -1192,7 +1192,7 @@ class SEMFlowCard extends HTMLElement {
                     </g>
                     <text x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="${evColor}">${this._getNodeName('ev')}</text>
                     <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${evColor}">0 W</text>
-                    <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${evColor}" opacity="0.5"></text>` : ''}
+                    <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${evColor}" opacity="0.5">\u00A0</text>` : ''}
 
                     <!-- Device labels -->
                     <g id="device-labels"></g>
