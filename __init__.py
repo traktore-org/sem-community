@@ -515,22 +515,55 @@ async def _async_register_services(
             if stale_count:
                 _LOGGER.info("Removed %d stale Lovelace resource(s)", stale_count)
 
+            # Cache-busting: use timestamp so every generate_dashboard
+            # call forces browsers to reload card JS files.
+            import time as _time
+            cache_bust = str(int(_time.time()))
+
             existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
             added_resources = []
+            updated_resources = 0
             for fname in installed_cards:
                 base_url = f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
                 if base_url not in existing_bases:
                     import uuid as _uuid
                     resources_data["items"].append({
                         "id": _uuid.uuid4().hex,
-                        "url": base_url,
+                        "url": f"{base_url}?v={cache_bust}",
                         "type": "module",
                     })
                     added_resources.append(base_url)
-            if added_resources or stale_count:
+
+            # Update ?v= on existing SEM resources and remove orphaned ones
+            installed_bases = {
+                f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
+                for fname in installed_cards
+            }
+            cleaned = []
+            kept_items = []
+            for item in resources_data["items"]:
+                url = item.get("url", "")
+                base = url.split("?")[0]
+                if f"/custom_components/{DOMAIN}/" in base and base.endswith(".js"):
+                    if base not in installed_bases:
+                        # Card file no longer exists — remove orphaned resource
+                        cleaned.append(base)
+                        continue
+                    new_url = f"{base}?v={cache_bust}"
+                    if item["url"] != new_url:
+                        item["url"] = new_url
+                        updated_resources += 1
+                kept_items.append(item)
+            resources_data["items"] = kept_items
+            if cleaned:
+                _LOGGER.info("Removed %d orphaned card resource(s): %s", len(cleaned), cleaned)
+
+            if added_resources or stale_count or updated_resources:
                 await resources_store.async_save(resources_data)
                 if added_resources:
                     _LOGGER.info("Registered %d new Lovelace resource(s): %s", len(added_resources), added_resources)
+                if updated_resources:
+                    _LOGGER.info("Updated cache-bust on %d Lovelace resource(s) to v=%s", updated_resources, cache_bust)
 
             # Step 2: Generate dashboard config
             generator = DashboardGenerator(hass)
