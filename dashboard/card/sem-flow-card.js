@@ -960,24 +960,24 @@ class SEMFlowCard extends HTMLElement {
     _getLayout() {
         if (this._compact) {
             return {
-                vb: '0 0 500 1060',
+                vb: '0 0 500 1100',
                 solar:    { cx: 250, cy: 70,  r: 48 },
-                inverter: { cx: 250, cy: 195, r: 20 },
-                battery:  { cx: 100, cy: 310, r: 48 },
-                grid:     { cx: 400, cy: 310, r: 48 },
-                home:     { cx: 250, cy: 480, r: 60 },
-                ev:       { cx: 100, cy: 630, r: 42 },
+                inverter: { cx: 250, cy: 225, r: 20 },
+                battery:  { cx: 100, cy: 340, r: 48 },
+                grid:     { cx: 400, cy: 340, r: 48 },
+                home:     { cx: 250, cy: 510, r: 60 },
+                ev:       { cx: 100, cy: 660, r: 42 },
                 socR: 33,
                 autarkyR: 48,
                 paths: {
-                    solar:   'M250,118 L250,175',
-                    home:    'M250,215 L250,420',
-                    battery: 'M230,200 C180,230 120,260 100,262',
-                    grid:    'M270,200 C320,230 380,260 400,262',
-                    ev:      'M230,210 C180,350 130,530 100,588',
+                    solar:   'M250,118 L250,205',
+                    home:    'M250,245 L250,450',
+                    battery: 'M230,230 C180,260 120,290 100,292',
+                    grid:    'M270,230 C320,260 380,290 400,292',
+                    ev:      'M230,240 C180,380 130,560 100,618',
                 },
                 font: { label: 14, value: 22, sub: 12, homeVal: 26 },
-                deviceY: 780,
+                deviceY: 810,
             };
         }
         return {
