@@ -104,6 +104,7 @@ class SEMFlowCard extends HTMLElement {
         this._showLabels = config.show_labels !== false;
         this._showValues = config.show_values !== false;
         this._showGlow = config.show_glow !== false;
+        this._showInverter = config.show_inverter !== false;
     }
 
     connectedCallback() {
@@ -544,10 +545,14 @@ class SEMFlowCard extends HTMLElement {
         this._setText('val-today-battery', dailyBattery ? `Today ${dailyBattery} kWh` : '');
         this._setText('val-today-home', dailyHome ? `Today ${dailyHome} kWh` : '');
 
-        // Grid daily: show both import and export on one line
+        // Grid daily: show import, export, and net on one line
         const gridDailyParts = [];
         if (dailyGridImport) gridDailyParts.push(`\u2193${dailyGridImport}`);
         if (dailyGridExport) gridDailyParts.push(`\u2191${dailyGridExport}`);
+        if (dailyGridImport && dailyGridExport) {
+            const net = (parseFloat(dailyGridImport) - parseFloat(dailyGridExport)).toFixed(1);
+            gridDailyParts.push(`Net ${net > 0 ? '+' : ''}${net}`);
+        }
         this._setText('val-today-grid', gridDailyParts.length ? gridDailyParts.join(' ') + ' kWh' : '');
 
         // Battery SOC arc
@@ -590,10 +595,22 @@ class SEMFlowCard extends HTMLElement {
             gridLabel.textContent = isImport ? 'IMPORT' : (gridExport > 10 ? 'EXPORT' : 'GRID');
         }
 
-        // Battery label
+        // Battery label + dynamic color (pink=#f06292 charge, teal=#4db6ac discharge)
         const battLabel = this.shadowRoot.getElementById('label-battery-state');
         if (battLabel) {
             battLabel.textContent = battCharge > 10 ? 'CHARGING' : (battDischarge > 10 ? 'DISCHARGE' : '');
+        }
+
+        // Dynamic battery color based on direction
+        const battColor = battCharge > 10 ? '#f06292' : (battDischarge > 10 ? '#4db6ac' : this._getNodeColor('battery'));
+        const battEls = ['val-battery-soc', 'val-battery-power', 'label-battery-state', 'val-today-battery'];
+        for (const id of battEls) {
+            const el = this.shadowRoot.getElementById(id);
+            if (el) el.setAttribute('fill', battColor);
+        }
+        const socArcEl = this.shadowRoot.getElementById('soc-arc');
+        if (socArcEl && (battCharge > 10 || battDischarge > 10)) {
+            socArcEl.style.stroke = battColor;
         }
 
         // Flow animations
@@ -1008,7 +1025,7 @@ class SEMFlowCard extends HTMLElement {
         const hasBattery = this._hasNode('battery');
         const hasGrid = this._hasNode('grid');
         const hasEv = this._hasNode('ev');
-        const hasInverter = this._hasNode('inverter');
+        const hasInverter = this._showInverter && this._hasNode('inverter');
 
         this.shadowRoot.innerHTML = `
             <style>
@@ -1191,8 +1208,10 @@ class SEMFlowCard extends HTMLElement {
     _setupClickHandlers() {
         const nodes = [
             { ids: ['node-solar', 'val-solar', 'val-today-solar'], node: 'solar', key: 'solar_power' },
-            { ids: ['node-battery', 'val-battery-soc', 'val-battery-power', 'label-battery-state', 'val-today-battery'], node: 'battery', key: 'battery_power' },
-            { ids: ['node-grid', 'val-grid', 'label-grid', 'val-today-grid'], node: 'grid', key: 'grid_import_power' },
+            { ids: ['node-battery', 'val-battery-soc'], node: 'battery', key: 'battery_soc' },
+            { ids: ['val-battery-power', 'label-battery-state', 'val-today-battery'], node: 'battery', key: 'battery_power' },
+            { ids: ['node-grid', 'val-grid', 'label-grid'], node: 'grid', key: 'grid_import_power' },
+            { ids: ['val-today-grid'], node: 'grid', key: 'daily_grid_import_energy' },
             { ids: ['node-home', 'val-home', 'val-autarky', 'val-today-home'], node: 'home', key: 'home_consumption_power' },
             { ids: ['node-ev', 'val-ev', 'val-today-ev'], node: 'ev', key: 'ev_power' },
         ];
@@ -1379,6 +1398,7 @@ class SEMFlowCardEditor extends HTMLElement {
             { name: 'show_labels', label: 'Show Labels', selector: { boolean: {} } },
             { name: 'show_values', label: 'Show Values', selector: { boolean: {} } },
             { name: 'show_glow', label: 'Show Glow Effects', selector: { boolean: {} } },
+            { name: 'show_inverter', label: 'Show Inverter Node', selector: { boolean: {} } },
         ],
         device: [
             { name: 'entity', label: 'Power Sensor', selector: { entity: { domain: 'sensor' } } },
@@ -1436,6 +1456,7 @@ class SEMFlowCardEditor extends HTMLElement {
             show_labels: this._config.show_labels !== false,
             show_values: this._config.show_values !== false,
             show_glow: this._config.show_glow !== false,
+            show_inverter: this._config.show_inverter !== false,
         };
     }
 
@@ -1487,6 +1508,7 @@ class SEMFlowCardEditor extends HTMLElement {
         this._config.show_labels = newData.show_labels;
         this._config.show_values = newData.show_values;
         this._config.show_glow = newData.show_glow;
+        this._config.show_inverter = newData.show_inverter;
         this._fire();
     }
 
