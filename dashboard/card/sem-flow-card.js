@@ -1207,13 +1207,26 @@ class SEMFlowCard extends HTMLElement {
 
     _setupClickHandlers() {
         const nodes = [
-            { ids: ['node-solar', 'val-solar', 'val-today-solar'], node: 'solar', key: 'solar_power' },
+            // Every element opens the entity it displays
+            // Solar
+            { ids: ['node-solar', 'val-solar'], node: 'solar', key: 'solar_power' },
+            { ids: ['val-today-solar'], node: 'solar', key: 'daily_solar_energy' },
+            // Battery
             { ids: ['node-battery', 'val-battery-soc'], node: 'battery', key: 'battery_soc' },
-            { ids: ['val-battery-power', 'label-battery-state', 'val-today-battery'], node: 'battery', key: 'battery_power' },
+            { ids: ['val-battery-power', 'label-battery-state'], node: 'battery', key: 'battery_power' },
+            { ids: ['val-today-battery'], node: 'battery', key: 'daily_battery_energy' },
+            // Grid
             { ids: ['node-grid', 'val-grid', 'label-grid'], node: 'grid', key: 'grid_import_power' },
             { ids: ['val-today-grid'], node: 'grid', key: 'daily_grid_import_energy' },
-            { ids: ['node-home', 'val-home', 'val-autarky', 'val-today-home'], node: 'home', key: 'home_consumption_power' },
-            { ids: ['node-ev', 'val-ev', 'val-today-ev'], node: 'ev', key: 'ev_power' },
+            // Home
+            { ids: ['node-home', 'val-home'], node: 'home', key: 'home_consumption_power' },
+            { ids: ['val-autarky'], node: 'home', key: 'autarky_rate' },
+            { ids: ['val-today-home'], node: 'home', key: 'daily_home_energy' },
+            // EV
+            { ids: ['node-ev', 'val-ev'], node: 'ev', key: 'ev_power' },
+            { ids: ['val-today-ev'], node: 'ev', key: 'daily_ev_energy' },
+            // Inverter
+            { ids: ['val-inverter-status'], node: 'home', key: 'charging_state' },
         ];
 
         for (const { ids, node, key } of nodes) {
