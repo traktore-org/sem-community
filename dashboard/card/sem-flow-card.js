@@ -297,6 +297,7 @@ class SEMFlowCard extends HTMLElement {
 
     _handleAction(config, entityId) {
         if (!config) config = { action: 'more-info' };
+        console.log('[SEM-FLOW] Action:', config.action, 'Entity:', config.entity || entityId);
         switch (config.action) {
             case 'more-info':
                 this._fireMoreInfo(config.entity || entityId);
@@ -1206,29 +1207,66 @@ class SEMFlowCard extends HTMLElement {
     }
 
     _setupClickHandlers() {
-        const nodes = [
-            // Every element opens the entity it displays
+        // Map element IDs to their target entity keys
+        const entityMap = {
             // Solar
-            { ids: ['node-solar', 'val-solar'], node: 'solar', key: 'solar_power' },
-            { ids: ['val-today-solar'], node: 'solar', key: 'daily_solar_energy' },
+            'node-solar': 'solar_power', 'val-solar': 'solar_power',
+            'val-today-solar': 'daily_solar_energy',
             // Battery
-            { ids: ['node-battery', 'val-battery-soc'], node: 'battery', key: 'battery_soc' },
-            { ids: ['val-battery-power', 'label-battery-state'], node: 'battery', key: 'battery_power' },
-            { ids: ['val-today-battery'], node: 'battery', key: 'daily_battery_energy' },
+            'node-battery': 'battery_soc', 'val-battery-soc': 'battery_soc',
+            'val-battery-power': 'battery_power', 'label-battery-state': 'battery_power',
+            'val-today-battery': 'daily_battery_energy',
             // Grid
-            { ids: ['node-grid', 'val-grid', 'label-grid'], node: 'grid', key: 'grid_import_power' },
-            { ids: ['val-today-grid'], node: 'grid', key: 'daily_grid_import_energy' },
+            'node-grid': 'grid_import_power', 'val-grid': 'grid_import_power', 'label-grid': 'grid_import_power',
+            'val-today-grid': 'daily_grid_import_energy',
             // Home
-            { ids: ['node-home', 'val-home'], node: 'home', key: 'home_consumption_power' },
-            { ids: ['val-autarky'], node: 'home', key: 'autarky_rate' },
-            { ids: ['val-today-home'], node: 'home', key: 'daily_home_energy' },
+            'node-home': 'home_consumption_power', 'val-home': 'home_consumption_power',
+            'val-autarky': 'autarky_rate',
+            'val-today-home': 'daily_home_energy',
             // EV
-            { ids: ['node-ev', 'val-ev'], node: 'ev', key: 'ev_power' },
-            { ids: ['val-today-ev'], node: 'ev', key: 'daily_ev_energy' },
+            'node-ev': 'ev_power', 'val-ev': 'ev_power',
+            'val-today-ev': 'daily_ev_energy',
             // Inverter
-            { ids: ['val-inverter-status'], node: 'home', key: 'charging_state' },
-        ];
+            'val-inverter-status': 'charging_state',
+        };
 
+        // Stamp data-entity attribute on each element for delegation
+        for (const [id, key] of Object.entries(entityMap)) {
+            const entityId = this._getEntityId(key);
+            if (!entityId) continue;
+            const el = this.shadowRoot.getElementById(id);
+            if (el) {
+                el.setAttribute('data-entity', entityId);
+                el.style.cursor = 'pointer';
+            }
+        }
+
+        // Single delegated click handler on the SVG
+        const svg = this.shadowRoot.querySelector('svg');
+        if (svg) {
+            svg.addEventListener('click', (e) => {
+                // Walk up from click target to find element with data-entity
+                let target = e.target;
+                for (let i = 0; i < 5 && target && target !== svg; i++) {
+                    const entity = target.getAttribute?.('data-entity');
+                    if (entity) {
+                        this._fireMoreInfo(entity);
+                        return;
+                    }
+                    // Check parent group (for clicks on child elements of node-* groups)
+                    target = target.parentElement;
+                }
+            });
+        }
+
+        // Legacy: set up tap/hold/double-tap for node groups (uses custom actions if configured)
+        const nodes = [
+            { ids: ['node-solar'], node: 'solar', key: 'solar_power' },
+            { ids: ['node-battery'], node: 'battery', key: 'battery_soc' },
+            { ids: ['node-grid'], node: 'grid', key: 'grid_import_power' },
+            { ids: ['node-home'], node: 'home', key: 'home_consumption_power' },
+            { ids: ['node-ev'], node: 'ev', key: 'ev_power' },
+        ];
         for (const { ids, node, key } of nodes) {
             const entityId = this._getEntityId(key);
             if (!entityId) continue;
