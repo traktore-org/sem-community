@@ -981,24 +981,24 @@ class SEMFlowCard extends HTMLElement {
             };
         }
         return {
-            vb: '0 0 1000 780',
+            vb: '0 0 1000 800',
             solar:    { cx: 500, cy: 65,  r: 50 },
-            inverter: { cx: 500, cy: 185, r: 20 },
-            battery:  { cx: 150, cy: 240, r: 50 },
-            grid:     { cx: 850, cy: 240, r: 50 },
-            home:     { cx: 500, cy: 355, r: 62 },
-            ev:       { cx: 150, cy: 430, r: 44 },
+            inverter: { cx: 500, cy: 210, r: 20 },
+            battery:  { cx: 150, cy: 270, r: 50 },
+            grid:     { cx: 850, cy: 270, r: 50 },
+            home:     { cx: 500, cy: 385, r: 62 },
+            ev:       { cx: 150, cy: 460, r: 44 },
             socR: 40,
             autarkyR: 50,
             paths: {
-                solar:   'M500,115 L500,165',
-                home:    'M500,205 L500,293',
-                battery: 'M480,190 C380,200 250,215 200,240',
-                grid:    'M520,190 C620,200 750,215 800,240',
-                ev:      'M480,198 C380,300 250,380 195,430',
+                solar:   'M500,115 L500,190',
+                home:    'M500,230 L500,323',
+                battery: 'M480,215 C380,230 250,245 200,270',
+                grid:    'M520,215 C620,230 750,245 800,270',
+                ev:      'M480,225 C380,330 250,410 195,460',
             },
             font: { label: 13, value: 20, sub: 11, homeVal: 24 },
-            deviceY: 560,
+            deviceY: 590,
         };
     }
 
