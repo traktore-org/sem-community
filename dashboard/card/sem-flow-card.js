@@ -114,7 +114,7 @@ class SEMFlowCard extends HTMLElement {
             resizeTimeout = setTimeout(() => {
                 for (const entry of entries) {
                     const w = entry.contentRect.width;
-                    const compact = w < 500;
+                    const compact = w < 400;
                     if (compact !== this._compact) {
                         this._compact = compact;
                         this._rendered = false;
@@ -151,7 +151,7 @@ class SEMFlowCard extends HTMLElement {
         this._hass = hass;
         if (!this._rendered) {
             const w = this.clientWidth || this.offsetWidth;
-            const compact = w > 0 ? w < 500 : false;
+            const compact = w > 0 ? w < 400 : false;
             if (compact !== this._compact) this._compact = compact;
             this._render();
             this._rendered = true;
