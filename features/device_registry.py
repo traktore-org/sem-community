@@ -110,6 +110,7 @@ class UnifiedDeviceRegistry:
         self._devices: List[UnifiedDevice] = []
         self._manual_mappings: Dict[str, Dict[str, Any]] = {}
         self._priority_overrides: Dict[str, int] = {}
+        self._control_mode_overrides: Dict[str, str] = {}  # device_id → "off"/"peak_only"/"surplus"
 
     @property
     def devices(self) -> List[UnifiedDevice]:
@@ -127,10 +128,12 @@ class UnifiedDeviceRegistry:
             if data:
                 self._manual_mappings = data.get("mappings", {})
                 self._priority_overrides = data.get("priority_overrides", {})
+                self._control_mode_overrides: Dict[str, str] = data.get("control_modes", {})
                 _LOGGER.debug(
-                    "Loaded %d manual mappings, %d priority overrides",
+                    "Loaded %d manual mappings, %d priority overrides, %d control modes",
                     len(self._manual_mappings),
                     len(self._priority_overrides),
+                    len(self._control_mode_overrides),
                 )
         except Exception as e:
             _LOGGER.warning("Could not load device mappings: %s", e)
@@ -246,6 +249,13 @@ class UnifiedDeviceRegistry:
                     entity_id=entity,
                     power_entity_id=device.power_sensor,
                 )
+                # Apply persisted control mode (#49)
+                from ..devices.base import DeviceControlMode
+                mode_str = self._control_mode_overrides.get(device.device_id, "peak_only")
+                try:
+                    surplus_device.control_mode = DeviceControlMode(mode_str)
+                except ValueError:
+                    surplus_device.control_mode = DeviceControlMode.PEAK_ONLY
                 self._surplus_controller.register_device(surplus_device)
 
             elif control_type == "current":
@@ -313,6 +323,7 @@ class UnifiedDeviceRegistry:
                 "is_critical": device.is_critical,
                 "is_controllable": device.is_controllable,
                 "is_ev": device.is_ev,
+                "control_mode": self._control_mode_overrides.get(device.device_id, "peak_only"),
             }
 
             # Backwards-compatible switch_entity
@@ -357,6 +368,7 @@ class UnifiedDeviceRegistry:
                 "device_type": "ev_charger" if device.is_ev else "individual_device",
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
+                "control_mode": self._control_mode_overrides.get(did, "peak_only"),
             }
         return result
 
@@ -394,11 +406,38 @@ class UnifiedDeviceRegistry:
         await self._save_storage()
         await self.async_refresh_devices()
 
+    async def update_device_control_mode(self, device_id: str, mode: str) -> None:
+        """Update a device's control mode and persist (#49).
+
+        Args:
+            device_id: Device identifier (e.g., "energy_dashboard_heizband")
+            mode: "off", "peak_only", or "surplus"
+        """
+        from ..devices.base import DeviceControlMode
+        try:
+            control_mode = DeviceControlMode(mode)
+        except ValueError:
+            _LOGGER.warning("Invalid control mode '%s' for %s", mode, device_id)
+            return
+
+        self._control_mode_overrides[device_id] = mode
+
+        # Apply to running surplus device if registered
+        surplus_device = self._surplus_controller.get_device(device_id)
+        if surplus_device:
+            surplus_device.control_mode = control_mode
+            _LOGGER.info(
+                "Updated %s control mode to %s", device_id, mode,
+            )
+
+        await self._save_storage()
+
     async def _save_storage(self) -> None:
-        """Persist manual mappings and priority overrides."""
+        """Persist manual mappings, priority overrides, and control modes."""
         data = {
             "mappings": self._manual_mappings,
             "priority_overrides": self._priority_overrides,
+            "control_modes": self._control_mode_overrides,
         }
         await self._store.async_save(data)
         _LOGGER.debug("Saved device mappings to storage")

@@ -749,6 +749,9 @@ class LoadManagementCoordinator:
         available_devices = []
 
         for device_id, device_info in self._devices.items():
+            # Skip devices in "off" mode — SEM never touches these (#49)
+            if device_info.get("control_mode") == "off":
+                continue
             if (device_info.get("is_controllable", True) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and

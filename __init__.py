@@ -902,6 +902,13 @@ async def _async_register_services(
             await coordinator._load_manager.update_device_critical_status(device_id, bool(value))
         elif prop == "controllable":
             await coordinator._load_manager.update_device_controllable_status(device_id, bool(value))
+        elif prop == "control_mode":
+            # Update device control mode: off / peak_only / surplus (#49)
+            registry = getattr(coordinator, '_device_registry', None)
+            if registry:
+                await registry.update_device_control_mode(device_id, str(value))
+            else:
+                raise HomeAssistantError("Device registry not initialized")
         else:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -909,7 +916,6 @@ async def _async_register_services(
                 translation_placeholders={"property": prop},
             )
         _LOGGER.info("Updated %s.%s = %s", device_id, prop, value)
-        # Force coordinator refresh so sensors reflect the change immediately
         await coordinator.async_request_refresh()
 
     try:
@@ -919,8 +925,8 @@ async def _async_register_services(
             async_update_device_config,
             schema=vol.Schema({
                 vol.Required("device_id"): cv.string,
-                vol.Required("property"): vol.In(["controllable", "critical"]),
-                vol.Required("value"): cv.boolean,
+                vol.Required("property"): vol.In(["controllable", "critical", "control_mode"]),
+                vol.Required("value"): cv.string,
             }),
         )
         _LOGGER.debug("Registered service: %s.update_device_config", DOMAIN)

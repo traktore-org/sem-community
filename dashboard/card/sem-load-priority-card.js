@@ -79,6 +79,7 @@ class SEMLoadPriorityCard extends HTMLElement {
                     isAvailable: info.is_available || false,
                     hasManualMapping: info.has_manual_mapping || false,
                     energySensor: info.energy_sensor || '',
+                    controlMode: info.control_mode || 'peak_only',
                     icon: this._getDeviceIcon(info.device_type),
                 }))
                 .sort((a, b) => a.priority - b.priority);
@@ -186,8 +187,12 @@ class SEMLoadPriorityCard extends HTMLElement {
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? 'ON' : 'OFF'}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
-                    <label class="toggle-label"><span class="dim">Controllable</span>
-                        <div class="toggle ${device.isControllable ? 'on' : ''}" data-action="controllable" data-device="${device.id}"><div class="knob"></div></div>
+                    <label class="toggle-label"><span class="dim">Mode</span>
+                        <select class="mode-select" data-action="control_mode" data-device="${device.id}">
+                            <option value="off"${device.controlMode === 'off' ? ' selected' : ''}>Off</option>
+                            <option value="peak_only"${device.controlMode === 'peak_only' ? ' selected' : ''}>Peak Only</option>
+                            <option value="surplus"${device.controlMode === 'surplus' ? ' selected' : ''}>Surplus</option>
+                        </select>
                     </label>
                     <label class="toggle-label"><span class="dim">Critical</span>
                         <div class="toggle ${device.isCritical ? 'on' : ''}" data-action="critical" data-device="${device.id}"><div class="knob"></div></div>
@@ -347,6 +352,18 @@ class SEMLoadPriorityCard extends HTMLElement {
                 this._showConfigureModal(target.dataset.energy, target.dataset.name);
             }
         });
+
+        // Control mode select handler (#49)
+        root.addEventListener('change', (e) => {
+            const target = e.target.closest('[data-action="control_mode"]');
+            if (!target) return;
+            const deviceId = target.dataset.device;
+            const device = this.devices.find(d => d.id === deviceId);
+            if (device) {
+                device.controlMode = target.value;
+                this._sendDeviceUpdate(deviceId, 'control_mode', target.value);
+            }
+        });
     }
 
     _moveDevice(deviceId, direction) {
@@ -479,6 +496,9 @@ class SEMLoadPriorityCard extends HTMLElement {
             .arrows { display:flex; flex-direction:column; gap:1px; }
             .arrow-btn { border:none; background:none; cursor:pointer; font-size:10px; padding:0 4px; opacity:0.35; line-height:1; color:var(--primary-text-color, inherit); }
             .arrow-btn:hover { opacity:0.8; }
+            .mode-select { background:rgba(40,40,55,0.7); color:#e0e0e0; border:1px solid rgba(255,255,255,0.1); border-radius:6px; padding:2px 6px; font-size:11px; font-family:'Segoe UI','Roboto',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none; }
+            .mode-select:focus { outline:none; border-color:rgba(255,152,0,0.5); }
+            .mode-select option { background:#1e1e2e; color:#e0e0e0; }
             .configure-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.25); border-radius:5px; color:#ffc107; cursor:pointer; font-size:0.75em; }
             .configure-btn:hover { background:rgba(255,193,7,0.22); }
             .hint { text-align:center; font-size:0.8em; opacity:0.4; margin-top:10px; }

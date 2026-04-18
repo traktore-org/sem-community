@@ -1547,11 +1547,14 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        # Always update from coordinator to ensure fresh availability in tests
         self._update_from_coordinator()
         is_available = self._attr_available and self.coordinator.last_update_success
-        if not is_available:
+        # Log unavailability once per sensor, not every cycle
+        if not is_available and not getattr(self, '_logged_unavailable', False):
             _LOGGER.debug("Sensor %s is unavailable", self.entity_description.key)
+            self._logged_unavailable = True
+        elif is_available:
+            self._logged_unavailable = False
         return is_available
 
     @property
