@@ -341,6 +341,38 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ---
 
+## Recent Improvements (v1.0.4)
+
+### Performance
+- Cached forecast source detection and surplus window estimation — reduced CPU overhead per update cycle
+- Dashboard cards: debounced flow updates (100ms), reduced DOM thrashing with incremental updates
+
+### Stability
+- Exponential backoff for EV device retry (replaces linear 30-retry loop)
+- Error recovery for battery protection — resets state on service call failure instead of leaving stale limits
+- Storage validation on restore — detects corrupted data before it propagates to sensors
+- Migration rollback safety — keeps original config intact on migration failure
+- Narrowed exception handling throughout coordinator (specific types instead of bare `except Exception`)
+- Fixed availability logging spam in binary sensors and sensors
+
+### Usability
+- Config flow validates entity IDs exist before accepting
+- Notification flap suppression — solar charging states must be stable 60s before notifying
+- KEBA service validated once on startup (no repeated exception noise if not installed)
+- Dashboard cards show entity availability indicator when sensors are unavailable
+- Shared color palette and power formatting utilities across all dashboard cards
+
+### Accessibility
+- Dashboard cards: ARIA labels, role attributes, keyboard-friendly button semantics
+
+### Code Quality
+- Coordinator update method reduced from ~440 to ~260 lines (analytics and notifications extracted)
+- Hardcoded entity IDs replaced with named constants
+- Shared JS constants (sem-shared.js) for color palette and formatters
+- Load management: preserves user-set device priorities across discovery cycles
+
+---
+
 ## Contributing
 
 Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request.
