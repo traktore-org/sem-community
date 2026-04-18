@@ -594,6 +594,24 @@
       "utility_signal_count_today": {
         "name": "Utility Signals Today"
       },
+      "predictor_training_status": {
+        "name": "Predictor Training Status"
+      },
+      "predictor_model_accuracy": {
+        "name": "Predictor Accuracy"
+      },
+      "predicted_consumption_next_hour": {
+        "name": "Predicted Consumption (Next Hour)"
+      },
+      "predicted_consumption_today_kwh": {
+        "name": "Predicted Consumption Today"
+      },
+      "predicted_solar_next_hour": {
+        "name": "Predicted Solar (Next Hour)"
+      },
+      "predicted_surplus_window": {
+        "name": "Predicted Surplus Window"
+      },
       "session_energy": {
         "name": "Session Energy"
       },

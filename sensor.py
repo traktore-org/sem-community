@@ -123,6 +123,7 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="battery_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="battery_temperature",
@@ -135,6 +136,7 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         suggested_display_precision=1,
         icon="mdi:battery-sync",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="battery_health_score",
@@ -142,6 +144,7 @@ SENSOR_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
         icon="mdi:battery-heart-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 
     # ============================================================================
@@ -174,6 +177,7 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="grid_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="solar_charging_status",
@@ -797,9 +801,11 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="load_management_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="load_management_recommendation",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="loads_currently_shed",
@@ -910,12 +916,16 @@ SENSOR_TYPES = [
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
         key="forecast_source",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="charging_recommendation",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 
     # ============================================================================
@@ -947,9 +957,11 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="tariff_price_level",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="tariff_provider",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="tariff_next_cheap_start",
@@ -975,21 +987,27 @@ SENSOR_TYPES = [
         key="pv_daily_specific_yield",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh/kWp",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="pv_performance_vs_forecast",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="pv_estimated_annual_degradation",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
         key="pv_degradation_trend",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
 
     # ============================================================================
@@ -1000,12 +1018,15 @@ SENSOR_TYPES = [
         key="energy_optimization_score",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="points",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="energy_tip",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="energy_tip_category",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="energy_ev_solar_percentage",
@@ -1020,10 +1041,55 @@ SENSOR_TYPES = [
 
     SensorEntityDescription(
         key="utility_signal_source",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
         key="utility_signal_count_today",
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+
+    # ============================================================================
+    # CONSUMPTION/SOLAR PREDICTOR (Phase 8, #3)
+    # ============================================================================
+
+    SensorEntityDescription(
+        key="predictor_training_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="predictor_model_accuracy",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="predicted_consumption_next_hour",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="predicted_consumption_today_kwh",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="predicted_solar_next_hour",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="predicted_surplus_window",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 
     # ============================================================================

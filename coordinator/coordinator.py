@@ -55,6 +55,7 @@ from .ev_control import EVControlMixin
 from .battery_protection import BatteryProtectionMixin
 from ..tariff import StaticTariffProvider, DynamicTariffProvider, PriceLevel
 from ..analytics.pv_performance import PVPerformanceAnalyzer
+from ..analytics.consumption_predictor import ConsumptionPredictor
 from ..analytics.energy_assistant import EnergyAssistant
 from ..utility_signals import UtilitySignalMonitor
 
@@ -162,6 +163,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             signal_entity_id=config.get("utility_signal_entity"),
             solar_loads_exempt=config.get("utility_solar_exempt", True),
         )
+
+        # Phase 8: Consumption/solar predictor (#3)
+        self._predictor = ConsumptionPredictor()
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -273,6 +277,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Restore forecast tracker state
             forecast_state = self._storage.export_forecast_tracker_state()
             self._forecast_tracker.restore_state(forecast_state)
+
+            # Restore consumption predictor state (#3)
+            predictor_state = self._storage._daily_data.get("predictor", {})
+            self._predictor.restore_state(predictor_state)
 
             # Restore device runtimes from storage
             self._restore_device_runtimes()
@@ -464,6 +472,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 )
                 # Persist device runtimes
                 self._persist_device_runtimes()
+                # Persist predictor state (#3)
+                self._storage._daily_data["predictor"] = self._predictor.get_state()
                 await self._storage.async_save_energy_delayed()
 
             self._initial_update_done = True
@@ -511,6 +521,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 dep_state = self.hass.states.get(departure_entity)
                 if dep_state and dep_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     result["ev_departure_time"] = dep_state.state
+
+            # Predictor sensors (#3)
+            result["predictor_training_status"] = self._predictor.training_status
+            result["predictor_model_accuracy"] = self._predictor.model_accuracy_pct
+            now = dt_util.now()
+            consumption_24h = self._predictor.predict_consumption_24h(now)
+            if consumption_24h:
+                result["predicted_consumption_next_hour"] = round(consumption_24h[0], 0)
+                result["predicted_consumption_today_kwh"] = round(
+                    self._predictor.predict_consumption_today_kwh(now), 2
+                )
+            solar_24h = self._predictor.predict_solar_24h(now)
+            if solar_24h:
+                result["predicted_solar_next_hour"] = round(solar_24h[0], 0)
+            surplus_window = self._predictor.predict_surplus_window(now)
+            if surplus_window:
+                result["predicted_surplus_window"] = surplus_window
 
             return result
 
@@ -682,6 +709,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _LOGGER.debug("Utility signal update failed: %s", e)
 
         heat_pump_data = HeatPumpSensorData()
+
+        # Phase 8: Consumption/solar predictor (#3)
+        try:
+            now = dt_util.now()
+            self._predictor.observe(
+                now,
+                consumption_w=power.home_consumption_power,
+                solar_w=power.solar_power,
+            )
+        except (ValueError, TypeError) as e:
+            _LOGGER.debug("Predictor observation failed: %s", e)
 
         return (
             forecast_data, tracker_data, tariff_data, surplus_data,
