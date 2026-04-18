@@ -218,22 +218,54 @@ During night charging, the home battery should only power home consumption — n
 
 ---
 
+## Device Control Modes
+
+Every device registered in SEM has a **control mode** that determines how SEM is allowed to interact with it. This is the most important setting for each device — it defines the boundary between what SEM controls and what the user controls.
+
+| Mode | SEM turns ON? | SEM turns OFF (peak)? | Use case |
+|------|--------------|----------------------|----------|
+| **off** | Never | Never | Monitoring only (coffee machine, lights you don't want managed) |
+| **peak_only** | Never | Yes, when peak limit reached | Devices that should stay under user control, but SEM can shed to protect the grid limit (towel heaters, general appliances) |
+| **surplus** | Yes, when solar surplus available | Yes, when surplus drops or peak limit reached | Devices you want SEM to actively control based on solar (hot water heater, pool pump) |
+
+**Default for all devices: `peak_only`** — SEM will never proactively turn on a device unless you explicitly set it to `surplus` mode.
+
+### Changing the mode
+
+Use the `solar_energy_management.update_device_config` service:
+
+```yaml
+service: solar_energy_management.update_device_config
+data:
+  device_id: energy_dashboard_heizband
+  property: control_mode
+  value: surplus
+```
+
+The mode is persisted across restarts.
+
+### EV charging
+
+EV charging is managed separately by the coordinator's dedicated EV control system (not by the surplus controller). The EV charger's control mode setting does not affect EV charging behavior.
+
+---
+
 ## Surplus Distribution
 
-SEM distributes solar surplus across multiple devices by priority (1 = highest, 10 = lowest):
+SEM distributes solar surplus across devices that are in **`surplus` mode** by priority (1 = highest, 10 = lowest):
 
 1. Read available surplus (solar - home - battery charge)
 2. Subtract regulation offset (default 50W export buffer)
-3. Iterate devices by priority
+3. Iterate **surplus-mode devices** by priority
 4. Activate if surplus >= device minimum power
 5. Variable-power devices get proportional allocation
 6. When surplus drops: LIFO (lowest priority first) deactivation
 
-The surplus controller runs every 10 seconds and is always active. EV charging is handled separately (not through the surplus controller) due to its unique requirements.
+Devices in `peak_only` or `off` mode are **never activated** by the surplus controller. They can only be shed by peak load management.
 
 ### Price-responsive mode
 
-When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution becomes price-aware: during cheap or negative price periods, SEM adds virtual surplus to encourage device activation.
+When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution becomes price-aware: during cheap or negative price periods, SEM adds virtual surplus to encourage activation of **surplus-mode devices**.
 
 ---
 
@@ -241,14 +273,16 @@ When using dynamic tariffs (Tibber, Nordpool, aWATTar), surplus distribution bec
 
 ![Control Tab](docs/images/sem_control_panel.png)
 
-SEM monitors rolling 15-minute average power and progressively sheds loads to stay under your target peak limit.
+SEM monitors rolling 15-minute average power and progressively sheds loads to stay under your target peak limit. Only devices in `peak_only` or `surplus` mode can be shed. Devices in `off` mode are never touched.
 
 | State | Behavior |
 |-------|----------|
-| **Normal** | Full calculated current |
-| **Warning** | Reduced current with safety buffer |
+| **Normal** | No action — all devices run freely |
+| **Warning** | Alert — approaching peak limit |
 | **Shedding** | Automatic device shedding by reverse priority |
-| **Emergency** | Minimum current, all non-critical loads shed |
+| **Emergency** | All non-critical loads shed immediately |
+
+When the peak drops back below the target, SEM restores devices **only if they were ON before shedding**. Devices that were already off are not turned on.
 
 Enable via integration options. Requires controllable devices with switch entities.
 

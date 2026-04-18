@@ -86,12 +86,6 @@ class SurplusController:
     - LIFO deactivation when surplus drops
     """
 
-    # Grace period after startup before activating devices.
-    # Prevents turning on all devices immediately when surplus is available
-    # after a restart — devices should stay in their pre-restart state until
-    # the system has settled and readings are reliable.
-    STARTUP_GRACE_SECONDS = 120  # 2 minutes
-
     def __init__(
         self,
         hass: HomeAssistant,
@@ -105,8 +99,6 @@ class SurplusController:
         self._price_responsive_mode = False
         self._last_surplus = 0.0
         self._smoothed_surplus: Optional[float] = None
-        self._startup_time = datetime.now()
-        self._startup_grace_active = True
 
     @property
     def allocation_data(self) -> SurplusAllocationData:
@@ -209,32 +201,22 @@ class SurplusController:
                             device.name,
                         )
 
-        # Startup grace period: skip activation for first 2 minutes after restart
-        # to prevent turning on devices that were off before the restart.
-        if self._startup_grace_active:
-            elapsed = (datetime.now() - self._startup_time).total_seconds()
-            if elapsed < self.STARTUP_GRACE_SECONDS:
-                _LOGGER.debug(
-                    "Startup grace period: %ds remaining, skipping device activation",
-                    int(self.STARTUP_GRACE_SECONDS - elapsed),
-                )
-                return SurplusAllocationData(
-                    total_surplus_w=available_power_w,
-                    distributable_surplus_w=distributable,
-                    regulation_offset_w=self.regulation_offset,
-                    allocated_w=0,
-                    unallocated_w=distributable,
-                    active_devices=0,
-                    total_devices=len(devices),
-                    last_update=datetime.now(),
-                )
-            else:
-                self._startup_grace_active = False
-                _LOGGER.info("Startup grace period ended, surplus allocation active")
+        # Import control mode enum
+        from ..devices.base import DeviceControlMode
 
         # Activation pass: iterate by priority, activate eligible devices
+        # Only devices in "surplus" mode are candidates for activation (#49).
+        # Devices in "peak_only" mode are tracked but never proactively turned on.
+        # Devices in "off" mode are skipped entirely.
         for device in devices:
+            # Skip devices in "off" mode — SEM never touches these
+            if device.control_mode == DeviceControlMode.OFF:
+                continue
+
             if remaining_surplus >= device.min_power_threshold and not device.is_active:
+                # Only activate if device is in "surplus" mode
+                if device.control_mode != DeviceControlMode.SURPLUS:
+                    continue  # peak_only: never proactively turn on
                 if device.can_activate():
                     consumed = await device.activate(remaining_surplus)
                     if consumed > 0:
@@ -243,14 +225,12 @@ class SurplusController:
                     remaining_surplus -= consumed
                     if consumed > 0:
                         active_count += 1
-                # else: can_activate tracks its own surplus timer
 
             elif not device.is_active and remaining_surplus < device.min_power_threshold:
-                # Not enough surplus — reset sustained surplus timer
                 device.reset_surplus_timer()
 
             elif device.is_active:
-                # Already active — adjust power level
+                # Already active — adjust power level (applies to all modes)
                 old_consumption = device.get_current_consumption()
                 consumed = await device.adjust_power(remaining_surplus + old_consumption)
                 delta = consumed - old_consumption
@@ -314,8 +294,11 @@ class SurplusController:
                 )
 
         # Off-peak activation pass: force-activate devices with runtime deficit
+        # Only for "surplus" mode devices — off-peak is a form of proactive activation (#49)
         if price_level in ("cheap", "very_cheap", "negative"):
             for device in devices:
+                if device.control_mode != DeviceControlMode.SURPLUS:
+                    continue
                 if device.needs_offpeak_activation:
                     consumed = await device.activate(device.min_power_threshold)
                     if consumed > 0:

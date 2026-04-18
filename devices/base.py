@@ -39,6 +39,23 @@ class DeviceType(Enum):
     SCHEDULE = "schedule"
 
 
+class DeviceControlMode(Enum):
+    """How SEM is allowed to control this device (#49).
+
+    Hierarchy: off < peak_only < surplus
+    Each level adds capability on top of the previous.
+
+    - off:       SEM monitors but never controls this device
+    - peak_only: SEM can shed (turn off) to protect peak limit,
+                 restores to pre-shed state. Never proactively turns on.
+    - surplus:   SEM activates when surplus available, deactivates when
+                 surplus drops. Also includes peak protection (shedding).
+    """
+    OFF = "off"
+    PEAK_ONLY = "peak_only"
+    SURPLUS = "surplus"
+
+
 @dataclass
 class DeviceStatus:
     """Current status of a controllable device."""
@@ -81,6 +98,7 @@ class ControllableDevice(ABC):
         self._status = DeviceStatus()
         self._enabled = True
         self._managed_externally = False
+        self.control_mode = DeviceControlMode.PEAK_ONLY  # Default: peak protection only (#49)
 
         # Power-change cooldown
         self._min_power_change_interval: float = 0.0  # seconds, 0 = disabled
