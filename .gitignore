@@ -83,9 +83,27 @@ logo/
 # Development/Utility folders (not needed for module runtime)
 migration/
 deployment/
-dashboard_generator.py
 run_tests.sh
 n8n_workflow_improved.json
+
+# Local deploy scripts (not for distribution)
+deploy-test.sh
+deploy-prod.sh
+
+# MCP configuration
+.mcp.json
+
+# Node/Playwright (local testing)
+node_modules/
+package-lock.json
+package.json
+
+# pytest local config
+pytest.ini
+requirements_test.txt
+
+# Sync script (legacy, no longer needed)
+scripts/sync_to_community.py
 
 # Temporary screenshots
 tmp/

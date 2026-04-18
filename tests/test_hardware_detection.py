@@ -658,3 +658,90 @@ class TestDiscoverInverterFromRegistry:
 
         with self._patch_registry(entries):
             assert discover_inverter_from_registry(hass, cfg) is None
+
+    def test_solax_discharge_entity(self):
+        """SolAX discharge control entity should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.solax_battery_power", "solax_modbus"),
+            _make_registry_entry("number.solax_battery_discharge_max_power", "solax_modbus"),
+            _make_registry_entry("number.solax_battery_charge_max_current", "solax_modbus"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.solax_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.solax_battery_discharge_max_power"
+
+    def test_solarman_deye_discharge_entity(self):
+        """Solarman/DEYE discharge control entity should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.deye_battery_power", "solarman"),
+            _make_registry_entry("number.deye_battery_discharge_limit", "solarman"),
+            _make_registry_entry("number.deye_grid_export_limit", "solarman"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.deye_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.deye_battery_discharge_limit"
+
+    def test_growatt_discharge_entity(self):
+        """Growatt discharge control entity should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.growatt_battery_power", "growatt"),
+            _make_registry_entry("number.growatt_battery_discharge_power", "growatt"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.growatt_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.growatt_battery_discharge_power"
+
+    def test_generic_discharge_power_limit(self):
+        """Generic discharge_power_limit naming should match as fallback."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.inverter_battery_power", "some_integration"),
+            _make_registry_entry("number.inverter_discharge_power_limit", "some_integration"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.inverter_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.inverter_discharge_power_limit"
+
+    def test_sunsynk_discharge_entity(self):
+        """Sunsynk (via solarman) discharge entity should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.sunsynk_battery_power", "solarman"),
+            _make_registry_entry("number.sunsynk_battery_discharge_max", "solarman"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.sunsynk_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.sunsynk_battery_discharge_max"

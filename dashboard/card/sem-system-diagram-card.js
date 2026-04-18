@@ -21,6 +21,7 @@ class SEMSystemDiagramCard extends HTMLElement {
         this._compact = false;
         this._rendered = false;
         this._visible = true;
+        this._updateTimer = null;
     }
 
     setConfig(config) {
@@ -57,6 +58,11 @@ class SEMSystemDiagramCard extends HTMLElement {
     disconnectedCallback() {
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
+        clearTimeout(this._updateTimer);
+        for (const id of Object.keys(this._animFrames)) {
+            cancelAnimationFrame(this._animFrames[id]);
+        }
+        this._animFrames = {};
     }
 
     set hass(hass) {
@@ -71,7 +77,9 @@ class SEMSystemDiagramCard extends HTMLElement {
         }
         // Skip update if card is not visible (off-screen tab)
         if (!this._visible) return;
-        this._updateFlows();
+        // Debounce flow updates (#30)
+        clearTimeout(this._updateTimer);
+        this._updateTimer = setTimeout(() => this._updateFlows(), 100);
     }
 
     _getState(suffix) {
@@ -165,6 +173,24 @@ class SEMSystemDiagramCard extends HTMLElement {
         const key = JSON.stringify(vals);
         if (this._lastKey === key) return;
         this._lastKey = key;
+
+        // Track entity availability for visual feedback (#38)
+        const unavailable = [];
+        for (const suffix of ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'ev_power', 'battery_soc']) {
+            const entity = this._hass.states[`${this.entityPrefix}${suffix}`];
+            if (!entity || entity.state === 'unavailable' || entity.state === 'unknown') {
+                unavailable.push(suffix);
+            }
+        }
+        const statusEl = this.shadowRoot.getElementById('entity-status');
+        if (statusEl) {
+            if (unavailable.length > 0) {
+                statusEl.textContent = `⚠ ${unavailable.length} sensor${unavailable.length > 1 ? 's' : ''} unavailable`;
+                statusEl.style.display = 'block';
+            } else {
+                statusEl.style.display = 'none';
+            }
+        }
 
         // Animated power values
         this._animateValue('val-solar', solar);
@@ -479,7 +505,7 @@ class SEMSystemDiagramCard extends HTMLElement {
                 @keyframes socPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
             </style>
             <ha-card>
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="${L.vb}" style="background:transparent">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="${L.vb}" style="background:transparent" role="img" aria-label="Solar energy system diagram showing power flows between solar, battery, grid, home and EV charger">
                     <defs>
                         <radialGradient id="bgGrad" cx="50%" cy="45%" r="60%">
                             <stop offset="0%" stop-color="rgba(200,220,240,0.08)"/>
@@ -618,6 +644,11 @@ class SEMSystemDiagramCard extends HTMLElement {
 
                     <!-- Device labels -->
                     <g id="device-labels"></g>
+
+                    <!-- Entity status indicator (#38) -->
+                    <foreignObject x="10" y="${this._compact ? 1030 : 750}" width="200" height="20">
+                        <div xmlns="http://www.w3.org/1999/xhtml" id="entity-status" style="display:none;font-family:'Segoe UI','Roboto',sans-serif;font-size:10px;color:#ef5350;opacity:0.7"></div>
+                    </foreignObject>
 
                     <!-- SEM watermark -->
                     <text x="${this._compact ? 470 : 960}" y="${this._compact ? 1050 : 770}" text-anchor="end" font-family="${F}" font-size="10" font-weight="300" letter-spacing="2" fill="rgba(0,0,0,0.1)">SEM</text>

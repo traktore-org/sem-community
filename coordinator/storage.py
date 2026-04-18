@@ -66,15 +66,21 @@ class SEMStorage:
         try:
             stored = await self._energy_store.async_load()
             if stored:
-                self._energy_data = stored
-                _LOGGER.info(
-                    f"Loaded energy data: {len(stored.get('accumulators', {}))} accumulators"
-                )
+                # Validate restored data ranges (#37)
+                if not self._validate_energy_data(stored):
+                    _LOGGER.warning("Energy data failed validation, starting fresh")
+                    self._energy_data = self._get_default_energy_data()
+                else:
+                    self._energy_data = stored
+                    _LOGGER.info(
+                        "Loaded energy data: %d accumulators",
+                        len(stored.get("accumulators", {})),
+                    )
             else:
                 _LOGGER.info("No persisted energy data found, starting fresh")
                 self._energy_data = self._get_default_energy_data()
-        except Exception as e:
-            _LOGGER.warning(f"Failed to load energy data: {e}")
+        except (OSError, ValueError, TypeError) as e:
+            _LOGGER.warning("Failed to load energy data: %s", e)
             self._energy_data = self._get_default_energy_data()
 
     async def _load_daily_data(self) -> None:
@@ -84,14 +90,39 @@ class SEMStorage:
             if stored:
                 self._daily_data = stored
                 _LOGGER.info(
-                    f"Loaded daily data: {len(stored.get('baselines', {}))} baselines"
+                    "Loaded daily data: %d baselines",
+                    len(stored.get("baselines", {})),
                 )
             else:
                 _LOGGER.info("No persisted daily data found, starting fresh")
                 self._daily_data = self._get_default_daily_data()
-        except Exception as e:
-            _LOGGER.warning(f"Failed to load daily data: {e}")
+        except (OSError, ValueError, TypeError) as e:
+            _LOGGER.warning("Failed to load daily data: %s", e)
             self._daily_data = self._get_default_daily_data()
+
+    @staticmethod
+    def _validate_energy_data(data: Dict[str, Any]) -> bool:
+        """Validate restored energy data is within sane ranges (#37).
+
+        Catches corrupted storage (partial writes, disk errors) before
+        the values propagate into energy sensors.
+        """
+        if not isinstance(data, dict):
+            return False
+        accumulators = data.get("accumulators", {})
+        if not isinstance(accumulators, dict):
+            return False
+        for key, value in accumulators.items():
+            if not isinstance(value, (int, float)):
+                _LOGGER.warning("Non-numeric accumulator %s=%s", key, value)
+                return False
+            # Sane range: no single accumulator should exceed 100 MWh
+            if abs(value) > 100_000:
+                _LOGGER.warning(
+                    "Accumulator %s=%.1f kWh exceeds 100 MWh limit", key, value
+                )
+                return False
+        return True
 
     def _get_default_energy_data(self) -> Dict[str, Any]:
         """Get default energy data structure."""
@@ -254,16 +285,16 @@ class SEMStorage:
 
             self._energy_store.async_delay_save(get_data, ENERGY_SAVE_DELAY)
             _LOGGER.debug("Scheduled delayed save of energy data")
-        except Exception as e:
-            _LOGGER.warning(f"Failed to schedule energy data save: {e}")
+        except (OSError, TypeError) as e:
+            _LOGGER.warning("Failed to schedule energy data save: %s", e)
 
     async def async_save_daily(self) -> None:
         """Save daily data immediately."""
         try:
             await self._daily_store.async_save(self._daily_data)
             _LOGGER.debug("Saved daily data to storage")
-        except Exception as e:
-            _LOGGER.warning(f"Failed to save daily data: {e}")
+        except (OSError, TypeError) as e:
+            _LOGGER.warning("Failed to save daily data: %s", e)
 
     async def async_save_all(self) -> None:
         """Save all data immediately (for shutdown)."""
@@ -281,8 +312,8 @@ class SEMStorage:
             _LOGGER.debug("Saved daily data on shutdown")
 
             _LOGGER.info("All SEM data saved successfully")
-        except Exception as e:
-            _LOGGER.error(f"Failed to save SEM data: {e}")
+        except (OSError, TypeError) as e:
+            _LOGGER.error("Failed to save SEM data: %s", e)
 
     def _register_shutdown_listener(self) -> None:
         """Register shutdown listener to save data before HA stops."""
@@ -307,6 +338,7 @@ class SEMStorage:
             "yearly_accumulators": dict(self._daily_data.get("yearly_accumulators", {})),
             "lifetime_accumulators": dict(self._daily_data.get("lifetime_accumulators", {})),
             "last_update": self._energy_data.get("last_update"),
+            "yearly_seeded": self._daily_data.get("yearly_seeded", False),
         }
 
     def import_energy_calculator_state(self, state: Dict[str, Any]) -> None:
@@ -319,6 +351,8 @@ class SEMStorage:
             self._daily_data["yearly_accumulators"] = state["yearly_accumulators"]
         if "lifetime_accumulators" in state:
             self._daily_data["lifetime_accumulators"] = state["lifetime_accumulators"]
+        if "yearly_seeded" in state:
+            self._daily_data["yearly_seeded"] = state["yearly_seeded"]
 
     def export_forecast_tracker_state(self) -> Dict[str, Any]:
         """Export state for ForecastTracker."""

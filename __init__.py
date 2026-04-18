@@ -60,44 +60,51 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
     )
 
     if entry.version < 2:
-        from .consts.core import (
-            DEFAULT_BATTERY_BUFFER_SOC,
-            DEFAULT_BATTERY_AUTO_START_SOC,
-            DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
-        )
-
-        new_data = {**entry.data}
-        new_options = {**entry.options}
-        legacy_priority = max(
-            new_options.get("battery_priority_soc") or 0,
-            new_data.get("battery_priority_soc") or 0,
-        )
-        # Anything ≥ 50 is the legacy 3-zone meaning — remap.
-        if legacy_priority >= 50:
-            _LOGGER.warning(
-                "Migrating battery_priority_soc %s → 30 (4-zone semantics, see #98)",
-                legacy_priority,
+        try:
+            from .consts.core import (
+                DEFAULT_BATTERY_BUFFER_SOC,
+                DEFAULT_BATTERY_AUTO_START_SOC,
+                DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
             )
-            new_data["battery_priority_soc"] = 30
-            new_options.pop("battery_priority_soc", None)
 
-        # Seed any 4-zone keys missing or null on legacy entries so the
-        # number entities boot with sensible state.
-        for key, default in (
-            ("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
-            ("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
-            ("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
-        ):
-            if new_data.get(key) in (None, 0):
-                new_data[key] = default
+            new_data = {**entry.data}
+            new_options = {**entry.options}
+            legacy_priority = max(
+                new_options.get("battery_priority_soc") or 0,
+                new_data.get("battery_priority_soc") or 0,
+            )
+            # Anything ≥ 50 is the legacy 3-zone meaning — remap.
+            if legacy_priority >= 50:
+                _LOGGER.warning(
+                    "Migrating battery_priority_soc %s → 30 (4-zone semantics, see #98)",
+                    legacy_priority,
+                )
+                new_data["battery_priority_soc"] = 30
+                new_options.pop("battery_priority_soc", None)
 
-        hass.config_entries.async_update_entry(
-            entry,
-            data=new_data,
-            options=new_options,
-            version=2,
-            minor_version=1,
-        )
+            # Seed any 4-zone keys missing or null on legacy entries so the
+            # number entities boot with sensible state.
+            for key, default in (
+                ("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
+                ("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
+                ("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
+            ):
+                if new_data.get(key) in (None, 0):
+                    new_data[key] = default
+
+            hass.config_entries.async_update_entry(
+                entry,
+                data=new_data,
+                options=new_options,
+                version=2,
+                minor_version=1,
+            )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
 
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
@@ -475,28 +482,95 @@ async def _async_register_services(
             if installed_cards:
                 _LOGGER.info("Installed %d card(s) to %s: %s", len(installed_cards), card_www_dir, installed_cards)
 
+            # Step 1b: Clean up stale card copies in /config/www/ root
+            # Old standalone installs may leave files that conflict with
+            # the component-managed copies (double customElements.define).
+            def _cleanup_stale_www():
+                www_dir = os.path.join(hass.config.config_dir, "www")
+                removed = []
+                for fname in os.listdir(www_dir) if os.path.isdir(www_dir) else []:
+                    if fname.startswith("sem-") and fname.endswith(".js"):
+                        stale = os.path.join(www_dir, fname)
+                        os.remove(stale)
+                        removed.append(fname)
+                return removed
+
+            stale_removed = await hass.async_add_executor_job(_cleanup_stale_www)
+            if stale_removed:
+                _LOGGER.info("Removed %d stale card(s) from /config/www/: %s", len(stale_removed), stale_removed)
+
             # Step 1c: Register cards as Lovelace resources (idempotent)
             # Compare by base URL (without ?v= query) to avoid duplicates
             # when _async_register_frontend_resources already added versioned URLs.
+            # Also remove stale /local/sem-*.js entries (old standalone installs).
             resources_store = Store(hass, 1, "lovelace_resources")
             resources_data = await resources_store.async_load() or {"items": []}
             if "items" not in resources_data:
                 resources_data["items"] = []
+
+            # Remove stale standalone resource entries (/local/sem-*.js)
+            component_prefix = f"/local/custom_components/{DOMAIN}/"
+            before_count = len(resources_data["items"])
+            resources_data["items"] = [
+                item for item in resources_data["items"]
+                if not (
+                    item.get("url", "").startswith("/local/sem-")
+                    and component_prefix not in item.get("url", "")
+                )
+            ]
+            stale_count = before_count - len(resources_data["items"])
+            if stale_count:
+                _LOGGER.info("Removed %d stale Lovelace resource(s)", stale_count)
+
+            # Cache-busting: use timestamp so every generate_dashboard
+            # call forces browsers to reload card JS files.
+            import time as _time
+            cache_bust = str(int(_time.time()))
+
             existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
             added_resources = []
+            updated_resources = 0
             for fname in installed_cards:
                 base_url = f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
                 if base_url not in existing_bases:
                     import uuid as _uuid
                     resources_data["items"].append({
                         "id": _uuid.uuid4().hex,
-                        "url": base_url,
+                        "url": f"{base_url}?v={cache_bust}",
                         "type": "module",
                     })
                     added_resources.append(base_url)
-            if added_resources:
+
+            # Update ?v= on existing SEM resources and remove orphaned ones
+            installed_bases = {
+                f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
+                for fname in installed_cards
+            }
+            cleaned = []
+            kept_items = []
+            for item in resources_data["items"]:
+                url = item.get("url", "")
+                base = url.split("?")[0]
+                if f"/custom_components/{DOMAIN}/" in base and base.endswith(".js"):
+                    if base not in installed_bases:
+                        # Card file no longer exists — remove orphaned resource
+                        cleaned.append(base)
+                        continue
+                    new_url = f"{base}?v={cache_bust}"
+                    if item["url"] != new_url:
+                        item["url"] = new_url
+                        updated_resources += 1
+                kept_items.append(item)
+            resources_data["items"] = kept_items
+            if cleaned:
+                _LOGGER.info("Removed %d orphaned card resource(s): %s", len(cleaned), cleaned)
+
+            if added_resources or stale_count or updated_resources:
                 await resources_store.async_save(resources_data)
-                _LOGGER.info("Registered %d new Lovelace resource(s): %s", len(added_resources), added_resources)
+                if added_resources:
+                    _LOGGER.info("Registered %d new Lovelace resource(s): %s", len(added_resources), added_resources)
+                if updated_resources:
+                    _LOGGER.info("Updated cache-bust on %d Lovelace resource(s) to v=%s", updated_resources, cache_bust)
 
             # Step 2: Generate dashboard config
             generator = DashboardGenerator(hass)
@@ -920,18 +994,22 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         except Exception:
             version = "0"
 
+        shared_base = f"{static_path}/card/sem-shared.js"
         card_base = f"{static_path}/card/sem-load-priority-card.js"
         diagram_base = f"{static_path}/card/sem-system-diagram-card.js"
         period_base = f"{static_path}/card/sem-period-selector-card.js"
         chart_base = f"{static_path}/card/sem-chart-card.js"
         solar_summary_base = f"{static_path}/card/sem-solar-summary-card.js"
         weather_base = f"{static_path}/card/sem-weather-card.js"
+        flow_base = f"{static_path}/card/sem-flow-card.js"
+        shared_url = f"{shared_base}?v={version}"
         card_url = f"{card_base}?v={version}"
         diagram_url = f"{diagram_base}?v={version}"
         period_url = f"{period_base}?v={version}"
         chart_url = f"{chart_base}?v={version}"
         solar_summary_url = f"{solar_summary_base}?v={version}"
         weather_url = f"{weather_base}?v={version}"
+        flow_url = f"{flow_base}?v={version}"
         try:
             from homeassistant.components.lovelace.resources import ResourceStorageCollection
             resources: ResourceStorageCollection = hass.data["lovelace"].resources
@@ -945,17 +1023,19 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 existing_by_base[base] = item
 
             for base, versioned_url in (
+                (shared_base, shared_url),
                 (card_base, card_url),
                 (diagram_base, diagram_url),
                 (period_base, period_url),
                 (chart_base, chart_url),
                 (solar_summary_base, solar_summary_url),
                 (weather_base, weather_url),
+                (flow_base, flow_url),
             ):
                 item = existing_by_base.get(base)
                 if item is None:
                     # Not registered yet — create
-                    await resources.async_create_item({"res_type": "js", "url": versioned_url})
+                    await resources.async_create_item({"res_type": "module", "url": versioned_url})
                     _LOGGER.info("Registered SEM Lovelace resource: %s", versioned_url)
                 elif item["url"] != versioned_url:
                     # Registered but with old version — update to bust cache

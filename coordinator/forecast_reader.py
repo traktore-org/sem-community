@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
+from homeassistant.const import STATE_UNKNOWN, STATE_UNAVAILABLE
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ class ForecastReader:
         # Check Solcast
         test_entity = SOLCAST_ENTITIES["forecast_today"]
         state = self.hass.states.get(test_entity)
-        if state and state.state not in ("unknown", "unavailable", None):
+        if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
             self._entities = SOLCAST_ENTITIES
             self._source = "solcast"
             _LOGGER.info("Detected Solcast PV Solar integration")
@@ -114,7 +115,7 @@ class ForecastReader:
         # Check Forecast.Solar
         test_entity = FORECAST_SOLAR_ENTITIES["forecast_today"]
         state = self.hass.states.get(test_entity)
-        if state and state.state not in ("unknown", "unavailable", None):
+        if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
             self._entities = FORECAST_SOLAR_ENTITIES
             self._source = "forecast_solar"
             _LOGGER.info("Detected Forecast.Solar integration")
@@ -124,9 +125,21 @@ class ForecastReader:
         return None
 
     def read_forecast(self) -> ForecastData:
-        """Read current forecast data from detected source."""
+        """Read current forecast data from detected source.
+
+        Caches the detected source — only re-detects if source becomes
+        unavailable (#26).
+        """
         if not self._source:
             self.detect_source()
+        elif self._source != "custom":
+            # Verify cached source is still valid (entity may have disappeared)
+            test_entity = self._entities.get("forecast_today")
+            if test_entity:
+                state = self.hass.states.get(test_entity)
+                if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    self._source = None
+                    self.detect_source()
 
         if not self._source:
             return ForecastData()
@@ -195,7 +208,7 @@ class ForecastReader:
         if not entity_id:
             return default
         state = self.hass.states.get(entity_id)
-        if state and state.state not in ("unknown", "unavailable", None):
+        if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
             try:
                 return float(state.state)
             except (ValueError, TypeError):

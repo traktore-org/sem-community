@@ -284,6 +284,12 @@
       "battery_temperature": {
         "name": "Battery Temperature"
       },
+      "battery_cycles_estimated": {
+        "name": "Battery Cycles (Estimated)"
+      },
+      "battery_health_score": {
+        "name": "Battery Health Score"
+      },
       "calculated_current": {
         "name": "Calculated Current"
       },
@@ -769,6 +775,12 @@
       },
       "daily_ev_target": {
         "name": "Daily EV Target"
+      },
+      "ev_km_per_kwh": {
+        "name": "EV Efficiency"
+      },
+      "public_charging_rate": {
+        "name": "Public Charging Rate"
       },
       "battery_assist_max_power": {
         "name": "Battery Assist Max Power"

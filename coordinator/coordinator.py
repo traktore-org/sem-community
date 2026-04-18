@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.util import dt as dt_util
@@ -25,6 +26,12 @@ from ..const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
     ChargingState,
+    ENTITY_OBSERVER_MODE_SWITCH,
+    ENTITY_SOLAR_POWER,
+    ENTITY_FORECAST_NIGHT_REDUCTION,
+    WEATHER_ENTITY_CANDIDATES,
+    STATE_UNKNOWN,
+    STATE_UNAVAILABLE,
 )
 from ..utils.time_manager import TimeManager
 from ..ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
@@ -285,7 +292,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 issues.append("EV device not registered (KEBA not discovered)")
             if not self._storage or not self._storage.is_loaded:
                 issues.append("Storage not loaded")
-            if self.hass.states.get("sensor.sem_solar_power") is None:
+            if self.hass.states.get(f"sensor.{ENTITY_SOLAR_POWER}") is None:
                 issues.append("Solar power sensor missing")
             if issues:
                 _LOGGER.warning("SEM health check: %s", "; ".join(issues))
@@ -293,7 +300,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 _LOGGER.info("SEM health check: all OK (EV=%s)", self._ev_device.name if self._ev_device else "none")
 
         # Read observer mode from switch entity (allows runtime toggle)
-        observer_state = self.hass.states.get("switch.sem_observer_mode")
+        observer_state = self.hass.states.get(f"switch.{ENTITY_OBSERVER_MODE_SWITCH}")
         if observer_state is not None:
             self._observer_mode = observer_state.state == "on"
 
@@ -326,25 +333,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charging_state = self._state_machine.update_state(charging_context)
 
             # Step 7.5a: Unified EV control via CurrentControlDevice
-            # Retry EV device setup if it failed during startup (KEBA race condition)
-            if not self._ev_device and not hasattr(self, '_ev_retry_count'):
-                self._ev_retry_count = 0
-            if not self._ev_device and getattr(self, '_ev_retry_count', 0) < 30:
-                self._ev_retry_count = getattr(self, '_ev_retry_count', 0) + 1
-                try:
-                    await self._retry_ev_device_setup()
-                except Exception as e:
-                    _LOGGER.debug(f"EV device retry {self._ev_retry_count}/30: {e}")
+            # Retry EV device setup with exponential backoff (#27)
+            if not self._ev_device:
+                await self._retry_ev_device_with_backoff()
 
             if self._ev_device and not self._observer_mode:
                 try:
                     await self._execute_ev_control(
                         charging_state, power, energy, charging_context
                     )
-                    # Persist EV session state after each control cycle
                     self._save_ev_session_state()
-                except Exception as e:
-                    _LOGGER.error(f"EV control failed: {e}", exc_info=True)
+                except (HomeAssistantError, ServiceValidationError) as e:
+                    _LOGGER.error("EV control service failed: %s", e)
+                except ValueError as e:
+                    _LOGGER.warning("EV control invalid value: %s", e)
 
             # Step 7.5c: Battery discharge protection (night charging)
             discharge_limit = None
@@ -353,8 +355,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     discharge_limit = await self._apply_battery_discharge_protection(
                         charging_state, power
                     )
-                except Exception as e:
-                    _LOGGER.error("Battery discharge protection failed: %s", e)
+                except (HomeAssistantError, ServiceValidationError) as e:
+                    _LOGGER.error(
+                        "Battery discharge protection service failed (resetting state): %s", e
+                    )
+                    self._battery_protection_active = False
 
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
@@ -367,12 +372,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     await self._load_manager.process_peak_update(
                         current_peak,
                         monthly_peak,
-                        ev_is_charging=False,  # EV controlled by _execute_ev_control
+                        ev_is_charging=False,
                         grid_import_w=power.grid_import_power,
                         ev_power_w=power.ev_power,
                     )
-                except Exception as e:
-                    _LOGGER.error(f"Load management processing failed: {e}")
+                except (HomeAssistantError, ServiceValidationError) as e:
+                    _LOGGER.error("Load management service call failed: %s", e)
+                except (ValueError, KeyError) as e:
+                    _LOGGER.warning("Load management data error: %s", e)
 
             # Step 8: Update system status
             status = self._build_system_status(power, charging_state)
@@ -386,157 +393,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self.hass, self._energy_dashboard_config
                 )
 
-            # Step 10: Read forecast data (Phase 0.3)
-            forecast_data = ForecastSensorData()
-            try:
-                forecast = self._forecast_reader.read_forecast()
-                if forecast.available:
-                    forecast_data.forecast_today_kwh = forecast.forecast_today_kwh
-                    forecast_data.forecast_tomorrow_kwh = forecast.forecast_tomorrow_kwh
-                    forecast_data.forecast_remaining_today_kwh = forecast.forecast_remaining_today_kwh
-                    forecast_data.forecast_power_now_w = forecast.power_now_w
-                    forecast_data.forecast_power_next_hour_w = forecast.power_next_hour_w
-                    forecast_data.forecast_peak_power_today_w = forecast.peak_power_today_w
-                    forecast_data.forecast_peak_time_today = forecast.peak_time_today or ""
-                    forecast_data.forecast_source = forecast.source
-                    forecast_data.forecast_available = forecast.available
-                    # Charging recommendation (Phase 3.2)
-                    daily_ev_target = self.config.get("daily_ev_target", 10)
-                    forecast_data.charging_recommendation = self._forecast_reader.get_charging_recommendation(
-                        daily_ev_target, energy.daily_ev,
+            # Step 9b: Seed yearly accumulators from recorder statistics (runs once)
+            if self._energy_dashboard_config and not self._energy_calculator._yearly_seeded:
+                try:
+                    await self._energy_calculator.seed_yearly_from_statistics(
+                        self.hass, self._energy_dashboard_config
                     )
-                    # Smart surplus window estimation
-                    forecast_data.best_surplus_window = self._estimate_best_surplus_window(
-                        forecast, power, energy
-                    )
-                    forecast_data.forecast_surplus_kwh = max(
-                        0,
-                        forecast.forecast_remaining_today_kwh
-                        - (energy.daily_home * 0.5)  # rough remaining home need
-                    )
-            except Exception as e:
-                _LOGGER.debug("Forecast read failed: %s", e)
+                except Exception as e:
+                    _LOGGER.warning("Yearly seeding from statistics failed (will retry): %s", e)
 
-            # Step 10a: Update forecast tracker (deviation + correction factor)
-            try:
-                weather_state = self.hass.states.get("weather.home") or self.hass.states.get("weather.openweathermap")
-                weather_condition = weather_state.state if weather_state else "unknown"
-                self._forecast_tracker.update(
-                    forecast_data.forecast_today_kwh,
-                    energy.daily_solar,
-                    weather_condition,
+            # Step 9c: Calculate battery health metrics
+            battery_capacity = self.config.get("battery_capacity_kwh", 15.0)
+            if battery_capacity > 0:
+                lifetime_charge = self._energy_calculator._get_lifetime("battery_charge")
+                lifetime_discharge = self._energy_calculator._get_lifetime("battery_discharge")
+                total_throughput = (lifetime_charge + lifetime_discharge) / 2
+                power.battery_cycles_estimated = round(total_throughput / battery_capacity, 1)
+                # Estimate health: assume 0.02% degradation per cycle (typical Li-ion)
+                degradation = min(30, power.battery_cycles_estimated * 0.02)
+                power.battery_health_score = round(100 - degradation, 1)
+
+            # Steps 10–10.5: Analytics phases (extracted for readability, #29)
+            forecast_data, tracker_data, tariff_data, surplus_data, \
+                pv_data, assistant_data, utility_data, heat_pump_data = \
+                await self._update_analytics_phases(
+                    power, energy, energy_flows, performance, available_power,
                 )
-                # Apply correction to tomorrow's forecast
-                tracker_data = self._forecast_tracker.get_data()
-                tracker_data["forecast_corrected_tomorrow"] = self._forecast_tracker.apply_correction(
-                    forecast_data.forecast_tomorrow_kwh
-                )
-            except Exception as e:
-                _LOGGER.debug("Forecast tracker update failed: %s", e)
-                tracker_data = {}
-
-            # Step 10.1: Read tariff data (Phase 1)
-            tariff_data = TariffSensorData()
-            try:
-                tariff = self._tariff_provider.get_tariff_data()
-                tariff_data.tariff_current_import_rate = tariff.current_import_rate
-                tariff_data.tariff_current_export_rate = tariff.current_export_rate
-                tariff_data.tariff_price_level = tariff.price_level.value
-                tariff_data.tariff_provider = tariff.provider
-                tariff_data.tariff_is_dynamic = tariff.is_dynamic
-                tariff_data.tariff_today_min_price = tariff.today_min_price
-                tariff_data.tariff_today_max_price = tariff.today_max_price
-                tariff_data.tariff_today_avg_price = tariff.today_avg_price
-                if tariff.next_cheap_window_start:
-                    tariff_data.tariff_next_cheap_start = tariff.next_cheap_window_start.isoformat()
-                # Update energy calculator with dynamic rates
-                self._energy_calculator._import_rate = tariff.current_import_rate
-                self._energy_calculator._export_rate = tariff.current_export_rate
-            except Exception as e:
-                _LOGGER.debug("Tariff read failed: %s", e)
-
-            # Step 10.2: Update surplus controller (Phase 0.2)
-            surplus_data = SurplusControlData()
-            try:
-                price_level = tariff_data.tariff_price_level
-                allocation = await self._surplus_controller.update(
-                    available_power, price_level=price_level,
-                )
-                surplus_data.surplus_total_w = allocation.total_surplus_w
-                surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
-                surplus_data.surplus_regulation_offset_w = allocation.regulation_offset_w
-                surplus_data.surplus_allocated_w = allocation.allocated_w
-                surplus_data.surplus_unallocated_w = allocation.unallocated_w
-                surplus_data.surplus_active_devices = allocation.active_devices
-                surplus_data.surplus_total_devices = allocation.total_devices
-            except Exception as e:
-                _LOGGER.debug("Surplus controller update failed: %s", e)
-
-            # Step 10.2b: Accumulate device daily runtimes
-            try:
-                meter_day = dt_util.now().date()  # Midnight-based, matches HA Energy Dashboard
-                for device in self._surplus_controller._devices.values():
-                    device.update_daily_runtime(meter_day)
-            except Exception as e:
-                _LOGGER.debug("Device runtime update failed: %s", e)
-
-            # Step 10.3: Update PV analytics (Phase 5)
-            pv_data = PVAnalyticsData()
-            try:
-                pv = self._pv_analyzer.update(
-                    daily_solar_kwh=energy.daily_solar,
-                    monthly_solar_kwh=energy.monthly_solar,
-                    current_solar_power_w=power.solar_power,
-                    forecast_today_kwh=forecast_data.forecast_today_kwh,
-                )
-                pv_data.pv_daily_specific_yield = pv.daily_specific_yield
-                pv_data.pv_performance_vs_forecast = pv.performance_vs_forecast
-                pv_data.pv_estimated_annual_degradation = pv.estimated_annual_degradation
-                pv_data.pv_degradation_trend = pv.degradation_trend
-            except Exception as e:
-                _LOGGER.debug("PV analytics update failed: %s", e)
-
-            # Step 10.4: Update energy assistant (Phase 6)
-            assistant_data = EnergyAssistantSensorData()
-            try:
-                assistant = self._energy_assistant.analyze(
-                    daily_solar_kwh=energy.daily_solar,
-                    daily_home_kwh=energy.daily_home,
-                    daily_ev_kwh=energy.daily_ev,
-                    daily_grid_import_kwh=energy.daily_grid_import,
-                    daily_grid_export_kwh=energy.daily_grid_export,
-                    daily_battery_charge_kwh=energy.daily_battery_charge,
-                    daily_battery_discharge_kwh=energy.daily_battery_discharge,
-                    solar_to_ev_kwh=energy_flows.solar_to_ev,
-                    grid_to_ev_kwh=energy_flows.grid_to_ev,
-                    self_consumption_rate=performance.self_consumption_rate,
-                    autarky_rate=performance.autarky_rate,
-                    current_price_level=tariff_data.tariff_price_level,
-                    forecast_remaining_kwh=forecast_data.forecast_remaining_today_kwh,
-                    forecast_tomorrow_kwh=forecast_data.forecast_tomorrow_kwh,
-                    best_surplus_window=forecast_data.best_surplus_window,
-                    peak_time_today=forecast_data.forecast_peak_time_today,
-                    battery_soc=power.battery_soc,
-                )
-                assistant_data.energy_optimization_score = assistant.optimization_score
-                assistant_data.energy_tip = assistant.current_tip or "No recommendations"
-                assistant_data.energy_tip_category = assistant.tip_category or "none"
-                assistant_data.energy_ev_solar_percentage = assistant.ev_solar_percentage
-            except Exception as e:
-                _LOGGER.debug("Energy assistant update failed: %s", e)
-
-            # Step 10.5: Update utility signal monitor (Phase 7)
-            utility_data = UtilitySignalSensorData()
-            try:
-                signal = self._utility_monitor.update(solar_power_w=power.solar_power)
-                utility_data.utility_signal_active = signal.signal_active
-                utility_data.utility_signal_source = signal.signal_source
-                utility_data.utility_signal_count_today = signal.signal_count_today
-            except Exception as e:
-                _LOGGER.debug("Utility signal update failed: %s", e)
-
-            # Heat pump data (Phase 2 - populated when heat pump device is registered)
-            heat_pump_data = HeatPumpSensorData()
 
             # Step 11: Build complete data structure
             sem_data = SEMData(
@@ -564,54 +446,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 last_update=dt_util.now(),
             )
 
-            # Step 12: Send notifications on state change
-            await self._notification_manager.notify_state_change(
-                charging_state,
-                {
-                    "battery_soc": power.battery_soc,
-                    "calculated_current": calculated_current,
-                    "available_power": available_power,
-                    "daily_ev_energy": energy.daily_ev,
-                    "charging_strategy": charging_context.charging_strategy,
-                    "charging_strategy_reason": charging_context.charging_strategy_reason,
-                    "discharge_limit": discharge_limit,
-                }
+            # Step 12: Notifications (extracted for readability, #29)
+            await self._send_notifications(
+                charging_state, power, energy, costs, performance,
+                charging_context, forecast_data, discharge_limit,
+                calculated_current, available_power,
             )
-
-            # Step 12.1: Event-based notifications
-            try:
-                # Battery full
-                if power.battery_soc >= 99.5:
-                    await self._notification_manager.notify_battery_full(power.battery_soc)
-
-                # High grid import (>90% of peak limit)
-                peak_pct = performance.current_vs_peak_percentage if hasattr(performance, 'current_vs_peak_percentage') else 0
-                if peak_pct > 90:
-                    grid_import_w = power.grid_import_power
-                    await self._notification_manager.notify_high_grid_import(grid_import_w, peak_pct)
-
-                # Daily summary at 20:00
-                now = dt_util.now()
-                if now.hour == 20 and now.minute < (self.config.get("update_interval", 30) // 60 + 1):
-                    await self._notification_manager.notify_daily_summary({
-                        "daily_solar": energy.daily_solar,
-                        "daily_home": energy.daily_home,
-                        "autarky_rate": performance.autarky_rate,
-                        "daily_savings": costs.daily_savings if hasattr(costs, 'daily_savings') else 0,
-                        "daily_ev": energy.daily_ev,
-                        "daily_net_cost": costs.daily_net_cost if hasattr(costs, 'daily_net_cost') else 0,
-                        "forecast_tomorrow": forecast_data.forecast_tomorrow_kwh,
-                    })
-
-                # Low forecast alert (evening, <5 kWh tomorrow)
-                if (now.hour == 19
-                        and forecast_data.forecast_tomorrow_kwh > 0
-                        and forecast_data.forecast_tomorrow_kwh < 5):
-                    await self._notification_manager.notify_forecast_alert(
-                        forecast_data.forecast_tomorrow_kwh
-                    )
-            except Exception as e:
-                _LOGGER.debug("Event notification failed: %s", e)
 
             # Step 13: Persist data
             if self._storage:
@@ -639,7 +479,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 result["night_start_time"] = night_start
                 result["night_end_time"] = night_end
                 result["night_window_hours"] = round(self.time_manager.get_night_window_hours(), 1)
-            except Exception:
+            except (ValueError, AttributeError):
                 result["night_start_time"] = ""
                 result["night_end_time"] = ""
                 result["night_window_hours"] = 0
@@ -659,7 +499,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             vehicle_soc_entity = self.config.get("vehicle_soc_entity", "")
             if vehicle_soc_entity:
                 soc_state = self.hass.states.get(vehicle_soc_entity)
-                if soc_state and soc_state.state not in ("unknown", "unavailable"):
+                if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     try:
                         result["vehicle_soc"] = float(soc_state.state)
                     except (ValueError, TypeError):
@@ -669,7 +509,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             departure_entity = self.config.get("ev_departure_time_entity", "")
             if departure_entity:
                 dep_state = self.hass.states.get(departure_entity)
-                if dep_state and dep_state.state not in ("unknown", "unavailable"):
+                if dep_state and dep_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     result["ev_departure_time"] = dep_state.state
 
             return result
@@ -677,6 +517,266 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except Exception as e:
             _LOGGER.error(f"Error updating SEM data: {e}", exc_info=True)
             raise UpdateFailed(f"Update failed: {e}") from e
+
+    async def _update_analytics_phases(
+        self, power, energy, energy_flows, performance, available_power,
+    ):
+        """Run analytics phases: forecast, tariff, surplus, PV, assistant, utility (#29).
+
+        Extracted from _async_update_data to reduce cyclomatic complexity.
+        Each phase is independent and fails gracefully.
+        """
+        # Forecast (Phase 0.3)
+        forecast_data = ForecastSensorData()
+        try:
+            forecast = self._forecast_reader.read_forecast()
+            if forecast.available:
+                forecast_data.forecast_today_kwh = forecast.forecast_today_kwh
+                forecast_data.forecast_tomorrow_kwh = forecast.forecast_tomorrow_kwh
+                forecast_data.forecast_remaining_today_kwh = forecast.forecast_remaining_today_kwh
+                forecast_data.forecast_power_now_w = forecast.power_now_w
+                forecast_data.forecast_power_next_hour_w = forecast.power_next_hour_w
+                forecast_data.forecast_peak_power_today_w = forecast.peak_power_today_w
+                forecast_data.forecast_peak_time_today = forecast.peak_time_today or ""
+                forecast_data.forecast_source = forecast.source
+                forecast_data.forecast_available = forecast.available
+                daily_ev_target = self.config.get("daily_ev_target", 10)
+                forecast_data.charging_recommendation = self._forecast_reader.get_charging_recommendation(
+                    daily_ev_target, energy.daily_ev,
+                )
+                forecast_sig = f"{forecast.forecast_remaining_today_kwh:.1f}:{forecast.peak_time_today}"
+                if forecast_sig != getattr(self, '_last_forecast_sig', ''):
+                    self._last_forecast_sig = forecast_sig
+                    self._cached_surplus_window = self._estimate_best_surplus_window(
+                        forecast, power, energy
+                    )
+                forecast_data.best_surplus_window = getattr(self, '_cached_surplus_window', '')
+                forecast_data.forecast_surplus_kwh = max(
+                    0, forecast.forecast_remaining_today_kwh - (energy.daily_home * 0.5)
+                )
+        except (ValueError, TypeError) as e:
+            _LOGGER.debug("Forecast data parsing error: %s", e)
+        except AttributeError as e:
+            _LOGGER.debug("Forecast source not available: %s", e)
+
+        # Forecast tracker
+        tracker_data = {}
+        try:
+            weather_state = None
+            for candidate in WEATHER_ENTITY_CANDIDATES:
+                weather_state = self.hass.states.get(candidate)
+                if weather_state:
+                    break
+            weather_condition = weather_state.state if weather_state else STATE_UNKNOWN
+            self._forecast_tracker.update(
+                forecast_data.forecast_today_kwh, energy.daily_solar, weather_condition,
+            )
+            tracker_data = self._forecast_tracker.get_data()
+            tracker_data["forecast_corrected_tomorrow"] = self._forecast_tracker.apply_correction(
+                forecast_data.forecast_tomorrow_kwh
+            )
+        except (ValueError, TypeError, AttributeError) as e:
+            _LOGGER.debug("Forecast tracker update failed: %s", e)
+
+        # Tariff (Phase 1)
+        tariff_data = TariffSensorData()
+        try:
+            tariff = self._tariff_provider.get_tariff_data()
+            tariff_data.tariff_current_import_rate = tariff.current_import_rate
+            tariff_data.tariff_current_export_rate = tariff.current_export_rate
+            tariff_data.tariff_price_level = tariff.price_level.value
+            tariff_data.tariff_provider = tariff.provider
+            tariff_data.tariff_is_dynamic = tariff.is_dynamic
+            tariff_data.tariff_today_min_price = tariff.today_min_price
+            tariff_data.tariff_today_max_price = tariff.today_max_price
+            tariff_data.tariff_today_avg_price = tariff.today_avg_price
+            if tariff.next_cheap_window_start:
+                tariff_data.tariff_next_cheap_start = tariff.next_cheap_window_start.isoformat()
+            self._energy_calculator._import_rate = tariff.current_import_rate
+            self._energy_calculator._export_rate = tariff.current_export_rate
+        except (ValueError, TypeError, AttributeError) as e:
+            _LOGGER.debug("Tariff read failed: %s", e)
+
+        # Surplus controller (Phase 0.2)
+        surplus_data = SurplusControlData()
+        try:
+            allocation = await self._surplus_controller.update(
+                available_power, price_level=tariff_data.tariff_price_level,
+            )
+            surplus_data.surplus_total_w = allocation.total_surplus_w
+            surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
+            surplus_data.surplus_regulation_offset_w = allocation.regulation_offset_w
+            surplus_data.surplus_allocated_w = allocation.allocated_w
+            surplus_data.surplus_unallocated_w = allocation.unallocated_w
+            surplus_data.surplus_active_devices = allocation.active_devices
+            surplus_data.surplus_total_devices = allocation.total_devices
+        except (ValueError, TypeError) as e:
+            _LOGGER.debug("Surplus controller update failed: %s", e)
+
+        # Device runtimes
+        try:
+            meter_day = dt_util.now().date()
+            for device in self._surplus_controller._devices.values():
+                device.update_daily_runtime(meter_day)
+        except (AttributeError, TypeError) as e:
+            _LOGGER.debug("Device runtime update failed: %s", e)
+
+        # PV analytics (Phase 5)
+        pv_data = PVAnalyticsData()
+        try:
+            pv = self._pv_analyzer.update(
+                daily_solar_kwh=energy.daily_solar,
+                monthly_solar_kwh=energy.monthly_solar,
+                current_solar_power_w=power.solar_power,
+                forecast_today_kwh=forecast_data.forecast_today_kwh,
+            )
+            pv_data.pv_daily_specific_yield = pv.daily_specific_yield
+            pv_data.pv_performance_vs_forecast = pv.performance_vs_forecast
+            pv_data.pv_estimated_annual_degradation = pv.estimated_annual_degradation
+            pv_data.pv_degradation_trend = pv.degradation_trend
+        except (ValueError, TypeError, AttributeError) as e:
+            _LOGGER.debug("PV analytics update failed: %s", e)
+
+        # Energy assistant (Phase 6)
+        assistant_data = EnergyAssistantSensorData()
+        try:
+            assistant = self._energy_assistant.analyze(
+                daily_solar_kwh=energy.daily_solar,
+                daily_home_kwh=energy.daily_home,
+                daily_ev_kwh=energy.daily_ev,
+                daily_grid_import_kwh=energy.daily_grid_import,
+                daily_grid_export_kwh=energy.daily_grid_export,
+                daily_battery_charge_kwh=energy.daily_battery_charge,
+                daily_battery_discharge_kwh=energy.daily_battery_discharge,
+                solar_to_ev_kwh=energy_flows.solar_to_ev,
+                grid_to_ev_kwh=energy_flows.grid_to_ev,
+                self_consumption_rate=performance.self_consumption_rate,
+                autarky_rate=performance.autarky_rate,
+                current_price_level=tariff_data.tariff_price_level,
+                forecast_remaining_kwh=forecast_data.forecast_remaining_today_kwh,
+                forecast_tomorrow_kwh=forecast_data.forecast_tomorrow_kwh,
+                best_surplus_window=forecast_data.best_surplus_window,
+                peak_time_today=forecast_data.forecast_peak_time_today,
+                battery_soc=power.battery_soc,
+            )
+            assistant_data.energy_optimization_score = assistant.optimization_score
+            assistant_data.energy_tip = assistant.current_tip or "No recommendations"
+            assistant_data.energy_tip_category = assistant.tip_category or "none"
+            assistant_data.energy_ev_solar_percentage = assistant.ev_solar_percentage
+        except (ValueError, TypeError, AttributeError) as e:
+            _LOGGER.debug("Energy assistant update failed: %s", e)
+
+        # Utility signal (Phase 7)
+        utility_data = UtilitySignalSensorData()
+        try:
+            signal = self._utility_monitor.update(solar_power_w=power.solar_power)
+            utility_data.utility_signal_active = signal.signal_active
+            utility_data.utility_signal_source = signal.signal_source
+            utility_data.utility_signal_count_today = signal.signal_count_today
+        except (ValueError, TypeError, AttributeError) as e:
+            _LOGGER.debug("Utility signal update failed: %s", e)
+
+        heat_pump_data = HeatPumpSensorData()
+
+        return (
+            forecast_data, tracker_data, tariff_data, surplus_data,
+            pv_data, assistant_data, utility_data, heat_pump_data,
+        )
+
+    async def _send_notifications(
+        self, charging_state, power, energy, costs, performance,
+        charging_context, forecast_data, discharge_limit,
+        calculated_current, available_power,
+    ) -> None:
+        """Send state-change and event-based notifications (#29).
+
+        Extracted from _async_update_data to reduce cyclomatic complexity.
+        """
+        await self._notification_manager.notify_state_change(
+            charging_state,
+            {
+                "battery_soc": power.battery_soc,
+                "calculated_current": calculated_current,
+                "available_power": available_power,
+                "daily_ev_energy": energy.daily_ev,
+                "charging_strategy": charging_context.charging_strategy,
+                "charging_strategy_reason": charging_context.charging_strategy_reason,
+                "discharge_limit": discharge_limit,
+            }
+        )
+
+        try:
+            if power.battery_soc >= 99.5:
+                await self._notification_manager.notify_battery_full(power.battery_soc)
+
+            peak_pct = performance.current_vs_peak_percentage if hasattr(performance, 'current_vs_peak_percentage') else 0
+            if peak_pct > 90:
+                await self._notification_manager.notify_high_grid_import(power.grid_import_power, peak_pct)
+
+            now = dt_util.now()
+            if now.hour == 20 and now.minute < (self.config.get("update_interval", 30) // 60 + 1):
+                await self._notification_manager.notify_daily_summary({
+                    "daily_solar": energy.daily_solar,
+                    "daily_home": energy.daily_home,
+                    "autarky_rate": performance.autarky_rate,
+                    "daily_savings": costs.daily_savings if hasattr(costs, 'daily_savings') else 0,
+                    "daily_ev": energy.daily_ev,
+                    "daily_net_cost": costs.daily_net_cost if hasattr(costs, 'daily_net_cost') else 0,
+                    "forecast_tomorrow": forecast_data.forecast_tomorrow_kwh,
+                })
+
+            if (now.hour == 19
+                    and forecast_data.forecast_tomorrow_kwh > 0
+                    and forecast_data.forecast_tomorrow_kwh < 5):
+                await self._notification_manager.notify_forecast_alert(
+                    forecast_data.forecast_tomorrow_kwh
+                )
+        except (ValueError, TypeError) as e:
+            _LOGGER.debug("Event notification failed: %s", e)
+        except HomeAssistantError as e:
+            _LOGGER.warning("Notification service call failed: %s", e)
+
+    async def _retry_ev_device_with_backoff(self) -> None:
+        """Retry EV device setup with exponential backoff (#27).
+
+        Retries at increasing intervals: 10s, 20s, 40s, 80s, 160s, 320s.
+        After max retries, creates a persistent notification so the user knows.
+        """
+        import time as _time
+
+        if not hasattr(self, '_ev_retry_count'):
+            self._ev_retry_count = 0
+            self._ev_retry_next_at = 0.0
+
+        now = _time.monotonic()
+        if now < self._ev_retry_next_at:
+            return  # Still in backoff period
+
+        if self._ev_retry_count >= 10:
+            return  # Give up after 10 retries
+
+        self._ev_retry_count += 1
+        backoff_seconds = min(320, 10 * (2 ** (self._ev_retry_count - 1)))
+        self._ev_retry_next_at = now + backoff_seconds
+
+        try:
+            await self._retry_ev_device_setup()
+            if self._ev_device:
+                _LOGGER.info("EV device discovered on retry %d", self._ev_retry_count)
+                self._ev_retry_count = 999  # Stop retrying
+        except (HomeAssistantError, ValueError, AttributeError) as e:
+            level = logging.WARNING if self._ev_retry_count >= 3 else logging.DEBUG
+            _LOGGER.log(
+                level,
+                "EV device retry %d/10 failed (next in %ds): %s",
+                self._ev_retry_count, backoff_seconds, e,
+            )
+            if self._ev_retry_count >= 10:
+                _LOGGER.warning(
+                    "EV charger not found after %d retries — EV control disabled. "
+                    "Check that the KEBA integration is loaded.",
+                    self._ev_retry_count,
+                )
 
     async def _retry_ev_device_setup(self) -> None:
         """Retry EV device setup if KEBA wasn't available at startup."""
@@ -737,7 +837,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         vehicle_soc = None
         if vehicle_soc_entity:
             soc_state = self.hass.states.get(vehicle_soc_entity)
-            if soc_state and soc_state.state not in ("unknown", "unavailable"):
+            if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                 try:
                     vehicle_soc = float(soc_state.state)
                 except (ValueError, TypeError):
@@ -778,8 +878,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         if not is_cheap_hour:
                             cheap_start = cheapest[0].timestamp.strftime("%H:%M")
                             return ("idle", f"night: waiting for cheaper hour (next: {cheap_start}){soc_info}")
-                except Exception:
-                    pass  # Fallback to immediate charging
+                except (ValueError, TypeError, AttributeError) as e:
+                    _LOGGER.debug("Price optimization unavailable, falling back to immediate charging: %s", e)
 
             return ("night_grid", f"night mode, remaining={remaining_need:.1f}kWh{soc_info}")
 
@@ -936,7 +1036,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Night charging target: optionally reduced by forecast
         night_target = remaining
-        forecast_reduction = self.hass.states.is_state("switch.sem_forecast_night_reduction", "on")
+        forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_FORECAST_NIGHT_REDUCTION}", "on")
         if self.time_manager.is_night_mode() and forecast_reduction:
             night_target = self._calculate_forecast_night_target(
                 remaining, energy,

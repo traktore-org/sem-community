@@ -623,6 +623,12 @@
       },
       "forecast_surplus_kwh": {
         "name": "Forecast Surplus"
+      },
+      "battery_cycles_estimated": {
+        "name": "Battery Cycles (Estimated)"
+      },
+      "battery_health_score": {
+        "name": "Battery Health Score"
       }
     },
     "binary_sensor": {
@@ -773,6 +779,12 @@
       },
       "battery_capacity": {
         "name": "Battery Capacity"
+      },
+      "ev_km_per_kwh": {
+        "name": "EV Efficiency"
+      },
+      "public_charging_rate": {
+        "name": "Public Charging Rate"
       }
     }
   }

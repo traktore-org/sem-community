@@ -49,11 +49,7 @@ class SensorReader:
         # Layer 1: config_flow saves as ev_charging_power_sensor, legacy uses ev_power_sensor
         ev_power = config.get("ev_power_sensor") or config.get("ev_charging_power_sensor")
 
-        # Auto-detect KEBA daily energy sensor if not explicitly configured
         ev_daily_energy = config.get("ev_daily_energy_sensor")
-        if not ev_daily_energy and ev_power and "keba" in ev_power.lower():
-            # Try common KEBA daily energy sensor pattern
-            ev_daily_energy = "sensor.keba_p30_charging_daily"
 
         return SensorConfig(
             solar_power_sensor=config.get("solar_production_sensor"),
@@ -63,8 +59,8 @@ class SensorReader:
             ev_daily_energy_sensor=ev_daily_energy,
             battery_soc_sensor=config.get("battery_soc_sensor"),
             battery_temperature_sensor=config.get("battery_temperature_sensor"),
-            ev_plug_sensor=config.get("ev_plug_sensor", "binary_sensor.keba_p30_plug"),
-            ev_charging_sensor=config.get("ev_charging_sensor", "binary_sensor.keba_p30_charging_state"),
+            ev_plug_sensor=config.get("ev_plug_sensor", ""),
+            ev_charging_sensor=config.get("ev_charging_sensor", ""),
         )
 
     def set_energy_dashboard_config(self, ed_config) -> None:

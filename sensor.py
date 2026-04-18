@@ -130,8 +130,19 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
     ),
-    # Removed: Battery details not populated from hardware
-    # battery_voltage (hardcoded 48V), battery_current, battery_cycles, battery_health, battery_efficiency
+    SensorEntityDescription(
+        key="battery_cycles_estimated",
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=1,
+        icon="mdi:battery-sync",
+    ),
+    SensorEntityDescription(
+        key="battery_health_score",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+        icon="mdi:battery-heart-variant",
+    ),
 
     # ============================================================================
     # EV CHARGING CONTROL & STATUS
@@ -1149,7 +1160,6 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
     _attr_should_poll = False
     _attr_has_entity_name = True
-    _logged_unavailable: bool = False
 
     # Sensors disabled by default (not used by dashboard template)
     DISABLED_BY_DEFAULT: set = set()
@@ -1470,16 +1480,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available. Logs once on transition."""
+        """Return if entity is available."""
         # Always update from coordinator to ensure fresh availability in tests
         self._update_from_coordinator()
         is_available = self._attr_available and self.coordinator.last_update_success
-        if not is_available and not self._logged_unavailable:
-            _LOGGER.warning("Sensor %s is unavailable", self.entity_description.key)
-            self._logged_unavailable = True
-        elif is_available and self._logged_unavailable:
-            _LOGGER.info("Sensor %s is available again", self.entity_description.key)
-            self._logged_unavailable = False
+        if not is_available:
+            _LOGGER.debug("Sensor %s is unavailable", self.entity_description.key)
         return is_available
 
     @property
@@ -1523,6 +1529,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             "power_charge_cost",  # Monthly power charge cost
         ]
 
+        # Yearly reset patterns (reset on Jan 1 00:00:00)
+        yearly_reset_patterns = [
+            "yearly_",  # All yearly_* sensors
+        ]
+
         # Check if sensor resets daily
         if any(pattern in sensor_key for pattern in daily_reset_patterns):
             # Return midnight of current day (00:00:00)
@@ -1532,6 +1543,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if any(pattern in sensor_key for pattern in monthly_reset_patterns):
             # Return first day of current month at midnight
             return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        # Check if sensor resets yearly
+        if any(pattern in sensor_key for pattern in yearly_reset_patterns):
+            # Return Jan 1 of current year at midnight
+            return now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
 
         # Lifetime totals (never reset) return None
         return None

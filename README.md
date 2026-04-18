@@ -8,6 +8,7 @@
 [![GitHub Activity][commits-shield]][commits]
 [![License][license-shield]](LICENSE)
 [![hacs][hacsbadge]][hacs]
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/O5O11XNXL1)
 
 **Intelligent solar energy orchestration for Home Assistant** — maximize self-consumption, manage EV charging, and track energy costs automatically.
 
@@ -45,13 +46,13 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 ### Via HACS (Recommended)
 
 1. Open **HACS** > **Integrations** > **Custom repositories**
-2. Add `https://github.com/traktore-org/sem-community` as an **Integration**
+2. Add `https://github.com/traktore-org/solar_energy_management` as an **Integration**
 3. Search for **Solar Energy Management** and click **Download**
 4. **Restart Home Assistant**
 
 ### Manual Installation
 
-1. Download the [latest release](https://github.com/traktore-org/sem-community/releases)
+1. Download the [latest release](https://github.com/traktore-org/solar_energy_management/releases)
 2. Copy the `custom_components/solar_energy_management/` folder to your Home Assistant `config/custom_components/` directory
 3. **Restart Home Assistant**
 
@@ -196,11 +197,11 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 
 ### Dashboard Features
 - **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects
-- **Animated system diagram** — custom SVG card with glow rings, flow animations, individual device nodes
-- **Custom SEM cards** — solar summary (glow ring), weather (clock + forecast), chart card (Chart.js), period selector
+- **Animated energy flow** — sem-flow-card with real-time power flows, daily energy totals, autarky gauge, config editor, tap/hold/double-tap actions
+- **Custom SEM cards** — flow card, solar summary (glow ring), weather (clock + forecast), chart card (Chart.js), period selector
 - **Drag-and-drop load priority** — reorder device shedding priorities visually
 - **Environmental impact** — CO2 avoided and trees-equivalent with growing icon (sprout/tree/pine/forest)
-- **Yearly KPIs** — year-to-date costs, savings, revenue on the Costs tab
+- **Yearly KPIs** — year-to-date costs, savings, revenue on the Costs tab (auto-seeded from HA recorder on mid-year install)
 
 For dashboard setup instructions, see the [Dashboard Guide](docs/DASHBOARD_GUIDE.md).
 
@@ -230,7 +231,9 @@ SEM creates 60+ sensors organized by category:
 
 ## Supported Hardware
 
-**Solar Inverters:** Huawei Solar, SolarEdge, Fronius, SMA, Enphase, or any inverter with HA sensors
+**Solar Inverters:** Huawei Solar, SolAX, DEYE, Sunsynk, SolArk, Growatt, Sofar, Solis, KSTAR, Fronius, SMA, SolarEdge, Enphase, or any inverter with HA sensors
+
+**Battery discharge control auto-detected for:** Huawei Solar, SolAX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis
 
 **Batteries:** Huawei LUNA2000, Tesla Powerwall, LG Chem, BYD, Sonnen
 
@@ -338,6 +341,38 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ---
 
+## Recent Improvements (v1.0.4)
+
+### Performance
+- Cached forecast source detection and surplus window estimation — reduced CPU overhead per update cycle
+- Dashboard cards: debounced flow updates (100ms), reduced DOM thrashing with incremental updates
+
+### Stability
+- Exponential backoff for EV device retry (replaces linear 30-retry loop)
+- Error recovery for battery protection — resets state on service call failure instead of leaving stale limits
+- Storage validation on restore — detects corrupted data before it propagates to sensors
+- Migration rollback safety — keeps original config intact on migration failure
+- Narrowed exception handling throughout coordinator (specific types instead of bare `except Exception`)
+- Fixed availability logging spam in binary sensors and sensors
+
+### Usability
+- Config flow validates entity IDs exist before accepting
+- Notification flap suppression — solar charging states must be stable 60s before notifying
+- KEBA service validated once on startup (no repeated exception noise if not installed)
+- Dashboard cards show entity availability indicator when sensors are unavailable
+- Shared color palette and power formatting utilities across all dashboard cards
+
+### Accessibility
+- Dashboard cards: ARIA labels, role attributes, keyboard-friendly button semantics
+
+### Code Quality
+- Coordinator update method reduced from ~440 to ~260 lines (analytics and notifications extracted)
+- Hardcoded entity IDs replaced with named constants
+- Shared JS constants (sem-shared.js) for color palette and formatters
+- Load management: preserves user-set device priorities across discovery cycles
+
+---
+
 ## Contributing
 
 Contributions are welcome! Please fork the repository, create a feature branch, and submit a pull request.
@@ -348,10 +383,10 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-[releases-shield]: https://img.shields.io/github/release/traktore-org/sem-community.svg?style=for-the-badge
-[releases]: https://github.com/traktore-org/sem-community/releases
-[commits-shield]: https://img.shields.io/github/commit-activity/y/traktore-org/sem-community.svg?style=for-the-badge
-[commits]: https://github.com/traktore-org/sem-community/commits/main
-[license-shield]: https://img.shields.io/github/license/traktore-org/sem-community.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/traktore-org/solar_energy_management.svg?style=for-the-badge
+[releases]: https://github.com/traktore-org/solar_energy_management/releases
+[commits-shield]: https://img.shields.io/github/commit-activity/y/traktore-org/solar_energy_management.svg?style=for-the-badge
+[commits]: https://github.com/traktore-org/solar_energy_management/commits/main
+[license-shield]: https://img.shields.io/github/license/traktore-org/solar_energy_management.svg?style=for-the-badge
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
 [hacs]: https://github.com/custom-components/hacs

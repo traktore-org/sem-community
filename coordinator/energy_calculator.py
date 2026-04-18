@@ -47,6 +47,7 @@ class EnergyCalculator:
         self._hass: Optional[HomeAssistant] = None
         self._ev_daily_energy_sensor: Optional[str] = None
         self._lifetime_seeded: bool = False
+        self._yearly_seeded: bool = False
 
     def calculate_energy(self, power: PowerReadings) -> EnergyTotals:
         """Calculate energy totals by integrating power over time."""
@@ -215,6 +216,127 @@ class EnergyCalculator:
                 "batt_charge=%.0f batt_discharge=%.0f home=%.0f ev=%.0f kWh",
                 solar, grid_import, grid_export, batt_charge, batt_discharge, home, ev_total,
             )
+
+    async def seed_yearly_from_statistics(self, hass: HomeAssistant, ed_config) -> None:
+        """Seed yearly accumulators from HA recorder statistics.
+
+        On first install mid-year, yearly sensors would start at zero.
+        This reads cumulative energy stats from the HA recorder for
+        Jan 1 to now and seeds the yearly accumulators. Runs once.
+        """
+        if self._yearly_seeded:
+            return
+        if not ed_config:
+            return
+
+        year_key = str(dt_util.now().year)
+
+        # If yearly accumulators already have significant data, skip
+        current_total = sum(
+            v for k, v in self._yearly_accumulators.items()
+            if k.endswith(year_key)
+        )
+        if current_total > 10:
+            self._yearly_seeded = True
+            _LOGGER.debug("Yearly accumulators already have %.1f kWh, skipping seed", current_total)
+            return
+
+        try:
+            from homeassistant.components.recorder.statistics import (
+                statistics_during_period,
+            )
+        except ImportError:
+            _LOGGER.debug("Recorder not available for yearly seeding")
+            return
+
+        # Build entity → category mapping from Energy Dashboard config
+        entity_map = {}
+        if ed_config.solar_energy:
+            entity_map[ed_config.solar_energy] = "solar"
+        if ed_config.grid_import_energy:
+            entity_map[ed_config.grid_import_energy] = "grid_import"
+        if ed_config.grid_export_energy:
+            entity_map[ed_config.grid_export_energy] = "grid_export"
+        if ed_config.battery_charge_energy:
+            entity_map[ed_config.battery_charge_energy] = "battery_charge"
+        if ed_config.battery_discharge_energy:
+            entity_map[ed_config.battery_discharge_energy] = "battery_discharge"
+
+        if not entity_map:
+            _LOGGER.debug("No energy entities in ED config for yearly seeding")
+            return
+
+        # Query statistics from Jan 1 of current year
+        now = dt_util.now()
+        start_time = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        entity_ids = list(entity_map.keys())
+
+        try:
+            stats = await statistics_during_period(
+                hass, start_time, None, entity_ids, "hour", None, {"sum"}
+            )
+        except Exception as e:
+            _LOGGER.warning("Failed to query recorder statistics for yearly seeding: %s", e)
+            return
+
+        if not stats:
+            _LOGGER.debug("No recorder statistics available for yearly seeding")
+            return
+
+        # Extract yearly energy: difference between latest and first sum
+        seeded = {}
+        for entity_id, category in entity_map.items():
+            entity_stats = stats.get(entity_id, [])
+            if len(entity_stats) < 2:
+                seeded[category] = 0.0
+                continue
+            first_sum = entity_stats[0].get("sum", 0.0) or 0.0
+            last_sum = entity_stats[-1].get("sum", 0.0) or 0.0
+            yearly_energy = max(0, last_sum - first_sum)
+            seeded[category] = yearly_energy
+            self._yearly_accumulators[f"{category}_{year_key}"] = yearly_energy
+
+        # Derive home consumption from energy balance
+        solar = seeded.get("solar", 0)
+        grid_import = seeded.get("grid_import", 0)
+        grid_export = seeded.get("grid_export", 0)
+        batt_charge = seeded.get("battery_charge", 0)
+        batt_discharge = seeded.get("battery_discharge", 0)
+        home = max(0, solar + grid_import + batt_discharge - grid_export - batt_charge)
+        self._yearly_accumulators[f"home_{year_key}"] = home
+        seeded["home"] = home
+
+        # Seed EV from device consumption (same pattern as lifetime)
+        ev_total = 0.0
+        if hasattr(ed_config, "device_consumption") and ed_config.device_consumption:
+            for dev in ed_config.device_consumption:
+                energy_sensor = dev.get("stat_consumption", "")
+                if any(p in energy_sensor.lower() for p in ["keba", "ev", "charger", "wallbox", "easee"]):
+                    ev_stats = stats.get(energy_sensor, [])
+                    if not ev_stats:
+                        # Try querying separately
+                        try:
+                            ev_result = await statistics_during_period(
+                                hass, start_time, None, [energy_sensor], "hour", None, {"sum"}
+                            )
+                            ev_stats = ev_result.get(energy_sensor, [])
+                        except Exception:
+                            pass
+                    if len(ev_stats) >= 2:
+                        ev_total = max(0, (ev_stats[-1].get("sum", 0) or 0) - (ev_stats[0].get("sum", 0) or 0))
+                    break
+        if ev_total > 0:
+            self._yearly_accumulators[f"ev_{year_key}"] = ev_total
+            seeded["ev"] = ev_total
+
+        self._yearly_seeded = True
+        _LOGGER.info(
+            "Yearly accumulators seeded from recorder: solar=%.1f import=%.1f export=%.1f "
+            "batt_charge=%.1f batt_discharge=%.1f home=%.1f ev=%.1f kWh",
+            seeded.get("solar", 0), seeded.get("grid_import", 0), seeded.get("grid_export", 0),
+            seeded.get("battery_charge", 0), seeded.get("battery_discharge", 0),
+            home, ev_total,
+        )
 
     def _reconcile_ev_energy(self, today: date, month_key: str) -> None:
         """Cross-check integrated EV energy against hardware counter.
@@ -466,6 +588,7 @@ class EnergyCalculator:
             "yearly_accumulators": self._yearly_accumulators.copy(),
             "lifetime_accumulators": self._lifetime_accumulators.copy(),
             "last_update": self._last_update.isoformat() if self._last_update else None,
+            "yearly_seeded": self._yearly_seeded,
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
@@ -475,6 +598,7 @@ class EnergyCalculator:
             self._monthly_accumulators = state.get("monthly_accumulators", {})
             self._yearly_accumulators = state.get("yearly_accumulators", {})
             self._lifetime_accumulators = state.get("lifetime_accumulators", {})
+            self._yearly_seeded = state.get("yearly_seeded", False)
             last_update = state.get("last_update")
             if last_update:
                 self._last_update = datetime.fromisoformat(last_update)

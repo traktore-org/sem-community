@@ -111,7 +111,7 @@ class EVControlMixin:
                 last_change = getattr(self, '_ev_last_change_time', None)
                 cooldown_ok = (last_change is None or
                                (dt_util.now() - last_change).total_seconds() > stall_cooldown)
-                if cooldown_ok and self._should_reenable_keba(power):
+                if cooldown_ok and self._should_reenable_charger(power):
                     _LOGGER.info("Night: charger stalled, re-enabling")
                     await ev._set_current(ev._current_setpoint or initial_amps)
                     await ev.start_session(energy_target_kwh=0)
@@ -189,7 +189,7 @@ class EVControlMixin:
                                          max(ev.min_current, ev.watts_to_current(budget_w)))
                     await ev._set_current(target_current)
 
-                    if not ev._session_active or self._should_reenable_keba(power):
+                    if not ev._session_active or self._should_reenable_charger(power):
                         await ev.start_session(energy_target_kwh=0)
                     self._ev_charge_started_at = now_ts
                     _LOGGER.debug(
@@ -311,12 +311,17 @@ class EVControlMixin:
 
         return max(0, base)
 
-    def _should_reenable_keba(self, power: PowerReadings) -> bool:
-        """Detect if KEBA was externally disabled and needs re-enabling."""
+    def _should_reenable_charger(self, power: PowerReadings) -> bool:
+        """Detect if EV charger was externally disabled and needs re-enabling.
+
+        Works with any charger (KEBA, Wallbox, Easee, etc.) — if SEM set
+        a current >= min but the charger reports no power, it may have been
+        externally disabled or stalled. Re-enable after cooldown.
+        """
         ev = self._ev_device
         if not ev._session_active:
             return False
-        # SEM set current >= min but KEBA reports no power → externally disabled
+        # SEM set current >= min but charger reports no power → stalled
         if (ev._current_setpoint >= ev.min_current
                 and power.ev_power < 50
                 and power.ev_connected):
@@ -324,7 +329,7 @@ class EVControlMixin:
                 self._ev_stalled_since = dt_util.now().timestamp()
                 return False
             if dt_util.now().timestamp() - self._ev_stalled_since > 30:
-                _LOGGER.warning("KEBA stalled (setpoint=%.0fA, power=%.0fW) — re-enabling",
+                _LOGGER.warning("EV charger stalled (setpoint=%.0fA, power=%.0fW) — re-enabling",
                                 ev._current_setpoint, power.ev_power)
                 self._ev_stalled_since = None
                 return True

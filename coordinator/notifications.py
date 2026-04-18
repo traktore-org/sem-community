@@ -44,17 +44,39 @@ class NotificationManager:
         self._last_mobile_time: float = -(2 * _MOBILE_COOLDOWN_SECONDS)  # ensure first notification is never suppressed
         self._daily_summary_sent: Optional[str] = None  # date string "YYYY-MM-DD"
         self._notified_flags: set = set()  # tracks one-shot notifications (battery_full, etc.)
+        # Flap suppression: require state to be stable before notifying (#35)
+        self._pending_state: Optional[str] = None
+        self._pending_state_since: float = 0.0
+        self._keba_service_checked: bool = False
+        self._keba_service_available: bool = True
 
     async def notify_state_change(
         self,
         new_state: str,
         data: Dict[str, Any]
     ) -> None:
-        """Send notifications based on charging state changes."""
+        """Send notifications based on charging state changes.
+
+        Uses flap suppression (#35): for cooldown states (solar charging),
+        the state must be stable for 60s before a notification is sent.
+        This prevents spam when clouds cause rapid pause/resume cycles.
+        """
         # Only notify on actual state changes
         if new_state == self._last_notified_state:
+            self._pending_state = None
             return
 
+        # Flap suppression for cooldown states (#35)
+        if new_state in _COOLDOWN_STATES:
+            now = time.monotonic()
+            if self._pending_state != new_state:
+                self._pending_state = new_state
+                self._pending_state_since = now
+                return  # Wait for stability
+            if now - self._pending_state_since < 60:
+                return  # Not stable yet
+
+        self._pending_state = None
         self._last_notified_state = new_state
 
         # Check if notifications are enabled (from config, not switches)
@@ -85,6 +107,16 @@ class NotificationManager:
 
     async def _send_keba_notification(self, message: str) -> None:
         """Send notification to KEBA display."""
+        # Validate KEBA service exists (check once, #35)
+        if not self._keba_service_checked:
+            self._keba_service_checked = True
+            self._keba_service_available = self.hass.services.has_service("notify", "keba_display")
+            if not self._keba_service_available:
+                _LOGGER.info("KEBA display notification service not available — KEBA notifications disabled")
+
+        if not self._keba_service_available:
+            return
+
         try:
             await self.hass.services.async_call(
                 "notify",
@@ -97,9 +129,9 @@ class NotificationManager:
                     }
                 }
             )
-            _LOGGER.debug(f"Sent KEBA notification: {message}")
+            _LOGGER.debug("Sent KEBA notification: %s", message)
         except Exception as e:
-            _LOGGER.warning(f"Failed to send KEBA notification: {e}")
+            _LOGGER.warning("Failed to send KEBA notification: %s", e)
 
     async def _send_mobile_notification(self, message: str) -> None:
         """Send mobile notification."""

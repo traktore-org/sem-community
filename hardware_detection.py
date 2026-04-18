@@ -554,15 +554,29 @@ def _discover_wallbox(entities) -> Dict[str, str]:
 
 # Compiled at import time so the discovery loop is hot-path friendly.
 _DISCHARGE_CONTROL_PATTERNS = [
+    # Huawei Solar (English)
     re.compile(r"max.*discharg.*power", re.IGNORECASE),
     re.compile(r"discharg.*max.*power", re.IGNORECASE),
     re.compile(r"battery.*max.*discharg", re.IGNORECASE),
     re.compile(r"battery.*discharg.*limit", re.IGNORECASE),
-    # German (Huawei Solar in DE locale ships e.g.
-    # number.batteries_maximale_entladeleistung)
+    # Huawei Solar (German locale, e.g. number.batteries_maximale_entladeleistung)
     re.compile(r"maximale.*entlade", re.IGNORECASE),
     re.compile(r"max.*entlade", re.IGNORECASE),
     re.compile(r"entlade.*maximum", re.IGNORECASE),
+    # SolAX (solax-modbus)
+    re.compile(r"solax.*discharg.*power", re.IGNORECASE),
+    re.compile(r"solax.*battery.*discharg", re.IGNORECASE),
+    # Solarman / DEYE / Sunsynk (ha-solarman)
+    re.compile(r"(solarman|deye|sunsynk).*discharg", re.IGNORECASE),
+    # Growatt (solax-modbus / growatt integration)
+    re.compile(r"growatt.*discharg.*power", re.IGNORECASE),
+    re.compile(r"growatt.*battery.*discharg", re.IGNORECASE),
+    # Sofar
+    re.compile(r"sofar.*discharg.*power", re.IGNORECASE),
+    # Solis
+    re.compile(r"solis.*discharg.*power", re.IGNORECASE),
+    # Generic fallback (any integration with standard naming)
+    re.compile(r"discharg.*power.*limit", re.IGNORECASE),
 ]
 
 
@@ -619,6 +633,7 @@ def discover_inverter_from_registry(
 
     platform = seed_entry.platform
     config_entry_id = seed_entry.config_entry_id
+    _LOGGER.info("Detected inverter platform: %s (seed: %s)", platform, seed_entry.entity_id)
 
     # Collect candidate number entities from the same integration. Prefer
     # the same config_entry_id (for installs with multiple inverters).

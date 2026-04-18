@@ -40,6 +40,10 @@ class PowerReadings:
     battery_soc: float = 0.0
     battery_temperature: float = 25.0
 
+    # Battery health (calculated from energy data)
+    battery_cycles_estimated: float = 0.0
+    battery_health_score: float = 100.0
+
     # EV state
     ev_connected: bool = False
     ev_charging: bool = False
@@ -366,6 +370,8 @@ class SEMData:
             "battery_discharge_power": self.power.battery_discharge_power,
             "battery_soc": self.power.battery_soc,
             "battery_temperature": self.power.battery_temperature,
+            "battery_cycles_estimated": self.power.battery_cycles_estimated,
+            "battery_health_score": self.power.battery_health_score,
             "ev_connected": self.power.ev_connected,
             "ev_charging": self.power.ev_charging,
 
