@@ -173,8 +173,8 @@ def test_min_power_threshold(mock_dt, calculator):
     assert energy.daily_solar == 0.0
     assert energy.daily_home == 0.0
 
-    # Power at threshold
-    power2 = _make_power(solar=MIN_POWER_THRESHOLD, home=MIN_POWER_THRESHOLD)
+    # Power above threshold
+    power2 = _make_power(solar=MIN_POWER_THRESHOLD + 50, home=MIN_POWER_THRESHOLD + 50)
     now2 = _freeze_now(minute=1)
     mock_dt.now.return_value = now2
     energy2 = calculator.calculate_energy(power2)

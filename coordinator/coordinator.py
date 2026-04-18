@@ -167,6 +167,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Phase 8: Consumption/solar predictor (#3)
         self._predictor = ConsumptionPredictor()
 
+        # Per-cycle caches (initialized here, populated in _async_update_data)
+        self._cycle_forecast = None
+        self._cycle_vehicle_soc: Optional[float] = None
+
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
 
