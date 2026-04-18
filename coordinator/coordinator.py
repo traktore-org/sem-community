@@ -206,7 +206,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             manufacturer="Home Assistant",
             model="Solar EV Charging Controller",
             sw_version="1.2.0",
-            configuration_url="https://github.com/traktore-org/solar_energy_management",
+            configuration_url="https://github.com/traktore-org/sem-community",
         )
 
     async def async_initialize_energy_dashboard(self) -> bool:

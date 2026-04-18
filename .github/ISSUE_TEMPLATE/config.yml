@@ -1,11 +1,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: Report a bug
-    url: https://github.com/traktore-org/solar_energy_management/issues/new?template=bug_report.md
+    url: https://github.com/traktore-org/sem-community/issues/new?template=bug_report.md
     about: All bug reports are tracked in the development repository
   - name: Request a feature
-    url: https://github.com/traktore-org/solar_energy_management/issues/new?template=feature_request.md
+    url: https://github.com/traktore-org/sem-community/issues/new?template=feature_request.md
     about: All feature requests are tracked in the development repository
   - name: Ask a question
-    url: https://github.com/traktore-org/solar_energy_management/discussions
+    url: https://github.com/traktore-org/sem-community/discussions
     about: Questions and discussions happen in the development repository
