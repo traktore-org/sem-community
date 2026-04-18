@@ -43,8 +43,8 @@ function _loadChartJs() {
     return _chartJsReady;
 }
 
-/* ── Canonical color palette (matches sem-system-diagram-card) ── */
-const C = {
+/* ── Canonical color palette (from sem-shared.js) ── */
+const C = (typeof SEM_COLORS !== 'undefined') ? SEM_COLORS : {
     solar: '#ff9800',
     gridImport: '#488fc2',
     gridExport: '#8353d1',

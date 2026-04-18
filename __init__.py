@@ -987,6 +987,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         except Exception:
             version = "0"
 
+        shared_base = f"{static_path}/card/sem-shared.js"
         card_base = f"{static_path}/card/sem-load-priority-card.js"
         diagram_base = f"{static_path}/card/sem-system-diagram-card.js"
         period_base = f"{static_path}/card/sem-period-selector-card.js"
@@ -994,6 +995,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_summary_base = f"{static_path}/card/sem-solar-summary-card.js"
         weather_base = f"{static_path}/card/sem-weather-card.js"
         flow_base = f"{static_path}/card/sem-flow-card.js"
+        shared_url = f"{shared_base}?v={version}"
         card_url = f"{card_base}?v={version}"
         diagram_url = f"{diagram_base}?v={version}"
         period_url = f"{period_base}?v={version}"
@@ -1014,6 +1016,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 existing_by_base[base] = item
 
             for base, versioned_url in (
+                (shared_base, shared_url),
                 (card_base, card_url),
                 (diagram_base, diagram_url),
                 (period_base, period_url),

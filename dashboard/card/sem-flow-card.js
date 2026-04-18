@@ -57,7 +57,7 @@ const SFC_DEFAULTS = {
     inverter: { name: 'Inverter', color: '#96CAEE' },
 };
 
-const SFC_DEVICE_COLORS = ['#FF8A65', '#AED581', '#CE93D8', '#64B5F6', '#ff9800', '#96CAEE'];
+const SFC_DEVICE_COLORS = (typeof SEM_DEVICE_COLORS !== 'undefined') ? SEM_DEVICE_COLORS : ['#FF8A65', '#AED581', '#CE93D8', '#64B5F6', '#ff9800', '#96CAEE'];
 
 const SFC_ACTION_OPTIONS = [
     { value: 'more-info', label: 'More Info' },
