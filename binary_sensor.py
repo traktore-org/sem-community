@@ -84,7 +84,6 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """EMS Solar Optimizer binary sensor entity."""
 
     _attr_has_entity_name = True
-    _logged_unavailable: bool = False
 
     # Disabled by default
     DISABLED_BY_DEFAULT = {
@@ -118,14 +117,10 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
     @property
     def available(self) -> bool:
-        """Return if entity is available. Logs once on transition."""
+        """Return if entity is available."""
         is_available = self.coordinator.last_update_success and self.coordinator.data is not None
-        if not is_available and not self._logged_unavailable:
-            _LOGGER.warning("Binary sensor %s is unavailable", self.entity_description.key)
-            self._logged_unavailable = True
-        elif is_available and self._logged_unavailable:
-            _LOGGER.info("Binary sensor %s is available again", self.entity_description.key)
-            self._logged_unavailable = False
+        if not is_available:
+            _LOGGER.debug("Binary sensor %s is unavailable", self.entity_description.key)
         return is_available
 
     @property
