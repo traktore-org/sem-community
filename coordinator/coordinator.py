@@ -519,8 +519,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             raise UpdateFailed(f"Update failed: {e}") from e
 
     async def _update_analytics_phases(
-        self, power, energy, energy_flows, performance, available_power,
-    ):
+        self,
+        power: PowerReadings,
+        energy: Any,
+        energy_flows: Any,
+        performance: Any,
+        available_power: float,
+    ) -> tuple:
         """Run analytics phases: forecast, tariff, surplus, PV, assistant, utility (#29).
 
         Extracted from _async_update_data to reduce cyclomatic complexity.

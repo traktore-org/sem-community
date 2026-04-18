@@ -306,3 +306,59 @@ def test_get_last_update_missing_key(storage):
     """Test returns None when last_update key missing."""
     storage._energy_data.pop("last_update", None)
     assert storage.get_last_update() is None
+
+
+# ──────────────────────────────────────────────
+# Storage validation (#37)
+# ──────────────────────────────────────────────
+
+def test_validate_energy_data_valid():
+    """Valid energy data should pass validation."""
+    data = {
+        "accumulators": {"solar": 150.0, "grid_import": 50.0},
+        "previous_values": {},
+    }
+    assert SEMStorage._validate_energy_data(data) is True
+
+
+def test_validate_energy_data_empty_accumulators():
+    """Empty accumulators should pass (fresh install)."""
+    data = {"accumulators": {}}
+    assert SEMStorage._validate_energy_data(data) is True
+
+
+def test_validate_energy_data_exceeds_range():
+    """Accumulator exceeding 100 MWh should fail."""
+    data = {"accumulators": {"solar": 150_000.0}}
+    assert SEMStorage._validate_energy_data(data) is False
+
+
+def test_validate_energy_data_non_numeric():
+    """Non-numeric accumulator values should fail."""
+    data = {"accumulators": {"solar": "not_a_number"}}
+    assert SEMStorage._validate_energy_data(data) is False
+
+
+def test_validate_energy_data_not_dict():
+    """Non-dict input should fail."""
+    assert SEMStorage._validate_energy_data("invalid") is False
+    assert SEMStorage._validate_energy_data(None) is False
+
+
+def test_validate_energy_data_bad_accumulators_type():
+    """Non-dict accumulators should fail."""
+    data = {"accumulators": [1, 2, 3]}
+    assert SEMStorage._validate_energy_data(data) is False
+
+
+@pytest.mark.asyncio
+async def test_async_load_rejects_corrupt_data(storage):
+    """Loading corrupt energy data should reset to defaults."""
+    corrupt_data = {
+        "accumulators": {"solar": 999_999.0},  # exceeds 100 MWh
+        "previous_values": {},
+    }
+    storage._energy_store.async_load = AsyncMock(return_value=corrupt_data)
+    await storage.async_load()
+    # Should have reset to defaults
+    assert storage._energy_data["accumulators"] == {}
