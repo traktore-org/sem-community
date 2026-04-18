@@ -54,6 +54,7 @@ from .forecast_tracker import ForecastTracker
 from .ev_control import EVControlMixin
 from .battery_protection import BatteryProtectionMixin
 from ..tariff import StaticTariffProvider, DynamicTariffProvider, PriceLevel
+from ..tariff.calendar_provider import CalendarTariffProvider
 from ..analytics.pv_performance import PVPerformanceAnalyzer
 from ..analytics.consumption_predictor import ConsumptionPredictor
 from ..analytics.energy_assistant import EnergyAssistant
@@ -136,6 +137,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 export_rate=config.get("electricity_export_rate", 0.075),
                 cheap_threshold=config.get("cheap_price_threshold", 0.15),
                 expensive_threshold=config.get("expensive_price_threshold", 0.35),
+                currency=currency,
+            )
+        elif tariff_mode == "calendar":
+            schedule = config.get("tariff_schedule", {})
+            self._tariff_provider = CalendarTariffProvider(
+                hass,
+                ht_rate=config.get("electricity_import_rate", 0.35),
+                nt_rate=config.get("electricity_nt_rate", 0.22),
+                export_rate=config.get("electricity_export_rate", 0.075),
+                rules=schedule.get("rules", []),
+                default_tariff=schedule.get("default_tariff", "nt"),
+                holiday_entity=schedule.get("holiday_entity"),
+                schedule_entity=schedule.get("schedule_entity"),
                 currency=currency,
             )
         else:
@@ -544,6 +558,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 dep_state = self.hass.states.get(departure_entity)
                 if dep_state and dep_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     result["ev_departure_time"] = dep_state.state
+
+            # Tariff schedule for dashboard card (#25)
+            if hasattr(self._tariff_provider, 'get_schedule_for_day'):
+                result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
 
             # Predictor sensors (#3)
             result["predictor_training_status"] = self._predictor.training_status

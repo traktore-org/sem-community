@@ -1008,6 +1008,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_summary_base = f"{static_path}/card/sem-solar-summary-card.js"
         weather_base = f"{static_path}/card/sem-weather-card.js"
         flow_base = f"{static_path}/card/sem-flow-card.js"
+        schedule_base = f"{static_path}/card/sem-schedule-card.js"
         shared_url = f"{shared_base}?v={version}"
         card_url = f"{card_base}?v={version}"
         diagram_url = f"{diagram_base}?v={version}"
@@ -1016,6 +1017,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_summary_url = f"{solar_summary_base}?v={version}"
         weather_url = f"{weather_base}?v={version}"
         flow_url = f"{flow_base}?v={version}"
+        schedule_url = f"{schedule_base}?v={version}"
         try:
             from homeassistant.components.lovelace.resources import ResourceStorageCollection
             resources: ResourceStorageCollection = hass.data["lovelace"].resources
@@ -1037,6 +1039,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 (solar_summary_base, solar_summary_url),
                 (weather_base, weather_url),
                 (flow_base, flow_url),
+                (schedule_base, schedule_url),
             ):
                 item = existing_by_base.get(base)
                 if item is None:
