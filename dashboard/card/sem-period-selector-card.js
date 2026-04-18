@@ -12,6 +12,19 @@ class SEMPeriodSelectorCard extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
         this._active = 'week'; // default
+        this._btnCleanup = [];
+    }
+
+    connectedCallback() {
+        // Will be populated after render
+    }
+
+    disconnectedCallback() {
+        // Clean up button listeners (#30)
+        if (this._btnCleanup) {
+            this._btnCleanup.forEach(fn => fn());
+            this._btnCleanup = [];
+        }
     }
 
     setConfig(config) {
@@ -130,14 +143,17 @@ class SEMPeriodSelectorCard extends HTMLElement {
             <ha-card>
                 <div class="sem-period">
                     ${buttons.map(b =>
-                        `<button class="btn${b.key === this._active ? ' active' : ''}" data-key="${b.key}">${b.label}</button>`
+                        `<button class="btn${b.key === this._active ? ' active' : ''}" data-key="${b.key}" role="button" aria-label="Select ${b.label} period" aria-pressed="${b.key === this._active}">${b.label}</button>`
                     ).join('')}
                 </div>
             </ha-card>
         `;
 
+        this._btnCleanup = [];
         this.shadowRoot.querySelectorAll('.btn').forEach(btn => {
-            btn.addEventListener('click', () => this._dispatchPeriod(btn.dataset.key));
+            const handler = () => this._dispatchPeriod(btn.dataset.key);
+            btn.addEventListener('click', handler);
+            this._btnCleanup.push(() => btn.removeEventListener('click', handler));
         });
     }
 

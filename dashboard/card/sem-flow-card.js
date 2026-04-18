@@ -86,6 +86,7 @@ class SEMFlowCard extends HTMLElement {
         this._visible = true;
         this._deviceConfigSig = '';
         this._devicePositions = [];
+        this._updateTimer = null;
     }
 
     setConfig(config) {
@@ -140,6 +141,7 @@ class SEMFlowCard extends HTMLElement {
     disconnectedCallback() {
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
+        clearTimeout(this._updateTimer);
         // Clean up animation frames to prevent memory leaks
         for (const id of Object.keys(this._animFrames)) {
             cancelAnimationFrame(this._animFrames[id]);
@@ -157,7 +159,9 @@ class SEMFlowCard extends HTMLElement {
             this._rendered = true;
         }
         if (!this._visible) return;
-        this._updateFlows();
+        // Debounce flow updates (#30)
+        clearTimeout(this._updateTimer);
+        this._updateTimer = setTimeout(() => this._updateFlows(), 100);
     }
 
     _getState(key) {
