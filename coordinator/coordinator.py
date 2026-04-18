@@ -25,6 +25,12 @@ from ..const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
     ChargingState,
+    ENTITY_OBSERVER_MODE_SWITCH,
+    ENTITY_SOLAR_POWER,
+    ENTITY_FORECAST_NIGHT_REDUCTION,
+    WEATHER_ENTITY_CANDIDATES,
+    STATE_UNKNOWN,
+    STATE_UNAVAILABLE,
 )
 from ..utils.time_manager import TimeManager
 from ..ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
@@ -285,7 +291,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 issues.append("EV device not registered (KEBA not discovered)")
             if not self._storage or not self._storage.is_loaded:
                 issues.append("Storage not loaded")
-            if self.hass.states.get("sensor.sem_solar_power") is None:
+            if self.hass.states.get(f"sensor.{ENTITY_SOLAR_POWER}") is None:
                 issues.append("Solar power sensor missing")
             if issues:
                 _LOGGER.warning("SEM health check: %s", "; ".join(issues))
@@ -293,7 +299,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 _LOGGER.info("SEM health check: all OK (EV=%s)", self._ev_device.name if self._ev_device else "none")
 
         # Read observer mode from switch entity (allows runtime toggle)
-        observer_state = self.hass.states.get("switch.sem_observer_mode")
+        observer_state = self.hass.states.get(f"switch.{ENTITY_OBSERVER_MODE_SWITCH}")
         if observer_state is not None:
             self._observer_mode = observer_state.state == "on"
 
@@ -439,7 +445,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Step 10a: Update forecast tracker (deviation + correction factor)
             try:
-                weather_state = self.hass.states.get("weather.home") or self.hass.states.get("weather.openweathermap")
+                weather_state = None
+                for candidate in WEATHER_ENTITY_CANDIDATES:
+                    weather_state = self.hass.states.get(candidate)
+                    if weather_state:
+                        break
                 weather_condition = weather_state.state if weather_state else "unknown"
                 self._forecast_tracker.update(
                     forecast_data.forecast_today_kwh,
@@ -679,7 +689,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             vehicle_soc_entity = self.config.get("vehicle_soc_entity", "")
             if vehicle_soc_entity:
                 soc_state = self.hass.states.get(vehicle_soc_entity)
-                if soc_state and soc_state.state not in ("unknown", "unavailable"):
+                if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     try:
                         result["vehicle_soc"] = float(soc_state.state)
                     except (ValueError, TypeError):
@@ -689,7 +699,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             departure_entity = self.config.get("ev_departure_time_entity", "")
             if departure_entity:
                 dep_state = self.hass.states.get(departure_entity)
-                if dep_state and dep_state.state not in ("unknown", "unavailable"):
+                if dep_state and dep_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     result["ev_departure_time"] = dep_state.state
 
             return result
@@ -757,7 +767,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         vehicle_soc = None
         if vehicle_soc_entity:
             soc_state = self.hass.states.get(vehicle_soc_entity)
-            if soc_state and soc_state.state not in ("unknown", "unavailable"):
+            if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                 try:
                     vehicle_soc = float(soc_state.state)
                 except (ValueError, TypeError):
@@ -956,7 +966,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Night charging target: optionally reduced by forecast
         night_target = remaining
-        forecast_reduction = self.hass.states.is_state("switch.sem_forecast_night_reduction", "on")
+        forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_FORECAST_NIGHT_REDUCTION}", "on")
         if self.time_manager.is_night_mode() and forecast_reduction:
             night_target = self._calculate_forecast_night_target(
                 remaining, energy,

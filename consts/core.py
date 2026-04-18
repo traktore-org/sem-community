@@ -209,3 +209,18 @@ DEFAULT_HOT_WATER_MAX_TEMP: Final = 60.0  # Degrees
 # ============================================
 DEFAULT_SYSTEM_SIZE_KWP: Final = 10.0
 DEFAULT_INVERTER_MAX_POWER_W: Final = 10000
+
+# ============================================
+# ENTITY ID REFERENCES
+# ============================================
+# Used for internal state lookups — avoids magic strings scattered across modules.
+ENTITY_OBSERVER_MODE_SWITCH: Final = f"{DOMAIN}.observer_mode"  # switch.sem_observer_mode
+ENTITY_SOLAR_POWER: Final = f"{DOMAIN}.solar_power"  # sensor.sem_solar_power
+ENTITY_FORECAST_NIGHT_REDUCTION: Final = f"{DOMAIN}.forecast_night_reduction"  # switch.sem_forecast_night_reduction
+
+# Weather entity: auto-detected at runtime, fallback order
+WEATHER_ENTITY_CANDIDATES: Final = ("weather.home", "weather.openweathermap")
+
+# HA state constants (avoid magic strings)
+STATE_UNKNOWN: Final = "unknown"
+STATE_UNAVAILABLE: Final = "unavailable"
