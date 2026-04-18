@@ -130,9 +130,9 @@ class TestDetermineChargingStrategy:
         # remaining_need = 10 - 0 = 10 kWh
         # needs estimated_surplus >= 10 * 1.5 = 15 kWh
         # surplus = forecast_remaining * 0.5, so forecast_remaining >= 30
-        coord._forecast_reader.read_forecast.return_value = _MockForecast(
-            available=True, remaining=35.0
-        )
+        forecast = _MockForecast(available=True, remaining=35.0)
+        coord._forecast_reader.read_forecast.return_value = forecast
+        coord._cycle_forecast = forecast
         strategy, reason = coord._determine_charging_strategy(
             _make_power(battery_soc=80), _MockEnergy()
         )
