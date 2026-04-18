@@ -181,15 +181,22 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors.update(validation_errors)
                 _LOGGER.error(f"EV validation failed: {validation_errors}")
 
-            # Validate optional entity IDs exist in HA
+            # Validate optional entity IDs exist in HA and have usable state (#32)
             for entity_key in (
                 "ev_charger_service_entity_id",
                 "ev_current_sensor",
                 "ev_total_energy_sensor",
             ):
                 entity_id = user_input.get(entity_key, "")
-                if entity_id and not self.hass.states.get(entity_id):
-                    errors[entity_key] = "entity_not_found"
+                if entity_id:
+                    state = self.hass.states.get(entity_id)
+                    if not state:
+                        errors[entity_key] = "entity_not_found"
+                    elif state.state in ("unknown", "unavailable"):
+                        _LOGGER.warning(
+                            "Entity %s exists but has state '%s' — may cause issues",
+                            entity_id, state.state,
+                        )
 
             if not errors:
                 # Store EV charger entities and continue to the hardware step
