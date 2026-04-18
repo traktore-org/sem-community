@@ -8,7 +8,7 @@ from custom_components.solar_energy_management.coordinator.surplus_controller im
     SurplusAllocationData,
     DEFAULT_REGULATION_OFFSET,
 )
-from custom_components.solar_energy_management.devices.base import DeviceState
+from custom_components.solar_energy_management.devices.base import DeviceControlMode, DeviceState
 
 
 def _make_device(
@@ -43,6 +43,9 @@ def _make_device(
     device.status = MagicMock()
     device.status.allocated_power_w = consumption
     device.status.state = MagicMock(value="active" if is_active else "idle")
+    # Control mode — defaults to SURPLUS so surplus controller will activate (#49)
+    device.control_mode = DeviceControlMode.SURPLUS
+
     # Off-peak attributes (Feature 2)
     device._offpeak_forced = False
     device.needs_offpeak_activation = False
@@ -467,6 +470,7 @@ class TestScheduleDeviceBudgetLeak:
         sched.status = MagicMock()
         sched.status.allocated_power_w = 0.0
         sched.status.state = MagicMock(value="idle")
+        sched.control_mode = DeviceControlMode.SURPLUS
         sched._offpeak_forced = False
         sched.needs_offpeak_activation = False
         sched.remaining_daily_runtime_sec = 0
