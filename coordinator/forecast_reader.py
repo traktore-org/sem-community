@@ -125,9 +125,21 @@ class ForecastReader:
         return None
 
     def read_forecast(self) -> ForecastData:
-        """Read current forecast data from detected source."""
+        """Read current forecast data from detected source.
+
+        Caches the detected source — only re-detects if source becomes
+        unavailable (#26).
+        """
         if not self._source:
             self.detect_source()
+        elif self._source != "custom":
+            # Verify cached source is still valid (entity may have disappeared)
+            test_entity = self._entities.get("forecast_today")
+            if test_entity:
+                state = self.hass.states.get(test_entity)
+                if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    self._source = None
+                    self.detect_source()
 
         if not self._source:
             return ForecastData()
