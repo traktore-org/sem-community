@@ -68,7 +68,7 @@
     },
     "error": {
       "unknown": "An unexpected error occurred. Please try again.",
-      "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
+      "entity_not_found": "Entit\u00e4t nicht gefunden. Bitte \u00fcberpr\u00fcfen Sie die Entity-ID.",
       "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
       "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
       "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
