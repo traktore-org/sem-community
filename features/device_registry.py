@@ -368,6 +368,7 @@ class UnifiedDeviceRegistry:
                 "device_type": "ev_charger" if device.is_ev else "individual_device",
                 "has_manual_mapping": device.has_manual_mapping,
                 "control": device.control,
+                "control_mode": self._control_mode_overrides.get(did, "peak_only"),
             }
         return result
 
