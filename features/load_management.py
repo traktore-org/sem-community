@@ -92,15 +92,32 @@ class LoadManagementCoordinator:
             # Load device configuration from storage
             await self._load_device_configuration()
 
-            # Schedule delayed discovery to run after entities are loaded
-            # Run after 30 seconds to ensure all entities are available
-            async def delayed_discovery():
-                await asyncio.sleep(30)
-                _LOGGER.info("Running delayed device discovery...")
+            # Schedule discovery with retry if result is incomplete
+            async def _discovery_with_retry():
+                initial_delay = 30
+                retry_delay = 15
+                max_retries = 3
+                previous_count = len(self._devices)
+
+                await asyncio.sleep(initial_delay)
+                _LOGGER.info("Running initial device discovery...")
                 await self._discover_devices()
 
-            # Start delayed discovery in background
-            asyncio.create_task(delayed_discovery())
+                # Retry if discovery found fewer devices than we had in storage
+                for attempt in range(1, max_retries + 1):
+                    current_count = len(self._devices)
+                    if current_count >= previous_count:
+                        break
+                    _LOGGER.info(
+                        "Discovery incomplete: found %d devices but expected at least %d, "
+                        "retry %d/%d in %ds",
+                        current_count, previous_count, attempt, max_retries, retry_delay,
+                    )
+                    await asyncio.sleep(retry_delay)
+                    await self._discover_devices()
+
+            # Start discovery in background
+            asyncio.create_task(_discovery_with_retry())
 
             _LOGGER.info(
                 f"Load management initialized: {len(self._devices)} devices loaded from storage, "
@@ -194,16 +211,23 @@ class LoadManagementCoordinator:
                     _LOGGER.info(f"Added new device: {device_id} ({switch_info} + {power_info}) [source: {source}]")
                 else:
                     # Update availability and power rating, preserve user settings
-                    # NOTE: is_controllable and is_critical are user-editable —
-                    # never overwrite them from discovery.
-                    self._devices[device_id].update({
+                    # NOTE: is_controllable, is_critical, and priority are user-editable —
+                    # never overwrite them from discovery when the user has set them.
+                    existing = self._devices[device_id]
+                    update = {
                         "is_available": device_info.get("is_available", True),
                         "power_rating": device_info.get("power_rating", 0.0),
                         "power_entity": device_info.get("power_entity"),
                         "energy_entity": device_info.get("energy_entity"),
-                        "switch_entity": device_info.get("switch_entity") or self._devices[device_id].get("switch_entity"),
+                        "switch_entity": device_info.get("switch_entity") or existing.get("switch_entity"),
                         "source": device_info.get("source", "pattern"),
-                    })
+                    }
+                    # Only set priority from discovery if the user hasn't customized it
+                    if not existing.get("user_set_priority", False):
+                        discovered_priority = device_info.get("priority")
+                        if discovered_priority is not None:
+                            update["priority"] = discovered_priority
+                    existing.update(update)
                     _LOGGER.debug(f"Updated existing device: {device_id}")
 
             # Save updated configuration
@@ -328,8 +352,9 @@ class LoadManagementCoordinator:
         """Update device priority."""
         if device_id in self._devices:
             self._devices[device_id]["priority"] = priority
+            self._devices[device_id]["user_set_priority"] = True
             await self._save_device_configuration()
-            _LOGGER.debug(f"Updated {device_id} priority to {priority}")
+            _LOGGER.debug(f"Updated {device_id} priority to {priority} (user-set)")
 
     async def update_device_critical_status(self, device_id: str, is_critical: bool):
         """Update device critical status."""
@@ -420,6 +445,9 @@ class LoadManagementCoordinator:
             await self._save_device_configuration()
 
         try:
+            # Clean up shed list: remove devices that powered off naturally
+            self._cleanup_shed_list()
+
             # Determine current state based on peak levels
             new_state = self._determine_load_management_state(current_peak, consecutive_peak)
 
@@ -448,6 +476,34 @@ class LoadManagementCoordinator:
     def get_state(self) -> str:
         """Get current load management state."""
         return self._state
+
+    def _cleanup_shed_list(self):
+        """Remove devices from the shed list if they are already off naturally.
+
+        Devices may power off on their own (e.g., a cycle completes, user turns
+        them off manually). Keeping them in _devices_shed blocks state
+        transitions and prevents correct accounting.
+        """
+        if not self._devices_shed:
+            return
+
+        stale = []
+        for device_id in self._devices_shed:
+            device_info = self._devices.get(device_id)
+            if device_info is None:
+                # Device was removed from the device list entirely
+                stale.append(device_id)
+                continue
+
+            device_state = self._device_discovery.get_device_current_state(device_info)
+            if not device_state["is_on"] and device_state["current_power"] <= 0:
+                stale.append(device_id)
+
+        for device_id in stale:
+            self._devices_shed.remove(device_id)
+            _LOGGER.debug(
+                "Cleaned %s from shed list (device is off / removed)", device_id
+            )
 
     def _determine_load_management_state(self, current_peak: float, consecutive_peak: float) -> str:
         """Determine the appropriate load management state.
