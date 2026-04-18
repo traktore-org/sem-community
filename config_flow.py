@@ -69,6 +69,25 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._energy_dashboard_config: EnergyDashboardConfig | None = None
         self._detector = None
 
+    async def async_step_integration_discovery(
+        self, discovery_info: dict[str, Any]
+    ) -> FlowResult:
+        """Handle integration discovery (#44).
+
+        Triggered when a supported inverter integration (huawei_solar,
+        solaredge, fronius) is loaded. Suggests SEM setup if Energy
+        Dashboard is configured.
+        """
+        await self.async_set_unique_id(DOMAIN)
+        self._abort_if_unique_id_configured()
+
+        # Only proceed if Energy Dashboard is actually configured
+        dashboard = await read_energy_dashboard_config(self.hass)
+        if not dashboard or not dashboard.is_minimally_configured():
+            return self.async_abort(reason="energy_dashboard_not_configured")
+
+        return await self.async_step_user()
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:

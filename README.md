@@ -36,7 +36,8 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 - **Built-in dashboard** — glassmorphism dark theme with animated system diagram, Sankey, and native HA energy cards
 - **PV performance analytics** — specific yield, forecast accuracy, degradation tracking
 - **Smart recommendations** — forecast-aware tips ("Best window for appliances: 11:00-14:00", "Low solar tomorrow — charge EV tonight")
-- **Push notifications** — battery full, daily summary, forecast alerts, EV charging events (with spam cooldown)
+- **Consumption/solar predictor** — learns hourly patterns (weekday/weekend), predicts next-hour power and daily consumption
+- **Push notifications** — battery full, daily summary, forecast alerts, EV charging events (with Android channels and action buttons)
 - **Brand icons** — native HA 2026.3+ brand support (no submission to home-assistant/brands needed)
 
 ---
@@ -341,7 +342,20 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ---
 
-## Recent Improvements (v1.0.4)
+## Recent Improvements (v1.0.6)
+
+### New Features
+- **Consumption/solar predictor (#3)** — pure Python hourly EWMA profiles that learn weekday/weekend patterns. Predicts next-hour consumption and solar, daily consumption total, and optimal surplus window. No external dependencies. Cold start to trained in 3 days.
+- **Improved notifications (#47)** — Android notification channels (Charging, Alerts, Summary) for per-category control. Actionable buttons ("Open Dashboard"). HA events (`sem_notification`) fired for automation triggers. Mobile service validation cached.
+- **Integration discovery (#44)** — `async_step_integration_discovery()` enables auto-suggestion when supported inverter integrations are detected
+
+### Quality Scale Improvements (#43, #45, #46)
+- 20+ sensors properly categorized as `EntityCategory.DIAGNOSTIC`
+- Obscure diagnostic sensors disabled by default in entity registry
+- New predictor sensors with full translation support
+- Diagnostics handler with comprehensive state export
+
+### Previous (v1.0.4-1.0.5)
 
 ### Performance
 - Cached forecast source detection and surplus window estimation — reduced CPU overhead per update cycle
