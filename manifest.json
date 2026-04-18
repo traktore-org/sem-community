@@ -17,7 +17,7 @@
   "loggers": [
     "custom_components.solar_energy_management"
   ],
-  "quality_scale": "gold",
+  "quality_scale": "platinum",
   "requirements": [],
   "version": "1.0.8"
 }
