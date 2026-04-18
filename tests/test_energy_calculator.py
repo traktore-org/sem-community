@@ -173,12 +173,18 @@ def test_min_power_threshold(mock_dt, calculator):
     assert energy.daily_solar == 0.0
     assert energy.daily_home == 0.0
 
-    # Power above threshold
-    power2 = _make_power(solar=MIN_POWER_THRESHOLD + 50, home=MIN_POWER_THRESHOLD + 50)
+    # First reading above threshold (establishes baseline)
+    power2 = _make_power(solar=1000, home=500)
     now2 = _freeze_now(minute=1)
     mock_dt.now.return_value = now2
-    energy2 = calculator.calculate_energy(power2)
-    assert energy2.daily_solar > 0
+    calculator.calculate_energy(power2)
+
+    # Second reading above threshold (should accumulate)
+    power3 = _make_power(solar=1000, home=500)
+    now3 = _freeze_now(minute=2)
+    mock_dt.now.return_value = now3
+    energy3 = calculator.calculate_energy(power3)
+    assert energy3.daily_solar > 0
 
 
 @patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")

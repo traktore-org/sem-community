@@ -86,6 +86,8 @@ def _build_coordinator(config_overrides=None, current_state=ChargingState.SOLAR_
     coord._forecast_reader.read_forecast = MagicMock(
         return_value=_MockForecast(available=False)
     )
+    coord._cycle_forecast = _MockForecast(available=False)
+    coord._cycle_vehicle_soc = None
 
     # flow calculator (for _calculate_solar_ev_budget)
     coord._flow_calculator = MagicMock()
