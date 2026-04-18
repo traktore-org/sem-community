@@ -60,44 +60,51 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
     )
 
     if entry.version < 2:
-        from .consts.core import (
-            DEFAULT_BATTERY_BUFFER_SOC,
-            DEFAULT_BATTERY_AUTO_START_SOC,
-            DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
-        )
-
-        new_data = {**entry.data}
-        new_options = {**entry.options}
-        legacy_priority = max(
-            new_options.get("battery_priority_soc") or 0,
-            new_data.get("battery_priority_soc") or 0,
-        )
-        # Anything ≥ 50 is the legacy 3-zone meaning — remap.
-        if legacy_priority >= 50:
-            _LOGGER.warning(
-                "Migrating battery_priority_soc %s → 30 (4-zone semantics, see #98)",
-                legacy_priority,
+        try:
+            from .consts.core import (
+                DEFAULT_BATTERY_BUFFER_SOC,
+                DEFAULT_BATTERY_AUTO_START_SOC,
+                DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
             )
-            new_data["battery_priority_soc"] = 30
-            new_options.pop("battery_priority_soc", None)
 
-        # Seed any 4-zone keys missing or null on legacy entries so the
-        # number entities boot with sensible state.
-        for key, default in (
-            ("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
-            ("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
-            ("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
-        ):
-            if new_data.get(key) in (None, 0):
-                new_data[key] = default
+            new_data = {**entry.data}
+            new_options = {**entry.options}
+            legacy_priority = max(
+                new_options.get("battery_priority_soc") or 0,
+                new_data.get("battery_priority_soc") or 0,
+            )
+            # Anything ≥ 50 is the legacy 3-zone meaning — remap.
+            if legacy_priority >= 50:
+                _LOGGER.warning(
+                    "Migrating battery_priority_soc %s → 30 (4-zone semantics, see #98)",
+                    legacy_priority,
+                )
+                new_data["battery_priority_soc"] = 30
+                new_options.pop("battery_priority_soc", None)
 
-        hass.config_entries.async_update_entry(
-            entry,
-            data=new_data,
-            options=new_options,
-            version=2,
-            minor_version=1,
-        )
+            # Seed any 4-zone keys missing or null on legacy entries so the
+            # number entities boot with sensible state.
+            for key, default in (
+                ("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
+                ("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
+                ("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
+            ):
+                if new_data.get(key) in (None, 0):
+                    new_data[key] = default
+
+            hass.config_entries.async_update_entry(
+                entry,
+                data=new_data,
+                options=new_options,
+                version=2,
+                minor_version=1,
+            )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
 
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
