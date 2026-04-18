@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+# Prevent pytest from collecting __init__.py in repo root
+collect_ignore = ["__init__.py", "setup.py"]

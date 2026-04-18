@@ -129,8 +129,8 @@ async def test_async_load_existing(storage):
 @pytest.mark.asyncio
 async def test_async_load_error(storage):
     """Test falls back to defaults on error."""
-    storage._energy_store.async_load = AsyncMock(side_effect=Exception("Corrupt"))
-    storage._daily_store.async_load = AsyncMock(side_effect=Exception("Corrupt"))
+    storage._energy_store.async_load = AsyncMock(side_effect=OSError("Corrupt"))
+    storage._daily_store.async_load = AsyncMock(side_effect=OSError("Corrupt"))
 
     await storage.async_load()
     assert storage._energy_data["accumulators"] == {}

@@ -5,6 +5,7 @@
 # Solar Energy Management (SEM)
 
 [![GitHub Release][releases-shield]][releases]
+[![Tests](https://github.com/traktore-org/sem-community/actions/workflows/tests.yml/badge.svg)](https://github.com/traktore-org/sem-community/actions/workflows/tests.yml)
 [![GitHub Activity][commits-shield]][commits]
 [![License][license-shield]](LICENSE)
 [![hacs][hacsbadge]][hacs]
@@ -43,6 +44,8 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 ---
 
 ## Installation
+
+> **New to custom integrations?** See the [Step-by-Step Setup Guide](docs/SETUP_GUIDE.md) for a beginner-friendly walkthrough with checklist and FAQ.
 
 ### Via HACS (Recommended)
 

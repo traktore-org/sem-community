@@ -380,7 +380,10 @@ class TestNotificationFiltering:
     def test_mobile_for_charging_start(self):
         from custom_components.solar_energy_management.coordinator.notifications import NotificationManager
         from custom_components.solar_energy_management.const import ChargingState
-        nm = NotificationManager(MagicMock(), {"daily_ev_target": 10})
+        hass = MagicMock()
+        hass.bus = MagicMock()
+        hass.bus.async_fire = MagicMock()
+        nm = NotificationManager(hass, {"daily_ev_target": 10})
         msgs = nm._get_notification_messages(ChargingState.SOLAR_CHARGING_ACTIVE,
                                               {"calculated_current": 10, "available_power": 3000,
                                                "daily_ev_energy": 5, "ev_session_energy": 0})
@@ -389,7 +392,10 @@ class TestNotificationFiltering:
     def test_no_mobile_for_pause(self):
         from custom_components.solar_energy_management.coordinator.notifications import NotificationManager
         from custom_components.solar_energy_management.const import ChargingState
-        nm = NotificationManager(MagicMock(), {"daily_ev_target": 10})
+        hass = MagicMock()
+        hass.bus = MagicMock()
+        hass.bus.async_fire = MagicMock()
+        nm = NotificationManager(hass, {"daily_ev_target": 10})
         msgs = nm._get_notification_messages(ChargingState.SOLAR_PAUSE_LOW_BATTERY,
                                               {"battery_soc": 25, "calculated_current": 0,
                                                "available_power": 0, "daily_ev_energy": 5,
@@ -399,7 +405,10 @@ class TestNotificationFiltering:
     def test_no_mobile_for_night_idle(self):
         from custom_components.solar_energy_management.coordinator.notifications import NotificationManager
         from custom_components.solar_energy_management.const import ChargingState
-        nm = NotificationManager(MagicMock(), {"daily_ev_target": 10})
+        hass = MagicMock()
+        hass.bus = MagicMock()
+        hass.bus.async_fire = MagicMock()
+        nm = NotificationManager(hass, {"daily_ev_target": 10})
         msgs = nm._get_notification_messages(ChargingState.NIGHT_IDLE,
                                               {"daily_ev_energy": 0, "ev_session_energy": 0})
         assert "mobile" not in msgs

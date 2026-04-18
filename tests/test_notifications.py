@@ -1,9 +1,11 @@
 """Tests for NotificationManager from coordinator/notifications.py."""
+import time
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.solar_energy_management.coordinator.notifications import (
     NotificationManager,
+    _FLAP_STABILITY_SECONDS,
 )
 from custom_components.solar_energy_management.const import ChargingState
 
@@ -22,6 +24,8 @@ def hass():
     h.services = MagicMock()
     h.services.async_call = AsyncMock()
     h.services.has_service = MagicMock(return_value=True)
+    h.bus = MagicMock()
+    h.bus.async_fire = MagicMock()
     h.data = {}
     return h
 
@@ -41,7 +45,15 @@ def config():
 @pytest.fixture
 def notifier(hass, config):
     """Return a NotificationManager with both KEBA and mobile enabled."""
-    return NotificationManager(hass, config)
+    nm = NotificationManager(hass, config)
+    # Pre-validate services to skip cached validation in tests
+    nm._keba_service_checked = True
+    nm._keba_service_available = True
+    nm._keba_service_name = "keba_display"
+    nm._mobile_service_checked = True
+    nm._mobile_service_available = True
+    nm._mobile_service_name = "mobile_app_phone"
+    return nm
 
 
 @pytest.fixture
@@ -60,7 +72,25 @@ def sample_data():
 def _make_notifier(hass, config, keba_on=True, mobile_on=True):
     """Helper to create notifier with specific notification settings."""
     cfg = {**config, "enable_keba_notifications": keba_on, "enable_mobile_notifications": mobile_on}
-    return NotificationManager(hass, cfg)
+    nm = NotificationManager(hass, cfg)
+    # Pre-validate services to skip cached validation in tests
+    nm._keba_service_checked = True
+    nm._keba_service_available = True
+    nm._keba_service_name = "keba_display"
+    nm._mobile_service_checked = True
+    nm._mobile_service_available = True
+    nm._mobile_service_name = "mobile_app_phone"
+    return nm
+
+
+def _bypass_flap_suppression(notifier, state):
+    """Pre-set pending state so flap suppression is satisfied on next call.
+
+    For cooldown states, the manager requires the state to be stable for 60s.
+    This helper sets the pending state as if it has been pending for long enough.
+    """
+    notifier._pending_state = state
+    notifier._pending_state_since = time.monotonic() - _FLAP_STABILITY_SECONDS - 1
 
 
 # ──────────────────────────────────────────────
@@ -81,6 +111,7 @@ def test_init(notifier):
 @pytest.mark.asyncio
 async def test_notify_state_change_solar_charging(notifier, sample_data):
     """Test KEBA and mobile messages for solar charging."""
+    _bypass_flap_suppression(notifier, ChargingState.SOLAR_CHARGING_ACTIVE)
     await notifier.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     assert notifier._last_notified_state == ChargingState.SOLAR_CHARGING_ACTIVE
     # Should have called KEBA + mobile = 2 calls
@@ -132,6 +163,7 @@ async def test_notify_state_change_pause_low_battery(notifier, sample_data):
 @pytest.mark.asyncio
 async def test_notify_state_change_idle_with_session(notifier, sample_data):
     """Test SOLAR_IDLE with session energy generates messages."""
+    _bypass_flap_suppression(notifier, ChargingState.SOLAR_IDLE)
     await notifier.notify_state_change(ChargingState.SOLAR_IDLE, sample_data)
     calls = notifier.hass.services.async_call.call_args_list
     assert len(calls) == 2  # keba + mobile
@@ -142,6 +174,7 @@ async def test_notify_state_change_idle_with_session(notifier, sample_data):
 @pytest.mark.asyncio
 async def test_notify_state_change_idle_no_session(notifier):
     """Test SOLAR_IDLE without session energy generates no messages."""
+    _bypass_flap_suppression(notifier, ChargingState.SOLAR_IDLE)
     data = {"battery_soc": 65, "calculated_current": 0, "available_power": 0,
             "ev_session_energy": 0, "daily_ev_energy": 0}
     await notifier.notify_state_change(ChargingState.SOLAR_IDLE, data)
@@ -155,6 +188,7 @@ async def test_notify_state_change_idle_no_session(notifier):
 @pytest.mark.asyncio
 async def test_notify_duplicate_suppressed(notifier, sample_data):
     """Test same state twice sends only one notification."""
+    _bypass_flap_suppression(notifier, ChargingState.SOLAR_CHARGING_ACTIVE)
     await notifier.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     count_after_first = notifier.hass.services.async_call.call_count
     await notifier.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
@@ -169,6 +203,7 @@ async def test_notify_duplicate_suppressed(notifier, sample_data):
 async def test_notify_both_disabled(hass, config, sample_data):
     """Test no notifications when both switches off."""
     nm = _make_notifier(hass, config, keba_on=False, mobile_on=False)
+    _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     hass.services.async_call.assert_not_called()
 
@@ -177,6 +212,7 @@ async def test_notify_both_disabled(hass, config, sample_data):
 async def test_notify_keba_only(hass, config, sample_data):
     """Test only KEBA notification when mobile disabled."""
     nm = _make_notifier(hass, config, keba_on=True, mobile_on=False)
+    _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     calls = hass.services.async_call.call_args_list
     assert len(calls) == 1
@@ -187,6 +223,7 @@ async def test_notify_keba_only(hass, config, sample_data):
 async def test_notify_mobile_only(hass, config, sample_data):
     """Test only mobile notification when KEBA disabled."""
     nm = _make_notifier(hass, config, keba_on=False, mobile_on=True)
+    _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     calls = hass.services.async_call.call_args_list
     assert len(calls) == 1
@@ -198,6 +235,7 @@ async def test_notify_mobile_no_service(hass, sample_data):
     """Test no mobile notification when no service configured."""
     cfg = {"daily_ev_target": 10, "battery_priority_soc": 80, "mobile_notification_service": ""}
     nm = _make_notifier(hass, cfg, keba_on=False, mobile_on=True)
+    _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     # Only the KEBA display is not enabled, and mobile has no service -> no calls
     hass.services.async_call.assert_not_called()
@@ -208,6 +246,10 @@ async def test_notify_mobile_service_not_found(hass, config, sample_data):
     """Test mobile notification skipped when service validation fails."""
     hass.services.has_service = MagicMock(return_value=False)
     nm = _make_notifier(hass, config, keba_on=False, mobile_on=True)
+    # Override cached service availability to let validation run
+    nm._mobile_service_checked = False
+    nm._keba_service_checked = False
+    _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     hass.services.async_call.assert_not_called()
 
@@ -220,6 +262,7 @@ async def test_notify_mobile_service_not_found(hass, config, sample_data):
 async def test_keba_notification_error(notifier, sample_data):
     """Test KEBA service call error is handled gracefully."""
     notifier.hass.services.async_call = AsyncMock(side_effect=Exception("KEBA offline"))
+    _bypass_flap_suppression(notifier, ChargingState.SOLAR_CHARGING_ACTIVE)
     # Should not raise
     await notifier.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     assert notifier._last_notified_state == ChargingState.SOLAR_CHARGING_ACTIVE
@@ -232,6 +275,7 @@ async def test_keba_notification_error(notifier, sample_data):
 @pytest.mark.asyncio
 async def test_reset(notifier, sample_data):
     """Test reset clears last notified state."""
+    _bypass_flap_suppression(notifier, ChargingState.SOLAR_CHARGING_ACTIVE)
     await notifier.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     assert notifier._last_notified_state is not None
     notifier.reset()
