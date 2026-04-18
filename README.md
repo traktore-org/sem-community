@@ -50,13 +50,13 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 ### Via HACS (Recommended)
 
 1. Open **HACS** > **Integrations** > **Custom repositories**
-2. Add `https://github.com/traktore-org/solar_energy_management` as an **Integration**
+2. Add `https://github.com/traktore-org/sem-community` as an **Integration**
 3. Search for **Solar Energy Management** and click **Download**
 4. **Restart Home Assistant**
 
 ### Manual Installation
 
-1. Download the [latest release](https://github.com/traktore-org/solar_energy_management/releases)
+1. Download the [latest release](https://github.com/traktore-org/sem-community/releases)
 2. Copy the `custom_components/solar_energy_management/` folder to your Home Assistant `config/custom_components/` directory
 3. **Restart Home Assistant**
 
@@ -400,10 +400,10 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-[releases-shield]: https://img.shields.io/github/release/traktore-org/solar_energy_management.svg?style=for-the-badge
-[releases]: https://github.com/traktore-org/solar_energy_management/releases
-[commits-shield]: https://img.shields.io/github/commit-activity/y/traktore-org/solar_energy_management.svg?style=for-the-badge
-[commits]: https://github.com/traktore-org/solar_energy_management/commits/main
-[license-shield]: https://img.shields.io/github/license/traktore-org/solar_energy_management.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/traktore-org/sem-community.svg?style=for-the-badge
+[releases]: https://github.com/traktore-org/sem-community/releases
+[commits-shield]: https://img.shields.io/github/commit-activity/y/traktore-org/sem-community.svg?style=for-the-badge
+[commits]: https://github.com/traktore-org/sem-community/commits/main
+[license-shield]: https://img.shields.io/github/license/traktore-org/sem-community.svg?style=for-the-badge
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
 [hacs]: https://github.com/custom-components/hacs

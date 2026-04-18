@@ -41,7 +41,7 @@ and "Grid consumption" sections with sensors assigned.
 3. Click the **Integrations** tab.
 4. Click the three-dot menu (top right) and select **Custom repositories**.
 5. Paste the repository URL:
-   `https://github.com/traktore-org/solar_energy_management`
+   `https://github.com/traktore-org/sem-community`
 6. Set the category to **Integration** and click **Add**.
 7. Close the dialog. Search for **Solar Energy Management** in the
    HACS integrations list.
