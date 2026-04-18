@@ -25,18 +25,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pytest pytest-asyncio pytest-cov freezegun homeassistant
-          # Create importable package structure
+
+      - name: Set up importable package structure
+        run: |
+          # Create custom_components structure outside the checkout
+          # so pytest doesn't try to collect __init__.py from repo root
           mkdir -p /tmp/ha-config/custom_components
-          ln -s $GITHUB_WORKSPACE /tmp/ha-config/custom_components/solar_energy_management
+          cp -r $GITHUB_WORKSPACE /tmp/ha-config/custom_components/solar_energy_management
 
       - name: Run tests with coverage
+        working-directory: /tmp/ha-config/custom_components/solar_energy_management
         env:
           PYTHONPATH: /tmp/ha-config
         run: |
           python -m pytest tests/ \
             --cov=custom_components.solar_energy_management \
             --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
+            --cov-report=xml:$GITHUB_WORKSPACE/coverage.xml \
             -v --tb=short
 
       - name: Upload coverage report
@@ -48,11 +53,11 @@ jobs:
 
       - name: Coverage summary
         if: always()
+        working-directory: /tmp/ha-config/custom_components/solar_energy_management
+        env:
+          PYTHONPATH: /tmp/ha-config
         run: |
           python -m pytest tests/ \
             --cov=custom_components.solar_energy_management \
             --cov-report=term \
-            --cov-fail-under=70 \
             -q --no-header 2>&1 | tail -30 || true
-        env:
-          PYTHONPATH: /tmp/ha-config
