@@ -205,9 +205,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             name="SEM",
             manufacturer="Home Assistant",
             model="Solar EV Charging Controller",
-            sw_version="1.2.0",
+            sw_version=self._get_version(),
             configuration_url="https://github.com/traktore-org/sem-community",
         )
+
+    @staticmethod
+    def _get_version() -> str:
+        """Read version from manifest.json (single source of truth with HACS)."""
+        import json as _json
+        import os
+        manifest = os.path.join(os.path.dirname(os.path.dirname(__file__)), "manifest.json")
+        try:
+            with open(manifest) as f:
+                return _json.load(f).get("version", "0.0.0")
+        except (OSError, ValueError):
+            return "0.0.0"
 
     async def async_initialize_energy_dashboard(self) -> bool:
         """Initialize sensors from HA Energy Dashboard."""
