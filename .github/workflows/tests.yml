@@ -34,7 +34,7 @@ jobs:
           PYTHONPATH: /tmp/ha-config
         run: |
           python -m pytest tests/ \
-            --cov=. \
+            --cov=custom_components.solar_energy_management \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             -v --tb=short
@@ -50,7 +50,7 @@ jobs:
         if: always()
         run: |
           python -m pytest tests/ \
-            --cov=. \
+            --cov=custom_components.solar_energy_management \
             --cov-report=term \
             --cov-fail-under=70 \
             -q --no-header 2>&1 | tail -30 || true
