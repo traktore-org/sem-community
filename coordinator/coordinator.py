@@ -313,6 +313,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             self._observer_mode = observer_state.state == "on"
 
         try:
+            # Per-cycle caches — avoid redundant lookups within one 10s cycle (#52)
+            self._cycle_forecast = self._forecast_reader.read_forecast()
+            # Cache vehicle SOC (read in both _async_update_data and _determine_charging_strategy)
+            _vehicle_soc_entity = self.config.get("vehicle_soc_entity", "")
+            self._cycle_vehicle_soc = None
+            if _vehicle_soc_entity:
+                _soc_state = self.hass.states.get(_vehicle_soc_entity)
+                if _soc_state and _soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    try:
+                        self._cycle_vehicle_soc = float(_soc_state.state)
+                    except (ValueError, TypeError):
+                        pass
+
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()
 
@@ -505,15 +518,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 solar = lifetime.get("total_solar_kwh", 0)
                 result["lifetime_ev_solar_share"] = round(solar / total * 100, 1) if total > 0 else 0
 
-            # Vehicle SOC (if configured)
-            vehicle_soc_entity = self.config.get("vehicle_soc_entity", "")
-            if vehicle_soc_entity:
-                soc_state = self.hass.states.get(vehicle_soc_entity)
-                if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                    try:
-                        result["vehicle_soc"] = float(soc_state.state)
-                    except (ValueError, TypeError):
-                        pass
+            # Vehicle SOC (from per-cycle cache)
+            if self._cycle_vehicle_soc is not None:
+                result["vehicle_soc"] = self._cycle_vehicle_soc
 
             # EV departure time (if configured via input_datetime entity)
             departure_entity = self.config.get("ev_departure_time_entity", "")
@@ -561,7 +568,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Forecast (Phase 0.3)
         forecast_data = ForecastSensorData()
         try:
-            forecast = self._forecast_reader.read_forecast()
+            forecast = self._cycle_forecast
             if forecast.available:
                 forecast_data.forecast_today_kwh = forecast.forecast_today_kwh
                 forecast_data.forecast_tomorrow_kwh = forecast.forecast_tomorrow_kwh
@@ -877,14 +884,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         ev_battery_capacity = self.config.get("ev_battery_capacity_kwh", 40)
         ev_target_soc = self.config.get("ev_target_soc", 80)
 
-        vehicle_soc = None
-        if vehicle_soc_entity:
-            soc_state = self.hass.states.get(vehicle_soc_entity)
-            if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                try:
-                    vehicle_soc = float(soc_state.state)
-                except (ValueError, TypeError):
-                    pass
+        vehicle_soc = self._cycle_vehicle_soc
 
         if vehicle_soc is not None:
             # SOC-based: remaining = (target_soc - current_soc) / 100 * capacity
@@ -965,7 +965,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if power.battery_soc >= buffer_soc:
             # Use forecast if available to check if surplus alone is enough
             try:
-                forecast = self._forecast_reader.read_forecast()
+                forecast = self._cycle_forecast
                 if forecast.available:
                     surplus_factor = 0.5
                     estimated_surplus = forecast.forecast_remaining_today_kwh * surplus_factor
@@ -999,7 +999,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 )
             reason = f"Zone 2: SOC={power.battery_soc:.0f}% in [{priority_soc}%..{buffer_soc}%) — surplus only"
             try:
-                forecast = self._forecast_reader.read_forecast()
+                forecast = self._cycle_forecast
                 if forecast.available:
                     surplus_factor = 0.5
                     estimated_surplus = forecast.forecast_remaining_today_kwh * surplus_factor
@@ -1055,7 +1055,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Use EV budget (with battery redirect) instead of surplus-style available_power
         forecast_remaining = 0
         try:
-            forecast = self._forecast_reader.read_forecast()
+            forecast = self._cycle_forecast
             if forecast.available:
                 forecast_remaining = forecast.forecast_remaining_today_kwh
         except Exception:
