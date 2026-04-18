@@ -86,6 +86,12 @@ class SurplusController:
     - LIFO deactivation when surplus drops
     """
 
+    # Grace period after startup before activating devices.
+    # Prevents turning on all devices immediately when surplus is available
+    # after a restart — devices should stay in their pre-restart state until
+    # the system has settled and readings are reliable.
+    STARTUP_GRACE_SECONDS = 120  # 2 minutes
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -99,6 +105,8 @@ class SurplusController:
         self._price_responsive_mode = False
         self._last_surplus = 0.0
         self._smoothed_surplus: Optional[float] = None
+        self._startup_time = datetime.now()
+        self._startup_grace_active = True
 
     @property
     def allocation_data(self) -> SurplusAllocationData:
@@ -200,6 +208,29 @@ class SurplusController:
                             "Off-peak deactivation of %s blocked by anti-flicker",
                             device.name,
                         )
+
+        # Startup grace period: skip activation for first 2 minutes after restart
+        # to prevent turning on devices that were off before the restart.
+        if self._startup_grace_active:
+            elapsed = (datetime.now() - self._startup_time).total_seconds()
+            if elapsed < self.STARTUP_GRACE_SECONDS:
+                _LOGGER.debug(
+                    "Startup grace period: %ds remaining, skipping device activation",
+                    int(self.STARTUP_GRACE_SECONDS - elapsed),
+                )
+                return SurplusAllocationData(
+                    total_surplus_w=available_power_w,
+                    distributable_surplus_w=distributable,
+                    regulation_offset_w=self.regulation_offset,
+                    allocated_w=0,
+                    unallocated_w=distributable,
+                    active_devices=0,
+                    total_devices=len(devices),
+                    last_update=datetime.now(),
+                )
+            else:
+                self._startup_grace_active = False
+                _LOGGER.info("Startup grace period ended, surplus allocation active")
 
         # Activation pass: iterate by priority, activate eligible devices
         for device in devices:
