@@ -1612,6 +1612,13 @@ views:
                   style: *glass_card
 
           # ── Load Priority (drag-and-drop device management) ──
+          # ── Schedule Timeline ──
+          - type: custom:mushroom-title-card
+            title: Today's Schedule
+            subtitle: Tariff windows · Night charging · Surplus forecast
+          - type: custom:sem-schedule-card
+            entity_prefix: sensor.sem_
+
           - type: custom:mushroom-title-card
             title: Load Management
             subtitle: >-
