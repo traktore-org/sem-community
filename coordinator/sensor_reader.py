@@ -59,7 +59,7 @@ class SensorReader:
             ev_daily_energy_sensor=ev_daily_energy,
             battery_soc_sensor=config.get("battery_soc_sensor"),
             battery_temperature_sensor=config.get("battery_temperature_sensor"),
-            ev_plug_sensor=config.get("ev_plug_sensor", ""),
+            ev_plug_sensor=config.get("ev_connected_sensor") or config.get("ev_plug_sensor", ""),
             ev_charging_sensor=config.get("ev_charging_sensor", ""),
         )
 
