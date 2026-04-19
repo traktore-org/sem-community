@@ -215,14 +215,15 @@ class SEMBatteryCard extends HTMLElement {
                 }
                 .battery-icon {
                     display: block;
-                    margin: 0 auto 2px;
+                    margin: 0 auto 1px;
                 }
                 .soc-value {
-                    font-size: 18px;
+                    font-size: 14px;
                     font-weight: 700;
                     font-variant-numeric: tabular-nums;
                     color: #4db6ac;
                     text-shadow: 0 0 8px rgba(77,182,172,0.3);
+                    line-height: 1;
                 }
 
                 /* Metrics column */
@@ -320,7 +321,7 @@ class SEMBatteryCard extends HTMLElement {
                                     stroke-dashoffset="${circumference}"/>
                             </svg>
                             <div class="ring-center">
-                                <svg class="battery-icon" width="20" height="28" viewBox="0 0 20 30" fill="none" stroke="#4db6ac" stroke-width="1.8" opacity="0.7">
+                                <svg class="battery-icon" width="16" height="22" viewBox="0 0 20 30" fill="none" stroke="#4db6ac" stroke-width="1.8" opacity="0.7">
                                     <rect x="2" y="4" width="16" height="26" rx="3"/>
                                     <rect x="6" y="0" width="8" height="5" rx="2" fill="#4db6ac" opacity="0.5" stroke="none"/>
                                 </svg>

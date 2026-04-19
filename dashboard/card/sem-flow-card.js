@@ -1135,7 +1135,7 @@ class SEMFlowCard extends HTMLElement {
                         <circle id="soc-arc" cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="${batteryColor}" stroke-width="5"
                                 stroke-dasharray="${socCirc}" stroke-dashoffset="${socCirc}"
                                 transform="rotate(-90 ${B.cx} ${B.cy})" stroke-linecap="round" opacity="0.75"/>
-                        <g transform="translate(${B.cx},${B.cy})" stroke="${batteryColor}" fill="none" opacity="0.7">
+                        <g transform="translate(${B.cx},${B.cy}) scale(0.8)" stroke="${batteryColor}" fill="none" opacity="0.7">
                             <rect x="-8" y="-13" width="16" height="26" rx="3" stroke-width="1.8"/>
                             <rect x="-3" y="-16" width="6" height="4" rx="1.5" fill="${batteryColor}" opacity="0.5" stroke="none"/>
                         </g>
