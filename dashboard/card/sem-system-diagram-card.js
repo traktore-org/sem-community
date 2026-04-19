@@ -154,6 +154,11 @@ class SEMSystemDiagramCard extends HTMLElement {
         ring.style.opacity = (0.15 + ratio * 0.85).toFixed(2);
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     _updateFlows() {
         const solar = this._getState('solar_power');
         const battery = this._getState('battery_power');
@@ -202,9 +207,9 @@ class SEMSystemDiagramCard extends HTMLElement {
         // Non-animated text
         this._setText('val-battery-soc', `${soc.toFixed(0)}%`);
         this._setText('val-inverter-status', this._getStateStr('charging_state'));
-        this._setText('val-today-solar', `Today ${this._getStateStr('daily_solar_energy')} kWh`);
-        this._setText('val-today-ev', `Today ${this._getStateStr('daily_ev_energy')} kWh`);
-        this._setText('val-autarky', `Autarky ${this._getStateStr('autarky_rate')}%`);
+        this._setText('val-today-solar', `${this._t('today')} ${this._getStateStr('daily_solar_energy')} kWh`);
+        this._setText('val-today-ev', `${this._t('today')} ${this._getStateStr('daily_ev_energy')} kWh`);
+        this._setText('val-autarky', `${this._t('autarky')} ${this._getStateStr('autarky_rate')}%`);
 
         // Battery SOC arc
         const socArc = this.shadowRoot.getElementById('soc-arc');
@@ -217,13 +222,13 @@ class SEMSystemDiagramCard extends HTMLElement {
         // Grid label
         const gridLabel = this.shadowRoot.getElementById('label-grid');
         if (gridLabel) {
-            gridLabel.textContent = gridImport > gridExport ? 'IMPORT' : (gridExport > 10 ? 'EXPORT' : 'GRID');
+            gridLabel.textContent = gridImport > gridExport ? this._t('importing') : (gridExport > 10 ? this._t('exporting') : this._t('grid'));
         }
 
         // Battery label
         const battLabel = this.shadowRoot.getElementById('label-battery-state');
         if (battLabel) {
-            battLabel.textContent = battCharge > 10 ? 'CHARGING' : (battDischarge > 10 ? 'DISCHARGE' : '');
+            battLabel.textContent = battCharge > 10 ? this._t('charging') : (battDischarge > 10 ? this._t('discharging') : '');
         }
 
         // Flow animations
@@ -567,7 +572,7 @@ class SEMSystemDiagramCard extends HTMLElement {
                             <line x1="-7" y1="17" x2="7" y2="17" stroke-width="1.5"/>
                         </g>
                     </g>
-                    <text x="${S.cx}" y="${S.cy + S.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#ff9800">Solar</text>
+                    <text id="label-solar" x="${S.cx}" y="${S.cy + S.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#ff9800">${this._t('solar')}</text>
                     <text id="val-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#ff9800">0 W</text>
                     <text id="val-today-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#ff9800" opacity="0.55"></text>
 
@@ -591,7 +596,7 @@ class SEMSystemDiagramCard extends HTMLElement {
                             <rect x="-3" y="-16" width="6" height="4" rx="1.5" fill="#4db6ac" opacity="0.5" stroke="none"/>
                         </g>
                     </g>
-                    <text x="${B.cx}" y="${B.cy + B.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#4db6ac">Battery</text>
+                    <text id="label-battery" x="${B.cx}" y="${B.cy + B.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#4db6ac">${this._t('battery')}</text>
                     <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#4db6ac">0%</text>
                     <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="#4db6ac" opacity="0.7">0 W</text>
                     <text id="label-battery-state" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.5"></text>
@@ -608,7 +613,7 @@ class SEMSystemDiagramCard extends HTMLElement {
                             <line x1="10" y1="-8" x2="5" y2="14"/>
                         </g>
                     </g>
-                    <text x="${G.cx}" y="${G.cy + G.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#488fc2">Grid</text>
+                    <text id="label-grid-name" x="${G.cx}" y="${G.cy + G.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#488fc2">${this._t('grid')}</text>
                     <text id="val-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#488fc2">0 W</text>
                     <text id="label-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fs}" font-weight="500" fill="#488fc2" opacity="0.5">GRID</text>
 
@@ -622,7 +627,7 @@ class SEMSystemDiagramCard extends HTMLElement {
                             <rect x="-4" y="10" width="8" height="12"/>
                         </g>
                     </g>
-                    <text x="${H.cx}" y="${H.cy + H.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl + 1}" font-weight="600" fill="#5BC8D8">Home</text>
+                    <text id="label-home" x="${H.cx}" y="${H.cy + H.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl + 1}" font-weight="600" fill="#5BC8D8">${this._t('home')}</text>
                     <text id="val-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fhv}" font-weight="700" fill="#5BC8D8">0 W</text>
                     <text id="val-autarky" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#5BC8D8" opacity="0.5"></text>
 
@@ -638,7 +643,7 @@ class SEMSystemDiagramCard extends HTMLElement {
                             <circle cx="0" cy="15" r="1.5" fill="#8DC892" opacity="0.4" stroke="none"/>
                         </g>
                     </g>
-                    <text x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#8DC892">EV Charger</text>
+                    <text id="label-ev" x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#8DC892">${this._t('ev_charging')}</text>
                     <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#8DC892">0 W</text>
                     <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#8DC892" opacity="0.5"></text>
 

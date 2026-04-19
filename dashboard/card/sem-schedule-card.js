@@ -139,6 +139,11 @@ class SEMScheduleCard extends HTMLElement {
         return SEMScheduleCard.MARGIN_LEFT + frac * SEMScheduleCard.BAR_WIDTH;
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     _update() {
         if (!this._hass) return;
 
@@ -171,7 +176,7 @@ class SEMScheduleCard extends HTMLElement {
         }
 
         // Row labels (left side)
-        const rowLabels = ['Tariff', 'Night', 'Surplus', 'EV'];
+        const rowLabels = [this._t('tariff'), this._t('night'), this._t('surplus'), this._t('ev')];
         rowLabels.forEach((label, i) => {
             const y = FRY + i * (RH + RG) + RH / 2 + 3.5;
             svgContent += `<text x="${ML - 4}" y="${y}" text-anchor="end"
@@ -197,9 +202,10 @@ class SEMScheduleCard extends HTMLElement {
                 rx="3" fill="${fill}" opacity="${opacity}"/>`;
             // Label inside block if wide enough
             if (w > 30) {
+                const tariffLabel = this._t(block.type.toLowerCase());
                 svgContent += `<text x="${x + w / 2}" y="${tariffY + RH / 2 + 3.5}"
                     text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="8"
-                    font-weight="600" font-family="'Segoe UI','Roboto',sans-serif">${block.type}</text>`;
+                    font-weight="600" font-family="'Segoe UI','Roboto',sans-serif">${tariffLabel}</text>`;
             }
         });
 

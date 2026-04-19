@@ -64,6 +64,11 @@ class SEMEVStatusCard extends HTMLElement {
         return Math.round(w) + ' W';
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     _update() {
         if (!this._hass) return;
 
@@ -97,13 +102,13 @@ class SEMEVStatusCard extends HTMLElement {
         const statusEl = $('.status-value');
         if (statusEl) {
             if (charging) {
-                statusEl.textContent = 'Charging';
+                statusEl.textContent = this._t('charging');
                 statusEl.className = 'status-value charging';
             } else if (connected) {
-                statusEl.textContent = 'Connected';
+                statusEl.textContent = this._t('connected');
                 statusEl.className = 'status-value connected';
             } else {
-                statusEl.textContent = 'Disconnected';
+                statusEl.textContent = this._t('disconnected');
                 statusEl.className = 'status-value disconnected';
             }
         }
@@ -134,6 +139,17 @@ class SEMEVStatusCard extends HTMLElement {
 
         // Bottom chips
         setVal('.cost-chip-value', this._fmt(sessionCost, 2) + ' CHF');
+
+        // Translate labels
+        const setLabel = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        setLabel('.lbl-status', this._t('status'));
+        setLabel('.lbl-power', this._t('power'));
+        setLabel('.lbl-current', this._t('current'));
+        setLabel('.lbl-session', this._t('session'));
+        setLabel('.lbl-today', this._t('today'));
+        setLabel('.lbl-solar-share', this._t('solar_share'));
+        setLabel('.lbl-strategy', this._t('strategy'));
+        setLabel('.lbl-session-cost', this._t('session_cost'));
 
         // Glow ring animation state
         const ring = $('.glow-ring');
@@ -413,31 +429,31 @@ class SEMEVStatusCard extends HTMLElement {
 
                         <div class="metrics-col">
                             <div class="metric-row">
-                                <span class="metric-label">Status</span>
+                                <span class="metric-label lbl-status">Status</span>
                                 <span class="status-value disconnected">Disconnected</span>
                             </div>
                             <div class="metric-row power-row" style="display:none">
-                                <span class="metric-label">Power</span>
+                                <span class="metric-label lbl-power">Power</span>
                                 <span class="metric-value power-value">\u2014 W</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Current</span>
+                                <span class="metric-label lbl-current">Current</span>
                                 <span class="metric-value current-value">\u2014 A</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Session</span>
+                                <span class="metric-label lbl-session">Session</span>
                                 <span class="metric-value session-value">\u2014 kWh</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Today</span>
+                                <span class="metric-label lbl-today">Today</span>
                                 <span class="metric-value daily-value">\u2014 kWh</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Solar share</span>
+                                <span class="metric-label lbl-solar-share">Solar share</span>
                                 <span class="metric-value solar-share-value">\u2014%</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Strategy</span>
+                                <span class="metric-label lbl-strategy">Strategy</span>
                                 <span class="strategy-value">\u2014</span>
                             </div>
                         </div>
@@ -445,7 +461,7 @@ class SEMEVStatusCard extends HTMLElement {
 
                     <div class="bottom-bar">
                         <div class="chip">
-                            <span class="chip-label">Session cost</span>
+                            <span class="chip-label lbl-session-cost">Session cost</span>
                             <span class="cost-chip-value">\u2014 CHF</span>
                         </div>
                     </div>
