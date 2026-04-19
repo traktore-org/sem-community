@@ -52,6 +52,11 @@ class SEMLoadPriorityCard extends HTMLElement {
         }
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     _updateDeviceData() {
         if (!this._hass) return;
 
@@ -176,7 +181,7 @@ class SEMLoadPriorityCard extends HTMLElement {
                     <div class="device-name">
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
-                        ${device.isCritical ? '<span class="badge critical">CRITICAL</span>' : ''}
+                        ${device.isCritical ? `<span class="badge critical">${this._t('critical').toUpperCase()}</span>` : ''}
                         ${device.hasManualMapping ? '<ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px;color:#ffc107;opacity:0.6"></ha-icon>' : ''}
                         ${!device.isControllable ? `<span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}"><ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px"></ha-icon> Configure</span>` : ''}
                     </div>
@@ -187,14 +192,14 @@ class SEMLoadPriorityCard extends HTMLElement {
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? 'ON' : 'OFF'}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
-                    <label class="toggle-label"><span class="dim">Mode</span>
+                    <label class="toggle-label"><span class="dim">${this._t('mode')}</span>
                         <select class="mode-select" data-action="control_mode" data-device="${device.id}">
-                            <option value="off"${device.controlMode === 'off' ? ' selected' : ''}>Off</option>
-                            <option value="peak_only"${device.controlMode === 'peak_only' ? ' selected' : ''}>Peak Only</option>
-                            <option value="surplus"${device.controlMode === 'surplus' ? ' selected' : ''}>Surplus</option>
+                            <option value="off"${device.controlMode === 'off' ? ' selected' : ''}>${this._t('off')}</option>
+                            <option value="peak_only"${device.controlMode === 'peak_only' ? ' selected' : ''}>${this._t('peak_only')}</option>
+                            <option value="surplus"${device.controlMode === 'surplus' ? ' selected' : ''}>${this._t('surplus_mode')}</option>
                         </select>
                     </label>
-                    <label class="toggle-label"><span class="dim">Critical</span>
+                    <label class="toggle-label"><span class="dim">${this._t('critical')}</span>
                         <div class="toggle ${device.isCritical ? 'on' : ''}" data-action="critical" data-device="${device.id}"><div class="knob"></div></div>
                     </label>
                     <div class="arrows">

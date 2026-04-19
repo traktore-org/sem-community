@@ -57,6 +57,11 @@ class SEMBatteryCard extends HTMLElement {
         return Math.round(w) + ' W';
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     _update() {
         if (!this._hass) return;
 
@@ -74,7 +79,7 @@ class SEMBatteryCard extends HTMLElement {
         // Determine status
         const isCharging = statusRaw === 'charging' || chargePower > 10;
         const isDischarging = statusRaw === 'discharging' || dischargePower > 10;
-        const status = isCharging ? 'Charging' : isDischarging ? 'Discharging' : 'Idle';
+        const status = isCharging ? this._t('charging') : isDischarging ? this._t('discharging') : this._t('idle');
 
         // Temperature: try battery_temperature sensor
         const tempEntity = this._hass?.states[`${this._prefix}battery_temperature`];
@@ -130,6 +135,17 @@ class SEMBatteryCard extends HTMLElement {
         if (statusEl) {
             statusEl.style.color = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : '#888';
         }
+
+        // Translate labels
+        setVal('.lbl-soc', this._t('soc'));
+        setVal('.lbl-power', this._t('power'));
+        setVal('.lbl-status', this._t('status'));
+        setVal('.lbl-health', this._t('health'));
+        setVal('.lbl-cycles', this._t('cycles'));
+        setVal('.lbl-temp', this._t('temperature'));
+        setVal('.lbl-charge-today', this._t('charge_today'));
+        setVal('.lbl-discharge-today', this._t('discharge_today'));
+        setVal('.lbl-savings-today', this._t('savings_today'));
 
         // Bottom chips
         setVal('.chip-charge', this._fmt(dailyCharge, 2) + ' kWh');
@@ -330,27 +346,27 @@ class SEMBatteryCard extends HTMLElement {
                         </div>
                         <div class="metrics-col">
                             <div class="metric-row">
-                                <span class="metric-label">SOC</span>
+                                <span class="metric-label lbl-soc">SOC</span>
                                 <span class="metric-val m-soc">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Power</span>
+                                <span class="metric-label lbl-power">Power</span>
                                 <span class="metric-val m-power">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Status</span>
+                                <span class="metric-label lbl-status">Status</span>
                                 <span class="metric-val m-status" style="color:#888">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Health</span>
+                                <span class="metric-label lbl-health">Health</span>
                                 <span class="metric-val m-health">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Cycles</span>
+                                <span class="metric-label lbl-cycles">Cycles</span>
                                 <span class="metric-val m-cycles">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label">Temperature</span>
+                                <span class="metric-label lbl-temp">Temperature</span>
                                 <span class="metric-val m-temp">—</span>
                             </div>
                         </div>
@@ -358,15 +374,15 @@ class SEMBatteryCard extends HTMLElement {
 
                     <div class="chips">
                         <div class="chip">
-                            <div class="chip-label">Charge today</div>
+                            <div class="chip-label lbl-charge-today">Charge today</div>
                             <div class="chip-value c-charge chip-charge">—</div>
                         </div>
                         <div class="chip">
-                            <div class="chip-label">Discharge today</div>
+                            <div class="chip-label lbl-discharge-today">Discharge today</div>
                             <div class="chip-value c-discharge chip-discharge">—</div>
                         </div>
                         <div class="chip">
-                            <div class="chip-label">Savings today</div>
+                            <div class="chip-label lbl-savings-today">Savings today</div>
                             <div class="chip-value c-savings chip-savings">—</div>
                         </div>
                     </div>

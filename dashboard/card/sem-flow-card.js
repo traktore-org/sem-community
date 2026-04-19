@@ -234,15 +234,23 @@ class SEMFlowCard extends HTMLElement {
         }
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     _getNodeName(node) {
         const e = this._entities;
-        if (!e) return SFC_DEFAULTS[node]?.name || node;
+        // Translation keys for default names
+        const translationKeys = { solar: 'solar', battery: 'battery', grid: 'grid', home: 'home', ev: 'ev_charging' };
+        const defaultTranslated = translationKeys[node] ? this._t(translationKeys[node]) : (SFC_DEFAULTS[node]?.name || node);
+        if (!e) return defaultTranslated;
         switch (node) {
-            case 'solar': return e.solar?.name || SFC_DEFAULTS.solar.name;
-            case 'battery': return e.battery?.name || SFC_DEFAULTS.battery.name;
-            case 'grid': return e.grid?.name || SFC_DEFAULTS.grid.name;
-            case 'home': return e.home?.name || SFC_DEFAULTS.home.name;
-            case 'ev': return e.ev?.name || e.individual?.[0]?.name || SFC_DEFAULTS.ev.name;
+            case 'solar': return e.solar?.name || defaultTranslated;
+            case 'battery': return e.battery?.name || defaultTranslated;
+            case 'grid': return e.grid?.name || defaultTranslated;
+            case 'home': return e.home?.name || defaultTranslated;
+            case 'ev': return e.ev?.name || e.individual?.[0]?.name || defaultTranslated;
             default: return node;
         }
     }
@@ -545,10 +553,11 @@ class SEMFlowCard extends HTMLElement {
         this._setText('val-inverter-status', this._getStateStr('charging_state'));
 
         // Daily energy texts
-        this._setText('val-today-solar', dailySolar ? `Today ${dailySolar} kWh` : '');
-        this._setText('val-today-ev', dailyEv ? `Today ${dailyEv} kWh` : '');
-        this._setText('val-today-battery', dailyBattery ? `Today ${dailyBattery} kWh` : '');
-        this._setText('val-today-home', dailyHome ? `Today ${dailyHome} kWh` : '');
+        const _today = this._t('today');
+        this._setText('val-today-solar', dailySolar ? `${_today} ${dailySolar} kWh` : '');
+        this._setText('val-today-ev', dailyEv ? `${_today} ${dailyEv} kWh` : '');
+        this._setText('val-today-battery', dailyBattery ? `${_today} ${dailyBattery} kWh` : '');
+        this._setText('val-today-home', dailyHome ? `${_today} ${dailyHome} kWh` : '');
 
         // Grid daily: show import, export, and net on one line
         const gridDailyParts = [];
@@ -597,13 +606,13 @@ class SEMFlowCard extends HTMLElement {
         // Grid label
         const gridLabel = this.shadowRoot.getElementById('label-grid');
         if (gridLabel) {
-            gridLabel.textContent = isImport ? 'IMPORT' : (gridExport > 10 ? 'EXPORT' : 'GRID');
+            gridLabel.textContent = isImport ? this._t('importing') : (gridExport > 10 ? this._t('exporting') : this._t('grid'));
         }
 
         // Battery label + dynamic color (pink=#f06292 charge, teal=#4db6ac discharge)
         const battLabel = this.shadowRoot.getElementById('label-battery-state');
         if (battLabel) {
-            battLabel.textContent = battCharge > 10 ? 'CHARGING' : (battDischarge > 10 ? 'DISCHARGE' : '');
+            battLabel.textContent = battCharge > 10 ? this._t('charging') : (battDischarge > 10 ? this._t('discharging') : '');
         }
 
         // Dynamic battery color based on direction
@@ -862,7 +871,7 @@ class SEMFlowCard extends HTMLElement {
             // Daily energy text
             if (info.daily_energy_entity) {
                 const de = this._hass.states[info.daily_energy_entity];
-                this._setText(`dev-daily-${idx}`, de ? `Today ${de.state} kWh` : '');
+                this._setText(`dev-daily-${idx}`, de ? `${this._t('today')} ${de.state} kWh` : '');
             }
 
             // Update connection line opacity

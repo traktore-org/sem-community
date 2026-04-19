@@ -30,6 +30,83 @@ class DashboardGenerator:
             self._dashboard_template_path = basic_path
             self._is_premium = False
 
+    # Dashboard section title translations for generate_dashboard (#60)
+    _DASHBOARD_TRANSLATIONS = {
+        "de": {
+            "EV Charging": "EV-Laden", "Surplus Control": "Überschusssteuerung",
+            "Battery Management": "Batterieverwaltung", "Heat Pump & Hot Water": "Wärmepumpe & Warmwasser",
+            "Solar & Power": "Solar & Leistung", "Tariff & Pricing": "Tarif & Preise",
+            "Today's Schedule": "Tagesplan", "Load Management": "Lastmanagement",
+            "Peak & Load Management": "Spitzen- & Lastmanagement",
+            "SOC Zone Configuration": "SOC-Zonen Konfiguration",
+            "Charging Settings": "Ladeeinstellungen", "Lifetime EV Statistics": "EV Gesamtstatistik",
+            "Cost Tracking": "Kostenübersicht", "This Year": "Dieses Jahr",
+            "Energy Costs": "Energiekosten", "Energy Savings": "Energieeinsparungen",
+            "EV Charging Economics": "EV-Ladekosten", "Return on Investment": "Kapitalrendite",
+            "Demand Charge": "Leistungspreis", "Tariff Rates": "Tarifpreise",
+            "System Health": "Systemzustand", "Today": "Heute", "This Month": "Diesen Monat",
+        },
+        "fr": {
+            "EV Charging": "Charge VE", "Surplus Control": "Contrôle surplus",
+            "Battery Management": "Gestion batterie", "Heat Pump & Hot Water": "Pompe à chaleur",
+            "Solar & Power": "Solaire & puissance", "Tariff & Pricing": "Tarifs & prix",
+            "Today's Schedule": "Planning du jour", "Load Management": "Gestion de charge",
+            "Peak & Load Management": "Gestion pointe & charge",
+            "SOC Zone Configuration": "Configuration zones SOC",
+            "Charging Settings": "Paramètres de charge", "Lifetime EV Statistics": "Statistiques VE",
+            "Cost Tracking": "Suivi des coûts", "This Year": "Cette année",
+            "Energy Costs": "Coûts énergie", "Energy Savings": "Économies",
+            "System Health": "Santé système", "Today": "Aujourd'hui", "This Month": "Ce mois",
+        },
+        "es": {
+            "EV Charging": "Carga VE", "Surplus Control": "Control excedente",
+            "Battery Management": "Gestión batería", "Solar & Power": "Solar y potencia",
+            "Tariff & Pricing": "Tarifas y precios", "Load Management": "Gestión de carga",
+            "SOC Zone Configuration": "Configuración zonas SOC",
+            "Charging Settings": "Ajustes de carga", "Cost Tracking": "Seguimiento costes",
+            "System Health": "Salud sistema", "Today": "Hoy", "This Month": "Este mes",
+            "This Year": "Este año",
+        },
+        "it": {
+            "EV Charging": "Carica VE", "Surplus Control": "Controllo eccedenza",
+            "Battery Management": "Gestione batteria", "Solar & Power": "Solare e potenza",
+            "Tariff & Pricing": "Tariffe e prezzi", "Load Management": "Gestione carico",
+            "SOC Zone Configuration": "Configurazione zone SOC",
+            "Cost Tracking": "Monitoraggio costi", "System Health": "Salute sistema",
+            "Today": "Oggi", "This Month": "Questo mese", "This Year": "Quest'anno",
+        },
+        "nl": {
+            "EV Charging": "EV laden", "Surplus Control": "Overschotbeheer",
+            "Battery Management": "Batterijbeheer", "Solar & Power": "Zon & vermogen",
+            "Tariff & Pricing": "Tarieven & prijzen", "Load Management": "Lastbeheer",
+            "SOC Zone Configuration": "SOC-zone configuratie",
+            "Cost Tracking": "Kostenoverzicht", "System Health": "Systeemstatus",
+            "Today": "Vandaag", "This Month": "Deze maand", "This Year": "Dit jaar",
+        },
+    }
+
+    def _translate_dashboard(self, config: dict) -> dict:
+        """Translate dashboard section titles to user's HA language (#60)."""
+        lang = self.hass.config.language
+        translations = self._DASHBOARD_TRANSLATIONS.get(lang)
+        if not translations:
+            return config  # English or unsupported — keep as-is
+
+        def _walk(obj):
+            if isinstance(obj, dict):
+                for key in ("title", "subtitle", "primary"):
+                    if key in obj and isinstance(obj[key], str) and obj[key] in translations:
+                        obj[key] = translations[obj[key]]
+                for v in obj.values():
+                    _walk(v)
+            elif isinstance(obj, list):
+                for item in obj:
+                    _walk(item)
+
+        _walk(config)
+        _LOGGER.info("Dashboard translated to '%s' (%d substitutions available)", lang, len(translations))
+        return config
+
     async def _load_comprehensive_dashboard_template(self) -> Optional[Dict[str, Any]]:
         """Load the comprehensive dashboard template from YAML file."""
         try:
@@ -74,6 +151,8 @@ class DashboardGenerator:
         template = await self._load_comprehensive_dashboard_template()
 
         if template and "views" in template:
+            # Translate section titles to user's language (#60)
+            template = self._translate_dashboard(template)
             _LOGGER.info("Using comprehensive dashboard template with %d views", len(template["views"]))
 
             # Find and update views with dynamic content
