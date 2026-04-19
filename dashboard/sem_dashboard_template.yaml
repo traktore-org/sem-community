@@ -164,17 +164,17 @@ views:
             card_mod:
               style: *glass_card
 
-          # ── Solar Summary + Weather (side by side) ──
-          - type: horizontal-stack
-            cards:
-              - type: custom:sem-solar-summary-card
-                entity_prefix: sensor.sem_
-                card_mod:
-                  style: *glass_card
-              - type: custom:sem-weather-card
-                entity: weather.home
-                card_mod:
-                  style: *glass_card
+          # ── Solar Summary ──
+          - type: custom:sem-solar-summary-card
+            entity_prefix: sensor.sem_
+            card_mod:
+              style: *glass_card
+
+          # ── Weather & Clock ──
+          - type: custom:sem-weather-card
+            entity: weather.home
+            card_mod:
+              style: *glass_card
 
           # ── 7-Day Summary ──
           - type: custom:apexcharts-card
@@ -2191,9 +2191,9 @@ views:
               - type: custom:mushroom-template-card
                 primary: Solar Forecast
                 secondary: >-
-                  Today: {{ states('sensor.sem_forecast_today_kwh') }} kWh · Tomorrow: {{ states('sensor.sem_forecast_tomorrow_kwh') }} kWh
+                  Today: {{ states('sensor.sem_forecast_today_kwh') | float(0) | round(1) }} kWh · Tomorrow: {{ states('sensor.sem_forecast_tomorrow_kwh') | float(0) | round(1) }} kWh
 
-                  Remaining {{ states('sensor.sem_forecast_remaining_today_kwh') }} kWh · Now {{ states('sensor.sem_forecast_power_now_w') }} W
+                  Remaining {{ states('sensor.sem_forecast_remaining_today_kwh') | float(0) | round(1) }} kWh · Now {{ states('sensor.sem_forecast_power_now_w') | float(0) | round(0) }} W
 
                   Source: {{ states('sensor.sem_forecast_source') }}
                 icon: mdi:weather-sunny
@@ -2204,9 +2204,9 @@ views:
               - type: custom:mushroom-template-card
                 primary: Surplus Allocation
                 secondary: >-
-                  Total: {{ states('sensor.sem_surplus_total_w') }}W · Free: {{ states('sensor.sem_surplus_unallocated_w') }}W
+                  Total: {{ states('sensor.sem_surplus_total_w') | float(0) | round(0) }}W · Free: {{ states('sensor.sem_surplus_unallocated_w') | float(0) | round(0) }}W
 
-                  Distributable {{ states('sensor.sem_surplus_distributable_w') }}W · Allocated {{ states('sensor.sem_surplus_allocated_w') }}W
+                  Distributable {{ states('sensor.sem_surplus_distributable_w') | float(0) | round(0) }}W · Allocated {{ states('sensor.sem_surplus_allocated_w') | float(0) | round(0) }}W
 
                   Active: {{ states('sensor.sem_surplus_active_devices') }}/{{ states('sensor.sem_surplus_total_devices') }}
                 icon: mdi:chart-donut
