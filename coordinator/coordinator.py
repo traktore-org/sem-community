@@ -181,6 +181,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Phase 8: Consumption/solar predictor (#3)
         self._predictor = ConsumptionPredictor()
 
+        # Hourly activity tracker for schedule card (#63)
+        self._today_surplus_hours: list = [False] * 24
+        self._today_ev_hours: list = [False] * 24
+        self._tracker_date = None
+
         # Per-cycle caches (initialized here, populated in _async_update_data)
         self._cycle_forecast = None
         self._cycle_vehicle_soc: Optional[float] = None
@@ -563,6 +568,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
                 result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
 
+            # Hourly activity tracker for schedule card (#63)
+            now_time = dt_util.now()
+            today_date = now_time.date()
+            if self._tracker_date != today_date:
+                self._today_surplus_hours = [False] * 24
+                self._today_ev_hours = [False] * 24
+                self._tracker_date = today_date
+            hour = now_time.hour
+            if surplus_data.surplus_total_w > 100:
+                self._today_surplus_hours[hour] = True
+            if power.ev_power > 10:
+                self._today_ev_hours[hour] = True
+            result["schedule_surplus_hours"] = list(self._today_surplus_hours)
+            result["schedule_ev_hours"] = list(self._today_ev_hours)
+
             # Predictor sensors (#3)
             result["predictor_training_status"] = self._predictor.training_status
             result["predictor_model_accuracy"] = self._predictor.model_accuracy_pct
@@ -893,9 +913,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_retry_count = 999  # Stop retrying
 
         # Update sensor reader with discovered entities
-        for key in ("ev_connected_sensor", "ev_charging_sensor", "ev_total_energy_sensor"):
-            if ev_auto.get(key) and not self.config.get(key):
-                self._sensor_reader._config[key] = ev_auto[key]
+        # Map discovery keys to sensor_reader config keys (they differ!)
+        key_map = {
+            "ev_connected_sensor": "ev_plug_sensor",
+            "ev_charging_sensor": "ev_charging_sensor",
+            "ev_total_energy_sensor": "ev_total_energy_sensor",
+        }
+        for discover_key, reader_key in key_map.items():
+            value = ev_auto.get(discover_key)
+            if value and not getattr(self._sensor_reader.config, reader_key, None):
+                setattr(self._sensor_reader.config, reader_key, value)
+                _LOGGER.info("Set sensor reader %s = %s", reader_key, value)
 
         _LOGGER.info("EV charger registered via late discovery: service=%s", ev_auto.get("ev_charger_service"))
 

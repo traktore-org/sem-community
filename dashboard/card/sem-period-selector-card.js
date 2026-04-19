@@ -88,13 +88,18 @@ class SEMPeriodSelectorCard extends HTMLElement {
         });
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     _render() {
         const buttons = [
-            { key: 'today', label: 'Today' },
-            { key: 'yesterday', label: 'Yesterday' },
-            { key: 'week', label: 'This Week' },
-            { key: 'month', label: 'This Month' },
-            { key: 'year', label: 'This Year' },
+            { key: 'today', label: this._t('period_today') || 'Today' },
+            { key: 'yesterday', label: this._t('period_yesterday') || 'Yesterday' },
+            { key: 'week', label: this._t('period_this_week') || 'This Week' },
+            { key: 'month', label: this._t('period_this_month') || 'This Month' },
+            { key: 'year', label: this._t('period_this_year') || 'This Year' },
         ];
 
         this.shadowRoot.innerHTML = `

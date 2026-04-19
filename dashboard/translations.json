@@ -1,14 +1,4 @@
-/**
- * SEM Localization — inline translation tables for all SEM dashboard cards
- *
- * Source of truth: dashboard/translations.json (149 keys x 6 languages)
- * Both this file and dashboard_generator.py read from translations.json.
- * To add/edit translations, update translations.json and regenerate this file.
- *
- * Usage: const text = semLocalize('charging', this._hass?.language);
- */
-
-const SEM_TRANSLATIONS = {
+{
     "en": {
         "charging": "Charging",
         "discharging": "Discharging",
@@ -915,14 +905,4 @@ const SEM_TRANSLATIONS = {
         "grid_today": "Net vandaag",
         "ev_today": "EV vandaag"
     }
-};
-
-function semLocalize(key, lang) {
-    const t = SEM_TRANSLATIONS[lang] || SEM_TRANSLATIONS.en || {};
-    return t[key] || (SEM_TRANSLATIONS.en || {})[key] || key;
-}
-
-if (typeof window !== 'undefined') {
-    window.SEM_TRANSLATIONS = SEM_TRANSLATIONS;
-    window.semLocalize = semLocalize;
 }

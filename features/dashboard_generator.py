@@ -30,73 +30,54 @@ class DashboardGenerator:
             self._dashboard_template_path = basic_path
             self._is_premium = False
 
-    # Dashboard section title translations for generate_dashboard (#60)
-    _DASHBOARD_TRANSLATIONS = {
-        "de": {
-            "EV Charging": "EV-Laden", "Surplus Control": "Überschusssteuerung",
-            "Battery Management": "Batterieverwaltung", "Heat Pump & Hot Water": "Wärmepumpe & Warmwasser",
-            "Solar & Power": "Solar & Leistung", "Tariff & Pricing": "Tarif & Preise",
-            "Today's Schedule": "Tagesplan", "Load Management": "Lastmanagement",
-            "Peak & Load Management": "Spitzen- & Lastmanagement",
-            "SOC Zone Configuration": "SOC-Zonen Konfiguration",
-            "Charging Settings": "Ladeeinstellungen", "Lifetime EV Statistics": "EV Gesamtstatistik",
-            "Cost Tracking": "Kostenübersicht", "This Year": "Dieses Jahr",
-            "Energy Costs": "Energiekosten", "Energy Savings": "Energieeinsparungen",
-            "EV Charging Economics": "EV-Ladekosten", "Return on Investment": "Kapitalrendite",
-            "Demand Charge": "Leistungspreis", "Tariff Rates": "Tarifpreise",
-            "System Health": "Systemzustand", "Today": "Heute", "This Month": "Diesen Monat",
-        },
-        "fr": {
-            "EV Charging": "Charge VE", "Surplus Control": "Contrôle surplus",
-            "Battery Management": "Gestion batterie", "Heat Pump & Hot Water": "Pompe à chaleur",
-            "Solar & Power": "Solaire & puissance", "Tariff & Pricing": "Tarifs & prix",
-            "Today's Schedule": "Planning du jour", "Load Management": "Gestion de charge",
-            "Peak & Load Management": "Gestion pointe & charge",
-            "SOC Zone Configuration": "Configuration zones SOC",
-            "Charging Settings": "Paramètres de charge", "Lifetime EV Statistics": "Statistiques VE",
-            "Cost Tracking": "Suivi des coûts", "This Year": "Cette année",
-            "Energy Costs": "Coûts énergie", "Energy Savings": "Économies",
-            "System Health": "Santé système", "Today": "Aujourd'hui", "This Month": "Ce mois",
-        },
-        "es": {
-            "EV Charging": "Carga VE", "Surplus Control": "Control excedente",
-            "Battery Management": "Gestión batería", "Solar & Power": "Solar y potencia",
-            "Tariff & Pricing": "Tarifas y precios", "Load Management": "Gestión de carga",
-            "SOC Zone Configuration": "Configuración zonas SOC",
-            "Charging Settings": "Ajustes de carga", "Cost Tracking": "Seguimiento costes",
-            "System Health": "Salud sistema", "Today": "Hoy", "This Month": "Este mes",
-            "This Year": "Este año",
-        },
-        "it": {
-            "EV Charging": "Carica VE", "Surplus Control": "Controllo eccedenza",
-            "Battery Management": "Gestione batteria", "Solar & Power": "Solare e potenza",
-            "Tariff & Pricing": "Tariffe e prezzi", "Load Management": "Gestione carico",
-            "SOC Zone Configuration": "Configurazione zone SOC",
-            "Cost Tracking": "Monitoraggio costi", "System Health": "Salute sistema",
-            "Today": "Oggi", "This Month": "Questo mese", "This Year": "Quest'anno",
-        },
-        "nl": {
-            "EV Charging": "EV laden", "Surplus Control": "Overschotbeheer",
-            "Battery Management": "Batterijbeheer", "Solar & Power": "Zon & vermogen",
-            "Tariff & Pricing": "Tarieven & prijzen", "Load Management": "Lastbeheer",
-            "SOC Zone Configuration": "SOC-zone configuratie",
-            "Cost Tracking": "Kostenoverzicht", "System Health": "Systeemstatus",
-            "Today": "Vandaag", "This Month": "Deze maand", "This Year": "Dit jaar",
-        },
-    }
+    def _load_dashboard_translations(self) -> dict:
+        """Load translations from dashboard/translations.json (single source of truth)."""
+        import json as _json
+        translations_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "dashboard", "translations.json",
+        )
+        try:
+            with open(translations_path, "r", encoding="utf-8") as f:
+                return _json.load(f)
+        except (OSError, ValueError) as e:
+            _LOGGER.warning("Could not load dashboard translations: %s", e)
+            return {}
 
     def _translate_dashboard(self, config: dict) -> dict:
-        """Translate dashboard section titles to user's HA language (#60)."""
-        lang = self.hass.config.language
-        translations = self._DASHBOARD_TRANSLATIONS.get(lang)
-        if not translations:
-            return config  # English or unsupported — keep as-is
+        """Translate dashboard strings to user's HA language (#60).
 
+        Reads from dashboard/translations.json — the single source of truth
+        shared with sem-localize.js (browser cards).
+        """
+        lang = self.hass.config.language
+        if lang == "en":
+            return config  # English template, no translation needed
+
+        all_translations = self._load_dashboard_translations()
+        lang_translations = all_translations.get(lang)
+        if not lang_translations:
+            return config
+
+        # Build reverse lookup: English text → translated text
+        en = all_translations.get("en", {})
+        reverse_map = {}
+        for key, en_text in en.items():
+            translated = lang_translations.get(key)
+            if translated and translated != en_text:
+                reverse_map[en_text] = translated
+
+        if not reverse_map:
+            return config
+
+        # Walk the config and replace English strings with translations
         def _walk(obj):
             if isinstance(obj, dict):
-                for key in ("title", "subtitle", "primary"):
-                    if key in obj and isinstance(obj[key], str) and obj[key] in translations:
-                        obj[key] = translations[obj[key]]
+                for field in ("title", "subtitle", "primary", "name", "label"):
+                    if field in obj and isinstance(obj[field], str):
+                        text = obj[field]
+                        if text in reverse_map:
+                            obj[field] = reverse_map[text]
                 for v in obj.values():
                     _walk(v)
             elif isinstance(obj, list):
@@ -104,7 +85,10 @@ class DashboardGenerator:
                     _walk(item)
 
         _walk(config)
-        _LOGGER.info("Dashboard translated to '%s' (%d substitutions available)", lang, len(translations))
+        _LOGGER.info(
+            "Dashboard translated to '%s' (%d strings available)",
+            lang, len(reverse_map),
+        )
         return config
 
     async def _load_comprehensive_dashboard_template(self) -> Optional[Dict[str, Any]]:

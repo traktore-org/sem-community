@@ -181,7 +181,6 @@ class SEMLoadPriorityCard extends HTMLElement {
                     <div class="device-name">
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
-                        ${device.isCritical ? `<span class="badge critical">${this._t('critical').toUpperCase()}</span>` : ''}
                         ${device.hasManualMapping ? '<ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px;color:#ffc107;opacity:0.6"></ha-icon>' : ''}
                         ${!device.isControllable ? `<span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}"><ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px"></ha-icon> Configure</span>` : ''}
                     </div>
@@ -198,9 +197,6 @@ class SEMLoadPriorityCard extends HTMLElement {
                             <option value="peak_only"${device.controlMode === 'peak_only' ? ' selected' : ''}>${this._t('peak_only')}</option>
                             <option value="surplus"${device.controlMode === 'surplus' ? ' selected' : ''}>${this._t('surplus_mode')}</option>
                         </select>
-                    </label>
-                    <label class="toggle-label"><span class="dim">${this._t('critical')}</span>
-                        <div class="toggle ${device.isCritical ? 'on' : ''}" data-action="critical" data-device="${device.id}"><div class="knob"></div></div>
                     </label>
                     <div class="arrows">
                         <button class="arrow-btn" data-action="move-up" data-device="${device.id}" title="Move up">▲</button>
@@ -344,13 +340,6 @@ class SEMLoadPriorityCard extends HTMLElement {
                     target.classList.toggle('on', device.isControllable);
                     this._sendDeviceUpdate(deviceId, 'controllable', device.isControllable);
                 }
-            } else if (action === 'critical') {
-                const device = this.devices.find(d => d.id === deviceId);
-                if (device) {
-                    device.isCritical = !device.isCritical;
-                    target.classList.toggle('on', device.isCritical);
-                    this._sendDeviceUpdate(deviceId, 'critical', device.isCritical);
-                }
             } else if (action === 'move-up' || action === 'move-down') {
                 this._moveDevice(deviceId, action === 'move-up' ? -1 : 1);
             } else if (action === 'configure') {
@@ -492,7 +481,6 @@ class SEMLoadPriorityCard extends HTMLElement {
             .spacer { flex:1; }
             .badge { padding:2px 7px; border-radius:8px; font-size:0.8em; font-weight:600; }
             .badge.priority { background:#ff9800; color:#fff; min-width:14px; text-align:center; }
-            .badge.critical { background:#f44336; color:#fff; font-size:0.7em; letter-spacing:0.3px; }
             .toggle-label { display:flex; align-items:center; gap:4px; }
             .toggle { width:30px; height:16px; background:rgba(128,128,128,0.2); border-radius:8px; cursor:pointer; position:relative; transition:background 0.2s; flex-shrink:0; }
             .toggle.on { background:#ff9800; }

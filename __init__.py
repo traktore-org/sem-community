@@ -1133,6 +1133,15 @@ async def _async_install_card_assets(
                     if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
                         shutil.copy2(src, dst)
                         cards.append(fname)
+        # Also copy translations.json for sem-localize.js (#60)
+        dashboard_dir = os.path.dirname(card_src_dir)
+        translations_src = os.path.join(dashboard_dir, "translations.json")
+        translations_dst = os.path.join(os.path.dirname(card_www_dir), "translations.json")
+        if os.path.exists(translations_src):
+            if not os.path.exists(translations_dst) or os.path.getmtime(translations_src) > os.path.getmtime(translations_dst):
+                os.makedirs(os.path.dirname(translations_dst), exist_ok=True)
+                shutil.copy2(translations_src, translations_dst)
+                cards.append("translations.json")
         return cards
 
     updated = await hass.async_add_executor_job(_copy_cards)
