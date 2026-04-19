@@ -345,20 +345,30 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ---
 
-## Recent Improvements (v1.0.6)
+## Recent Improvements (v1.1.0)
 
-### New Features
-- **Consumption/solar predictor (#3)** — pure Python hourly EWMA profiles that learn weekday/weekend patterns. Predicts next-hour consumption and solar, daily consumption total, and optimal surplus window. No external dependencies. Cold start to trained in 3 days.
-- **Improved notifications (#47)** — Android notification channels (Charging, Alerts, Summary) for per-category control. Actionable buttons ("Open Dashboard"). HA events (`sem_notification`) fired for automation triggers. Mobile service validation cached.
-- **Integration discovery (#44)** — `async_step_integration_discovery()` enables auto-suggestion when supported inverter integrations are detected
+### Dashboard Lumina Redesign (#56)
+- **Lumina tab headers** on all 7 tabs — SVG glow icons, live stats, dot-grid background
+- **Battery hero card** — SOC arc ring with charge/discharge pulse animation, health metrics
+- **EV status card** — three visual states (disconnected/connected/charging) with animated lightning bolt
+- **Section title styling** — transparent backgrounds with gradient divider lines
+- **Consistent precision** — kWh=1dp, W=0dp, CHF=2dp across all dashboard values
 
-### Quality Scale Improvements (#43, #45, #46)
-- 20+ sensors properly categorized as `EntityCategory.DIAGNOSTIC`
-- Obscure diagnostic sensors disabled by default in entity registry
-- New predictor sensors with full translation support
-- Diagnostics handler with comprehensive state export
+### Auto Card Installation (#55)
+- Card JS files auto-installed to `/config/www/` on every restart (if dashboard exists)
+- No more manual `generate_dashboard` call needed after HACS updates
+- Self-healing: recreates card directory if deleted
 
-### Previous (v1.0.4-1.0.5)
+### Device Control Modes (#49)
+- Every device has a control mode: `off`, `peak_only` (default), `surplus`
+- SEM never turns on devices unless explicitly set to `surplus` mode
+- Mode selector dropdown on Control tab, persists across restarts
+
+### Tariff Calendar (#25)
+- User-defined HT/NT time windows with Swiss provider presets (EKZ, BKW, CKW, ewz)
+- Schedule dashboard card showing 24h timeline (tariff, night, surplus, EV)
+
+### Previous (v1.0.x)
 
 ### Performance
 - Cached forecast source detection and surplus window estimation — reduced CPU overhead per update cycle

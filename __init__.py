@@ -330,6 +330,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             err
         )
 
+    # Auto-install card JS files to /config/www/ on startup (#55)
+    # Only runs if dashboard was previously generated. On HACS updates,
+    # this ensures new cards are available after restart without manual action.
+    try:
+        await _async_install_card_assets(hass, entry)
+    except Exception as err:
+        _LOGGER.debug("Card asset installation skipped: %s", err)
+
     # Register options update listener
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
@@ -1008,6 +1016,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_summary_base = f"{static_path}/card/sem-solar-summary-card.js"
         weather_base = f"{static_path}/card/sem-weather-card.js"
         flow_base = f"{static_path}/card/sem-flow-card.js"
+        tab_header_base = f"{static_path}/card/sem-tab-header.js"
+        battery_card_base = f"{static_path}/card/sem-battery-card.js"
+        ev_status_base = f"{static_path}/card/sem-ev-status-card.js"
         schedule_base = f"{static_path}/card/sem-schedule-card.js"
         shared_url = f"{shared_base}?v={version}"
         card_url = f"{card_base}?v={version}"
@@ -1017,6 +1028,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_summary_url = f"{solar_summary_base}?v={version}"
         weather_url = f"{weather_base}?v={version}"
         flow_url = f"{flow_base}?v={version}"
+        tab_header_url = f"{tab_header_base}?v={version}"
+        battery_card_url = f"{battery_card_base}?v={version}"
+        ev_status_url = f"{ev_status_base}?v={version}"
         schedule_url = f"{schedule_base}?v={version}"
         try:
             from homeassistant.components.lovelace.resources import ResourceStorageCollection
@@ -1039,6 +1053,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 (solar_summary_base, solar_summary_url),
                 (weather_base, weather_url),
                 (flow_base, flow_url),
+                (tab_header_base, tab_header_url),
+                (battery_card_base, battery_card_url),
+                (ev_status_base, ev_status_url),
                 (schedule_base, schedule_url),
             ):
                 item = existing_by_base.get(base)
@@ -1057,6 +1074,69 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
 
     except Exception as e:
         _LOGGER.debug("Frontend resource registration skipped: %s", e)
+
+
+async def _async_install_card_assets(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Auto-install card JS files to /config/www/ on startup (#55).
+
+    Only runs if the SEM dashboard was previously generated, detected by:
+    1. Config entry flag `_install_dashboard_generated` (set by install flow)
+    2. Dashboard storage file `.storage/lovelace.sem-dashboard` (set by service)
+
+    On first install (no dashboard yet): skip — generate_dashboard handles it.
+    On HACS update: auto-copy new/changed cards so restart is sufficient.
+    Self-healing: recreates www dir if deleted but dashboard still exists.
+    """
+    import shutil
+
+    component_dir = os.path.dirname(__file__)
+    card_src_dir = os.path.join(component_dir, "dashboard", "card")
+    card_www_dir = os.path.join(
+        hass.config.config_dir, "www",
+        "custom_components", DOMAIN, "dashboard", "card",
+    )
+
+    # Check if dashboard was ever generated
+    dashboard_generated = False
+
+    # Method 1: Config entry flag (set during install flow)
+    if entry.options.get("_install_dashboard_generated"):
+        dashboard_generated = True
+
+    # Method 2: Dashboard storage file (set by generate_dashboard service)
+    dashboard_storage = os.path.join(
+        hass.config.config_dir, ".storage", "lovelace.sem-dashboard"
+    )
+    if os.path.exists(dashboard_storage):
+        dashboard_generated = True
+
+    if not dashboard_generated:
+        _LOGGER.debug(
+            "SEM dashboard not yet generated — skipping card auto-install. "
+            "Run the generate_dashboard service after setup."
+        )
+        return
+
+    def _copy_cards() -> list:
+        os.makedirs(card_www_dir, exist_ok=True)
+        cards = []
+        if os.path.isdir(card_src_dir):
+            for fname in os.listdir(card_src_dir):
+                if fname.endswith(".js"):
+                    src = os.path.join(card_src_dir, fname)
+                    dst = os.path.join(card_www_dir, fname)
+                    if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
+                        shutil.copy2(src, dst)
+                        cards.append(fname)
+        return cards
+
+    updated = await hass.async_add_executor_job(_copy_cards)
+    if updated:
+        _LOGGER.info("Auto-installed %d updated card(s): %s", len(updated), updated)
+    else:
+        _LOGGER.debug("All card assets up to date")
 
 
 async def _async_register_phase_services(
