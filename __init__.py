@@ -1008,6 +1008,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_summary_base = f"{static_path}/card/sem-solar-summary-card.js"
         weather_base = f"{static_path}/card/sem-weather-card.js"
         flow_base = f"{static_path}/card/sem-flow-card.js"
+        tab_header_base = f"{static_path}/card/sem-tab-header.js"
+        battery_card_base = f"{static_path}/card/sem-battery-card.js"
+        ev_status_base = f"{static_path}/card/sem-ev-status-card.js"
         schedule_base = f"{static_path}/card/sem-schedule-card.js"
         shared_url = f"{shared_base}?v={version}"
         card_url = f"{card_base}?v={version}"
@@ -1017,6 +1020,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_summary_url = f"{solar_summary_base}?v={version}"
         weather_url = f"{weather_base}?v={version}"
         flow_url = f"{flow_base}?v={version}"
+        tab_header_url = f"{tab_header_base}?v={version}"
+        battery_card_url = f"{battery_card_base}?v={version}"
+        ev_status_url = f"{ev_status_base}?v={version}"
         schedule_url = f"{schedule_base}?v={version}"
         try:
             from homeassistant.components.lovelace.resources import ResourceStorageCollection
@@ -1039,6 +1045,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 (solar_summary_base, solar_summary_url),
                 (weather_base, weather_url),
                 (flow_base, flow_url),
+                (tab_header_base, tab_header_url),
+                (battery_card_base, battery_card_url),
+                (ev_status_base, ev_status_url),
                 (schedule_base, schedule_url),
             ):
                 item = existing_by_base.get(base)
