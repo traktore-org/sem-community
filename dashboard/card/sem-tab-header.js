@@ -13,10 +13,26 @@
  *   entity_prefix: sensor.sem_ # default
  */
 
+// Localization helper — uses sem-localize.js if loaded
+// Fallback table for when sem-localize.js hasn't loaded yet
+const _FALLBACK = {
+    home: 'Home', energy: 'Energy', battery: 'Battery', ev_charging: 'EV Charging',
+    control: 'Control', costs: 'Costs', system: 'System',
+    home_sub: 'Energy overview', energy_sub: 'Production & consumption',
+    battery_sub: 'Storage & health', ev_sub: 'Vehicle & sessions',
+    control_sub: 'Devices & scheduling', costs_sub: 'Savings & tariffs',
+    system_sub: 'Health & diagnostics',
+    solar: 'Solar', autarky: 'Autarky', today: 'Today', soc: 'SOC',
+    power: 'Power', health: 'Health', session: 'Session', peak: 'Peak',
+    devices: 'Devices', active: 'Active', cost: 'Cost', saved: 'Saved',
+    net: 'Net', score: 'Score', co2: 'CO₂', self_use: 'Self-use',
+};
+const _t = (key, hass) => (typeof semLocalize === 'function') ? semLocalize(key, hass?.language) : (_FALLBACK[key] || key);
+
 const SEM_TAB_CONFIG = {
     home: {
-        title: 'Home',
-        subtitle: 'Energy overview',
+        titleKey: 'home',
+        subtitleKey: 'home_sub',
         color: '#5BC8D8',
         icon: (s) => `
             <path d="M-20,2 L0,-16 L20,2" stroke-width="2.2"/>
@@ -24,15 +40,15 @@ const SEM_TAB_CONFIG = {
             <rect x="-5" y="12" width="10" height="12" stroke-width="1.5"/>`,
     },
     energy: {
-        title: 'Energy',
-        subtitle: 'Production & consumption',
+        titleKey: 'energy',
+        subtitleKey: 'energy_sub',
         color: '#ff9800',
         icon: (s) => `
             <path d="M-4,-18 L-10,2 L-2,2 L-6,18 L12,-4 L2,-4 L8,-18 Z" stroke-width="1.8"/>`,
     },
     battery: {
-        title: 'Battery',
-        subtitle: 'Storage & health',
+        titleKey: 'battery',
+        subtitleKey: 'battery_sub',
         color: '#4db6ac',
         icon: (s) => `
             <rect x="-10" y="-16" width="20" height="32" rx="4" stroke-width="2"/>
@@ -41,8 +57,8 @@ const SEM_TAB_CONFIG = {
             <line x1="-5" y1="4" x2="5" y2="4" stroke-width="1.5" opacity="0.5"/>`,
     },
     ev: {
-        title: 'EV Charging',
-        subtitle: 'Vehicle & sessions',
+        titleKey: 'ev_charging',
+        subtitleKey: 'ev_sub',
         color: '#8DC892',
         icon: (s) => `
             <rect x="-12" y="-14" width="24" height="24" rx="5" stroke-width="2"/>
@@ -51,8 +67,8 @@ const SEM_TAB_CONFIG = {
             <circle cx="0" cy="18" r="2" fill="currentColor" opacity="0.4" stroke="none"/>`,
     },
     control: {
-        title: 'Control',
-        subtitle: 'Devices & scheduling',
+        titleKey: 'control',
+        subtitleKey: 'control_sub',
         color: '#96CAEE',
         icon: (s) => `
             <line x1="-12" y1="-12" x2="-12" y2="12" stroke-width="2"/>
@@ -63,8 +79,8 @@ const SEM_TAB_CONFIG = {
             <circle cx="12" cy="-8" r="4" fill="currentColor" opacity="0.6" stroke="none"/>`,
     },
     costs: {
-        title: 'Costs',
-        subtitle: 'Savings & tariffs',
+        titleKey: 'costs',
+        subtitleKey: 'costs_sub',
         color: '#f06292',
         icon: (s) => `
             <circle cx="0" cy="0" r="16" stroke-width="2"/>
@@ -73,8 +89,8 @@ const SEM_TAB_CONFIG = {
                   font-family="'Segoe UI','Roboto',sans-serif">$</text>`,
     },
     system: {
-        title: 'System',
-        subtitle: 'Health & diagnostics',
+        titleKey: 'system',
+        subtitleKey: 'system_sub',
         color: '#96CAEE',
         icon: (s) => `
             <path d="M-16,4 L-8,-8 L0,0 L6,-12 L10,-4 L16,4" stroke-width="2.2" fill="none"/>
@@ -158,21 +174,22 @@ class SEMTabHeader extends HTMLElement {
     }
 
     _getStatLabels() {
+        const t = (k) => _t(k, this._hass);
         const tab = this._tab;
-        if (tab === 'home') return ['Solar', 'Autarky', 'Today'];
-        if (tab === 'energy') return ['Solar', 'Home', 'Self-use'];
-        if (tab === 'battery') return ['SOC', 'Power', 'Health'];
-        if (tab === 'ev') return ['Power', 'Today', 'Session'];
-        if (tab === 'control') return ['Peak', 'Devices', 'Active'];
-        if (tab === 'costs') return ['Cost', 'Saved', 'Net'];
-        if (tab === 'system') return ['Score', 'Saved', 'CO₂'];
+        if (tab === 'home') return [t('solar'), t('autarky'), t('today')];
+        if (tab === 'energy') return [t('solar'), t('home'), t('self_use')];
+        if (tab === 'battery') return [t('soc'), t('power'), t('health')];
+        if (tab === 'ev') return [t('power'), t('today'), t('session')];
+        if (tab === 'control') return [t('peak'), t('devices'), t('active')];
+        if (tab === 'costs') return [t('cost'), t('saved'), t('net')];
+        if (tab === 'system') return [t('score'), t('saved'), t('co2')];
         return ['—', '—', '—'];
     }
 
     _render() {
         const cfg = SEM_TAB_CONFIG[this._tab] || SEM_TAB_CONFIG.home;
-        const title = this.config.title || cfg.title;
-        const subtitle = this.config.subtitle || cfg.subtitle;
+        const title = this.config.title || _t(cfg.titleKey, this._hass);
+        const subtitle = this.config.subtitle || _t(cfg.subtitleKey, this._hass);
         const color = cfg.color;
         const labels = this._getStatLabels();
         const F = "'Segoe UI','Roboto',sans-serif";

@@ -193,616 +193,634 @@
   "entity": {
     "sensor": {
       "solar_power": {
-        "name": "Solar Power"
+        "name": "Zonne-energie"
       },
       "home_consumption_power": {
-        "name": "Home Power"
+        "name": "Huisverbruik"
       },
       "grid_power": {
-        "name": "Grid Power"
+        "name": "Netvermogen"
       },
       "grid_import_power": {
-        "name": "Grid Import"
+        "name": "Netimport"
       },
       "grid_export_power": {
-        "name": "Grid Export"
+        "name": "Netexport"
       },
       "battery_power": {
-        "name": "Battery Power"
+        "name": "Batterijvermogen"
       },
       "battery_charge_power": {
-        "name": "Battery Charge Power"
+        "name": "Batterij Laadvermogen"
       },
       "battery_discharge_power": {
-        "name": "Battery Discharge Power"
+        "name": "Batterij Ontlaadvermogen"
       },
       "ev_power": {
-        "name": "EV Power"
+        "name": "EV-vermogen"
       },
       "available_power": {
-        "name": "Available Power"
+        "name": "Beschikbaar Vermogen"
       },
       "battery_soc": {
-        "name": "Battery SOC"
+        "name": "Batterij SOC"
       },
       "battery_status": {
-        "name": "Battery Status"
+        "name": "Batterijstatus"
       },
       "battery_temperature": {
-        "name": "Battery Temperature"
+        "name": "Batterijtemperatuur"
+      },
+      "battery_cycles_estimated": {
+        "name": "Batterijcycli (Geschat)"
+      },
+      "battery_health_score": {
+        "name": "Batterij Gezondheidsscore"
       },
       "calculated_current": {
-        "name": "Calculated Current"
+        "name": "Berekende Stroom"
       },
       "charging_state": {
-        "name": "Charging State"
+        "name": "Laadstatus"
       },
       "grid_status": {
-        "name": "Grid Status"
+        "name": "Netstatus"
       },
       "solar_charging_status": {
-        "name": "Solar Charging"
+        "name": "Zonne-laden"
       },
       "night_charging_status": {
-        "name": "Night Charging"
+        "name": "Nachtladen"
       },
       "battery_priority_status": {
-        "name": "Battery Priority"
+        "name": "Batterijprioriteit"
       },
       "charging_strategy": {
-        "name": "Charging Strategy"
+        "name": "Laadstrategie"
       },
       "daily_solar_energy": {
-        "name": "Today Solar"
+        "name": "Vandaag Zon"
       },
       "daily_home_energy": {
-        "name": "Today Home"
+        "name": "Vandaag Huis"
       },
       "daily_grid_import_energy": {
-        "name": "Today Import"
+        "name": "Vandaag Import"
       },
       "daily_grid_export_energy": {
-        "name": "Today Export"
+        "name": "Vandaag Export"
       },
       "daily_battery_charge_energy": {
-        "name": "Today Charge"
+        "name": "Vandaag Laden"
       },
       "daily_battery_discharge_energy": {
-        "name": "Today Discharge"
+        "name": "Vandaag Ontladen"
       },
       "daily_ev_energy": {
-        "name": "Today EV"
+        "name": "Vandaag EV"
       },
       "monthly_solar_yield_energy": {
-        "name": "Monthly Solar"
+        "name": "Maandelijks Zon"
       },
       "monthly_grid_import_energy": {
-        "name": "Monthly Import"
+        "name": "Maandelijks Import"
       },
       "monthly_grid_export_energy": {
-        "name": "Monthly Export"
+        "name": "Maandelijks Export"
       },
       "monthly_battery_charge_energy": {
-        "name": "Monthly Charge"
+        "name": "Maandelijks Laden"
       },
       "monthly_battery_discharge_energy": {
-        "name": "Monthly Discharge"
+        "name": "Maandelijks Ontladen"
       },
       "monthly_home_consumption_energy": {
-        "name": "Monthly Home"
+        "name": "Maandelijks Huis"
       },
       "flow_solar_to_home_power": {
-        "name": "Solar to Home"
+        "name": "Zon naar Huis"
       },
       "flow_solar_to_battery_power": {
-        "name": "Solar to Battery"
+        "name": "Zon naar Batterij"
       },
       "flow_solar_to_grid_power": {
-        "name": "Solar to Grid"
+        "name": "Zon naar Net"
       },
       "flow_solar_to_ev_power": {
-        "name": "Solar to EV"
+        "name": "Zon naar EV"
       },
       "flow_battery_to_home_power": {
-        "name": "Battery to Home"
+        "name": "Batterij naar Huis"
       },
       "flow_battery_to_ev_power": {
-        "name": "Battery to EV"
+        "name": "Batterij naar EV"
       },
       "flow_grid_to_home_power": {
-        "name": "Grid to Home"
+        "name": "Net naar Huis"
       },
       "flow_grid_to_ev_power": {
-        "name": "Grid to EV"
+        "name": "Net naar EV"
       },
       "flow_grid_to_battery_power": {
-        "name": "Grid to Battery"
+        "name": "Net naar Batterij"
       },
       "flow_solar_to_home_energy": {
-        "name": "Solar to Home Energy"
+        "name": "Zon naar Huis Energie"
       },
       "flow_solar_to_ev_energy": {
-        "name": "Solar to EV Energy"
+        "name": "Zon naar EV Energie"
       },
       "flow_solar_to_battery_energy": {
-        "name": "Solar to Battery Energy"
+        "name": "Zon naar Batterij Energie"
       },
       "flow_solar_to_grid_energy": {
-        "name": "Solar to Grid Energy"
+        "name": "Zon naar Net Energie"
       },
       "flow_grid_to_home_energy": {
-        "name": "Grid to Home Energy"
+        "name": "Net naar Huis Energie"
       },
       "flow_grid_to_ev_energy": {
-        "name": "Grid to EV Energy"
+        "name": "Net naar EV Energie"
       },
       "flow_grid_to_battery_energy": {
-        "name": "Grid to Battery Energy"
+        "name": "Net naar Batterij Energie"
       },
       "flow_battery_to_home_energy": {
-        "name": "Battery to Home Energy"
+        "name": "Batterij naar Huis Energie"
       },
       "flow_battery_to_ev_energy": {
-        "name": "Battery to EV Energy"
+        "name": "Batterij naar EV Energie"
       },
       "self_consumption_rate": {
-        "name": "Self Consumption"
+        "name": "Eigenverbruik"
       },
       "autarky_rate": {
-        "name": "Autarky Rate"
+        "name": "Autarkie"
       },
       "daily_savings": {
-        "name": "Today Savings"
+        "name": "Besparing Vandaag"
       },
       "daily_battery_savings": {
-        "name": "Battery Savings Daily"
+        "name": "Batterijbesparing Dagelijks"
       },
       "daily_costs": {
-        "name": "Costs Daily"
+        "name": "Kosten Dagelijks"
       },
       "daily_export_revenue": {
-        "name": "Export Revenue Daily"
+        "name": "Exportopbrengst Dagelijks"
       },
       "daily_net_cost": {
-        "name": "Net Cost Daily"
+        "name": "Nettokosten Dagelijks"
       },
       "monthly_savings": {
-        "name": "Monthly Savings"
+        "name": "Maandelijkse Besparing"
       },
       "monthly_battery_savings": {
-        "name": "Battery Savings Monthly"
+        "name": "Batterijbesparing Maandelijks"
       },
       "monthly_costs": {
-        "name": "Costs Monthly"
+        "name": "Kosten Maandelijks"
       },
       "monthly_export_revenue": {
-        "name": "Export Revenue Monthly"
+        "name": "Exportopbrengst Maandelijks"
       },
       "monthly_net_cost": {
-        "name": "Net Cost Monthly"
+        "name": "Nettokosten Maandelijks"
       },
       "yearly_solar_yield_energy": {
-        "name": "Yearly Solar"
+        "name": "Jaarlijks Zon"
       },
       "yearly_grid_import_energy": {
-        "name": "Yearly Grid Import"
+        "name": "Jaarlijks Netimport"
       },
       "yearly_grid_export_energy": {
-        "name": "Yearly Grid Export"
+        "name": "Jaarlijks Netexport"
       },
       "yearly_battery_charge_energy": {
-        "name": "Yearly Battery Charge"
+        "name": "Jaarlijks Batterij Laden"
       },
       "yearly_battery_discharge_energy": {
-        "name": "Yearly Battery Discharge"
+        "name": "Jaarlijks Batterij Ontladen"
       },
       "yearly_home_consumption_energy": {
-        "name": "Yearly Home Consumption"
+        "name": "Jaarlijks Huisverbruik"
       },
       "yearly_ev_energy": {
-        "name": "Yearly EV Energy"
+        "name": "Jaarlijks EV-energie"
       },
       "yearly_costs": {
-        "name": "Yearly Costs"
+        "name": "Jaarlijkse Kosten"
       },
       "yearly_savings": {
-        "name": "Yearly Savings"
+        "name": "Jaarlijkse Besparing"
       },
       "yearly_battery_savings": {
-        "name": "Yearly Battery Savings"
+        "name": "Jaarlijkse Batterijbesparing"
       },
       "yearly_export_revenue": {
-        "name": "Yearly Export Revenue"
+        "name": "Jaarlijkse Exportopbrengst"
       },
       "yearly_net_cost": {
-        "name": "Yearly Net Cost"
+        "name": "Jaarlijkse Nettokosten"
       },
       "lifetime_total_savings": {
-        "name": "Lifetime Total Savings"
+        "name": "Totale Besparing"
       },
       "lifetime_grid_cost": {
-        "name": "Lifetime Grid Cost"
+        "name": "Totale Netkosten"
       },
       "roi_percentage": {
         "name": "ROI Percentage"
       },
       "roi_payback_years": {
-        "name": "ROI Payback Years"
+        "name": "ROI Terugverdientijd"
       },
       "roi_annual_savings": {
-        "name": "ROI Annual Savings"
+        "name": "ROI Jaarlijkse Besparing"
       },
       "forecast_accuracy_today": {
-        "name": "Forecast Accuracy Today"
+        "name": "Voorspelling Nauwkeurigheid Vandaag"
       },
       "forecast_accuracy_7d": {
-        "name": "Forecast Accuracy 7d"
+        "name": "Voorspelling Nauwkeurigheid 7d"
       },
       "forecast_correction_factor": {
-        "name": "Forecast Correction Factor"
+        "name": "Voorspelling Correctiefactor"
       },
       "forecast_deviation_kwh": {
-        "name": "Forecast Deviation"
+        "name": "Voorspelling Afwijking"
       },
       "forecast_corrected_today": {
-        "name": "Corrected Forecast Today"
+        "name": "Gecorrigeerde Voorspelling Vandaag"
       },
       "forecast_corrected_tomorrow": {
-        "name": "Corrected Forecast Tomorrow"
+        "name": "Gecorrigeerde Voorspelling Morgen"
       },
       "forecast_history_days": {
-        "name": "Forecast History Days"
+        "name": "Voorspelling Historiedagen"
       },
       "daily_co2_avoided": {
-        "name": "CO2 Avoided Today"
+        "name": "CO2 Vermeden Vandaag"
       },
       "yearly_co2_avoided": {
-        "name": "CO2 Avoided This Year"
+        "name": "CO2 Vermeden Dit Jaar"
       },
       "yearly_trees_equivalent": {
-        "name": "Trees Equivalent This Year"
+        "name": "Bomen Equivalent Dit Jaar"
       },
       "lifetime_co2_avoided": {
-        "name": "Lifetime CO2 Avoided"
+        "name": "CO2 Vermeden Totaal"
       },
       "lifetime_trees_equivalent": {
-        "name": "Lifetime Trees Equivalent"
+        "name": "Bomen Equivalent Totaal"
       },
       "power_charge_cost": {
-        "name": "Power Charge Cost"
+        "name": "Vermogenskosten"
       },
       "consecutive_peak_15min": {
-        "name": "15min Peak"
+        "name": "15min Piek"
       },
       "monthly_consecutive_peak": {
-        "name": "Monthly Peak"
+        "name": "Maandelijkse Piek"
       },
       "current_vs_peak_percentage": {
-        "name": "Peak Percentage"
+        "name": "Piekpercentage"
       },
       "target_peak_limit": {
-        "name": "Peak Limit"
+        "name": "Pieklimiet"
       },
       "peak_margin": {
-        "name": "Peak Margin"
+        "name": "Piekmarge"
       },
       "load_management_status": {
-        "name": "Load Management"
+        "name": "Lastbeheer"
       },
       "load_management_recommendation": {
-        "name": "Load Recommendation"
+        "name": "Lastaanbeveling"
       },
       "loads_currently_shed": {
-        "name": "Loads Shed"
+        "name": "Afgeschakelde Lasten"
       },
       "available_load_reduction": {
-        "name": "Available Reduction"
+        "name": "Beschikbare Reductie"
       },
       "controllable_devices_count": {
-        "name": "Devices Count"
+        "name": "Aantal Apparaten"
       },
       "surplus_total_w": {
-        "name": "Surplus Total"
+        "name": "Overschot Totaal"
       },
       "surplus_distributable_w": {
-        "name": "Surplus Distributable"
+        "name": "Overschot Verdeelbaar"
       },
       "surplus_allocated_w": {
-        "name": "Surplus Allocated"
+        "name": "Overschot Toegewezen"
       },
       "surplus_unallocated_w": {
-        "name": "Surplus Unallocated"
+        "name": "Overschot Niet Toegewezen"
       },
       "surplus_active_devices": {
-        "name": "Surplus Active Devices"
+        "name": "Overschot Actieve Apparaten"
       },
       "surplus_total_devices": {
-        "name": "Surplus Total Devices"
+        "name": "Overschot Apparaten Totaal"
       },
       "forecast_today_kwh": {
-        "name": "Forecast Today"
+        "name": "Voorspelling Vandaag"
       },
       "forecast_tomorrow_kwh": {
-        "name": "Forecast Tomorrow"
+        "name": "Voorspelling Morgen"
       },
       "forecast_remaining_today_kwh": {
-        "name": "Forecast Remaining Today"
+        "name": "Voorspelling Resterend Vandaag"
       },
       "forecast_power_now_w": {
-        "name": "Forecast Power Now"
+        "name": "Voorspeld Vermogen Nu"
       },
       "forecast_source": {
-        "name": "Forecast Source"
+        "name": "Voorspellingsbron"
       },
       "charging_recommendation": {
-        "name": "Charging Recommendation"
+        "name": "Laadaanbeveling"
       },
       "tariff_current_import_rate": {
-        "name": "Electricity Price"
+        "name": "Elektriciteitsprijs"
       },
       "tariff_current_export_rate": {
-        "name": "Export Rate"
+        "name": "Exporttarief"
       },
       "tariff_price_level": {
-        "name": "Price Level"
+        "name": "Prijsniveau"
       },
       "tariff_provider": {
-        "name": "Tariff Provider"
+        "name": "Tariefaanbieder"
       },
       "tariff_next_cheap_start": {
-        "name": "Next Cheap Window"
+        "name": "Volgend Goedkoop Venster"
       },
       "heat_pump_mode": {
-        "name": "Heat Pump Mode"
+        "name": "Warmtepomp Modus"
       },
       "heat_pump_sg_ready_state": {
-        "name": "Heat Pump SG-Ready State"
+        "name": "Warmtepomp SG-Ready"
       },
       "pv_daily_specific_yield": {
-        "name": "PV Specific Yield"
+        "name": "PV Specifieke Opbrengst"
       },
       "pv_performance_vs_forecast": {
-        "name": "PV vs Forecast"
+        "name": "PV vs Voorspelling"
       },
       "pv_estimated_annual_degradation": {
-        "name": "PV Annual Degradation"
+        "name": "PV Jaarlijkse Degradatie"
       },
       "pv_degradation_trend": {
-        "name": "PV Degradation Trend"
+        "name": "PV Degradatietrend"
       },
       "energy_optimization_score": {
-        "name": "Optimization Score"
+        "name": "Optimalisatiescore"
       },
       "energy_tip": {
-        "name": "Energy Tip"
+        "name": "Energietip"
       },
       "energy_tip_category": {
-        "name": "Energy Tip Category"
+        "name": "Energietip Categorie"
       },
       "energy_ev_solar_percentage": {
-        "name": "EV Solar Charging %"
+        "name": "EV Zonneladen %"
       },
       "utility_signal_source": {
-        "name": "Utility Signal Source"
+        "name": "Netbeheerder Signaalbron"
       },
       "utility_signal_count_today": {
-        "name": "Utility Signals Today"
+        "name": "Netbeheerder Signalen Vandaag"
+      },
+      "predictor_training_status": {
+        "name": "Voorspeller Trainingsstatus"
+      },
+      "predictor_model_accuracy": {
+        "name": "Voorspeller Nauwkeurigheid"
+      },
+      "predicted_consumption_next_hour": {
+        "name": "Voorsp. Verbruik (Volgend Uur)"
+      },
+      "predicted_consumption_today_kwh": {
+        "name": "Voorsp. Verbruik Vandaag"
+      },
+      "predicted_solar_next_hour": {
+        "name": "Voorsp. Zon (Volgend Uur)"
+      },
+      "predicted_surplus_window": {
+        "name": "Voorsp. Overschotvenster"
       },
       "session_energy": {
-        "name": "Session Energy"
+        "name": "Sessie-energie"
       },
       "session_solar_share": {
-        "name": "Session Solar Share"
+        "name": "Sessie Zonneaandeel"
       },
       "session_cost": {
-        "name": "Session Cost"
+        "name": "Sessiekosten"
       },
       "session_duration": {
-        "name": "Session Duration"
+        "name": "Sessieduur"
       },
       "lifetime_ev_energy": {
-        "name": "Lifetime EV Energy"
+        "name": "Totaal EV-energie"
       },
       "lifetime_ev_solar": {
-        "name": "Lifetime EV Solar Energy"
+        "name": "Totaal EV Zonne-energie"
       },
       "lifetime_ev_cost": {
-        "name": "Lifetime EV Cost"
+        "name": "Totaal EV-kosten"
       },
       "lifetime_ev_sessions": {
-        "name": "Lifetime EV Sessions"
+        "name": "Totaal EV-sessies"
       },
       "lifetime_ev_solar_share": {
-        "name": "Lifetime EV Solar Share"
+        "name": "Totaal EV Zonneaandeel"
       },
       "vehicle_soc": {
-        "name": "Vehicle SOC"
+        "name": "Voertuig SOC"
       },
       "best_surplus_window": {
-        "name": "Best Surplus Window"
+        "name": "Beste Overschotvenster"
       },
       "night_start_time": {
-        "name": "Night Start Time"
+        "name": "Nacht Starttijd"
       },
       "night_end_time": {
-        "name": "Night End Time"
+        "name": "Nacht Eindtijd"
       },
       "night_window_hours": {
-        "name": "Night Window Hours"
+        "name": "Nachtvenster Uren"
       },
       "forecast_peak_power_today_w": {
-        "name": "Forecast Peak Power Today"
+        "name": "Voorsp. Piekvermogen Vandaag"
       },
       "forecast_peak_time_today": {
-        "name": "Forecast Peak Time Today"
+        "name": "Voorsp. Piektijd Vandaag"
       },
       "forecast_power_next_hour_w": {
-        "name": "Forecast Power Next Hour"
+        "name": "Voorsp. Vermogen Volgend Uur"
       },
       "forecast_surplus_kwh": {
-        "name": "Forecast Surplus"
-      },
-      "battery_cycles_estimated": {
-        "name": "Battery Cycles (Estimated)"
-      },
-      "battery_health_score": {
-        "name": "Battery Health Score"
+        "name": "Voorspeld Overschot"
       }
     },
     "binary_sensor": {
       "ev_connected": {
-        "name": "EV Connected"
+        "name": "EV Verbonden"
       },
       "ev_charging": {
-        "name": "EV Charging"
+        "name": "EV Laden"
       },
       "battery_charging": {
-        "name": "Battery Charging"
+        "name": "Batterij Laden"
       },
       "battery_discharging": {
-        "name": "Battery Discharging"
+        "name": "Batterij Ontladen"
       },
       "grid_export_active": {
-        "name": "Grid Export Active"
+        "name": "Netexport Actief"
       },
       "solar_active": {
-        "name": "Solar Active"
+        "name": "Zon Actief"
       },
       "forecast_available": {
-        "name": "Forecast Available"
+        "name": "Voorspelling Beschikbaar"
       },
       "tariff_is_dynamic": {
-        "name": "Dynamic Tariff"
+        "name": "Dynamisch Tarief"
       },
       "heat_pump_solar_boost": {
-        "name": "Heat Pump Solar Boost"
+        "name": "Warmtepomp Zonne-boost"
       },
       "utility_signal_active": {
-        "name": "Utility Signal Active"
+        "name": "Netbeheerder Signaal Actief"
       }
     },
     "switch": {
       "night_charging": {
-        "name": "Night Charging"
+        "name": "Nachtladen"
       },
       "observer_mode": {
-        "name": "Observer Mode"
+        "name": "Observatiemodus"
       },
       "forecast_night_reduction": {
-        "name": "Forecast Night Reduction"
+        "name": "Voorspelling Nachtreductie"
       }
     },
     "number": {
       "update_interval": {
-        "name": "Update Interval"
+        "name": "Update-interval"
       },
       "power_delta": {
-        "name": "Power Delta"
+        "name": "Vermogensdelta"
       },
       "current_delta": {
-        "name": "Current Delta"
+        "name": "Stroomdelta"
       },
       "soc_delta": {
-        "name": "SOC Delta"
+        "name": "SOC-delta"
       },
       "battery_priority_soc": {
-        "name": "Battery Priority SOC"
+        "name": "Batterij Prioriteits-SOC"
       },
       "battery_minimum_soc": {
-        "name": "Battery Minimum SOC"
+        "name": "Batterij Minimum-SOC"
       },
       "battery_resume_soc": {
-        "name": "Battery Resume SOC"
+        "name": "Batterij Hervatting-SOC"
       },
       "minimum_solar_power": {
-        "name": "Minimum Solar Power"
+        "name": "Minimum Zonne-vermogen"
       },
       "maximum_grid_import": {
-        "name": "Maximum Grid Import"
+        "name": "Maximum Netimport"
       },
       "daily_ev_target": {
-        "name": "Daily EV Target"
-      },
-      "battery_assist_max_power": {
-        "name": "Battery Assist Max Power"
-      },
-      "regulation_offset": {
-        "name": "Regulation Offset"
-      },
-      "demand_charge_rate": {
-        "name": "Demand Charge Rate"
-      },
-      "cheap_price_threshold": {
-        "name": "Cheap Price Threshold"
-      },
-      "expensive_price_threshold": {
-        "name": "Expensive Price Threshold"
-      },
-      "heat_pump_boost_offset": {
-        "name": "Heat Pump Boost Offset"
-      },
-      "hot_water_max_temperature": {
-        "name": "Hot Water Max Temperature"
-      },
-      "system_size_kwp": {
-        "name": "PV System Size"
-      },
-      "ev_night_initial_current": {
-        "name": "EV Night Initial Current"
-      },
-      "ev_min_current": {
-        "name": "EV Minimum Current"
-      },
-      "ev_stall_cooldown": {
-        "name": "EV Stall Cooldown"
-      },
-      "battery_buffer_soc": {
-        "name": "Battery Buffer SOC"
-      },
-      "battery_auto_start_soc": {
-        "name": "Battery Auto Start SOC"
-      },
-      "battery_assist_floor_soc": {
-        "name": "Battery Assist Floor SOC"
-      },
-      "battery_capacity_kwh": {
-        "name": "Battery Capacity"
-      },
-      "battery_max_discharge_power": {
-        "name": "Battery Max Discharge Power"
-      },
-      "system_investment_cost": {
-        "name": "System Investment Cost"
-      },
-      "system_install_year": {
-        "name": "System Install Year"
-      },
-      "ev_minimum_current": {
-        "name": "EV Minimum Current"
-      },
-      "ev_phases": {
-        "name": "EV Phases"
-      },
-      "electricity_import_rate": {
-        "name": "Electricity Import Rate"
-      },
-      "electricity_export_rate": {
-        "name": "Electricity Export Rate"
-      },
-      "night_earliest_start": {
-        "name": "Night Earliest Start"
-      },
-      "night_latest_end": {
-        "name": "Night Latest End"
-      },
-      "battery_capacity": {
-        "name": "Battery Capacity"
+        "name": "Dagelijks EV-doel"
       },
       "ev_km_per_kwh": {
-        "name": "EV Efficiency"
+        "name": "EV-efficiëntie"
       },
       "public_charging_rate": {
-        "name": "Public Charging Rate"
+        "name": "Openbaar Laadtarief"
+      },
+      "battery_assist_max_power": {
+        "name": "Batterij Ondersteuning Max"
+      },
+      "regulation_offset": {
+        "name": "Regelingsoffset"
+      },
+      "demand_charge_rate": {
+        "name": "Vermogenstarief"
+      },
+      "cheap_price_threshold": {
+        "name": "Drempel Lage Prijs"
+      },
+      "expensive_price_threshold": {
+        "name": "Drempel Hoge Prijs"
+      },
+      "heat_pump_boost_offset": {
+        "name": "Warmtepomp Boost-offset"
+      },
+      "hot_water_max_temperature": {
+        "name": "Warm Water Max Temperatuur"
+      },
+      "system_size_kwp": {
+        "name": "PV-systeemgrootte"
+      },
+      "ev_night_initial_current": {
+        "name": "EV Nacht Beginstroom"
+      },
+      "ev_min_current": {
+        "name": "EV Minimale Stroom"
+      },
+      "ev_stall_cooldown": {
+        "name": "EV Stall Afkoeling"
+      },
+      "battery_buffer_soc": {
+        "name": "Batterij Buffer-SOC"
+      },
+      "battery_auto_start_soc": {
+        "name": "Batterij Auto-start-SOC"
+      },
+      "battery_assist_floor_soc": {
+        "name": "Batterij Ondersteuning Min-SOC"
+      },
+      "battery_capacity_kwh": {
+        "name": "Batterijcapaciteit"
+      },
+      "battery_max_discharge_power": {
+        "name": "Batterij Max Ontlaadvermogen"
+      },
+      "system_investment_cost": {
+        "name": "Systeeminvesteringskosten"
+      },
+      "system_install_year": {
+        "name": "Installatiejaar"
+      },
+      "ev_minimum_current": {
+        "name": "EV Minimale Stroom"
+      },
+      "ev_phases": {
+        "name": "EV Fasen"
+      },
+      "electricity_import_rate": {
+        "name": "Stroomimporttarief"
+      },
+      "electricity_export_rate": {
+        "name": "Stroomexporttarief"
+      },
+      "night_earliest_start": {
+        "name": "Nacht Vroegste Start"
+      },
+      "night_latest_end": {
+        "name": "Nacht Laatste Einde"
+      },
+      "battery_capacity": {
+        "name": "Batterijcapaciteit"
       }
     }
   }
