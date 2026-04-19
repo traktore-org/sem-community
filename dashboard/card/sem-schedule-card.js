@@ -36,10 +36,13 @@ class SEMScheduleCard extends HTMLElement {
         this._hass = hass;
         const key = [
             'tariff_price_level', 'night_start_time', 'night_end_time',
-            'best_surplus_window', 'ev_power', 'charging_state',
+            'best_surplus_window', 'predicted_surplus_window',
+            'ev_power', 'charging_state',
         ].map(s => {
             const e = hass?.states[`${this._prefix}${s}`];
-            return (e?.state || '') + JSON.stringify(e?.attributes?.tariff_schedule_today || '');
+            return (e?.state || '') + JSON.stringify(e?.attributes?.tariff_schedule_today || '')
+                + JSON.stringify(e?.attributes?.schedule_surplus_hours || '')
+                + JSON.stringify(e?.attributes?.schedule_ev_hours || '');
         }).join('|');
         if (key === this._lastKey) return;
         this._lastKey = key;
@@ -101,17 +104,56 @@ class SEMScheduleCard extends HTMLElement {
         return { start, end };
     }
 
-    /** Return {start, end} fractions for surplus window, or null. */
-    _getSurplusWindow() {
-        const raw = this._stateObj('best_surplus_window')?.state;
-        if (!raw || raw === 'unknown' || raw === 'unavailable') return null;
-        // Expected: "10:00-14:00"
-        const parts = raw.split('-');
-        if (parts.length !== 2) return null;
-        const start = this._parseTime(parts[0].trim());
-        const end = this._parseTime(parts[1].trim());
-        if (start == null || end == null) return null;
-        return { start, end };
+    /** Return predicted surplus window as {start, end} fractions, or null. */
+    _getPredictedSurplusWindow() {
+        // Try predicted_surplus_window first, then best_surplus_window
+        for (const key of ['predicted_surplus_window', 'best_surplus_window']) {
+            const raw = this._stateObj(key)?.state;
+            if (!raw || raw === 'unknown' || raw === 'unavailable') continue;
+            // Skip "tomorrow..." — we only show today
+            if (raw.toLowerCase().startsWith('tomorrow')) continue;
+            // Parse "HH:MM–HH:MM" or "HH:MM-HH:MM" (both dash types)
+            const parts = raw.split(/[-–]/);
+            if (parts.length !== 2) continue;
+            const start = this._parseTime(parts[0].trim());
+            const end = this._parseTime(parts[1].trim());
+            if (start != null && end != null) return { start, end };
+        }
+        return null;
+    }
+
+    /** Return array of {start, end} blocks from hourly boolean array. */
+    _hoursToBlocks(hours) {
+        if (!hours || !Array.isArray(hours)) return [];
+        const blocks = [];
+        let blockStart = -1;
+        for (let h = 0; h < 24; h++) {
+            if (hours[h] && blockStart === -1) {
+                blockStart = h;
+            } else if (!hours[h] && blockStart !== -1) {
+                blocks.push({ start: blockStart / 24, end: h / 24 });
+                blockStart = -1;
+            }
+        }
+        if (blockStart !== -1) {
+            blocks.push({ start: blockStart / 24, end: 1 });
+        }
+        return blocks;
+    }
+
+    /** Get actual surplus hours from coordinator data. */
+    _getActualSurplusBlocks() {
+        // Read from any SEM sensor's attributes (coordinator adds to all)
+        const data = this._hass?.states[`${this._prefix}surplus_total_w`];
+        const hours = data?.attributes?.schedule_surplus_hours;
+        return this._hoursToBlocks(hours);
+    }
+
+    /** Get actual EV charging hours from coordinator data. */
+    _getActualEvBlocks() {
+        const data = this._hass?.states[`${this._prefix}surplus_total_w`];
+        const hours = data?.attributes?.schedule_ev_hours;
+        return this._hoursToBlocks(hours);
     }
 
     /** Return true if EV is currently charging. */
@@ -231,29 +273,44 @@ class SEMScheduleCard extends HTMLElement {
             }
         }
 
-        // ── Row 2: Surplus Window ──
+        // ── Row 2: Surplus — predicted (faded) + actual (solid) ──
         const surplusY = FRY + 2 * (RH + RG);
-        const surplus = this._getSurplusWindow();
-        if (surplus) {
-            const x = this._toX(surplus.start);
-            const w = this._toX(surplus.end) - x;
+        // Layer 1: predicted surplus window (faded background)
+        const predicted = this._getPredictedSurplusWindow();
+        if (predicted) {
+            const x = this._toX(predicted.start);
+            const w = this._toX(predicted.end) - x;
             svgContent += `<rect x="${x}" y="${surplusY}" width="${Math.max(w, 0)}" height="${RH}"
-                rx="3" fill="#fdd835" opacity="0.55"/>`;
+                rx="3" fill="#fdd835" opacity="0.18"/>`;
+        }
+        // Layer 2: actual surplus hours (solid overlay)
+        for (const block of this._getActualSurplusBlocks()) {
+            const x = this._toX(block.start);
+            const w = this._toX(block.end) - x;
+            svgContent += `<rect x="${x}" y="${surplusY}" width="${Math.max(w, 0)}" height="${RH}"
+                rx="3" fill="#fdd835" opacity="0.6"/>`;
         }
 
-        // ── Row 3: EV Charging ──
+        // ── Row 3: EV — actual charging hours (solid) + live indicator ──
         const evY = FRY + 3 * (RH + RG);
+        // Layer 1: actual EV charging hours today
+        for (const block of this._getActualEvBlocks()) {
+            const x = this._toX(block.start);
+            const w = this._toX(block.end) - x;
+            svgContent += `<rect x="${x}" y="${evY}" width="${Math.max(w, 0)}" height="${RH}"
+                rx="3" fill="${colors.ev}" opacity="0.55"/>`;
+        }
+        // Layer 2: live charging indicator (brighter block at current time)
         if (this._isEvCharging()) {
-            // Show a block at the current hour (± 15 min visual width)
             const now = new Date();
             const nowFrac = (now.getHours() + now.getMinutes() / 60) / 24;
-            const halfBlock = 0.5 / 24; // 30-min visual block
+            const halfBlock = 0.5 / 24;
             const start = Math.max(0, nowFrac - halfBlock);
             const end = Math.min(1, nowFrac + halfBlock);
             const x = this._toX(start);
             const w = this._toX(end) - x;
             svgContent += `<rect x="${x}" y="${evY}" width="${w}" height="${RH}"
-                rx="3" fill="${colors.ev}" opacity="0.65"/>`;
+                rx="3" fill="${colors.ev}" opacity="0.85"/>`;
         }
 
         // ── Current time indicator (red vertical line) ──

@@ -1542,6 +1542,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             attrs["peak_trend"] = self.coordinator.data.get("peak_trend", "Unknown")
             attrs["tariff_type"] = self.coordinator.data.get("tariff_type", "unknown")
 
+        # Schedule card hourly data (#63) — attached to surplus_total_w
+        if self.entity_description.key == "surplus_total_w":
+            attrs["schedule_surplus_hours"] = self.coordinator.data.get("schedule_surplus_hours", [])
+            attrs["schedule_ev_hours"] = self.coordinator.data.get("schedule_ev_hours", [])
+
         return attrs
 
     @property
