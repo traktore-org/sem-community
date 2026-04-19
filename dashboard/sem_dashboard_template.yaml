@@ -39,7 +39,10 @@ views:
   - title: Home
     path: home
     icon: mdi:home-lightning-bolt
+    type: panel
     cards:
+      - type: vertical-stack
+        cards:
           # ── Observer Mode Warning (only when active) ──
           - type: conditional
             conditions:
@@ -155,21 +158,25 @@ views:
                   box-shadow: 0 6px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.08) !important;
                 }
 
-          # ── Flow Card (animated power flow with daily energy + autarky) ──
+          # ── Flow Card (full width) ──
           - type: custom:sem-flow-card
             entity_prefix: sensor.sem_
-            view_layout:
-              position: main
             card_mod:
               style: *glass_card
 
-          # ── Solar Summary (Lumina-styled, replaces solar-card) ──
-          - type: custom:sem-solar-summary-card
-            entity_prefix: sensor.sem_
-            card_mod:
-              style: *glass_card
+          # ── Solar Summary + Weather (side by side) ──
+          - type: horizontal-stack
+            cards:
+              - type: custom:sem-solar-summary-card
+                entity_prefix: sensor.sem_
+                card_mod:
+                  style: *glass_card
+              - type: custom:sem-weather-card
+                entity: weather.home
+                card_mod:
+                  style: *glass_card
 
-          # ── 7-Day Summary (moved from Overview) ──
+          # ── 7-Day Summary ──
           - type: custom:apexcharts-card
             header:
               title: Last 7 Days
@@ -369,13 +376,6 @@ views:
                     0%, 100% { box-shadow: 0 0 8px rgba(141,200,146,0.2), 0 4px 24px rgba(0,0,0,0.35); }
                     50% { box-shadow: 0 0 20px rgba(141,200,146,0.4), 0 4px 24px rgba(0,0,0,0.35); }
                   }
-
-          # ── Weather & Clock (moved from Overview) ──
-          - type: custom:sem-weather-card
-            entity: weather.home
-            forecast_rows: 5
-            card_mod:
-              style: *glass_card
 
   # ============================================================
   # VIEW 1: ENERGY — Sankey, charts, daily breakdown
