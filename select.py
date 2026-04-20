@@ -51,6 +51,8 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
     select.sem_ev_charging_mode regardless of HA language setting.
     """
 
+    _attr_has_entity_name = True
+
     def __init__(
         self,
         coordinator: SEMCoordinator,
@@ -63,10 +65,9 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = coordinator.device_info
-        # Fixed English name for stable entity ID
-        self._attr_name = "SEM EV Charging Mode"
-        # Translation key for display name in UI
         self._attr_translation_key = description.key
+        # Force stable entity ID regardless of HA language
+        self.entity_id = f"select.sem_{description.key}"
 
     @property
     def current_option(self) -> str | None:
