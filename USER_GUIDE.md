@@ -103,24 +103,47 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 
 ## Charging Modes
 
-SEM supports three EV charging modes, configured via `ev_charging_mode`:
+SEM supports six EV charging modes, selectable via the `select.sem_ev_charging_mode` entity on the dashboard:
 
-### Solar Only (`pv`) — Default
+### Auto (`auto`) — Default
 
-The EV charges only from solar surplus. SEM calculates available power every 10 seconds and adjusts the charging current accordingly (6-32A range).
+Automatically switches between self-consumption and solar+battery mode based on solar forecast and EV charging need:
 
-- If surplus is below the minimum threshold (~4140W for 3-phase at 6A), charging pauses
-- Current changes are ramp-limited (default +-2A per cycle) to avoid oscillation
-- evcc-style enable/disable delays prevent rapid on/off cycling
+| Ratio (forecast ÷ EV need) | Strategy | When |
+|---|---|---|
+| > 2.0 | Self-consumption | Summer — plenty of sun, charge slowly, zero import |
+| 1.0 – 2.0 | Solar+Battery (capped) | Enough sun but tight — charge fast when available |
+| < 1.0 | Solar+Battery (aggressive) | Not enough sun — battery assist, fast charge |
+
+The ratio is recalculated every 10 seconds using `forecast_remaining_today_kwh` and the EV's remaining need.
+
+### Solar + Battery (`pv`)
+
+The EV charges from solar surplus plus battery redirect/discharge (SOC zone dependent). Some grid import possible when battery assists aggressively.
+
+- Full SOC zone strategy active (Zone 3/4 battery assist)
+- Fastest charging in afternoon with full battery
+- Best for: short charging windows, spring/autumn
+
+### Self-Consumption (`self_consumption`)
+
+The EV charges only from true solar surplus: `solar - home_consumption - battery_charge`. Zero grid import.
+
+- Zone 4 (SOC ≥ 90%): battery charge is redirected to EV (battery is full enough)
+- Zone 1-3: battery charges first, EV gets leftover surplus
+- Best for: summer, long sunny days, maximum self-consumption
 
 ### Min+PV (`minpv`)
 
-Guarantees a minimum charging current (6A) from the grid and adds any solar surplus on top.
+Guarantees a minimum charging current (6A) from the grid and adds solar surplus on top.
 
 - The EV always charges at least at 6A, even without sun
 - Solar surplus increases the current above 6A
-- No enable delay — charging starts immediately when the EV connects
-- Use this when you need the car charged by a specific time
+- Best for: need the car charged by a specific time
+
+### Maximum (`now`)
+
+Charges at maximum current immediately, regardless of solar.
 
 ### Off (`off`)
 

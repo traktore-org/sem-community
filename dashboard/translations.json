@@ -151,7 +151,8 @@
         "ev_today": "EV Today",
         "self_consumption_mode": "Self-Consumption",
         "solar_battery_mode": "Solar + Battery",
-        "maximum_mode": "Maximum"
+        "maximum_mode": "Maximum",
+        "auto_mode": "Auto (Forecast)"
     },
     "de": {
         "charging": "Laden",
@@ -305,7 +306,8 @@
         "ev_today": "EV heute",
         "self_consumption_mode": "Eigenverbrauch",
         "solar_battery_mode": "Solar + Batterie",
-        "maximum_mode": "Maximum"
+        "maximum_mode": "Maximum",
+        "auto_mode": "Automatisch (Prognose)"
     },
     "fr": {
         "charging": "En charge",
@@ -459,7 +461,8 @@
         "ev_today": "VE aujourd'hui",
         "self_consumption_mode": "Autoconsommation",
         "solar_battery_mode": "Solaire + Batterie",
-        "maximum_mode": "Maximum"
+        "maximum_mode": "Maximum",
+        "auto_mode": "Auto (Prévision)"
     },
     "es": {
         "charging": "Cargando",
@@ -613,7 +616,8 @@
         "ev_today": "VE hoy",
         "self_consumption_mode": "Autoconsumo",
         "solar_battery_mode": "Solar + Batería",
-        "maximum_mode": "Máximo"
+        "maximum_mode": "Máximo",
+        "auto_mode": "Auto (Previsión)"
     },
     "it": {
         "charging": "In carica",
@@ -767,7 +771,8 @@
         "ev_today": "VE oggi",
         "self_consumption_mode": "Autoconsumo",
         "solar_battery_mode": "Solare + Batteria",
-        "maximum_mode": "Massimo"
+        "maximum_mode": "Massimo",
+        "auto_mode": "Auto (Previsione)"
     },
     "nl": {
         "charging": "Laden",
@@ -921,6 +926,7 @@
         "ev_today": "EV vandaag",
         "self_consumption_mode": "Eigenverbruik",
         "solar_battery_mode": "Zon + Batterij",
-        "maximum_mode": "Maximum"
+        "maximum_mode": "Maximum",
+        "auto_mode": "Auto (Voorspelling)"
     }
 }

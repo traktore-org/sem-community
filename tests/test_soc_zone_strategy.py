@@ -404,3 +404,85 @@ class TestCalculateSolarEvBudget:
         # Verify forecast_remaining was passed through
         call_args = coord._flow_calculator.calculate_ev_budget.call_args
         assert call_args[0][1] == 12.5  # forecast_remaining positional arg
+
+
+class TestAutoMode:
+    """Tests for auto mode — forecast-aware self_consumption vs pv switching."""
+
+    def test_auto_high_ratio_uses_self_consumption(self):
+        """Plenty of solar → self_consumption strategy."""
+        from custom_components.solar_energy_management.coordinator.forecast_reader import ForecastData
+        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
+        forecast = _MockForecast(available=True, remaining=25.0)
+        coord._cycle_forecast = forecast
+        coord._forecast_tracker = MagicMock()
+        coord._forecast_tracker.apply_correction = MagicMock(return_value=25.0)
+
+        strategy, reason = coord._determine_charging_strategy(
+            _make_power(solar=8000, home=500, battery_soc=50), _MockEnergy(daily_ev=2)
+        )
+        assert "self_consumption" in reason
+        assert strategy == "solar_only"
+
+    def test_auto_low_ratio_uses_pv(self):
+        """Not enough solar → fall through to pv/zone logic."""
+        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
+        forecast = _MockForecast(available=True, remaining=5.0)
+        coord._cycle_forecast = forecast
+        coord._forecast_tracker = MagicMock()
+        coord._forecast_tracker.apply_correction = MagicMock(return_value=5.0)
+
+        result = coord._auto_mode_strategy(
+            _make_power(solar=5000, battery_soc=50), _MockEnergy(daily_ev=0), 10
+        )
+        # ratio = 5/10 = 0.5 → None (fall through to zones)
+        assert result is None
+
+    def test_auto_no_forecast_uses_pv(self):
+        """No forecast → fall through to pv."""
+        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
+        coord._cycle_forecast = _MockForecast(available=False)
+
+        result = coord._auto_mode_strategy(
+            _make_power(solar=5000, battery_soc=80), _MockEnergy(daily_ev=0), 10
+        )
+        assert result is None
+
+    def test_auto_target_reached_idle(self):
+        """EV target reached → idle."""
+        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
+        coord._cycle_forecast = _MockForecast(available=True, remaining=20.0)
+        coord._forecast_tracker = MagicMock()
+        coord._forecast_tracker.apply_correction = MagicMock(return_value=20.0)
+
+        result = coord._auto_mode_strategy(
+            _make_power(solar=5000, battery_soc=80), _MockEnergy(daily_ev=10), 0.1
+        )
+        assert result[0] == "idle"
+        assert "target reached" in result[1]
+
+
+class TestSelfConsumptionStrategy:
+    """Tests for self_consumption mode Zone 4 redirect."""
+
+    def test_zone4_redirects_battery_charge(self):
+        """Zone 4 (SOC≥90%): don't subtract battery charge — redirect to EV."""
+        coord = _build_coordinator(config_overrides={"ev_charging_mode": "self_consumption"})
+        strategy, reason = coord._self_consumption_strategy(
+            _make_power(solar=10000, home=500, battery_charge=2000, battery_soc=95),
+            _MockEnergy()
+        )
+        assert strategy == "solar_only"
+        # surplus = solar(10000) - home(500) = 9500 (battery charge NOT subtracted)
+        assert "9500" in reason
+
+    def test_zone3_battery_charges_first(self):
+        """Zone 3 (SOC<90%): battery charges first, EV gets leftover."""
+        coord = _build_coordinator(config_overrides={"ev_charging_mode": "self_consumption"})
+        strategy, reason = coord._self_consumption_strategy(
+            _make_power(solar=5000, home=500, battery_charge=3000, battery_soc=75),
+            _MockEnergy()
+        )
+        assert strategy == "solar_only"
+        # surplus = solar(5000) - home(500) - battery(3000) = 1500
+        assert "1500" in reason

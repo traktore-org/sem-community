@@ -26,7 +26,8 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 ## Features
 
 - **Smart EV charging** — dynamic 6-32A current control based on real-time solar surplus
-- **Three charging modes** — pure solar, Min+PV (guaranteed minimum + solar top-up), overnight grid charging
+- **Six charging modes** — Auto (forecast-aware), Solar+Battery, Self-Consumption, Min+PV, Maximum, Off
+- **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
 - **Night charging with battery protection** — charges EV from grid overnight without draining home battery
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority

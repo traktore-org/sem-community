@@ -16,6 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 0
 
 EV_CHARGING_MODES = {
+    "auto": "Auto (Forecast)",
     "pv": "Solar + Battery",
     "self_consumption": "Self-Consumption",
     "minpv": "Min + PV",
