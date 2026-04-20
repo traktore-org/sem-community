@@ -137,6 +137,12 @@ class SEMEVStatusCard extends HTMLElement {
             strategyEl.textContent = text.length > 30 ? text.substring(0, 28) + '\u2026' : text;
         }
 
+        // Charging mode (from select entity)
+        const modeEntity = this._hass?.states['select.sem_ev_charging_mode'];
+        const mode = modeEntity?.state || 'auto';
+        const modeLabels = { auto: 'Auto', minpv: 'Min+PV', now: 'Maximum', off: 'Off' };
+        setVal('.mode-value', modeLabels[mode] || mode);
+
         // Bottom chips
         setVal('.cost-chip-value', this._fmt(sessionCost, 2) + ' CHF');
 
@@ -149,6 +155,7 @@ class SEMEVStatusCard extends HTMLElement {
         setLabel('.lbl-today', this._t('today'));
         setLabel('.lbl-solar-share', this._t('solar_share'));
         setLabel('.lbl-strategy', this._t('strategy'));
+        setLabel('.lbl-mode', this._t('mode'));
         setLabel('.lbl-session-cost', this._t('session_cost'));
 
         // Glow ring animation state
@@ -455,6 +462,10 @@ class SEMEVStatusCard extends HTMLElement {
                             <div class="metric-row">
                                 <span class="metric-label lbl-strategy">Strategy</span>
                                 <span class="strategy-value">\u2014</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-mode">Mode</span>
+                                <span class="mode-value">\u2014</span>
                             </div>
                         </div>
                     </div>

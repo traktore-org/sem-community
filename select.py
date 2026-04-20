@@ -62,13 +62,19 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = coordinator.device_info
         self._attr_translation_key = description.key
+        # Force stable entity ID regardless of language
+        self.entity_id = f"select.sem_{description.key}"
 
     @property
     def current_option(self) -> str | None:
         """Return the currently selected option."""
-        return self.coordinator.config.get(
-            self.entity_description.key, "pv"
+        value = self.coordinator.config.get(
+            self.entity_description.key, "auto"
         )
+        # Map legacy modes to auto (pv and self_consumption are now internal)
+        if value in ("pv", "self_consumption"):
+            return "auto"
+        return value if value in EV_CHARGING_MODES else "auto"
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
