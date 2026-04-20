@@ -365,6 +365,8 @@ class EMSSolarNumber(CoordinatorEntity, NumberEntity):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_translation_key = description.key
         self._attr_suggested_object_id = f"sem_{description.key}"
+        # Force stable entity ID regardless of HA language
+        self.entity_id = f"number.sem_{description.key}"
         self._entry = entry
 
         if description.key in self.DISABLED_BY_DEFAULT:

@@ -107,6 +107,8 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self.entity_description = description
         self._attr_unique_id = f"sem_{description.key}"
         self._attr_translation_key = description.key
+        # Force stable entity ID regardless of HA language
+        self.entity_id = f"binary_sensor.sem_{description.key}"
         self._entry = entry
 
         if description.key in self.DIAGNOSTIC_SENSORS:

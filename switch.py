@@ -74,6 +74,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self._attr_translation_key = description.key
         self._attr_suggested_object_id = f"sem_{description.key}"
         self._attr_device_info = coordinator.device_info
+        # Force stable entity ID regardless of HA language
+        self.entity_id = f"switch.sem_{description.key}"
 
         if description.key == "night_charging":
             self._is_on = True  # Default to ON (will be restored from last state if available)

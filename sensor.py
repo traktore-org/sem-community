@@ -1258,6 +1258,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         self._attr_translation_key = description.key
         self._attr_device_info = coordinator.device_info
         self._attr_suggested_object_id = f"sem_{description.key}"
+        # Force stable entity ID regardless of HA language
+        self.entity_id = f"sensor.sem_{description.key}"
 
         # Initialize availability and value
         self._attr_available = True
