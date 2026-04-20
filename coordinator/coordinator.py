@@ -999,6 +999,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return ("idle", "Solar charging disabled by user")
         if charging_mode == "minpv":
             return ("min_pv", f"Min+PV mode, remaining={remaining_need:.1f}kWh, solar={power.solar_power:.0f}W")
+        if charging_mode == "self_consumption":
+            # Self-consumption mode (#67): always solar_only strategy
+            # Zones still apply (Zone 1 blocks EV), but no battery_assist inflation
+            if power.solar_power < 200:
+                return ("idle", f"self_consumption: solar={power.solar_power:.0f}W < 200W")
+            available = power.solar_power - power.home_consumption_power - power.battery_charge_power
+            if power.ev_power > 0:
+                available += power.ev_power  # EV's own draw is redirectable
+            return ("solar_only", f"self_consumption: surplus={available:.0f}W, solar={power.solar_power:.0f}W")
 
         # No meaningful solar → wait
         if power.solar_power < 200:

@@ -155,7 +155,16 @@ class EVControlMixin:
 
         # === SOLAR CHARGING (unified, with evcc-style enable/disable delays) ===
         if state in self.SOLAR_CHARGING_STATES:
-            budget_w = self._calculate_solar_ev_budget(state, power, context)
+            charging_mode = self.config.get("ev_charging_mode", "pv")
+            if charging_mode == "self_consumption":
+                # Self-consumption mode (#67): use true surplus only
+                # No battery redirect, no battery discharge inflation
+                budget_w = max(0, self._flow_calculator.calculate_available_power(power))
+                # If EV is already drawing, add its own power back (it's part of "consumption")
+                if power.ev_power > 0:
+                    budget_w += power.ev_power
+            else:
+                budget_w = self._calculate_solar_ev_budget(state, power, context)
 
             # Phase switching: auto-switch 1p/3p based on available surplus
             await ev.check_phase_switch(budget_w)
