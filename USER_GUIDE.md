@@ -103,43 +103,27 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 
 ## Charging Modes
 
-SEM supports six EV charging modes, selectable via the `select.sem_ev_charging_mode` entity on the dashboard:
+SEM supports four EV charging modes, selectable from the **Control tab** on the dashboard:
 
 ### Auto (`auto`) — Default
 
-Automatically switches between self-consumption and solar+battery mode based on solar forecast and EV charging need:
+The smart mode. SEM automatically decides the best strategy based on solar forecast and how much charging the EV still needs:
 
-| Ratio (forecast ÷ EV need) | Strategy | When |
-|---|---|---|
-| > 2.0 | Self-consumption | Summer — plenty of sun, charge slowly, zero import |
-| 1.0 – 2.0 | Solar+Battery (capped) | Enough sun but tight — charge fast when available |
-| < 1.0 | Solar+Battery (aggressive) | Not enough sun — battery assist, fast charge |
+| Situation | What SEM does | Grid import? |
+|---|---|:---:|
+| **Plenty of sun** (forecast >> EV need) | Charge slowly from pure surplus | No |
+| **Enough sun** (forecast ≈ EV need) | Charge with SOC zone strategy + battery assist | Small amount |
+| **Not enough sun** (forecast < EV need) | Charge aggressively with full battery assist | Yes |
 
-The ratio is recalculated every 10 seconds using `forecast_remaining_today_kwh` and the EV's remaining need.
+The decision recalculates every 10 seconds. On a long summer day, the EV charges slowly from pure surplus (zero import). On a short autumn day, it charges fast to capture all available solar before sunset.
 
-### Solar + Battery (`pv`)
-
-The EV charges from solar surplus plus battery redirect/discharge (SOC zone dependent). Some grid import possible when battery assists aggressively.
-
-- Full SOC zone strategy active (Zone 3/4 battery assist)
-- Fastest charging in afternoon with full battery
-- Best for: short charging windows, spring/autumn
-
-### Self-Consumption (`self_consumption`)
-
-The EV charges only from true solar surplus: `solar - home_consumption - battery_charge`. Zero grid import.
-
-- Zone 4 (SOC ≥ 90%): battery charge is redirected to EV (battery is full enough)
-- Zone 1-3: battery charges first, EV gets leftover surplus
-- Best for: summer, long sunny days, maximum self-consumption
+When battery SOC ≥ 90%: battery charge power is redirected to EV (the battery is full enough).
 
 ### Min+PV (`minpv`)
 
-Guarantees a minimum charging current (6A) from the grid and adds solar surplus on top.
+Guarantees a minimum charging current (6A ≈ 4.1kW) from the grid and adds any solar surplus on top. The EV always charges, even without sun.
 
-- The EV always charges at least at 6A, even without sun
-- Solar surplus increases the current above 6A
-- Best for: need the car charged by a specific time
+Best for: you need the car ready by a specific time.
 
 ### Maximum (`now`)
 

@@ -1319,6 +1319,10 @@ views:
               {{ states('sensor.sem_charging_state') }} · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }} kWh
           - type: horizontal-stack
             cards:
+              - type: custom:mushroom-select-card
+                entity: select.sem_ev_charging_mode
+                card_mod:
+                  style: *glass_card
               - type: custom:mushroom-entity-card
                 entity: switch.sem_night_charging
                 name: Night Charging
