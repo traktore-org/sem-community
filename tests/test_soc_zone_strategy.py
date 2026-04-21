@@ -31,14 +31,12 @@ def _make_power(
 ) -> PowerReadings:
     """Create PowerReadings with sensible defaults for zone strategy tests."""
     # Accept shorthand aliases used in test scenarios
-    aliases = {
-        "solar": "solar_power",
-        "home": "home_consumption_power",
-        "battery_charge": "battery_charge_power",
-    }
-    for short, full in aliases.items():
-        if short in kwargs:
-            kwargs[full] = kwargs.pop(short)
+    if "solar" in kwargs:
+        solar_power = kwargs.pop("solar")
+    if "home" in kwargs:
+        kwargs["home_consumption_power"] = kwargs.pop("home")
+    if "battery_charge" in kwargs:
+        kwargs["battery_charge_power"] = kwargs.pop("battery_charge")
 
     p = PowerReadings(
         solar_power=solar_power,
