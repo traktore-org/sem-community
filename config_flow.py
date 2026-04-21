@@ -593,6 +593,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         """Manage the options."""
         return await self.async_step_ev_charger()
 
+    @staticmethod
+    def _cfg(config: dict, key: str, fallback: Any) -> Any:
+        """Null-safe config lookup.
+
+        ``dict.get(key, fallback)`` returns ``None`` when the key exists
+        with value ``None``.  Voluptuous rejects ``None`` as a default
+        for NumberSelector / BooleanSelector, causing the form to crash
+        with HTTP 400 (#73).  This helper treats ``None`` the same as
+        missing.
+        """
+        v = config.get(key)
+        return fallback if v is None else v
+
     async def async_step_ev_charger(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -604,6 +617,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_settings()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
 
         # Same suggested_value pattern as the install ev_charger step:
         # optional EntitySelector fields cannot use default="" — HA rejects
@@ -662,7 +676,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     "ev_battery_capacity_kwh",
-                    default=current_config.get("ev_battery_capacity_kwh", 40),
+                    default=_c("ev_battery_capacity_kwh", 40),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=10, max=120, step=5, unit_of_measurement="kWh", mode="box"
@@ -670,7 +684,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     "ev_target_soc",
-                    default=current_config.get("ev_target_soc", 80),
+                    default=_c("ev_target_soc", 80),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
@@ -692,53 +706,53 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
 
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
         return self.async_show_form(
             step_id="settings",
             data_schema=vol.Schema({
                 vol.Optional(
                     "battery_priority_soc",
-                    default=current_config.get("battery_priority_soc", DEFAULT_BATTERY_PRIORITY_SOC),
+                    default=_c("battery_priority_soc", DEFAULT_BATTERY_PRIORITY_SOC),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=5, max=60, step=5, unit_of_measurement="%", mode="slider")
                 ),
                 vol.Optional(
                     "battery_buffer_soc",
-                    default=current_config.get("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
+                    default=_c("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=50, max=95, step=5, unit_of_measurement="%", mode="slider")
                 ),
                 vol.Optional(
                     "battery_auto_start_soc",
-                    default=current_config.get("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
+                    default=_c("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=70, max=100, step=5, unit_of_measurement="%", mode="slider")
                 ),
                 vol.Optional(
                     "battery_assist_floor_soc",
-                    default=current_config.get("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
+                    default=_c("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=30, max=80, step=5, unit_of_measurement="%", mode="slider")
                 ),
                 vol.Optional(
                     "battery_capacity_kwh",
-                    default=current_config.get("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH),
+                    default=_c("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=5, max=100, step=1, unit_of_measurement="kWh", mode="slider")
                 ),
                 vol.Optional(
                     "battery_assist_max_power",
-                    default=current_config.get("battery_assist_max_power",
-                        current_config.get("super_charger_power", DEFAULT_BATTERY_ASSIST_MAX_POWER)),
+                    default=_c("battery_assist_max_power", _c("super_charger_power", DEFAULT_BATTERY_ASSIST_MAX_POWER)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1000, max=10000, step=500, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "battery_discharge_protection_enabled",
-                    default=current_config.get("battery_discharge_protection_enabled", DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED),
+                    default=_c("battery_discharge_protection_enabled", DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED),
                 ): selector.BooleanSelector(),
                 vol.Optional(
                     "battery_max_discharge_power",
-                    default=current_config.get("battery_max_discharge_power", DEFAULT_BATTERY_MAX_DISCHARGE_POWER),
+                    default=_c("battery_max_discharge_power", DEFAULT_BATTERY_MAX_DISCHARGE_POWER),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=500, max=10000, step=250, unit_of_measurement="W", mode="slider")
                 ),
@@ -759,35 +773,36 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_settings_tariff()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
 
         return self.async_show_form(
             step_id="settings_ev",
             data_schema=vol.Schema({
                 vol.Optional(
                     "daily_ev_target",
-                    default=current_config.get("daily_ev_target", DEFAULT_DAILY_EV_TARGET),
+                    default=_c("daily_ev_target", DEFAULT_DAILY_EV_TARGET),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0, max=100, step=0.5, unit_of_measurement="kWh", mode="slider")
                 ),
                 vol.Optional(
                     "min_solar_power",
-                    default=current_config.get("min_solar_power", DEFAULT_MIN_SOLAR_POWER),
+                    default=_c("min_solar_power", DEFAULT_MIN_SOLAR_POWER),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0, max=5000, step=100, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "max_grid_import",
-                    default=current_config.get("max_grid_import", DEFAULT_MAX_GRID_IMPORT),
+                    default=_c("max_grid_import", DEFAULT_MAX_GRID_IMPORT),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0, max=2000, step=100, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "observer_mode",
-                    default=current_config.get("observer_mode", DEFAULT_OBSERVER_MODE),
+                    default=_c("observer_mode", DEFAULT_OBSERVER_MODE),
                 ): selector.BooleanSelector(),
                 vol.Optional(
                     "forecast_night_reduction",
-                    default=current_config.get("forecast_night_reduction", False),
+                    default=_c("forecast_night_reduction", False),
                 ): selector.BooleanSelector(),
             }),
         )
@@ -801,56 +816,57 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_load_management()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
-        currency = self.hass.config.currency
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
+        currency = self.hass.config.currency or "EUR"
 
         return self.async_show_form(
             step_id="settings_tariff",
             data_schema=vol.Schema({
                 vol.Optional(
                     "electricity_import_rate",
-                    default=current_config.get("electricity_import_rate", 0.3387),
+                    default=_c("electricity_import_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.0001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_nt_rate",
-                    default=current_config.get("electricity_nt_rate", 0.3387),
+                    default=_c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.0001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_export_rate",
-                    default=current_config.get("electricity_export_rate", 0.075),
+                    default=_c("electricity_export_rate", 0.075),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.01, max=0.50, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "demand_charge_rate",
-                    default=current_config.get("demand_charge_rate", 4.32),
+                    default=_c("demand_charge_rate", 4.32),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=20.0, step=0.5, unit_of_measurement=f"{currency}/kW/Mt", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=20.0, step=0.01, unit_of_measurement=f"{currency}/kW/Mt", mode="box")
                 ),
                 vol.Optional(
                     "update_interval",
-                    default=current_config.get("update_interval", DEFAULT_UPDATE_INTERVAL),
+                    default=_c("update_interval", DEFAULT_UPDATE_INTERVAL),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="s", mode="slider")
                 ),
                 vol.Optional(
                     "power_delta",
-                    default=current_config.get("power_delta", DEFAULT_POWER_DELTA),
+                    default=_c("power_delta", DEFAULT_POWER_DELTA),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=50, max=3000, step=50, unit_of_measurement="W", mode="slider")
+                    selector.NumberSelectorConfig(min=10, max=3000, step=10, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "current_delta",
-                    default=current_config.get("current_delta", DEFAULT_CURRENT_DELTA),
+                    default=_c("current_delta", DEFAULT_CURRENT_DELTA),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, unit_of_measurement="A", mode="slider")
                 ),
                 vol.Optional(
                     "soc_delta",
-                    default=current_config.get("soc_delta", DEFAULT_SOC_DELTA),
+                    default=_c("soc_delta", DEFAULT_SOC_DELTA),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=20, step=1, unit_of_measurement="%", mode="slider")
                 ),
@@ -868,13 +884,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             return await self.async_step_notifications()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
 
         data_defaults = {
-            "load_management_enabled": current_config.get("load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED),
-            "target_peak_limit": current_config.get("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT),
-            "warning_peak_level": current_config.get("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
-            "emergency_peak_level": current_config.get("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
-            "critical_device_protection": current_config.get("critical_device_protection", DEFAULT_CRITICAL_DEVICE_PROTECTION),
+            "load_management_enabled": _c("load_management_enabled", DEFAULT_LOAD_MANAGEMENT_ENABLED),
+            "target_peak_limit": _c("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT),
+            "warning_peak_level": _c("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
+            "emergency_peak_level": _c("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
+            "critical_device_protection": _c("critical_device_protection", DEFAULT_CRITICAL_DEVICE_PROTECTION),
         }
 
         return self.async_show_form(
@@ -933,11 +950,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 return self.async_create_entry(data=self._data)
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
 
         suggestions = {
-            "enable_keba_notifications": current_config.get("enable_keba_notifications", True),
-            "enable_mobile_notifications": current_config.get("enable_mobile_notifications", False),
-            "mobile_notification_service": current_config.get("mobile_notification_service", ""),
+            "enable_keba_notifications": _c("enable_keba_notifications", True),
+            "enable_mobile_notifications": _c("enable_mobile_notifications", False),
+            "mobile_notification_service": _c("mobile_notification_service", ""),
         }
 
         notify_services = [{"value": "", "label": "None"}]
