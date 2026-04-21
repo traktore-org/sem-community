@@ -317,16 +317,38 @@ class SensorReader:
             return 0.0
 
     def _read_binary_sensor(self, entity_id: Optional[str], name: str) -> bool:
-        """Read a binary sensor value."""
+        """Read a binary sensor or status sensor value.
+
+        Supports both binary_sensor (on/off) and regular sensor entities
+        used by chargers like Easee that expose status as a sensor (#68).
+        """
         if not entity_id:
             return False
 
         state = self.hass.states.get(entity_id)
         if not state:
-            _LOGGER.debug(f"Binary sensor {entity_id} ({name}) not found")
+            _LOGGER.debug("Sensor %s (%s) not found", entity_id, name)
             return False
 
-        return state.state == "on"
+        s = state.state.lower()
+        if s == "on":
+            return True
+        if s in ("off", "unknown", "unavailable"):
+            return False
+        # Regular sensor status values (Easee, Wallbox, etc.)
+        if name == "ev_plug" and s in (
+            "connected", "ready_to_charge", "awaiting_start",
+            "awaiting_authorization", "charging", "completed", "ready",
+        ):
+            return True
+        if name == "ev_charging" and s in ("charging",):
+            return True
+        # Numeric: treat > 0 as True (e.g. power sensor as charging indicator)
+        try:
+            return float(s) > 0
+        except (ValueError, TypeError):
+            pass
+        return False
 
     def _auto_detect_battery_soc(self, battery_power_entity: str) -> Optional[str]:
         """Auto-detect battery SOC sensor from the same device as the power sensor.

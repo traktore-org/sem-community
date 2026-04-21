@@ -253,17 +253,18 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="ev_charger",
             data_schema=vol.Schema({
                 # EV Charger Control Entities (Required for solar optimization)
+                # Accept both binary_sensor and sensor for Easee/GoodWe (#68)
                 vol.Required(
                     "ev_connected_sensor",
                     default=suggestions.get("ev_connected_sensor", ""),
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="binary_sensor")
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
                 vol.Required(
                     "ev_charging_sensor",
                     default=suggestions.get("ev_charging_sensor", ""),
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="binary_sensor")
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
                 vol.Required(
                     "ev_charging_power_sensor",
@@ -520,13 +521,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "ev_connected_sensor",
                     default=current_config.get("ev_connected_sensor", ""),
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="binary_sensor")
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
                 vol.Required(
                     "ev_charging_sensor",
                     default=current_config.get("ev_charging_sensor", ""),
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="binary_sensor")
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
                 vol.Required(
                     "ev_charging_power_sensor",
@@ -618,13 +619,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "ev_connected_sensor",
                     default=current_config.get("ev_connected_sensor", "")
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="binary_sensor")
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
                 vol.Required(
                     "ev_charging_sensor",
                     default=current_config.get("ev_charging_sensor", "")
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="binary_sensor")
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
                 ),
                 vol.Required(
                     "ev_charging_power_sensor",
@@ -766,7 +767,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "daily_ev_target",
                     default=current_config.get("daily_ev_target", DEFAULT_DAILY_EV_TARGET),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0, max=100, step=1, unit_of_measurement="kWh", mode="slider")
+                    selector.NumberSelectorConfig(min=0, max=100, step=0.5, unit_of_measurement="kWh", mode="slider")
                 ),
                 vol.Optional(
                     "min_solar_power",

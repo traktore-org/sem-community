@@ -575,6 +575,9 @@ _DISCHARGE_CONTROL_PATTERNS = [
     re.compile(r"sofar.*discharg.*power", re.IGNORECASE),
     # Solis
     re.compile(r"solis.*discharg.*power", re.IGNORECASE),
+    # GoodWe
+    re.compile(r"goodwe.*discharg.*power", re.IGNORECASE),
+    re.compile(r"goodwe.*battery.*discharg", re.IGNORECASE),
     # Generic fallback (any integration with standard naming)
     re.compile(r"discharg.*power.*limit", re.IGNORECASE),
 ]
