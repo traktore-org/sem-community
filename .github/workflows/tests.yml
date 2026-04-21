@@ -36,7 +36,7 @@ jobs:
       - name: Run tests with coverage
         working-directory: /tmp/ha-config
         env:
-          PYTHONPATH: /tmp/ha-config
+          PYTHONPATH: /tmp/ha-config:/tmp/ha-config/custom_components/solar_energy_management
         run: |
           python -m pytest custom_components/solar_energy_management/tests/ \
             --cov=custom_components.solar_energy_management \
@@ -55,7 +55,7 @@ jobs:
         if: always()
         working-directory: /tmp/ha-config
         env:
-          PYTHONPATH: /tmp/ha-config
+          PYTHONPATH: /tmp/ha-config:/tmp/ha-config/custom_components/solar_energy_management
         run: |
           python -m pytest custom_components/solar_energy_management/tests/ \
             --cov=custom_components.solar_energy_management \
