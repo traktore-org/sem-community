@@ -1,872 +1,905 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "title": "Solar Energy Management Setup",
-                "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
-                "data": {
-                    "observer_mode": "Test mode (read-only — do not control hardware)"
-                },
-                "data_description": {
-                    "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
-                }
-            },
-            "ev_charger": {
-                "title": "EV Charger",
-                "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
-                "data": {
-                    "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
-                    "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
-                    "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
-                    "ev_charger_service": "EV Charger Set-Current Service (optional)",
-                    "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-                    "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-                    "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
-                },
-                "data_description": {
-                    "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger.",
-                    "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
-                    "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-                    "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
-                    "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
-                    "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-                    "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking."
-                }
-            },
-            "hardware": {
-                "title": "Hardware",
-                "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
-                "data": {
-                    "battery_capacity_kwh": "Home Battery Capacity (kWh)",
-                    "target_peak_limit": "Peak Power Limit (kW)",
-                    "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)"
-                },
-                "data_description": {
-                    "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-                    "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-                    "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service."
-                }
-            },
-            "reconfigure": {
-                "title": "Reconfigure Solar Energy Management",
-                "description": "Update your EV charger and notification settings",
-                "data": {
-                    "ev_connected_sensor": "EV Connected Status",
-                    "ev_charging_sensor": "EV Charging Status",
-                    "ev_charging_power_sensor": "EV Charging Power",
-                    "ev_charger_service": "EV Charger Service",
-                    "ev_charger_service_entity_id": "EV Charger Service Entity",
-                    "ev_total_energy_sensor": "EV Total Energy Counter",
-                    "enable_keba_notifications": "Enable KEBA Display Notifications",
-                    "enable_mobile_notifications": "Enable Mobile Notifications",
-                    "mobile_notification_service": "Mobile Notification Service",
-                    "vehicle_soc_entity": "Vehicle Battery SOC",
-                    "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-                    "ev_target_soc": "EV Target SOC (%)"
-                }
-            }
+  "config": {
+    "step": {
+      "user": {
+        "title": "Solar Energy Management Setup",
+        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "data": {
+          "observer_mode": "Test mode (read-only — do not control hardware)"
         },
-        "error": {
-            "unknown": "An unexpected error occurred. Please try again.",
-            "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
-            "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-            "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-            "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-            "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-            "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-            "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-            "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-            "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-            "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-            "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-            "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-            "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-            "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
-        },
-        "abort": {
-            "already_configured": "Solar Energy Management is already configured. Only one instance is allowed."
+        "data_description": {
+          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
         }
+      },
+      "ev_charger": {
+        "title": "EV Charger",
+        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
+        "data": {
+          "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
+          "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
+          "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
+          "ev_charger_service": "EV Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
+          "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
+          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
+        },
+        "data_description": {
+          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger.",
+          "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
+          "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
+          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
+          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
+          "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
+          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking."
+        }
+      },
+      "hardware": {
+        "title": "Hardware",
+        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "data": {
+          "battery_capacity_kwh": "Home Battery Capacity (kWh)",
+          "target_peak_limit": "Peak Power Limit (kW)",
+          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)"
+        },
+        "data_description": {
+          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
+          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
+          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Solar Energy Management",
+        "description": "Update your EV charger and notification settings",
+        "data": {
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "EV Charger Service",
+          "ev_charger_service_entity_id": "EV Charger Service Entity",
+          "ev_total_energy_sensor": "EV Total Energy Counter",
+          "enable_keba_notifications": "Enable KEBA Display Notifications",
+          "enable_mobile_notifications": "Enable Mobile Notifications",
+          "mobile_notification_service": "Mobile Notification Service",
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)"
+        }
+      }
     },
-    "options": {
-        "step": {
-            "ev_charger": {
-                "title": "Caricatore VE",
-                "description": "Verifica e aggiorna le mappature delle entità del caricatore VE. I campi SOC del veicolo vengono utilizzati solo se fornisci un sensore SOC batteria del veicolo.",
-                "data": {
-                    "ev_connected_sensor": "Stato connessione VE",
-                    "ev_charging_sensor": "Stato di carica VE",
-                    "ev_charging_power_sensor": "Potenza di carica VE",
-                    "ev_charger_service": "Servizio impostazione corrente caricatore VE (opzionale)",
-                    "ev_charger_service_entity_id": "Entità destinazione servizio caricatore VE (opzionale)",
-                    "ev_total_energy_sensor": "Contatore energia totale VE (opzionale)",
-                    "vehicle_soc_entity": "Sensore SOC batteria veicolo (opzionale)",
-                    "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
-                    "ev_target_soc": "SOC obiettivo VE (%)"
-                }
-            },
-            "hardware": {
-                "title": "Hardware Entity Configuration",
-                "description": "Update your hardware entity mappings",
-                "data": {
-                    "solar_production_sensor": "Solar Production Power",
-                    "grid_power_sensor": "Grid Power Exchange",
-                    "battery_soc_sensor": "Battery State of Charge",
-                    "battery_power_sensor": "Battery Charge/Discharge Power",
-                    "battery_temperature_sensor": "Battery Temperature [Optional]",
-                    "ev_connected_sensor": "EV Connected Status",
-                    "ev_charging_sensor": "EV Charging Status",
-                    "ev_charging_power_sensor": "EV Charging Power",
-                    "ev_total_energy_sensor": "EV Total Energy Counter [Optional]",
-                    "solar_total_energy_sensor": "Solar Total Energy Counter [Optional]",
-                    "grid_import_total_energy_sensor": "Grid Import Total Energy [Optional]",
-                    "grid_export_total_energy_sensor": "Grid Export Total Energy [Optional]",
-                    "battery_charge_total_energy_sensor": "Battery Charge Total Energy [Optional]",
-                    "battery_discharge_total_energy_sensor": "Battery Discharge Total Energy [Optional]",
-                    "vehicle_soc_entity": "Vehicle Battery SOC",
-                    "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-                    "ev_target_soc": "EV Target SOC (%)"
-                }
-            },
-            "settings": {
-                "title": "SEM Optimization Settings",
-                "description": "Update your SEM optimization parameters",
-                "data": {
-                    "update_interval": "Update Interval (seconds)",
-                    "power_delta": "Power Delta Threshold (W)",
-                    "current_delta": "Current Delta Threshold (A)",
-                    "soc_delta": "Battery SOC Delta Threshold (%)",
-                    "battery_priority_soc": "Battery Priority SOC (%)",
-                    "battery_minimum_soc": "Battery Minimum SOC (%)",
-                    "battery_resume_soc": "Battery Resume SOC (%)",
-                    "min_solar_power": "Minimum Solar Power (W)",
-                    "max_grid_import": "Maximum Grid Import (W)",
-                    "daily_ev_target": "Daily EV Target (kWh)",
-                    "battery_assist_max_power": "Battery Assist Max Power (W)",
-                    "battery_capacity_kwh": "Battery Capacity (kWh)",
-                    "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
-                    "battery_max_discharge_power": "Maximum Discharge Power (W)",
-                    "electricity_import_rate": "Electricity Import Rate (per kWh)",
-                    "electricity_nt_rate": "Electricity NT Rate (per kWh)",
-                    "electricity_export_rate": "Electricity Export Rate (per kWh)",
-                    "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
-                    "observer_mode": "Observer Mode (Read-Only)",
-                    "forecast_night_reduction": "Forecast Night Reduction",
-                    "vehicle_soc_entity": "Vehicle Battery SOC",
-                    "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-                    "ev_target_soc": "EV Target SOC (%)"
-                }
-            },
-            "settings_ev": {
-                "title": "Carica VE & Solare",
-                "description": "Configurare gli obiettivi di carica VE e le soglie solari.",
-                "data": {
-                    "daily_ev_target": "Obiettivo carica notturna (kWh)",
-                    "min_solar_power": "Potenza solare minima per avviare la carica VE (W)",
-                    "max_grid_import": "Import rete max. durante carica solare (W, 0 = solo solare)",
-                    "observer_mode": "Modalità osservatore (solo lettura, nessun controllo hardware)",
-                    "forecast_night_reduction": "Ridurre obiettivo notturno in base alla previsione di domani"
-                }
-            },
-            "settings_tariff": {
-                "title": "Tariffe & Avanzato",
-                "description": "Tariffe elettriche e parametri avanzati di regolazione.",
-                "data": {
-                    "electricity_import_rate": "Tariffa di importazione",
-                    "electricity_nt_rate": "Tariffa notturna (se diversa)",
-                    "electricity_export_rate": "Tariffa di esportazione",
-                    "demand_charge_rate": "Tariffa potenza impegnata",
-                    "update_interval": "Intervallo di aggiornamento (s)",
-                    "power_delta": "Soglia variazione potenza (W)",
-                    "current_delta": "Soglia variazione corrente (A)",
-                    "soc_delta": "Soglia variazione SOC (%)"
-                }
-            },
-            "load_management": {
-                "title": "Load Management Settings",
-                "description": "Update load management configuration",
-                "data": {
-                    "load_management_enabled": "Enable Load Management",
-                    "target_peak_limit": "Target Peak Limit (kW)",
-                    "warning_peak_level": "Warning Peak Level (kW)",
-                    "emergency_peak_level": "Emergency Peak Level (kW)",
-                    "critical_device_protection": "Protect Critical Devices",
-                    "vehicle_soc_entity": "Vehicle Battery SOC",
-                    "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-                    "ev_target_soc": "EV Target SOC (%)"
-                }
-            },
-            "notifications": {
-                "title": "Notification Settings",
-                "description": "Update notification configuration",
-                "data": {
-                    "enable_keba_notifications": "Enable KEBA Display Notifications",
-                    "enable_mobile_notifications": "Enable Mobile Notifications",
-                    "mobile_notification_service": "Mobile Notification Service",
-                    "vehicle_soc_entity": "Vehicle Battery SOC",
-                    "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-                    "ev_target_soc": "EV Target SOC (%)"
-                }
-            },
-            "dashboard_options": {
-                "title": "Dashboard Installation",
-                "description": "Install or reinstall the SEM dashboard",
-                "data": {
-                    "generate_dashboard": "Generate Dashboard",
-                    "dashboard_title": "Dashboard Title",
-                    "dashboard_path": "Dashboard Path (URL)",
-                    "include_financial": "Include Financial Tracking",
-                    "include_flows": "Include Power Flow Visualization",
-                    "vehicle_soc_entity": "Vehicle Battery SOC",
-                    "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-                    "ev_target_soc": "EV Target SOC (%)"
-                },
-                "data_description": {
-                    "generate_dashboard": "Create a new Lovelace dashboard for SEM. If a dashboard with the same path already exists, it will be replaced.",
-                    "dashboard_title": "Display name for the dashboard in the sidebar. Example: 'Solar Energy Management'",
-                    "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
-                    "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
-                    "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows."
-                }
-            }
-        }
+    "error": {
+      "unknown": "An unexpected error occurred. Please try again.",
+      "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
+      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
+      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
+      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
+      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
+      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
+      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
+      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
+      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
+      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
+      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
+      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
+      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
+      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
     },
-    "entity": {
-        "sensor": {
-            "solar_power": {
-                "name": "Potenza Solare"
-            },
-            "home_consumption_power": {
-                "name": "Consumo Casa"
-            },
-            "grid_power": {
-                "name": "Potenza Rete"
-            },
-            "grid_import_power": {
-                "name": "Importazione Rete"
-            },
-            "grid_export_power": {
-                "name": "Esportazione Rete"
-            },
-            "battery_power": {
-                "name": "Potenza Batteria"
-            },
-            "battery_charge_power": {
-                "name": "Potenza Carica Batteria"
-            },
-            "battery_discharge_power": {
-                "name": "Potenza Scarica Batteria"
-            },
-            "ev_power": {
-                "name": "Potenza VE"
-            },
-            "available_power": {
-                "name": "Potenza Disponibile"
-            },
-            "battery_soc": {
-                "name": "SOC Batteria"
-            },
-            "battery_status": {
-                "name": "Stato Batteria"
-            },
-            "battery_temperature": {
-                "name": "Temperatura Batteria"
-            },
-            "battery_cycles_estimated": {
-                "name": "Cicli Batteria (Stimati)"
-            },
-            "battery_health_score": {
-                "name": "Salute Batteria"
-            },
-            "calculated_current": {
-                "name": "Corrente Calcolata"
-            },
-            "charging_state": {
-                "name": "Stato di Carica"
-            },
-            "grid_status": {
-                "name": "Stato Rete"
-            },
-            "solar_charging_status": {
-                "name": "Carica Solare"
-            },
-            "night_charging_status": {
-                "name": "Carica Notturna"
-            },
-            "battery_priority_status": {
-                "name": "Priorità Batteria"
-            },
-            "charging_strategy": {
-                "name": "Strategia di Carica"
-            },
-            "daily_solar_energy": {
-                "name": "Oggi Solare"
-            },
-            "daily_home_energy": {
-                "name": "Oggi Casa"
-            },
-            "daily_grid_import_energy": {
-                "name": "Oggi Importazione"
-            },
-            "daily_grid_export_energy": {
-                "name": "Oggi Esportazione"
-            },
-            "daily_battery_charge_energy": {
-                "name": "Oggi Carica"
-            },
-            "daily_battery_discharge_energy": {
-                "name": "Oggi Scarica"
-            },
-            "daily_ev_energy": {
-                "name": "Oggi VE"
-            },
-            "monthly_solar_yield_energy": {
-                "name": "Mensile Solare"
-            },
-            "monthly_grid_import_energy": {
-                "name": "Mensile Importazione"
-            },
-            "monthly_grid_export_energy": {
-                "name": "Mensile Esportazione"
-            },
-            "monthly_battery_charge_energy": {
-                "name": "Mensile Carica"
-            },
-            "monthly_battery_discharge_energy": {
-                "name": "Mensile Scarica"
-            },
-            "monthly_home_consumption_energy": {
-                "name": "Mensile Casa"
-            },
-            "flow_solar_to_home_power": {
-                "name": "Solare a Casa"
-            },
-            "flow_solar_to_battery_power": {
-                "name": "Solare a Batteria"
-            },
-            "flow_solar_to_grid_power": {
-                "name": "Solare a Rete"
-            },
-            "flow_solar_to_ev_power": {
-                "name": "Solare a VE"
-            },
-            "flow_battery_to_home_power": {
-                "name": "Batteria a Casa"
-            },
-            "flow_battery_to_ev_power": {
-                "name": "Batteria a VE"
-            },
-            "flow_grid_to_home_power": {
-                "name": "Rete a Casa"
-            },
-            "flow_grid_to_ev_power": {
-                "name": "Rete a VE"
-            },
-            "flow_grid_to_battery_power": {
-                "name": "Rete a Batteria"
-            },
-            "flow_solar_to_home_energy": {
-                "name": "Solare a Casa Energia"
-            },
-            "flow_solar_to_ev_energy": {
-                "name": "Solare a VE Energia"
-            },
-            "flow_solar_to_battery_energy": {
-                "name": "Solare a Batteria Energia"
-            },
-            "flow_solar_to_grid_energy": {
-                "name": "Solare a Rete Energia"
-            },
-            "flow_grid_to_home_energy": {
-                "name": "Rete a Casa Energia"
-            },
-            "flow_grid_to_ev_energy": {
-                "name": "Rete a VE Energia"
-            },
-            "flow_grid_to_battery_energy": {
-                "name": "Rete a Batteria Energia"
-            },
-            "flow_battery_to_home_energy": {
-                "name": "Batteria a Casa Energia"
-            },
-            "flow_battery_to_ev_energy": {
-                "name": "Batteria a VE Energia"
-            },
-            "self_consumption_rate": {
-                "name": "Autoconsumo"
-            },
-            "autarky_rate": {
-                "name": "Tasso Autarchia"
-            },
-            "daily_savings": {
-                "name": "Risparmio Oggi"
-            },
-            "daily_battery_savings": {
-                "name": "Risparmio Batteria Giornaliero"
-            },
-            "daily_costs": {
-                "name": "Costi Giornalieri"
-            },
-            "daily_export_revenue": {
-                "name": "Ricavo Esportazione Giornaliero"
-            },
-            "daily_net_cost": {
-                "name": "Costo Netto Giornaliero"
-            },
-            "monthly_savings": {
-                "name": "Risparmio Mensile"
-            },
-            "monthly_battery_savings": {
-                "name": "Risparmio Batteria Mensile"
-            },
-            "monthly_costs": {
-                "name": "Costi Mensili"
-            },
-            "monthly_export_revenue": {
-                "name": "Ricavo Esportazione Mensile"
-            },
-            "monthly_net_cost": {
-                "name": "Costo Netto Mensile"
-            },
-            "yearly_solar_yield_energy": {
-                "name": "Annuale Solare"
-            },
-            "yearly_grid_import_energy": {
-                "name": "Annuale Importazione Rete"
-            },
-            "yearly_grid_export_energy": {
-                "name": "Annuale Esportazione Rete"
-            },
-            "yearly_battery_charge_energy": {
-                "name": "Annuale Carica Batteria"
-            },
-            "yearly_battery_discharge_energy": {
-                "name": "Annuale Scarica Batteria"
-            },
-            "yearly_home_consumption_energy": {
-                "name": "Annuale Consumo Casa"
-            },
-            "yearly_ev_energy": {
-                "name": "Annuale Energia VE"
-            },
-            "yearly_costs": {
-                "name": "Costi Annuali"
-            },
-            "yearly_savings": {
-                "name": "Risparmio Annuale"
-            },
-            "yearly_battery_savings": {
-                "name": "Risparmio Batteria Annuale"
-            },
-            "yearly_export_revenue": {
-                "name": "Ricavo Esportazione Annuale"
-            },
-            "yearly_net_cost": {
-                "name": "Costo Netto Annuale"
-            },
-            "lifetime_total_savings": {
-                "name": "Risparmio Totale"
-            },
-            "lifetime_grid_cost": {
-                "name": "Costo Rete Totale"
-            },
-            "roi_percentage": {
-                "name": "ROI Percentuale"
-            },
-            "roi_payback_years": {
-                "name": "ROI Anni Ammortamento"
-            },
-            "roi_annual_savings": {
-                "name": "ROI Risparmio Annuale"
-            },
-            "forecast_accuracy_today": {
-                "name": "Precisione Previsione Oggi"
-            },
-            "forecast_accuracy_7d": {
-                "name": "Precisione Previsione 7g"
-            },
-            "forecast_correction_factor": {
-                "name": "Fattore Correzione Previsione"
-            },
-            "forecast_deviation_kwh": {
-                "name": "Deviazione Previsione"
-            },
-            "forecast_corrected_today": {
-                "name": "Previsione Corretta Oggi"
-            },
-            "forecast_corrected_tomorrow": {
-                "name": "Previsione Corretta Domani"
-            },
-            "forecast_history_days": {
-                "name": "Storico Previsione Giorni"
-            },
-            "daily_co2_avoided": {
-                "name": "CO2 Evitato Oggi"
-            },
-            "yearly_co2_avoided": {
-                "name": "CO2 Evitato Quest'Anno"
-            },
-            "yearly_trees_equivalent": {
-                "name": "Equivalente Alberi Quest'Anno"
-            },
-            "lifetime_co2_avoided": {
-                "name": "CO2 Evitato Totale"
-            },
-            "lifetime_trees_equivalent": {
-                "name": "Equivalente Alberi Totale"
-            },
-            "power_charge_cost": {
-                "name": "Costo Potenza Impegnata"
-            },
-            "consecutive_peak_15min": {
-                "name": "Picco 15min"
-            },
-            "monthly_consecutive_peak": {
-                "name": "Picco Mensile"
-            },
-            "current_vs_peak_percentage": {
-                "name": "Percentuale Picco"
-            },
-            "target_peak_limit": {
-                "name": "Limite Picco"
-            },
-            "peak_margin": {
-                "name": "Margine Picco"
-            },
-            "load_management_status": {
-                "name": "Gestione Carichi"
-            },
-            "load_management_recommendation": {
-                "name": "Raccomandazione Carichi"
-            },
-            "loads_currently_shed": {
-                "name": "Carichi Disconnessi"
-            },
-            "available_load_reduction": {
-                "name": "Riduzione Disponibile"
-            },
-            "controllable_devices_count": {
-                "name": "Numero Dispositivi"
-            },
-            "surplus_total_w": {
-                "name": "Eccedenza Totale"
-            },
-            "surplus_distributable_w": {
-                "name": "Eccedenza Distribuibile"
-            },
-            "surplus_allocated_w": {
-                "name": "Eccedenza Allocata"
-            },
-            "surplus_unallocated_w": {
-                "name": "Eccedenza Non Allocata"
-            },
-            "surplus_active_devices": {
-                "name": "Eccedenza Dispositivi Attivi"
-            },
-            "surplus_total_devices": {
-                "name": "Eccedenza Dispositivi Totale"
-            },
-            "forecast_today_kwh": {
-                "name": "Previsione Oggi"
-            },
-            "forecast_tomorrow_kwh": {
-                "name": "Previsione Domani"
-            },
-            "forecast_remaining_today_kwh": {
-                "name": "Previsione Restante Oggi"
-            },
-            "forecast_power_now_w": {
-                "name": "Potenza Prevista Ora"
-            },
-            "forecast_source": {
-                "name": "Fonte Previsione"
-            },
-            "charging_recommendation": {
-                "name": "Raccomandazione di Carica"
-            },
-            "tariff_current_import_rate": {
-                "name": "Prezzo Elettricità"
-            },
-            "tariff_current_export_rate": {
-                "name": "Tariffa Esportazione"
-            },
-            "tariff_price_level": {
-                "name": "Livello Prezzo"
-            },
-            "tariff_provider": {
-                "name": "Fornitore Tariffa"
-            },
-            "tariff_next_cheap_start": {
-                "name": "Prossima Finestra Economica"
-            },
-            "heat_pump_mode": {
-                "name": "Modalità Pompa di Calore"
-            },
-            "heat_pump_sg_ready_state": {
-                "name": "Pompa di Calore SG-Ready"
-            },
-            "pv_daily_specific_yield": {
-                "name": "Resa Specifica PV"
-            },
-            "pv_performance_vs_forecast": {
-                "name": "PV vs Previsione"
-            },
-            "pv_estimated_annual_degradation": {
-                "name": "Degradazione Annuale PV"
-            },
-            "pv_degradation_trend": {
-                "name": "Tendenza Degradazione PV"
-            },
-            "energy_optimization_score": {
-                "name": "Punteggio Ottimizzazione"
-            },
-            "energy_tip": {
-                "name": "Consiglio Energia"
-            },
-            "energy_tip_category": {
-                "name": "Categoria Consiglio"
-            },
-            "energy_ev_solar_percentage": {
-                "name": "VE Carica Solare %"
-            },
-            "utility_signal_source": {
-                "name": "Fonte Segnale Rete"
-            },
-            "utility_signal_count_today": {
-                "name": "Segnali Rete Oggi"
-            },
-            "predictor_training_status": {
-                "name": "Stato Addestramento Predittore"
-            },
-            "predictor_model_accuracy": {
-                "name": "Precisione Predittore"
-            },
-            "predicted_consumption_next_hour": {
-                "name": "Consumo Previsto (Pross. Ora)"
-            },
-            "predicted_consumption_today_kwh": {
-                "name": "Consumo Previsto Oggi"
-            },
-            "predicted_solar_next_hour": {
-                "name": "Solare Previsto (Pross. Ora)"
-            },
-            "predicted_surplus_window": {
-                "name": "Finestra Eccedenza Prevista"
-            },
-            "session_energy": {
-                "name": "Energia Sessione"
-            },
-            "session_solar_share": {
-                "name": "Quota Solare Sessione"
-            },
-            "session_cost": {
-                "name": "Costo Sessione"
-            },
-            "session_duration": {
-                "name": "Durata Sessione"
-            },
-            "lifetime_ev_energy": {
-                "name": "Energia VE Totale"
-            },
-            "lifetime_ev_solar": {
-                "name": "Energia VE Solare Totale"
-            },
-            "lifetime_ev_cost": {
-                "name": "Costo VE Totale"
-            },
-            "lifetime_ev_sessions": {
-                "name": "Sessioni VE Totali"
-            },
-            "lifetime_ev_solar_share": {
-                "name": "Quota Solare VE Totale"
-            },
-            "vehicle_soc": {
-                "name": "SOC Veicolo"
-            },
-            "best_surplus_window": {
-                "name": "Miglior Finestra Eccedenza"
-            },
-            "night_start_time": {
-                "name": "Inizio Periodo Notturno"
-            },
-            "night_end_time": {
-                "name": "Fine Periodo Notturno"
-            },
-            "night_window_hours": {
-                "name": "Ore Periodo Notturno"
-            },
-            "forecast_peak_power_today_w": {
-                "name": "Potenza Picco Prevista Oggi"
-            },
-            "forecast_peak_time_today": {
-                "name": "Ora Picco Prevista Oggi"
-            },
-            "forecast_power_next_hour_w": {
-                "name": "Potenza Prevista Pross. Ora"
-            },
-            "forecast_surplus_kwh": {
-                "name": "Eccedenza Prevista"
-            }
-        },
-        "binary_sensor": {
-            "ev_connected": {
-                "name": "VE Connesso"
-            },
-            "ev_charging": {
-                "name": "VE in Carica"
-            },
-            "battery_charging": {
-                "name": "Batteria in Carica"
-            },
-            "battery_discharging": {
-                "name": "Batteria in Scarica"
-            },
-            "grid_export_active": {
-                "name": "Esportazione Rete Attiva"
-            },
-            "solar_active": {
-                "name": "Solare Attivo"
-            },
-            "forecast_available": {
-                "name": "Previsione Disponibile"
-            },
-            "tariff_is_dynamic": {
-                "name": "Tariffa Dinamica"
-            },
-            "heat_pump_solar_boost": {
-                "name": "Boost Solare Pompa di Calore"
-            },
-            "utility_signal_active": {
-                "name": "Segnale Rete Attivo"
-            }
-        },
-        "switch": {
-            "night_charging": {
-                "name": "Carica Notturna"
-            },
-            "observer_mode": {
-                "name": "Modalità Osservatore"
-            },
-            "forecast_night_reduction": {
-                "name": "Riduzione Notturna Previsione"
-            }
-        },
-        "number": {
-            "update_interval": {
-                "name": "Intervallo Aggiornamento"
-            },
-            "power_delta": {
-                "name": "Delta Potenza"
-            },
-            "current_delta": {
-                "name": "Delta Corrente"
-            },
-            "soc_delta": {
-                "name": "Delta SOC"
-            },
-            "battery_priority_soc": {
-                "name": "SOC Priorità Batteria"
-            },
-            "battery_minimum_soc": {
-                "name": "SOC Minimo Batteria"
-            },
-            "battery_resume_soc": {
-                "name": "SOC Ripresa Batteria"
-            },
-            "minimum_solar_power": {
-                "name": "Potenza Solare Minima"
-            },
-            "maximum_grid_import": {
-                "name": "Importazione Rete Massima"
-            },
-            "daily_ev_target": {
-                "name": "Obiettivo VE Giornaliero"
-            },
-            "ev_km_per_kwh": {
-                "name": "Efficienza VE"
-            },
-            "public_charging_rate": {
-                "name": "Tariffa Ricarica Pubblica"
-            },
-            "battery_assist_max_power": {
-                "name": "Potenza Max Assistenza Batteria"
-            },
-            "regulation_offset": {
-                "name": "Offset Regolazione"
-            },
-            "demand_charge_rate": {
-                "name": "Tariffa Potenza Impegnata"
-            },
-            "cheap_price_threshold": {
-                "name": "Soglia Prezzo Basso"
-            },
-            "expensive_price_threshold": {
-                "name": "Soglia Prezzo Alto"
-            },
-            "heat_pump_boost_offset": {
-                "name": "Offset Boost Pompa di Calore"
-            },
-            "hot_water_max_temperature": {
-                "name": "Temperatura Max Acqua Calda"
-            },
-            "system_size_kwp": {
-                "name": "Dimensione Impianto PV"
-            },
-            "ev_night_initial_current": {
-                "name": "Corrente Iniziale Notte VE"
-            },
-            "ev_min_current": {
-                "name": "Corrente Minima VE"
-            },
-            "ev_stall_cooldown": {
-                "name": "Raffreddamento Arresto VE"
-            },
-            "battery_buffer_soc": {
-                "name": "SOC Buffer Batteria"
-            },
-            "battery_auto_start_soc": {
-                "name": "SOC Auto-Avvio Batteria"
-            },
-            "battery_assist_floor_soc": {
-                "name": "SOC Minimo Assistenza Batteria"
-            },
-            "battery_capacity_kwh": {
-                "name": "Capacità Batteria"
-            },
-            "battery_max_discharge_power": {
-                "name": "Potenza Max Scarica Batteria"
-            },
-            "system_investment_cost": {
-                "name": "Costo Investimento Impianto"
-            },
-            "system_install_year": {
-                "name": "Anno Installazione"
-            },
-            "ev_minimum_current": {
-                "name": "Corrente Minima VE"
-            },
-            "ev_phases": {
-                "name": "Fasi VE"
-            },
-            "electricity_import_rate": {
-                "name": "Tariffa Importazione Elettricità"
-            },
-            "electricity_export_rate": {
-                "name": "Tariffa Esportazione Elettricità"
-            },
-            "night_earliest_start": {
-                "name": "Inizio Notte Più Presto"
-            },
-            "night_latest_end": {
-                "name": "Fine Notte Più Tardi"
-            },
-            "battery_capacity": {
-                "name": "Capacità Batteria"
-            }
-        },
-        "select": {
-            "ev_charging_mode": {
-                "name": "Modalità di carica VE"
-            }
-        }
+    "abort": {
+      "already_configured": "Solar Energy Management is already configured. Only one instance is allowed."
     }
+  },
+  "options": {
+    "step": {
+      "ev_charger": {
+        "title": "Caricatore VE",
+        "description": "Verifica e aggiorna le mappature delle entità del caricatore VE. I campi SOC del veicolo vengono utilizzati solo se fornisci un sensore SOC batteria del veicolo.",
+        "data": {
+          "ev_connected_sensor": "Stato connessione VE",
+          "ev_charging_sensor": "Stato di carica VE",
+          "ev_charging_power_sensor": "Potenza di carica VE",
+          "ev_charger_service": "Servizio impostazione corrente caricatore VE (opzionale)",
+          "ev_charger_service_entity_id": "Entità destinazione servizio caricatore VE (opzionale)",
+          "ev_total_energy_sensor": "Contatore energia totale VE (opzionale)",
+          "vehicle_soc_entity": "Sensore SOC batteria veicolo (opzionale)",
+          "ev_battery_capacity_kwh": "Capacità batteria VE (kWh)",
+          "ev_target_soc": "SOC obiettivo VE (%)"
+        }
+      },
+      "hardware": {
+        "title": "Hardware Entity Configuration",
+        "description": "Update your hardware entity mappings",
+        "data": {
+          "solar_production_sensor": "Solar Production Power",
+          "grid_power_sensor": "Grid Power Exchange",
+          "battery_soc_sensor": "Battery State of Charge",
+          "battery_power_sensor": "Battery Charge/Discharge Power",
+          "battery_temperature_sensor": "Battery Temperature [Optional]",
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_total_energy_sensor": "EV Total Energy Counter [Optional]",
+          "solar_total_energy_sensor": "Solar Total Energy Counter [Optional]",
+          "grid_import_total_energy_sensor": "Grid Import Total Energy [Optional]",
+          "grid_export_total_energy_sensor": "Grid Export Total Energy [Optional]",
+          "battery_charge_total_energy_sensor": "Battery Charge Total Energy [Optional]",
+          "battery_discharge_total_energy_sensor": "Battery Discharge Total Energy [Optional]",
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)"
+        },
+        "data_description": {
+          "vehicle_soc_entity": "Optional. A sensor that exposes the vehicle's current State of Charge (0–100 %). Only a few cars provide this (Tesla, some VW IDs, MG ZS EV with custom integrations, OBD-II adapters). If empty, SEM uses the kWh-based daily target instead and the two fields below are ignored.",
+          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery. ONLY used when the Vehicle SOC sensor above is configured — SEM combines it with the SOC reading to compute the remaining energy needed to reach the target. Without a SOC sensor this value is ignored entirely.",
+          "ev_target_soc": "SOC % SEM aims to reach when night charging. ONLY used when the Vehicle SOC sensor is configured. Without one, the kWh-based 'Daily EV target' field on the Optimization Settings step is used instead."
+        }
+      },
+      "settings": {
+        "title": "SEM Optimization Settings",
+        "description": "Update your SEM optimization parameters",
+        "data": {
+          "update_interval": "Update Interval (seconds)",
+          "power_delta": "Power Delta Threshold (W)",
+          "current_delta": "Current Delta Threshold (A)",
+          "soc_delta": "Battery SOC Delta Threshold (%)",
+          "battery_priority_soc": "Battery Priority SOC (%)",
+          "battery_minimum_soc": "Battery Minimum SOC (%)",
+          "battery_resume_soc": "Battery Resume SOC (%)",
+          "min_solar_power": "Minimum Solar Power (W)",
+          "max_grid_import": "Maximum Grid Import (W)",
+          "daily_ev_target": "Daily EV Target (kWh)",
+          "battery_assist_max_power": "Battery Assist Max Power (W)",
+          "battery_capacity_kwh": "Battery Capacity (kWh)",
+          "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
+          "battery_max_discharge_power": "Maximum Discharge Power (W)",
+          "electricity_import_rate": "Electricity Import Rate (per kWh)",
+          "electricity_nt_rate": "Electricity NT Rate (per kWh)",
+          "electricity_export_rate": "Electricity Export Rate (per kWh)",
+          "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
+          "observer_mode": "Observer Mode (Read-Only)",
+          "forecast_night_reduction": "Forecast Night Reduction",
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)",
+          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
+          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
+          "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
+          "battery_discharge_control_entity": "Battery discharge control entity (optional)"
+        },
+        "data_description": {
+          "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
+          "power_delta": "Change-detection threshold for power sensors. Lower = more updates (more sensitive but heavier on the recorder). Default 1000 W is fine for most installs; tune down to 100–200 W for finer control.",
+          "current_delta": "Minimum charging-current change (A) before SEM updates the EV charger. Higher = less ramping.",
+          "soc_delta": "Minimum battery SOC change (%) before SEM reacts. Battery SOC moves slowly so 10 % is usually fine.",
+          "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
+          "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
+          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
+          "battery_assist_floor_soc": "Hysteresis floor — once battery assist is active, it stays active until SOC drops below this value. Default 60 %.",
+          "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
+          "max_grid_import": "Hard cap on grid power that SEM will pull while doing solar charging. 0 = pure-PV mode (the recommended SEM default).",
+          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
+          "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
+          "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
+          "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
+          "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
+          "electricity_import_rate": "Day / flat tariff (CHF/kWh, incl. VAT). Used for cost tracking.",
+          "electricity_nt_rate": "Night tariff (CHF/kWh). Set equal to import rate if you don't have a dual tariff.",
+          "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
+          "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
+          "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
+          "forecast_night_reduction": "When ON, SEM reduces the night charging target based on tomorrow's solar forecast (weekday: 20 % credit, weekend: 70 % credit). Requires Solcast or Forecast.Solar.",
+          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed."
+        }
+      },
+      "settings_ev": {
+        "title": "Carica VE & Solare",
+        "description": "Configurare gli obiettivi di carica VE e le soglie solari.",
+        "data": {
+          "daily_ev_target": "Obiettivo carica notturna (kWh)",
+          "min_solar_power": "Potenza solare minima per avviare la carica VE (W)",
+          "max_grid_import": "Import rete max. durante carica solare (W, 0 = solo solare)",
+          "observer_mode": "Modalità osservatore (solo lettura, nessun controllo hardware)",
+          "forecast_night_reduction": "Ridurre obiettivo notturno in base alla previsione di domani"
+        }
+      },
+      "settings_tariff": {
+        "title": "Tariffe & Avanzato",
+        "description": "Tariffe elettriche e parametri avanzati di regolazione.",
+        "data": {
+          "electricity_import_rate": "Tariffa di importazione",
+          "electricity_nt_rate": "Tariffa notturna (se diversa)",
+          "electricity_export_rate": "Tariffa di esportazione",
+          "demand_charge_rate": "Tariffa potenza impegnata",
+          "update_interval": "Intervallo di aggiornamento (s)",
+          "power_delta": "Soglia variazione potenza (W)",
+          "current_delta": "Soglia variazione corrente (A)",
+          "soc_delta": "Soglia variazione SOC (%)"
+        }
+      },
+      "load_management": {
+        "title": "Load Management Settings",
+        "description": "Update load management configuration",
+        "data": {
+          "load_management_enabled": "Enable Load Management",
+          "target_peak_limit": "Target Peak Limit (kW)",
+          "warning_peak_level": "Warning Peak Level (kW)",
+          "emergency_peak_level": "Emergency Peak Level (kW)",
+          "critical_device_protection": "Protect Critical Devices",
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)"
+        }
+      },
+      "notifications": {
+        "title": "Notification Settings",
+        "description": "Update notification configuration",
+        "data": {
+          "enable_keba_notifications": "Enable KEBA Display Notifications",
+          "enable_mobile_notifications": "Enable Mobile Notifications",
+          "mobile_notification_service": "Mobile Notification Service",
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)"
+        }
+      },
+      "dashboard_options": {
+        "title": "Dashboard Installation",
+        "description": "Install or reinstall the SEM dashboard",
+        "data": {
+          "generate_dashboard": "Generate Dashboard",
+          "dashboard_title": "Dashboard Title",
+          "dashboard_path": "Dashboard Path (URL)",
+          "include_financial": "Include Financial Tracking",
+          "include_flows": "Include Power Flow Visualization",
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)"
+        },
+        "data_description": {
+          "generate_dashboard": "Create a new Lovelace dashboard for SEM. If a dashboard with the same path already exists, it will be replaced.",
+          "dashboard_title": "Display name for the dashboard in the sidebar. Example: 'Solar Energy Management'",
+          "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
+          "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
+          "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "solar_power": {
+        "name": "Potenza Solare"
+      },
+      "home_consumption_power": {
+        "name": "Consumo Casa"
+      },
+      "grid_power": {
+        "name": "Potenza Rete"
+      },
+      "grid_import_power": {
+        "name": "Importazione Rete"
+      },
+      "grid_export_power": {
+        "name": "Esportazione Rete"
+      },
+      "battery_power": {
+        "name": "Potenza Batteria"
+      },
+      "battery_charge_power": {
+        "name": "Potenza Carica Batteria"
+      },
+      "battery_discharge_power": {
+        "name": "Potenza Scarica Batteria"
+      },
+      "ev_power": {
+        "name": "Potenza VE"
+      },
+      "available_power": {
+        "name": "Potenza Disponibile"
+      },
+      "battery_soc": {
+        "name": "SOC Batteria"
+      },
+      "battery_status": {
+        "name": "Stato Batteria"
+      },
+      "battery_temperature": {
+        "name": "Temperatura Batteria"
+      },
+      "battery_cycles_estimated": {
+        "name": "Cicli Batteria (Stimati)"
+      },
+      "battery_health_score": {
+        "name": "Salute Batteria"
+      },
+      "calculated_current": {
+        "name": "Corrente Calcolata"
+      },
+      "charging_state": {
+        "name": "Stato di Carica"
+      },
+      "grid_status": {
+        "name": "Stato Rete"
+      },
+      "solar_charging_status": {
+        "name": "Carica Solare"
+      },
+      "night_charging_status": {
+        "name": "Carica Notturna"
+      },
+      "battery_priority_status": {
+        "name": "Priorità Batteria"
+      },
+      "charging_strategy": {
+        "name": "Strategia di Carica"
+      },
+      "daily_solar_energy": {
+        "name": "Oggi Solare"
+      },
+      "daily_home_energy": {
+        "name": "Oggi Casa"
+      },
+      "daily_grid_import_energy": {
+        "name": "Oggi Importazione"
+      },
+      "daily_grid_export_energy": {
+        "name": "Oggi Esportazione"
+      },
+      "daily_battery_charge_energy": {
+        "name": "Oggi Carica"
+      },
+      "daily_battery_discharge_energy": {
+        "name": "Oggi Scarica"
+      },
+      "daily_ev_energy": {
+        "name": "Oggi VE"
+      },
+      "monthly_solar_yield_energy": {
+        "name": "Mensile Solare"
+      },
+      "monthly_grid_import_energy": {
+        "name": "Mensile Importazione"
+      },
+      "monthly_grid_export_energy": {
+        "name": "Mensile Esportazione"
+      },
+      "monthly_battery_charge_energy": {
+        "name": "Mensile Carica"
+      },
+      "monthly_battery_discharge_energy": {
+        "name": "Mensile Scarica"
+      },
+      "monthly_home_consumption_energy": {
+        "name": "Mensile Casa"
+      },
+      "flow_solar_to_home_power": {
+        "name": "Solare a Casa"
+      },
+      "flow_solar_to_battery_power": {
+        "name": "Solare a Batteria"
+      },
+      "flow_solar_to_grid_power": {
+        "name": "Solare a Rete"
+      },
+      "flow_solar_to_ev_power": {
+        "name": "Solare a VE"
+      },
+      "flow_battery_to_home_power": {
+        "name": "Batteria a Casa"
+      },
+      "flow_battery_to_ev_power": {
+        "name": "Batteria a VE"
+      },
+      "flow_grid_to_home_power": {
+        "name": "Rete a Casa"
+      },
+      "flow_grid_to_ev_power": {
+        "name": "Rete a VE"
+      },
+      "flow_grid_to_battery_power": {
+        "name": "Rete a Batteria"
+      },
+      "flow_solar_to_home_energy": {
+        "name": "Solare a Casa Energia"
+      },
+      "flow_solar_to_ev_energy": {
+        "name": "Solare a VE Energia"
+      },
+      "flow_solar_to_battery_energy": {
+        "name": "Solare a Batteria Energia"
+      },
+      "flow_solar_to_grid_energy": {
+        "name": "Solare a Rete Energia"
+      },
+      "flow_grid_to_home_energy": {
+        "name": "Rete a Casa Energia"
+      },
+      "flow_grid_to_ev_energy": {
+        "name": "Rete a VE Energia"
+      },
+      "flow_grid_to_battery_energy": {
+        "name": "Rete a Batteria Energia"
+      },
+      "flow_battery_to_home_energy": {
+        "name": "Batteria a Casa Energia"
+      },
+      "flow_battery_to_ev_energy": {
+        "name": "Batteria a VE Energia"
+      },
+      "self_consumption_rate": {
+        "name": "Autoconsumo"
+      },
+      "autarky_rate": {
+        "name": "Tasso Autarchia"
+      },
+      "daily_savings": {
+        "name": "Risparmio Oggi"
+      },
+      "daily_battery_savings": {
+        "name": "Risparmio Batteria Giornaliero"
+      },
+      "daily_costs": {
+        "name": "Costi Giornalieri"
+      },
+      "daily_export_revenue": {
+        "name": "Ricavo Esportazione Giornaliero"
+      },
+      "daily_net_cost": {
+        "name": "Costo Netto Giornaliero"
+      },
+      "monthly_savings": {
+        "name": "Risparmio Mensile"
+      },
+      "monthly_battery_savings": {
+        "name": "Risparmio Batteria Mensile"
+      },
+      "monthly_costs": {
+        "name": "Costi Mensili"
+      },
+      "monthly_export_revenue": {
+        "name": "Ricavo Esportazione Mensile"
+      },
+      "monthly_net_cost": {
+        "name": "Costo Netto Mensile"
+      },
+      "yearly_solar_yield_energy": {
+        "name": "Annuale Solare"
+      },
+      "yearly_grid_import_energy": {
+        "name": "Annuale Importazione Rete"
+      },
+      "yearly_grid_export_energy": {
+        "name": "Annuale Esportazione Rete"
+      },
+      "yearly_battery_charge_energy": {
+        "name": "Annuale Carica Batteria"
+      },
+      "yearly_battery_discharge_energy": {
+        "name": "Annuale Scarica Batteria"
+      },
+      "yearly_home_consumption_energy": {
+        "name": "Annuale Consumo Casa"
+      },
+      "yearly_ev_energy": {
+        "name": "Annuale Energia VE"
+      },
+      "yearly_costs": {
+        "name": "Costi Annuali"
+      },
+      "yearly_savings": {
+        "name": "Risparmio Annuale"
+      },
+      "yearly_battery_savings": {
+        "name": "Risparmio Batteria Annuale"
+      },
+      "yearly_export_revenue": {
+        "name": "Ricavo Esportazione Annuale"
+      },
+      "yearly_net_cost": {
+        "name": "Costo Netto Annuale"
+      },
+      "lifetime_total_savings": {
+        "name": "Risparmio Totale"
+      },
+      "lifetime_grid_cost": {
+        "name": "Costo Rete Totale"
+      },
+      "roi_percentage": {
+        "name": "ROI Percentuale"
+      },
+      "roi_payback_years": {
+        "name": "ROI Anni Ammortamento"
+      },
+      "roi_annual_savings": {
+        "name": "ROI Risparmio Annuale"
+      },
+      "forecast_accuracy_today": {
+        "name": "Precisione Previsione Oggi"
+      },
+      "forecast_accuracy_7d": {
+        "name": "Precisione Previsione 7g"
+      },
+      "forecast_correction_factor": {
+        "name": "Fattore Correzione Previsione"
+      },
+      "forecast_deviation_kwh": {
+        "name": "Deviazione Previsione"
+      },
+      "forecast_corrected_today": {
+        "name": "Previsione Corretta Oggi"
+      },
+      "forecast_corrected_tomorrow": {
+        "name": "Previsione Corretta Domani"
+      },
+      "forecast_history_days": {
+        "name": "Storico Previsione Giorni"
+      },
+      "daily_co2_avoided": {
+        "name": "CO2 Evitato Oggi"
+      },
+      "yearly_co2_avoided": {
+        "name": "CO2 Evitato Quest'Anno"
+      },
+      "yearly_trees_equivalent": {
+        "name": "Equivalente Alberi Quest'Anno"
+      },
+      "lifetime_co2_avoided": {
+        "name": "CO2 Evitato Totale"
+      },
+      "lifetime_trees_equivalent": {
+        "name": "Equivalente Alberi Totale"
+      },
+      "power_charge_cost": {
+        "name": "Costo Potenza Impegnata"
+      },
+      "consecutive_peak_15min": {
+        "name": "Picco 15min"
+      },
+      "monthly_consecutive_peak": {
+        "name": "Picco Mensile"
+      },
+      "current_vs_peak_percentage": {
+        "name": "Percentuale Picco"
+      },
+      "target_peak_limit": {
+        "name": "Limite Picco"
+      },
+      "peak_margin": {
+        "name": "Margine Picco"
+      },
+      "load_management_status": {
+        "name": "Gestione Carichi"
+      },
+      "load_management_recommendation": {
+        "name": "Raccomandazione Carichi"
+      },
+      "loads_currently_shed": {
+        "name": "Carichi Disconnessi"
+      },
+      "available_load_reduction": {
+        "name": "Riduzione Disponibile"
+      },
+      "controllable_devices_count": {
+        "name": "Numero Dispositivi"
+      },
+      "surplus_total_w": {
+        "name": "Eccedenza Totale"
+      },
+      "surplus_distributable_w": {
+        "name": "Eccedenza Distribuibile"
+      },
+      "surplus_allocated_w": {
+        "name": "Eccedenza Allocata"
+      },
+      "surplus_unallocated_w": {
+        "name": "Eccedenza Non Allocata"
+      },
+      "surplus_active_devices": {
+        "name": "Eccedenza Dispositivi Attivi"
+      },
+      "surplus_total_devices": {
+        "name": "Eccedenza Dispositivi Totale"
+      },
+      "forecast_today_kwh": {
+        "name": "Previsione Oggi"
+      },
+      "forecast_tomorrow_kwh": {
+        "name": "Previsione Domani"
+      },
+      "forecast_remaining_today_kwh": {
+        "name": "Previsione Restante Oggi"
+      },
+      "forecast_power_now_w": {
+        "name": "Potenza Prevista Ora"
+      },
+      "forecast_source": {
+        "name": "Fonte Previsione"
+      },
+      "charging_recommendation": {
+        "name": "Raccomandazione di Carica"
+      },
+      "tariff_current_import_rate": {
+        "name": "Prezzo Elettricità"
+      },
+      "tariff_current_export_rate": {
+        "name": "Tariffa Esportazione"
+      },
+      "tariff_price_level": {
+        "name": "Livello Prezzo"
+      },
+      "tariff_provider": {
+        "name": "Fornitore Tariffa"
+      },
+      "tariff_next_cheap_start": {
+        "name": "Prossima Finestra Economica"
+      },
+      "heat_pump_mode": {
+        "name": "Modalità Pompa di Calore"
+      },
+      "heat_pump_sg_ready_state": {
+        "name": "Pompa di Calore SG-Ready"
+      },
+      "pv_daily_specific_yield": {
+        "name": "Resa Specifica PV"
+      },
+      "pv_performance_vs_forecast": {
+        "name": "PV vs Previsione"
+      },
+      "pv_estimated_annual_degradation": {
+        "name": "Degradazione Annuale PV"
+      },
+      "pv_degradation_trend": {
+        "name": "Tendenza Degradazione PV"
+      },
+      "energy_optimization_score": {
+        "name": "Punteggio Ottimizzazione"
+      },
+      "energy_tip": {
+        "name": "Consiglio Energia"
+      },
+      "energy_tip_category": {
+        "name": "Categoria Consiglio"
+      },
+      "energy_ev_solar_percentage": {
+        "name": "VE Carica Solare %"
+      },
+      "utility_signal_source": {
+        "name": "Fonte Segnale Rete"
+      },
+      "utility_signal_count_today": {
+        "name": "Segnali Rete Oggi"
+      },
+      "predictor_training_status": {
+        "name": "Stato Addestramento Predittore"
+      },
+      "predictor_model_accuracy": {
+        "name": "Precisione Predittore"
+      },
+      "predicted_consumption_next_hour": {
+        "name": "Consumo Previsto (Pross. Ora)"
+      },
+      "predicted_consumption_today_kwh": {
+        "name": "Consumo Previsto Oggi"
+      },
+      "predicted_solar_next_hour": {
+        "name": "Solare Previsto (Pross. Ora)"
+      },
+      "predicted_surplus_window": {
+        "name": "Finestra Eccedenza Prevista"
+      },
+      "session_energy": {
+        "name": "Energia Sessione"
+      },
+      "session_solar_share": {
+        "name": "Quota Solare Sessione"
+      },
+      "session_cost": {
+        "name": "Costo Sessione"
+      },
+      "session_duration": {
+        "name": "Durata Sessione"
+      },
+      "lifetime_ev_energy": {
+        "name": "Energia VE Totale"
+      },
+      "lifetime_ev_solar": {
+        "name": "Energia VE Solare Totale"
+      },
+      "lifetime_ev_cost": {
+        "name": "Costo VE Totale"
+      },
+      "lifetime_ev_sessions": {
+        "name": "Sessioni VE Totali"
+      },
+      "lifetime_ev_solar_share": {
+        "name": "Quota Solare VE Totale"
+      },
+      "vehicle_soc": {
+        "name": "SOC Veicolo"
+      },
+      "best_surplus_window": {
+        "name": "Miglior Finestra Eccedenza"
+      },
+      "night_start_time": {
+        "name": "Inizio Periodo Notturno"
+      },
+      "night_end_time": {
+        "name": "Fine Periodo Notturno"
+      },
+      "night_window_hours": {
+        "name": "Ore Periodo Notturno"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "Potenza Picco Prevista Oggi"
+      },
+      "forecast_peak_time_today": {
+        "name": "Ora Picco Prevista Oggi"
+      },
+      "forecast_power_next_hour_w": {
+        "name": "Potenza Prevista Pross. Ora"
+      },
+      "forecast_surplus_kwh": {
+        "name": "Eccedenza Prevista"
+      }
+    },
+    "binary_sensor": {
+      "ev_connected": {
+        "name": "VE Connesso"
+      },
+      "ev_charging": {
+        "name": "VE in Carica"
+      },
+      "battery_charging": {
+        "name": "Batteria in Carica"
+      },
+      "battery_discharging": {
+        "name": "Batteria in Scarica"
+      },
+      "grid_export_active": {
+        "name": "Esportazione Rete Attiva"
+      },
+      "solar_active": {
+        "name": "Solare Attivo"
+      },
+      "forecast_available": {
+        "name": "Previsione Disponibile"
+      },
+      "tariff_is_dynamic": {
+        "name": "Tariffa Dinamica"
+      },
+      "heat_pump_solar_boost": {
+        "name": "Boost Solare Pompa di Calore"
+      },
+      "utility_signal_active": {
+        "name": "Segnale Rete Attivo"
+      }
+    },
+    "switch": {
+      "night_charging": {
+        "name": "Carica Notturna"
+      },
+      "observer_mode": {
+        "name": "Modalità Osservatore"
+      },
+      "forecast_night_reduction": {
+        "name": "Riduzione Notturna Previsione"
+      }
+    },
+    "number": {
+      "update_interval": {
+        "name": "Intervallo Aggiornamento"
+      },
+      "power_delta": {
+        "name": "Delta Potenza"
+      },
+      "current_delta": {
+        "name": "Delta Corrente"
+      },
+      "soc_delta": {
+        "name": "Delta SOC"
+      },
+      "battery_priority_soc": {
+        "name": "SOC Priorità Batteria"
+      },
+      "battery_minimum_soc": {
+        "name": "SOC Minimo Batteria"
+      },
+      "battery_resume_soc": {
+        "name": "SOC Ripresa Batteria"
+      },
+      "minimum_solar_power": {
+        "name": "Potenza Solare Minima"
+      },
+      "maximum_grid_import": {
+        "name": "Importazione Rete Massima"
+      },
+      "daily_ev_target": {
+        "name": "Obiettivo VE Giornaliero"
+      },
+      "ev_km_per_kwh": {
+        "name": "Efficienza VE"
+      },
+      "public_charging_rate": {
+        "name": "Tariffa Ricarica Pubblica"
+      },
+      "battery_assist_max_power": {
+        "name": "Potenza Max Assistenza Batteria"
+      },
+      "regulation_offset": {
+        "name": "Offset Regolazione"
+      },
+      "demand_charge_rate": {
+        "name": "Tariffa Potenza Impegnata"
+      },
+      "cheap_price_threshold": {
+        "name": "Soglia Prezzo Basso"
+      },
+      "expensive_price_threshold": {
+        "name": "Soglia Prezzo Alto"
+      },
+      "heat_pump_boost_offset": {
+        "name": "Offset Boost Pompa di Calore"
+      },
+      "hot_water_max_temperature": {
+        "name": "Temperatura Max Acqua Calda"
+      },
+      "system_size_kwp": {
+        "name": "Dimensione Impianto PV"
+      },
+      "ev_night_initial_current": {
+        "name": "Corrente Iniziale Notte VE"
+      },
+      "ev_min_current": {
+        "name": "Corrente Minima VE"
+      },
+      "ev_stall_cooldown": {
+        "name": "Raffreddamento Arresto VE"
+      },
+      "battery_buffer_soc": {
+        "name": "SOC Buffer Batteria"
+      },
+      "battery_auto_start_soc": {
+        "name": "SOC Auto-Avvio Batteria"
+      },
+      "battery_assist_floor_soc": {
+        "name": "SOC Minimo Assistenza Batteria"
+      },
+      "battery_capacity_kwh": {
+        "name": "Capacità Batteria"
+      },
+      "battery_max_discharge_power": {
+        "name": "Potenza Max Scarica Batteria"
+      },
+      "system_investment_cost": {
+        "name": "Costo Investimento Impianto"
+      },
+      "system_install_year": {
+        "name": "Anno Installazione"
+      },
+      "ev_minimum_current": {
+        "name": "Corrente Minima VE"
+      },
+      "ev_phases": {
+        "name": "Fasi VE"
+      },
+      "electricity_import_rate": {
+        "name": "Tariffa Importazione Elettricità"
+      },
+      "electricity_export_rate": {
+        "name": "Tariffa Esportazione Elettricità"
+      },
+      "night_earliest_start": {
+        "name": "Inizio Notte Più Presto"
+      },
+      "night_latest_end": {
+        "name": "Fine Notte Più Tardi"
+      },
+      "battery_capacity": {
+        "name": "Capacità Batteria"
+      }
+    },
+    "select": {
+      "ev_charging_mode": {
+        "name": "Modalità di carica VE"
+      }
+    }
+  }
 }
