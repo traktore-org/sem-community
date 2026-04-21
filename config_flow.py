@@ -75,8 +75,9 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Handle integration discovery (#44).
 
         Triggered when a supported inverter integration (huawei_solar,
-        solaredge, fronius) is loaded. Suggests SEM setup if Energy
-        Dashboard is configured.
+        solaredge, fronius, goodwe, enphase_envoy, sma, growatt_server,
+        solis) is loaded. Suggests SEM setup if Energy Dashboard is
+        configured.
         """
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()

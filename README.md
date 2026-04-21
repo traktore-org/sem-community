@@ -73,7 +73,7 @@ Before setting up SEM, make sure you have:
   - A grid consumption sensor (W)
 - **Optional but recommended:**
   - Battery SOC (%) and power (W) sensors
-  - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, etc.)
+  - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
   - [Solcast PV Solar](https://github.com/oziee/ha-solcast-solar) or [Forecast.Solar](https://www.home-assistant.io/integrations/forecast_solar/) for solar forecasts
   - Tibber, Nordpool, or aWATTar integration for dynamic tariffs
 
@@ -91,7 +91,7 @@ Before setting up SEM, make sure you have:
 
 SEM auto-detects your solar, grid, and battery sensors from the HA Energy Dashboard. If they are not configured yet, the wizard will ask you to set up the Energy Dashboard first.
 
-SEM also uses the Energy Dashboard's import/export energy counters to automatically detect your grid power sensor's sign convention — no manual configuration needed. This works with all inverter brands (Huawei, SolarEdge, Fronius, etc.).
+SEM also uses the Energy Dashboard's import/export energy counters to automatically detect your grid and battery power sensor sign conventions — no manual configuration needed. This works with all inverter brands regardless of whether they use positive-for-export or positive-for-import conventions.
 
 ### Step 3: EV Charger Configuration
 
@@ -105,7 +105,7 @@ Select the sensors for your EV charger:
 | Charger service | Service to set charging current (e.g., `keba.set_current`) |
 | Total energy sensor | Cumulative energy sensor (kWh) — optional |
 
-SEM supports any charger that exposes these sensors in HA: KEBA, Wallbox Pulsar, go-eCharger, Easee, Tesla Wall Connector, Zaptec, OpenWB, Myenergi Zappi, ChargePoint, Heidelberg.
+SEM auto-detects chargers from the entity registry: **KEBA**, **Wallbox Pulsar**, **go-eCharger**, **Easee**, **Zaptec**, **ChargePoint**, **Heidelberg**. Any other charger that exposes power/connected/charging sensors in HA can be configured manually.
 
 ### Step 4: Notifications (Optional)
 
@@ -236,13 +236,15 @@ SEM creates 60+ sensors organized by category:
 
 ## Supported Hardware
 
-**Solar Inverters:** Huawei Solar, SolAX, DEYE, Sunsynk, SolArk, Growatt, Sofar, Solis, KSTAR, Fronius, SMA, SolarEdge, Enphase, or any inverter with HA sensors
+**Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
 
-**Battery discharge control auto-detected for:** Huawei Solar, SolAX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis
+**Battery discharge control auto-detected for:** Huawei Solar, SolaX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis, GoodWe
 
-**Batteries:** Huawei LUNA2000, Tesla Powerwall, LG Chem, BYD, Sonnen
+**Batteries:** Any battery exposed through a supported inverter integration. Huawei LUNA2000, Tesla Powerwall, Sonnen, and others work automatically via their paired inverter.
 
-**EV Chargers:** KEBA P30, Wallbox Pulsar, go-eCharger, Easee, Tesla Wall Connector, Zaptec, OpenWB, Myenergi Zappi, ChargePoint, Heidelberg
+**EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg Energy Control
+
+**EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA. OpenWB works via pattern matching.
 
 **Heat Pumps:** Any SG-Ready compatible heat pump controllable via HA
 

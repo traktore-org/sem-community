@@ -43,6 +43,10 @@ class SensorReader:
         self._grid_sign_detected = False  # True once sign is reliably determined
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
+        self._battery_sign_inverted = False
+        self._battery_sign_detected = False
+        self._battery_charge_baseline: Optional[float] = None
+        self._battery_discharge_baseline: Optional[float] = None
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -88,6 +92,14 @@ class SensorReader:
 
         if needs_negate:
             readings.grid_power = -readings.grid_power
+            readings.calculate_derived()
+
+        # Auto-detect battery sign convention using Energy Dashboard counters.
+        # SEM convention: positive = charge, negative = discharge.
+        battery_needs_negate = self._detect_battery_sign(readings)
+
+        if battery_needs_negate:
+            readings.battery_power = -readings.battery_power
             readings.calculate_derived()
 
         return readings
@@ -176,6 +188,93 @@ class SensorReader:
 
         return self._grid_sign_inverted
 
+    def _detect_battery_sign(self, readings: PowerReadings) -> bool:
+        """Detect if battery power needs negation using Energy Dashboard counters.
+
+        Compares the power sensor's sign against which energy counter
+        (charge or discharge) is increasing. SEM convention: positive = charge,
+        negative = discharge.
+
+        This enables automatic support for inverters with opposite battery
+        sign conventions (Enphase, GoodWe, Tesla Powerwall, Sunsynk/DEYE).
+
+        Returns True if battery_power should be negated.
+        """
+        ed = self._energy_dashboard_config
+        if not ed:
+            return False
+
+        charge_entity = ed.battery_charge_energy
+        discharge_entity = ed.battery_discharge_energy
+
+        if not charge_entity or not discharge_entity:
+            return False
+
+        # Need meaningful power to detect (ignore noise)
+        power = readings.battery_power
+        if abs(power) < 100:
+            return self._battery_sign_inverted  # Keep last known state
+
+        # Read energy counter values
+        charge_state = self.hass.states.get(charge_entity)
+        discharge_state = self.hass.states.get(discharge_entity)
+
+        if not charge_state or charge_state.state in ("unknown", "unavailable"):
+            return self._battery_sign_inverted
+        if not discharge_state or discharge_state.state in ("unknown", "unavailable"):
+            return self._battery_sign_inverted
+
+        try:
+            charge_val = float(charge_state.state)
+            discharge_val = float(discharge_state.state)
+        except (ValueError, TypeError):
+            return self._battery_sign_inverted
+
+        # First call: store baselines, don't correct yet
+        if self._battery_charge_baseline is None:
+            self._battery_charge_baseline = charge_val
+            self._battery_discharge_baseline = discharge_val
+            return False
+
+        charge_delta = charge_val - self._battery_charge_baseline
+        discharge_delta = discharge_val - self._battery_discharge_baseline
+
+        # Update baselines for next cycle
+        self._battery_charge_baseline = charge_val
+        self._battery_discharge_baseline = discharge_val
+
+        # Determine convention from correlation:
+        # power > 0 + charge growing → SEM convention (+ = charge) → no negate
+        # power > 0 + discharge growing → opposite convention (+ = discharge) → negate
+        # power < 0 + charge growing → opposite convention (- = charge) → negate
+        # power < 0 + discharge growing → SEM convention (- = discharge) → no negate
+        detected = None
+        if charge_delta > 0.001 and discharge_delta < 0.001:
+            # Charge counter increasing
+            detected = power < 0  # If power negative during charge → negate
+        elif discharge_delta > 0.001 and charge_delta < 0.001:
+            # Discharge counter increasing
+            detected = power > 0  # If power positive during discharge → negate
+
+        if detected is not None and detected != self._battery_sign_inverted:
+            if not self._battery_sign_detected:
+                _LOGGER.info(
+                    "Battery sign detected from Energy Dashboard counters: %s "
+                    "(power=%.0fW, charge_delta=%.3f, discharge_delta=%.3f)",
+                    "negating (opposite convention)" if detected else "no correction (SEM convention)",
+                    power, charge_delta, discharge_delta,
+                )
+            self._battery_sign_inverted = detected
+            self._battery_sign_detected = True
+        elif detected is not None and not self._battery_sign_detected:
+            self._battery_sign_detected = True
+            _LOGGER.info(
+                "Battery sign confirmed from Energy Dashboard counters: %s",
+                "negating (opposite convention)" if detected else "no correction (SEM convention)",
+            )
+
+        return self._battery_sign_inverted
+
     def _read_from_energy_dashboard(self) -> PowerReadings:
         """Read power values from Energy Dashboard configured sensors."""
         ed = self._energy_dashboard_config
@@ -194,19 +293,9 @@ class SensorReader:
             readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
 
         # Battery power — pass through the source sensor unchanged.
-        #
-        # The HA Energy Dashboard schema does not define a canonical signed
-        # combined battery sensor — `stat_rate` is just a pass-through to
-        # whatever the source integration exposes. Major inverters
-        # (Huawei, Fronius, SolarEdge, Tesla Powerwall, BYD, Sonnen) all
-        # report negative = discharge / positive = charge, which matches
-        # SEM convention. No transformation needed.
-        #
-        # Historical note: commit 00e449c added a `-` here under the
-        # mistaken belief that the source sensor was already inverted by
-        # the user to "follow HA convention". On real hardware that's not
-        # the case — the negation double-flipped the sign and made
-        # `home_consumption_power` clamp to 0 W. Reverted in #101.
+        # Sign auto-detection (in read_power → _detect_battery_sign) handles
+        # inverters with opposite conventions (Enphase, GoodWe, Powerwall,
+        # Sunsynk/DEYE) by comparing against charge/discharge energy counters.
         if ed.battery_power:
             readings.battery_power = self._read_sensor(ed.battery_power, "battery")
 

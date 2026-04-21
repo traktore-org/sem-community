@@ -15,7 +15,7 @@ Before installing SEM, make sure you have:
 - **Home Assistant 2025.3+**
 - **HA Energy Dashboard configured** — SEM reads your solar, grid, and battery sensors from it
   - Go to **Settings > Dashboards > Energy** and verify solar + grid sensors are set up
-- **EV charger integration** installed (KEBA, Wallbox, go-eCharger, Easee, etc.)
+- **EV charger integration** installed (KEBA, Wallbox, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
 - **5 HACS frontend cards** installed (see [Step 4](#step-4-install-dashboard-cards))
 
 ---

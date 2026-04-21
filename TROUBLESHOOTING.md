@@ -90,6 +90,35 @@ list — `card-mod`, `bar-card` and `mushroom` are the most commonly missing.
 
 ---
 
+## Battery charge/discharge values are swapped
+
+**Symptom:** SEM shows battery charging when it's actually discharging (or vice versa). The `sensor.sem_battery_power` sign is opposite of what the hardware reports.
+
+**How SEM detects battery direction:** SEM compares the battery power sensor's sign against the charge/discharge energy counters from the Energy Dashboard. If the discharge counter is growing while battery power is positive, SEM knows positive means discharge (opposite of SEM convention) and auto-corrects.
+
+**Requirements:**
+- HA Energy Dashboard must be configured with battery charge AND discharge energy sensors
+- Both energy sensors must be available (not "unknown" or "unavailable")
+- Battery power must exceed 100W for detection to activate
+
+**Fix:**
+1. Verify your Energy Dashboard has battery charge and discharge energy sensors configured under **Settings > Dashboards > Energy > Battery**
+2. Restart HA — detection runs automatically after startup
+3. Check logs: `ha core logs | grep "Battery sign"` — you should see "Battery sign confirmed/detected"
+
+**Sign conventions by inverter brand:**
+| Brand | Battery power convention | SEM correction |
+|-------|------------------------|----------------|
+| Huawei SUN2000 | + = charge, - = discharge | None needed |
+| Fronius | + = charge, - = discharge | None needed |
+| SolarEdge | + = charge, - = discharge | None needed |
+| Enphase | + = discharge, - = charge | Auto-negated |
+| GoodWe | + = discharge, - = charge | Auto-negated |
+| Tesla Powerwall | + = discharge, - = charge | Auto-negated |
+| Sunsynk (kellerza) | + = discharge, - = charge | Auto-negated |
+
+---
+
 ## Peak load management not working
 
 **Cause:** Load management must be explicitly enabled and configured with a target peak limit.

@@ -24,7 +24,7 @@
           "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger.",
+          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
           "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
           "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
           "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
