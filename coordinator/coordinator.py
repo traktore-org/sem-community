@@ -1083,10 +1083,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return ("idle", f"Zone 1: SOC={power.battery_soc:.0f}% < priority={priority_soc}% — battery priority")
 
     def _self_consumption_strategy(self, power, energy) -> tuple:
-        """Self-consumption mode: charge EV from true surplus only (#67).
+        """Self-consumption mode: charge EV from true solar surplus only (#67).
 
-        Zone 4 (SOC ≥ 90%): redirect battery charge to EV (battery is full enough).
-        Zone 1-3: battery charges first, EV gets only leftover surplus.
+        Budget = solar - home (no ev_power add-back, no battery discharge for EV).
+        Zone 4 (SOC ≥ 90%): don't subtract battery charge (redirect to EV).
+        Zone 1-3: battery charges first, subtract battery_charge from budget.
+        Battery discharging for home is fine (that's using stored solar).
         """
         if power.solar_power < 200:
             return ("idle", f"self_consumption: solar={power.solar_power:.0f}W < 200W")
@@ -1095,13 +1097,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         available = power.solar_power - power.home_consumption_power
 
         if power.battery_soc < auto_start_soc:
-            # Battery not full — battery charges first, EV gets leftover
-            available -= power.battery_charge_power
-        # Zone 4 (≥90%): don't subtract battery charge — redirect it to EV
+            available -= power.battery_charge_power  # battery charges first
 
-        if power.ev_power > 0:
-            available += power.ev_power  # EV's own draw is redirectable
-
+        available = max(0, available)
         zone = "Z4-redirect" if power.battery_soc >= auto_start_soc else f"Z{self._get_zone(power.battery_soc)}"
         return ("solar_only", f"self_consumption ({zone}): surplus={available:.0f}W, solar={power.solar_power:.0f}W")
 
