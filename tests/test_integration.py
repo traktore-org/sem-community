@@ -350,7 +350,7 @@ class TestNightChargingStrategy:
 
     def test_night_target_reached_returns_idle(self):
         """Night mode + target reached = idle (don't charge from grid)."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power, _MockEnergy
         coord = _build_coordinator()
         coord.time_manager.is_night_mode.return_value = True
         strategy, reason = coord._determine_charging_strategy(
@@ -361,7 +361,7 @@ class TestNightChargingStrategy:
 
     def test_solar_target_reached_continues(self):
         """Daytime + target reached = solar continues (free surplus)."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power, _MockEnergy
         coord = _build_coordinator()
         strategy, _ = coord._determine_charging_strategy(
             _make_power(battery_soc=95, solar_power=5000), _MockEnergy(daily_ev=10.0)

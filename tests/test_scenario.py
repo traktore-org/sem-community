@@ -208,7 +208,7 @@ class TestChargingStrategyScenarios:
 
     def test_morning_low_solar_no_charge(self):
         """Early morning, 200W solar — should idle."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
         coord = _build_coordinator()
         strategy, reason = coord._determine_charging_strategy(
             _mp(solar_power=150, battery_soc=60), _MockEnergy()
@@ -218,7 +218,7 @@ class TestChargingStrategyScenarios:
 
     def test_midday_surplus_charges(self):
         """Midday, 5kW solar, battery 90% — battery assist."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
         coord = _build_coordinator()
         strategy, _ = coord._determine_charging_strategy(
             _mp(solar_power=5000, battery_soc=95), _MockEnergy()
@@ -227,7 +227,7 @@ class TestChargingStrategyScenarios:
 
     def test_evening_night_mode_charges(self):
         """Evening, night mode, target not reached — night grid."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
         coord = _build_coordinator()
         coord.time_manager.is_night_mode.return_value = True
         strategy, _ = coord._determine_charging_strategy(
@@ -237,7 +237,7 @@ class TestChargingStrategyScenarios:
 
     def test_night_target_reached_stops(self):
         """Night mode, target reached — idle."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
         coord = _build_coordinator()
         coord.time_manager.is_night_mode.return_value = True
         strategy, _ = coord._determine_charging_strategy(
@@ -247,7 +247,7 @@ class TestChargingStrategyScenarios:
 
     def test_solar_continues_past_target(self):
         """Daytime, target reached, surplus available — solar continues."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
         coord = _build_coordinator()
         strategy, _ = coord._determine_charging_strategy(
             _mp(solar_power=5000, battery_soc=95), _MockEnergy(daily_ev=15.0)
@@ -256,7 +256,7 @@ class TestChargingStrategyScenarios:
 
     def test_now_mode_overrides(self):
         """Now mode — charge at max regardless."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
         coord = _build_coordinator()
         coord.config["ev_charging_mode"] = "now"
         strategy, _ = coord._determine_charging_strategy(
@@ -266,7 +266,7 @@ class TestChargingStrategyScenarios:
 
     def test_low_battery_blocks_ev(self):
         """Battery below priority SOC — should idle (Zone 1)."""
-        from tests.test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
+        from .test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
         coord = _build_coordinator()
         strategy, reason = coord._determine_charging_strategy(
             _mp(solar_power=3000, battery_soc=20), _MockEnergy()
