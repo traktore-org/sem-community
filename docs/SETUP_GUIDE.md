@@ -25,7 +25,7 @@ Make sure you have the following ready before you begin:
       (Settings > Dashboards > Energy)
 - [ ] *(Optional)* A battery with SOC and power sensors
 - [ ] *(Optional)* An EV charger controllable via HA (KEBA, Wallbox,
-      go-eCharger, Easee, etc.)
+      go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
 - [ ] *(Optional)* A solar forecast integration -- Solcast or Forecast.Solar
 
 If you are unsure whether your Energy Dashboard is set up, go to
@@ -133,8 +133,9 @@ that SEM has detected your sensors correctly:
 4. If either shows "unavailable", check that your inverter integration
    is online and the Energy Dashboard has the correct sensors assigned.
 
-SEM automatically detects your grid sensor's sign convention (whether
-positive means import or export). No manual configuration is needed.
+SEM automatically detects your grid and battery sensor sign conventions
+(whether positive means import/export or charge/discharge). No manual
+configuration is needed — this works with all inverter brands.
 
 ---
 

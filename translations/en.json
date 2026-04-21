@@ -24,7 +24,7 @@
           "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger.",
+          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
           "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
           "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
           "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
@@ -89,6 +89,21 @@
   },
   "options": {
     "step": {
+      "ev_charger": {
+        "title": "EV Charger",
+        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "data": {
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "EV Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
+          "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
+          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
+          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
+          "ev_target_soc": "EV target SOC (%)"
+        }
+      },
       "hardware": {
         "title": "Hardware Entity Configuration",
         "description": "Update your hardware entity mappings",
@@ -110,6 +125,11 @@
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
           "ev_target_soc": "EV Target SOC (%)"
+        },
+        "data_description": {
+          "vehicle_soc_entity": "Optional. A sensor that exposes the vehicle's current State of Charge (0–100 %). Only a few cars provide this (Tesla, some VW IDs, MG ZS EV with custom integrations, OBD-II adapters). If empty, SEM uses the kWh-based daily target instead and the two fields below are ignored.",
+          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery. ONLY used when the Vehicle SOC sensor above is configured — SEM combines it with the SOC reading to compute the remaining energy needed to reach the target. Without a SOC sensor this value is ignored entirely.",
+          "ev_target_soc": "SOC % SEM aims to reach when night charging. ONLY used when the Vehicle SOC sensor is configured. Without one, the kWh-based 'Daily EV target' field on the Optimization Settings step is used instead."
         }
       },
       "settings": {
@@ -138,10 +158,63 @@
           "forecast_night_reduction": "Forecast Night Reduction",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "EV Target SOC (%)",
+          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
+          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
+          "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
+          "battery_discharge_control_entity": "Battery discharge control entity (optional)"
+        },
+        "data_description": {
+          "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
+          "power_delta": "Change-detection threshold for power sensors. Lower = more updates (more sensitive but heavier on the recorder). Default 1000 W is fine for most installs; tune down to 100–200 W for finer control.",
+          "current_delta": "Minimum charging-current change (A) before SEM updates the EV charger. Higher = less ramping.",
+          "soc_delta": "Minimum battery SOC change (%) before SEM reacts. Battery SOC moves slowly so 10 % is usually fine.",
+          "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
+          "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
+          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
+          "battery_assist_floor_soc": "Hysteresis floor — once battery assist is active, it stays active until SOC drops below this value. Default 60 %.",
+          "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
+          "max_grid_import": "Hard cap on grid power that SEM will pull while doing solar charging. 0 = pure-PV mode (the recommended SEM default).",
+          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
+          "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
+          "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
+          "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
+          "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
+          "electricity_import_rate": "Day / flat tariff (CHF/kWh, incl. VAT). Used for cost tracking.",
+          "electricity_nt_rate": "Night tariff (CHF/kWh). Set equal to import rate if you don't have a dual tariff.",
+          "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
+          "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
+          "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
+          "forecast_night_reduction": "When ON, SEM reduces the night charging target based on tomorrow's solar forecast (weekday: 20 % credit, weekend: 70 % credit). Requires Solcast or Forecast.Solar.",
+          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed."
         }
       },
-      "load_management_options": {
+      "settings_ev": {
+        "title": "EV Charging & Solar",
+        "description": "Configure EV charging targets and solar thresholds.",
+        "data": {
+          "daily_ev_target": "Night charge target (kWh)",
+          "min_solar_power": "Minimum solar power to start EV charging (W)",
+          "max_grid_import": "Max grid import during solar charging (W, 0 = pure solar)",
+          "observer_mode": "Observer mode (read-only, no hardware control)",
+          "forecast_night_reduction": "Reduce night target based on tomorrow's forecast"
+        }
+      },
+      "settings_tariff": {
+        "title": "Tariff & Advanced",
+        "description": "Electricity rates and advanced tuning parameters.",
+        "data": {
+          "electricity_import_rate": "Import rate",
+          "electricity_nt_rate": "Night tariff rate (if different)",
+          "electricity_export_rate": "Export rate",
+          "demand_charge_rate": "Demand charge rate",
+          "update_interval": "Update interval (s)",
+          "power_delta": "Power change threshold (W)",
+          "current_delta": "Current change threshold (A)",
+          "soc_delta": "SOC change threshold (%)"
+        }
+      },
+      "load_management": {
         "title": "Load Management Settings",
         "description": "Update load management configuration",
         "data": {
@@ -155,7 +228,7 @@
           "ev_target_soc": "EV Target SOC (%)"
         }
       },
-      "notifications_options": {
+      "notifications": {
         "title": "Notification Settings",
         "description": "Update notification configuration",
         "data": {
@@ -821,6 +894,11 @@
       },
       "battery_capacity": {
         "name": "Battery Capacity"
+      }
+    },
+    "select": {
+      "ev_charging_mode": {
+        "name": "EV Charging Mode"
       }
     }
   }

@@ -103,24 +103,31 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 
 ## Charging Modes
 
-SEM supports three EV charging modes, configured via `ev_charging_mode`:
+SEM supports four EV charging modes, selectable from the **Control tab** on the dashboard:
 
-### Solar Only (`pv`) — Default
+### Auto (`auto`) — Default
 
-The EV charges only from solar surplus. SEM calculates available power every 10 seconds and adjusts the charging current accordingly (6-32A range).
+The smart mode. SEM automatically decides the best strategy based on solar forecast and how much charging the EV still needs:
 
-- If surplus is below the minimum threshold (~4140W for 3-phase at 6A), charging pauses
-- Current changes are ramp-limited (default +-2A per cycle) to avoid oscillation
-- evcc-style enable/disable delays prevent rapid on/off cycling
+| Situation | What SEM does | Grid import? |
+|---|---|:---:|
+| **Plenty of sun** (forecast >> EV need) | Charge slowly from pure surplus | No |
+| **Enough sun** (forecast ≈ EV need) | Charge with SOC zone strategy + battery assist | Small amount |
+| **Not enough sun** (forecast < EV need) | Charge aggressively with full battery assist | Yes |
+
+The decision recalculates every 10 seconds. On a long summer day, the EV charges slowly from pure surplus (zero import). On a short autumn day, it charges fast to capture all available solar before sunset.
+
+When battery SOC ≥ 90%: battery charge power is redirected to EV (the battery is full enough).
 
 ### Min+PV (`minpv`)
 
-Guarantees a minimum charging current (6A) from the grid and adds any solar surplus on top.
+Guarantees a minimum charging current (6A ≈ 4.1kW) from the grid and adds any solar surplus on top. The EV always charges, even without sun.
 
-- The EV always charges at least at 6A, even without sun
-- Solar surplus increases the current above 6A
-- No enable delay — charging starts immediately when the EV connects
-- Use this when you need the car charged by a specific time
+Best for: you need the car ready by a specific time.
+
+### Maximum (`now`)
+
+Charges at maximum current immediately, regardless of solar.
 
 ### Off (`off`)
 

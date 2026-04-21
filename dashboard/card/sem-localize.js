@@ -1,13 +1,3 @@
-/**
- * SEM Localization — inline translation tables for all SEM dashboard cards
- *
- * Source of truth: dashboard/translations.json (149 keys x 6 languages)
- * Both this file and dashboard_generator.py read from translations.json.
- * To add/edit translations, update translations.json and regenerate this file.
- *
- * Usage: const text = semLocalize('charging', this._hass?.language);
- */
-
 const SEM_TRANSLATIONS = {
     "en": {
         "charging": "Charging",
@@ -158,7 +148,11 @@ const SEM_TRANSLATIONS = {
         "production": "Production",
         "yield_today": "Yield today",
         "grid_today": "Grid today",
-        "ev_today": "EV Today"
+        "ev_today": "EV Today",
+        "self_consumption_mode": "Self-Consumption",
+        "solar_battery_mode": "Solar + Battery",
+        "maximum_mode": "Maximum",
+        "auto_mode": "Auto (Forecast)"
     },
     "de": {
         "charging": "Laden",
@@ -309,7 +303,11 @@ const SEM_TRANSLATIONS = {
         "production": "Produktion",
         "yield_today": "Ertrag heute",
         "grid_today": "Netz heute",
-        "ev_today": "EV heute"
+        "ev_today": "EV heute",
+        "self_consumption_mode": "Eigenverbrauch",
+        "solar_battery_mode": "Solar + Batterie",
+        "maximum_mode": "Maximum",
+        "auto_mode": "Automatisch (Prognose)"
     },
     "fr": {
         "charging": "En charge",
@@ -460,7 +458,11 @@ const SEM_TRANSLATIONS = {
         "production": "Production",
         "yield_today": "Production aujourd'hui",
         "grid_today": "Réseau aujourd'hui",
-        "ev_today": "VE aujourd'hui"
+        "ev_today": "VE aujourd'hui",
+        "self_consumption_mode": "Autoconsommation",
+        "solar_battery_mode": "Solaire + Batterie",
+        "maximum_mode": "Maximum",
+        "auto_mode": "Auto (Prévision)"
     },
     "es": {
         "charging": "Cargando",
@@ -611,7 +613,11 @@ const SEM_TRANSLATIONS = {
         "production": "Producción",
         "yield_today": "Producción hoy",
         "grid_today": "Red hoy",
-        "ev_today": "VE hoy"
+        "ev_today": "VE hoy",
+        "self_consumption_mode": "Autoconsumo",
+        "solar_battery_mode": "Solar + Batería",
+        "maximum_mode": "Máximo",
+        "auto_mode": "Auto (Previsión)"
     },
     "it": {
         "charging": "In carica",
@@ -762,7 +768,11 @@ const SEM_TRANSLATIONS = {
         "production": "Produzione",
         "yield_today": "Produzione oggi",
         "grid_today": "Rete oggi",
-        "ev_today": "VE oggi"
+        "ev_today": "VE oggi",
+        "self_consumption_mode": "Autoconsumo",
+        "solar_battery_mode": "Solare + Batteria",
+        "maximum_mode": "Massimo",
+        "auto_mode": "Auto (Previsione)"
     },
     "nl": {
         "charging": "Laden",
@@ -913,16 +923,18 @@ const SEM_TRANSLATIONS = {
         "production": "Productie",
         "yield_today": "Opbrengst vandaag",
         "grid_today": "Net vandaag",
-        "ev_today": "EV vandaag"
+        "ev_today": "EV vandaag",
+        "self_consumption_mode": "Eigenverbruik",
+        "solar_battery_mode": "Zon + Batterij",
+        "maximum_mode": "Maximum",
+        "auto_mode": "Auto (Voorspelling)"
     }
 };
-
 function semLocalize(key, lang) {
     const t = SEM_TRANSLATIONS[lang] || SEM_TRANSLATIONS.en || {};
     return t[key] || (SEM_TRANSLATIONS.en || {})[key] || key;
 }
-
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
     window.SEM_TRANSLATIONS = SEM_TRANSLATIONS;
     window.semLocalize = semLocalize;
 }

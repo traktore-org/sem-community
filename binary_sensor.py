@@ -107,6 +107,8 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self.entity_description = description
         self._attr_unique_id = f"sem_{description.key}"
         self._attr_translation_key = description.key
+        # Force stable entity ID regardless of HA language
+        self.entity_id = f"binary_sensor.sem_{description.key}"
         self._entry = entry
 
         if description.key in self.DIAGNOSTIC_SENSORS:
@@ -115,13 +117,18 @@ class SEMSolarBinarySensor(CoordinatorEntity, BinarySensorEntity):
         if description.key in self.DISABLED_BY_DEFAULT:
             self._attr_entity_registry_enabled_default = False
 
+        # Start unavailable until first coordinator update (#70)
+        self._first_update_received = False
+
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        is_available = self.coordinator.last_update_success and self.coordinator.data is not None
-        if not is_available:
-            _LOGGER.debug("Binary sensor %s is unavailable", self.entity_description.key)
-        return is_available
+        if not self._first_update_received:
+            if self.coordinator.last_update_success and self.coordinator.data is not None:
+                self._first_update_received = True
+            else:
+                return False
+        return self.coordinator.last_update_success and self.coordinator.data is not None
 
     @property
     def is_on(self) -> bool | None:

@@ -1320,6 +1320,11 @@ views:
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-entity-card
+                entity: select.sem_ev_charging_mode
+                name: EV Charging Mode
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-entity-card
                 entity: switch.sem_night_charging
                 name: Night Charging
                 tap_action:

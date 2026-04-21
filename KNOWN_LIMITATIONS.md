@@ -10,7 +10,7 @@ Only one SEM config entry is supported per Home Assistant instance. Creating a s
 
 ## EV charger requirements
 
-The EV charger must be controllable via a supported HA integration (KEBA, Easee, go-eCharger, Wallbox, OpenWB) or through a generic `number` entity for current control. Manual configuration of entity IDs is required if the charger is not auto-detected.
+The EV charger must be controllable via a supported HA integration (KEBA, Easee, go-eCharger, Wallbox, Zaptec, ChargePoint, Heidelberg, OpenWB) or through a generic `number` entity for current control. Manual configuration of entity IDs is required if the charger is not auto-detected.
 
 ## Battery discharge protection
 

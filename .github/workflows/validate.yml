@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
@@ -45,17 +45,3 @@ jobs:
             docker run --rm \
               -v "$GITHUB_WORKSPACE":/github/workspace \
               ghcr.io/home-assistant/hassfest
-
-  tests:
-    name: Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: custom_components/solar_energy_management
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r custom_components/solar_energy_management/tests/requirements_test.txt
-      - run: python -m pytest tests/ --ignore=tests/test_energy_flow_balance.py --ignore=tests/test_flow_accumulation.py -v
-        working-directory: custom_components/solar_energy_management

@@ -11,7 +11,7 @@ provides power/energy sensors, not the control entities needed for:
 
 Detection is integration-aware:
 1. **Integration-Aware Detection**: Recognizes entity naming conventions from
-   KEBA, Easee, Wallbox, go-eCharger, OpenWB, etc.
+   KEBA, Easee, Wallbox, go-eCharger, OpenWB, Zaptec, ChargePoint, Heidelberg, etc.
 
 2. **Priority-Based Matching**: Each pattern has a priority score (1-10):
    - 10: Integration-specific patterns (highest accuracy)
@@ -174,6 +174,91 @@ EV_INTEGRATION_PATTERNS = {
             ],
         }
     },
+    "zaptec": {
+        "integration_name": "Zaptec",
+        "patterns": {
+            "ev_connected": [
+                ("binary_sensor.zaptec_*_cable_connected", "Zaptec - Cable Connected", 10),
+                ("binary_sensor.zaptec_*_connected", "Zaptec - Connected", 9),
+            ],
+            "ev_charging": [
+                ("binary_sensor.zaptec_*_charging", "Zaptec - Charging", 10),
+                ("sensor.zaptec_*_charger_operation_mode", "Zaptec - Operation Mode", 8),
+            ],
+            "ev_charging_power": [
+                ("sensor.zaptec_*_charge_power", "Zaptec - Charge Power", 10),
+                ("sensor.zaptec_*_power", "Zaptec - Power", 9),
+            ],
+            "ev_current": [
+                ("number.zaptec_*_available_current", "Zaptec - Available Current", 10),
+                ("sensor.zaptec_*_current", "Zaptec - Current", 9),
+            ],
+            "ev_session_energy": [
+                ("sensor.zaptec_*_session_energy", "Zaptec - Session Energy", 10),
+                ("sensor.zaptec_*_total_charge_power_session", "Zaptec - Session Charge", 9),
+            ],
+            "ev_total_energy": [
+                ("sensor.zaptec_*_total_charge_power", "Zaptec - Total Energy", 10),
+            ],
+        }
+    },
+    "chargepoint": {
+        "integration_name": "ChargePoint",
+        "patterns": {
+            "ev_connected": [
+                ("binary_sensor.chargepoint_*_connected", "ChargePoint - Connected", 10),
+                ("binary_sensor.chargepoint_*_plugged*", "ChargePoint - Plugged", 9),
+            ],
+            "ev_charging": [
+                ("binary_sensor.chargepoint_*_charging", "ChargePoint - Charging", 10),
+                ("sensor.chargepoint_*_status", "ChargePoint - Status", 8),
+            ],
+            "ev_charging_power": [
+                ("sensor.chargepoint_*_power_output", "ChargePoint - Power Output", 10),
+                ("sensor.chargepoint_*_power", "ChargePoint - Power", 9),
+            ],
+            "ev_current": [
+                ("number.chargepoint_*_charging_amperage_limit", "ChargePoint - Amperage Limit", 10),
+                ("sensor.chargepoint_*_current", "ChargePoint - Current", 9),
+            ],
+            "ev_session_energy": [
+                ("sensor.chargepoint_*_session_energy", "ChargePoint - Session Energy", 10),
+            ],
+            "ev_total_energy": [
+                ("sensor.chargepoint_*_energy_output", "ChargePoint - Energy Output", 10),
+                ("sensor.chargepoint_*_total_energy", "ChargePoint - Total Energy", 9),
+            ],
+        }
+    },
+    "heidelberg": {
+        "integration_name": "Heidelberg Energy Control",
+        "patterns": {
+            "ev_connected": [
+                ("binary_sensor.heidelberg_*_connected", "Heidelberg - Connected", 10),
+                ("binary_sensor.heidelberg_*_plug*", "Heidelberg - Plug", 9),
+            ],
+            "ev_charging": [
+                ("binary_sensor.heidelberg_*_charging", "Heidelberg - Charging", 10),
+                ("binary_sensor.heidelberg_*_active", "Heidelberg - Active", 8),
+            ],
+            "ev_charging_power": [
+                ("sensor.heidelberg_*_charging_power", "Heidelberg - Charging Power", 10),
+                ("sensor.heidelberg_*_power", "Heidelberg - Power", 9),
+            ],
+            "ev_current": [
+                ("number.heidelberg_*_charging_current_limit", "Heidelberg - Current Limit", 10),
+                ("sensor.heidelberg_*_current", "Heidelberg - Current", 9),
+            ],
+            "ev_session_energy": [
+                ("sensor.heidelberg_*_session_energy", "Heidelberg - Session Energy", 10),
+                ("sensor.heidelberg_*_energy_session", "Heidelberg - Energy Session", 9),
+            ],
+            "ev_total_energy": [
+                ("sensor.heidelberg_*_total_energy", "Heidelberg - Total Energy", 10),
+                ("sensor.heidelberg_*_energy_total", "Heidelberg - Energy Total", 9),
+            ],
+        }
+    },
 }
 
 # Generic EV charger patterns (fallback)
@@ -304,7 +389,15 @@ class EVChargerDetector:
                 return -20000 <= value <= 20000
 
             elif sensor_type in ["ev_connected", "ev_charging"]:
-                return state.state.lower() in ("on", "off", "true", "false", "0", "1")
+                # Accept binary_sensor values AND regular sensor status values
+                # used by Easee, Wallbox, GoodWe, etc. (#68)
+                return state.state.lower() in (
+                    "on", "off", "true", "false", "0", "1",
+                    "connected", "disconnected", "ready_to_charge",
+                    "awaiting_start", "awaiting_authorization",
+                    "charging", "completed", "ready", "idle",
+                    "not_connected", "paused", "error",
+                )
 
             else:
                 return True
@@ -422,7 +515,8 @@ def discover_ev_charger_from_registry(hass: HomeAssistant) -> Dict[str, str]:
     """Auto-discover EV charger config from known integrations via entity registry.
 
     Queries the HA entity registry for entities belonging to supported EV charger
-    integrations (KEBA, Easee, go-eCharger, Wallbox) and maps them to SEM config keys.
+    integrations (KEBA, Easee, go-eCharger, Wallbox, Zaptec, ChargePoint, Heidelberg)
+    and maps them to SEM config keys.
 
     Returns:
         Dict with config keys (ev_connected_sensor, ev_charging_sensor, etc.)
@@ -436,6 +530,9 @@ def discover_ev_charger_from_registry(hass: HomeAssistant) -> Dict[str, str]:
         ("easee", _discover_easee),
         ("goecharger", _discover_goecharger),
         ("wallbox", _discover_wallbox),
+        ("zaptec", _discover_zaptec),
+        ("chargepoint", _discover_chargepoint),
+        ("heidelberg_energy_control", _discover_heidelberg),
     ]:
         entities = [
             e for e in entity_reg.entities.values()
@@ -477,6 +574,7 @@ def _discover_keba(entities) -> Dict[str, str]:
 
     if result:
         result["ev_charger_service"] = "keba.set_current"
+        result["ev_service_param_name"] = "current"
         target = result.get("ev_connected_sensor")
         if target:
             result["ev_charger_service_entity_id"] = target
@@ -487,20 +585,35 @@ def _discover_keba(entities) -> Dict[str, str]:
 def _discover_easee(entities) -> Dict[str, str]:
     """Discover EV charger config from Easee integration."""
     result: Dict[str, str] = {}
+    device_id = None
     for entry in entities:
         eid = entry.entity_id
         dc = entry.original_device_class
-        if eid.startswith("binary_sensor.") and "status" in eid:
+        # Easee uses sensor (not binary_sensor) for status (#68)
+        if eid.startswith("sensor.") and "status" in eid and dc is None:
             result.setdefault("ev_connected_sensor", eid)
             result.setdefault("ev_charging_sensor", eid)
+            if entry.device_id:
+                device_id = entry.device_id
         if eid.startswith("sensor.") and dc == "power":
             result["ev_charging_power_sensor"] = eid
+            if entry.device_id:
+                device_id = entry.device_id
         if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
             result["ev_total_energy_sensor"] = eid
         if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
             result["ev_session_energy_sensor"] = eid
     if result:
-        result["ev_charger_service"] = "easee.set_charger_max_limit"
+        # Use dynamic limit (preferred, no flash wear) over max_limit
+        result["ev_charger_service"] = "easee.set_charger_dynamic_limit"
+        result["ev_service_param_name"] = "current"
+        if device_id:
+            result["ev_service_device_id"] = device_id
+        # Start/stop via action_command service
+        result["ev_start_service"] = "easee.action_command"
+        result["ev_start_service_data"] = '{"action_command": "resume"}'
+        result["ev_stop_service"] = "easee.action_command"
+        result["ev_stop_service_data"] = '{"action_command": "pause"}'
     return result
 
 
@@ -539,6 +652,87 @@ def _discover_wallbox(entities) -> Dict[str, str]:
             result["ev_total_energy_sensor"] = eid
         if eid.startswith("number.") and "current" in eid:
             result["ev_current_control_entity"] = eid
+        # Wallbox pause/resume switch
+        if eid.startswith("switch.") and "pause" in eid:
+            result["ev_start_stop_entity"] = eid
+    return result
+
+
+def _discover_zaptec(entities) -> Dict[str, str]:
+    """Discover EV charger config from Zaptec integration."""
+    result: Dict[str, str] = {}
+    device_id = None
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and ("cable" in eid or "connect" in eid):
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("binary_sensor.") and "charg" in eid:
+            result["ev_charging_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+            if entry.device_id:
+                device_id = entry.device_id
+        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
+            result["ev_total_energy_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            result["ev_session_energy_sensor"] = eid
+        if eid.startswith("number.") and "current" in eid:
+            result["ev_current_control_entity"] = eid
+    if result:
+        # Prefer number entity control if found, otherwise use service
+        if "ev_current_control_entity" not in result:
+            result["ev_charger_service"] = "zaptec.limit_current"
+            result["ev_service_param_name"] = "available_current"
+            if device_id:
+                result["ev_service_device_id"] = device_id
+        # Discover resume/stop button entities
+        for entry in entities:
+            eid = entry.entity_id
+            if eid.startswith("button.") and "resume" in eid:
+                result["ev_start_stop_entity"] = eid  # button for start
+    return result
+
+
+def _discover_chargepoint(entities) -> Dict[str, str]:
+    """Discover EV charger config from ChargePoint integration."""
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and ("connect" in eid or "plug" in eid):
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("binary_sensor.") and "charg" in eid:
+            result["ev_charging_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
+            result["ev_total_energy_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            result["ev_session_energy_sensor"] = eid
+        if eid.startswith("number.") and ("amperage" in eid or "current" in eid):
+            result["ev_current_control_entity"] = eid
+    return result
+
+
+def _discover_heidelberg(entities) -> Dict[str, str]:
+    """Discover EV charger config from Heidelberg Energy Control integration."""
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and ("connect" in eid or "plug" in eid):
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("binary_sensor.") and ("charg" in eid or "active" in eid):
+            result["ev_charging_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
+            result["ev_total_energy_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            result["ev_session_energy_sensor"] = eid
+        if eid.startswith("number.") and "current" in eid:
+            result["ev_current_control_entity"] = eid
     return result
 
 
@@ -575,6 +769,9 @@ _DISCHARGE_CONTROL_PATTERNS = [
     re.compile(r"sofar.*discharg.*power", re.IGNORECASE),
     # Solis
     re.compile(r"solis.*discharg.*power", re.IGNORECASE),
+    # GoodWe
+    re.compile(r"goodwe.*discharg.*power", re.IGNORECASE),
+    re.compile(r"goodwe.*battery.*discharg", re.IGNORECASE),
     # Generic fallback (any integration with standard naming)
     re.compile(r"discharg.*power.*limit", re.IGNORECASE),
 ]

@@ -907,6 +907,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charger_service_entity_id=ev_auto.get("ev_charger_service_entity_id"),
             current_entity_id=ev_auto.get("ev_current_control_entity"),
         )
+        # Per-integration charger profile (#82)
+        if ev_auto.get("ev_service_param_name"):
+            ev_device.service_param_name = ev_auto["ev_service_param_name"]
+        if ev_auto.get("ev_service_device_id"):
+            ev_device.service_device_id = ev_auto["ev_service_device_id"]
+        if ev_auto.get("ev_start_stop_entity"):
+            ev_device.start_stop_entity = ev_auto["ev_start_stop_entity"]
+        if ev_auto.get("ev_start_service"):
+            ev_device.start_service = ev_auto["ev_start_service"]
+            import json as _json
+            ev_device.start_service_data = _json.loads(ev_auto.get("ev_start_service_data", "{}"))
+        if ev_auto.get("ev_stop_service"):
+            ev_device.stop_service = ev_auto["ev_stop_service"]
+            import json as _json
+            ev_device.stop_service_data = _json.loads(ev_auto.get("ev_stop_service_data", "{}"))
         self._surplus_controller.register_device(ev_device)
         self._ev_device = ev_device
         ev_device.managed_externally = True
@@ -999,6 +1014,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return ("idle", "Solar charging disabled by user")
         if charging_mode == "minpv":
             return ("min_pv", f"Min+PV mode, remaining={remaining_need:.1f}kWh, solar={power.solar_power:.0f}W")
+        if charging_mode == "self_consumption":
+            return self._self_consumption_strategy(power, energy)
+
+        if charging_mode == "auto":
+            auto_result = self._auto_mode_strategy(power, energy, remaining_need)
+            if auto_result is not None:
+                return auto_result
+            # None = fall through to normal zone-based pv logic below
 
         # No meaningful solar → wait
         if power.solar_power < 200:
@@ -1073,6 +1096,74 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Zone 1: SOC < priority_soc → battery priority
         # State machine will route to SOLAR_PAUSE_LOW_BATTERY via battery_too_low flag
         return ("idle", f"Zone 1: SOC={power.battery_soc:.0f}% < priority={priority_soc}% — battery priority")
+
+    def _self_consumption_strategy(self, power, energy) -> tuple:
+        """Self-consumption mode: charge EV from true solar surplus only (#67).
+
+        Budget = solar - home (no ev_power add-back, no battery discharge for EV).
+        Zone 4 (SOC ≥ 90%): don't subtract battery charge (redirect to EV).
+        Zone 1-3: battery charges first, subtract battery_charge from budget.
+        Battery discharging for home is fine (that's using stored solar).
+        """
+        if power.solar_power < 200:
+            return ("idle", f"self_consumption: solar={power.solar_power:.0f}W < 200W")
+
+        auto_start_soc = self.config.get("battery_auto_start_soc", 90)
+        available = power.solar_power - power.home_consumption_power
+
+        if power.battery_soc < auto_start_soc:
+            available -= power.battery_charge_power  # battery charges first
+
+        available = max(0, available)
+        zone = "Z4-redirect" if power.battery_soc >= auto_start_soc else f"Z{self._get_zone(power.battery_soc)}"
+        return ("solar_only", f"self_consumption ({zone}): surplus={available:.0f}W, solar={power.solar_power:.0f}W")
+
+    def _auto_mode_strategy(self, power, energy, remaining_need: float) -> tuple:
+        """Auto mode: forecast-aware switching between self_consumption and pv (#67).
+
+        ratio = remaining_solar / remaining_ev_need
+        ratio > 2.0 → self_consumption (plenty of sun, no rush)
+        1.0-2.0     → pv with cap (tight, charge when available)
+        < 1.0       → pv aggressive (not enough, battery assist)
+        """
+        forecast = self._cycle_forecast
+        remaining_solar = 0
+        if forecast and forecast.available:
+            remaining_solar = forecast.forecast_remaining_today_kwh
+            try:
+                remaining_solar = self._forecast_tracker.apply_correction(remaining_solar)
+            except (ValueError, AttributeError):
+                pass
+
+        if remaining_need < 0.5:
+            return ("idle", "auto: EV target reached")
+
+        ratio = remaining_solar / remaining_need if remaining_need > 0 else 99
+
+        if ratio > 2.0:
+            # Plenty of sun → self_consumption
+            result = self._self_consumption_strategy(power, energy)
+            return (result[0], f"auto (ratio={ratio:.1f}→self_consumption): {result[1]}")
+        elif not forecast or not forecast.available:
+            # No forecast → default pv behavior (fall through to zone logic below)
+            pass
+        else:
+            # Tight or insufficient → pv with zones (fall through)
+            _LOGGER.debug("auto: ratio=%.1f → pv mode (zones active)", ratio)
+
+        # Fall through to normal zone-based pv logic
+        # (return None so caller continues to zone logic)
+        return None  # Signal: continue to zone logic
+
+    def _get_zone(self, soc: float) -> int:
+        """Get SOC zone number for logging."""
+        auto_start = self.config.get("battery_auto_start_soc", 90)
+        buffer = self.config.get("battery_buffer_soc", 70)
+        priority = self.config.get("battery_priority_soc", 30)
+        if soc >= auto_start: return 4
+        if soc >= buffer: return 3
+        if soc >= priority: return 2
+        return 1
 
     def _build_charging_context(
         self,

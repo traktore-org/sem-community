@@ -24,7 +24,7 @@
           "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger.",
+          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
           "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
           "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
           "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
@@ -89,6 +89,21 @@
   },
   "options": {
     "step": {
+      "ev_charger": {
+        "title": "EV Charger",
+        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "data": {
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "EV Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
+          "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
+          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
+          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
+          "ev_target_soc": "EV target SOC (%)"
+        }
+      },
       "hardware": {
         "title": "Hardware Entity Configuration",
         "description": "Update your hardware entity mappings. The Vehicle SOC fields at the bottom are only used if you provide a Vehicle Battery SOC sensor — otherwise SEM falls back to the kWh-based daily target.",
@@ -194,7 +209,7 @@
           "soc_delta": "SOC change threshold (%)"
         }
       },
-      "load_management_options": {
+      "load_management": {
         "title": "Load Management Settings",
         "description": "Update load management configuration",
         "data": {
@@ -208,7 +223,7 @@
           "ev_target_soc": "EV Target SOC (%)"
         }
       },
-      "notifications_options": {
+      "notifications": {
         "title": "Notification Settings",
         "description": "Update notification configuration",
         "data": {

@@ -4,7 +4,7 @@ on:
   push:
     branches: [develop, main]
   pull_request:
-    branches: [main]
+    branches: [develop, main]
 
 jobs:
   test:
@@ -34,11 +34,11 @@ jobs:
           cp -r $GITHUB_WORKSPACE /tmp/ha-config/custom_components/solar_energy_management
 
       - name: Run tests with coverage
-        working-directory: /tmp/ha-config/custom_components/solar_energy_management
+        working-directory: /tmp/ha-config
         env:
           PYTHONPATH: /tmp/ha-config
         run: |
-          python -m pytest tests/ \
+          python -m pytest custom_components/solar_energy_management/tests/ \
             --cov=custom_components.solar_energy_management \
             --cov-report=term-missing \
             --cov-report=xml:$GITHUB_WORKSPACE/coverage.xml \
@@ -53,11 +53,11 @@ jobs:
 
       - name: Coverage summary
         if: always()
-        working-directory: /tmp/ha-config/custom_components/solar_energy_management
+        working-directory: /tmp/ha-config
         env:
           PYTHONPATH: /tmp/ha-config
         run: |
-          python -m pytest tests/ \
+          python -m pytest custom_components/solar_energy_management/tests/ \
             --cov=custom_components.solar_energy_management \
             --cov-report=term \
             -q --no-header 2>&1 | tail -30 || true
