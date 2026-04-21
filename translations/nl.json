@@ -89,6 +89,21 @@
     },
     "options": {
         "step": {
+            "ev_charger": {
+                "title": "EV-lader",
+                "description": "Controleer en werk de entiteitstoewijzingen van uw EV-lader bij. De voertuig-SOC-velden worden alleen gebruikt als u een voertuig-batterij-SOC-sensor opgeeft.",
+                "data": {
+                    "ev_connected_sensor": "EV-verbindingsstatus",
+                    "ev_charging_sensor": "EV-laadstatus",
+                    "ev_charging_power_sensor": "EV-laadvermogen",
+                    "ev_charger_service": "EV-lader stroom-insteldienst (optioneel)",
+                    "ev_charger_service_entity_id": "EV-lader dienst-doelentiteit (optioneel)",
+                    "ev_total_energy_sensor": "EV totale energieteller (optioneel)",
+                    "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
+                    "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
+                    "ev_target_soc": "EV-doel-SOC (%)"
+                }
+            },
             "hardware": {
                 "title": "Hardware Entity Configuration",
                 "description": "Update your hardware entity mappings",
@@ -141,7 +156,32 @@
                     "ev_target_soc": "EV Target SOC (%)"
                 }
             },
-            "load_management_options": {
+            "settings_ev": {
+                "title": "EV-laden & Zon",
+                "description": "EV-laaddoelen en zonne-energiedrempels configureren.",
+                "data": {
+                    "daily_ev_target": "Nachtlaaddoel (kWh)",
+                    "min_solar_power": "Minimaal zonnevermogen om EV-laden te starten (W)",
+                    "max_grid_import": "Max. netimport tijdens zonneladen (W, 0 = alleen zon)",
+                    "observer_mode": "Observatiemodus (alleen lezen, geen hardwarebesturing)",
+                    "forecast_night_reduction": "Nachtdoel verlagen op basis van voorspelling van morgen"
+                }
+            },
+            "settings_tariff": {
+                "title": "Tarieven & Geavanceerd",
+                "description": "Elektriciteitstarieven en geavanceerde afstemmingsparameters.",
+                "data": {
+                    "electricity_import_rate": "Importtarief",
+                    "electricity_nt_rate": "Nachttarief (indien afwijkend)",
+                    "electricity_export_rate": "Exporttarief",
+                    "demand_charge_rate": "Vermogenstarief",
+                    "update_interval": "Update-interval (s)",
+                    "power_delta": "Drempel vermogenswijziging (W)",
+                    "current_delta": "Drempel stroomwijziging (A)",
+                    "soc_delta": "Drempel SOC-wijziging (%)"
+                }
+            },
+            "load_management": {
                 "title": "Load Management Settings",
                 "description": "Update load management configuration",
                 "data": {
@@ -155,7 +195,7 @@
                     "ev_target_soc": "EV Target SOC (%)"
                 }
             },
-            "notifications_options": {
+            "notifications": {
                 "title": "Notification Settings",
                 "description": "Update notification configuration",
                 "data": {

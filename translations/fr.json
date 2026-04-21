@@ -89,6 +89,21 @@
     },
     "options": {
         "step": {
+            "ev_charger": {
+                "title": "Chargeur VE",
+                "description": "Vérifiez et mettez à jour les mappages d'entités de votre chargeur VE. Les champs SOC du véhicule ne sont utilisés que si vous fournissez un capteur SOC de batterie du véhicule.",
+                "data": {
+                    "ev_connected_sensor": "État de connexion VE",
+                    "ev_charging_sensor": "État de charge VE",
+                    "ev_charging_power_sensor": "Puissance de charge VE",
+                    "ev_charger_service": "Service de réglage du courant du chargeur VE (optionnel)",
+                    "ev_charger_service_entity_id": "Entité cible du service du chargeur VE (optionnel)",
+                    "ev_total_energy_sensor": "Compteur d'énergie totale VE (optionnel)",
+                    "vehicle_soc_entity": "Capteur SOC batterie véhicule (optionnel)",
+                    "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
+                    "ev_target_soc": "SOC cible VE (%)"
+                }
+            },
             "hardware": {
                 "title": "Configuration des Entités Matérielles",
                 "description": "Mettez à jour vos mappages d'entités matérielles",
@@ -132,7 +147,32 @@
                     "electricity_export_rate": "Tarif d'Export d'Électricité (par kWh)"
                 }
             },
-            "load_management_options": {
+            "settings_ev": {
+                "title": "Charge VE & Solaire",
+                "description": "Configurer les objectifs de charge VE et les seuils solaires.",
+                "data": {
+                    "daily_ev_target": "Objectif de charge nocturne (kWh)",
+                    "min_solar_power": "Puissance solaire minimale pour démarrer la charge VE (W)",
+                    "max_grid_import": "Import réseau max. pendant charge solaire (W, 0 = solaire pur)",
+                    "observer_mode": "Mode observation (lecture seule, pas de contrôle matériel)",
+                    "forecast_night_reduction": "Réduire l'objectif nocturne selon la prévision de demain"
+                }
+            },
+            "settings_tariff": {
+                "title": "Tarifs & Avancé",
+                "description": "Tarifs d'électricité et paramètres de réglage avancés.",
+                "data": {
+                    "electricity_import_rate": "Tarif d'import",
+                    "electricity_nt_rate": "Tarif de nuit (si différent)",
+                    "electricity_export_rate": "Tarif d'export",
+                    "demand_charge_rate": "Tarif de puissance souscrite",
+                    "update_interval": "Intervalle de mise à jour (s)",
+                    "power_delta": "Seuil de variation de puissance (W)",
+                    "current_delta": "Seuil de variation de courant (A)",
+                    "soc_delta": "Seuil de variation du SOC (%)"
+                }
+            },
+            "load_management": {
                 "title": "Paramètres de Gestion de Charge",
                 "description": "Mettre à jour la configuration de gestion de charge",
                 "data": {
@@ -143,7 +183,7 @@
                     "critical_device_protection": "Protéger les Appareils Critiques"
                 }
             },
-            "notifications_options": {
+            "notifications": {
                 "title": "Paramètres de Notification",
                 "description": "Mettre à jour la configuration des notifications",
                 "data": {

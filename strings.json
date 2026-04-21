@@ -89,6 +89,21 @@
   },
   "options": {
     "step": {
+      "ev_charger": {
+        "title": "EV Charger",
+        "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+        "data": {
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "EV Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
+          "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
+          "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
+          "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
+          "ev_target_soc": "EV target SOC (%)"
+        }
+      },
       "hardware": {
         "title": "Hardware Entity Configuration",
         "description": "Update your hardware entity mappings. The Vehicle SOC fields at the bottom are only used if you provide a Vehicle Battery SOC sensor — otherwise SEM falls back to the kWh-based daily target.",
@@ -194,7 +209,7 @@
           "soc_delta": "SOC change threshold (%)"
         }
       },
-      "load_management_options": {
+      "load_management": {
         "title": "Load Management Settings",
         "description": "Update load management configuration",
         "data": {
@@ -208,7 +223,7 @@
           "ev_target_soc": "EV Target SOC (%)"
         }
       },
-      "notifications_options": {
+      "notifications": {
         "title": "Notification Settings",
         "description": "Update notification configuration",
         "data": {

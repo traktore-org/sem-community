@@ -89,6 +89,21 @@
     },
     "options": {
         "step": {
+            "ev_charger": {
+                "title": "EV-Ladegerät",
+                "description": "Überprüfen und aktualisieren Sie Ihre EV-Ladegerät-Entitätszuordnungen. Die Fahrzeug-SOC-Felder werden nur verwendet, wenn Sie einen Fahrzeug-Batterie-SOC-Sensor angeben.",
+                "data": {
+                    "ev_connected_sensor": "EV-Verbindungsstatus",
+                    "ev_charging_sensor": "EV-Ladestatus",
+                    "ev_charging_power_sensor": "EV-Ladeleistung",
+                    "ev_charger_service": "EV-Ladegerät Strom-Setzen-Dienst (optional)",
+                    "ev_charger_service_entity_id": "EV-Ladegerät Dienst-Zielentität (optional)",
+                    "ev_total_energy_sensor": "EV-Gesamtenergiezähler (optional)",
+                    "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
+                    "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+                    "ev_target_soc": "EV-Ziel-SOC (%)"
+                }
+            },
             "hardware": {
                 "title": "Hardware-Entitätskonfiguration",
                 "description": "Aktualisieren Sie Ihre Hardware-Entitätszuordnungen",
@@ -138,7 +153,32 @@
                     "ev_target_soc": "EV Target SOC (%)"
                 }
             },
-            "load_management_options": {
+            "settings_ev": {
+                "title": "EV-Laden & Solar",
+                "description": "EV-Ladeziele und Solar-Schwellenwerte konfigurieren.",
+                "data": {
+                    "daily_ev_target": "Nacht-Ladeziel (kWh)",
+                    "min_solar_power": "Minimale Solarleistung zum Starten der EV-Ladung (W)",
+                    "max_grid_import": "Max. Netzimport während Solarladen (W, 0 = reiner Solarbetrieb)",
+                    "observer_mode": "Beobachtermodus (nur lesen, keine Hardwaresteuerung)",
+                    "forecast_night_reduction": "Nachtziel basierend auf Prognose von morgen reduzieren"
+                }
+            },
+            "settings_tariff": {
+                "title": "Tarif & Erweitert",
+                "description": "Stromtarife und erweiterte Optimierungsparameter.",
+                "data": {
+                    "electricity_import_rate": "Importtarif",
+                    "electricity_nt_rate": "Nachttarif (falls abweichend)",
+                    "electricity_export_rate": "Exporttarif",
+                    "demand_charge_rate": "Leistungspreis",
+                    "update_interval": "Aktualisierungsintervall (s)",
+                    "power_delta": "Leistungsänderungs-Schwellenwert (W)",
+                    "current_delta": "Stromänderungs-Schwellenwert (A)",
+                    "soc_delta": "SOC-Änderungs-Schwellenwert (%)"
+                }
+            },
+            "load_management": {
                 "title": "Lastmanagement-Einstellungen",
                 "description": "Lastmanagement-Konfiguration aktualisieren",
                 "data": {
@@ -152,7 +192,7 @@
                     "ev_target_soc": "EV Target SOC (%)"
                 }
             },
-            "notifications_options": {
+            "notifications": {
                 "title": "Benachrichtigungseinstellungen",
                 "description": "Benachrichtigungskonfiguration aktualisieren",
                 "data": {

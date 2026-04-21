@@ -89,6 +89,21 @@
     },
     "options": {
         "step": {
+            "ev_charger": {
+                "title": "EV Charger",
+                "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
+                "data": {
+                    "ev_connected_sensor": "EV Connected Status",
+                    "ev_charging_sensor": "EV Charging Status",
+                    "ev_charging_power_sensor": "EV Charging Power",
+                    "ev_charger_service": "EV Charger Set-Current Service (optional)",
+                    "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
+                    "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
+                    "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
+                    "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
+                    "ev_target_soc": "EV target SOC (%)"
+                }
+            },
             "hardware": {
                 "title": "Hardware Entity Configuration",
                 "description": "Update your hardware entity mappings",
@@ -141,7 +156,32 @@
                     "ev_target_soc": "EV Target SOC (%)"
                 }
             },
-            "load_management_options": {
+            "settings_ev": {
+                "title": "EV Charging & Solar",
+                "description": "Configure EV charging targets and solar thresholds.",
+                "data": {
+                    "daily_ev_target": "Night charge target (kWh)",
+                    "min_solar_power": "Minimum solar power to start EV charging (W)",
+                    "max_grid_import": "Max grid import during solar charging (W, 0 = pure solar)",
+                    "observer_mode": "Observer mode (read-only, no hardware control)",
+                    "forecast_night_reduction": "Reduce night target based on tomorrow's forecast"
+                }
+            },
+            "settings_tariff": {
+                "title": "Tariff & Advanced",
+                "description": "Electricity rates and advanced tuning parameters.",
+                "data": {
+                    "electricity_import_rate": "Import rate",
+                    "electricity_nt_rate": "Night tariff rate (if different)",
+                    "electricity_export_rate": "Export rate",
+                    "demand_charge_rate": "Demand charge rate",
+                    "update_interval": "Update interval (s)",
+                    "power_delta": "Power change threshold (W)",
+                    "current_delta": "Current change threshold (A)",
+                    "soc_delta": "SOC change threshold (%)"
+                }
+            },
+            "load_management": {
                 "title": "Load Management Settings",
                 "description": "Update load management configuration",
                 "data": {
@@ -155,7 +195,7 @@
                     "ev_target_soc": "EV Target SOC (%)"
                 }
             },
-            "notifications_options": {
+            "notifications": {
                 "title": "Notification Settings",
                 "description": "Update notification configuration",
                 "data": {
