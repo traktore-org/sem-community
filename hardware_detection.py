@@ -609,6 +609,11 @@ def _discover_easee(entities) -> Dict[str, str]:
         result["ev_service_param_name"] = "current"
         if device_id:
             result["ev_service_device_id"] = device_id
+        # Start/stop via action_command service
+        result["ev_start_service"] = "easee.action_command"
+        result["ev_start_service_data"] = '{"action_command": "resume"}'
+        result["ev_stop_service"] = "easee.action_command"
+        result["ev_stop_service_data"] = '{"action_command": "pause"}'
     return result
 
 
@@ -647,6 +652,9 @@ def _discover_wallbox(entities) -> Dict[str, str]:
             result["ev_total_energy_sensor"] = eid
         if eid.startswith("number.") and "current" in eid:
             result["ev_current_control_entity"] = eid
+        # Wallbox pause/resume switch
+        if eid.startswith("switch.") and "pause" in eid:
+            result["ev_start_stop_entity"] = eid
     return result
 
 
@@ -678,6 +686,11 @@ def _discover_zaptec(entities) -> Dict[str, str]:
             result["ev_service_param_name"] = "available_current"
             if device_id:
                 result["ev_service_device_id"] = device_id
+        # Discover resume/stop button entities
+        for entry in entities:
+            eid = entry.entity_id
+            if eid.startswith("button.") and "resume" in eid:
+                result["ev_start_stop_entity"] = eid  # button for start
     return result
 
 

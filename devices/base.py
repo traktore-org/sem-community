@@ -453,6 +453,17 @@ class CurrentControlDevice(ControllableDevice):
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
         self.global_services: bool = True  # True = services don't need entity_id (KEBA-style)
+        # Start/stop control — per-integration (#82)
+        # Entities: switch/button/select entity_ids for start/stop
+        self.start_stop_entity: Optional[str] = None  # switch or button entity
+        self.charge_mode_entity: Optional[str] = None  # select entity (go-e, OpenWB)
+        self.charge_mode_start: Optional[str] = None  # select option for "start"
+        self.charge_mode_stop: Optional[str] = None  # select option for "stop"
+        # Service-based start/stop (Easee action_command)
+        self.start_service: Optional[str] = None  # e.g. "easee.action_command"
+        self.start_service_data: Optional[Dict] = None  # e.g. {"action_command": "resume"}
+        self.stop_service: Optional[str] = None
+        self.stop_service_data: Optional[Dict] = None
         # Phase switching (1p/3p)
         self.min_phases: int = 1
         self.max_phases: int = phases
@@ -607,11 +618,42 @@ class CurrentControlDevice(ControllableDevice):
     async def start_session(self, energy_target_kwh: float = 0) -> None:
         """Start a charging session.
 
-        For night charging: pass energy_target_kwh > 0 to set KEBA auto-stop.
-        For solar charging: pass 0 (no auto-stop, charge as long as surplus).
+        Uses the charger profile to determine the correct start method (#82):
+        - KEBA: service enable + optional failsafe/energy target
+        - Easee: action_command service with "resume"
+        - Wallbox/Heidelberg: switch entity turn_on
+        - Zaptec/ChargePoint: button entity press
+        - go-eCharger/OpenWB: select entity set mode
+        - Fallback: probe for domain.enable service (KEBA pattern)
         """
         try:
-            if self.charger_service:
+            # 1. Profile-based start (preferred)
+            if self.start_service:
+                domain, service = self.start_service.split(".", 1)
+                data = dict(self.start_service_data or {})
+                if self.service_device_id:
+                    data["device_id"] = self.service_device_id
+                await self.hass.services.async_call(domain, service, data, blocking=True)
+            elif self.charge_mode_entity and self.charge_mode_start:
+                await self.hass.services.async_call(
+                    "select", "select_option",
+                    {"entity_id": self.charge_mode_entity, "option": self.charge_mode_start},
+                    blocking=True,
+                )
+            elif self.start_stop_entity:
+                domain = self.start_stop_entity.split(".")[0]
+                if domain == "switch":
+                    await self.hass.services.async_call(
+                        "switch", "turn_on",
+                        {"entity_id": self.start_stop_entity}, blocking=True,
+                    )
+                elif domain == "button":
+                    await self.hass.services.async_call(
+                        "button", "press",
+                        {"entity_id": self.start_stop_entity}, blocking=True,
+                    )
+            elif self.charger_service:
+                # 2. KEBA-style fallback: probe for enable/disable services
                 domain = self.charger_service.split(".", 1)[0]
 
                 # KEBA-specific: disable failsafe mode
@@ -622,45 +664,70 @@ class CurrentControlDevice(ControllableDevice):
                             {"failsafe_timeout": 0, "failsafe_fallback": 6, "failsafe_persist": False},
                             blocking=True,
                         )
-                        _LOGGER.info("Charger failsafe disabled for %s", self.name)
                     except Exception as e:
                         _LOGGER.warning("Failed to disable charger failsafe: %s", e)
 
-                # Set energy target if supported and requested
+                # Set energy target if supported (KEBA)
                 if energy_target_kwh > 0 and self.hass.services.has_service(domain, "set_energy"):
                     await self.hass.services.async_call(
-                        domain, "set_energy",
-                        {"energy": energy_target_kwh},
-                        blocking=True,
+                        domain, "set_energy", {"energy": energy_target_kwh}, blocking=True,
                     )
-                    _LOGGER.info("Charger session: energy target %.1f kWh", energy_target_kwh)
 
                 # Pilot cycle: disable/enable for cars that need fresh signal
                 if self.needs_pilot_cycle and self.hass.services.has_service(domain, "disable"):
-                    await self.hass.services.async_call(
-                        domain, "disable", {}, blocking=True,
-                    )
+                    await self.hass.services.async_call(domain, "disable", {}, blocking=True)
                     await asyncio.sleep(3)
 
                 # Enable charger
                 if self.hass.services.has_service(domain, "enable"):
-                    await self.hass.services.async_call(
-                        domain, "enable", {}, blocking=True,
-                    )
+                    await self.hass.services.async_call(domain, "enable", {}, blocking=True)
+
             self._session_active = True
             _LOGGER.info("Charging session started for %s", self.name)
         except Exception as e:
             _LOGGER.error("Failed to start session on %s: %s", self.name, e)
 
     async def stop_session(self) -> None:
-        """Stop the charging session."""
+        """Stop the charging session.
+
+        Uses the charger profile to determine the correct stop method (#82).
+        """
         try:
-            if self.charger_service:
+            if self.stop_service:
+                domain, service = self.stop_service.split(".", 1)
+                data = dict(self.stop_service_data or {})
+                if self.service_device_id:
+                    data["device_id"] = self.service_device_id
+                await self.hass.services.async_call(domain, service, data, blocking=True)
+            elif self.charge_mode_entity and self.charge_mode_stop:
+                await self.hass.services.async_call(
+                    "select", "select_option",
+                    {"entity_id": self.charge_mode_entity, "option": self.charge_mode_stop},
+                    blocking=True,
+                )
+            elif self.start_stop_entity:
+                domain = self.start_stop_entity.split(".")[0]
+                if domain == "switch":
+                    await self.hass.services.async_call(
+                        "switch", "turn_off",
+                        {"entity_id": self.start_stop_entity}, blocking=True,
+                    )
+                elif domain == "button":
+                    # Stop buttons have different entity_ids than start buttons
+                    # The stop entity is typically named *_stop_charging*
+                    stop_entity = self.start_stop_entity.replace("resume", "stop").replace("start", "stop")
+                    if "_charging" not in stop_entity:
+                        stop_entity = stop_entity.replace("_stop", "_stop_charging")
+                    await self.hass.services.async_call(
+                        "button", "press",
+                        {"entity_id": stop_entity}, blocking=True,
+                    )
+            elif self.charger_service:
+                # KEBA-style fallback
                 domain = self.charger_service.split(".", 1)[0]
                 if self.hass.services.has_service(domain, "disable"):
-                    await self.hass.services.async_call(
-                        domain, "disable", {}, blocking=True,
-                    )
+                    await self.hass.services.async_call(domain, "disable", {}, blocking=True)
+
             await self._set_current(0)
             self._session_active = False
             self._status.state = DeviceState.IDLE
