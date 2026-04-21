@@ -907,6 +907,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charger_service_entity_id=ev_auto.get("ev_charger_service_entity_id"),
             current_entity_id=ev_auto.get("ev_current_control_entity"),
         )
+        # Per-integration service parameter mapping (#82)
+        if ev_auto.get("ev_service_param_name"):
+            ev_device.service_param_name = ev_auto["ev_service_param_name"]
+        if ev_auto.get("ev_service_device_id"):
+            ev_device.service_device_id = ev_auto["ev_service_device_id"]
         self._surplus_controller.register_device(ev_device)
         self._ev_device = ev_device
         ev_device.managed_externally = True

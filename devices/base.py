@@ -449,6 +449,8 @@ class CurrentControlDevice(ControllableDevice):
         self.current_entity_id = current_entity_id
         self.charger_service = charger_service
         self.charger_service_entity_id = charger_service_entity_id
+        self.service_param_name: str = "current"  # Overridden per integration (#82)
+        self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
         self.global_services: bool = True  # True = services don't need entity_id (KEBA-style)
         # Phase switching (1p/3p)
@@ -559,11 +561,14 @@ class CurrentControlDevice(ControllableDevice):
 
         try:
             if self.charger_service:
-                # Service-based control (e.g., keba.set_current)
+                # Service-based control — param name varies per integration (#82)
                 domain, service = self.charger_service.split(".", 1)
-                service_data = {"current": current}
+                service_data = {self.service_param_name: current}
+                # Some integrations need device_id (Easee, Zaptec)
+                if self.service_device_id:
+                    service_data["device_id"] = self.service_device_id
                 # Pass entity_id only if service requires it (non-global services)
-                if self.charger_service_entity_id and not self.global_services:
+                elif self.charger_service_entity_id and not self.global_services:
                     service_data["entity_id"] = self.charger_service_entity_id
                 await self.hass.services.async_call(
                     domain, service,

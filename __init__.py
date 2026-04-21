@@ -268,6 +268,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 current_entity_id=ev_current_entity,
             )
             ev_device.needs_pilot_cycle = full_config.get("ev_charger_needs_cycle", False)
+            # Per-integration service parameter mapping (#82)
+            if full_config.get("ev_service_param_name"):
+                ev_device.service_param_name = full_config["ev_service_param_name"]
+            if full_config.get("ev_service_device_id"):
+                ev_device.service_device_id = full_config["ev_service_device_id"]
             coordinator._surplus_controller.register_device(ev_device)
             coordinator._ev_device = ev_device
             ev_device.managed_externally = True  # Coordinator always owns EV

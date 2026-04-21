@@ -574,6 +574,7 @@ def _discover_keba(entities) -> Dict[str, str]:
 
     if result:
         result["ev_charger_service"] = "keba.set_current"
+        result["ev_service_param_name"] = "current"
         target = result.get("ev_connected_sensor")
         if target:
             result["ev_charger_service_entity_id"] = target
@@ -584,20 +585,30 @@ def _discover_keba(entities) -> Dict[str, str]:
 def _discover_easee(entities) -> Dict[str, str]:
     """Discover EV charger config from Easee integration."""
     result: Dict[str, str] = {}
+    device_id = None
     for entry in entities:
         eid = entry.entity_id
         dc = entry.original_device_class
-        if eid.startswith("binary_sensor.") and "status" in eid:
+        # Easee uses sensor (not binary_sensor) for status (#68)
+        if eid.startswith("sensor.") and "status" in eid and dc is None:
             result.setdefault("ev_connected_sensor", eid)
             result.setdefault("ev_charging_sensor", eid)
+            if entry.device_id:
+                device_id = entry.device_id
         if eid.startswith("sensor.") and dc == "power":
             result["ev_charging_power_sensor"] = eid
+            if entry.device_id:
+                device_id = entry.device_id
         if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
             result["ev_total_energy_sensor"] = eid
         if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
             result["ev_session_energy_sensor"] = eid
     if result:
-        result["ev_charger_service"] = "easee.set_charger_max_limit"
+        # Use dynamic limit (preferred, no flash wear) over max_limit
+        result["ev_charger_service"] = "easee.set_charger_dynamic_limit"
+        result["ev_service_param_name"] = "current"
+        if device_id:
+            result["ev_service_device_id"] = device_id
     return result
 
 
@@ -642,6 +653,7 @@ def _discover_wallbox(entities) -> Dict[str, str]:
 def _discover_zaptec(entities) -> Dict[str, str]:
     """Discover EV charger config from Zaptec integration."""
     result: Dict[str, str] = {}
+    device_id = None
     for entry in entities:
         eid = entry.entity_id
         dc = entry.original_device_class
@@ -651,6 +663,8 @@ def _discover_zaptec(entities) -> Dict[str, str]:
             result["ev_charging_sensor"] = eid
         if eid.startswith("sensor.") and dc == "power":
             result["ev_charging_power_sensor"] = eid
+            if entry.device_id:
+                device_id = entry.device_id
         if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
             result["ev_total_energy_sensor"] = eid
         if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
@@ -658,7 +672,12 @@ def _discover_zaptec(entities) -> Dict[str, str]:
         if eid.startswith("number.") and "current" in eid:
             result["ev_current_control_entity"] = eid
     if result:
-        result.setdefault("ev_charger_service", "zaptec.limit_current")
+        # Prefer number entity control if found, otherwise use service
+        if "ev_current_control_entity" not in result:
+            result["ev_charger_service"] = "zaptec.limit_current"
+            result["ev_service_param_name"] = "available_current"
+            if device_id:
+                result["ev_service_device_id"] = device_id
     return result
 
 
