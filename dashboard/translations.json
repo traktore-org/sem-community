@@ -152,7 +152,8 @@
         "self_consumption_mode": "Self-Consumption",
         "solar_battery_mode": "Solar + Battery",
         "maximum_mode": "Maximum",
-        "auto_mode": "Auto (Forecast)"
+        "auto_mode": "Auto (Forecast)",
+        "ev_charging_mode": "EV Charging Mode"
     },
     "de": {
         "charging": "Laden",
@@ -307,7 +308,8 @@
         "self_consumption_mode": "Eigenverbrauch",
         "solar_battery_mode": "Solar + Batterie",
         "maximum_mode": "Maximum",
-        "auto_mode": "Automatisch (Prognose)"
+        "auto_mode": "Automatisch (Prognose)",
+        "ev_charging_mode": "EV-Lademodus"
     },
     "fr": {
         "charging": "En charge",
@@ -462,7 +464,8 @@
         "self_consumption_mode": "Autoconsommation",
         "solar_battery_mode": "Solaire + Batterie",
         "maximum_mode": "Maximum",
-        "auto_mode": "Auto (Prévision)"
+        "auto_mode": "Auto (Prévision)",
+        "ev_charging_mode": "Mode de charge VE"
     },
     "es": {
         "charging": "Cargando",
@@ -617,7 +620,8 @@
         "self_consumption_mode": "Autoconsumo",
         "solar_battery_mode": "Solar + Batería",
         "maximum_mode": "Máximo",
-        "auto_mode": "Auto (Previsión)"
+        "auto_mode": "Auto (Previsión)",
+        "ev_charging_mode": "Modo de carga VE"
     },
     "it": {
         "charging": "In carica",
@@ -772,7 +776,8 @@
         "self_consumption_mode": "Autoconsumo",
         "solar_battery_mode": "Solare + Batteria",
         "maximum_mode": "Massimo",
-        "auto_mode": "Auto (Previsione)"
+        "auto_mode": "Auto (Previsione)",
+        "ev_charging_mode": "Modalità carica VE"
     },
     "nl": {
         "charging": "Laden",
@@ -927,6 +932,7 @@
         "self_consumption_mode": "Eigenverbruik",
         "solar_battery_mode": "Zon + Batterij",
         "maximum_mode": "Maximum",
-        "auto_mode": "Auto (Voorspelling)"
+        "auto_mode": "Auto (Voorspelling)",
+        "ev_charging_mode": "EV-laadmodus"
     }
 }

@@ -1261,8 +1261,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         # Force stable entity ID regardless of HA language
         self.entity_id = f"sensor.sem_{description.key}"
 
-        # Initialize availability and value
-        self._attr_available = True
+        # Start unavailable — only become available after first coordinator update (#70)
+        # Prevents zero-value spikes in history/energy dashboard during HA restart
+        self._attr_available = False
         self._attr_native_value = None
 
         # Use HA configured currency for monetary sensors (instead of hardcoded CHF)
@@ -1347,6 +1348,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
         # Check if data key exists in coordinator data
         if data_key in self.coordinator.data:
+            self._attr_available = True  # Data received — sensor is available (#70)
             value = self.coordinator.data[data_key]
 
             # Special handling for charging state
