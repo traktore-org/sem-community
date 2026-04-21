@@ -1,49 +1,26 @@
-name: CI/CD - Run Tests and Deploy
+name: CI/CD - Deploy
 
 on:
-  push:
-    branches: [ develop, main ]
-  pull_request:
-    branches: [ develop, main ]
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [develop]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  run-integration-tests:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12", "3.13"]
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        path: custom_components/solar_energy_management
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install dependencies
-      run: pip install -r custom_components/solar_energy_management/tests/requirements_test.txt
-
-    - name: Run tests
-      run: python -m pytest tests/ --ignore=tests/test_energy_flow_balance.py --ignore=tests/test_flow_accumulation.py -v
-      working-directory: custom_components/solar_energy_management
-
   trigger-deployment:
-    needs: run-integration-tests
     runs-on: ubuntu-latest
-    if: success() && github.ref == 'refs/heads/develop'
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'develop')
     permissions:
       contents: write
 
     steps:
     - uses: actions/checkout@v4
       with:
+        ref: develop
         fetch-depth: 0
         token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -96,8 +73,8 @@ jobs:
     - name: Trigger n8n deployment workflow
       env:
         N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
-        COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-        AUTHOR_NAME: ${{ github.event.head_commit.author.name }}
+        COMMIT_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
       run: |
         echo "✅ Tests passed! Ready for deployment."
         echo "📦 Version: ${{ steps.bump.outputs.version }}"
@@ -107,10 +84,8 @@ jobs:
           # Use jq to properly escape JSON values
           PAYLOAD=$(jq -n \
             --arg version "${{ steps.bump.outputs.version }}" \
-            --arg branch "${{ github.ref_name }}" \
-            --arg commit_sha "${{ github.sha }}" \
-            --arg commit_message "$COMMIT_MESSAGE" \
-            --arg author "$AUTHOR_NAME" \
+            --arg branch "$HEAD_BRANCH" \
+            --arg commit_sha "$COMMIT_SHA" \
             --arg repository "${{ github.repository }}" \
             --arg workflow "${{ github.workflow }}" \
             --arg run_id "${{ github.run_id }}" \
@@ -120,8 +95,6 @@ jobs:
               version: $version,
               branch: $branch,
               commit_sha: $commit_sha,
-              commit_message: $commit_message,
-              author: $author,
               repository: $repository,
               workflow: $workflow,
               run_id: $run_id,
