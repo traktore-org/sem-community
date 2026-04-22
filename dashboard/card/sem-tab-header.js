@@ -113,9 +113,20 @@ class SEMTabHeader extends HTMLElement {
 
     set hass(hass) {
         this._hass = hass;
-        if (!this._rendered) {
+        // Re-render when sem-localize.js finishes loading (it may race with
+        // the first hass assignment) or when the user's language changes —
+        // otherwise English fallback labels would stick forever.
+        const hasLocalize = typeof semLocalize === 'function';
+        const lang = hass?.language;
+        if (
+            !this._rendered
+            || this._renderedLang !== lang
+            || (hasLocalize && !this._renderedWithLocalize)
+        ) {
             this._render();
             this._rendered = true;
+            this._renderedLang = lang;
+            this._renderedWithLocalize = hasLocalize;
         }
         this._updateStats();
     }

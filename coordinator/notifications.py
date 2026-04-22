@@ -58,8 +58,9 @@ class NotificationManager:
         self._pending_state: Optional[str] = None
         self._pending_state_since: float = 0.0
         # Service validation caching (#47)
-        self._keba_service_checked: bool = False
-        self._keba_service_available: bool = True
+        self._charger_notify_checked: bool = False
+        self._charger_notify_available: bool = True
+        self._charger_notify_service: str = ""
         self._mobile_service_checked: bool = False
         self._mobile_service_available: bool = True
 
@@ -90,7 +91,9 @@ class NotificationManager:
         self._pending_state = None
         self._last_notified_state = new_state
 
-        keba_enabled = self.config.get("enable_keba_notifications", True)
+        # Backward compat: accept both enable_keba_notifications and enable_charger_notifications (#85)
+        keba_enabled = self.config.get("enable_charger_notifications",
+                                       self.config.get("enable_keba_notifications", True))
         mobile_enabled = self.config.get("enable_mobile_notifications", False)
 
         if not (keba_enabled or mobile_enabled):
@@ -107,7 +110,7 @@ class NotificationManager:
             })
 
         if keba_enabled and messages.get("keba"):
-            await self._send_keba_notification(messages["keba"])
+            await self._send_charger_notification(messages["keba"])
 
         if mobile_enabled and messages.get("mobile"):
             elapsed = time.monotonic() - self._last_mobile_time
@@ -123,34 +126,39 @@ class NotificationManager:
                     group="sem_charging",
                 )
 
-    async def _send_keba_notification(self, message: str) -> None:
-        """Send notification to KEBA display."""
-        if not self._keba_service_checked:
-            self._keba_service_checked = True
-            keba_service = self.config.get("keba_notification_service", "keba_display")
-            self._keba_service_name = keba_service
-            self._keba_service_available = self.hass.services.has_service("notify", keba_service)
-            if not self._keba_service_available:
-                _LOGGER.info("KEBA notification service 'notify.%s' not available", keba_service)
+    async def _send_charger_notification(self, message: str) -> None:
+        """Send notification to EV charger display (#85).
 
-        if not self._keba_service_available:
+        Supports KEBA (notify service with min/max_time), and any other
+        charger that exposes a notify.* service. Falls back gracefully
+        if no charger notification service is available.
+        """
+        if not self._charger_notify_checked:
+            self._charger_notify_checked = True
+            # Try configured service, then KEBA default
+            service = (self.config.get("charger_notification_service")
+                       or self.config.get("keba_notification_service")
+                       or "keba_display")
+            self._charger_notify_service = service
+            self._charger_notify_available = self.hass.services.has_service("notify", service)
+            if not self._charger_notify_available:
+                _LOGGER.info("Charger notification service 'notify.%s' not available", service)
+
+        if not self._charger_notify_available:
             return
 
         try:
+            service_data: dict = {"message": message}
+            # KEBA-specific: display timing parameters
+            if "keba" in self._charger_notify_service:
+                service_data["data"] = {"min_time": 3, "max_time": 10}
+
             await self.hass.services.async_call(
-                "notify",
-                self._keba_service_name,
-                {
-                    "message": message,
-                    "data": {
-                        "min_time": 3,
-                        "max_time": 10,
-                    }
-                }
+                "notify", self._charger_notify_service, service_data,
             )
-            _LOGGER.debug("Sent KEBA notification: %s", message)
+            _LOGGER.debug("Sent charger notification: %s", message)
         except Exception as e:
-            _LOGGER.warning("Failed to send KEBA notification: %s", e)
+            _LOGGER.warning("Failed to send charger notification: %s", e)
 
     async def _send_mobile_notification(
         self,
@@ -217,9 +225,14 @@ class NotificationManager:
         daily_ev_target = self.config.get("daily_ev_target", DEFAULT_DAILY_EV_TARGET)
         remaining_needed = max(0, daily_ev_target - daily_ev_energy)
 
+        from ..utils.translate import get_text
+        _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
+
         if state == ChargingState.SOLAR_CHARGING_ACTIVE:
             messages["keba"] = f"Solar: {calculated_current}A"
-            messages["mobile"] = f"Solar charging started: {calculated_current}A ({available_power:.0f}W)"
+            messages["mobile"] = _t("notif_solar_started",
+                "Solar charging started: {current}A ({power:.0f}W)",
+                current=calculated_current, power=available_power)
 
         elif state == ChargingState.SOLAR_SUPER_CHARGING:
             messages["keba"] = f"Bat+Sol: {calculated_current}A"
@@ -229,7 +242,9 @@ class NotificationManager:
 
         elif state == ChargingState.SOLAR_TARGET_REACHED:
             messages["keba"] = "Target reached"
-            messages["mobile"] = f"Daily target reached: {daily_ev_energy:.1f}/{daily_ev_target}kWh"
+            messages["mobile"] = _t("notif_target_reached",
+                "Daily target reached: {charged:.1f}/{target}kWh",
+                charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.SOLAR_WAITING_BATTERY_PRIORITY:
             messages["keba"] = f"Wait: Bat {battery_soc}%"
@@ -240,15 +255,21 @@ class NotificationManager:
         elif state == ChargingState.SOLAR_IDLE:
             if ev_session_energy > 0:
                 messages["keba"] = "Session done"
-                messages["mobile"] = f"Solar charging stopped: {ev_session_energy:.1f}kWh charged"
+                messages["mobile"] = _t("notif_solar_stopped",
+                    "Solar charging stopped: {energy:.1f}kWh charged",
+                    energy=ev_session_energy)
 
         elif state == ChargingState.NIGHT_CHARGING_ACTIVE:
             messages["keba"] = f"Night: {remaining_needed:.0f}kWh"
-            messages["mobile"] = f"Night charging started: {remaining_needed:.1f}kWh remaining"
+            messages["mobile"] = _t("notif_night_started",
+                "Night charging started: {remaining:.1f}kWh remaining",
+                remaining=remaining_needed)
 
         elif state == ChargingState.NIGHT_TARGET_REACHED:
             messages["keba"] = "Night: Done"
-            messages["mobile"] = f"Night charging complete: {daily_ev_energy:.1f}/{daily_ev_target}kWh"
+            messages["mobile"] = _t("notif_night_complete",
+                "Night charging complete: {charged:.1f}/{target}kWh",
+                charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.NIGHT_DISABLED:
             messages["keba"] = "Night: Off"
@@ -258,7 +279,9 @@ class NotificationManager:
 
         elif state == ChargingState.TARGET_REACHED:
             messages["keba"] = "Target done"
-            messages["mobile"] = f"Daily target reached: {daily_ev_energy:.1f}kWh"
+            messages["mobile"] = _t("notif_target_reached",
+                "Daily target reached: {charged:.1f}/{target}kWh",
+                charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.IDLE:
             if ev_session_energy > 0:
@@ -283,8 +306,11 @@ class NotificationManager:
             "battery_soc": soc,
         })
 
+        from ..utils.translate import get_text
         await self._send_mobile_notification(
-            f"Battery full ({soc:.0f}%) — surplus available for appliances or export.",
+            get_text(self.hass, "notif_battery_full",
+                "Battery full ({soc:.0f}%) — surplus available for appliances or export.",
+                soc=soc),
             channel=_CHANNEL_ALERTS,
             group="sem_alerts",
             actions=[{"action": "URI", "title": "Open Dashboard", "uri": "/sem-dashboard/overview"}],
@@ -308,9 +334,11 @@ class NotificationManager:
             "peak_pct": peak_pct,
         })
 
+        from ..utils.translate import get_text
         await self._send_mobile_notification(
-            f"High grid import: {power_w:.0f}W ({peak_pct:.0f}% of peak limit). "
-            f"Consider reducing load to avoid demand charges.",
+            get_text(self.hass, "notif_high_grid_import",
+                "High grid import: {power_w:.0f}W ({peak_pct:.0f}% of peak limit). Consider reducing loads.",
+                power_w=power_w, peak_pct=peak_pct),
             channel=_CHANNEL_ALERTS,
             group="sem_alerts",
             actions=[{"action": "URI", "title": "Open Dashboard", "uri": "/sem-dashboard/overview"}],
@@ -374,9 +402,11 @@ class NotificationManager:
             "forecast_tomorrow_kwh": tomorrow_kwh,
         })
 
+        from ..utils.translate import get_text
         await self._send_mobile_notification(
-            f"Low solar forecast tomorrow: {tomorrow_kwh:.1f} kWh. "
-            f"Consider charging EV tonight and deferring export.",
+            get_text(self.hass, "notif_low_forecast",
+                "Low solar forecast tomorrow: {tomorrow_kwh:.1f} kWh. Consider charging EV tonight.",
+                tomorrow_kwh=tomorrow_kwh),
             channel=_CHANNEL_ALERTS,
             group="sem_alerts",
         )

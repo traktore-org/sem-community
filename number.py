@@ -361,8 +361,13 @@ class EMSSolarNumber(CoordinatorEntity, NumberEntity):
         """Initialize the number entity."""
         super().__init__(coordinator)
         self.entity_description = description
-        # Keep entry_id-based unique_id for backward compatibility with existing entities
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        # Backward-compatible unique_id: old versions used the config key
+        # (e.g. battery_capacity_kwh), not the description key (battery_capacity).
+        _LEGACY_UID_MAP = {
+            "battery_capacity": "battery_capacity_kwh",
+        }
+        uid_key = _LEGACY_UID_MAP.get(description.key, description.key)
+        self._attr_unique_id = f"{entry.entry_id}_{uid_key}"
         self._attr_translation_key = description.key
         self._attr_suggested_object_id = f"sem_{description.key}"
         # Force stable entity ID regardless of HA language
@@ -386,10 +391,15 @@ class EMSSolarNumber(CoordinatorEntity, NumberEntity):
         }
         config = {**entry.data, **entry.options}
         config_key = _CONFIG_KEY_MAP.get(description.key, description.key)
-        self._attr_native_value = config.get(
-            config_key,
-            config.get(description.key, self._get_default_value(description.key))
-        )
+        # Null-safe: config may store None explicitly, which makes the
+        # entity unavailable.  Fall through to the default in that case.
+        # Note: don't use `or` — 0 is a valid value (e.g. max_grid_import=0).
+        value = config.get(config_key)
+        if value is None:
+            value = config.get(description.key)
+        if value is None:
+            value = self._get_default_value(description.key)
+        self._attr_native_value = value
 
     def _get_default_value(self, key: str) -> float:
         """Get default value for a setting."""

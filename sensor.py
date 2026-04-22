@@ -1631,7 +1631,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         return None
 
     def _format_charging_state(self, state: str) -> str:
-        """Format charging state to human-readable message."""
+        """Format charging state to human-readable message (#62)."""
         if not state or not self.coordinator.data:
             return "Unknown"
-        return STATUS_MESSAGES.get(state, state)
+        from .consts.states import get_status_message
+        return get_status_message(state, self.hass)

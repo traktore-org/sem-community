@@ -478,6 +478,58 @@ class SensorReader:
 
         return None
 
+    def auto_detect_battery_capacity_kwh(self) -> Optional[float]:
+        """Auto-detect battery rated capacity from inverter sensors (#84).
+
+        Searches for a capacity/rated sensor on the same device as the
+        battery power sensor. Returns kWh or None if not found.
+
+        Known patterns:
+        - Huawei: sensor.batterien_akkukapazitat (Wh)
+        - GoodWe: sensor.goodwe_*_capacity (Wh)
+        - SolarEdge: sensor.*_rated_energy (Wh)
+        """
+        # Try Energy Dashboard battery sensor first, then config
+        ed = self._energy_dashboard_config
+        battery_entity = None
+        if ed:
+            battery_entity = ed.battery_power or ed.battery_charge_energy
+        if not battery_entity:
+            battery_entity = self.config.battery_power_sensor
+
+        if not battery_entity:
+            return None
+
+        # Search all sensors for capacity keywords
+        capacity_keywords = [
+            "akkukapazit", "rated_capacity", "battery_capacity",
+            "rated_energy", "nennkapazit", "usable_capacity",
+        ]
+        for state in self.hass.states.async_all("sensor"):
+            eid = state.entity_id
+            name = (state.attributes.get("friendly_name") or "").lower()
+            if not any(kw in eid.lower() or kw in name for kw in capacity_keywords):
+                continue
+            if state.state in ("unknown", "unavailable", None):
+                continue
+            try:
+                value = float(state.state)
+                if value <= 0:
+                    continue
+                unit = (state.attributes.get("unit_of_measurement") or "").lower()
+                if unit == "wh" or value > 500:
+                    value /= 1000  # Wh → kWh
+                if 1 <= value <= 200:  # Sanity: 1-200 kWh
+                    _LOGGER.info(
+                        "Auto-detected battery capacity: %s = %.1f kWh",
+                        eid, value,
+                    )
+                    return value
+            except (ValueError, TypeError):
+                continue
+
+        return None
+
     def sensors_ready(self) -> bool:
         """Check if required sensors are available."""
         # Check at least solar or grid sensor is configured and available
