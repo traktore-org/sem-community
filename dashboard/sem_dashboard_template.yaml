@@ -225,7 +225,7 @@ views:
                   func: max
                   duration: 1d
               - entity: sensor.sem_daily_home_energy
-                name: Home
+                name: House
                 type: column
                 color: "#5BC8D8"
                 statistics:
@@ -584,7 +584,7 @@ views:
                   func: avg
                   duration: 5m
               - entity: sensor.sem_home_consumption_power
-                name: Home
+                name: House
                 color: "#5BC8D8"
                 type: line
                 stroke_width: 2
@@ -842,7 +842,7 @@ views:
                   func: max
                   duration: 1d
               - entity: sensor.sem_home_consumption_power
-                name: Home
+                name: House
                 color: "#5BC8D8"
                 type: column
                 statistics:
