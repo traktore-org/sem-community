@@ -44,6 +44,33 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 
 ---
 
+## Why SEM?
+
+There are many solar/EV tools for Home Assistant — evcc, emhass, Predbat, PV Excess Control, and more. Each is great at one thing. SEM is the only **all-in-one HACS integration** that covers everything in a single install:
+
+|  | SEM | evcc | emhass | Predbat | PV Excess Control |
+|---|:---:|:---:|:---:|:---:|:---:|
+| EV solar surplus charging | :white_check_mark: | :white_check_mark: | :x: | :x: | :white_check_mark: |
+| Battery management | :white_check_mark: | :x: | :white_check_mark: | :white_check_mark: | partial |
+| Multi-device surplus control | :white_check_mark: | :x: | :x: | :x: | :white_check_mark: |
+| Auto-generated dashboard | :white_check_mark: | own UI | :x: | :x: | :x: |
+| Cost tracking & savings | :white_check_mark: | :x: | :x: | :x: | :x: |
+| Push notifications | :white_check_mark: | :x: | :x: | :x: | :x: |
+| Smart recommendations | :white_check_mark: | :x: | :x: | :x: | :x: |
+| Multi-language (6) | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
+| Pure HACS integration | :white_check_mark: | standalone Go | Docker/Add-on | AppDaemon | :white_check_mark: |
+| Zero-config auto-detect | :white_check_mark: | config file | complex setup | config file | manual |
+
+**SEM's approach:** Install one integration, get everything — EV charging, battery zones, cost analytics, 8-tab dashboard, and smart notifications. No separate services, no Docker containers, no YAML configuration files.
+
+**When to use something else:**
+- **evcc** if you need support for 100+ charger brands or vehicle SoC from car APIs
+- **emhass** if you want mathematical optimization with linear programming
+- **Predbat** if you only need battery charge/discharge scheduling with ML prediction
+- **PV Excess Control** if you only need simple appliance on/off switching
+
+---
+
 ## Installation
 
 > **New to custom integrations?** See the [Step-by-Step Setup Guide](docs/SETUP_GUIDE.md) for a beginner-friendly walkthrough with checklist and FAQ.
