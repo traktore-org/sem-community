@@ -71,9 +71,17 @@ class DashboardGenerator:
             return config
 
         # Walk the config and replace English strings with translations
+        # Fields that contain plain user-visible text (not Jinja templates).
+        # `secondary` is included so static secondary strings translate, but
+        # Jinja-templated secondaries still pass through unchanged (the match
+        # is exact, and templates never match a plain English translation key).
+        translatable_fields = (
+            "title", "subtitle", "primary", "secondary", "name", "label",
+        )
+
         def _walk(obj):
             if isinstance(obj, dict):
-                for field in ("title", "subtitle", "primary", "name", "label"):
+                for field in translatable_fields:
                     if field in obj and isinstance(obj[field], str):
                         text = obj[field]
                         if text in reverse_map:
