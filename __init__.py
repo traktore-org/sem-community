@@ -275,6 +275,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ev_device.service_device_id = full_config["ev_service_device_id"]
             if full_config.get("ev_start_stop_entity"):
                 ev_device.start_stop_entity = full_config["ev_start_stop_entity"]
+            if full_config.get("ev_charge_mode_entity"):
+                ev_device.charge_mode_entity = full_config["ev_charge_mode_entity"]
+                ev_device.charge_mode_start = full_config.get("ev_charge_mode_start")
+                ev_device.charge_mode_stop = full_config.get("ev_charge_mode_stop")
             if full_config.get("ev_start_service"):
                 ev_device.start_service = full_config["ev_start_service"]
                 import json as _json
