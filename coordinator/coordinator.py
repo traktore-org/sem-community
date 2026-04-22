@@ -931,6 +931,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_device.service_device_id = ev_auto["ev_service_device_id"]
         if ev_auto.get("ev_start_stop_entity"):
             ev_device.start_stop_entity = ev_auto["ev_start_stop_entity"]
+        if ev_auto.get("ev_charge_mode_entity"):
+            ev_device.charge_mode_entity = ev_auto["ev_charge_mode_entity"]
+            ev_device.charge_mode_start = ev_auto.get("ev_charge_mode_start")
+            ev_device.charge_mode_stop = ev_auto.get("ev_charge_mode_stop")
         if ev_auto.get("ev_start_service"):
             ev_device.start_service = ev_auto["ev_start_service"]
             import json as _json

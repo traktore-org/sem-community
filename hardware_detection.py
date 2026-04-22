@@ -529,10 +529,14 @@ def discover_ev_charger_from_registry(hass: HomeAssistant) -> Dict[str, str]:
         ("keba", _discover_keba),
         ("easee", _discover_easee),
         ("goecharger", _discover_goecharger),
+        ("goecharger_mqtt", _discover_goecharger_mqtt),
+        ("goecharger_api2", _discover_goecharger_mqtt),  # marq24 variant uses same entity patterns
         ("wallbox", _discover_wallbox),
         ("zaptec", _discover_zaptec),
         ("chargepoint", _discover_chargepoint),
         ("heidelberg_energy_control", _discover_heidelberg),
+        ("openwb2mqtt", _discover_openwb),
+        ("openwbmqtt", _discover_openwb),
     ]:
         entities = [
             e for e in entity_reg.entities.values()
@@ -733,6 +737,64 @@ def _discover_heidelberg(entities) -> Dict[str, str]:
             result["ev_session_energy_sensor"] = eid
         if eid.startswith("number.") and "current" in eid:
             result["ev_current_control_entity"] = eid
+    return result
+
+
+def _discover_goecharger_mqtt(entities) -> Dict[str, str]:
+    """Discover EV charger config from go-eCharger MQTT integration.
+
+    HACS: syssi/homeassistant-goecharger-mqtt
+    Uses number entities for current control (amp, ama).
+    Start/stop via select entity (frc: 0=neutral, 1=off, 2=on).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and dc == "plug":
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("binary_sensor.") and "car" in eid:
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
+            result["ev_total_energy_sensor"] = eid
+        # Requested current (amp) — primary control
+        if eid.startswith("number.") and ("requested_current" in eid or eid.endswith("_amp")):
+            result["ev_current_control_entity"] = eid
+        # Force state select (frc) — start/stop control
+        if eid.startswith("select.") and ("frc" in eid or "force_state" in eid):
+            result["ev_charge_mode_entity"] = eid
+            result["ev_charge_mode_start"] = "2"  # force ON
+            result["ev_charge_mode_stop"] = "1"   # force OFF
+    return result
+
+
+def _discover_openwb(entities) -> Dict[str, str]:
+    """Discover EV charger config from OpenWB 2.x MQTT integration.
+
+    HACS: a529987659852/openwb2mqtt
+    Uses select entity for charge mode, number entity for current.
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and ("plug" in eid or "connect" in eid):
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("binary_sensor.") and "charg" in eid:
+            result["ev_charging_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "power" and "charg" in eid:
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
+            result["ev_total_energy_sensor"] = eid
+        if eid.startswith("number.") and "current" in eid:
+            result["ev_current_control_entity"] = eid
+        # Charge mode select — start/stop control
+        if eid.startswith("select.") and "chargemode" in eid:
+            result["ev_charge_mode_entity"] = eid
+            result["ev_charge_mode_start"] = "Instant Charging"
+            result["ev_charge_mode_stop"] = "Stop"
     return result
 
 

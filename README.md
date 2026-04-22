@@ -105,7 +105,7 @@ Select the sensors for your EV charger:
 | Charger service | Service to set charging current (e.g., `keba.set_current`) |
 | Total energy sensor | Cumulative energy sensor (kWh) — optional |
 
-SEM auto-detects chargers from the entity registry: **KEBA**, **Wallbox Pulsar**, **go-eCharger**, **Easee**, **Zaptec**, **ChargePoint**, **Heidelberg**. Any other charger that exposes power/connected/charging sensors in HA can be configured manually.
+SEM auto-detects chargers from the entity registry: **KEBA**, **Wallbox Pulsar**, **go-eCharger** (HTTP + MQTT), **Easee**, **Zaptec**, **ChargePoint**, **Heidelberg**, **OpenWB 2.x**. Any other charger that exposes power/connected/charging sensors in HA can be configured manually.
 
 ### Step 4: Notifications (Optional)
 
@@ -240,11 +240,17 @@ SEM creates 60+ sensors organized by category:
 
 **Battery discharge control auto-detected for:** Huawei Solar, SolaX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis, GoodWe
 
-**Batteries:** Any battery exposed through a supported inverter integration. Huawei LUNA2000, Tesla Powerwall, Sonnen, and others work automatically via their paired inverter.
+**Batteries:** Any battery exposed through a supported inverter integration. Huawei LUNA2000, Tesla Powerwall, Sonnen, and others work automatically via their paired inverter. Battery capacity is auto-detected from the inverter.
 
-**EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg Energy Control
+**EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger (HTTP + MQTT), Easee, Zaptec, ChargePoint, Heidelberg Energy Control, OpenWB 2.x
 
-**EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA. OpenWB works via pattern matching.
+**EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA.
+
+> **Note:** Tesla Wall Connector is monitoring-only — it does not expose power sensors or current control in HA. SEM can read voltage/current but cannot control charging.
+
+> **Note:** KSTAR inverters are supported via the [ha-solarman](https://github.com/davidrapan/ha-solarman) integration with KSTAR YAML profiles, not via a dedicated KSTAR integration.
+
+> **Note:** Myenergi Zappi has its own built-in solar diversion logic. SEM can monitor it but direct current control is not available — the Zappi manages surplus charging internally.
 
 **Heat Pumps:** Any SG-Ready compatible heat pump controllable via HA
 
