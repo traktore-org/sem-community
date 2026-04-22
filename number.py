@@ -386,10 +386,15 @@ class EMSSolarNumber(CoordinatorEntity, NumberEntity):
         }
         config = {**entry.data, **entry.options}
         config_key = _CONFIG_KEY_MAP.get(description.key, description.key)
-        self._attr_native_value = config.get(
-            config_key,
-            config.get(description.key, self._get_default_value(description.key))
-        )
+        # Null-safe: config may store None explicitly, which makes the
+        # entity unavailable.  Fall through to the default in that case.
+        # Note: don't use `or` — 0 is a valid value (e.g. max_grid_import=0).
+        value = config.get(config_key)
+        if value is None:
+            value = config.get(description.key)
+        if value is None:
+            value = self._get_default_value(description.key)
+        self._attr_native_value = value
 
     def _get_default_value(self, key: str) -> float:
         """Get default value for a setting."""

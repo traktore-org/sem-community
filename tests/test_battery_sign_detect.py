@@ -285,3 +285,110 @@ class TestBatterySignAutoDetect:
         # Call 3: low power period — should keep the detected state
         result = sensor_reader._detect_battery_sign(PowerReadings(battery_power=30.0))
         assert result is True, "Low power should preserve detected inversion state"
+
+
+class TestBatteryCapacityAutoDetect:
+    """Tests for battery capacity auto-detection (#84)."""
+
+    def _make_reader(self, hass):
+        config = {"battery_power_sensor": "sensor.battery_power"}
+        reader = SensorReader(hass, config)
+        ed = _make_energy_dashboard_config()
+        reader.set_energy_dashboard_config(ed)
+        return reader
+
+    def test_detect_huawei_capacity_wh(self):
+        """Huawei: sensor.batterien_akkukapazitat in Wh → kWh."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+
+        capacity_state = Mock()
+        capacity_state.entity_id = "sensor.batterien_akkukapazitat"
+        capacity_state.state = "15000"
+        capacity_state.attributes = {
+            "unit_of_measurement": "Wh",
+            "friendly_name": "Batteries Rated Capacity",
+        }
+        hass.states.async_all.return_value = [capacity_state]
+
+        result = reader.auto_detect_battery_capacity_kwh()
+        assert result == 15.0
+
+    def test_detect_goodwe_capacity_wh(self):
+        """GoodWe: sensor with 'battery_capacity' in name."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+
+        capacity_state = Mock()
+        capacity_state.entity_id = "sensor.goodwe_battery_capacity"
+        capacity_state.state = "10000"
+        capacity_state.attributes = {
+            "unit_of_measurement": "Wh",
+            "friendly_name": "Battery Capacity",
+        }
+        hass.states.async_all.return_value = [capacity_state]
+
+        result = reader.auto_detect_battery_capacity_kwh()
+        assert result == 10.0
+
+    def test_detect_kwh_unit(self):
+        """Sensor already in kWh — no conversion."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+
+        capacity_state = Mock()
+        capacity_state.entity_id = "sensor.battery_rated_capacity"
+        capacity_state.state = "10.0"
+        capacity_state.attributes = {
+            "unit_of_measurement": "kWh",
+            "friendly_name": "Rated Capacity",
+        }
+        hass.states.async_all.return_value = [capacity_state]
+
+        result = reader.auto_detect_battery_capacity_kwh()
+        assert result == 10.0
+
+    def test_no_capacity_sensor(self):
+        """No capacity sensor found → returns None."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+
+        unrelated = Mock()
+        unrelated.entity_id = "sensor.temperature"
+        unrelated.state = "22.5"
+        unrelated.attributes = {"friendly_name": "Temperature"}
+        hass.states.async_all.return_value = [unrelated]
+
+        result = reader.auto_detect_battery_capacity_kwh()
+        assert result is None
+
+    def test_unavailable_capacity_ignored(self):
+        """Unavailable capacity sensor → returns None."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+
+        capacity_state = Mock()
+        capacity_state.entity_id = "sensor.battery_rated_capacity"
+        capacity_state.state = "unavailable"
+        capacity_state.attributes = {"friendly_name": "Rated Capacity"}
+        hass.states.async_all.return_value = [capacity_state]
+
+        result = reader.auto_detect_battery_capacity_kwh()
+        assert result is None
+
+    def test_insane_value_rejected(self):
+        """Value outside 1-200 kWh range rejected."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+
+        capacity_state = Mock()
+        capacity_state.entity_id = "sensor.battery_rated_capacity"
+        capacity_state.state = "500000"  # 500 kWh — too large
+        capacity_state.attributes = {
+            "unit_of_measurement": "Wh",
+            "friendly_name": "Rated Capacity",
+        }
+        hass.states.async_all.return_value = [capacity_state]
+
+        result = reader.auto_detect_battery_capacity_kwh()
+        assert result is None

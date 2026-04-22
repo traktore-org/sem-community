@@ -98,6 +98,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Initialize time manager
         self.time_manager = TimeManager(hass, config)
 
+        # Battery capacity: config value, auto-detected, or default
+        self._detected_battery_capacity_kwh: Optional[float] = None
+
         # Initialize modules
         self._sensor_reader = SensorReader(hass, config)
         self._energy_calculator = EnergyCalculator(config, self.time_manager)
@@ -215,6 +218,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._observer_mode:
             _LOGGER.info("Observer mode: hardware control disabled")
         _LOGGER.info(f"SEM Coordinator initialized with {update_interval}s update interval")
+
+    @property
+    def battery_capacity_kwh(self) -> float:
+        """Battery capacity in kWh — auto-detected or from config (#84)."""
+        val = self.config.get("battery_capacity_kwh")
+        if val is not None and val > 0:
+            return float(val)
+        if self._detected_battery_capacity_kwh is None:
+            self._detected_battery_capacity_kwh = (
+                self._sensor_reader.auto_detect_battery_capacity_kwh() or 0.0
+            )
+        if self._detected_battery_capacity_kwh > 0:
+            return self._detected_battery_capacity_kwh
+        return float(DEFAULT_BATTERY_CAPACITY_KWH)
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -459,7 +476,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     _LOGGER.warning("Yearly seeding from statistics failed (will retry): %s", e)
 
             # Step 9c: Calculate battery health metrics
-            battery_capacity = self.config.get("battery_capacity_kwh", 15.0)
+            battery_capacity = self.battery_capacity_kwh
             if battery_capacity > 0:
                 lifetime_charge = self._energy_calculator._get_lifetime("battery_charge")
                 lifetime_discharge = self._energy_calculator._get_lifetime("battery_discharge")
@@ -1032,7 +1049,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         buffer_soc = self.config.get("battery_buffer_soc", 70)
         priority_soc = self.config.get("battery_priority_soc", 30)
         battery_floor = self.config.get("battery_assist_floor_soc", 60)
-        battery_capacity = self.config.get("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH)
+        battery_capacity = self.battery_capacity_kwh
 
         already_assisting = (self._state_machine.current_state == ChargingState.SOLAR_SUPER_CHARGING)
 
@@ -1214,7 +1231,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except Exception:
             pass
 
-        battery_capacity = self.config.get("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH)
+        battery_capacity = self.battery_capacity_kwh
         ev_budget = self._flow_calculator.calculate_ev_budget(
             power, forecast_remaining, power.battery_soc, battery_capacity,
         )
