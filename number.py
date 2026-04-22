@@ -361,8 +361,13 @@ class EMSSolarNumber(CoordinatorEntity, NumberEntity):
         """Initialize the number entity."""
         super().__init__(coordinator)
         self.entity_description = description
-        # Keep entry_id-based unique_id for backward compatibility with existing entities
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        # Backward-compatible unique_id: old versions used the config key
+        # (e.g. battery_capacity_kwh), not the description key (battery_capacity).
+        _LEGACY_UID_MAP = {
+            "battery_capacity": "battery_capacity_kwh",
+        }
+        uid_key = _LEGACY_UID_MAP.get(description.key, description.key)
+        self._attr_unique_id = f"{entry.entry_id}_{uid_key}"
         self._attr_translation_key = description.key
         self._attr_suggested_object_id = f"sem_{description.key}"
         # Force stable entity ID regardless of HA language
