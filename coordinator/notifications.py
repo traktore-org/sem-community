@@ -58,8 +58,9 @@ class NotificationManager:
         self._pending_state: Optional[str] = None
         self._pending_state_since: float = 0.0
         # Service validation caching (#47)
-        self._keba_service_checked: bool = False
-        self._keba_service_available: bool = True
+        self._charger_notify_checked: bool = False
+        self._charger_notify_available: bool = True
+        self._charger_notify_service: str = ""
         self._mobile_service_checked: bool = False
         self._mobile_service_available: bool = True
 
@@ -90,7 +91,9 @@ class NotificationManager:
         self._pending_state = None
         self._last_notified_state = new_state
 
-        keba_enabled = self.config.get("enable_keba_notifications", True)
+        # Backward compat: accept both enable_keba_notifications and enable_charger_notifications (#85)
+        keba_enabled = self.config.get("enable_charger_notifications",
+                                       self.config.get("enable_keba_notifications", True))
         mobile_enabled = self.config.get("enable_mobile_notifications", False)
 
         if not (keba_enabled or mobile_enabled):
@@ -107,7 +110,7 @@ class NotificationManager:
             })
 
         if keba_enabled and messages.get("keba"):
-            await self._send_keba_notification(messages["keba"])
+            await self._send_charger_notification(messages["keba"])
 
         if mobile_enabled and messages.get("mobile"):
             elapsed = time.monotonic() - self._last_mobile_time
@@ -123,34 +126,39 @@ class NotificationManager:
                     group="sem_charging",
                 )
 
-    async def _send_keba_notification(self, message: str) -> None:
-        """Send notification to KEBA display."""
-        if not self._keba_service_checked:
-            self._keba_service_checked = True
-            keba_service = self.config.get("keba_notification_service", "keba_display")
-            self._keba_service_name = keba_service
-            self._keba_service_available = self.hass.services.has_service("notify", keba_service)
-            if not self._keba_service_available:
-                _LOGGER.info("KEBA notification service 'notify.%s' not available", keba_service)
+    async def _send_charger_notification(self, message: str) -> None:
+        """Send notification to EV charger display (#85).
 
-        if not self._keba_service_available:
+        Supports KEBA (notify service with min/max_time), and any other
+        charger that exposes a notify.* service. Falls back gracefully
+        if no charger notification service is available.
+        """
+        if not self._charger_notify_checked:
+            self._charger_notify_checked = True
+            # Try configured service, then KEBA default
+            service = (self.config.get("charger_notification_service")
+                       or self.config.get("keba_notification_service")
+                       or "keba_display")
+            self._charger_notify_service = service
+            self._charger_notify_available = self.hass.services.has_service("notify", service)
+            if not self._charger_notify_available:
+                _LOGGER.info("Charger notification service 'notify.%s' not available", service)
+
+        if not self._charger_notify_available:
             return
 
         try:
+            service_data: dict = {"message": message}
+            # KEBA-specific: display timing parameters
+            if "keba" in self._charger_notify_service:
+                service_data["data"] = {"min_time": 3, "max_time": 10}
+
             await self.hass.services.async_call(
-                "notify",
-                self._keba_service_name,
-                {
-                    "message": message,
-                    "data": {
-                        "min_time": 3,
-                        "max_time": 10,
-                    }
-                }
+                "notify", self._charger_notify_service, service_data,
             )
-            _LOGGER.debug("Sent KEBA notification: %s", message)
+            _LOGGER.debug("Sent charger notification: %s", message)
         except Exception as e:
-            _LOGGER.warning("Failed to send KEBA notification: %s", e)
+            _LOGGER.warning("Failed to send charger notification: %s", e)
 
     async def _send_mobile_notification(
         self,

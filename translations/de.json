@@ -57,7 +57,7 @@
           "ev_charger_service": "EV Charger Service",
           "ev_charger_service_entity_id": "EV Charger Service Entity",
           "ev_total_energy_sensor": "EV Total Energy Counter",
-          "enable_keba_notifications": "Enable KEBA Display Notifications",
+          "enable_keba_notifications": "Ladegerät-Display-Benachrichtigungen aktivieren",
           "enable_mobile_notifications": "Enable Mobile Notifications",
           "mobile_notification_service": "Mobile Notification Service",
           "vehicle_soc_entity": "Vehicle Battery SOC",
@@ -233,7 +233,7 @@
         "title": "Benachrichtigungseinstellungen",
         "description": "Benachrichtigungskonfiguration aktualisieren",
         "data": {
-          "enable_keba_notifications": "KEBA-Display-Benachrichtigungen aktivieren",
+          "enable_keba_notifications": "Ladegerät-Display-Benachrichtigungen aktivieren",
           "enable_mobile_notifications": "Mobile Benachrichtigungen aktivieren",
           "mobile_notification_service": "Mobiler Benachrichtigungsdienst",
           "vehicle_soc_entity": "Vehicle Battery SOC",
