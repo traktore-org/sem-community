@@ -159,6 +159,36 @@ In observer mode, SEM reads all sensors and calculates everything normally but d
 
 ---
 
+## Options flow shows "Unknown error occurred"
+
+**Cause:** Fixed in v1.2.0. The root cause was a `NumberSelector` with `step=0.0001` below the HA 2026.4 minimum allowed step value, combined with `null` config defaults that caused the options flow to crash.
+
+**Fix:**
+Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
+
+---
+
+## Easee charger not detected
+
+**Cause:** Easee's power sensor is disabled by default in the HA Easee integration. SEM cannot detect the charger without an active power sensor.
+
+**Fix:**
+1. Go to **Settings > Devices & Services > Easee**
+2. Click on the Easee device
+3. Find the power sensor entity (it will be listed as disabled)
+4. Click the entity, then click **Enable** and confirm
+5. Wait for the entity to become available, then re-configure SEM
+
+---
+
+## Tesla Wall Connector can't control charging
+
+**Cause:** The Tesla Wall Connector does not expose a power sensor or current control entity in Home Assistant. This is a hardware/integration limitation — the Wall Connector's API does not support external current control.
+
+**Status:** Monitoring-only. SEM can read voltage and current values if available, but cannot start/stop charging or adjust the charging current.
+
+---
+
 ## Debug logging
 
 To enable detailed logging for SEM, add this to your `configuration.yaml`:
