@@ -85,7 +85,18 @@ class DashboardGenerator:
                     if field in obj and isinstance(obj[field], str):
                         text = obj[field]
                         if text in reverse_map:
+                            # Exact match — plain text field
                             obj[field] = reverse_map[text]
+                        elif "{%" in text or "{{" in text:
+                            # Jinja template — replace English fragments inline (#87)
+                            # Process longer phrases first to prevent partial matches
+                            # (e.g. "Set investment cost on Control tab" before "Control")
+                            for en_text, translated in sorted(
+                                reverse_map.items(), key=lambda x: len(x[0]), reverse=True
+                            ):
+                                if en_text in text:
+                                    text = text.replace(en_text, translated)
+                            obj[field] = text
                 for v in obj.values():
                     _walk(v)
             elif isinstance(obj, list):
