@@ -1,5 +1,7 @@
 """State machine definitions for SEM Solar Energy Management."""
-from typing import Final, Dict
+from typing import Final, Dict, Optional
+
+from homeassistant.core import HomeAssistant
 
 
 # ============================================
@@ -75,6 +77,50 @@ STATUS_MESSAGES: Final = {
     ChargingState.NIGHT_WAITING_FOR_WINDOW: "Night mode - Waiting for charging window",
     ChargingState.NIGHT_TIME_EXPIRED: "Night charging window expired",
 }
+
+# Map charging states to translation keys in dashboard/translations.json (#62)
+_STATE_TRANSLATION_KEYS: Final = {
+    ChargingState.IDLE: "state_system_ready",
+    ChargingState.WAITING_BATTERY_PRIORITY: "state_waiting_battery",
+    ChargingState.CHARGING_ALLOWED: "state_charging_allowed",
+    ChargingState.CHARGING_ACTIVE: "state_charging_active",
+    ChargingState.PAUSE_LOW_BATTERY: "state_pause_low_battery",
+    ChargingState.RESUME_PENDING: "state_resume_pending",
+    ChargingState.NIGHT_CHARGING: "state_night_charging",
+    ChargingState.SUPER_CHARGING: "state_battery_assist",
+    ChargingState.TARGET_REACHED: "state_target_reached",
+    ChargingState.ERROR: "state_error",
+    ChargingState.SOLAR_IDLE: "state_solar_ready",
+    ChargingState.SOLAR_WAITING_BATTERY_PRIORITY: "state_solar_waiting",
+    ChargingState.SOLAR_CHARGING_ALLOWED: "state_solar_allowed",
+    ChargingState.SOLAR_CHARGING_ACTIVE: "state_solar_charging",
+    ChargingState.SOLAR_SUPER_CHARGING: "state_solar_battery_assist",
+    ChargingState.SOLAR_PAUSE_LOW_BATTERY: "state_solar_paused",
+    ChargingState.SOLAR_TARGET_REACHED: "state_solar_target",
+    ChargingState.SOLAR_MIN_PV: "state_solar_minpv",
+    ChargingState.NIGHT_IDLE: "state_night_ready",
+    ChargingState.NIGHT_DISABLED: "state_night_disabled",
+    ChargingState.NIGHT_CHARGING_ACTIVE: "state_night_charging",
+    ChargingState.NIGHT_TARGET_REACHED: "state_night_target",
+    ChargingState.NIGHT_WAITING_FOR_WINDOW: "state_night_waiting",
+    ChargingState.NIGHT_TIME_EXPIRED: "state_night_expired",
+}
+
+
+def get_status_message(state: str, hass: Optional[HomeAssistant] = None) -> str:
+    """Get translated status message for a charging state (#62).
+
+    Falls back to English STATUS_MESSAGES if hass is not available
+    or translation key is missing.
+    """
+    if hass is not None:
+        key = _STATE_TRANSLATION_KEYS.get(state)
+        if key:
+            from ..utils.translate import get_text
+            text = get_text(hass, key)
+            if text:
+                return text
+    return STATUS_MESSAGES.get(state, state)
 
 
 # ============================================
