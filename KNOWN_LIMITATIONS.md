@@ -32,6 +32,15 @@ Forecast-based features (charging recommendations, battery-assist decisions) req
 
 Peak load management requires controllable devices with switch entities for shedding. Devices without a discoverable switch entity must be configured manually. The 15-minute rolling average calculation starts fresh after each HA restart.
 
+## Charger Limitations
+
+Some EV chargers have limitations that prevent full SEM control:
+
+- **Tesla Wall Connector** — monitoring-only. The Wall Connector does not expose a power sensor or current control entity in Home Assistant. SEM can read voltage/current but cannot control charging.
+- **Myenergi Zappi** — the Zappi has built-in solar diversion logic that conflicts with external surplus control. SEM can monitor the Zappi but cannot control charging current — the Zappi manages surplus charging internally.
+- **KSTAR inverters** — no dedicated HA integration exists. Use [ha-solarman](https://github.com/davidrapan/ha-solarman) with KSTAR YAML profiles for inverter/battery support.
+- **Easee** — the power sensor is disabled by default in the HA Easee integration. It must be manually enabled in **Settings > Devices > Easee** before SEM can detect and configure the charger.
+
 ## Multi-phase EV charging
 
 SEM assumes 3-phase charging at 230V per phase by default. Single-phase or 2-phase configurations must be set via the integration options. Incorrect phase configuration will result in inaccurate current calculations.

@@ -25,8 +25,10 @@ Make sure you have the following ready before you begin:
       (Settings > Dashboards > Energy)
 - [ ] *(Optional)* A battery with SOC and power sensors
 - [ ] *(Optional)* An EV charger controllable via HA (KEBA, Wallbox,
-      go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)
+      go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, OpenWB 2.x, etc.)
 - [ ] *(Optional)* A solar forecast integration -- Solcast or Forecast.Solar
+
+> **Note:** Easee's power sensor is disabled by default in HA. Enable it in **Settings > Devices > Easee** before installing SEM.
 
 If you are unsure whether your Energy Dashboard is set up, go to
 **Settings > Dashboards > Energy**. You should see at least "Solar panels"

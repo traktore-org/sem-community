@@ -161,7 +161,7 @@ Install these via HACS > Frontend before the dashboard will render:
 | `sankey-chart` | `MindFreeze/sankey-chart` | Energy flow diagram on Energy tab |
 | `fold-entity-row` | `thomasloven/lovelace-fold-entity-row` | Collapsible "Welcome to SEM" intro |
 
-Only **5 HACS cards** required.
+**4 required HACS cards** (mushroom, card-mod, apexcharts-card, sankey-chart) + **1 optional** (fold-entity-row).
 
 ---
 
@@ -181,7 +181,7 @@ These ship with the integration — no HACS installation needed:
 
 Resource URLs include `?v={version}` for automatic cache busting.
 
-### Cards Removed in v2.6+ (replaced by SEM cards)
+### Cards Removed in v1.2.0+ (replaced by SEM cards)
 
 These HACS cards are no longer required:
 

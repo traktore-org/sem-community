@@ -34,7 +34,7 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 - **Peak load management** — automatic device shedding to stay under your grid limit
 - **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
 - **Dynamic tariff support** — Tibber, Nordpool, aWATTar price-responsive charging
-- **70+ sensors** — power, energy, flows, costs, performance, forecasts, and more
+- **200+ sensors and entities** — power, energy, flows, costs, performance, forecasts, and more
 - **Built-in dashboard** — glassmorphism dark theme with animated system diagram, Sankey, and native HA energy cards
 - **PV performance analytics** — specific yield, forecast accuracy, degradation tracking
 - **Smart recommendations** — forecast-aware tips ("Best window for appliances: 11:00-14:00", "Low solar tomorrow — charge EV tonight")
@@ -98,6 +98,7 @@ Before setting up SEM, make sure you have:
 - **Energy Dashboard configured** — SEM reads your solar and grid sensors from the HA Energy Dashboard (Settings > Energy). You need at least:
   - A solar production sensor (W)
   - A grid consumption sensor (W)
+- **Battery capacity** is auto-detected from your inverter (v1.2.1+)
 - **Optional but recommended:**
   - Battery SOC (%) and power (W) sensors
   - An EV charger controllable via HA (KEBA, Wallbox, go-eCharger, Easee, Zaptec, ChargePoint, Heidelberg, etc.)

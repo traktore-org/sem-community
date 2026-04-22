@@ -406,6 +406,19 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 
 ---
 
+## Charger Compatibility Notes
+
+Not all EV chargers support full SEM control. Here are the key differences:
+
+| Charger | Status | Notes |
+|---------|--------|-------|
+| **Tesla Wall Connector** | Monitoring-only | No power sensor or current control available in HA. SEM can read voltage/current but cannot control charging. |
+| **Myenergi Zappi** | Monitoring-only | Manages solar surplus internally via built-in diversion logic. SEM can monitor but cannot control current — the Zappi handles surplus charging on its own. |
+| **KSTAR** | Supported via ha-solarman | No dedicated HA integration. Use [ha-solarman](https://github.com/davidrapan/ha-solarman) with KSTAR YAML profiles. |
+| **Easee** | Fully supported | Easee's power sensor is disabled by default in HA. Enable it in **Settings > Devices > Easee** before configuring SEM. |
+
+---
+
 ## Daily Energy Reset
 
 SEM resets daily energy counters at **sunrise**, not midnight. This is intentional:

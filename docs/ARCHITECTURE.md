@@ -124,6 +124,15 @@ The coordinator owns all EV control (`ev.managed_externally = True`). The EV is 
 ### Pause States
 - Zero current, keep session alive (no stop/start cycling)
 
+### Charger Abstraction
+
+SEM abstracts charger-specific differences through per-integration service profiles:
+
+- **Service profiles** — each supported charger integration has a `service_param_name` (e.g., `current` for KEBA, `charging_current` for Wallbox) and `service_device_id` mapping, so the coordinator can call the correct HA service with the right parameters.
+- **Start/stop abstraction** — chargers that require explicit start/stop commands use `start_stop_entity`, `charge_mode_entity`, and `start_service` to manage session lifecycle. Chargers that only need current=0 to pause do not use these.
+- **Supported chargers (auto-detected):** KEBA, Easee, Wallbox, go-eCharger (HTTP + MQTT), Zaptec, ChargePoint, Heidelberg, OpenWB 2.x
+- **Manual config:** Any charger exposing power/connected/charging sensors in HA can be configured manually via the integration options.
+
 ---
 
 ## EV Budget Calculation
@@ -151,6 +160,7 @@ The coordinator owns all EV control (`ev.managed_externally = True`). The EV is 
 | `DEFAULT_DAILY_EV_TARGET` | 10 kWh | `const.py` |
 | `DEFAULT_EV_RAMP_RATE_AMPS` | 2 | config |
 | `DEFAULT_EV_CHARGING_MODE` | `"pv"` | config |
+| `battery_capacity_kwh` | auto-detected from inverter, fallback to config | coordinator |
 | Update interval | 10s | coordinator |
 | Regulation offset | 50W | surplus controller |
 | Peak limit | 6 kW | load management |
