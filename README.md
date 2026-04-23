@@ -30,6 +30,7 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 - **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
 - **Night charging with battery protection** — charges EV from grid overnight without draining home battery
+- **Hot water solar boost** — SEM supplements your existing heating system with solar surplus (does not replace your boiler/heat pump), with mandatory Legionella prevention cycle (DVGW W 551, SIA 385/1, ÖNORM B 5019)
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority
 - **Peak load management** — automatic device shedding to stay under your grid limit
 - **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
@@ -279,6 +280,8 @@ SEM creates 60+ sensors organized by category:
 > **Note:** KSTAR inverters are supported via the [ha-solarman](https://github.com/davidrapan/ha-solarman) integration with KSTAR YAML profiles, not via a dedicated KSTAR integration.
 
 > **Note:** Myenergi Zappi has its own built-in solar diversion logic. SEM can monitor it but direct current control is not available — the Zappi manages surplus charging internally.
+
+**Hot Water:** Any hot water system exposed as a `water_heater`, `climate`, or `switch` entity in HA. Includes automatic Legionella prevention cycling per DVGW W 551 / SIA 385/1 / ÖNORM B 5019.
 
 **Heat Pumps:** Any SG-Ready compatible heat pump controllable via HA
 

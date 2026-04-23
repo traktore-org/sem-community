@@ -113,18 +113,18 @@ class TestTemperatureReading:
 
 class TestTemperatureSafety:
 
-    def test_safe_when_below_max(self, hass):
+    def test_safe_when_below_solar_target(self, hass):
         hass.states.get = lambda eid: _make_state(45.0)
         ctrl = HotWaterController(hass, entity_id="switch.boiler",
                                    temperature_entity_id="sensor.temp",
-                                   max_temperature=55.0)
+                                   solar_target_temp=60.0)
         assert ctrl.is_temperature_safe() is True
 
-    def test_unsafe_when_above_max(self, hass):
-        hass.states.get = lambda eid: _make_state(58.0)
+    def test_unsafe_when_above_solar_target(self, hass):
+        hass.states.get = lambda eid: _make_state(62.0)
         ctrl = HotWaterController(hass, entity_id="switch.boiler",
                                    temperature_entity_id="sensor.temp",
-                                   max_temperature=55.0)
+                                   solar_target_temp=60.0)
         assert ctrl.is_temperature_safe() is False
 
     def test_safe_when_no_sensor(self, hass):
@@ -133,23 +133,34 @@ class TestTemperatureSafety:
         assert ctrl.is_temperature_safe() is True  # Rely on thermostat
 
     def test_legionella_cycle_allows_higher_temp(self, hass):
-        """During Legionella cycle, safety cutoff is the Legionella target, not max_temperature."""
-        hass.states.get = lambda eid: _make_state(58.0)
-        ctrl = HotWaterController(hass, entity_id="switch.boiler",
-                                   temperature_entity_id="sensor.temp",
-                                   max_temperature=55.0,
-                                   legionella_target_temp=65.0)
-        ctrl._legionella_cycle_active = True
-        assert ctrl.is_temperature_safe() is True  # 58 < 65 Legionella target
-
-    @pytest.mark.asyncio
-    async def test_activate_blocked_above_max(self, hass):
+        """During Legionella cycle, cutoff is Legionella target, not solar target."""
         hass.states.get = lambda eid: _make_state(62.0)
         ctrl = HotWaterController(hass, entity_id="switch.boiler",
                                    temperature_entity_id="sensor.temp",
-                                   max_temperature=55.0)
+                                   solar_target_temp=60.0,
+                                   legionella_target_temp=65.0)
+        # Normally 62 > 60 (solar target) → unsafe
+        assert ctrl.is_temperature_safe() is False
+        # But during Legionella cycle → 62 < 65 → safe
+        ctrl._legionella_cycle_active = True
+        assert ctrl.is_temperature_safe() is True
+
+    def test_high_solar_target_allows_high_temp(self, hass):
+        """Solar target 80°C allows heating above 60°C — Legionella met naturally."""
+        hass.states.get = lambda eid: _make_state(65.0)
+        ctrl = HotWaterController(hass, entity_id="switch.boiler",
+                                   temperature_entity_id="sensor.temp",
+                                   solar_target_temp=80.0)
+        assert ctrl.is_temperature_safe() is True  # 65 < 80
+
+    @pytest.mark.asyncio
+    async def test_activate_blocked_above_solar_target(self, hass):
+        hass.states.get = lambda eid: _make_state(62.0)
+        ctrl = HotWaterController(hass, entity_id="switch.boiler",
+                                   temperature_entity_id="sensor.temp",
+                                   solar_target_temp=60.0)
         result = await ctrl.activate(3000)
-        assert result == 0.0  # Blocked by safety
+        assert result == 0.0  # Blocked — above solar target
 
 
 # ════════════════════════════════════════════

@@ -149,14 +149,17 @@ class HotWaterController(SwitchDevice):
         return None
 
     def is_temperature_safe(self) -> bool:
-        """Check if temperature is below safety cutoff."""
+        """Check if temperature is below the active target.
+
+        During normal solar boost: cutoff is solar_target_temp.
+        During Legionella cycle: cutoff is legionella_target_temp.
+        """
         temp = self.get_current_temperature()
         if temp is None:
             return True  # No sensor — allow operation (rely on thermostat)
-        # During Legionella cycle, allow up to legionella target
         if self._legionella_cycle_active:
             return temp < self.legionella_target_temp
-        return temp < self.max_temperature
+        return temp < self.solar_target_temp
 
     def needs_heating(self) -> bool:
         """Check if water temperature is below minimum."""

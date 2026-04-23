@@ -41,6 +41,10 @@ Some EV chargers have limitations that prevent full SEM control:
 - **KSTAR inverters** — no dedicated HA integration exists. Use [ha-solarman](https://github.com/davidrapan/ha-solarman) with KSTAR YAML profiles for inverter/battery support.
 - **Easee** — the power sensor is disabled by default in the HA Easee integration. It must be manually enabled in **Settings > Devices > Easee** before SEM can detect and configure the charger.
 
+## Heat pump SG-Ready control
+
+The `HeatPumpController` device class exists in the codebase and supports SG-Ready 4-state control, but it is **not yet wired up** as a registered device controller. The corresponding dashboard cards have been removed from the dashboard template. The controller logic is functional but not instantiated or registered with the surplus controller. This will be connected in a future release.
+
 ## Multi-phase EV charging
 
 SEM assumes 3-phase charging at 230V per phase by default. Single-phase or 2-phase configurations must be set via the integration options. Incorrect phase configuration will result in inaccurate current calculations.

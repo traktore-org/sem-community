@@ -50,6 +50,47 @@ ControllableDevice (abstract base)
 
 ---
 
+## Hot Water Control
+
+SEM acts as a solar boost layer for hot water — it supplements your existing heating system (boiler, heat pump) rather than replacing it. Your existing system continues its normal heating schedule. SEM only activates when solar surplus is available, heating the water further to store energy that would otherwise be exported.
+
+Legionella prevention complies with DVGW W 551 (Germany), SIA 385/1 (Switzerland), and ÖNORM B 5019 (Austria).
+
+### Supported Entity Types
+
+Hot water devices are controlled through one of three HA entity types:
+
+| Entity type | How SEM controls it |
+|---|---|
+| `water_heater` | Sets target temperature via `water_heater.set_temperature` |
+| `climate` | Sets target temperature via `climate.set_temperature` |
+| `switch` | Simple on/off — used for resistive heating elements |
+
+### Temperature Logic
+
+The `solar_target_temp` (Solar Boost Target) is the cutoff temperature for solar surplus heating. When the water reaches this temperature, SEM stops heating and releases surplus for other devices. There is no separate "max temperature" — the solar boost target is the ceiling for SEM-controlled heating.
+
+If the solar boost target is set at or above 60°C, the Legionella requirement is naturally satisfied during sunny days without a forced cycle.
+
+### Legionella Prevention Cycle
+
+SEM tracks the number of hours since the water last reached the Legionella target temperature (60°C+). When the configured interval is exceeded, SEM forces a heating cycle regardless of solar surplus availability:
+
+1. **Normal operation** — during solar surplus, SEM heats water to the solar boost target (e.g., 50-65°C)
+2. **Legionella countdown** — a counter tracks hours since the last time the water temperature reached the Legionella target
+3. **Forced disinfection** — when the interval expires (default 72 hours), SEM forces heating to the Legionella target temperature, using grid power if necessary
+4. **Hold duration** — the system holds the disinfection temperature for a duration that auto-adjusts based on the actual temperature reached (shorter hold at higher temperatures, since thermal kill rate increases exponentially)
+
+### Configuration Parameters
+
+| Parameter | Range | Default | Where configured | Description |
+|---|---|---|---|---|
+| Solar Boost Target | 40-80°C | — | Dashboard slider | Solar surplus heating cutoff |
+| Legionella Target | 60-80°C | 65°C | Dashboard slider | Forced heating temperature (legal minimum 60°C) |
+| Disinfection interval | 24-168 h | 72 h | Options flow | Maximum hours between disinfection cycles (not on dashboard) |
+
+---
+
 ## Surplus Distribution Algorithm
 
 1. Read available surplus (solar - home - battery charge)

@@ -1449,47 +1449,37 @@ views:
                 card_mod:
                   style: *glass_card
 
-          # ── Heat Pump & Hot Water ──
+          # ── Hot Water ──
           - type: custom:mushroom-title-card
             card_mod:
               style: *lumina_title
-            title: Heat Pump & Hot Water
-            subtitle: >-
-              {{ states('sensor.sem_heat_pump_mode') }} · SG-Ready {{ states('sensor.sem_heat_pump_sg_ready_state') }}
-          - type: horizontal-stack
-            cards:
-              - type: custom:mushroom-template-card
-                primary: SG-Ready State
-                secondary: >-
-                  {{ states('sensor.sem_heat_pump_sg_ready_state') }}
-                icon: mdi:heat-pump
-                icon_color: >-
-                  {% set sg = states('sensor.sem_heat_pump_sg_ready_state') | int(1) %}
-                  {% if sg == 4 %}red{% elif sg == 3 %}orange{% elif sg == 2 %}green{% else %}grey{% endif %}
-                card_mod:
-                  style: *glass_card
-              - type: custom:mushroom-template-card
-                primary: Mode
-                secondary: >-
-                  {{ states('sensor.sem_heat_pump_mode') }}
-                icon: mdi:thermostat
-                icon_color: cyan
-                card_mod:
-                  style: *glass_card
+            title: Hot Water
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-number-card
-                entity: number.sem_heat_pump_boost_offset
-                name: Boost Offset
-                icon: mdi:thermometer-plus
+                entity: number.sem_hot_water_solar_target
+                name: Solar Boost Target
+                icon: mdi:water-thermometer
                 card_mod:
                   style: *glass_card
               - type: custom:mushroom-number-card
-                entity: number.sem_hot_water_max_temperature
-                name: Hot Water Max
-                icon: mdi:water-boiler
+                entity: number.sem_legionella_target_temp
+                name: Legionella Target
+                icon: mdi:shield-alert
                 card_mod:
                   style: *glass_card
+          - type: custom:mushroom-template-card
+            primary: Legionella Prevention — Legal Requirements
+            secondary: >-
+              Germany (DVGW W 551): Storage ≥ 60°C, circulation ≥ 55°C.
+              Switzerland (SIA 385/1): Storage ≥ 60°C throughout tank.
+              Austria (ÖNORM B 5019): 60°C storage, thermal disinfection at 70°C / 3 min.
+              SEM forces a disinfection cycle if the tank hasn't reached the target temperature within the configured interval.
+            icon: mdi:shield-alert
+            icon_color: amber
+            multiline_secondary: true
+            card_mod:
+              style: *glass_card
 
           # ── Solar & Power ──
           - type: custom:mushroom-title-card
@@ -1811,11 +1801,25 @@ views:
             subtitle: >-
               {% set roi = states('sensor.sem_roi_percentage') | float(0) %}
               {% set cost = states('number.sem_system_investment_cost') | float(0) %}
-              {% if cost > 0 %}{{ roi | round(1) }}% of {{ cost | round(0) }} CHF recovered{% else %}Set investment cost on Control tab{% endif %}
+              {% if cost > 0 %}{{ roi | round(1) }}% of {{ cost | round(0) }} CHF recovered{% else %}Set investment cost below{% endif %}
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-number-card
+                entity: number.sem_system_investment_cost
+                name: Investment Cost
+                icon: mdi:cash
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-number-card
+                entity: number.sem_system_install_year
+                name: Install Year
+                icon: mdi:calendar
+                card_mod:
+                  style: *glass_card
           - type: conditional
             conditions:
               - condition: numeric_state
-                entity: sensor.sem_roi_percentage
+                entity: number.sem_system_investment_cost
                 above: 0
             card:
               type: vertical-stack
@@ -1862,46 +1866,31 @@ views:
                         {% if roi >= 100 %}green{% elif roi >= 50 %}amber{% else %}cyan{% endif %}
                       card_mod:
                         style: *glass_card
-                # ── Savings Breakdown (collapsed) ──
-                - type: entities
+                # ── Savings Breakdown ──
+                - type: custom:mushroom-template-card
+                  primary: >-
+                    {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
+                    How Savings Are Calculated · {{ savings | round(0) }} CHF total
+                  secondary: >-
+                    {% set import_rate = states('number.sem_electricity_import_rate') | float(0.36) %}
+                    {% set export_rate = states('number.sem_electricity_export_rate') | float(0.075) %}
+                    {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
+                    {% set annual = states('sensor.sem_roi_annual_savings') | float(0) %}
+                    {% set invest = states('number.sem_system_investment_cost') | float(0) %}
+                    {% set payback = states('sensor.sem_roi_payback_years') | float(0) %}
+                    {% set co2 = states('sensor.sem_lifetime_co2_avoided') | float(0) %}
+                    {% set trees = states('sensor.sem_lifetime_trees_equivalent') | float(0) %}
+                    Solar self-consumed × {{ import_rate }} CHF/kWh
+                    · Grid export × {{ export_rate }} CHF/kWh
+                    = {{ savings | round(0) }} CHF total savings
+                    ÷ system age = {{ annual | round(0) }} CHF/year
+                    {{ invest | round(0) }} CHF ÷ {{ annual | round(0) }} CHF/yr = {{ payback | round(1) }} yr payback
+                    {{ co2 | round(0) }} kg CO₂ avoided = {{ trees | round(0) }} trees
+                  icon: mdi:calculator
+                  icon_color: purple
+                  multiline_secondary: true
                   card_mod:
                     style: *glass_card
-                  entities:
-                    - type: custom:fold-entity-row
-                      head:
-                        type: section
-                        label: "How Savings Are Calculated"
-                      open: true
-                      entities:
-                        - type: custom:mushroom-template-card
-                          primary: >-
-                            {% set import_rate = states('number.sem_electricity_import_rate') | float(0.36) %}
-                            {% set export_rate = states('number.sem_electricity_export_rate') | float(0.075) %}
-                            {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
-                            {% set annual = states('sensor.sem_roi_annual_savings') | float(0) %}
-                            {% set invest = states('number.sem_system_investment_cost') | float(0) %}
-                            {% set payback = states('sensor.sem_roi_payback_years') | float(0) %}
-                            {% set co2 = states('sensor.sem_lifetime_co2_avoided') | float(0) %}
-                            {% set trees = states('sensor.sem_lifetime_trees_equivalent') | float(0) %}
-                            Lifetime Savings: {{ savings | round(0) }} CHF
-                          secondary: >-
-                            {% set import_rate = states('number.sem_electricity_import_rate') | float(0.36) %}
-                            {% set export_rate = states('number.sem_electricity_export_rate') | float(0.075) %}
-                            {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
-                            {% set annual = states('sensor.sem_roi_annual_savings') | float(0) %}
-                            {% set invest = states('number.sem_system_investment_cost') | float(0) %}
-                            {% set payback = states('sensor.sem_roi_payback_years') | float(0) %}
-                            {% set co2 = states('sensor.sem_lifetime_co2_avoided') | float(0) %}
-                            {% set trees = states('sensor.sem_lifetime_trees_equivalent') | float(0) %}
-                            Solar self-consumed × {{ import_rate }} CHF/kWh
-                            · Grid export × {{ export_rate }} CHF/kWh
-                            = {{ savings | round(0) }} CHF total savings
-                            ÷ system age = {{ annual | round(0) }} CHF/year
-                            {{ invest | round(0) }} CHF ÷ {{ annual | round(0) }} CHF/yr = {{ payback | round(1) }} yr payback
-                            {{ co2 | round(0) }} kg CO₂ avoided = {{ trees | round(0) }} trees
-                          icon: mdi:calculator
-                          icon_color: purple
-                          multiline_secondary: true
 
           # 8. DEMAND CHARGE
           # ══════════════════════════════════════════════════════

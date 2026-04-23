@@ -162,7 +162,10 @@
           "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
           "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
-          "battery_discharge_control_entity": "Battery discharge control entity (optional)"
+          "battery_discharge_control_entity": "Battery discharge control entity (optional)",
+          "hot_water_solar_target": "Hot water solar heating target (°C)",
+          "legionella_target_temp": "Legionella disinfection target (°C)",
+          "legionella_interval_hours": "Max hours between disinfection cycles"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
