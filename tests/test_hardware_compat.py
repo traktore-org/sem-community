@@ -467,3 +467,165 @@ class TestChargerServiceCalls:
             "number", "set_value",
             {"entity_id": "number.wallbox_pulsar_plus_maximum_charging_current", "value": 8},
             blocking=True)
+
+
+# ════════════════════════════════════════════
+# Additional Inverter Sign Convention Tests
+# ════════════════════════════════════════════
+
+class TestAdditionalInverterSigns(TestInverterSignConventions):
+    """Additional inverters not in the base set."""
+
+    def test_solax_grid_opposite(self):
+        """SolaX (solax-modbus): grid +import/-export (OPPOSITE)."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        # SolaX: positive power during import → opposite
+        assert self._detect_grid(reader, hass, 3000, 100, 100, 101, 100) is True
+
+    def test_solax_battery_matches(self):
+        """SolaX: battery +charge/-discharge (matches SEM)."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        assert self._detect_battery(reader, hass, 1000, 50, 50, 51, 50) is False
+
+    def test_deye_sunsynk_matches(self):
+        """DEYE/Sunsynk (ha-solarman): grid -import/+export, battery +charge/-discharge — matches SEM."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        # Grid: positive during export → matches SEM
+        assert self._detect_grid(reader, hass, 2000, 100, 100, 100, 101) is False
+        reader2 = self._make_reader(hass)
+        # Battery: positive during charge → matches SEM
+        assert self._detect_battery(reader2, hass, 500, 50, 50, 51, 50) is False
+
+    def test_solark_same_as_deye(self):
+        """SolArk uses DEYE profiles — same convention."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        assert self._detect_grid(reader, hass, 1500, 100, 100, 100, 101) is False
+        reader2 = self._make_reader(hass)
+        assert self._detect_battery(reader2, hass, 800, 50, 50, 51, 50) is False
+
+    def test_solis_modbus_matches(self):
+        """Solis (modbus): grid +export/-import, battery +charge/-discharge — matches SEM."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        assert self._detect_grid(reader, hass, 2000, 100, 100, 100, 101) is False
+        reader2 = self._make_reader(hass)
+        assert self._detect_battery(reader2, hass, 500, 50, 50, 51, 50) is False
+
+    def test_sma_grid_matches(self):
+        """SMA: grid +export/-import — matches SEM."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        assert self._detect_grid(reader, hass, 2000, 100, 100, 100, 101) is False
+
+    def test_solaredge_battery_opposite(self):
+        """SolarEdge (native): battery +discharge/-charge (OPPOSITE)."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        # Positive power + discharge increasing → opposite
+        assert self._detect_battery(reader, hass, 1500, 50, 50, 50, 51) is True
+
+    def test_kstar_grid_matches(self):
+        """KSTAR (ha-solarman with scale:-1): grid -import/+export — matches SEM."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        assert self._detect_grid(reader, hass, 2000, 100, 100, 100, 101) is False
+
+    def test_powerwall_both_opposite(self):
+        """Tesla Powerwall: grid +import (OPPOSITE), battery -charge/+discharge (OPPOSITE)."""
+        hass = MagicMock()
+        reader1 = self._make_reader(hass)
+        # Grid: positive during import → opposite
+        assert self._detect_grid(reader1, hass, 2000, 100, 100, 101, 100) is True
+        reader2 = self._make_reader(hass)
+        # Battery: positive during discharge → opposite
+        assert self._detect_battery(reader2, hass, 1500, 50, 50, 50, 51) is True
+
+    def test_sonnen_grid_matches_battery_opposite(self):
+        """Sonnenbatterie: grid +export (matches), battery +discharge (OPPOSITE)."""
+        hass = MagicMock()
+        reader1 = self._make_reader(hass)
+        assert self._detect_grid(reader1, hass, 2000, 100, 100, 100, 101) is False
+        reader2 = self._make_reader(hass)
+        assert self._detect_battery(reader2, hass, 1000, 50, 50, 50, 51) is True
+
+    def test_myenergi_grid_opposite(self):
+        """Myenergi hub: grid +import/-export (OPPOSITE)."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        assert self._detect_grid(reader, hass, 1500, 100, 100, 101, 100) is True
+
+
+# ════════════════════════════════════════════
+# Power Reading: kW vs W unit handling
+# ════════════════════════════════════════════
+
+class TestPowerUnitConversion:
+    """Test kW→W conversion for integrations that report in kW."""
+
+    def test_growatt_mix_kw(self):
+        """Growatt Mix: power in kW."""
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state(5.2, unit="kW")
+        reader = SensorReader(hass, {})
+        assert reader._read_sensor("sensor.growatt_mix_wattage_pv_all", "solar") == 5200.0
+
+    def test_powerwall_meter_kw(self):
+        """Tesla Powerwall meter: instant_power in kW."""
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state(2.5, unit="kW")
+        reader = SensorReader(hass, {})
+        assert reader._read_sensor("sensor.powerwall_solar_instant_power", "solar") == 2500.0
+
+    def test_sma_daily_yield_wh(self):
+        """SMA daily yield in Wh (not kWh) — no conversion needed for power."""
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state(3500, unit="W")
+        reader = SensorReader(hass, {})
+        assert reader._read_sensor("sensor.sma_pv_power", "solar") == 3500.0
+
+    def test_solaredge_power_watts(self):
+        """SolarEdge Modbus: power in W."""
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state(8000, unit="W")
+        reader = SensorReader(hass, {})
+        assert reader._read_sensor("sensor.solaredge_ac_power", "solar") == 8000.0
+
+    def test_sonnen_power_watts(self):
+        """Sonnenbatterie: power in W."""
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state(4500, unit="W")
+        reader = SensorReader(hass, {})
+        assert reader._read_sensor("sensor.sonnenbatterie_state_production", "solar") == 4500.0
+
+
+# ════════════════════════════════════════════
+# Monitoring-Only Chargers
+# ════════════════════════════════════════════
+
+class TestMonitoringOnlyChargers:
+    """Chargers that can be monitored but not controlled."""
+
+    def test_tesla_wall_connector_no_power_sensor(self):
+        """Tesla Wall Connector has no power sensor — only current + voltage."""
+        hass = MagicMock()
+        # Only current and voltage, no power
+        hass.states.get = lambda eid: {
+            "sensor.tesla_wall_connector_current_a_a": _state(15.2, unit="A"),
+            "sensor.tesla_wall_connector_voltage_a_v": _state(230, unit="V"),
+            "sensor.tesla_wall_connector_session_energy_wh": _state(12500, unit="Wh"),
+        }.get(eid)
+        reader = SensorReader(hass, {})
+        # No power sensor → returns 0
+        assert reader._read_sensor("sensor.tesla_wall_connector_power", "ev") == 0.0
+
+    def test_zappi_status_reading(self):
+        """Myenergi Zappi: can read charging power but cannot control current."""
+        hass = MagicMock()
+        hass.states.get = lambda eid: _state(3200, unit="W")
+        reader = SensorReader(hass, {})
+        # Can read power (monitoring works)
+        assert reader._read_sensor("sensor.myenergi_zappi_ct1_power", "ev") == 3200.0
