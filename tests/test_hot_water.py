@@ -9,6 +9,7 @@ Covers:
 """
 import pytest
 from datetime import datetime, timedelta
+from homeassistant.util import dt as dt_util
 from unittest.mock import MagicMock, AsyncMock, patch
 
 from custom_components.solar_energy_management.devices.hot_water_controller import (
@@ -189,7 +190,7 @@ class TestMultiEntityActivation:
         calls = [c for c in hass.services.async_call.call_args_list
                  if c[0][1] == "set_temperature"]
         assert len(calls) >= 1
-        assert calls[0][1]["temperature"] == 50.0
+        assert calls[0][0][2]["temperature"] == 50.0  # 3rd positional arg is service_data
 
     @pytest.mark.asyncio
     async def test_climate_activation(self, hass):
@@ -219,7 +220,7 @@ class TestMultiEntityActivation:
         await ctrl.deactivate()
         calls = [c for c in hass.services.async_call.call_args_list
                  if c[0][1] == "set_hvac_mode"]
-        assert any(c[1].get("hvac_mode") == "off" for c in calls)
+        assert any(c[0][2].get("hvac_mode") == "off" for c in calls)
 
 
 # ════════════════════════════════════════════
@@ -236,14 +237,14 @@ class TestLegionellaPrevention:
     def test_not_overdue_when_recently_run(self, hass):
         ctrl = HotWaterController(hass, entity_id="switch.boiler",
                                    legionella_interval_hours=72)
-        ctrl._last_legionella_time = datetime.now(tz=None)
+        ctrl._last_legionella_time = datetime.now(tz=dt_util.UTC)
         # hours_since will be ~0
         assert ctrl.legionella_overdue is False
 
     def test_overdue_after_interval(self, hass):
         ctrl = HotWaterController(hass, entity_id="switch.boiler",
                                    legionella_interval_hours=72)
-        ctrl._last_legionella_time = datetime.now(tz=None) - timedelta(hours=80)
+        ctrl._last_legionella_time = datetime.now(tz=dt_util.UTC) - timedelta(hours=80)
         assert ctrl.legionella_overdue is True
 
     def test_hold_duration_by_temperature(self, hass):
@@ -303,7 +304,7 @@ class TestLegionellaPrevention:
                                    legionella_target_temp=65)
         ctrl._legionella_cycle_active = True
         # Simulate hold start was 25 minutes ago (>20 min hold for 65°C)
-        ctrl._legionella_hold_start = datetime.now(tz=None) - timedelta(minutes=25)
+        ctrl._legionella_hold_start = datetime.now(tz=dt_util.UTC) - timedelta(minutes=25)
 
         result = await ctrl.check_legionella_cycle()
         assert result == "legionella_complete"
@@ -319,7 +320,7 @@ class TestLegionellaPrevention:
                                    legionella_target_temp=65)
         ctrl._legionella_cycle_active = True
         # Hold started 5 minutes ago (<20 min needed)
-        ctrl._legionella_hold_start = datetime.now(tz=None) - timedelta(minutes=5)
+        ctrl._legionella_hold_start = datetime.now(tz=dt_util.UTC) - timedelta(minutes=5)
 
         result = await ctrl.check_legionella_cycle()
         # Should still be holding (temp at target but not long enough)
