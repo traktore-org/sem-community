@@ -1,0 +1,29 @@
+name: Feature Request
+description: Suggest a new feature for SEM
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case, not just the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work?
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - EV Charging
+        - Battery Management
+        - Dashboard
+        - Notifications
+        - Tariff / Cost Tracking
+        - Hardware Support
+        - Localization
+        - Other

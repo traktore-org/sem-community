@@ -1,0 +1,76 @@
+name: Bug Report
+description: Report a bug with SEM
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill in the details below.
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant Version
+      placeholder: "2026.4.3"
+    validations:
+      required: true
+  - type: input
+    id: sem-version
+    attributes:
+      label: SEM Version
+      placeholder: "1.2.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: inverter
+    attributes:
+      label: Inverter / Battery System
+      options:
+        - Huawei Solar
+        - GoodWe
+        - Fronius
+        - Enphase
+        - SMA
+        - SolaX (solax-modbus)
+        - DEYE/Sunsynk (ha-solarman)
+        - SolArk
+        - Growatt
+        - Solis
+        - SolarEdge (Modbus)
+        - KSTAR (ha-solarman)
+        - Tesla Powerwall
+        - Sonnenbatterie
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: charger
+    attributes:
+      label: EV Charger
+      options:
+        - KEBA P30
+        - Easee Home
+        - Wallbox Pulsar
+        - go-eCharger (HTTP)
+        - go-eCharger (MQTT)
+        - Zaptec
+        - ChargePoint
+        - Heidelberg Energy Control
+        - OpenWB 2.x
+        - No EV charger
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe what you expected and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log entries
+      description: |
+        Add debug logs from Settings → System → Logs (filter: `custom_components.solar_energy_management`).
+      render: text

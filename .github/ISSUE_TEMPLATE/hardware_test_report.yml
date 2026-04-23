@@ -1,0 +1,67 @@
+name: Hardware Test Report
+description: Report your experience with a specific inverter or charger
+labels: ["hardware-support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing SEM with your hardware! Your report helps us verify compatibility.
+  - type: dropdown
+    id: inverter
+    attributes:
+      label: Inverter / Battery System
+      options:
+        - Huawei Solar
+        - GoodWe
+        - Fronius
+        - Enphase
+        - SMA
+        - SolaX (solax-modbus)
+        - DEYE/Sunsynk (ha-solarman)
+        - SolArk
+        - Growatt
+        - Solis
+        - SolarEdge (Modbus)
+        - KSTAR (ha-solarman)
+        - Tesla Powerwall
+        - Sonnenbatterie
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: charger
+    attributes:
+      label: EV Charger
+      options:
+        - KEBA P30
+        - Easee Home
+        - Wallbox Pulsar
+        - go-eCharger (HTTP)
+        - go-eCharger (MQTT)
+        - Zaptec
+        - ChargePoint
+        - Heidelberg Energy Control
+        - OpenWB 2.x
+        - No EV charger
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Overall result
+      options:
+        - Works perfectly
+        - Works with minor issues
+        - Partially works
+        - Does not work
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: |
+        What worked? What didn't? Any entity names or values that were unexpected?
+    validations:
+      required: true
