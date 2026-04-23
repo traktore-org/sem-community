@@ -189,6 +189,32 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 
 ---
 
+## Hot water not heating
+
+**Cause:** SEM only heats hot water when solar surplus is available (normal mode) or when a Legionella disinfection cycle is due (forced mode). If neither condition is met, the heater stays idle.
+
+**Fix:**
+1. Verify the hot water entity is configured in SEM: check **Settings > Devices & Services > Solar Energy Management > Configure**
+2. Confirm the entity exists and is available in **Developer Tools > States** — search for your `water_heater.*`, `climate.*`, or `switch.*` entity
+3. Check that the device control mode is set to `surplus` (not `peak_only` or `off`) — SEM will not activate devices in `peak_only` or `off` mode
+4. Verify sufficient solar surplus: `sensor.sem_surplus_available` should exceed the heater's minimum power threshold
+5. If using a `water_heater` or `climate` entity, check that the current temperature sensor is reporting correctly — SEM needs accurate temperature readings to decide when to heat
+
+---
+
+## Legionella cycle not running
+
+**Cause:** The Legionella disinfection cycle triggers only when the configured interval (default 72 hours) has elapsed since the water last reached the disinfection target temperature (default 65°C).
+
+**Fix:**
+1. Check how long since the last disinfection: look at the hot water sensor attributes or SEM debug logs for the hours-since-last-60C counter
+2. Verify the disinfection interval setting — if set to 168 hours (maximum), cycles will be infrequent
+3. Confirm the temperature sensor is accurate — if the sensor falsely reports temperatures above 60°C, SEM will reset the counter and skip the cycle
+4. Check that the hot water entity is available and controllable — SEM cannot force heating if the entity is unavailable or in an error state
+5. Enable debug logging (see below) and search for `legionella` or `hot_water` in the logs to trace the cycle state
+
+---
+
 ## Debug logging
 
 To enable detailed logging for SEM, add this to your `configuration.yaml`:

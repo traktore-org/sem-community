@@ -101,6 +101,36 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 
 ---
 
+## Hot Water Settings
+
+SEM works alongside your existing heating system — it only boosts with solar surplus, it does NOT replace your boiler or heat pump's normal heating schedule. Your existing system continues to handle baseline heating as usual. SEM adds a solar boost layer on top: when surplus solar power is available, SEM heats the water further to store energy that would otherwise be exported.
+
+Configure these settings under **Settings > Devices & Services > Solar Energy Management > Configure**.
+
+### Dashboard Sliders
+
+The dashboard exposes exactly two sliders for hot water control:
+
+#### Solar Boost Target (40-80°C)
+
+The temperature SEM heats to during solar surplus periods. When surplus power is available, SEM heats the water up to this target. Once reached, SEM stops heating and releases surplus for other devices (EV, battery, etc.).
+
+If you set the Solar Boost Target to 60°C or above, the Legionella prevention requirement (60°C) is naturally met during sunny days — no separate forced heating cycle is needed on those days.
+
+#### Legionella Target (60-80°C)
+
+The minimum temperature for the Legionella prevention cycle. Range: 60-80°C. The legal minimum is 60°C per DVGW W 551 (Germany), SIA 385/1 (Switzerland), and ÖNORM B 5019 (Austria). When a Legionella cycle triggers, SEM heats to this target regardless of solar availability — grid power is used if necessary.
+
+### Legionella Prevention
+
+SEM tracks when the water last reached the Legionella target temperature. If the configured interval expires without reaching that temperature, SEM forces a heating cycle. The disinfection interval is configurable in the integration options flow (default 72 hours, range 24-168 hours) but is not exposed on the dashboard — it rarely needs changing.
+
+### Important: Legionella cycle cannot be disabled
+
+The Legionella prevention cycle is a safety requirement mandated by building codes. It cannot be turned off. You can adjust the interval and the target temperature (minimum 60°C) in the integration options, but the cycle itself is always active when hot water control is enabled. This protects against dangerous Legionella bacteria growth in stored hot water.
+
+---
+
 ## Charging Modes
 
 SEM supports four EV charging modes, selectable from the **Control tab** on the dashboard:

@@ -160,7 +160,10 @@
           "demand_charge_rate": "Demand charge rate (CHF/kW/month)",
           "observer_mode": "Observer mode (read-only — no hardware control)",
           "forecast_night_reduction": "Forecast-driven night charging reduction",
-          "battery_discharge_control_entity": "Battery discharge control entity (optional)"
+          "battery_discharge_control_entity": "Battery discharge control entity (optional)",
+          "hot_water_solar_target": "Hot water solar heating target (°C)",
+          "legionella_target_temp": "Legionella disinfection target (°C)",
+          "legionella_interval_hours": "Max hours between disinfection cycles"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
