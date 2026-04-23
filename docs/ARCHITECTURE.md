@@ -208,6 +208,45 @@ SEM abstracts charger-specific differences through per-integration service profi
 
 ---
 
+## Hardware Compatibility Testing
+
+SEM includes a comprehensive hardware compatibility test suite (v1.2.3) that verifies every supported inverter + charger combination works correctly end-to-end.
+
+### Test Structure
+
+The suite runs 110 end-to-end tests, each executing a 10-step verification sequence per hardware combination:
+
+1. **Sensor discovery** — auto-detect inverter and charger entities
+2. **Sign convention detection** — verify grid and battery sign auto-detection
+3. **Power reading** — read solar, grid, battery, and EV power sensors
+4. **Energy integration** — validate energy accumulation from power readings
+5. **Flow calculation** — verify power flow distribution (solar-to-home, solar-to-EV, etc.)
+6. **Charging control** — test EV charging state machine transitions
+7. **Battery zone logic** — validate SOC zone strategy decisions
+8. **Surplus distribution** — verify multi-device surplus allocation
+9. **Service calls** — confirm charger service calls use correct parameters
+10. **Round-trip validation** — end-to-end cycle from sensor read to hardware command
+
+### Tested Combinations (11)
+
+| Inverter | Charger |
+|----------|---------|
+| Huawei SUN2000 | KEBA P30 |
+| Huawei SUN2000 | Wallbox Pulsar |
+| Huawei SUN2000 | go-eCharger |
+| SolarEdge | KEBA P30 |
+| SolarEdge | Easee |
+| Fronius | KEBA P30 |
+| Fronius | go-eCharger |
+| Growatt | Wallbox Pulsar |
+| SolaX | go-eCharger |
+| DEYE/Sunsynk | Zaptec |
+| GoodWe | ChargePoint |
+
+All 11 combinations are run in CI on every pull request and release. If your inverter and charger are in this list, SEM has been automatically verified against that exact pairing.
+
+---
+
 ## Other Key Modules
 
 ```

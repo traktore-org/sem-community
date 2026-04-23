@@ -5,6 +5,8 @@ Solar Energy Management (SEM) in Home Assistant.
 
 If you have never installed a custom integration before, this guide is for you.
 
+> **All supported hardware combinations are automatically tested in CI.** If your inverter and charger are listed below, SEM will work out of the box.
+
 ---
 
 ## Before You Start -- Checklist
