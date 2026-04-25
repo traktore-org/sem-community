@@ -262,6 +262,24 @@ class TestVirtualSOC:
         soc = det.get_virtual_soc(vehicle_soc=65.0)
         assert soc == 65.0
 
+    def test_virtual_soc_calibrates_from_real(self):
+        """When real SOC arrives, virtual SOC should calibrate."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+        det.update_energy(8.0)
+
+        # Real SOC = 72% → internal state should sync
+        det.get_virtual_soc(vehicle_soc=72.0)
+        assert det._estimated_soc == 72.0
+        # energy_since_full should be recalculated: (100-72)/100 * 40 = 11.2
+        assert det._energy_since_full == pytest.approx(11.2, abs=0.1)
+
+        # Now if car API goes offline, virtual continues from 72%
+        det.update_energy(4.0)  # +4 kWh consumed
+        soc = det.get_virtual_soc(vehicle_soc=None)
+        # Should be ~62% (11.2 + 4 = 15.2 kWh → 100 - 15.2/40*100 = 62%)
+        assert soc == pytest.approx(62.0, abs=0.5)
+
     def test_soc_resets_on_next_full(self):
         """SOC should reset to 100% when next full charge detected."""
         det = EVTaperDetector(DEFAULT_CONFIG)
@@ -377,6 +395,30 @@ class TestBatteryHealth:
             det.reset_session()
 
         assert len(det._battery_health_samples) <= 20
+
+    def test_health_from_partial_charge(self):
+        """Should estimate health from partial charge with real SOC."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+
+        for i in range(4):
+            # Simulate session: 40% → 80% with 15 kWh
+            # capacity_estimate = 15 / (0.40) = 37.5 kWh → 37.5/40 = 93.75%
+            _feed_constant(det, 7000, 16, 10)
+            det._session_peak_w = 7000
+            det._session_start_soc = 40.0
+            det.on_session_end(15.0, end_soc=80.0)
+            det.reset_session()
+
+        assert det._battery_health_pct == pytest.approx(93.75, abs=1.0)
+
+    def test_partial_charge_needs_min_soc_delta(self):
+        """Should reject partial charges with tiny SOC delta."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_constant(det, 7000, 16, 10)
+        det._session_peak_w = 7000
+        det._session_start_soc = 78.0
+        det.on_session_end(2.0, end_soc=80.0)  # Only 2% delta
+        assert len(det._battery_health_samples) == 0  # Rejected
 
 
 # ════════════════════════════════════════════

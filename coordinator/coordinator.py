@@ -1351,7 +1351,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Reset on disconnect
         if self._last_ev_connected and not power.ev_connected:
             if self._session_data.energy_kwh > 0:
-                self._ev_taper_detector.on_session_end(self._session_data.energy_kwh)
+                self._ev_taper_detector.on_session_end(
+                    self._session_data.energy_kwh,
+                    end_soc=self._cycle_vehicle_soc,
+                )
                 if self._storage:
                     self._storage.add_session_to_history({
                         "timestamp": self._session_data.start_time,

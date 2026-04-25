@@ -82,6 +82,11 @@ class EVTaperDetector:
         self._battery_health_samples: List[Dict] = []
         self._battery_health_pct: float = 0.0
 
+        # SOC calibration: track real SOC for syncing virtual SOC
+        self._last_real_soc: Optional[float] = None
+        # Session SOC tracking for partial-charge health estimates
+        self._session_start_soc: Optional[float] = None
+
     # ------------------------------------------------------------------
     # Public API — called each coordinator cycle
     # ------------------------------------------------------------------
@@ -154,11 +159,30 @@ class EVTaperDetector:
             self._energy_since_full += ev_energy_increment_kwh
 
     def get_virtual_soc(self, vehicle_soc: Optional[float] = None) -> float:
-        """Get estimated SOC, preferring real vehicle SOC if available."""
+        """Get estimated SOC, preferring real vehicle SOC if available.
+
+        When real SOC is available, calibrates internal state so the
+        virtual SOC stays accurate when the car API goes offline.
+        """
+        capacity = self._config.get("ev_battery_capacity_kwh", 40)
+
         if vehicle_soc is not None:
+            # Calibrate: sync internal state to real SOC so virtual
+            # continues accurately when car API goes offline
+            if self._last_real_soc is None or abs(vehicle_soc - self._last_real_soc) > 0.5:
+                self._estimated_soc = vehicle_soc
+                if capacity > 0:
+                    self._energy_since_full = (100.0 - vehicle_soc) / 100.0 * capacity
+                _LOGGER.debug(
+                    "SOC calibrated from vehicle: %.1f%% (energy_since_full=%.1f kWh)",
+                    vehicle_soc, self._energy_since_full,
+                )
+            self._last_real_soc = vehicle_soc
+            # Track session start SOC for health calculation
+            if self._session_start_soc is None:
+                self._session_start_soc = vehicle_soc
             return vehicle_soc
 
-        capacity = self._config.get("ev_battery_capacity_kwh", 40)
         if capacity <= 0:
             return 0.0
 
@@ -168,23 +192,63 @@ class EVTaperDetector:
         )
         return self._estimated_soc
 
-    def on_session_end(self, session_energy_kwh: float) -> None:
-        """Record completed session for battery health tracking."""
+    def on_session_end(self, session_energy_kwh: float, end_soc: Optional[float] = None) -> None:
+        """Record completed session for battery health tracking.
+
+        Supports two health estimation methods:
+        1. Full-cycle: taper detected (end ≈ 100%), uses full session energy
+        2. Partial-cycle: real SOC at start and end known, uses SOC delta
+
+        Method 2 works for any charge (40%→80%), so nobody needs to
+        drive to empty for health tracking.
+        """
+        if session_energy_kwh < 1.0 or self._session_peak_w < SESSION_PEAK_MIN:
+            self._session_start_soc = None
+            return
+
+        capacity = self._config.get("ev_battery_capacity_kwh", 40)
+        if capacity <= 0:
+            self._session_start_soc = None
+            return
+
+        sample = None
+
+        # Method 1: Full-cycle (taper detected → end SOC ≈ 100%)
+        if self._full_detected:
+            sample = {
+                "method": "full_cycle",
+                "energy_kwh": round(session_energy_kwh, 2),
+                "capacity_estimate_kwh": round(session_energy_kwh, 2),
+                "peak_w": round(self._session_peak_w, 0),
+            }
+
+        # Method 2: Partial-cycle (real SOC at start + end known)
         if (
-            self._full_detected
-            and self._session_peak_w > SESSION_PEAK_MIN
-            and session_energy_kwh > 1.0
+            sample is None
+            and self._session_start_soc is not None
+            and end_soc is not None
         ):
-            capacity = self._config.get("ev_battery_capacity_kwh", 40)
-            if capacity > 0:
-                self._battery_health_samples.append({
-                    "energy_kwh": round(session_energy_kwh, 2),
-                    "peak_w": round(self._session_peak_w, 0),
-                    "capacity_kwh": capacity,
-                })
-                if len(self._battery_health_samples) > MAX_HEALTH_SAMPLES:
-                    self._battery_health_samples = self._battery_health_samples[-MAX_HEALTH_SAMPLES:]
-                self._calculate_battery_health()
+            soc_delta = end_soc - self._session_start_soc
+            if soc_delta > 5:  # Need at least 5% delta for meaningful estimate
+                # capacity_estimate = energy / (delta% / 100)
+                capacity_estimate = session_energy_kwh / (soc_delta / 100.0)
+                # Sanity check: estimate should be within 50-150% of configured
+                if 0.5 * capacity <= capacity_estimate <= 1.5 * capacity:
+                    sample = {
+                        "method": "partial_cycle",
+                        "energy_kwh": round(session_energy_kwh, 2),
+                        "soc_start": round(self._session_start_soc, 1),
+                        "soc_end": round(end_soc, 1),
+                        "capacity_estimate_kwh": round(capacity_estimate, 2),
+                    }
+
+        if sample:
+            self._battery_health_samples.append(sample)
+            if len(self._battery_health_samples) > MAX_HEALTH_SAMPLES:
+                self._battery_health_samples = self._battery_health_samples[-MAX_HEALTH_SAMPLES:]
+            self._calculate_battery_health()
+
+        self._session_start_soc = None
 
     def reset_session(self) -> None:
         """Reset session-specific state (called when EV disconnects)."""
@@ -194,6 +258,7 @@ class EVTaperDetector:
         self._full_detected = False
         self._settling_counter = 0
         self._last_setpoint = 0.0
+        self._session_start_soc = None
 
     # ------------------------------------------------------------------
     # Night charge skip helpers
@@ -392,14 +457,24 @@ class EVTaperDetector:
         return "stable"
 
     def _calculate_battery_health(self) -> None:
-        """Estimate battery health from full-cycle charge data."""
+        """Estimate battery health from charge session data.
+
+        Uses capacity estimates from both full-cycle and partial-cycle
+        sessions. Health = average estimated capacity / rated capacity.
+        """
         if len(self._battery_health_samples) < 3:
             return
 
-        # Use the last 10 samples for a meaningful average
-        recent = self._battery_health_samples[-10:]
-        avg_energy = sum(s["energy_kwh"] for s in recent) / len(recent)
         capacity = self._config.get("ev_battery_capacity_kwh", 40)
+        if capacity <= 0:
+            return
 
-        if capacity > 0:
-            self._battery_health_pct = min(100.0, round(avg_energy / capacity * 100.0, 1))
+        # Use the last 10 samples — each has a capacity_estimate_kwh
+        recent = self._battery_health_samples[-10:]
+        estimates = [s["capacity_estimate_kwh"] for s in recent if "capacity_estimate_kwh" in s]
+
+        if not estimates:
+            return
+
+        avg_capacity = sum(estimates) / len(estimates)
+        self._battery_health_pct = min(100.0, round(avg_capacity / capacity * 100.0, 1))
