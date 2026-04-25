@@ -76,8 +76,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         Triggered when a supported inverter integration (huawei_solar,
         solaredge, fronius, goodwe, enphase_envoy, sma, growatt_server,
-        solis) is loaded. Suggests SEM setup if Energy Dashboard is
-        configured.
+        solis, powerwall, kostal_plenticore, solax, victron) is loaded.
+        Suggests SEM setup if Energy Dashboard is configured.
         """
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
