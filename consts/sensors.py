@@ -93,6 +93,19 @@ SEM_SENSORS: Final = {
     "grid_status": "sensor.sem_grid_status",
     "battery_health": "sensor.sem_battery_health",
     "ev_max_current_available": "sensor.sem_ev_max_current_available",
+
+    # EV Intelligence Sensors
+    "ev_taper_trend": "sensor.sem_ev_taper_trend",
+    "ev_taper_ratio": "sensor.sem_ev_taper_ratio",
+    "ev_taper_minutes_to_full": "sensor.sem_ev_taper_minutes_to_full",
+    "ev_estimated_soc": "sensor.sem_ev_estimated_soc",
+    "ev_last_full_charge": "sensor.sem_ev_last_full_charge",
+    "ev_energy_since_full": "sensor.sem_ev_energy_since_full",
+    "ev_predicted_daily_consumption": "sensor.sem_ev_predicted_daily_consumption",
+    "ev_nights_until_charge": "sensor.sem_ev_nights_until_charge",
+    "ev_charge_needed": "sensor.sem_ev_charge_needed",
+    "ev_battery_health": "sensor.sem_ev_battery_health",
+    "ev_charge_skip_reason": "sensor.sem_ev_charge_skip_reason",
 }
 
 # SEM Binary Sensors - These are created from hardware binary sensors

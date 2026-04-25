@@ -411,6 +411,64 @@ class NotificationManager:
             group="sem_alerts",
         )
 
+    async def notify_ev_nearly_full(self, minutes_remaining: float) -> None:
+        """Notify user that EV is nearly full based on taper detection (#106)."""
+        if minutes_remaining > 10:
+            self._notified_flags.discard("ev_nearly_full")
+            return
+        if "ev_nearly_full" in self._notified_flags:
+            return
+        self._notified_flags.add("ev_nearly_full")
+
+        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+            "category": "charging",
+            "event": "ev_nearly_full",
+            "minutes_remaining": round(minutes_remaining, 0),
+        })
+        await self._send_mobile_notification(
+            f"EV nearly full — ~{minutes_remaining:.0f} min remaining",
+            channel=_CHANNEL_CHARGING,
+            group="sem_charging",
+        )
+
+    async def notify_ev_charge_skip(
+        self, estimated_soc: float, nights: int,
+    ) -> None:
+        """Notify user that night charge was skipped (#106)."""
+        if "ev_charge_skip" in self._notified_flags:
+            return
+        self._notified_flags.add("ev_charge_skip")
+
+        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+            "category": "charging",
+            "event": "ev_charge_skip",
+            "estimated_soc": round(estimated_soc, 0),
+            "nights_remaining": nights,
+        })
+        await self._send_mobile_notification(
+            f"Night charge skipped — EV SOC {estimated_soc:.0f}%, "
+            f"{nights} night(s) range remaining",
+            channel=_CHANNEL_CHARGING,
+            group="sem_charging",
+        )
+
+    async def notify_ev_charge_recommended(self, estimated_soc: float) -> None:
+        """Notify user that EV charging is recommended (#106)."""
+        if "ev_charge_recommended" in self._notified_flags:
+            return
+        self._notified_flags.add("ev_charge_recommended")
+
+        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+            "category": "charging",
+            "event": "ev_charge_recommended",
+            "estimated_soc": round(estimated_soc, 0),
+        })
+        await self._send_mobile_notification(
+            f"EV charge recommended tonight — estimated SOC {estimated_soc:.0f}%",
+            channel=_CHANNEL_CHARGING,
+            group="sem_charging",
+        )
+
     def reset(self) -> None:
         """Reset notification state."""
         self._last_notified_state = None
