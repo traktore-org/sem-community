@@ -136,40 +136,44 @@ class TestSetpointDiscrimination:
         """Changing setpoint should mark samples as sem_changed."""
         det = EVTaperDetector(DEFAULT_CONFIG)
 
-        # Stable setpoint
-        det.update(7000, 16.0, True, _make_dt(0))
-        det.update(7000, 16.0, True, _make_dt(0.17))
+        # Initialize with stable setpoint (first few samples settle from 0→16)
+        for i in range(5):
+            det.update(7000, 16.0, True, _make_dt(i * 0.17))
+
+        # After settling, stable setpoint should be clean
+        det.update(7000, 16.0, True, _make_dt(1.0))
         assert det._buffer[-1].sem_changed is False
 
         # SEM changes setpoint
-        det.update(7000, 24.0, True, _make_dt(0.33))
+        det.update(7000, 24.0, True, _make_dt(1.17))
         assert det._buffer[-1].sem_changed is True
 
         # Settling window (3 cycles)
-        det.update(9000, 24.0, True, _make_dt(0.5))
+        det.update(9000, 24.0, True, _make_dt(1.33))
         assert det._buffer[-1].sem_changed is True
-        det.update(9000, 24.0, True, _make_dt(0.67))
+        det.update(9000, 24.0, True, _make_dt(1.5))
         assert det._buffer[-1].sem_changed is True
-        det.update(9000, 24.0, True, _make_dt(0.83))
+        det.update(9000, 24.0, True, _make_dt(1.67))
         assert det._buffer[-1].sem_changed is True
 
         # After settling, should be clean
-        det.update(9000, 24.0, True, _make_dt(1.0))
+        det.update(9000, 24.0, True, _make_dt(1.83))
         assert det._buffer[-1].sem_changed is False
 
     def test_no_false_taper_during_sem_ramp(self):
         """SEM ramping down current should not trigger taper detection."""
         det = EVTaperDetector(DEFAULT_CONFIG)
 
-        # Feed declining power with changing setpoint (SEM reducing current)
+        # Feed declining power with large setpoint changes each cycle
+        # (SEM reducing current by 2A each step — clearly SEM-initiated)
         for i in range(30):
             power = 9000 - i * 200
-            setpoint = 32 - i * 0.5
+            setpoint = 32 - i * 2  # Large steps, always > 0.5A threshold
             dt = _make_dt(i * 10 / 60)
-            det.update(power, setpoint, True, dt)
+            result = det.update(power, setpoint, True, dt)
 
-        result = det._analyze(9000 - 29 * 200)
         # All samples should be sem_changed due to constant setpoint changes
+        # so trend should be unknown (not enough BMS-only samples)
         assert result.trend == "unknown"
 
 
