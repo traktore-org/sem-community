@@ -135,7 +135,7 @@ Select the sensors for your EV charger:
 | Charger service | Service to set charging current (e.g., `keba.set_current`) |
 | Total energy sensor | Cumulative energy sensor (kWh) — optional |
 
-SEM auto-detects chargers from the entity registry: **KEBA**, **Wallbox Pulsar**, **go-eCharger** (HTTP + MQTT), **Easee**, **Zaptec**, **ChargePoint**, **Heidelberg**, **OpenWB 2.x**. Any other charger that exposes power/connected/charging sensors in HA can be configured manually.
+SEM auto-detects chargers from the entity registry: **KEBA**, **Wallbox Pulsar**, **go-eCharger** (HTTP + MQTT), **Easee**, **Zaptec**, **ChargePoint**, **Heidelberg**, **OpenWB 2.x**, **OCPP-compatible**, **Ohme**, **Peblar**, **V2C Trydan**, **Alfen Eve**, **Blue Current**, **OpenEVSE**. Any other charger that exposes power/connected/charging sensors in HA can be configured manually.
 
 ### Step 4: Notifications (Optional)
 
@@ -266,21 +266,19 @@ SEM creates 60+ sensors organized by category:
 
 ## Supported Hardware
 
-**Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
+**Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe, Tesla Powerwall, Kostal Plenticore, Sungrow, Victron, Sonnenbatterie — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
 
-**Battery discharge control auto-detected for:** Huawei Solar, SolaX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis, GoodWe
+**Battery discharge control auto-detected for:** Huawei Solar, SolaX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis, GoodWe, SolarEdge (solaredge-modbus-multi), Enphase (IQ Battery), Tesla Powerwall, Victron, Kostal Plenticore, Sungrow
 
-**Batteries:** Any battery exposed through a supported inverter integration. Huawei LUNA2000, Tesla Powerwall, Sonnen, and others work automatically via their paired inverter. Battery capacity is auto-detected from the inverter.
+**Batteries:** Any battery exposed through a supported inverter integration. Huawei LUNA2000, Tesla Powerwall, Sonnen, BYD, Pylontech, and others work automatically via their paired inverter. Battery capacity is auto-detected from the inverter.
 
-**EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger (HTTP + MQTT), Easee, Zaptec, ChargePoint, Heidelberg Energy Control, OpenWB 2.x
+**EV Chargers (auto-detected):** KEBA P30, Wallbox Pulsar, go-eCharger (HTTP + MQTT), Easee, Zaptec, ChargePoint, Heidelberg Energy Control, OpenWB 2.x, OCPP-compatible (ABB Terra, Vestel, Grizzl-E, etc.), Ohme, Peblar Rocksolid, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE
 
 **EV Chargers (manual config):** Any charger exposing power/connected/charging sensors in HA.
 
-> **Note:** Tesla Wall Connector is monitoring-only — it does not expose power sensors or current control in HA. SEM can read voltage/current but cannot control charging.
-
 > **Note:** KSTAR inverters are supported via the [ha-solarman](https://github.com/davidrapan/ha-solarman) integration with KSTAR YAML profiles, not via a dedicated KSTAR integration.
 
-> **Note:** Myenergi Zappi has its own built-in solar diversion logic. SEM can monitor it but direct current control is not available — the Zappi manages surplus charging internally.
+> **Note:** Fronius and SMA core integrations are read-only for battery control. Battery discharge protection requires the Modbus variant (e.g., `fronius_modbus`) or works without discharge limiting.
 
 **Hot Water:** Any hot water system exposed as a `water_heater`, `climate`, or `switch` entity in HA. Includes automatic Legionella prevention cycling per DVGW W 551 / SIA 385/1 / ÖNORM B 5019.
 

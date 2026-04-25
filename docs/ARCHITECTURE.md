@@ -171,7 +171,7 @@ SEM abstracts charger-specific differences through per-integration service profi
 
 - **Service profiles** — each supported charger integration has a `service_param_name` (e.g., `current` for KEBA, `charging_current` for Wallbox) and `service_device_id` mapping, so the coordinator can call the correct HA service with the right parameters.
 - **Start/stop abstraction** — chargers that require explicit start/stop commands use `start_stop_entity`, `charge_mode_entity`, and `start_service` to manage session lifecycle. Chargers that only need current=0 to pause do not use these.
-- **Supported chargers (auto-detected):** KEBA, Easee, Wallbox, go-eCharger (HTTP + MQTT), Zaptec, ChargePoint, Heidelberg, OpenWB 2.x
+- **Supported chargers (auto-detected):** KEBA, Easee, Wallbox, go-eCharger (HTTP + MQTT), Zaptec, ChargePoint, Heidelberg, OpenWB 2.x, OCPP-compatible, Ohme, Peblar, V2C Trydan, Alfen Eve, Blue Current, OpenEVSE
 - **Manual config:** Any charger exposing power/connected/charging sensors in HA can be configured manually via the integration options.
 
 ---

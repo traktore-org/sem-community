@@ -259,6 +259,192 @@ EV_INTEGRATION_PATTERNS = {
             ],
         }
     },
+    "ocpp": {
+        "integration_name": "OCPP",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.ocpp_*_status*connector*", "OCPP - Connector Status", 10),
+                ("sensor.ocpp_*_status", "OCPP - Status", 9),
+            ],
+            "ev_charging": [
+                ("sensor.ocpp_*_status*connector*", "OCPP - Connector Status", 10),
+                ("sensor.ocpp_*_status", "OCPP - Status", 9),
+            ],
+            "ev_charging_power": [
+                ("sensor.ocpp_*_power_active_import", "OCPP - Active Import Power", 10),
+                ("sensor.ocpp_*_power*", "OCPP - Power", 8),
+            ],
+            "ev_current": [
+                ("number.ocpp_*_maximum_current", "OCPP - Maximum Current", 10),
+                ("sensor.ocpp_*_current_offered", "OCPP - Current Offered", 9),
+                ("sensor.ocpp_*_current_import", "OCPP - Current Import", 8),
+            ],
+            "ev_session_energy": [
+                ("sensor.ocpp_*_energy_active_import_register", "OCPP - Energy Register", 10),
+                ("sensor.ocpp_*_session_energy", "OCPP - Session Energy", 9),
+            ],
+            "ev_total_energy": [
+                ("sensor.ocpp_*_energy_active_import_register", "OCPP - Energy Register", 10),
+            ],
+        }
+    },
+    "alfen": {
+        "integration_name": "Alfen Eve",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.*alfen*main_state*socket*", "Alfen - Main State", 10),
+                ("sensor.*alfen*status*socket*", "Alfen - Status", 9),
+            ],
+            "ev_charging": [
+                ("sensor.*alfen*main_state*socket*", "Alfen - Main State", 10),
+                ("sensor.*alfen*status*socket*", "Alfen - Status", 9),
+            ],
+            "ev_charging_power": [
+                ("sensor.*alfen*active_power_total*socket*", "Alfen - Active Power", 10),
+                ("sensor.*alfen*active_power*", "Alfen - Active Power Alt", 8),
+            ],
+            "ev_current": [
+                ("number.*alfen*max_current*socket*", "Alfen - Max Current", 10),
+                ("number.*alfen*current_limit*", "Alfen - Current Limit", 9),
+                ("sensor.*alfen*current*socket*", "Alfen - Current", 7),
+            ],
+            "ev_session_energy": [
+                ("sensor.*alfen*transaction*charging*", "Alfen - Session Energy", 10),
+                ("sensor.*alfen*meter_reading*", "Alfen - Meter Reading", 8),
+            ],
+            "ev_total_energy": [
+                ("sensor.*alfen*meter_reading*socket*", "Alfen - Total Energy", 10),
+            ],
+        }
+    },
+    "ohme": {
+        "integration_name": "Ohme",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.ohme_*_status", "Ohme - Status", 10),
+            ],
+            "ev_charging": [
+                ("sensor.ohme_*_status", "Ohme - Status", 10),
+            ],
+            "ev_charging_power": [
+                ("sensor.ohme_*_power", "Ohme - Power", 10),
+            ],
+            "ev_current": [
+                ("sensor.ohme_*_current", "Ohme - Current", 10),
+            ],
+            "ev_session_energy": [
+                ("sensor.ohme_*_energy", "Ohme - Energy", 10),
+            ],
+            "ev_total_energy": [
+                ("sensor.ohme_*_energy", "Ohme - Total Energy", 9),
+            ],
+        }
+    },
+    "peblar": {
+        "integration_name": "Peblar",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.peblar_*_state", "Peblar - State", 10),
+            ],
+            "ev_charging": [
+                ("sensor.peblar_*_state", "Peblar - State", 10),
+            ],
+            "ev_charging_power": [
+                ("sensor.peblar_*_power", "Peblar - Power", 10),
+            ],
+            "ev_current": [
+                ("number.peblar_*_charge_limit", "Peblar - Charge Limit", 10),
+                ("sensor.peblar_*_current", "Peblar - Current", 9),
+            ],
+            "ev_session_energy": [
+                ("sensor.peblar_*_session_energy", "Peblar - Session Energy", 10),
+            ],
+            "ev_total_energy": [
+                ("sensor.peblar_*_lifetime_energy", "Peblar - Lifetime Energy", 10),
+            ],
+        }
+    },
+    "v2c": {
+        "integration_name": "V2C Trydan",
+        "patterns": {
+            "ev_connected": [
+                ("binary_sensor.v2c_*_connected", "V2C - Connected", 10),
+            ],
+            "ev_charging": [
+                ("binary_sensor.v2c_*_charging", "V2C - Charging", 10),
+            ],
+            "ev_charging_power": [
+                ("sensor.v2c_*_charge_power", "V2C - Charge Power", 10),
+            ],
+            "ev_current": [
+                ("number.v2c_*_intensity", "V2C - Intensity", 10),
+            ],
+            "ev_session_energy": [
+                ("sensor.v2c_*_charge_energy", "V2C - Charge Energy", 10),
+            ],
+            "ev_total_energy": [
+                ("sensor.v2c_*_charge_energy", "V2C - Total Energy", 9),
+            ],
+        }
+    },
+    "blue_current": {
+        "integration_name": "Blue Current",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.*blue_current*vehicle_status*", "Blue Current - Vehicle Status", 10),
+                ("sensor.*blue_current*activity*", "Blue Current - Activity", 9),
+            ],
+            "ev_charging": [
+                ("sensor.*blue_current*activity*", "Blue Current - Activity", 10),
+            ],
+            "ev_charging_power": [
+                ("sensor.*blue_current*total_kw*", "Blue Current - Total kW", 10),
+                ("sensor.*blue_current*total_power*", "Blue Current - Total Power", 9),
+            ],
+            "ev_current": [
+                ("sensor.*blue_current*avg_current*", "Blue Current - Avg Current", 10),
+                ("sensor.*blue_current*max_usage*", "Blue Current - Max Usage", 9),
+            ],
+            "ev_session_energy": [
+                ("sensor.*blue_current*actual_kwh*", "Blue Current - Energy kWh", 10),
+                ("sensor.*blue_current*energy_usage*", "Blue Current - Energy Usage", 9),
+            ],
+            "ev_total_energy": [
+                ("sensor.*blue_current*actual_kwh*", "Blue Current - Total kWh", 10),
+            ],
+        }
+    },
+    "openevse": {
+        "integration_name": "OpenEVSE",
+        "patterns": {
+            "ev_connected": [
+                ("binary_sensor.openevse_*_vehicle", "OpenEVSE - Vehicle Plug", 10),
+                ("sensor.openevse_*_status", "OpenEVSE - Status", 9),
+                ("sensor.openevse_*_state", "OpenEVSE - State", 8),
+            ],
+            "ev_charging": [
+                ("sensor.openevse_*_status", "OpenEVSE - Status", 10),
+                ("sensor.openevse_*_state", "OpenEVSE - State", 9),
+            ],
+            "ev_charging_power": [
+                ("sensor.openevse_*_current_power", "OpenEVSE - Current Power", 10),
+                ("sensor.openevse_*_charging_power", "OpenEVSE - Charging Power", 9),
+            ],
+            "ev_current": [
+                ("number.openevse_*_max_current*", "OpenEVSE - Max Current", 10),
+                ("sensor.openevse_*_charging_current", "OpenEVSE - Charging Current", 9),
+                ("sensor.openevse_*_current_capacity", "OpenEVSE - Current Capacity", 8),
+            ],
+            "ev_session_energy": [
+                ("sensor.openevse_*_usage_session", "OpenEVSE - Session Usage", 10),
+                ("sensor.openevse_*_usage_this_session", "OpenEVSE - Session Usage Alt", 9),
+            ],
+            "ev_total_energy": [
+                ("sensor.openevse_*_usage_total", "OpenEVSE - Total Usage", 10),
+                ("sensor.openevse_*_total_energy*", "OpenEVSE - Total Energy", 9),
+            ],
+        }
+    },
 }
 
 # Generic EV charger patterns (fallback)
@@ -390,13 +576,24 @@ class EVChargerDetector:
 
             elif sensor_type in ["ev_connected", "ev_charging"]:
                 # Accept binary_sensor values AND regular sensor status values
-                # used by Easee, Wallbox, GoodWe, etc. (#68)
+                # used by Easee, Wallbox, GoodWe, OCPP, Ohme, Alfen, etc. (#68, #105)
                 return state.state.lower() in (
                     "on", "off", "true", "false", "0", "1",
                     "connected", "disconnected", "ready_to_charge",
                     "awaiting_start", "awaiting_authorization",
                     "charging", "completed", "ready", "idle",
                     "not_connected", "paused", "error",
+                    # OCPP status values
+                    "available", "preparing", "suspended_ev",
+                    "suspended_evse", "finishing", "faulted",
+                    # Ohme status values
+                    "plugged in", "unplugged",
+                    # Alfen status values
+                    "ev connected", "charging power on",
+                    # Peblar status values
+                    "no ev connected",
+                    # Blue Current status values
+                    "a", "b1", "b2", "c1", "c2", "d1", "d2", "e", "f",
                 )
 
             else:
@@ -537,6 +734,13 @@ def discover_ev_charger_from_registry(hass: HomeAssistant) -> Dict[str, str]:
         ("heidelberg_energy_control", _discover_heidelberg),
         ("openwb2mqtt", _discover_openwb),
         ("openwbmqtt", _discover_openwb),
+        ("ocpp", _discover_ocpp),
+        ("ohme", _discover_ohme),
+        ("peblar", _discover_peblar),
+        ("v2c", _discover_v2c),
+        ("alfen_wallbox", _discover_alfen),
+        ("openevse", _discover_openevse),
+        ("blue_current", _discover_blue_current),
     ]:
         entities = [
             e for e in entity_reg.entities.values()
@@ -798,6 +1002,177 @@ def _discover_openwb(entities) -> Dict[str, str]:
     return result
 
 
+def _discover_ocpp(entities) -> Dict[str, str]:
+    """Discover EV charger config from OCPP integration.
+
+    OCPP chargers use sensor entities for status (not binary_sensor).
+    Status values: Available, Preparing, Charging, SuspendedEV, Finishing, etc.
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "status" in eid and "connector" in eid:
+            result.setdefault("ev_connected_sensor", eid)
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy":
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and ("current" in eid or "limit" in eid):
+            result["ev_current_control_entity"] = eid
+        if eid.startswith("switch.") and "charge" in eid:
+            result["ev_start_stop_entity"] = eid
+    return result
+
+
+def _discover_ohme(entities) -> Dict[str, str]:
+    """Discover EV charger config from Ohme integration.
+
+    Ohme uses sensor for status (Plugged in, Charging, Unplugged).
+    Charge mode via select entity (Max charge, Paused, etc.).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "status" in eid:
+            result.setdefault("ev_connected_sensor", eid)
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy":
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("sensor.") and "current" in eid:
+            result.setdefault("ev_current_sensor", eid)
+        if eid.startswith("select.") and "charge_mode" in eid:
+            result["ev_charge_mode_entity"] = eid
+            result["ev_charge_mode_start"] = "Max charge"
+            result["ev_charge_mode_stop"] = "Paused"
+    return result
+
+
+def _discover_peblar(entities) -> Dict[str, str]:
+    """Discover EV charger config from Peblar integration.
+
+    Peblar uses sensor for state (connected, charging, no EV connected).
+    Current control via number entity (charge_limit).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "state" in eid and dc is None:
+            result.setdefault("ev_connected_sensor", eid)
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            result.setdefault("ev_session_energy_sensor", eid)
+        if eid.startswith("sensor.") and dc == "energy" and "lifetime" in eid:
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and ("charge" in eid or "limit" in eid):
+            result["ev_current_control_entity"] = eid
+        if eid.startswith("switch.") and "charge" in eid:
+            result["ev_start_stop_entity"] = eid
+    return result
+
+
+def _discover_v2c(entities) -> Dict[str, str]:
+    """Discover EV charger config from V2C Trydan integration.
+
+    V2C uses binary_sensor for connected/charging status.
+    Current control via number entity (intensity).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and "connect" in eid:
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("binary_sensor.") and "charg" in eid:
+            result["ev_charging_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy":
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and ("intensity" in eid or "current" in eid):
+            result["ev_current_control_entity"] = eid
+        if eid.startswith("switch.") and "pause" in eid:
+            result["ev_start_stop_entity"] = eid
+    return result
+
+
+def _discover_alfen(entities) -> Dict[str, str]:
+    """Discover EV charger config from Alfen Eve wallbox integration.
+
+    Alfen uses sensor for main state (EV Connected, Charging Power On, Available).
+    Current control via number entity (max_current).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "main_state" in eid:
+            result.setdefault("ev_connected_sensor", eid)
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power" and "active_power" in eid:
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "meter_reading" in eid:
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and "max_current" in eid:
+            result["ev_current_control_entity"] = eid
+    return result
+
+
+def _discover_openevse(entities) -> Dict[str, str]:
+    """Discover EV charger config from OpenEVSE integration.
+
+    OpenEVSE uses binary_sensor for vehicle detection, sensor for status.
+    Current control via number entity (max_current).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and "vehicle" in eid:
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("sensor.") and "status" in eid:
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            result.setdefault("ev_session_energy_sensor", eid)
+        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and "current" in eid:
+            result["ev_current_control_entity"] = eid
+    return result
+
+
+def _discover_blue_current(entities) -> Dict[str, str]:
+    """Discover EV charger config from Blue Current integration.
+
+    Blue Current uses sensor for vehicle_status and activity.
+    No dedicated current control entity — power-only monitoring.
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "vehicle_status" in eid:
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("sensor.") and "activity" in eid:
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy":
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("sensor.") and ("avg_current" in eid or "max_usage" in eid):
+            result.setdefault("ev_current_sensor", eid)
+    return result
+
+
 # ============================================================
 # Inverter / battery discharge-control discovery
 # ============================================================
@@ -834,8 +1209,30 @@ _DISCHARGE_CONTROL_PATTERNS = [
     # GoodWe
     re.compile(r"goodwe.*discharg.*power", re.IGNORECASE),
     re.compile(r"goodwe.*battery.*discharg", re.IGNORECASE),
+    # SolarEdge Modbus Multi (solaredge-modbus-multi HACS)
+    re.compile(r"solaredge.*storage.*discharg", re.IGNORECASE),
+    re.compile(r"solaredge.*discharg.*limit", re.IGNORECASE),
+    # Enphase Envoy (IQ Battery reserve)
+    re.compile(r"envoy.*reserve.*battery", re.IGNORECASE),
+    re.compile(r"enphase.*reserve.*battery", re.IGNORECASE),
+    re.compile(r"enpower.*reserve.*battery", re.IGNORECASE),
+    # Tesla Powerwall (backup reserve %)
+    re.compile(r"powerwall.*backup.*reserve", re.IGNORECASE),
+    # Victron (ESS SOC limit)
+    re.compile(r"victron.*ess.*soclimit", re.IGNORECASE),
+    re.compile(r"victron.*minimum.*soc", re.IGNORECASE),
+    re.compile(r"victron.*discharg", re.IGNORECASE),
+    # Kostal Plenticore (battery DC power control)
+    re.compile(r"kostal.*battery.*dc.*power", re.IGNORECASE),
+    re.compile(r"plenticore.*battery.*dc.*power", re.IGNORECASE),
+    re.compile(r"kostal.*discharg", re.IGNORECASE),
+    # Sungrow (max discharge power)
+    re.compile(r"sungrow.*discharg.*power", re.IGNORECASE),
+    re.compile(r"sungrow.*battery.*discharg", re.IGNORECASE),
+    re.compile(r"sungrow.*max.*discharg", re.IGNORECASE),
     # Generic fallback (any integration with standard naming)
     re.compile(r"discharg.*power.*limit", re.IGNORECASE),
+    re.compile(r"backup.*reserve", re.IGNORECASE),
 ]
 
 

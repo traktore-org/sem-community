@@ -745,3 +745,105 @@ class TestDiscoverInverterFromRegistry:
         with self._patch_registry(entries):
             result = discover_inverter_from_registry(hass, cfg)
         assert result == "number.sunsynk_battery_discharge_max"
+
+    def test_solaredge_modbus_discharge_limit(self):
+        """SolarEdge Modbus Multi storage discharge limit should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.solaredge_b1_dc_power", "solaredge_modbus_multi"),
+            _make_registry_entry("number.solaredge_i1_storage_discharge_limit", "solaredge_modbus_multi"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.solaredge_b1_dc_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.solaredge_i1_storage_discharge_limit"
+
+    def test_enphase_reserve_battery_level(self):
+        """Enphase reserve battery level should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.envoy_battery_discharge", "enphase_envoy"),
+            _make_registry_entry("number.enpower_reserve_battery_level", "enphase_envoy"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.envoy_battery_discharge")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.enpower_reserve_battery_level"
+
+    def test_powerwall_backup_reserve(self):
+        """Tesla Powerwall backup reserve should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.powerwall_battery_instant_power", "powerwall"),
+            _make_registry_entry("number.powerwall_backup_reserve", "powerwall"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.powerwall_battery_instant_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.powerwall_backup_reserve"
+
+    def test_victron_ess_soclimit(self):
+        """Victron ESS SOC limit should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.victron_battery_power", "victron"),
+            _make_registry_entry("number.victron_settings_ess_batterylife_soclimit", "victron"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.victron_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.victron_settings_ess_batterylife_soclimit"
+
+    def test_kostal_battery_dc_power(self):
+        """Kostal Plenticore battery DC power control should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.plenticore_battery_power", "kostal_plenticore"),
+            _make_registry_entry("number.plenticore_battery_dc_power_abs", "kostal_plenticore"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.plenticore_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.plenticore_battery_dc_power_abs"
+
+    def test_sungrow_max_discharge(self):
+        """Sungrow max discharge power should be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_inverter_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.sungrow_battery_power", "sungrow"),
+            _make_registry_entry("number.sungrow_battery_max_discharge_power", "sungrow"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.sungrow_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_inverter_from_registry(hass, cfg)
+        assert result == "number.sungrow_battery_max_discharge_power"

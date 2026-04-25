@@ -698,6 +698,66 @@ SONNEN = MockInverter(
     battery_positive_means="discharge",  # OPPOSITE
 )
 
+KOSTAL = MockInverter(
+    name="Kostal Plenticore",
+    solar_power="sensor.plenticore_dc_power",
+    solar_energy="sensor.plenticore_total_yield",
+    grid_power="sensor.plenticore_grid_power",
+    grid_import_energy="sensor.plenticore_energy_from_grid",
+    grid_export_energy="sensor.plenticore_energy_to_grid",
+    battery_power="sensor.plenticore_battery_power",
+    battery_soc="sensor.plenticore_battery_soc",
+    battery_charge_energy="sensor.plenticore_battery_charge_total",
+    battery_discharge_energy="sensor.plenticore_battery_discharge_total",
+    grid_positive_means="import",  # OPPOSITE
+    battery_positive_means="discharge",  # OPPOSITE
+)
+
+SUNGROW = MockInverter(
+    name="Sungrow",
+    solar_power="sensor.sungrow_total_dc_power",
+    solar_energy="sensor.sungrow_total_energy_yield",
+    grid_power="sensor.sungrow_export_power",
+    grid_import_energy="sensor.sungrow_import_energy",
+    grid_export_energy="sensor.sungrow_export_energy",
+    battery_power="sensor.sungrow_battery_power",
+    battery_soc="sensor.sungrow_battery_level",
+    battery_charge_energy="sensor.sungrow_battery_charge_energy",
+    battery_discharge_energy="sensor.sungrow_battery_discharge_energy",
+    grid_positive_means="export",
+    battery_positive_means="charge",
+)
+
+VICTRON = MockInverter(
+    name="Victron",
+    solar_power="sensor.victron_pv_power",
+    solar_energy="sensor.victron_pv_energy_total",
+    grid_power="sensor.victron_grid_power",
+    grid_import_energy="sensor.victron_grid_energy_from",
+    grid_export_energy="sensor.victron_grid_energy_to",
+    battery_power="sensor.victron_battery_power",
+    battery_soc="sensor.victron_battery_soc",
+    battery_charge_energy="sensor.victron_battery_charge_total",
+    battery_discharge_energy="sensor.victron_battery_discharge_total",
+    grid_positive_means="import",  # OPPOSITE
+    battery_positive_means="discharge",  # OPPOSITE
+)
+
+SOLAREDGE_MODBUS = MockInverter(
+    name="SolarEdge Modbus",
+    solar_power="sensor.solaredge_i1_ac_power",
+    solar_energy="sensor.solaredge_i1_ac_energy_kwh",
+    grid_power="sensor.solaredge_m1_ac_power",
+    grid_import_energy="sensor.solaredge_m1_imported_kwh",
+    grid_export_energy="sensor.solaredge_m1_exported_kwh",
+    battery_power="sensor.solaredge_b1_dc_power",
+    battery_soc="sensor.solaredge_b1_state_of_energy",
+    battery_charge_energy="sensor.solaredge_b1_energy_charged",
+    battery_discharge_energy="sensor.solaredge_b1_energy_discharged",
+    grid_positive_means="export",
+    battery_positive_means="charge",
+)
+
 
 # ════════════════════════════════════════════
 # Charger Definitions
@@ -832,6 +892,108 @@ OPENWB = MockCharger(
     disconnected_state="off",
 )
 
+OCPP = MockCharger(
+    name="OCPP",
+    platform="ocpp",
+    connected_sensor="sensor.ocpp_charger_status_connector",
+    charging_sensor="sensor.ocpp_charger_status_connector",
+    power_sensor="sensor.ocpp_charger_power_active_import",
+    power_unit="kW",
+    energy_sensor="sensor.ocpp_charger_energy_active_import_register",
+    current_entity="number.ocpp_charger_maximum_current",
+    start_stop_entity="switch.ocpp_charger_charge_control",
+    connected_state="Preparing",
+    charging_state="Charging",
+    disconnected_state="Available",
+)
+
+OHME = MockCharger(
+    name="Ohme",
+    platform="ohme",
+    connected_sensor="sensor.ohme_home_pro_status",
+    charging_sensor="sensor.ohme_home_pro_status",
+    power_sensor="sensor.ohme_home_pro_power",
+    power_unit="kW",
+    energy_sensor="sensor.ohme_home_pro_energy",
+    charge_mode_entity="select.ohme_home_pro_charge_mode",
+    charge_mode_start="Max charge",
+    charge_mode_stop="Paused",
+    connected_state="Plugged in",
+    charging_state="Charging",
+    disconnected_state="Unplugged",
+)
+
+PEBLAR = MockCharger(
+    name="Peblar",
+    platform="peblar",
+    connected_sensor="sensor.peblar_rocksolid_state",
+    charging_sensor="sensor.peblar_rocksolid_state",
+    power_sensor="sensor.peblar_rocksolid_power",
+    power_unit="W",
+    energy_sensor="sensor.peblar_rocksolid_session_energy",
+    current_entity="number.peblar_rocksolid_charge_limit",
+    start_stop_entity="switch.peblar_rocksolid_charge",
+    connected_state="connected",
+    charging_state="charging",
+    disconnected_state="no EV connected",
+)
+
+V2C = MockCharger(
+    name="V2C Trydan",
+    platform="v2c",
+    connected_sensor="binary_sensor.v2c_trydan_connected",
+    charging_sensor="binary_sensor.v2c_trydan_charging",
+    power_sensor="sensor.v2c_trydan_charge_power",
+    power_unit="W",
+    energy_sensor="sensor.v2c_trydan_charge_energy",
+    current_entity="number.v2c_trydan_intensity",
+    start_stop_entity="switch.v2c_trydan_pause_session",
+    connected_state="on",
+    charging_state="on",
+    disconnected_state="off",
+)
+
+BLUE_CURRENT = MockCharger(
+    name="Blue Current",
+    platform="blue_current",
+    connected_sensor="sensor.blue_current_bcw1_vehicle_status",
+    charging_sensor="sensor.blue_current_bcw1_activity",
+    power_sensor="sensor.blue_current_bcw1_total_kw",
+    power_unit="kW",
+    energy_sensor="sensor.blue_current_bcw1_actual_kwh",
+    connected_state="connected",
+    charging_state="charging",
+    disconnected_state="available",
+)
+
+OPENEVSE = MockCharger(
+    name="OpenEVSE",
+    platform="openevse",
+    connected_sensor="binary_sensor.openevse_station_vehicle",
+    charging_sensor="sensor.openevse_station_status",
+    power_sensor="sensor.openevse_station_current_power",
+    power_unit="W",
+    energy_sensor="sensor.openevse_station_usage_session",
+    current_entity="number.openevse_station_max_current_soft",
+    connected_state="on",
+    charging_state="charging",
+    disconnected_state="off",
+)
+
+ALFEN = MockCharger(
+    name="Alfen Eve",
+    platform="alfen_wallbox",
+    connected_sensor="sensor.alfen_wallbox_main_state_socket_1",
+    charging_sensor="sensor.alfen_wallbox_main_state_socket_1",
+    power_sensor="sensor.alfen_wallbox_active_power_total_socket_1",
+    power_unit="W",
+    energy_sensor="sensor.alfen_wallbox_meter_reading_socket_1",
+    current_entity="number.alfen_wallbox_main_normal_max_current_socket_1",
+    connected_state="EV Connected",
+    charging_state="Charging Power On",
+    disconnected_state="Available",
+)
+
 
 # ════════════════════════════════════════════
 # E2E Test Classes — one per combination
@@ -901,3 +1063,57 @@ class TestE2E_GoodWe_OpenWB(E2ETestBase):
     """GoodWe (battery opposite) + OpenWB (chargemode select)."""
     inverter = GOODWE
     charger = OPENWB
+
+
+class TestE2E_Kostal_Peblar(E2ETestBase):
+    """Kostal Plenticore (both opposite) + Peblar (switch start/stop)."""
+    inverter = KOSTAL
+    charger = PEBLAR
+
+
+class TestE2E_Sungrow_V2C(E2ETestBase):
+    """Sungrow (grid matches) + V2C Trydan (intensity number)."""
+    inverter = SUNGROW
+    charger = V2C
+
+
+class TestE2E_Victron_OCPP(E2ETestBase):
+    """Victron (both opposite) + OCPP (generic protocol)."""
+    inverter = VICTRON
+    charger = OCPP
+
+
+class TestE2E_SolarEdgeModbus_Ohme(E2ETestBase):
+    """SolarEdge Modbus (grid matches) + Ohme (charge mode select)."""
+    inverter = SOLAREDGE_MODBUS
+    charger = OHME
+
+
+class TestE2E_Fronius_Alfen(E2ETestBase):
+    """Fronius (both opposite) + Alfen Eve (current limit number)."""
+    inverter = FRONIUS
+    charger = ALFEN
+
+
+class TestE2E_Enphase_OpenEVSE(E2ETestBase):
+    """Enphase (both opposite) + OpenEVSE (status-based)."""
+    inverter = ENPHASE
+    charger = OPENEVSE
+
+
+class TestE2E_Powerwall_BlueCurrent(E2ETestBase):
+    """Tesla Powerwall (both opposite) + Blue Current (no current control)."""
+    inverter = POWERWALL
+    charger = BLUE_CURRENT
+
+
+class TestE2E_SMA_OCPP(E2ETestBase):
+    """SMA (grid matches) + OCPP (generic protocol)."""
+    inverter = SMA
+    charger = OCPP
+
+
+class TestE2E_DEYE_Peblar(E2ETestBase):
+    """DEYE/Sunsynk (matches SEM) + Peblar (switch charge control)."""
+    inverter = DEYE
+    charger = PEBLAR
