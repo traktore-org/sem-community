@@ -576,13 +576,24 @@ class EVChargerDetector:
 
             elif sensor_type in ["ev_connected", "ev_charging"]:
                 # Accept binary_sensor values AND regular sensor status values
-                # used by Easee, Wallbox, GoodWe, etc. (#68)
+                # used by Easee, Wallbox, GoodWe, OCPP, Ohme, Alfen, etc. (#68, #105)
                 return state.state.lower() in (
                     "on", "off", "true", "false", "0", "1",
                     "connected", "disconnected", "ready_to_charge",
                     "awaiting_start", "awaiting_authorization",
                     "charging", "completed", "ready", "idle",
                     "not_connected", "paused", "error",
+                    # OCPP status values
+                    "available", "preparing", "suspended_ev",
+                    "suspended_evse", "finishing", "faulted",
+                    # Ohme status values
+                    "plugged in", "unplugged",
+                    # Alfen status values
+                    "ev connected", "charging power on",
+                    # Peblar status values
+                    "no ev connected",
+                    # Blue Current status values
+                    "a", "b1", "b2", "c1", "c2", "d1", "d2", "e", "f",
                 )
 
             else:
@@ -723,6 +734,13 @@ def discover_ev_charger_from_registry(hass: HomeAssistant) -> Dict[str, str]:
         ("heidelberg_energy_control", _discover_heidelberg),
         ("openwb2mqtt", _discover_openwb),
         ("openwbmqtt", _discover_openwb),
+        ("ocpp", _discover_ocpp),
+        ("ohme", _discover_ohme),
+        ("peblar", _discover_peblar),
+        ("v2c", _discover_v2c),
+        ("alfen_wallbox", _discover_alfen),
+        ("openevse", _discover_openevse),
+        ("blue_current", _discover_blue_current),
     ]:
         entities = [
             e for e in entity_reg.entities.values()
@@ -981,6 +999,177 @@ def _discover_openwb(entities) -> Dict[str, str]:
             result["ev_charge_mode_entity"] = eid
             result["ev_charge_mode_start"] = "Instant Charging"
             result["ev_charge_mode_stop"] = "Stop"
+    return result
+
+
+def _discover_ocpp(entities) -> Dict[str, str]:
+    """Discover EV charger config from OCPP integration.
+
+    OCPP chargers use sensor entities for status (not binary_sensor).
+    Status values: Available, Preparing, Charging, SuspendedEV, Finishing, etc.
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "status" in eid and "connector" in eid:
+            result.setdefault("ev_connected_sensor", eid)
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy":
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and ("current" in eid or "limit" in eid):
+            result["ev_current_control_entity"] = eid
+        if eid.startswith("switch.") and "charge" in eid:
+            result["ev_start_stop_entity"] = eid
+    return result
+
+
+def _discover_ohme(entities) -> Dict[str, str]:
+    """Discover EV charger config from Ohme integration.
+
+    Ohme uses sensor for status (Plugged in, Charging, Unplugged).
+    Charge mode via select entity (Max charge, Paused, etc.).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "status" in eid:
+            result.setdefault("ev_connected_sensor", eid)
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy":
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("sensor.") and "current" in eid:
+            result.setdefault("ev_current_sensor", eid)
+        if eid.startswith("select.") and "charge_mode" in eid:
+            result["ev_charge_mode_entity"] = eid
+            result["ev_charge_mode_start"] = "Max charge"
+            result["ev_charge_mode_stop"] = "Paused"
+    return result
+
+
+def _discover_peblar(entities) -> Dict[str, str]:
+    """Discover EV charger config from Peblar integration.
+
+    Peblar uses sensor for state (connected, charging, no EV connected).
+    Current control via number entity (charge_limit).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "state" in eid and dc is None:
+            result.setdefault("ev_connected_sensor", eid)
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            result.setdefault("ev_session_energy_sensor", eid)
+        if eid.startswith("sensor.") and dc == "energy" and "lifetime" in eid:
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and ("charge" in eid or "limit" in eid):
+            result["ev_current_control_entity"] = eid
+        if eid.startswith("switch.") and "charge" in eid:
+            result["ev_start_stop_entity"] = eid
+    return result
+
+
+def _discover_v2c(entities) -> Dict[str, str]:
+    """Discover EV charger config from V2C Trydan integration.
+
+    V2C uses binary_sensor for connected/charging status.
+    Current control via number entity (intensity).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and "connect" in eid:
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("binary_sensor.") and "charg" in eid:
+            result["ev_charging_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy":
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and ("intensity" in eid or "current" in eid):
+            result["ev_current_control_entity"] = eid
+        if eid.startswith("switch.") and "pause" in eid:
+            result["ev_start_stop_entity"] = eid
+    return result
+
+
+def _discover_alfen(entities) -> Dict[str, str]:
+    """Discover EV charger config from Alfen Eve wallbox integration.
+
+    Alfen uses sensor for main state (EV Connected, Charging Power On, Available).
+    Current control via number entity (max_current).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "main_state" in eid:
+            result.setdefault("ev_connected_sensor", eid)
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power" and "active_power" in eid:
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "meter_reading" in eid:
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and "max_current" in eid:
+            result["ev_current_control_entity"] = eid
+    return result
+
+
+def _discover_openevse(entities) -> Dict[str, str]:
+    """Discover EV charger config from OpenEVSE integration.
+
+    OpenEVSE uses binary_sensor for vehicle detection, sensor for status.
+    Current control via number entity (max_current).
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("binary_sensor.") and "vehicle" in eid:
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("sensor.") and "status" in eid:
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy" and "session" in eid:
+            result.setdefault("ev_session_energy_sensor", eid)
+        if eid.startswith("sensor.") and dc == "energy" and "total" in eid:
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("number.") and "current" in eid:
+            result["ev_current_control_entity"] = eid
+    return result
+
+
+def _discover_blue_current(entities) -> Dict[str, str]:
+    """Discover EV charger config from Blue Current integration.
+
+    Blue Current uses sensor for vehicle_status and activity.
+    No dedicated current control entity — power-only monitoring.
+    """
+    result: Dict[str, str] = {}
+    for entry in entities:
+        eid = entry.entity_id
+        dc = entry.original_device_class
+        if eid.startswith("sensor.") and "vehicle_status" in eid:
+            result["ev_connected_sensor"] = eid
+        if eid.startswith("sensor.") and "activity" in eid:
+            result.setdefault("ev_charging_sensor", eid)
+        if eid.startswith("sensor.") and dc == "power":
+            result["ev_charging_power_sensor"] = eid
+        if eid.startswith("sensor.") and dc == "energy":
+            result.setdefault("ev_total_energy_sensor", eid)
+        if eid.startswith("sensor.") and ("avg_current" in eid or "max_usage" in eid):
+            result.setdefault("ev_current_sensor", eid)
     return result
 
 

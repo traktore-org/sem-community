@@ -424,13 +424,27 @@ class SensorReader:
             return True
         if s in ("off", "unknown", "unavailable"):
             return False
-        # Regular sensor status values (Easee, Wallbox, etc.)
+        # Regular sensor status values (Easee, Wallbox, OCPP, Ohme, Alfen, etc.)
         if name == "ev_plug" and s in (
             "connected", "ready_to_charge", "awaiting_start",
             "awaiting_authorization", "charging", "completed", "ready",
+            # OCPP: Preparing/Charging/SuspendedEV mean EV is plugged in
+            "preparing", "suspended_ev", "suspended_evse", "finishing",
+            # Ohme
+            "plugged in",
+            # Alfen
+            "ev connected", "charging power on",
+            # Peblar
+            # ("connected" already listed above)
+            # Blue Current
+            # ("connected" already listed above)
         ):
             return True
-        if name == "ev_charging" and s in ("charging",):
+        if name == "ev_charging" and s in (
+            "charging",
+            # Alfen
+            "charging power on",
+        ):
             return True
         # Numeric: treat > 0 as True (e.g. power sensor as charging indicator)
         try:
