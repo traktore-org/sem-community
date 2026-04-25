@@ -259,6 +259,192 @@ EV_INTEGRATION_PATTERNS = {
             ],
         }
     },
+    "ocpp": {
+        "integration_name": "OCPP",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.ocpp_*_status*connector*", "OCPP - Connector Status", 10),
+                ("sensor.ocpp_*_status", "OCPP - Status", 9),
+            ],
+            "ev_charging": [
+                ("sensor.ocpp_*_status*connector*", "OCPP - Connector Status", 10),
+                ("sensor.ocpp_*_status", "OCPP - Status", 9),
+            ],
+            "ev_charging_power": [
+                ("sensor.ocpp_*_power_active_import", "OCPP - Active Import Power", 10),
+                ("sensor.ocpp_*_power*", "OCPP - Power", 8),
+            ],
+            "ev_current": [
+                ("number.ocpp_*_maximum_current", "OCPP - Maximum Current", 10),
+                ("sensor.ocpp_*_current_offered", "OCPP - Current Offered", 9),
+                ("sensor.ocpp_*_current_import", "OCPP - Current Import", 8),
+            ],
+            "ev_session_energy": [
+                ("sensor.ocpp_*_energy_active_import_register", "OCPP - Energy Register", 10),
+                ("sensor.ocpp_*_session_energy", "OCPP - Session Energy", 9),
+            ],
+            "ev_total_energy": [
+                ("sensor.ocpp_*_energy_active_import_register", "OCPP - Energy Register", 10),
+            ],
+        }
+    },
+    "alfen": {
+        "integration_name": "Alfen Eve",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.*alfen*main_state*socket*", "Alfen - Main State", 10),
+                ("sensor.*alfen*status*socket*", "Alfen - Status", 9),
+            ],
+            "ev_charging": [
+                ("sensor.*alfen*main_state*socket*", "Alfen - Main State", 10),
+                ("sensor.*alfen*status*socket*", "Alfen - Status", 9),
+            ],
+            "ev_charging_power": [
+                ("sensor.*alfen*active_power_total*socket*", "Alfen - Active Power", 10),
+                ("sensor.*alfen*active_power*", "Alfen - Active Power Alt", 8),
+            ],
+            "ev_current": [
+                ("number.*alfen*max_current*socket*", "Alfen - Max Current", 10),
+                ("number.*alfen*current_limit*", "Alfen - Current Limit", 9),
+                ("sensor.*alfen*current*socket*", "Alfen - Current", 7),
+            ],
+            "ev_session_energy": [
+                ("sensor.*alfen*transaction*charging*", "Alfen - Session Energy", 10),
+                ("sensor.*alfen*meter_reading*", "Alfen - Meter Reading", 8),
+            ],
+            "ev_total_energy": [
+                ("sensor.*alfen*meter_reading*socket*", "Alfen - Total Energy", 10),
+            ],
+        }
+    },
+    "ohme": {
+        "integration_name": "Ohme",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.ohme_*_status", "Ohme - Status", 10),
+            ],
+            "ev_charging": [
+                ("sensor.ohme_*_status", "Ohme - Status", 10),
+            ],
+            "ev_charging_power": [
+                ("sensor.ohme_*_power", "Ohme - Power", 10),
+            ],
+            "ev_current": [
+                ("sensor.ohme_*_current", "Ohme - Current", 10),
+            ],
+            "ev_session_energy": [
+                ("sensor.ohme_*_energy", "Ohme - Energy", 10),
+            ],
+            "ev_total_energy": [
+                ("sensor.ohme_*_energy", "Ohme - Total Energy", 9),
+            ],
+        }
+    },
+    "peblar": {
+        "integration_name": "Peblar",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.peblar_*_state", "Peblar - State", 10),
+            ],
+            "ev_charging": [
+                ("sensor.peblar_*_state", "Peblar - State", 10),
+            ],
+            "ev_charging_power": [
+                ("sensor.peblar_*_power", "Peblar - Power", 10),
+            ],
+            "ev_current": [
+                ("number.peblar_*_charge_limit", "Peblar - Charge Limit", 10),
+                ("sensor.peblar_*_current", "Peblar - Current", 9),
+            ],
+            "ev_session_energy": [
+                ("sensor.peblar_*_session_energy", "Peblar - Session Energy", 10),
+            ],
+            "ev_total_energy": [
+                ("sensor.peblar_*_lifetime_energy", "Peblar - Lifetime Energy", 10),
+            ],
+        }
+    },
+    "v2c": {
+        "integration_name": "V2C Trydan",
+        "patterns": {
+            "ev_connected": [
+                ("binary_sensor.v2c_*_connected", "V2C - Connected", 10),
+            ],
+            "ev_charging": [
+                ("binary_sensor.v2c_*_charging", "V2C - Charging", 10),
+            ],
+            "ev_charging_power": [
+                ("sensor.v2c_*_charge_power", "V2C - Charge Power", 10),
+            ],
+            "ev_current": [
+                ("number.v2c_*_intensity", "V2C - Intensity", 10),
+            ],
+            "ev_session_energy": [
+                ("sensor.v2c_*_charge_energy", "V2C - Charge Energy", 10),
+            ],
+            "ev_total_energy": [
+                ("sensor.v2c_*_charge_energy", "V2C - Total Energy", 9),
+            ],
+        }
+    },
+    "blue_current": {
+        "integration_name": "Blue Current",
+        "patterns": {
+            "ev_connected": [
+                ("sensor.*blue_current*vehicle_status*", "Blue Current - Vehicle Status", 10),
+                ("sensor.*blue_current*activity*", "Blue Current - Activity", 9),
+            ],
+            "ev_charging": [
+                ("sensor.*blue_current*activity*", "Blue Current - Activity", 10),
+            ],
+            "ev_charging_power": [
+                ("sensor.*blue_current*total_kw*", "Blue Current - Total kW", 10),
+                ("sensor.*blue_current*total_power*", "Blue Current - Total Power", 9),
+            ],
+            "ev_current": [
+                ("sensor.*blue_current*avg_current*", "Blue Current - Avg Current", 10),
+                ("sensor.*blue_current*max_usage*", "Blue Current - Max Usage", 9),
+            ],
+            "ev_session_energy": [
+                ("sensor.*blue_current*actual_kwh*", "Blue Current - Energy kWh", 10),
+                ("sensor.*blue_current*energy_usage*", "Blue Current - Energy Usage", 9),
+            ],
+            "ev_total_energy": [
+                ("sensor.*blue_current*actual_kwh*", "Blue Current - Total kWh", 10),
+            ],
+        }
+    },
+    "openevse": {
+        "integration_name": "OpenEVSE",
+        "patterns": {
+            "ev_connected": [
+                ("binary_sensor.openevse_*_vehicle", "OpenEVSE - Vehicle Plug", 10),
+                ("sensor.openevse_*_status", "OpenEVSE - Status", 9),
+                ("sensor.openevse_*_state", "OpenEVSE - State", 8),
+            ],
+            "ev_charging": [
+                ("sensor.openevse_*_status", "OpenEVSE - Status", 10),
+                ("sensor.openevse_*_state", "OpenEVSE - State", 9),
+            ],
+            "ev_charging_power": [
+                ("sensor.openevse_*_current_power", "OpenEVSE - Current Power", 10),
+                ("sensor.openevse_*_charging_power", "OpenEVSE - Charging Power", 9),
+            ],
+            "ev_current": [
+                ("number.openevse_*_max_current*", "OpenEVSE - Max Current", 10),
+                ("sensor.openevse_*_charging_current", "OpenEVSE - Charging Current", 9),
+                ("sensor.openevse_*_current_capacity", "OpenEVSE - Current Capacity", 8),
+            ],
+            "ev_session_energy": [
+                ("sensor.openevse_*_usage_session", "OpenEVSE - Session Usage", 10),
+                ("sensor.openevse_*_usage_this_session", "OpenEVSE - Session Usage Alt", 9),
+            ],
+            "ev_total_energy": [
+                ("sensor.openevse_*_usage_total", "OpenEVSE - Total Usage", 10),
+                ("sensor.openevse_*_total_energy*", "OpenEVSE - Total Energy", 9),
+            ],
+        }
+    },
 }
 
 # Generic EV charger patterns (fallback)
@@ -834,8 +1020,30 @@ _DISCHARGE_CONTROL_PATTERNS = [
     # GoodWe
     re.compile(r"goodwe.*discharg.*power", re.IGNORECASE),
     re.compile(r"goodwe.*battery.*discharg", re.IGNORECASE),
+    # SolarEdge Modbus Multi (solaredge-modbus-multi HACS)
+    re.compile(r"solaredge.*storage.*discharg", re.IGNORECASE),
+    re.compile(r"solaredge.*discharg.*limit", re.IGNORECASE),
+    # Enphase Envoy (IQ Battery reserve)
+    re.compile(r"envoy.*reserve.*battery", re.IGNORECASE),
+    re.compile(r"enphase.*reserve.*battery", re.IGNORECASE),
+    re.compile(r"enpower.*reserve.*battery", re.IGNORECASE),
+    # Tesla Powerwall (backup reserve %)
+    re.compile(r"powerwall.*backup.*reserve", re.IGNORECASE),
+    # Victron (ESS SOC limit)
+    re.compile(r"victron.*ess.*soclimit", re.IGNORECASE),
+    re.compile(r"victron.*minimum.*soc", re.IGNORECASE),
+    re.compile(r"victron.*discharg", re.IGNORECASE),
+    # Kostal Plenticore (battery DC power control)
+    re.compile(r"kostal.*battery.*dc.*power", re.IGNORECASE),
+    re.compile(r"plenticore.*battery.*dc.*power", re.IGNORECASE),
+    re.compile(r"kostal.*discharg", re.IGNORECASE),
+    # Sungrow (max discharge power)
+    re.compile(r"sungrow.*discharg.*power", re.IGNORECASE),
+    re.compile(r"sungrow.*battery.*discharg", re.IGNORECASE),
+    re.compile(r"sungrow.*max.*discharg", re.IGNORECASE),
     # Generic fallback (any integration with standard naming)
     re.compile(r"discharg.*power.*limit", re.IGNORECASE),
+    re.compile(r"backup.*reserve", re.IGNORECASE),
 ]
 
 
