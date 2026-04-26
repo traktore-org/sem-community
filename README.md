@@ -42,6 +42,9 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 - **Consumption/solar predictor** — learns hourly patterns (weekday/weekend), predicts next-hour power and daily consumption
 - **Push notifications** — battery full, daily summary, forecast alerts, EV charging events (with Android channels and action buttons)
 - **Brand icons** — native HA 2026.3+ brand support (no submission to home-assistant/brands needed)
+- **EV Intelligence** — detects BMS charge tapering, estimates SOC without car API, learns daily consumption per weekday, temperature-corrected predictions, smart night charge skip
+- **Smart Night Charging** — automatically skips or reduces night charges when SOC is sufficient, with solar forecast credit, daily SOC decay, and 3-skip safety net
+- **EV battery health** — tracks capacity degradation from partial charge sessions over months
 - **Hardware compatibility test suite** — 150+ automated tests covering all supported hardware — every inverter + charger combination verified in CI
 
 ---
@@ -285,6 +288,28 @@ SEM creates 60+ sensors organized by category:
 **Heat Pumps:** Any SG-Ready compatible heat pump controllable via HA
 
 **Smart Meters:** Shelly EM/Pro, Discovergy, or any HA-compatible meter
+
+---
+
+## EV Intelligence
+
+SEM learns your EV's charging behavior and makes smart decisions about when to charge. Enable via `switch.sem_smart_night_charging`.
+
+**How it works:**
+
+1. **Taper detection** — SEM detects the characteristic power staircase when your car's BMS reduces current near full charge (CC→CV transition). This is the most accurate SOC anchor (100% confirmed).
+
+2. **Virtual SOC** — Tracks estimated battery level without a car API by monitoring energy in (charging) and out (predicted daily consumption). Calibrates from real `vehicle_soc_entity` when available.
+
+3. **Daily consumption learning** — EWMA predictor learns per-weekday patterns: "Monday 8 kWh, Wednesday 0 kWh (WFH), Saturday 15 kWh". Adapts over 7 days.
+
+4. **Temperature correction** — Adjusts consumption predictions for seasonal variation: winter (-5°C) = +72% consumption, summer (30°C) = +9%. Based on Recurrent Auto fleet data (30,000+ vehicles).
+
+5. **Smart night charge skip** — If estimated SOC is sufficient for tomorrow's predicted consumption (with 30% safety margin and solar forecast credit), SEM skips the night charge. Max 3 consecutive skips as safety net.
+
+6. **Session-based anchoring** — Works from day one without needing a full charge. First charge session bootstraps the SOC estimate. Taper detection and car API override with more accurate values when available.
+
+**Sensors:** `ev_estimated_soc`, `ev_taper_trend`, `ev_nights_until_charge`, `ev_charge_needed`, `ev_predicted_daily_consumption`, `ev_battery_health`, and more.
 
 ---
 
