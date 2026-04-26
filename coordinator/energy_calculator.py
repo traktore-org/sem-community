@@ -164,58 +164,87 @@ class EnergyCalculator:
                     pass
             return 0.0
 
-        hw_solar = _read(ed_config.solar_energy)
-        current_lifetime = self._lifetime_accumulators.get("lifetime_solar", 0)
-
-        _LOGGER.debug(
-            "Lifetime seed check: hw_solar=%.1f current=%.1f",
-            hw_solar, current_lifetime,
-        )
-
-        # Already seeded (current values close to hardware)
-        if current_lifetime > hw_solar * 0.9 and hw_solar > 100:
-            self._lifetime_seeded = True
-            return
-
+        # Read all hardware counters first
         solar = _read(ed_config.solar_energy)
         grid_import = _read(ed_config.grid_import_energy)
         grid_export = _read(ed_config.grid_export_energy)
         batt_charge = _read(ed_config.battery_charge_energy)
         batt_discharge = _read(ed_config.battery_discharge_energy)
 
-        # ALL key sensors must be available before seeding
+        _LOGGER.debug(
+            "Lifetime seed check: hw solar=%.0f import=%.0f export=%.0f "
+            "batt_c=%.0f batt_d=%.0f",
+            solar, grid_import, grid_export, batt_charge, batt_discharge,
+        )
+
+        # ALL key sensors must be available before seeding.
+        # Include battery — they can take 30-60s longer to load (#110).
         if solar < 100 or grid_import < 10 or grid_export < 10:
             _LOGGER.debug(
-                "Lifetime seed waiting: solar=%.0f import=%.0f export=%.0f (all must be >0)",
+                "Lifetime seed waiting: solar=%.0f import=%.0f export=%.0f "
+                "(all must be > threshold)",
                 solar, grid_import, grid_export,
             )
             return
-
-        if solar > 0:
-            self._lifetime_accumulators["lifetime_solar"] = solar
-            self._lifetime_accumulators["lifetime_grid_import"] = grid_import
-            self._lifetime_accumulators["lifetime_grid_export"] = grid_export
-            self._lifetime_accumulators["lifetime_battery_charge"] = batt_charge
-            self._lifetime_accumulators["lifetime_battery_discharge"] = batt_discharge
-            home = max(0, solar + grid_import + batt_discharge - grid_export - batt_charge)
-            self._lifetime_accumulators["lifetime_home"] = home
-
-            # Seed EV from hardware counter (KEBA total energy)
-            ev_total = 0.0
-            for dev in ed_config.device_consumption:
-                energy_sensor = dev.get("stat_consumption", "")
-                if any(p in energy_sensor.lower() for p in ["keba", "ev", "charger", "wallbox", "easee"]):
-                    ev_total = _read(energy_sensor)
-                    break
-            if ev_total > 0:
-                self._lifetime_accumulators["lifetime_ev"] = ev_total
-
-            self._lifetime_seeded = True
-            _LOGGER.info(
-                "Lifetime seeded from hardware: solar=%.0f import=%.0f export=%.0f "
-                "batt_charge=%.0f batt_discharge=%.0f home=%.0f ev=%.0f kWh",
-                solar, grid_import, grid_export, batt_charge, batt_discharge, home, ev_total,
+        if (batt_charge < 1 or batt_discharge < 1) and (batt_charge + batt_discharge) < 10:
+            _LOGGER.debug(
+                "Lifetime seed waiting for battery: charge=%.0f discharge=%.0f",
+                batt_charge, batt_discharge,
             )
+            return
+
+        # Check if ALL sensors are properly seeded (not just solar).
+        # Re-seed any sensor that is <50% of the hardware counter —
+        # this fixes the race condition where solar loaded first but
+        # grid/battery were unavailable during initial seeding (#110).
+        current = self._lifetime_accumulators
+        needs_seed = False
+        checks = [
+            ("lifetime_solar", solar),
+            ("lifetime_grid_import", grid_import),
+            ("lifetime_grid_export", grid_export),
+            ("lifetime_battery_charge", batt_charge),
+            ("lifetime_battery_discharge", batt_discharge),
+        ]
+        for key, hw_value in checks:
+            stored = current.get(key, 0)
+            if hw_value > 100 and stored < hw_value * 0.5:
+                _LOGGER.info(
+                    "Lifetime re-seed needed: %s stored=%.0f hw=%.0f (%.0f%%)",
+                    key, stored, hw_value, (stored / hw_value * 100) if hw_value > 0 else 0,
+                )
+                needs_seed = True
+                break
+
+        if not needs_seed and current.get("lifetime_solar", 0) > solar * 0.9:
+            self._lifetime_seeded = True
+            return
+
+        # Seed (or re-seed) all lifetime accumulators from hardware
+        self._lifetime_accumulators["lifetime_solar"] = solar
+        self._lifetime_accumulators["lifetime_grid_import"] = grid_import
+        self._lifetime_accumulators["lifetime_grid_export"] = grid_export
+        self._lifetime_accumulators["lifetime_battery_charge"] = batt_charge
+        self._lifetime_accumulators["lifetime_battery_discharge"] = batt_discharge
+        home = max(0, solar + grid_import + batt_discharge - grid_export - batt_charge)
+        self._lifetime_accumulators["lifetime_home"] = home
+
+        # Seed EV from hardware counter (KEBA total energy etc.)
+        ev_total = 0.0
+        for dev in ed_config.device_consumption:
+            energy_sensor = dev.get("stat_consumption", "")
+            if any(p in energy_sensor.lower() for p in ["keba", "ev", "charger", "wallbox", "easee"]):
+                ev_total = _read(energy_sensor)
+                break
+        if ev_total > 0:
+            self._lifetime_accumulators["lifetime_ev"] = ev_total
+
+        self._lifetime_seeded = True
+        _LOGGER.info(
+            "Lifetime seeded from hardware: solar=%.0f import=%.0f export=%.0f "
+            "batt_charge=%.0f batt_discharge=%.0f home=%.0f ev=%.0f kWh",
+            solar, grid_import, grid_export, batt_charge, batt_discharge, home, ev_total,
+        )
 
     async def seed_yearly_from_statistics(self, hass: HomeAssistant, ed_config) -> None:
         """Seed yearly accumulators from HA recorder statistics.
