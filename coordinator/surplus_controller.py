@@ -99,6 +99,9 @@ class SurplusController:
         self._price_responsive_mode = False
         self._last_surplus = 0.0
         self._smoothed_surplus: Optional[float] = None
+        # EV Intelligence: anticipated surplus from taper detection (#106)
+        self._anticipated_surplus_w: float = 0.0
+        self._anticipated_deadline: Optional[float] = None
 
     @property
     def allocation_data(self) -> SurplusAllocationData:
@@ -112,6 +115,17 @@ class SurplusController:
     @price_responsive_mode.setter
     def price_responsive_mode(self, value: bool) -> None:
         self._price_responsive_mode = value
+
+    def set_anticipated_surplus(self, watts: float, minutes: float) -> None:
+        """Hint that watts will free up when EV taper completes (#106).
+
+        The surplus controller will factor this in 2 min before the
+        deadline to pre-warm devices.
+        """
+        import time as _time
+        self._anticipated_surplus_w = watts
+        self._anticipated_deadline = _time.monotonic() + minutes * 60
+        _LOGGER.debug("Anticipated surplus: %.0fW in %.0f min", watts, minutes)
 
     def register_device(self, device: ControllableDevice) -> None:
         """Register a device for surplus control."""

@@ -216,7 +216,7 @@ DEFAULT_INVERTER_MAX_POWER_W: Final = 10000
 # Used for internal state lookups — avoids magic strings scattered across modules.
 ENTITY_OBSERVER_MODE_SWITCH: Final = f"{DOMAIN}.observer_mode"  # switch.sem_observer_mode
 ENTITY_SOLAR_POWER: Final = f"{DOMAIN}.solar_power"  # sensor.sem_solar_power
-ENTITY_FORECAST_NIGHT_REDUCTION: Final = f"{DOMAIN}.forecast_night_reduction"  # switch.sem_forecast_night_reduction
+ENTITY_SMART_NIGHT_CHARGING: Final = f"{DOMAIN}.smart_night_charging"  # switch.sem_smart_night_charging
 
 # Weather entity: auto-detected at runtime, fallback order
 WEATHER_ENTITY_CANDIDATES: Final = ("weather.home", "weather.openweathermap")

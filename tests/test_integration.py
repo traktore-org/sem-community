@@ -45,7 +45,7 @@ class TestPlatformEntityCounts:
         switches = add_entities.call_args[0][0]
         assert len(switches) == 3
         keys = {s.entity_description.key for s in switches}
-        assert keys == {"night_charging", "observer_mode", "forecast_night_reduction"}
+        assert keys == {"night_charging", "observer_mode", "smart_night_charging"}
 
     @pytest.mark.asyncio
     async def test_number_count(self, hass, config_entry, mock_coordinator):
@@ -130,7 +130,7 @@ class TestSwitchDefaults:
         assert switch._is_on is False
 
     def test_forecast_reduction_default_off(self, mock_coordinator):
-        desc = SWITCH_TYPES[2]  # forecast_night_reduction
+        desc = SWITCH_TYPES[2]  # smart_night_charging
         switch = SEMSolarSwitch(mock_coordinator, desc, "test")
         assert switch._is_on is False
 

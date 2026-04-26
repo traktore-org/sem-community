@@ -280,7 +280,7 @@ views:
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-entity-card
-                entity: switch.sem_forecast_night_reduction
+                entity: switch.sem_smart_night_charging
                 name: Forecast
                 icon: mdi:crystal-ball
                 icon_color: amber
@@ -1168,6 +1168,118 @@ views:
             card_mod:
               style: *glass_card
 
+          # ── EV Intelligence (#106) ──
+          - type: custom:mushroom-title-card
+            card_mod:
+              style: *lumina_title
+            title: EV Intelligence
+            subtitle: >-
+              {% set soc = states('sensor.sem_ev_estimated_soc') | float(0) %}
+              {% set nights = states('sensor.sem_ev_nights_until_charge') | int(0) %}
+              {% if soc > 0 %}SOC {{ soc | round(0) }}% · {{ nights }} night{{ 's' if nights != 1 }} range
+              {% else %}Waiting for first full charge detection{% endif %}
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                entity: sensor.sem_ev_estimated_soc
+                name: EV Battery
+                min: 0
+                max: 100
+                severity:
+                  green: 60
+                  yellow: 30
+                  red: 0
+                card_mod:
+                  style: *glass_card
+              - type: vertical-stack
+                cards:
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.sem_ev_charge_needed
+                    name: Charge Tonight
+                    icon: >-
+                      {% if is_state('sensor.sem_ev_charge_needed', 'True') %}mdi:battery-alert
+                      {% else %}mdi:battery-check{% endif %}
+                    icon_color: >-
+                      {% if is_state('sensor.sem_ev_charge_needed', 'True') %}red
+                      {% else %}green{% endif %}
+                    card_mod:
+                      style: *glass_card
+                  - type: custom:mushroom-entity-card
+                    entity: sensor.sem_ev_predicted_daily_consumption
+                    name: Predicted Daily Use
+                    icon: mdi:chart-timeline-variant
+                    icon_color: teal
+                    card_mod:
+                      style: *glass_card
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.sem_ev_nights_until_charge
+                name: Nights Range
+                icon: mdi:calendar-range
+                icon_color: cyan
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-entity-card
+                entity: sensor.sem_ev_charge_skip_reason
+                name: Status
+                icon: mdi:information-outline
+                icon_color: amber
+                card_mod:
+                  style: *glass_card
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: binary_sensor.sem_ev_charging
+                state: "on"
+            card:
+              type: horizontal-stack
+              cards:
+                - type: custom:mushroom-entity-card
+                  entity: sensor.sem_ev_taper_trend
+                  name: Charge Trend
+                  icon: >-
+                    {% if is_state('sensor.sem_ev_taper_trend', 'declining') %}mdi:trending-down
+                    {% elif is_state('sensor.sem_ev_taper_trend', 'rising') %}mdi:trending-up
+                    {% else %}mdi:trending-neutral{% endif %}
+                  icon_color: >-
+                    {% if is_state('sensor.sem_ev_taper_trend', 'declining') %}orange
+                    {% elif is_state('sensor.sem_ev_taper_trend', 'rising') %}green
+                    {% else %}grey{% endif %}
+                  card_mod:
+                    style: *glass_card
+                - type: gauge
+                  entity: sensor.sem_ev_taper_ratio
+                  name: Power vs Peak
+                  min: 0
+                  max: 100
+                  severity:
+                    green: 70
+                    yellow: 40
+                    red: 0
+                  card_mod:
+                    style: *glass_card
+                - type: custom:mushroom-entity-card
+                  entity: sensor.sem_ev_taper_minutes_to_full
+                  name: Est. Full In
+                  icon: mdi:timer-outline
+                  icon_color: green
+                  card_mod:
+                    style: *glass_card
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.sem_ev_battery_health
+                above: 0
+            card:
+              type: custom:mushroom-entity-card
+              entity: sensor.sem_ev_battery_health
+              name: EV Battery Health
+              icon: mdi:battery-heart-variant
+              icon_color: green
+              card_mod:
+                style: *glass_card
+
           # ── Charging Controls ──
           - type: custom:mushroom-title-card
             card_mod:
@@ -1301,8 +1413,8 @@ views:
                 card_mod:
                   style: *glass_card
               - type: custom:mushroom-entity-card
-                entity: switch.sem_forecast_night_reduction
-                name: Forecast Reduction
+                entity: switch.sem_smart_night_charging
+                name: Smart Night
                 tap_action:
                   action: toggle
                 card_mod:
@@ -2109,7 +2221,7 @@ views:
           - type: custom:mushroom-template-card
             primary: Configuration
             secondary: >-
-              Observer: {{ states('switch.sem_observer_mode') }} · Night: {{ states('switch.sem_night_charging') }} · Fcst adjust: {{ states('switch.sem_forecast_night_reduction') }}
+              Observer: {{ states('switch.sem_observer_mode') }} · Night: {{ states('switch.sem_night_charging') }} · Smart night: {{ states('switch.sem_smart_night_charging') }}
 
               Night {{ states('number.sem_ev_night_initial_current') }}A · Min {{ states('number.sem_ev_minimum_current') }}A · Cooldown {{ states('number.sem_ev_stall_cooldown') }}s · Target {{ states('number.sem_daily_ev_target') }}kWh · Peak {{ states('sensor.sem_target_peak_limit') }}kW
             icon: mdi:cog

@@ -290,6 +290,40 @@ class UtilitySignalSensorData:
 
 
 @dataclass
+class EVTaperData:
+    """EV taper detection state.
+
+    Detects when the car's BMS reduces charging current as the battery
+    approaches full charge (CC-CV transition). The characteristic power
+    staircase (e.g. 6290W → 4340W → 2550W → 0W over ~17 min) is detected
+    via linear regression on power samples where SEM's setpoint was stable.
+    """
+    trend: str = "unknown"          # "declining", "stable", "rising", "unknown"
+    taper_ratio_pct: float = 0.0    # Current power / session peak * 100
+    slope_w_per_min: float = 0.0    # Linear regression slope (negative = declining)
+    minutes_to_full: float = 0.0    # Estimated minutes until BMS taper completes
+    ev_full_detected: bool = False  # True when taper reached 0W after declining
+
+
+@dataclass
+class EVIntelligenceData:
+    """Complete EV intelligence sensor data.
+
+    Combines taper detection, virtual SOC estimation, consumption
+    prediction, and charge skip logic into a single output structure.
+    """
+    taper: EVTaperData = field(default_factory=EVTaperData)
+    estimated_soc_pct: float = 0.0           # Virtual SOC (0-100)
+    last_full_charge: Optional[str] = None   # ISO timestamp of last detected full
+    energy_since_full_kwh: float = 0.0       # Energy consumed since last full
+    predicted_daily_ev_kwh: float = 0.0      # Tomorrow's predicted EV consumption
+    nights_until_charge: int = 0             # Estimated nights before charge needed
+    charge_needed: bool = True               # Whether charging is recommended tonight
+    ev_battery_health_pct: float = 0.0       # EV battery health estimate
+    charge_skip_reason: str = ""             # Human-readable skip explanation
+
+
+@dataclass
 class SessionData:
     """Per-session EV charging cost and energy attribution.
 
@@ -351,6 +385,9 @@ class SEMData:
 
     # Session tracking
     session: SessionData = field(default_factory=SessionData)
+
+    # EV intelligence
+    ev_intelligence: EVIntelligenceData = field(default_factory=EVIntelligenceData)
 
     # Timestamps
     last_update: Optional[datetime] = None
@@ -581,6 +618,19 @@ class SEMData:
             "session_grid_energy": self.session.grid_energy_kwh,
             "session_battery_energy": self.session.battery_energy_kwh,
             "session_avg_power": self.session.avg_power_w,
+
+            # EV intelligence
+            "ev_taper_trend": self.ev_intelligence.taper.trend,
+            "ev_taper_ratio": self.ev_intelligence.taper.taper_ratio_pct,
+            "ev_taper_minutes_to_full": self.ev_intelligence.taper.minutes_to_full,
+            "ev_estimated_soc": self.ev_intelligence.estimated_soc_pct,
+            "ev_last_full_charge": self.ev_intelligence.last_full_charge,
+            "ev_energy_since_full": self.ev_intelligence.energy_since_full_kwh,
+            "ev_predicted_daily_consumption": self.ev_intelligence.predicted_daily_ev_kwh,
+            "ev_nights_until_charge": self.ev_intelligence.nights_until_charge,
+            "ev_charge_needed": self.ev_intelligence.charge_needed,
+            "ev_battery_health": self.ev_intelligence.ev_battery_health_pct,
+            "ev_charge_skip_reason": self.ev_intelligence.charge_skip_reason,
         }
 
     def _get_solar_charging_status(self) -> str:

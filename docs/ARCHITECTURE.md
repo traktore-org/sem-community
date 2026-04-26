@@ -8,16 +8,17 @@ This document covers the internal architecture of Solar Energy Management (SEM) 
 
 ```
 coordinator/
-├── coordinator.py        — SEMCoordinator (DataUpdateCoordinator, 10s loop)
-├── sensor_reader.py      — SensorReader (reads HA sensors → PowerReadings)
-├── energy_calculator.py  — EnergyCalculator (power → energy integration)
-├── flow_calculator.py    — FlowCalculator (power/energy flow distribution)
-├── charging_control.py   — ChargingStateMachine (solar/night/Min+PV FSM)
-├── surplus_controller.py — SurplusController (multi-device surplus routing)
-├── forecast_reader.py    — ForecastReader (Solcast / Forecast.Solar)
-├── notifications.py      — NotificationManager (KEBA display + mobile)
-├── storage.py            — SEMStorage (persistent state)
-└── types.py              — All dataclasses (PowerReadings, SessionData, SEMData, etc.)
+├── coordinator.py          — SEMCoordinator (DataUpdateCoordinator, 10s loop)
+├── sensor_reader.py        — SensorReader (reads HA sensors → PowerReadings)
+├── energy_calculator.py    — EnergyCalculator (power → energy integration)
+├── flow_calculator.py      — FlowCalculator (power/energy flow distribution)
+├── charging_control.py     — ChargingStateMachine (solar/night/Min+PV FSM)
+├── ev_taper_detector.py    — EVTaperDetector (taper detection, virtual SOC, skip logic)
+├── surplus_controller.py   — SurplusController (multi-device surplus routing)
+├── forecast_reader.py      — ForecastReader (Solcast / Forecast.Solar)
+├── notifications.py        — NotificationManager (KEBA display + mobile)
+├── storage.py              — SEMStorage (persistent state)
+└── types.py                — All dataclasses (PowerReadings, SessionData, SEMData, etc.)
 ```
 
 The `SEMCoordinator` is a Home Assistant `DataUpdateCoordinator` that runs a 10-second update loop. Each cycle:
@@ -244,6 +245,104 @@ The suite runs 110 end-to-end tests, each executing a 10-step verification seque
 | GoodWe | ChargePoint |
 
 All 11 combinations are run in CI on every pull request and release. If your inverter and charger are in this list, SEM has been automatically verified against that exact pairing.
+
+---
+
+## EV Intelligence
+
+The `EVTaperDetector` (coordinator/ev_taper_detector.py, ~590 lines) provides six capabilities integrated into the coordinator's 10-second update loop via `_update_ev_intelligence()`:
+
+### Data Flow
+
+```
+SEMCoordinator._update_ev_intelligence()
+  ├── EVTaperDetector.update_power_buffer(ev_power, setpoint)
+  ├── EVTaperDetector.detect_taper() → EVTaperData
+  ├── EVTaperDetector.update_virtual_soc(energy, vehicle_soc) → float
+  ├── ConsumptionPredictor.update() / predict() → float
+  ├── EVTaperDetector.should_skip_night_charge(...) → (bool, str)
+  └── EVTaperDetector.update_battery_health(session) → float
+```
+
+### Key Dataclasses (coordinator/types.py)
+
+```python
+@dataclass
+class EVTaperData:
+    trend: str              # "declining", "stable", "rising", "unknown"
+    taper_ratio_pct: float  # Current power / session peak × 100
+    slope_w_per_min: float  # Linear regression slope
+    minutes_to_full: float  # ETA to completion
+    ev_full_detected: bool  # Taper reached 0W
+
+@dataclass
+class EVIntelligenceData:
+    taper: EVTaperData
+    estimated_soc_pct: float
+    last_full_charge: Optional[str]       # ISO timestamp
+    energy_since_full_kwh: float
+    predicted_daily_ev_kwh: float
+    nights_until_charge: int
+    charge_needed: bool
+    ev_battery_health_pct: float
+    charge_skip_reason: str               # Human-readable explanation
+```
+
+### Taper Detection
+
+Uses a 20-minute circular power buffer. Linear regression on the buffer detects a declining trend. BMS-initiated reductions are discriminated from SEM setpoint changes via a settling window (samples after a SEM command are excluded). When power reaches 0W during a declining trend, `ev_full_detected` is set.
+
+### Virtual SOC
+
+Tracks cumulative energy since last known full charge. Calibrates from:
+1. Taper detection (resets to 100%)
+2. Vehicle SOC entity (proportional calibration)
+3. Session bootstrapping (initial estimate from first session)
+
+### Skip Logic
+
+```
+required_soc = predicted_daily_kwh × temp_correction × 1.3 (safety margin)
+available_soc = estimated_soc - daily_decay
+solar_credit  = forecast_tomorrow × 0.3
+charge_needed = (available_soc - solar_credit) < required_soc
+```
+
+Consecutive skip counter enforces a 3-skip safety net.
+
+### State Persistence
+
+EV intelligence state (SOC estimate, last full charge, consumption history, skip counter) is persisted via `SEMStorage.set/get_ev_intelligence_state()` and restored on HA restart.
+
+---
+
+## Multi-Device Aggregation
+
+SEM reads **all** energy sources from the HA Energy Dashboard instead of only the first entry. This is handled in `ha_energy_reader.py` and `coordinator/sensor_reader.py`.
+
+### Energy Dashboard Config Fields
+
+```python
+# List fields (new in v1.3.0)
+solar_power_list: list[str]              # Multiple inverter power sensors
+solar_energy_list: list[str]             # Multiple inverter energy sensors
+battery_power_list: list[str]            # Multiple battery power sensors
+battery_charge_energy_list: list[str]    # Multiple battery charge sensors
+battery_discharge_energy_list: list[str] # Multiple battery discharge sensors
+grid_import_energy_list: list[str]       # Multiple grid import tariffs
+grid_export_energy_list: list[str]       # Multiple grid export tariffs
+grid_power_list: list[str]              # Multiple grid power sensors
+```
+
+### Aggregation Logic
+
+- `SensorReader._read_sensors_sum(entity_list)` — sums numeric values from multiple sensors; skips unavailable/unknown
+- `SensorReader._read_battery_soc_average()` — averages SOC across multiple battery units
+- Primary (single) fields are set from the first source for backward compatibility
+
+### Backward Compatibility
+
+Single-device setups are unaffected. The list fields contain exactly one entry, and the primary field points to the same sensor. No configuration changes needed.
 
 ---
 

@@ -156,7 +156,7 @@
           "electricity_export_rate": "Electricity export rate (per kWh)",
           "demand_charge_rate": "Demand charge rate (CHF/kW/month)",
           "observer_mode": "Observer mode (read-only — no hardware control)",
-          "forecast_night_reduction": "Forecast-driven night charging reduction",
+          "smart_night_charging": "Forecast-driven night charging reduction",
           "battery_discharge_control_entity": "Battery discharge control entity (optional)",
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
@@ -183,7 +183,7 @@
           "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
           "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
           "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
-          "forecast_night_reduction": "When ON, SEM reduces the night charging target based on tomorrow's solar forecast (weekday: 20 % credit, weekend: 70 % credit). Requires Solcast or Forecast.Solar.",
+          "smart_night_charging": "When ON, SEM intelligently skips or reduces night charging based on estimated EV SOC, solar forecast, temperature-adjusted consumption prediction, and learned driving patterns.",
           "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed."
         }
       },
@@ -195,7 +195,7 @@
           "min_solar_power": "Minimum solar power to start EV charging (W)",
           "max_grid_import": "Max grid import during solar charging (W, 0 = pure solar)",
           "observer_mode": "Observer mode (read-only, no hardware control)",
-          "forecast_night_reduction": "Reduce night target based on tomorrow's forecast"
+          "smart_night_charging": "Reduce night target based on tomorrow's forecast"
         }
       },
       "settings_tariff": {
@@ -759,7 +759,7 @@
       "observer_mode": {
         "name": "Observer Mode"
       },
-      "forecast_night_reduction": {
+      "smart_night_charging": {
         "name": "Forecast Night Reduction"
       }
     },

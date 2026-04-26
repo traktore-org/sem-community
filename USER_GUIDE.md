@@ -16,6 +16,7 @@ Complete reference for Solar Energy Management (SEM).
 - [Charging Modes](#charging-modes)
 - [SOC Zone Strategy](#soc-zone-strategy)
 - [Night Charging](#night-charging)
+- [EV Intelligence](#ev-intelligence)
 - [Battery Discharge Protection](#battery-discharge-protection)
 - [Surplus Distribution](#surplus-distribution)
 - [Peak Load Management](#peak-load-management)
@@ -96,7 +97,7 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `observer_mode` | false | Read-only mode — no hardware control |
-| `forecast_night_reduction` | false | Reduce night target based on solar forecast |
+| `smart_night_charging` | false | Intelligently skip or reduce night charges based on EV SOC, solar forecast, temperature, and learned driving patterns |
 | `daily_home_consumption_estimate` | 18 kWh | Fallback for first 7 days of month |
 
 ---
@@ -234,13 +235,67 @@ Night charging starts automatically when night mode activates (after sunset + 10
 
 The daily EV target uses **sunrise-based reset** — the counter resets at sunrise, not midnight. This means a night charging session from 22:00 to 06:00 stays in a single daily bucket.
 
-### Forecast night reduction (optional)
+### Smart Night Charging (optional)
 
-When `switch.sem_forecast_night_reduction` is ON, SEM reduces the night target based on expected solar production the next day:
+When `switch.sem_smart_night_charging` is ON, SEM uses the full EV Intelligence system to decide whether to charge overnight:
 
-- **Weekday**: conservative reduction (car leaves ~17:00, only 20% of surplus expected)
-- **Weekend**: aggressive reduction (car connected all day, 70% of surplus expected)
-- **Summer**: can reduce night target to 0 if solar covers everything
+- **SOC-based skip** — if the estimated EV SOC covers tomorrow's predicted consumption (with 30% safety margin), SEM skips the night charge entirely
+- **Solar forecast credit** — 30% of tomorrow's forecast is credited, reducing required SOC further
+- **Temperature correction** — consumption predictions adjust for seasonal variation (winter = higher consumption)
+- **Daily SOC decay** — accounts for ~0.5% overnight parasitic drain
+- **Safety net** — maximum 3 consecutive skips to prevent under-charging
+- **Fallback** — when EV Intelligence data is insufficient, SEM falls back to forecast-based reduction (weekday: conservative, weekend: aggressive)
+
+---
+
+## EV Intelligence
+
+SEM learns your EV's charging behavior and driving patterns to make smart decisions about when and how much to charge. Enable via `switch.sem_smart_night_charging`.
+
+### Taper Detection
+
+SEM monitors charging power in a 20-minute rolling buffer. When the car's BMS reduces current near full charge (CC→CV transition), SEM detects the characteristic power staircase (e.g., 6290W → 5580W → 4970W → ... → 0W). This provides the most accurate SOC anchor: 100% confirmed without needing a car API.
+
+SEM discriminates between BMS-initiated power reductions and its own setpoint changes by tracking a settling window after each SEM command.
+
+### Virtual SOC
+
+SEM tracks estimated EV battery level by monitoring:
+- Energy added during charging sessions
+- Predicted daily consumption (subtracted each day)
+- Daily parasitic drain (~0.5% SOC decay overnight)
+
+The virtual SOC calibrates from more accurate sources when available:
+1. **Taper detection** — resets to 100% when full charge detected
+2. **Vehicle SOC entity** — calibrates from real car SOC if `vehicle_soc_entity` is configured
+3. **Session bootstrapping** — first charge session establishes initial estimate
+
+### Daily Consumption Learning
+
+An EWMA predictor (alpha=0.3) learns per-weekday hourly patterns separately:
+- "Monday 8 kWh, Wednesday 0 kWh (WFH), Saturday 15 kWh"
+- Adapts gradually over 7 days
+- Cold-start bootstrap at 3 days minimum data
+
+### Temperature Correction
+
+Consumption predictions adjust for outdoor temperature using Recurrent Auto fleet data (30,000+ vehicles):
+- Winter (-5°C): +72% consumption
+- Summer (30°C): +9% consumption
+- Requires an outdoor temperature sensor (auto-detected from weather entity)
+
+### Battery Health Tracking
+
+SEM compares energy accepted during full-cycle vs partial-charge sessions over months to estimate capacity degradation. Available as `sensor.sem_ev_battery_health`.
+
+### Multi-Device Aggregation
+
+SEM automatically reads **all sources** from the HA Energy Dashboard, not just the first:
+- **Multiple solar inverters** — power and energy are summed
+- **Multiple battery units** — power/energy summed, SOC averaged across units
+- **Multiple grid tariff entries** — collected separately
+
+Single-device setups are unaffected — this is fully backward compatible. The config flow shows device counts (e.g., "Solar (2 inverters)") when multiple sources are detected.
 
 ---
 
@@ -422,6 +477,19 @@ Enable via **Settings** > **Devices & Services** > **Solar Energy Management** >
 - `sensor.sem_session_solar_share` — % of session energy from solar
 - `sensor.sem_session_cost` — current/last session cost
 - `sensor.sem_session_duration` — session duration (min)
+
+### EV Intelligence Sensors
+- `sensor.sem_ev_taper_trend` — taper state: "declining", "stable", "rising", "unknown"
+- `sensor.sem_ev_taper_ratio` — current power as % of session peak
+- `sensor.sem_ev_taper_minutes_to_full` — estimated minutes remaining to full charge
+- `sensor.sem_ev_estimated_soc` — virtual SOC estimate (0-100%)
+- `sensor.sem_ev_last_full_charge` — timestamp of last detected full charge
+- `sensor.sem_ev_energy_since_full` — kWh consumed since last full charge
+- `sensor.sem_ev_predicted_daily_consumption` — tomorrow's predicted EV consumption (kWh)
+- `sensor.sem_ev_nights_until_charge` — estimated nights before charging is needed
+- `sensor.sem_ev_charge_needed` — boolean: should charge tonight?
+- `sensor.sem_ev_battery_health` — estimated battery health (%)
+- `sensor.sem_ev_charge_skip_reason` — human-readable explanation of skip decision
 
 ### Forecast Sensors
 - `sensor.sem_forecast_today_kwh` — today's forecast (kWh)
