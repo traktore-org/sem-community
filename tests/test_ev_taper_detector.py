@@ -473,3 +473,121 @@ class TestEVConsumptionPredictor:
         pred = ConsumptionPredictor()
         result = pred.predict_ev_consumption_tomorrow(datetime(2026, 4, 24, 20, 0))
         assert result == 0.0
+
+
+# ════════════════════════════════════════════
+# Night charge skip scenarios
+# ════════════════════════════════════════════
+
+class TestNightChargeSkip:
+    """Test the calculate_nights_until_charge() logic that determines
+    whether SEM should skip tonight's night charge.
+
+    Real-world scenarios based on PROD data:
+    - 40 kWh battery, target SOC 80%, min threshold 20%
+    - Daily commute ~8 kWh (20% of capacity)
+    """
+
+    def test_skip_soc_above_target(self):
+        """SOC 98% > target 80% → skip, multi-night range."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)  # full detected → SOC 100%
+        det.update_energy(0.8)  # small drain → SOC ~98%
+        det.get_virtual_soc()
+
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is False
+        assert nights >= 3
+        assert "above target" in reason
+
+    def test_skip_enough_range_with_margin(self):
+        """SOC 70%, daily 8 kWh (20%), plenty of range → skip."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+        det.update_energy(12.0)  # 100% - 12/40*100 = 70%
+        det.get_virtual_soc()
+
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is False
+        assert nights >= 2
+        assert "nights range" in reason
+
+    def test_charge_needed_soc_low(self):
+        """SOC 25%, daily 8 kWh → only 1 day range → charge needed."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+        det.update_energy(30.0)  # 100% - 30/40*100 = 25%
+        det.get_virtual_soc()
+
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is True
+        assert "recommended" in reason
+
+    def test_charge_needed_no_history(self):
+        """No full charge ever detected → charge needed (safe default)."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        # Never fed a taper profile → no full charge detected
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is True
+        assert "No charge history" in reason
+
+    def test_skip_with_zero_daily_consumption(self):
+        """WFH day, 0 kWh predicted → skip with 99 nights range."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+
+        nights, needed, reason = det.calculate_nights_until_charge(0.0)
+        assert needed is False
+        assert nights == 99
+
+    def test_skip_weekend_high_consumption(self):
+        """SOC 60%, weekend trip 15 kWh (37.5%) → charge needed."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+        det.update_energy(16.0)  # 100% - 16/40*100 = 60%
+        det.get_virtual_soc()
+
+        nights, needed, reason = det.calculate_nights_until_charge(15.0)
+        assert needed is True
+
+    def test_skip_just_above_threshold(self):
+        """SOC 45%, daily 8 kWh (20%), margin 1.3×20=26% → 45-26=19% < 20% min → charge."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+        det.update_energy(22.0)  # 100% - 22/40*100 = 45%
+        det.get_virtual_soc()
+
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is True
+
+    def test_skip_with_real_vehicle_soc(self):
+        """Real vehicle SOC 85% overrides virtual → skip."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        # No taper history — but real SOC is provided
+        det._last_full_timestamp = "2026-04-25T12:00:00"  # Fake history
+
+        nights, needed, reason = det.calculate_nights_until_charge(
+            8.0, vehicle_soc=85.0
+        )
+        assert needed is False
+        assert "above target" in reason
+
+    def test_real_prod_scenario_apr25(self):
+        """Reproduce actual PROD scenario: SOC 98.3%, target 80%, daily 8 kWh.
+
+        Expected: skip night charge, 3+ nights range.
+        """
+        config = {
+            "ev_battery_capacity_kwh": 40,
+            "ev_target_soc": 80,
+            "ev_min_soc_threshold": 20,
+        }
+        det = EVTaperDetector(config)
+        _feed_taper_profile(det)
+        det.update_energy(0.68)  # SOC ~98.3%
+        det.get_virtual_soc()
+
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is False
+        assert nights >= 3
+        assert "above target" in reason
