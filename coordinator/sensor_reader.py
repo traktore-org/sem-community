@@ -275,13 +275,19 @@ class SensorReader:
 
         return self._battery_sign_inverted
 
+    def _read_sensors_sum(self, entity_ids: list, name: str) -> float:
+        """Sum values from multiple sensors of the same type."""
+        return sum(self._read_sensor(eid, name) for eid in entity_ids)
+
     def _read_from_energy_dashboard(self) -> PowerReadings:
         """Read power values from Energy Dashboard configured sensors."""
         ed = self._energy_dashboard_config
         readings = PowerReadings()
 
-        # Solar power
-        if ed.solar_power:
+        # Solar power — sum all inverters if multiple configured
+        if len(ed.solar_power_list) > 1:
+            readings.solar_power = self._read_sensors_sum(ed.solar_power_list, "solar")
+        elif ed.solar_power:
             readings.solar_power = self._read_sensor(ed.solar_power, "solar")
 
         # Grid power from Energy Dashboard.
@@ -292,20 +298,22 @@ class SensorReader:
         if ed.grid_import_power:
             readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
 
-        # Battery power — pass through the source sensor unchanged.
-        # Sign auto-detection (in read_power → _detect_battery_sign) handles
-        # inverters with opposite conventions (Enphase, GoodWe, Powerwall,
-        # Sunsynk/DEYE) by comparing against charge/discharge energy counters.
-        if ed.battery_power:
+        # Battery power — sum all battery units if multiple configured.
+        # Sign auto-detection (in read_power → _detect_battery_sign) uses the
+        # primary sensor and assumes all units share the same sign convention.
+        if len(ed.battery_power_list) > 1:
+            readings.battery_power = self._read_sensors_sum(ed.battery_power_list, "battery")
+        elif ed.battery_power:
             readings.battery_power = self._read_sensor(ed.battery_power, "battery")
 
-        # Battery SOC - from config or auto-detect from battery power sensor prefix
+        # Battery SOC — from config, or auto-detect and average across all units
         if self.config.battery_soc_sensor:
             readings.battery_soc = self._read_sensor(
                 self.config.battery_soc_sensor, "battery_soc"
             )
+        elif len(ed.battery_power_list) > 1:
+            readings.battery_soc = self._read_battery_soc_average(ed.battery_power_list)
         elif ed.battery_power:
-            # Auto-detect SOC from same device as battery power sensor
             soc_entity = self._auto_detect_battery_soc(ed.battery_power)
             if soc_entity:
                 readings.battery_soc = self._read_sensor(soc_entity, "battery_soc")
@@ -331,6 +339,23 @@ class SensorReader:
             )
 
         return readings
+
+    def _read_battery_soc_average(self, battery_power_entities: list) -> float:
+        """Average SOC across multiple battery units.
+
+        Auto-detects the SOC sensor for each battery power sensor and
+        returns the simple average of all valid readings.
+        """
+        soc_values = []
+        for batt_power in battery_power_entities:
+            soc_entity = self._auto_detect_battery_soc(batt_power)
+            if soc_entity:
+                val = self._read_sensor(soc_entity, "battery_soc")
+                if val > 0:
+                    soc_values.append(val)
+        if soc_values:
+            return sum(soc_values) / len(soc_values)
+        return 0.0
 
     def _read_from_legacy_config(self) -> PowerReadings:
         """Read power values from legacy configuration."""

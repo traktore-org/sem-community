@@ -110,6 +110,8 @@ class TestExtractSolarConfig:
         assert config.solar_energy == "sensor.solar_energy"
         assert config.solar_power == "sensor.solar_power"
         assert config.has_solar is True
+        assert config.solar_power_list == ["sensor.solar_power"]
+        assert config.solar_energy_list == ["sensor.solar_energy"]
 
     def test_extract_solar_config_stat_rate(self):
         """Prefers stat_rate over stat_power."""
@@ -138,6 +140,44 @@ class TestExtractSolarConfig:
         _extract_solar_config(source, config)
         assert config.has_solar is True
         assert config.solar_power is None
+
+    def test_extract_solar_two_inverters(self):
+        """Two solar sources — both in list, primary = first."""
+        config = EnergyDashboardConfig()
+        source1 = {
+            "stat_energy_from": "sensor.inverter1_energy",
+            "stat_rate": "sensor.inverter1_power",
+        }
+        source2 = {
+            "stat_energy_from": "sensor.inverter2_energy",
+            "stat_rate": "sensor.inverter2_power",
+        }
+        _extract_solar_config(source1, config)
+        _extract_solar_config(source2, config)
+        # Primary is first
+        assert config.solar_power == "sensor.inverter1_power"
+        assert config.solar_energy == "sensor.inverter1_energy"
+        # Lists have both
+        assert config.solar_power_list == [
+            "sensor.inverter1_power",
+            "sensor.inverter2_power",
+        ]
+        assert config.solar_energy_list == [
+            "sensor.inverter1_energy",
+            "sensor.inverter2_energy",
+        ]
+        assert config.has_solar is True
+
+    def test_extract_solar_three_inverters(self):
+        """Three solar sources — all in list."""
+        config = EnergyDashboardConfig()
+        for i in range(1, 4):
+            _extract_solar_config({
+                "stat_energy_from": f"sensor.inv{i}_energy",
+                "stat_rate": f"sensor.inv{i}_power",
+            }, config)
+        assert len(config.solar_power_list) == 3
+        assert config.solar_power == "sensor.inv1_power"
 
 
 class TestExtractGridConfig:
@@ -174,6 +214,49 @@ class TestExtractGridConfig:
         _extract_grid_config(source, config)
         assert config.has_grid is False
 
+    def test_extract_grid_multiple_flow_from(self):
+        """Dutch dual-tariff: 2 flow_from entries."""
+        config = EnergyDashboardConfig()
+        source = {
+            "flow_from": [
+                {"stat_energy_from": "sensor.grid_import_tarief_1"},
+                {"stat_energy_from": "sensor.grid_import_tarief_2"},
+            ],
+            "flow_to": [
+                {"stat_energy_to": "sensor.grid_export_tarief_1"},
+                {"stat_energy_to": "sensor.grid_export_tarief_2"},
+            ],
+            "power": [{"stat_rate": "sensor.grid_power"}],
+        }
+        _extract_grid_config(source, config)
+        # Primary is first
+        assert config.grid_import_energy == "sensor.grid_import_tarief_1"
+        assert config.grid_export_energy == "sensor.grid_export_tarief_1"
+        # Lists have both
+        assert config.grid_import_energy_list == [
+            "sensor.grid_import_tarief_1",
+            "sensor.grid_import_tarief_2",
+        ]
+        assert config.grid_export_energy_list == [
+            "sensor.grid_export_tarief_1",
+            "sensor.grid_export_tarief_2",
+        ]
+        assert config.grid_power_list == ["sensor.grid_power"]
+        assert config.has_grid is True
+
+    def test_extract_grid_single_flow_backward_compat(self):
+        """Single flow_from — list has one entry, same as primary."""
+        config = EnergyDashboardConfig()
+        source = {
+            "flow_from": [{"stat_energy_from": "sensor.grid_import"}],
+            "flow_to": [{"stat_energy_to": "sensor.grid_export"}],
+            "power": [{"stat_rate": "sensor.grid_power"}],
+        }
+        _extract_grid_config(source, config)
+        assert config.grid_import_energy == "sensor.grid_import"
+        assert config.grid_import_energy_list == ["sensor.grid_import"]
+        assert len(config.grid_power_list) == 1
+
 
 class TestExtractBatteryConfig:
     """Test _extract_battery_config()."""
@@ -200,6 +283,52 @@ class TestExtractBatteryConfig:
         _extract_battery_config(source, config)
         assert config.battery_power == "sensor.batt_power_old"
         assert config.has_battery is True
+
+    def test_extract_battery_two_units(self):
+        """Two battery sources — both in list, primary = first."""
+        config = EnergyDashboardConfig()
+        source1 = {
+            "stat_energy_from": "sensor.sessy1_discharged",
+            "stat_energy_to": "sensor.sessy1_charged",
+            "stat_rate": "sensor.sessy1_power",
+        }
+        source2 = {
+            "stat_energy_from": "sensor.sessy2_discharged",
+            "stat_energy_to": "sensor.sessy2_charged",
+            "stat_rate": "sensor.sessy2_power",
+        }
+        _extract_battery_config(source1, config)
+        _extract_battery_config(source2, config)
+        # Primary is first
+        assert config.battery_power == "sensor.sessy1_power"
+        assert config.battery_discharge_energy == "sensor.sessy1_discharged"
+        assert config.battery_charge_energy == "sensor.sessy1_charged"
+        # Lists have both
+        assert config.battery_power_list == [
+            "sensor.sessy1_power",
+            "sensor.sessy2_power",
+        ]
+        assert config.battery_charge_energy_list == [
+            "sensor.sessy1_charged",
+            "sensor.sessy2_charged",
+        ]
+        assert config.battery_discharge_energy_list == [
+            "sensor.sessy1_discharged",
+            "sensor.sessy2_discharged",
+        ]
+        assert config.has_battery is True
+
+    def test_extract_battery_single_backward_compat(self):
+        """Single battery — list has one entry, same as primary."""
+        config = EnergyDashboardConfig()
+        source = {
+            "stat_energy_from": "sensor.batt_discharge",
+            "stat_energy_to": "sensor.batt_charge",
+            "stat_rate": "sensor.batt_power",
+        }
+        _extract_battery_config(source, config)
+        assert config.battery_power == "sensor.batt_power"
+        assert config.battery_power_list == ["sensor.batt_power"]
 
 
 class TestExtractEvFromDevices:
@@ -305,6 +434,113 @@ class TestReadEnergyDashboardConfig:
                 config = await read_energy_dashboard_config(hass)
 
         assert config is None
+
+
+SAMPLE_MULTI_DEVICE_DATA = {
+    "data": {
+        "energy_sources": [
+            {
+                "type": "solar",
+                "stat_energy_from": "sensor.inverter1_energy",
+                "stat_rate": "sensor.inverter1_power",
+            },
+            {
+                "type": "solar",
+                "stat_energy_from": "sensor.inverter2_energy",
+                "stat_rate": "sensor.inverter2_power",
+            },
+            {
+                "type": "grid",
+                "flow_from": [
+                    {"stat_energy_from": "sensor.grid_import_tarief_1"},
+                    {"stat_energy_from": "sensor.grid_import_tarief_2"},
+                ],
+                "flow_to": [
+                    {"stat_energy_to": "sensor.grid_export_tarief_1"},
+                    {"stat_energy_to": "sensor.grid_export_tarief_2"},
+                ],
+                "power": [{"stat_rate": "sensor.grid_power"}],
+            },
+            {
+                "type": "battery",
+                "stat_energy_from": "sensor.sessy1_discharged",
+                "stat_energy_to": "sensor.sessy1_charged",
+                "stat_rate": "sensor.sessy1_power",
+            },
+            {
+                "type": "battery",
+                "stat_energy_from": "sensor.sessy2_discharged",
+                "stat_energy_to": "sensor.sessy2_charged",
+                "stat_rate": "sensor.sessy2_power",
+            },
+        ],
+        "device_consumption": [
+            {
+                "stat_consumption": "sensor.wallbox_links_energy",
+                "stat_rate": "sensor.wallbox_links_power",
+            },
+            {
+                "stat_consumption": "sensor.wallbox_rechts_energy",
+                "stat_rate": "sensor.wallbox_rechts_power",
+            },
+        ],
+    }
+}
+
+
+class TestReadMultiDeviceConfig:
+    """Test read_energy_dashboard_config() with multi-device setups."""
+
+    @pytest.mark.asyncio
+    async def test_multi_device_full(self, hass):
+        """Full multi-device setup: 2 inverters, 2 tariffs, 2 batteries, 2 wallboxes."""
+        async def run_func(func):
+            return func()
+
+        hass.async_add_executor_job = AsyncMock(side_effect=run_func)
+
+        with patch("os.path.exists", return_value=True):
+            with patch("builtins.open", mock_open(read_data=json.dumps(SAMPLE_MULTI_DEVICE_DATA))):
+                config = await read_energy_dashboard_config(hass)
+
+        assert config is not None
+        # Solar: 2 inverters
+        assert config.has_solar is True
+        assert len(config.solar_power_list) == 2
+        assert config.solar_power == "sensor.inverter1_power"
+        assert config.solar_power_list[1] == "sensor.inverter2_power"
+        # Grid: 2 tariffs
+        assert config.has_grid is True
+        assert len(config.grid_import_energy_list) == 2
+        assert config.grid_import_energy == "sensor.grid_import_tarief_1"
+        # Battery: 2 units
+        assert config.has_battery is True
+        assert len(config.battery_power_list) == 2
+        assert config.battery_power == "sensor.sessy1_power"
+        assert config.battery_power_list[1] == "sensor.sessy2_power"
+        # EV: first wallbox matched
+        assert config.has_ev is True
+        assert config.ev_power == "sensor.wallbox_links_power"
+
+    @pytest.mark.asyncio
+    async def test_single_device_backward_compat(self, hass):
+        """Single-device setup still works — lists have exactly one entry."""
+        async def run_func(func):
+            return func()
+
+        hass.async_add_executor_job = AsyncMock(side_effect=run_func)
+
+        with patch("os.path.exists", return_value=True):
+            with patch("builtins.open", mock_open(read_data=json.dumps(SAMPLE_ENERGY_DATA))):
+                config = await read_energy_dashboard_config(hass)
+
+        assert config is not None
+        assert len(config.solar_power_list) == 1
+        assert config.solar_power_list[0] == config.solar_power
+        assert len(config.battery_power_list) == 1
+        assert config.battery_power_list[0] == config.battery_power
+        assert len(config.grid_import_energy_list) == 1
+        assert config.grid_import_energy_list[0] == config.grid_import_energy
 
 
 class TestGetAllIndividualDevices:

@@ -140,22 +140,39 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             summary_lines.append("")
 
         if cfg.has_solar:
-            _add("Solar", [
-                ("Power", cfg.solar_power),
-                ("Energy", cfg.solar_energy),
-            ])
+            if len(cfg.solar_power_list) > 1:
+                fields = [(f"Power ({i+1})", p) for i, p in enumerate(cfg.solar_power_list)]
+                fields += [(f"Energy ({i+1})", e) for i, e in enumerate(cfg.solar_energy_list)]
+                _add(f"Solar ({len(cfg.solar_power_list)} inverters)", fields)
+            else:
+                _add("Solar", [
+                    ("Power", cfg.solar_power),
+                    ("Energy", cfg.solar_energy),
+                ])
         if cfg.has_grid:
-            _add("Grid", [
-                ("Power", cfg.grid_import_power),
-                ("Import energy", cfg.grid_import_energy),
-                ("Export energy", cfg.grid_export_energy),
-            ])
+            if len(cfg.grid_import_energy_list) > 1:
+                fields = [(f"Import energy ({i+1})", e) for i, e in enumerate(cfg.grid_import_energy_list)]
+                fields += [(f"Export energy ({i+1})", e) for i, e in enumerate(cfg.grid_export_energy_list)]
+                fields.insert(0, ("Power", cfg.grid_import_power))
+                _add(f"Grid ({len(cfg.grid_import_energy_list)} tariffs)", fields)
+            else:
+                _add("Grid", [
+                    ("Power", cfg.grid_import_power),
+                    ("Import energy", cfg.grid_import_energy),
+                    ("Export energy", cfg.grid_export_energy),
+                ])
         if cfg.has_battery:
-            _add("Battery", [
-                ("Power", cfg.battery_power),
-                ("Charge energy", cfg.battery_charge_energy),
-                ("Discharge energy", cfg.battery_discharge_energy),
-            ])
+            if len(cfg.battery_power_list) > 1:
+                fields = [(f"Power ({i+1})", p) for i, p in enumerate(cfg.battery_power_list)]
+                fields += [(f"Charge energy ({i+1})", e) for i, e in enumerate(cfg.battery_charge_energy_list)]
+                fields += [(f"Discharge energy ({i+1})", e) for i, e in enumerate(cfg.battery_discharge_energy_list)]
+                _add(f"Battery ({len(cfg.battery_power_list)} units)", fields)
+            else:
+                _add("Battery", [
+                    ("Power", cfg.battery_power),
+                    ("Charge energy", cfg.battery_charge_energy),
+                    ("Discharge energy", cfg.battery_discharge_energy),
+                ])
         if cfg.has_ev:
             _add("EV", [
                 ("Power", cfg.ev_power),
