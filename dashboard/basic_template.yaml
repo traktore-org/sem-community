@@ -119,8 +119,8 @@ views:
                 tap_action:
                   action: toggle
               - type: custom:mushroom-entity-card
-                entity: switch.sem_forecast_night_reduction
-                name: Forecast
+                entity: switch.sem_smart_night_charging
+                name: Smart Night
                 icon: mdi:crystal-ball
                 tap_action:
                   action: toggle

@@ -84,6 +84,8 @@ class EVTaperDetector:
 
         # SOC calibration: track real SOC for syncing virtual SOC
         self._last_real_soc: Optional[float] = None
+        # Consecutive night charge skip counter (safety net)
+        self._consecutive_skips: int = 0
         # Session SOC tracking for partial-charge health estimates
         self._session_start_soc: Optional[float] = None
 
@@ -149,6 +151,58 @@ class EVTaperDetector:
                 )
 
         return self._analyze(ev_power)
+
+    def apply_daily_decay(
+        self,
+        predicted_daily_kwh: float,
+        fallback_kwh: float,
+        temp_correction: float = 1.0,
+    ) -> None:
+        """Decay virtual SOC by predicted daily consumption.
+
+        Called once per day at rollover when the car is NOT connected.
+        Simulates driving consumption during the blind period when SEM
+        can't see actual energy use. Temperature-corrected for seasonal
+        variation (winter heating, summer AC).
+
+        Args:
+            predicted_daily_kwh: EWMA-predicted consumption for today's weekday.
+            fallback_kwh: Config daily_ev_target, used if predictor has no data.
+            temp_correction: Temperature factor (1.0=baseline, 1.5=cold winter).
+        """
+        decay = predicted_daily_kwh if predicted_daily_kwh > 0 else fallback_kwh
+        decay *= temp_correction
+        self._energy_since_full += decay
+
+        capacity = self._config.get("ev_battery_capacity_kwh", 40)
+        if capacity > 0:
+            self._estimated_soc = max(
+                0.0, 100.0 - (self._energy_since_full / capacity * 100.0)
+            )
+
+        _LOGGER.info(
+            "Virtual SOC decay: -%.1f kWh (predicted=%.1f, fallback=%.1f, "
+            "temp_factor=%.2f) → SOC %.1f%%",
+            decay, predicted_daily_kwh, fallback_kwh,
+            temp_correction, self._estimated_soc,
+        )
+
+    @staticmethod
+    def temperature_correction_factor(outdoor_temp_c: float) -> float:
+        """Calculate temperature correction factor for EV consumption.
+
+        Based on peer-reviewed fleet data (Recurrent Auto, 30k+ vehicles):
+        - Optimal range 10-28°C: factor 1.0
+        - Below 10°C: +0.048 per °C (≈+2.4 kWh/100km per 5°C drop)
+        - Above 28°C: +0.046 per °C (≈+2.3 kWh/100km per 5°C rise)
+
+        Examples: -5°C → 1.72, 0°C → 1.48, 20°C → 1.0, 35°C → 1.32
+        """
+        if outdoor_temp_c < 10:
+            return 1.0 + (10 - outdoor_temp_c) * 0.048
+        if outdoor_temp_c > 28:
+            return 1.0 + (outdoor_temp_c - 28) * 0.046
+        return 1.0
 
     def update_energy(self, ev_energy_increment_kwh: float) -> None:
         """Accumulate energy consumed since last full charge.
@@ -282,6 +336,11 @@ class EVTaperDetector:
         if self._last_full_timestamp is None and vehicle_soc is None:
             return (0, True, "No charge history yet")
 
+        # Safety net: max 3 consecutive skips, then force charge
+        max_skips = self._config.get("ev_max_consecutive_skips", 3)
+        if self._consecutive_skips >= max_skips:
+            return (0, True, f"Safety: {self._consecutive_skips} consecutive skips reached")
+
         soc = self.get_virtual_soc(vehicle_soc)
 
         if capacity <= 0 or predicted_daily_kwh <= 0:
@@ -303,6 +362,17 @@ class EVTaperDetector:
         # Charge needed
         return (0, True, f"SOC {soc:.0f}% — charge recommended")
 
+    def record_skip(self) -> None:
+        """Record that tonight's night charge was skipped."""
+        self._consecutive_skips += 1
+        _LOGGER.debug("Consecutive night charge skips: %d", self._consecutive_skips)
+
+    def reset_skips(self) -> None:
+        """Reset skip counter (called when charging happens)."""
+        if self._consecutive_skips > 0:
+            _LOGGER.debug("Consecutive skip counter reset (was %d)", self._consecutive_skips)
+        self._consecutive_skips = 0
+
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
@@ -315,6 +385,7 @@ class EVTaperDetector:
             "estimated_soc": round(self._estimated_soc, 1),
             "battery_health_samples": self._battery_health_samples,
             "battery_health_pct": round(self._battery_health_pct, 1),
+            "consecutive_skips": self._consecutive_skips,
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
@@ -324,6 +395,7 @@ class EVTaperDetector:
         self._estimated_soc = state.get("estimated_soc", 0.0)
         self._battery_health_samples = state.get("battery_health_samples", [])
         self._battery_health_pct = state.get("battery_health_pct", 0.0)
+        self._consecutive_skips = state.get("consecutive_skips", 0)
 
     # ------------------------------------------------------------------
     # Properties

@@ -359,7 +359,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "prefer_hardware_energy": DEFAULT_PREFER_HARDWARE_ENERGY,
             "energy_source_auto": DEFAULT_ENERGY_SOURCE_AUTO,
             # Optional / opt-in feature
-            "forecast_night_reduction": False,
+            "smart_night_charging": False,
             # Notifications — sensible defaults; tune in OptionsFlow
             "enable_keba_notifications": True,
             "enable_mobile_notifications": False,
@@ -802,8 +802,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("observer_mode", DEFAULT_OBSERVER_MODE),
                 ): selector.BooleanSelector(),
                 vol.Optional(
-                    "forecast_night_reduction",
-                    default=_c("forecast_night_reduction", False),
+                    "smart_night_charging",
+                    default=_c("smart_night_charging", False),
                 ): selector.BooleanSelector(),
             }),
         )

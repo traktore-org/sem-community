@@ -24,7 +24,7 @@ SWITCH_TYPES = [
         key="observer_mode",
     ),
     SwitchEntityDescription(
-        key="forecast_night_reduction",
+        key="smart_night_charging",
     ),
 ]
 

@@ -28,7 +28,7 @@ class TestSEMSwitches:
     def test_switch_types(self):
         """Verify switch types."""
         keys = [s.key for s in SWITCH_TYPES]
-        assert keys == ["night_charging", "observer_mode", "forecast_night_reduction"]
+        assert keys == ["night_charging", "observer_mode", "smart_night_charging"]
 
     @pytest.mark.asyncio
     async def test_night_charging_default_on(self, mock_coordinator):

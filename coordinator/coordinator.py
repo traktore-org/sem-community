@@ -28,7 +28,7 @@ from ..const import (
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
     ENTITY_SOLAR_POWER,
-    ENTITY_FORECAST_NIGHT_REDUCTION,
+    ENTITY_SMART_NIGHT_CHARGING,
     WEATHER_ENTITY_CANDIDATES,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
@@ -605,6 +605,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if self._tracker_date != today_date:
                 self._today_surplus_hours = [False] * 24
                 self._today_ev_hours = [False] * 24
+                # Day rollover: decay virtual SOC when car is unplugged (#106)
+                if (
+                    not power.ev_connected
+                    and self._ev_taper_detector.last_full_timestamp
+                ):
+                    predicted = self._predictor.predict_ev_consumption_tomorrow(now_time)
+                    fallback = self.config.get("daily_ev_target", 10)
+                    outdoor_temp = self._read_outdoor_temperature()
+                    temp_factor = EVTaperDetector.temperature_correction_factor(outdoor_temp)
+                    self._ev_taper_detector.apply_daily_decay(predicted, fallback, temp_factor)
                 self._tracker_date = today_date
             hour = now_time.hour
             if surplus_data.surplus_total_w > 100:
@@ -1270,7 +1280,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Night charging target: optionally reduced by forecast
         night_target = remaining
-        forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_FORECAST_NIGHT_REDUCTION}", "on")
+        forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_SMART_NIGHT_CHARGING}", "on")
         if self.time_manager.is_night_mode() and forecast_reduction:
             night_target = self._calculate_forecast_night_target(
                 remaining, energy,
@@ -1376,6 +1386,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             predicted_daily, self._cycle_vehicle_soc,
         )
 
+        # Track consecutive skips for safety net
+        if self.time_manager.is_night_mode() and power.ev_connected:
+            if not charge_needed:
+                self._ev_taper_detector.record_skip()
+            else:
+                self._ev_taper_detector.reset_skips()
+
         return EVIntelligenceData(
             taper=taper_data,
             estimated_soc_pct=round(estimated_soc, 1),
@@ -1387,6 +1404,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_battery_health_pct=self._ev_taper_detector.battery_health_pct,
             charge_skip_reason=skip_reason,
         )
+
+    def _read_outdoor_temperature(self) -> float:
+        """Read outdoor temperature from weather entity or configured sensor.
+
+        Used for temperature-corrected EV consumption prediction (#106).
+        Falls back to 15°C (spring-like) if no weather data available.
+        """
+        # Try configured entity first
+        temp_entity = self.config.get("outdoor_temperature_entity", "")
+        if temp_entity:
+            state = self.hass.states.get(temp_entity)
+            if state and state.state not in ("unknown", "unavailable"):
+                try:
+                    return float(state.state)
+                except (ValueError, TypeError):
+                    pass
+
+        # Fall back to any weather entity
+        for state in self.hass.states.async_all("weather"):
+            temp = state.attributes.get("temperature")
+            if temp is not None:
+                try:
+                    return float(temp)
+                except (ValueError, TypeError):
+                    pass
+
+        return 15.0  # Safe default
 
     # Solar charging state sets
     def _restore_device_runtimes(self) -> None:
