@@ -45,6 +45,19 @@ Some EV chargers have limitations that prevent full SEM control:
 
 The `HeatPumpController` device class exists in the codebase and supports SG-Ready 4-state control, but it is **not yet wired up** as a registered device controller. The corresponding dashboard cards have been removed from the dashboard template. The controller logic is functional but not instantiated or registered with the surplus controller. This will be connected in a future release.
 
+## EV Intelligence
+
+- **Virtual SOC accuracy** — depends on taper detection or car API calibration for the initial anchor. Without either, the SOC estimate drifts over time based solely on energy tracking and predicted consumption.
+- **Consumption predictor cold start** — needs at least 3 days of data before per-weekday predictions are useful. During the first 3 days, a conservative default is used.
+- **Temperature correction** — requires an outdoor temperature sensor (auto-detected from a `weather.*` entity). Without it, temperature correction is disabled and predictions assume 20°C.
+- **Battery health tracking** — requires multiple charge sessions over weeks/months to produce meaningful estimates. Short-term values may fluctuate.
+
+## Multi-device aggregation
+
+SEM supports multiple solar inverters, battery units, and grid tariff entries from the HA Energy Dashboard (v1.3.0+). Limitations:
+- **Battery SOC** is averaged across units — if batteries have very different capacities, the average may not reflect the true combined state accurately.
+- **Grid power sensors** — if multiple grid power sensors exist, they are summed. Ensure they don't overlap (e.g., don't add both a sub-meter and a main meter).
+
 ## Multi-phase EV charging
 
 SEM assumes 3-phase charging at 230V per phase by default. Single-phase or 2-phase configurations must be set via the integration options. Incorrect phase configuration will result in inaccurate current calculations.

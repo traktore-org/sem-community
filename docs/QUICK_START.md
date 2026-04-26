@@ -181,7 +181,7 @@ These are the only controls you need:
 |--------|---------|---------|
 | `switch.sem_night_charging` | ON | Grid-charge EV overnight to daily target |
 | `switch.sem_observer_mode` | OFF | Read-only mode — monitors but doesn't control |
-| `switch.sem_forecast_night_reduction` | OFF | Reduce night target when tomorrow is sunny |
+| `switch.sem_smart_night_charging` | OFF | Smart night charging — skips or reduces night charges based on EV SOC, forecast, and learned patterns |
 
 Everything else — solar charging, battery protection, peak management, surplus distribution — is fully automatic.
 

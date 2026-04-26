@@ -173,12 +173,13 @@ if they are not already present:
    - `card-mod`
    - `Mushroom`
    - `apexcharts-card`
-   - `mini-graph-card`
-   - `bar-card`
    - `sankey-chart`
-   - `bubble-card`
+   - `fold-entity-row`
 3. Hard-refresh your browser after installing (Ctrl+Shift+R or
    Cmd+Shift+R on Mac).
+
+> **Note:** `mini-graph-card`, `bar-card`, and `bubble-card` are no longer
+> required as of v1.2.0+ — they have been replaced by bundled SEM cards.
 
 ---
 
@@ -260,7 +261,7 @@ Once SEM is running, it works automatically:
 - **In the evening**, it can charge your EV from the grid at a managed
   rate (if night charging is enabled).
 - **All day**, it tracks energy flows, costs, savings, and performance
-  metrics across 60+ sensors.
+  metrics across 70+ sensors.
 
 The three switches you might want to adjust:
 
@@ -268,7 +269,7 @@ The three switches you might want to adjust:
 |--------|---------|---------|
 | `switch.sem_night_charging` | ON | Enable/disable overnight EV charging |
 | `switch.sem_observer_mode` | OFF | Read-only mode (no hardware control) |
-| `switch.sem_forecast_night_reduction` | OFF | Reduce night charging based on tomorrow's forecast |
+| `switch.sem_smart_night_charging` | OFF | Smart night charging — skips or reduces night charges based on EV SOC, forecast, and learned patterns |
 
 Everything else is automatic.
 

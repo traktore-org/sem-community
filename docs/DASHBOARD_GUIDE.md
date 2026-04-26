@@ -47,7 +47,7 @@ The main at-a-glance view with real-time power flows.
 | **7-Day Chart** | Bar chart showing daily solar, home, and grid import over the last week |
 | **Smart Recommendation** | AI-powered energy tip based on forecast, pricing, and current conditions |
 | **Peak Load + Energy Tip** | Current 15-min peak vs limit, actionable energy tip |
-| **Quick Controls** | Forecast reduction and observer mode toggles |
+| **Quick Controls** | Smart Night Charging and observer mode toggles |
 | **EV Status** | Conditional — shows charging state, current, power, session progress when EV is connected |
 | **Weather** | Live clock, temperature, weather conditions, 5-day forecast with temperature bars |
 
@@ -94,7 +94,8 @@ EV charging session tracking and statistics.
 | **Charging Status** | Current mode, power, session energy, solar share |
 | **Session Gauges** | Daily energy vs target, solar share percentage |
 | **Charging Power Chart** | 24h EV power curve |
-| **Charging Settings** | Night charging, forecast reduction, target, amps, wait conditions |
+| **Charging Settings** | Night charging, smart night charging, target, amps, wait conditions |
+| **EV Intelligence** | Taper trend visualization, virtual SOC estimate, charge skip status & reasoning, battery health indicator |
 | **Lifetime Statistics** | Total energy, cost, sessions, solar share over all time |
 
 ### Control
@@ -105,7 +106,7 @@ All settings and device management in one place.
 
 | Card | Description |
 |------|-------------|
-| **EV Charging** | Night charging toggle, forecast reduction, target, current settings |
+| **EV Charging** | Night charging toggle, smart night charging, target, current settings |
 | **Surplus Control** | Surplus available indicator, regulation offset |
 | **Battery Management** | Priority/minimum/resume SOC, capacity |
 | **Heat Pump & Hot Water** | Boost offset, hot water max temperature |

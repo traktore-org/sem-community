@@ -183,7 +183,7 @@ SEM is designed to be mostly automatic. There are only 3 switches to manage:
 |--------|---------|-------------|
 | `switch.sem_night_charging` | ON | Enable/disable overnight grid charging |
 | `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware |
-| `switch.sem_forecast_night_reduction` | OFF | Reduce night charging target based on tomorrow's solar forecast |
+| `switch.sem_smart_night_charging` | OFF | Intelligently skip or reduce night charges based on EV SOC, solar forecast, temperature, and learned driving patterns |
 
 Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.
 
@@ -222,7 +222,7 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 | **Home** | Animated system diagram with device nodes, solar summary card, 7-day chart, weather, smart recommendations |
 | **Energy** | Sankey diagram, self-consumption/autarky gauges, donut chart, 24h power, CO2 avoided, trees saved |
 | **Battery** | SOC radial gauge, 24h charge/discharge chart, zone configuration |
-| **EV** | Charging status, session stats, solar share gauge, lifetime totals |
+| **EV** | Charging status, session stats, solar share gauge, lifetime totals, EV Intelligence (taper trend, virtual SOC, charge skip reasoning, battery health) |
 | **Control** | Load priority drag-and-drop, surplus allocation, battery/EV/tariff settings |
 | **Costs** | Today/month/year KPIs, period selector, cost & savings charts, demand charge, tariff rates |
 | **System** | Health diagnostics, sensor status, charging state, peak management |
@@ -247,7 +247,7 @@ For dashboard setup instructions, see the [Dashboard Guide](docs/DASHBOARD_GUIDE
 
 ## Sensors
 
-SEM creates 60+ sensors organized by category:
+SEM creates 70+ sensors organized by category:
 
 | Category | Examples |
 |----------|---------|
@@ -263,6 +263,7 @@ SEM creates 60+ sensors organized by category:
 | **PV Analytics** | Specific yield, forecast accuracy, degradation trend |
 | **Smart Tips** | Optimization score, forecast-aware recommendations, best surplus window |
 | **Load Mgmt** | Peak margin, 15-min average, devices shed, trend |
+| **EV Intelligence** | Taper trend/ratio, virtual SOC, minutes to full, charge needed, skip reason, battery health, predicted consumption |
 | **Notifications** | Battery full, high grid import, daily summary, forecast alerts |
 
 ---
@@ -409,58 +410,39 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ---
 
-## Recent Improvements (v1.1.0)
+## Recent Improvements (v1.3.0)
 
-### Dashboard Lumina Redesign (#56)
-- **Lumina tab headers** on all 7 tabs — SVG glow icons, live stats, dot-grid background
-- **Battery hero card** — SOC arc ring with charge/discharge pulse animation, health metrics
-- **EV status card** — three visual states (disconnected/connected/charging) with animated lightning bolt
-- **Section title styling** — transparent backgrounds with gradient divider lines
-- **Consistent precision** — kWh=1dp, W=0dp, CHF=2dp across all dashboard values
+### EV Intelligence (#106)
+- **Taper detection** — detects BMS CC→CV transition (power staircase) to confirm 100% SOC without car API
+- **Virtual SOC** — tracks estimated battery level from charging energy and predicted consumption; calibrates from real vehicle SOC or taper detection when available
+- **Daily consumption learning** — EWMA predictor learns per-weekday driving patterns (adapts over 7 days)
+- **Temperature correction** — adjusts predictions for seasonal variation based on Recurrent Auto fleet data (30,000+ vehicles)
+- **Smart night charge skip** — skips night charging when estimated SOC covers tomorrow's predicted consumption (with 30% safety margin, solar forecast credit, and 3-consecutive-skip safety net)
+- **Session-based anchoring** — works from day one; first charge session bootstraps SOC estimate
+- **EV battery health** — tracks capacity degradation from partial charge sessions over months
+- **10 new sensors** — taper trend/ratio, virtual SOC, minutes to full, predicted consumption, nights until charge, charge needed, battery health, charge skip reason
 
-### Auto Card Installation (#55)
-- Card JS files auto-installed to `/config/www/` on every restart (if dashboard exists)
-- No more manual `generate_dashboard` call needed after HACS updates
-- Self-healing: recreates card directory if deleted
+### Multi-Device Aggregation (#112)
+- **Multiple inverters** — SEM reads all solar sources from the Energy Dashboard and sums them
+- **Multiple batteries** — summed power/energy, averaged SOC across units
+- **Multiple grid tariffs** — collected separately from Energy Dashboard flow_from/flow_to
+- **Backward compatible** — single-device setups work exactly as before
+- Config flow shows device counts: "Solar (2 inverters)", "Battery (3 units)"
 
-### Device Control Modes (#49)
-- Every device has a control mode: `off`, `peak_only` (default), `surplus`
-- SEM never turns on devices unless explicitly set to `surplus` mode
-- Mode selector dropdown on Control tab, persists across restarts
+### Smart Night Charging Rename
+- Switch renamed from `forecast_night_reduction` → `smart_night_charging` to reflect full EV Intelligence capabilities
+- Updated description in all 7 languages
 
-### Tariff Calendar (#25)
-- User-defined HT/NT time windows with Swiss provider presets (EKZ, BKW, CKW, ewz)
-- Schedule dashboard card showing 24h timeline (tariff, night, surplus, EV)
+### Other
+- Hassfest compliance: alphabetical manifest key order, `recorder` added to `after_dependencies`
+- 1,000+ automated tests (was 199+) across 20+ test files
 
-### Previous (v1.0.x)
-
-### Performance
-- Cached forecast source detection and surplus window estimation — reduced CPU overhead per update cycle
-- Dashboard cards: debounced flow updates (100ms), reduced DOM thrashing with incremental updates
-
-### Stability
-- Exponential backoff for EV device retry (replaces linear 30-retry loop)
-- Error recovery for battery protection — resets state on service call failure instead of leaving stale limits
-- Storage validation on restore — detects corrupted data before it propagates to sensors
-- Migration rollback safety — keeps original config intact on migration failure
-- Narrowed exception handling throughout coordinator (specific types instead of bare `except Exception`)
-- Fixed availability logging spam in binary sensors and sensors
-
-### Usability
-- Config flow validates entity IDs exist before accepting
-- Notification flap suppression — solar charging states must be stable 60s before notifying
-- KEBA service validated once on startup (no repeated exception noise if not installed)
-- Dashboard cards show entity availability indicator when sensors are unavailable
-- Shared color palette and power formatting utilities across all dashboard cards
-
-### Accessibility
-- Dashboard cards: ARIA labels, role attributes, keyboard-friendly button semantics
-
-### Code Quality
-- Coordinator update method reduced from ~440 to ~260 lines (analytics and notifications extracted)
-- Hardcoded entity IDs replaced with named constants
-- Shared JS constants (sem-shared.js) for color palette and formatters
-- Load management: preserves user-set device priorities across discovery cycles
+### Previous (v1.1.0)
+- Dashboard Lumina redesign — glassmorphism theme, SVG glow icons, battery hero card, EV status card
+- Auto card installation — JS files auto-installed to `/config/www/` on restart
+- Device control modes — `off`, `peak_only`, `surplus` per device
+- Tariff calendar — user-defined HT/NT time windows with Swiss provider presets
+- Performance, stability, usability, accessibility, and code quality improvements (see v1.0.4 changelog)
 
 ---
 
