@@ -177,12 +177,19 @@ class EnergyCalculator:
             solar, grid_import, grid_export, batt_charge, batt_discharge,
         )
 
-        # ALL key sensors must be available before seeding
+        # ALL key sensors must be available before seeding.
+        # Include battery — they can take 30-60s longer to load (#110).
         if solar < 100 or grid_import < 10 or grid_export < 10:
             _LOGGER.debug(
                 "Lifetime seed waiting: solar=%.0f import=%.0f export=%.0f "
                 "(all must be > threshold)",
                 solar, grid_import, grid_export,
+            )
+            return
+        if (batt_charge < 1 or batt_discharge < 1) and (batt_charge + batt_discharge) < 10:
+            _LOGGER.debug(
+                "Lifetime seed waiting for battery: charge=%.0f discharge=%.0f",
+                batt_charge, batt_discharge,
             )
             return
 
@@ -196,6 +203,8 @@ class EnergyCalculator:
             ("lifetime_solar", solar),
             ("lifetime_grid_import", grid_import),
             ("lifetime_grid_export", grid_export),
+            ("lifetime_battery_charge", batt_charge),
+            ("lifetime_battery_discharge", batt_discharge),
         ]
         for key, hw_value in checks:
             stored = current.get(key, 0)
