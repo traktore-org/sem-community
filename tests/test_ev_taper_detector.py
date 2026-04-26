@@ -476,6 +476,221 @@ class TestEVConsumptionPredictor:
 
 
 # ════════════════════════════════════════════
+# Temperature correction
+# ════════════════════════════════════════════
+
+class TestTemperatureCorrection:
+    def test_optimal_range(self):
+        """10-28°C should return factor 1.0."""
+        assert EVTaperDetector.temperature_correction_factor(10) == 1.0
+        assert EVTaperDetector.temperature_correction_factor(20) == 1.0
+        assert EVTaperDetector.temperature_correction_factor(28) == 1.0
+
+    def test_winter_cold(self):
+        """-5°C should give ~1.72 (+72% consumption)."""
+        factor = EVTaperDetector.temperature_correction_factor(-5)
+        assert factor == pytest.approx(1.72, abs=0.01)
+
+    def test_freezing(self):
+        """0°C should give ~1.48."""
+        factor = EVTaperDetector.temperature_correction_factor(0)
+        assert factor == pytest.approx(1.48, abs=0.01)
+
+    def test_summer_hot(self):
+        """35°C should give ~1.32."""
+        factor = EVTaperDetector.temperature_correction_factor(35)
+        assert factor == pytest.approx(1.32, abs=0.02)
+
+    def test_mild_summer(self):
+        """30°C should give ~1.09."""
+        factor = EVTaperDetector.temperature_correction_factor(30)
+        assert factor == pytest.approx(1.09, abs=0.01)
+
+
+# ════════════════════════════════════════════
+# SOC daily decay
+# ════════════════════════════════════════════
+
+class TestSOCDecay:
+    def test_soc_decays_daily_when_unplugged(self):
+        """SOC should drop by predicted daily amount."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)  # SOC = 100%
+
+        det.apply_daily_decay(predicted_daily_kwh=8.0, fallback_kwh=10.0)
+        # 8 kWh on 40 kWh battery = 20% drop
+        assert det._estimated_soc == pytest.approx(80.0, abs=0.5)
+
+    def test_decay_uses_fallback_when_no_prediction(self):
+        """Should use fallback when predictor returns 0."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+
+        det.apply_daily_decay(predicted_daily_kwh=0.0, fallback_kwh=10.0)
+        # 10 kWh fallback = 25% drop
+        assert det._estimated_soc == pytest.approx(75.0, abs=0.5)
+
+    def test_decay_with_temperature_correction(self):
+        """Winter temperature should increase decay."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+
+        # 8 kWh × 1.48 (0°C) = 11.84 kWh → 29.6% drop
+        det.apply_daily_decay(
+            predicted_daily_kwh=8.0, fallback_kwh=10.0,
+            temp_correction=EVTaperDetector.temperature_correction_factor(0),
+        )
+        assert det._estimated_soc == pytest.approx(70.4, abs=0.5)
+
+    def test_decay_accumulates_over_days(self):
+        """Multiple days of decay should accumulate."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)  # SOC = 100%
+
+        for day in range(3):
+            det.apply_daily_decay(8.0, 10.0)  # -20% each day
+
+        # 100% - 3×20% = 40%
+        assert det._estimated_soc == pytest.approx(40.0, abs=0.5)
+
+    def test_decay_clamped_at_zero(self):
+        """SOC should not go below 0%."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+
+        for day in range(10):  # Way more than enough to drain
+            det.apply_daily_decay(8.0, 10.0)
+
+        assert det._estimated_soc == 0.0
+
+    def test_calibration_overrides_decay(self):
+        """Real vehicle SOC should override decayed estimate."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+
+        # Decay 3 days → virtual SOC = 40%
+        for _ in range(3):
+            det.apply_daily_decay(8.0, 10.0)
+        assert det._estimated_soc == pytest.approx(40.0, abs=0.5)
+
+        # Car API says 65% → calibrate
+        soc = det.get_virtual_soc(vehicle_soc=65.0)
+        assert soc == 65.0
+        assert det._estimated_soc == 65.0
+
+
+# ════════════════════════════════════════════
+# Consecutive skip safety net
+# ════════════════════════════════════════════
+
+class TestConsecutiveSkips:
+    def test_skip_limit_forces_charge(self):
+        """After 3 consecutive skips, should force charge."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)  # SOC=100%
+
+        det.record_skip()
+        det.record_skip()
+        det.record_skip()
+
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is True
+        assert "consecutive skips" in reason
+
+    def test_skip_counter_resets_on_charge(self):
+        """Counter should reset when charging happens."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+
+        det.record_skip()
+        det.record_skip()
+        assert det._consecutive_skips == 2
+
+        det.reset_skips()
+        assert det._consecutive_skips == 0
+
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is False
+
+    def test_skip_counter_persists(self):
+        """Consecutive skips should survive restart."""
+        det1 = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det1)
+        det1.record_skip()
+        det1.record_skip()
+
+        state = det1.get_state()
+        det2 = EVTaperDetector(DEFAULT_CONFIG)
+        det2.restore_state(state)
+        assert det2._consecutive_skips == 2
+
+
+# ════════════════════════════════════════════
+# 10-day integration scenarios
+# ════════════════════════════════════════════
+
+class TestMultiDayScenarios:
+    def test_10_day_spring_scenario(self):
+        """Spring: 15°C, 8 kWh/day, solar available.
+
+        Expected: skip 2-3 nights, then charge, repeat.
+        """
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)  # Day 1: full charge → SOC=100%
+
+        temp_factor = EVTaperDetector.temperature_correction_factor(15)
+        assert temp_factor == 1.0  # 15°C is in optimal range
+
+        skip_days = 0
+        for day in range(10):
+            # Each morning: car unplugged, decay by daily use
+            det.apply_daily_decay(8.0, 10.0, temp_factor)
+
+            # Each evening: check if charge needed
+            nights, needed, reason = det.calculate_nights_until_charge(8.0)
+
+            if not needed:
+                det.record_skip()
+                skip_days += 1
+            else:
+                det.reset_skips()
+                # Simulate night charge: add 9.5 kWh back
+                det._energy_since_full = max(0, det._energy_since_full - 9.5)
+                det._estimated_soc = min(100, 100 - det._energy_since_full / 40 * 100)
+
+        # Should have skipped some but not all nights
+        assert 2 <= skip_days <= 7
+
+    def test_10_day_winter_scenario(self):
+        """Winter: -5°C, consumption +72%, charges more often.
+
+        8 kWh × 1.72 = 13.76 kWh/day effective consumption.
+        40 kWh battery → needs charge every 2-3 days.
+        """
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)
+
+        temp_factor = EVTaperDetector.temperature_correction_factor(-5)
+        assert temp_factor == pytest.approx(1.72, abs=0.01)
+
+        charge_count = 0
+        for day in range(10):
+            det.apply_daily_decay(8.0, 10.0, temp_factor)
+            nights, needed, reason = det.calculate_nights_until_charge(8.0)
+
+            if not needed:
+                det.record_skip()
+            else:
+                det.reset_skips()
+                det._energy_since_full = max(0, det._energy_since_full - 9.5)
+                det._estimated_soc = min(100, 100 - det._energy_since_full / 40 * 100)
+                charge_count += 1
+
+        # Winter: should charge more often than spring
+        assert charge_count >= 4  # At least every 2-3 days
+
+
+# ════════════════════════════════════════════
 # Night charge skip scenarios
 # ════════════════════════════════════════════
 
