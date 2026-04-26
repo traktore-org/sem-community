@@ -43,35 +43,6 @@ views:
     cards:
       - type: vertical-stack
         cards:
-          # ── Observer Mode Warning (only when active) ──
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: switch.sem_observer_mode
-                state: "on"
-            card:
-              type: custom:mushroom-template-card
-              primary: Observer Mode Active
-              secondary: SEM is read-only — no device commands are being sent
-              icon: mdi:eye-outline
-              icon_color: red
-              tap_action:
-                action: navigate
-                navigation_path: /sem-dashboard/control
-              card_mod:
-                style: |
-                  ha-card {
-                    background:
-                      radial-gradient(ellipse 60% 50% at 50% 40%, rgba(244,67,54,0.12) 0%, transparent 100%),
-                      radial-gradient(circle at 2px 2px, rgba(244,67,54,0.05) 0.7px, transparent 0.7px) !important;
-                    background-size: 100% 100%, 50px 50px !important;
-                    border: 1px solid rgba(244,67,54,0.35) !important;
-                    border-radius: 16px !important;
-                    backdrop-filter: blur(18px) saturate(160%) !important;
-                    -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
-                    box-shadow: 0 4px 24px rgba(244,67,54,0.18), inset 0 1px 0 rgba(255,255,255,0.05) !important;
-                  }
-
           # ── Lumina Tab Header ──
           - type: custom:sem-tab-header
             tab: home
@@ -699,7 +670,7 @@ views:
               {% else %}{{ trees | round(1) }} Trees Equivalent{% endif %}
             secondary: >-
               {{ states('sensor.sem_co2_avoided_this_year') | float(0) | round(1) }} kg CO₂ avoided this year
-              · Lifetime: {{ states('sensor.sem_lifetime_co2_avoided') | float(0) | round(0) }} kg
+              · Lifetime: {{ states('sensor.sem_lifetime_co2_avoided') | float(0) | round(0) }} kg · {{ states('sensor.sem_lifetime_trees_equivalent') | float(0) | round(0) }} trees
             icon: >-
               {% set trees = states('sensor.sem_trees_equivalent_this_year') | float(0) %}
               {% if trees >= 50 %}mdi:forest
@@ -1144,27 +1115,37 @@ views:
                 card_mod:
                   style: *glass_card
 
-          # ── EV Power Chart ──
+          # ── EV Power Chart (source breakdown) ──
           - type: custom:apexcharts-card
             header:
               title: EV Charging Power
               show: true
             graph_span: 24h
+            stacked: true
             series:
-              - entity: sensor.sem_ev_power
-                name: EV Power
-                color: "#8DC892"
+              - entity: sensor.sem_flow_solar_to_ev_power
+                name: Solar
+                color: "#ff9800"
                 type: area
-                opacity: 0.4
-                stroke_width: 2
+                opacity: 0.5
+                stroke_width: 1
                 group_by:
                   func: avg
                   duration: 5m
-              - entity: sensor.sem_flow_solar_to_ev_power
-                name: Solar > EV
-                color: "#ff9800"
+              - entity: sensor.sem_flow_battery_to_ev_power
+                name: Battery
+                color: "#4db6ac"
                 type: area
-                opacity: 0.3
+                opacity: 0.4
+                stroke_width: 1
+                group_by:
+                  func: avg
+                  duration: 5m
+              - entity: sensor.sem_flow_grid_to_ev_power
+                name: Grid
+                color: "#488fc2"
+                type: area
+                opacity: 0.4
                 stroke_width: 1
                 group_by:
                   func: avg
@@ -1174,6 +1155,7 @@ views:
                 height: 200
                 background: transparent
                 foreColor: var(--primary-text-color)
+                stacked: true
               grid:
                 borderColor: "rgba(255,255,255,0.06)"
               tooltip:
@@ -1183,19 +1165,6 @@ views:
               legend:
                 labels:
                   colors: "#9e9e9e"
-            card_mod:
-              style: *glass_card
-
-          # ── EV Solar Share Gauge ──
-          - type: gauge
-            entity: sensor.sem_energy_ev_solar_percentage
-            name: EV Solar Share
-            min: 0
-            max: 100
-            severity:
-              green: 70
-              yellow: 40
-              red: 0
             card_mod:
               style: *glass_card
 
