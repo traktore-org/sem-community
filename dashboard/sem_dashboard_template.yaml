@@ -280,7 +280,7 @@ views:
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-entity-card
-                entity: switch.sem_forecast_night_reduction
+                entity: switch.sem_smart_night_charging
                 name: Forecast
                 icon: mdi:crystal-ball
                 icon_color: amber
@@ -1413,8 +1413,8 @@ views:
                 card_mod:
                   style: *glass_card
               - type: custom:mushroom-entity-card
-                entity: switch.sem_forecast_night_reduction
-                name: Forecast Reduction
+                entity: switch.sem_smart_night_charging
+                name: Smart Night
                 tap_action:
                   action: toggle
                 card_mod:
@@ -2221,7 +2221,7 @@ views:
           - type: custom:mushroom-template-card
             primary: Configuration
             secondary: >-
-              Observer: {{ states('switch.sem_observer_mode') }} · Night: {{ states('switch.sem_night_charging') }} · Fcst adjust: {{ states('switch.sem_forecast_night_reduction') }}
+              Observer: {{ states('switch.sem_observer_mode') }} · Night: {{ states('switch.sem_night_charging') }} · Smart night: {{ states('switch.sem_smart_night_charging') }}
 
               Night {{ states('number.sem_ev_night_initial_current') }}A · Min {{ states('number.sem_ev_minimum_current') }}A · Cooldown {{ states('number.sem_ev_stall_cooldown') }}s · Target {{ states('number.sem_daily_ev_target') }}kWh · Peak {{ states('sensor.sem_target_peak_limit') }}kW
             icon: mdi:cog

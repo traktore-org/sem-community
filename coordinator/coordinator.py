@@ -28,7 +28,7 @@ from ..const import (
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
     ENTITY_SOLAR_POWER,
-    ENTITY_FORECAST_NIGHT_REDUCTION,
+    ENTITY_SMART_NIGHT_CHARGING,
     WEATHER_ENTITY_CANDIDATES,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
@@ -1280,7 +1280,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Night charging target: optionally reduced by forecast
         night_target = remaining
-        forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_FORECAST_NIGHT_REDUCTION}", "on")
+        forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_SMART_NIGHT_CHARGING}", "on")
         if self.time_manager.is_night_mode() and forecast_reduction:
             night_target = self._calculate_forecast_night_target(
                 remaining, energy,
