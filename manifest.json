@@ -1,6 +1,9 @@
 {
   "domain": "solar_energy_management",
   "name": "Solar Energy Management",
+  "after_dependencies": [
+    "recorder"
+  ],
   "codeowners": [
     "@traktore-org"
   ],
