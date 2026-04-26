@@ -270,6 +270,36 @@ class SEMStorage:
         """Persist EV session state (survives restarts)."""
         self._daily_data["ev_session"] = state
 
+    # EV intelligence persistence (survives restarts and daily resets)
+    def get_ev_intelligence_state(self) -> Dict[str, Any]:
+        """Get persisted EV intelligence state (taper, SOC, health)."""
+        return self._energy_data.get("ev_intelligence", {
+            "last_full_charge": None,
+            "energy_since_full": 0.0,
+            "ev_consumption_profile": {},
+            "session_history": [],
+            "battery_health_samples": [],
+        })
+
+    def set_ev_intelligence_state(self, state: Dict[str, Any]) -> None:
+        """Persist EV intelligence state."""
+        self._energy_data["ev_intelligence"] = state
+
+    def add_session_to_history(self, session: Dict[str, Any]) -> None:
+        """Append a completed session to bounded history (max 90 entries)."""
+        state = self.get_ev_intelligence_state()
+        history = state.get("session_history", [])
+        history.append(session)
+        if len(history) > 90:
+            history = history[-90:]
+        state["session_history"] = history
+        self._energy_data["ev_intelligence"] = state
+
+    def get_session_history(self) -> list:
+        """Get EV session history (bounded to 90 entries)."""
+        state = self.get_ev_intelligence_state()
+        return state.get("session_history", [])
+
     # Save operations
     async def async_save_energy_delayed(self) -> None:
         """Save energy data with delayed write for performance.

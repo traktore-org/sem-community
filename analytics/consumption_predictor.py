@@ -110,7 +110,9 @@ class ConsumptionPredictor:
     def __init__(self):
         self._consumption_profile = HourlyProfile()
         self._solar_profile = HourlyProfile()
+        self._ev_profile = HourlyProfile()  # Daily EV consumption per weekday
         self._last_observation_hour: Optional[int] = None
+        self._last_ev_observation_day: Optional[int] = None
         self._training_status = "cold_start"
 
     @property
@@ -241,11 +243,47 @@ class ConsumptionPredictor:
 
         return ""
 
+    def observe_ev(self, dt: datetime, daily_ev_kwh: float) -> None:
+        """Record daily EV consumption for weekday-based prediction.
+
+        Call once per day (at day rollover). Uses (dow, hour=12) as the
+        bin key — one value per day-of-week.
+
+        Args:
+            dt: Current datetime (day-of-week determines the bin).
+            daily_ev_kwh: Total EV energy consumed today (kWh).
+        """
+        dow = dt.weekday()
+        day_key = dt.toordinal()
+
+        # Deduplicate: only one observation per calendar day
+        if day_key == self._last_ev_observation_day:
+            return
+        self._last_ev_observation_day = day_key
+
+        self._ev_profile.update(dow, 12, daily_ev_kwh)
+        _LOGGER.debug(
+            "EV predictor: observed %.1f kWh on %s (dow=%d)",
+            daily_ev_kwh, dt.strftime("%A"), dow,
+        )
+
+    def predict_ev_consumption_tomorrow(self, from_dt: datetime) -> float:
+        """Predict tomorrow's EV consumption in kWh.
+
+        Uses the learned weekday profile. Returns 0.0 if no data
+        for tomorrow's day-of-week.
+        """
+        tomorrow = from_dt + timedelta(days=1)
+        dow = tomorrow.weekday()
+        value = self._ev_profile.predict(dow, 12)
+        return round(value, 1) if value is not None else 0.0
+
     def get_state(self) -> Dict[str, Any]:
         """Export state for persistence."""
         return {
             "consumption": self._consumption_profile.get_state(),
             "solar": self._solar_profile.get_state(),
+            "ev": self._ev_profile.get_state(),
             "training_status": self._training_status,
         }
 
@@ -255,4 +293,5 @@ class ConsumptionPredictor:
             return
         self._consumption_profile.restore_state(state.get("consumption", {}))
         self._solar_profile.restore_state(state.get("solar", {}))
+        self._ev_profile.restore_state(state.get("ev", {}))
         self._training_status = state.get("training_status", "cold_start")

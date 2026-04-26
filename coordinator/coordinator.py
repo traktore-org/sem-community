@@ -57,6 +57,7 @@ from ..tariff import StaticTariffProvider, DynamicTariffProvider, PriceLevel
 from ..tariff.calendar_provider import CalendarTariffProvider
 from ..analytics.pv_performance import PVPerformanceAnalyzer
 from ..analytics.consumption_predictor import ConsumptionPredictor
+from .ev_taper_detector import EVTaperDetector
 from ..analytics.energy_assistant import EnergyAssistant
 from ..utility_signals import UtilitySignalMonitor
 
@@ -183,6 +184,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Phase 8: Consumption/solar predictor (#3)
         self._predictor = ConsumptionPredictor()
+
+        # EV Intelligence: taper detection, virtual SOC, charge skip (#106)
+        self._ev_taper_detector = EVTaperDetector(config)
 
         # Hourly activity tracker for schedule card (#63)
         self._today_surplus_hours: list = [False] * 24
@@ -340,6 +344,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Restore EV session state (survives restarts)
             self._restore_ev_session_state()
 
+            # Restore EV intelligence state (#106)
+            ev_intel_state = self._storage.get_ev_intelligence_state()
+            self._ev_taper_detector.restore_state(ev_intel_state)
+
             # Ensure battery discharge limit is restored after restart
             # (protects against stale limit left by previous run)
             await self._restore_battery_discharge_limit_on_startup()
@@ -393,6 +401,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Step 4.5: Update session tracking (before charging decisions)
             self._update_session_tracking(power, power_flows)
+
+            # Step 4.6: EV taper detection and intelligence (#106)
+            ev_intelligence = self._update_ev_intelligence(power, energy)
 
             # Step 5: Calculate energy flows (daily totals for Sankey)
             energy_flows = self._flow_calculator.calculate_energy_flows(energy)
@@ -516,6 +527,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 energy_assistant=assistant_data,
                 utility_signal=utility_data,
                 session=self._session_data,
+                ev_intelligence=ev_intelligence,
                 last_update=dt_util.now(),
             )
 
@@ -539,6 +551,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._persist_device_runtimes()
                 # Persist predictor state (#3)
                 self._storage._daily_data["predictor"] = self._predictor.get_state()
+                # Persist EV intelligence state (#106)
+                self._storage.set_ev_intelligence_state(self._ev_taper_detector.get_state())
                 await self._storage.async_save_energy_delayed()
 
             self._initial_update_done = True
@@ -796,6 +810,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 consumption_w=power.home_consumption_power,
                 solar_w=power.solar_power,
             )
+            # Feed EV consumption predictor (#106) — deduplicates by day
+            if hasattr(energy, "daily_ev") and energy.daily_ev > 0:
+                self._predictor.observe_ev(now, energy.daily_ev)
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Predictor observation failed: %s", e)
 
@@ -1302,6 +1319,74 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "session_active": ev._session_active,
             "current_setpoint": ev._current_setpoint,
         })
+
+    def _update_ev_intelligence(
+        self, power: PowerReadings, energy,
+    ) -> "EVIntelligenceData":
+        """Update EV taper detection, virtual SOC, and charge skip logic (#106)."""
+        from .types import EVIntelligenceData, EVTaperData
+
+        now = dt_util.now()
+
+        # Get current EV setpoint (0 if no EV device)
+        ev_setpoint = 0.0
+        if self._ev_device:
+            ev_setpoint = getattr(self._ev_device, "_current_setpoint", 0.0)
+
+        # Run taper detection
+        if power.ev_power > 0 or power.ev_connected:
+            taper_data = self._ev_taper_detector.update(
+                power.ev_power, ev_setpoint, power.ev_connected, now,
+            )
+        else:
+            taper_data = EVTaperData()
+
+        # Track energy since last full charge
+        if hasattr(energy, "daily_ev"):
+            # Use per-cycle increment: ev_power * interval / 3600 / 1000
+            interval_hours = self.update_interval.total_seconds() / 3600
+            ev_increment = power.ev_power * interval_hours / 1000
+            self._ev_taper_detector.update_energy(ev_increment)
+
+        # Reset on disconnect
+        if self._last_ev_connected and not power.ev_connected:
+            if self._session_data.energy_kwh > 0:
+                self._ev_taper_detector.on_session_end(
+                    self._session_data.energy_kwh,
+                    end_soc=self._cycle_vehicle_soc,
+                )
+                if self._storage:
+                    self._storage.add_session_to_history({
+                        "timestamp": self._session_data.start_time,
+                        "energy_kwh": round(self._session_data.energy_kwh, 2),
+                        "solar_share_pct": round(self._session_data.solar_share_pct, 1),
+                        "duration_min": round(self._session_data.duration_minutes, 1),
+                        "taper_detected": self._ev_taper_detector.full_detected,
+                    })
+            self._ev_taper_detector.reset_session()
+
+        # Virtual SOC (prefer real vehicle SOC if available)
+        estimated_soc = self._ev_taper_detector.get_virtual_soc(self._cycle_vehicle_soc)
+
+        # EV consumption prediction
+        predicted_daily = self._predictor.predict_ev_consumption_tomorrow(now)
+
+        # Night charge skip calculation
+        nights, charge_needed, skip_reason = self._ev_taper_detector.calculate_nights_until_charge(
+            predicted_daily, self._cycle_vehicle_soc,
+        )
+
+        return EVIntelligenceData(
+            taper=taper_data,
+            estimated_soc_pct=round(estimated_soc, 1),
+            last_full_charge=self._ev_taper_detector.last_full_timestamp,
+            energy_since_full_kwh=round(self._ev_taper_detector.energy_since_full, 2),
+            predicted_daily_ev_kwh=predicted_daily,
+            nights_until_charge=nights,
+            charge_needed=charge_needed,
+            ev_battery_health_pct=self._ev_taper_detector.battery_health_pct,
+            charge_skip_reason=skip_reason,
+        )
 
     # Solar charging state sets
     def _restore_device_runtimes(self) -> None:

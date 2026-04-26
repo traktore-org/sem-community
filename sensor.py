@@ -1159,6 +1159,68 @@ SENSOR_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
     ),
+
+    # ============================================================================
+    # EV INTELLIGENCE (#106)
+    # ============================================================================
+
+    SensorEntityDescription(
+        key="ev_taper_trend",
+    ),
+    SensorEntityDescription(
+        key="ev_taper_ratio",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="ev_taper_minutes_to_full",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="min",
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="ev_estimated_soc",
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="ev_last_full_charge",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    SensorEntityDescription(
+        key="ev_energy_since_full",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_predicted_daily_consumption",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="ev_nights_until_charge",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="ev_charge_needed",
+    ),
+    SensorEntityDescription(
+        key="ev_battery_health",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="ev_charge_skip_reason",
+    ),
 ]
 
 
@@ -1242,6 +1304,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "heat_pump_mode", "heat_pump_sg_ready_state",
         "pv_degradation_trend", "energy_tip", "energy_tip_category",
         "utility_signal_source",
+        "ev_taper_trend", "ev_charge_needed", "ev_charge_skip_reason",
     }
 
     def __init__(
