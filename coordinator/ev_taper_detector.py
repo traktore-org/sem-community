@@ -278,10 +278,11 @@ class EVTaperDetector:
         target_soc = self._config.get("ev_target_soc", 80)
         min_soc = self._config.get("ev_min_soc_threshold", 20)
 
-        soc = self.get_virtual_soc(vehicle_soc)
-
-        if soc <= 0 and self._last_full_timestamp is None:
+        # No charge history and no real SOC → can't make skip decisions
+        if self._last_full_timestamp is None and vehicle_soc is None:
             return (0, True, "No charge history yet")
+
+        soc = self.get_virtual_soc(vehicle_soc)
 
         if capacity <= 0 or predicted_daily_kwh <= 0:
             return (99, False, "Insufficient data")
