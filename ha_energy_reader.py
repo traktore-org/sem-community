@@ -36,6 +36,16 @@ class EnergyDashboardConfig:
     battery_discharge_energy: Optional[str] = None
     ev_energy: Optional[str] = None
 
+    # Multi-device lists (all sources, not just first)
+    solar_power_list: List[str] = field(default_factory=list)
+    solar_energy_list: List[str] = field(default_factory=list)
+    battery_power_list: List[str] = field(default_factory=list)
+    battery_charge_energy_list: List[str] = field(default_factory=list)
+    battery_discharge_energy_list: List[str] = field(default_factory=list)
+    grid_import_energy_list: List[str] = field(default_factory=list)
+    grid_export_energy_list: List[str] = field(default_factory=list)
+    grid_power_list: List[str] = field(default_factory=list)
+
     # Additional device consumption entries (for EV detection)
     device_consumption: List[Dict[str, str]] = field(default_factory=list)
 
@@ -137,10 +147,10 @@ async def read_energy_dashboard_config(hass: HomeAssistant) -> Optional[EnergyDa
         _extract_ev_from_devices(device_consumption, config)
 
         _LOGGER.info(
-            "Read Energy Dashboard config: solar=%s, grid=%s, battery=%s, ev=%s",
-            config.has_solar,
-            config.has_grid,
-            config.has_battery,
+            "Read Energy Dashboard config: solar=%s (%d sources), grid=%s (%d import, %d export), battery=%s (%d units), ev=%s",
+            config.has_solar, len(config.solar_power_list),
+            config.has_grid, len(config.grid_import_energy_list), len(config.grid_export_energy_list),
+            config.has_battery, len(config.battery_power_list),
             config.has_ev,
         )
 
@@ -155,20 +165,31 @@ async def read_energy_dashboard_config(hass: HomeAssistant) -> Optional[EnergyDa
 
 
 def _extract_solar_config(source: Dict[str, Any], config: EnergyDashboardConfig) -> None:
-    """Extract solar configuration from energy source."""
-    # Energy sensor
-    config.solar_energy = source.get("stat_energy_from")
+    """Extract solar configuration from energy source.
 
-    # Power sensor (HA 2025.12+ uses "stat_rate", fallback to "stat_power")
-    config.solar_power = source.get("stat_rate") or source.get("stat_power")
+    Called once per solar source in the Energy Dashboard. Appends to lists
+    and sets the primary (single) field from the first source only.
+    """
+    energy = source.get("stat_energy_from")
+    power = source.get("stat_rate") or source.get("stat_power")
 
-    config.has_solar = bool(config.solar_energy or config.solar_power)
+    if energy:
+        config.solar_energy_list.append(energy)
+        if not config.solar_energy:
+            config.solar_energy = energy
+    if power:
+        config.solar_power_list.append(power)
+        if not config.solar_power:
+            config.solar_power = power
 
-    if config.has_solar:
+    config.has_solar = bool(config.solar_energy_list or config.solar_power_list)
+
+    if energy or power:
         _LOGGER.debug(
-            "Found solar: energy=%s, power=%s",
-            config.solar_energy,
-            config.solar_power,
+            "Found solar source #%d: energy=%s, power=%s",
+            len(config.solar_power_list),
+            energy,
+            power,
         )
 
 
@@ -177,76 +198,114 @@ def _extract_grid_config(source: Dict[str, Any], config: EnergyDashboardConfig) 
 
     Grid uses separate flow_from (import) and flow_to (export) arrays for energy.
     Power is configured in a separate "power" array with "stat_rate" field.
+    Arrays may contain multiple entries (e.g. dual-tariff metering in NL/BE).
 
     HA 2025.12 grid power convention:
     - Single combined sensor: positive=import, negative=export
     - Huawei Solar is OPPOSITE: positive=export, negative=import
     - User may have created a template sensor to invert the sign
     """
-    # Grid import energy — try flow_from array first, then direct field
+    # Grid import energy — collect ALL flow_from entries
     flow_from = source.get("flow_from", [])
     if flow_from:
-        first_import = flow_from[0]
-        config.grid_import_energy = first_import.get("stat_energy_from")
+        for entry in flow_from:
+            eid = entry.get("stat_energy_from")
+            if eid:
+                config.grid_import_energy_list.append(eid)
+                if not config.grid_import_energy:
+                    config.grid_import_energy = eid
     elif source.get("stat_energy_from"):
-        config.grid_import_energy = source.get("stat_energy_from")
+        eid = source.get("stat_energy_from")
+        config.grid_import_energy_list.append(eid)
+        if not config.grid_import_energy:
+            config.grid_import_energy = eid
 
-    # Grid export energy — try flow_to array first, then direct field
+    # Grid export energy — collect ALL flow_to entries
     flow_to = source.get("flow_to", [])
     if flow_to:
-        first_export = flow_to[0]
-        config.grid_export_energy = first_export.get("stat_energy_to")
+        for entry in flow_to:
+            eid = entry.get("stat_energy_to")
+            if eid:
+                config.grid_export_energy_list.append(eid)
+                if not config.grid_export_energy:
+                    config.grid_export_energy = eid
     elif source.get("stat_energy_to"):
-        config.grid_export_energy = source.get("stat_energy_to")
+        eid = source.get("stat_energy_to")
+        config.grid_export_energy_list.append(eid)
+        if not config.grid_export_energy:
+            config.grid_export_energy = eid
 
-    # Grid power — try "power" array first, then direct stat_rate field
+    # Grid power — collect ALL power entries
     power_config = source.get("power", [])
     if power_config:
-        first_power = power_config[0]
-        config.grid_import_power = first_power.get("stat_rate")
+        for entry in power_config:
+            eid = entry.get("stat_rate")
+            if eid:
+                config.grid_power_list.append(eid)
+                if not config.grid_import_power:
+                    config.grid_import_power = eid
     elif source.get("stat_rate"):
-        config.grid_import_power = source.get("stat_rate")
+        eid = source.get("stat_rate")
+        config.grid_power_list.append(eid)
+        if not config.grid_import_power:
+            config.grid_import_power = eid
 
     config.has_grid = bool(
-        config.grid_import_energy
-        or config.grid_import_power
-        or config.grid_export_energy
+        config.grid_import_energy_list
+        or config.grid_power_list
+        or config.grid_export_energy_list
     )
 
     if config.has_grid:
         _LOGGER.debug(
-            "Found grid: import_energy=%s, export_energy=%s, power=%s",
-            config.grid_import_energy,
-            config.grid_export_energy,
-            config.grid_import_power,
+            "Found grid: %d import energy, %d export energy, %d power sensors",
+            len(config.grid_import_energy_list),
+            len(config.grid_export_energy_list),
+            len(config.grid_power_list),
         )
 
 
 def _extract_battery_config(source: Dict[str, Any], config: EnergyDashboardConfig) -> None:
     """Extract battery configuration from energy source.
 
+    Called once per battery source in the Energy Dashboard. Appends to lists
+    and sets the primary (single) field from the first source only.
+
     Battery uses:
     - stat_energy_from: discharge energy
     - stat_energy_to: charge energy
     - stat_rate/stat_power: combined power (positive=charge, negative=discharge in HA 2025.12)
     """
-    config.battery_discharge_energy = source.get("stat_energy_from")
-    config.battery_charge_energy = source.get("stat_energy_to")
-    # HA 2025.12 uses "stat_rate", fallback to "stat_power"
-    config.battery_power = source.get("stat_rate") or source.get("stat_power")
+    discharge_energy = source.get("stat_energy_from")
+    charge_energy = source.get("stat_energy_to")
+    power = source.get("stat_rate") or source.get("stat_power")
+
+    if discharge_energy:
+        config.battery_discharge_energy_list.append(discharge_energy)
+        if not config.battery_discharge_energy:
+            config.battery_discharge_energy = discharge_energy
+    if charge_energy:
+        config.battery_charge_energy_list.append(charge_energy)
+        if not config.battery_charge_energy:
+            config.battery_charge_energy = charge_energy
+    if power:
+        config.battery_power_list.append(power)
+        if not config.battery_power:
+            config.battery_power = power
 
     config.has_battery = bool(
-        config.battery_discharge_energy
-        or config.battery_charge_energy
-        or config.battery_power
+        config.battery_discharge_energy_list
+        or config.battery_charge_energy_list
+        or config.battery_power_list
     )
 
-    if config.has_battery:
+    if discharge_energy or charge_energy or power:
         _LOGGER.debug(
-            "Found battery: charge_energy=%s, discharge_energy=%s, power=%s",
-            config.battery_charge_energy,
-            config.battery_discharge_energy,
-            config.battery_power,
+            "Found battery source #%d: charge_energy=%s, discharge_energy=%s, power=%s",
+            len(config.battery_power_list),
+            charge_energy,
+            discharge_energy,
+            power,
         )
 
 
