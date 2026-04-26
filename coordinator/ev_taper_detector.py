@@ -81,6 +81,9 @@ class EVTaperDetector:
         self._estimated_soc: float = 0.0
         self._battery_health_samples: List[Dict] = []
         self._battery_health_pct: float = 0.0
+        # SOC anchor: set True after first reliable SOC reference point
+        # (taper detection, car API calibration, or first session bootstrap)
+        self._soc_anchored: bool = False
 
         # SOC calibration: track real SOC for syncing virtual SOC
         self._last_real_soc: Optional[float] = None
@@ -145,8 +148,9 @@ class EVTaperDetector:
                 self._last_full_timestamp = timestamp.isoformat()
                 self._energy_since_full = 0.0
                 self._estimated_soc = 100.0
+                self._soc_anchored = True
                 _LOGGER.info(
-                    "EV full charge detected at %s (peak was %.0fW)",
+                    "EV full charge detected at %s (peak was %.0fW) — SOC anchored at 100%%",
                     self._last_full_timestamp, self._session_peak_w,
                 )
 
@@ -232,6 +236,7 @@ class EVTaperDetector:
                     vehicle_soc, self._energy_since_full,
                 )
             self._last_real_soc = vehicle_soc
+            self._soc_anchored = True
             # Track session start SOC for health calculation
             if self._session_start_soc is None:
                 self._session_start_soc = vehicle_soc
@@ -302,6 +307,35 @@ class EVTaperDetector:
                 self._battery_health_samples = self._battery_health_samples[-MAX_HEALTH_SAMPLES:]
             self._calculate_battery_health()
 
+        # Update virtual SOC: charging adds energy back
+        # (taper/full detection already handled above — this covers partial charges)
+        if not self._full_detected and session_energy_kwh > 0 and capacity > 0:
+            efficiency = self._config.get("ev_charger_efficiency", 0.92)
+            energy_to_battery = session_energy_kwh * efficiency
+            self._energy_since_full = max(0, self._energy_since_full - energy_to_battery)
+            self._estimated_soc = min(
+                100.0, 100.0 - (self._energy_since_full / capacity * 100.0)
+            )
+            # Bootstrap: first session anchors SOC if no prior reference
+            if not self._soc_anchored:
+                # Assume car arrived at target_soc minus what it accepted
+                target = self._config.get("ev_target_soc", 80)
+                soc_added = energy_to_battery / capacity * 100.0
+                pre_charge_soc = max(0, target - soc_added)
+                self._estimated_soc = min(100.0, pre_charge_soc + soc_added)
+                self._energy_since_full = (100.0 - self._estimated_soc) / 100.0 * capacity
+                self._soc_anchored = True
+                _LOGGER.info(
+                    "SOC bootstrapped from first session: %.1f kWh delivered "
+                    "(%.1f%% added) → estimated SOC %.1f%%",
+                    session_energy_kwh, soc_added, self._estimated_soc,
+                )
+            else:
+                _LOGGER.info(
+                    "SOC updated after charge: +%.1f kWh (%.0f%% eff) → SOC %.1f%%",
+                    session_energy_kwh, efficiency * 100, self._estimated_soc,
+                )
+
         self._session_start_soc = None
 
     def reset_session(self) -> None:
@@ -332,8 +366,8 @@ class EVTaperDetector:
         target_soc = self._config.get("ev_target_soc", 80)
         min_soc = self._config.get("ev_min_soc_threshold", 20)
 
-        # No charge history and no real SOC → can't make skip decisions
-        if self._last_full_timestamp is None and vehicle_soc is None:
+        # No anchor yet (no taper, no car API, no session) → safe default
+        if not self._soc_anchored and vehicle_soc is None:
             return (0, True, "No charge history yet")
 
         # Safety net: max 3 consecutive skips, then force charge
@@ -386,6 +420,7 @@ class EVTaperDetector:
             "battery_health_samples": self._battery_health_samples,
             "battery_health_pct": round(self._battery_health_pct, 1),
             "consecutive_skips": self._consecutive_skips,
+            "soc_anchored": self._soc_anchored,
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
@@ -396,6 +431,7 @@ class EVTaperDetector:
         self._battery_health_samples = state.get("battery_health_samples", [])
         self._battery_health_pct = state.get("battery_health_pct", 0.0)
         self._consecutive_skips = state.get("consecutive_skips", 0)
+        self._soc_anchored = state.get("soc_anchored", False)
 
     # ------------------------------------------------------------------
     # Properties

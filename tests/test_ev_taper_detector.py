@@ -301,6 +301,121 @@ class TestVirtualSOC:
 # ════════════════════════════════════════════
 # Night charge skip
 # ════════════════════════════════════════════
+# Session-based SOC anchoring
+# ════════════════════════════════════════════
+
+class TestSessionAnchor:
+    def test_first_session_bootstraps_soc(self):
+        """First charge session should anchor SOC even without taper."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        assert det._soc_anchored is False
+
+        # Simulate a night charge: 9.5 kWh delivered, no taper
+        _feed_constant(det, 7000, 16, 10)  # Need peak for session validation
+        det.on_session_end(9.5)
+
+        assert det._soc_anchored is True
+        # target=80%, added 9.5*0.92/40*100 ≈ 21.85% → pre=58.15%, post≈80%
+        assert det._estimated_soc == pytest.approx(80.0, abs=2.0)
+
+    def test_partial_charge_increases_soc(self):
+        """Charging should increase SOC by delivered energy."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_taper_profile(det)  # Anchor at 100%
+
+        # Decay 3 days → ~40%
+        det.reset_session()  # Clear full_detected so partial charge logic runs
+        for _ in range(3):
+            det.apply_daily_decay(8.0, 10.0)
+        assert det._estimated_soc == pytest.approx(40.0, abs=1.0)
+
+        # Night charge delivers 9.5 kWh → +21.85% (with 92% efficiency)
+        _feed_constant(det, 7000, 16, 10)
+        det.on_session_end(9.5)
+        assert det._estimated_soc == pytest.approx(61.8, abs=2.0)
+
+    def test_soc_anchored_enables_skip_logic(self):
+        """After session anchor, charge skip should work."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        assert det._soc_anchored is False
+
+        # No anchor → always charge
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert needed is True
+        assert "No charge history" in reason
+
+        # First session → bootstrap
+        _feed_constant(det, 7000, 16, 10)
+        det.on_session_end(9.5)
+
+        # Now skip logic should work
+        nights, needed, reason = det.calculate_nights_until_charge(8.0)
+        assert "No charge history" not in reason
+
+    def test_taper_anchor_overrides_session(self):
+        """Taper detection (gold anchor) should override session estimate."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+
+        # Bootstrap from session → ~80%
+        _feed_constant(det, 7000, 16, 10)
+        det.on_session_end(9.5)
+        soc_after_session = det._estimated_soc
+
+        # Full taper → resets to 100%
+        det.reset_session()
+        _feed_taper_profile(det)
+        assert det._estimated_soc == 100.0
+        assert det._energy_since_full == 0.0
+
+    def test_winter_scenario_no_taper(self):
+        """Winter: charge nightly, never full, should still work.
+
+        At 0°C: decay = 8 × 1.48 = 11.84 kWh/day
+        Night charge: 9.5 × 0.92 = 8.74 kWh net to battery
+        Net daily loss: 11.84 - 8.74 = 3.1 kWh → SOC drifts down
+        This is realistic — winter charges don't fully compensate,
+        so skip safety net (3 nights max) kicks in for larger charges.
+        """
+        config = {
+            "ev_battery_capacity_kwh": 40,
+            "ev_target_soc": 80,
+            "ev_min_soc_threshold": 20,
+            "ev_charger_efficiency": 0.92,
+        }
+        det = EVTaperDetector(config)
+
+        # Day 1 evening: first charge session → bootstrap
+        _feed_constant(det, 7000, 16, 10)
+        det.on_session_end(9.5)
+        assert det._soc_anchored is True
+
+        for day in range(7):
+            # Morning: drive to work
+            det.reset_session()
+            temp_factor = EVTaperDetector.temperature_correction_factor(0)  # Winter
+            det.apply_daily_decay(8.0, 10.0, temp_factor)
+
+            # Evening: night charge
+            _feed_constant(det, 7000, 16, 10)
+            det.on_session_end(9.5)
+
+        # SOC should not be negative — clamped at 0
+        assert det._estimated_soc >= 0
+        # System should be anchored and functional
+        assert det._soc_anchored is True
+
+    def test_soc_anchor_persists(self):
+        """Anchor state should survive restart."""
+        det1 = EVTaperDetector(DEFAULT_CONFIG)
+        _feed_constant(det1, 7000, 16, 10)
+        det1.on_session_end(9.5)
+        assert det1._soc_anchored is True
+
+        state = det1.get_state()
+        det2 = EVTaperDetector(DEFAULT_CONFIG)
+        det2.restore_state(state)
+        assert det2._soc_anchored is True
+
 
 class TestNightsUntilCharge:
     def test_skip_when_soc_above_target(self):
