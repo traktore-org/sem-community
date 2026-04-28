@@ -136,8 +136,8 @@ class TestNightChargeSkipLogic:
         result = coord._calculate_forecast_night_target(10.0, energy)
         assert result == 0.0
 
-    def test_no_forecast_returns_remaining(self):
-        """Without solar forecast, return original remaining kWh."""
+    def test_no_forecast_still_skips_on_soc(self):
+        """Without solar forecast, SOC skip should STILL work."""
         detector = self._make_taper_detector(soc=57.6, anchored=True)
         coord = self._make_coordinator(ev_taper=detector, forecast_tomorrow=0)
         coord._forecast_reader.read_forecast.return_value = MagicMock(
@@ -145,12 +145,9 @@ class TestNightChargeSkipLogic:
         )
         energy = self._make_energy()
 
-        # No forecast → returns remaining without reduction
-        # But SOC skip should still work
+        # SOC skip runs before forecast check — should return 0
         result = coord._calculate_forecast_night_target(10.0, energy)
-        # Forecast unavailable → early return at line 378-381 BEFORE skip check
-        # This is actually a separate issue — skip should work even without forecast
-        assert result == 10.0  # Current behavior: returns unchanged
+        assert result == 0.0, f"SOC skip should work even without forecast, got {result}"
 
 
 class TestTaperDetectorFullDetection:

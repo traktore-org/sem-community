@@ -373,6 +373,41 @@ class EVControlMixin:
         if remaining_kwh <= 0:
             return 0
 
+        # EV Intelligence SOC-based skip runs FIRST — independent of forecast (#106)
+        # This must be before the forecast check, because forecast may be unavailable
+        ev_taper = getattr(self, "_ev_taper_detector", None)
+        if ev_taper and (ev_taper.last_full_timestamp or ev_taper._soc_anchored):
+            now = dt_util.now()
+            estimated_soc = ev_taper.get_virtual_soc(
+                getattr(self, "_cycle_vehicle_soc", None)
+            )
+            target_soc = self.config.get("ev_target_soc", 80)
+            min_soc = self.config.get("ev_min_soc_threshold", 20)
+            capacity = self.config.get("ev_battery_capacity_kwh", 40)
+
+            predicted_daily = 0.0
+            predictor = getattr(self, "_predictor", None)
+            if predictor:
+                predicted_daily = predictor.predict_ev_consumption_tomorrow(now)
+
+            predicted_soc_drop = (predicted_daily / capacity * 100) if capacity > 0 else 0
+
+            if estimated_soc > target_soc:
+                _LOGGER.info(
+                    "EV charge skip: SOC %.0f%% > target %d%%, skipping night charge",
+                    estimated_soc, target_soc,
+                )
+                return 0.0
+
+            safety = 1.3
+            if predicted_soc_drop > 0 and (estimated_soc - predicted_soc_drop * safety) > min_soc:
+                nights = int((estimated_soc - min_soc) / predicted_soc_drop)
+                _LOGGER.info(
+                    "EV charge skip: SOC %.0f%%, predicted daily %.0f%%, %d nights range",
+                    estimated_soc, predicted_soc_drop, nights,
+                )
+                return 0.0
+
         try:
             forecast = self._forecast_reader.read_forecast()
             if not forecast.available or forecast.forecast_tomorrow_kwh <= 0:
@@ -414,42 +449,6 @@ class EVControlMixin:
             )
 
         adjusted = max(0, remaining_kwh - reduction)
-
-        # EV Intelligence: SOC-based charge skip (#106)
-        # Skip runs when SOC is anchored (taper detection, car API, or session bootstrap)
-        ev_taper = getattr(self, "_ev_taper_detector", None)
-        if ev_taper and (ev_taper.last_full_timestamp or ev_taper._soc_anchored):
-            estimated_soc = ev_taper.get_virtual_soc(
-                getattr(self, "_cycle_vehicle_soc", None)
-            )
-            target_soc = self.config.get("ev_target_soc", 80)
-            min_soc = self.config.get("ev_min_soc_threshold", 20)
-            capacity = self.config.get("ev_battery_capacity_kwh", 40)
-
-            predicted_daily = 0.0
-            predictor = getattr(self, "_predictor", None)
-            if predictor:
-                predicted_daily = predictor.predict_ev_consumption_tomorrow(now)
-
-            predicted_soc_drop = (predicted_daily / capacity * 100) if capacity > 0 else 0
-
-            # Skip: SOC already above target
-            if estimated_soc > target_soc:
-                _LOGGER.info(
-                    "EV charge skip: SOC %.0f%% > target %d%%, skipping night charge",
-                    estimated_soc, target_soc,
-                )
-                return 0.0
-
-            # Skip: enough range with 30% safety margin
-            safety = 1.3
-            if predicted_soc_drop > 0 and (estimated_soc - predicted_soc_drop * safety) > min_soc:
-                nights = int((estimated_soc - min_soc) / predicted_soc_drop)
-                _LOGGER.info(
-                    "EV charge skip: SOC %.0f%%, predicted daily %.0f%%, %d nights range",
-                    estimated_soc, predicted_soc_drop, nights,
-                )
-                return 0.0
 
         return adjusted
 
