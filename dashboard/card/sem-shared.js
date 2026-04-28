@@ -57,6 +57,24 @@ const SEM_GLOW_MAX_GRID = 10000;
 const SEM_GLOW_MAX_HOME = 8000;
 const SEM_GLOW_MAX_EV = 11000;
 
+/* ── Currency helper (#119) ── */
+/**
+ * Get the HA-configured currency symbol. Reads from the SEM daily_costs
+ * sensor unit_of_measurement, falling back to hass.config or "EUR".
+ * @param {object} hass - Home Assistant instance
+ * @returns {string} Currency code (e.g., "EUR", "CHF", "USD")
+ */
+function semGetCurrency(hass) {
+    if (!hass) return 'EUR';
+    // Try reading from a monetary SEM sensor's unit
+    const costEntity = hass.states?.['sensor.sem_daily_costs'];
+    if (costEntity?.attributes?.unit_of_measurement) {
+        return costEntity.attributes.unit_of_measurement;
+    }
+    // Fall back to HA config
+    return hass.config?.currency || 'EUR';
+}
+
 /* ── Export for use in other cards ── */
 if (typeof window !== 'undefined') {
     window.SEM_COLORS = SEM_COLORS;
@@ -64,4 +82,5 @@ if (typeof window !== 'undefined') {
     window.semFormatPower = semFormatPower;
     window.semFormatEnergy = semFormatEnergy;
     window.semCalcDuration = semCalcDuration;
+    window.semGetCurrency = semGetCurrency;
 }

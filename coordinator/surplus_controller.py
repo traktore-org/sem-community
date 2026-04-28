@@ -127,6 +127,77 @@ class SurplusController:
         self._anticipated_deadline = _time.monotonic() + minutes * 60
         _LOGGER.debug("Anticipated surplus: %.0fW in %.0f min", watts, minutes)
 
+    def distribute_ev_budget(
+        self,
+        budget_w: float,
+        ev_devices: Dict[str, "ControllableDevice"],
+    ) -> Dict[str, float]:
+        """Distribute EV charging budget across multiple chargers by priority.
+
+        Priority-based cascade: highest priority (lowest number) gets power
+        first, up to its max. Remainder cascades to next charger if it meets
+        the minimum threshold. 60s hysteresis between reallocations.
+
+        Args:
+            budget_w: Total watts available for EV charging.
+            ev_devices: Dict of charger_id → CurrentControlDevice.
+
+        Returns:
+            Dict of charger_id → allocated watts.
+        """
+        if not ev_devices:
+            return {}
+
+        import time as _time
+
+        # Sort by priority (lower = higher priority)
+        sorted_chargers = sorted(ev_devices.items(), key=lambda x: x[1].priority)
+
+        # Hysteresis: don't reallocate more than once per 60s
+        now = _time.monotonic()
+        last_realloc = getattr(self, "_ev_last_realloc_time", 0.0)
+        prev_alloc = getattr(self, "_ev_prev_allocation", {})
+
+        # Check if budget changed significantly (>500W) since last reallocation
+        prev_total = sum(prev_alloc.values()) if prev_alloc else 0
+        budget_changed = abs(budget_w - prev_total) > 500
+
+        if not budget_changed and (now - last_realloc) < 60:
+            # Within hysteresis window and no significant change → keep previous
+            return prev_alloc
+
+        allocations: Dict[str, float] = {}
+        remaining = budget_w
+
+        for charger_id, device in sorted_chargers:
+            if remaining <= 0:
+                allocations[charger_id] = 0
+                continue
+
+            max_power = device.max_current * device.phases * device.voltage
+            min_threshold = device.min_power_threshold
+
+            if remaining >= min_threshold:
+                alloc = min(remaining, max_power)
+                allocations[charger_id] = alloc
+                remaining -= alloc
+            else:
+                allocations[charger_id] = 0
+
+        self._ev_last_realloc_time = now
+        self._ev_prev_allocation = allocations
+
+        if len(ev_devices) > 1:
+            alloc_summary = ", ".join(
+                f"{cid}={w:.0f}W" for cid, w in allocations.items() if w > 0
+            )
+            _LOGGER.debug(
+                "EV budget distribution: %.0fW → %s (remaining=%.0fW)",
+                budget_w, alloc_summary or "none", remaining,
+            )
+
+        return allocations
+
     def register_device(self, device: ControllableDevice) -> None:
         """Register a device for surplus control."""
         self._devices[device.device_id] = device

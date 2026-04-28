@@ -80,7 +80,9 @@ class EVControlMixin:
         # === NIGHT CHARGING (peak-managed, ramp-limited) ===
         # Design: evcc-style ramp, configurable min current, IEC 61851 compliant
         if state == ChargingState.NIGHT_CHARGING_ACTIVE:
-            remaining_kwh = context.night_target_kwh
+            # Multi-charger (#112): use per-charger night target if distributed
+            per_charger_night = getattr(self, "_night_target_per_charger", None)
+            remaining_kwh = per_charger_night if per_charger_night is not None else context.night_target_kwh
 
             # Guard: target reached
             if remaining_kwh <= 0.1:
@@ -155,19 +157,20 @@ class EVControlMixin:
 
         # === SOLAR CHARGING (unified, with evcc-style enable/disable delays) ===
         if state in self.SOLAR_CHARGING_STATES:
-            charging_mode = self.config.get("ev_charging_mode", "pv")
-            if charging_mode in ("self_consumption", "auto") and "self_consumption" in (context.charging_strategy_reason or ""):
-                # Self-consumption mode (#67): EV gets only true solar surplus
-                # No ev_power add-back (causes feedback loop inflating budget)
-                # No battery discharge for EV (that's pv/battery_assist mode)
-                auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-                budget_w = power.solar_power - power.home_consumption_power
-                if power.battery_soc < auto_start_soc:
-                    budget_w -= power.battery_charge_power  # battery charges first
-                # Zone 4 (≥90%): don't subtract battery_charge — redirect to EV
-                budget_w = max(0, budget_w)
+            # Multi-charger (#112): use pre-distributed budget if available
+            per_charger_budget = getattr(self, "_current_charger_budget", None)
+            if per_charger_budget is not None:
+                budget_w = per_charger_budget
             else:
-                budget_w = self._calculate_solar_ev_budget(state, power, context)
+                charging_mode = self.config.get("ev_charging_mode", "pv")
+                if charging_mode in ("self_consumption", "auto") and "self_consumption" in (context.charging_strategy_reason or ""):
+                    auto_start_soc = self.config.get("battery_auto_start_soc", 90)
+                    budget_w = power.solar_power - power.home_consumption_power
+                    if power.battery_soc < auto_start_soc:
+                        budget_w -= power.battery_charge_power
+                    budget_w = max(0, budget_w)
+                else:
+                    budget_w = self._calculate_solar_ev_budget(state, power, context)
 
             # Phase switching: auto-switch 1p/3p based on available surplus
             await ev.check_phase_switch(budget_w)
@@ -370,6 +373,41 @@ class EVControlMixin:
         if remaining_kwh <= 0:
             return 0
 
+        # EV Intelligence SOC-based skip runs FIRST — independent of forecast (#106)
+        # This must be before the forecast check, because forecast may be unavailable
+        ev_taper = getattr(self, "_ev_taper_detector", None)
+        if ev_taper and (ev_taper.last_full_timestamp or ev_taper._soc_anchored):
+            now = dt_util.now()
+            estimated_soc = ev_taper.get_virtual_soc(
+                getattr(self, "_cycle_vehicle_soc", None)
+            )
+            target_soc = self.config.get("ev_target_soc", 80)
+            min_soc = self.config.get("ev_min_soc_threshold", 20)
+            capacity = self.config.get("ev_battery_capacity_kwh", 40)
+
+            predicted_daily = 0.0
+            predictor = getattr(self, "_predictor", None)
+            if predictor:
+                predicted_daily = predictor.predict_ev_consumption_tomorrow(now)
+
+            predicted_soc_drop = (predicted_daily / capacity * 100) if capacity > 0 else 0
+
+            if estimated_soc > target_soc:
+                _LOGGER.info(
+                    "EV charge skip: SOC %.0f%% > target %d%%, skipping night charge",
+                    estimated_soc, target_soc,
+                )
+                return 0.0
+
+            safety = 1.3
+            if predicted_soc_drop > 0 and (estimated_soc - predicted_soc_drop * safety) > min_soc:
+                nights = int((estimated_soc - min_soc) / predicted_soc_drop)
+                _LOGGER.info(
+                    "EV charge skip: SOC %.0f%%, predicted daily %.0f%%, %d nights range",
+                    estimated_soc, predicted_soc_drop, nights,
+                )
+                return 0.0
+
         try:
             forecast = self._forecast_reader.read_forecast()
             if not forecast.available or forecast.forecast_tomorrow_kwh <= 0:
@@ -411,41 +449,6 @@ class EVControlMixin:
             )
 
         adjusted = max(0, remaining_kwh - reduction)
-
-        # EV Intelligence: SOC-based charge skip (#106)
-        ev_taper = getattr(self, "_ev_taper_detector", None)
-        if ev_taper and ev_taper.last_full_timestamp:
-            estimated_soc = ev_taper.get_virtual_soc(
-                getattr(self, "_cycle_vehicle_soc", None)
-            )
-            target_soc = self.config.get("ev_target_soc", 80)
-            min_soc = self.config.get("ev_min_soc_threshold", 20)
-            capacity = self.config.get("ev_battery_capacity_kwh", 40)
-
-            predicted_daily = 0.0
-            predictor = getattr(self, "_predictor", None)
-            if predictor:
-                predicted_daily = predictor.predict_ev_consumption_tomorrow(now)
-
-            predicted_soc_drop = (predicted_daily / capacity * 100) if capacity > 0 else 0
-
-            # Skip: SOC already above target
-            if estimated_soc > target_soc:
-                _LOGGER.info(
-                    "EV charge skip: SOC %.0f%% > target %d%%, skipping night charge",
-                    estimated_soc, target_soc,
-                )
-                return 0.0
-
-            # Skip: enough range with 30% safety margin
-            safety = 1.3
-            if predicted_soc_drop > 0 and (estimated_soc - predicted_soc_drop * safety) > min_soc:
-                nights = int((estimated_soc - min_soc) / predicted_soc_drop)
-                _LOGGER.info(
-                    "EV charge skip: SOC %.0f%%, predicted daily %.0f%%, %d nights range",
-                    estimated_soc, predicted_soc_drop, nights,
-                )
-                return 0.0
 
         return adjusted
 

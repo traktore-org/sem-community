@@ -1109,7 +1109,7 @@ views:
                 primary: Solar Share
                 secondary: >-
                   {{ states('sensor.sem_session_solar_share') | float(0) | round(0) }}%
-                  · {{ states('sensor.sem_session_cost') | float(0) | round(2) }} CHF
+                  · {{ states('sensor.sem_session_cost') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
                 icon: mdi:white-balance-sunny
                 icon_color: amber
                 card_mod:
@@ -1280,6 +1280,34 @@ views:
               card_mod:
                 style: *glass_card
 
+          # ── Multi-Charger Status (#112) ──
+          # Only shown when more than 1 EV charger is configured
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.sem_ev_charger_count
+                above: 1
+            card:
+              type: vertical-stack
+              cards:
+                - type: custom:mushroom-title-card
+                  card_mod:
+                    style: *lumina_title
+                  title: Charger Status
+                  subtitle: >-
+                    {{ states('sensor.sem_ev_charger_count') }} chargers configured
+                - type: markdown
+                  content: >-
+                    {% set count = states('sensor.sem_ev_charger_count') | int(0) %}
+                    | Charger | Power | State |
+                    |---------|-------|-------|
+                    {% for i in range(count) %}
+                    {% set prefix = 'sensor.sem_ev_charger_' ~ i %}
+                    | {{ state_attr(prefix ~ '_power', 'friendly_name') or 'Charger ' ~ (i+1) }} | {{ states(prefix ~ '_power') | float(0) | round(0) }}W | {{ states(prefix ~ '_charging_state') or 'idle' }} |
+                    {% endfor %}
+                  card_mod:
+                    style: *glass_card
+
           # ── Charging Controls ──
           - type: custom:mushroom-title-card
             card_mod:
@@ -1345,7 +1373,7 @@ views:
                 icon: mdi:cash
                 icon_color: cyan
                 content: >-
-                  {{ states('sensor.sem_lifetime_ev_cost') | float(0) | round(2) }} CHF
+                  {{ states('sensor.sem_lifetime_ev_cost') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
               - type: template
                 icon: mdi:counter
                 icon_color: purple
@@ -1793,13 +1821,13 @@ views:
               style: *lumina_title
             title: This Year
             subtitle: >-
-              Net {{ states('sensor.sem_yearly_net_cost') | float(0) | round(2) }} CHF
+              Net {{ states('sensor.sem_yearly_net_cost') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-template-card
                 primary: Costs
                 secondary: >-
-                  {{ states('sensor.sem_yearly_costs') | float(0) | round(2) }} CHF
+                  {{ states('sensor.sem_yearly_costs') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
                 icon: mdi:cash-minus
                 icon_color: red
                 card_mod:
@@ -1807,7 +1835,7 @@ views:
               - type: custom:mushroom-template-card
                 primary: Revenue
                 secondary: >-
-                  {{ states('sensor.sem_yearly_export_revenue') | float(0) | round(2) }} CHF
+                  {{ states('sensor.sem_yearly_export_revenue') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
                 icon: mdi:cash-plus
                 icon_color: green
                 card_mod:
@@ -1815,7 +1843,7 @@ views:
               - type: custom:mushroom-template-card
                 primary: Savings
                 secondary: >-
-                  {{ states('sensor.sem_yearly_savings') | float(0) | round(2) }} CHF
+                  {{ states('sensor.sem_yearly_savings') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
                 icon: mdi:piggy-bank
                 icon_color: amber
                 card_mod:
@@ -1857,11 +1885,11 @@ views:
               {% set kmkwh = states('number.sem_ev_km_per_kwh') | float(5.5) %}
               {% set pub = states('number.sem_public_charging_rate') | float(0.55) %}
               {% if total > 0 %}
-              Cost/kWh: {{ (cost / total) | round(3) }} CHF ·
-              Cost/100km: {{ (cost / total * 100 / kmkwh) | round(2) }} CHF ·
+              Cost/kWh: {{ (cost / total) | round(3) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} ·
+              Cost/100km: {{ (cost / total * 100 / kmkwh) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} ·
               Solar: {{ solar | round(0) }}%
               {% if cost > 0 %}
-              · vs public ({{ pub }}/kWh): saved {{ ((pub * total) - cost) | round(0) }} CHF
+              · vs public ({{ pub }}/kWh): saved {{ ((pub * total) - cost) | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
               {% endif %}
               {% else %}
               No EV charging data yet
@@ -1882,7 +1910,7 @@ views:
             subtitle: >-
               {% set roi = states('sensor.sem_roi_percentage') | float(0) %}
               {% set cost = states('number.sem_system_investment_cost') | float(0) %}
-              {% if cost > 0 %}{{ roi | round(1) }}% of {{ cost | round(0) }} CHF recovered{% else %}Set investment cost below{% endif %}
+              {% if cost > 0 %}{{ roi | round(1) }}% of {{ cost | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} recovered{% else %}Set investment cost below{% endif %}
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-number-card
@@ -1910,7 +1938,7 @@ views:
                   cards:
                     - type: custom:mushroom-template-card
                       primary: >-
-                        {{ states('sensor.sem_lifetime_total_savings') | float(0) | round(0) }} CHF
+                        {{ states('sensor.sem_lifetime_total_savings') | float(0) | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
                       secondary: Lifetime Savings
                       icon: mdi:cash-check
                       icon_color: green
@@ -1918,7 +1946,7 @@ views:
                         style: *glass_card
                     - type: custom:mushroom-template-card
                       primary: >-
-                        {{ states('sensor.sem_roi_annual_savings') | float(0) | round(0) }} CHF/yr
+                        {{ states('sensor.sem_roi_annual_savings') | float(0) | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/yr
                       secondary: Annual Savings
                       icon: mdi:cash-fast
                       icon_color: amber
@@ -1951,7 +1979,7 @@ views:
                 - type: custom:mushroom-template-card
                   primary: >-
                     {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
-                    How Savings Are Calculated · {{ savings | round(0) }} CHF total
+                    How Savings Are Calculated · {{ savings | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} total
                   secondary: >-
                     {% set import_rate = states('number.sem_electricity_import_rate') | float(0.36) %}
                     {% set export_rate = states('number.sem_electricity_export_rate') | float(0.075) %}
@@ -1961,11 +1989,11 @@ views:
                     {% set payback = states('sensor.sem_roi_payback_years') | float(0) %}
                     {% set co2 = states('sensor.sem_lifetime_co2_avoided') | float(0) %}
                     {% set trees = states('sensor.sem_lifetime_trees_equivalent') | float(0) %}
-                    Solar self-consumed × {{ import_rate }} CHF/kWh
-                    · Grid export × {{ export_rate }} CHF/kWh
-                    = {{ savings | round(0) }} CHF total savings
-                    ÷ system age = {{ annual | round(0) }} CHF/year
-                    {{ invest | round(0) }} CHF ÷ {{ annual | round(0) }} CHF/yr = {{ payback | round(1) }} yr payback
+                    Solar self-consumed × {{ import_rate }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/kWh
+                    · Grid export × {{ export_rate }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/kWh
+                    = {{ savings | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} total savings
+                    ÷ system age = {{ annual | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/year
+                    {{ invest | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} ÷ {{ annual | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/yr = {{ payback | round(1) }} yr payback
                     {{ co2 | round(0) }} kg CO₂ avoided = {{ trees | round(0) }} trees
                   icon: mdi:calculator
                   icon_color: purple

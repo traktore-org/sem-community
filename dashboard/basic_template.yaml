@@ -265,10 +265,10 @@ views:
           - type: custom:mushroom-template-card
             primary: "Today's Financials"
             secondary: >-
-              Costs: {{ states('sensor.sem_daily_costs') | float(0) | round(2) }} CHF
-              · Savings: {{ states('sensor.sem_daily_savings') | float(0) | round(2) }} CHF
-              · Export: {{ states('sensor.sem_daily_export_revenue') | float(0) | round(2) }} CHF
-              · Net: {{ states('sensor.sem_daily_net_cost') | float(0) | round(2) }} CHF
+              Costs: {{ states('sensor.sem_daily_costs') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
+              · Savings: {{ states('sensor.sem_daily_savings') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
+              · Export: {{ states('sensor.sem_daily_export_revenue') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
+              · Net: {{ states('sensor.sem_daily_net_cost') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
             icon: mdi:cash-register
             icon_color: >-
               {% if states('sensor.sem_daily_net_cost') | float(0) <= 0 %}green{% else %}red{% endif %}
@@ -278,9 +278,9 @@ views:
           - type: custom:mushroom-template-card
             primary: This Month
             secondary: >-
-              Costs: {{ states('sensor.sem_monthly_costs') | float(0) | round(2) }} CHF
-              · Savings: {{ states('sensor.sem_monthly_savings') | float(0) | round(2) }} CHF
-              · Net: {{ states('sensor.sem_monthly_net_cost') | float(0) | round(2) }} CHF
+              Costs: {{ states('sensor.sem_monthly_costs') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
+              · Savings: {{ states('sensor.sem_monthly_savings') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
+              · Net: {{ states('sensor.sem_monthly_net_cost') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
             icon: mdi:calendar-month
             icon_color: cyan
             multiline_secondary: true

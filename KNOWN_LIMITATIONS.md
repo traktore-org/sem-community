@@ -43,7 +43,9 @@ Some EV chargers have limitations that prevent full SEM control:
 
 ## Heat pump SG-Ready control
 
-The `HeatPumpController` device class exists in the codebase and supports SG-Ready 4-state control, but it is **not yet wired up** as a registered device controller. The corresponding dashboard cards have been removed from the dashboard template. The controller logic is functional but not instantiated or registered with the surplus controller. This will be connected in a future release.
+SEM supports SG-Ready heat pump control via two relay entities (Shelly, ESPHome, etc.). Configure relay 1 and relay 2 in the options flow under "Heat Pump (SG-Ready)". The heat pump is managed by the surplus controller — when solar surplus exceeds the heat pump's rated power, SEM switches to BOOST mode (SG-Ready state 3) and optionally raises the temperature setpoint. With very high surplus (configurable threshold, default 5000W), SEM switches to FORCE_ON mode (state 4).
+
+**Requirements:** Two switch entities controlling the SG-Ready relay pins. Optionally a climate entity for temperature boost and a power sensor for consumption tracking.
 
 ## EV Intelligence
 

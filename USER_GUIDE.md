@@ -297,6 +297,21 @@ SEM automatically reads **all sources** from the HA Energy Dashboard, not just t
 
 Single-device setups are unaffected — this is fully backward compatible. The config flow shows device counts (e.g., "Solar (2 inverters)") when multiple sources are detected.
 
+### Multi-EV Charger Control
+
+SEM supports active control of **multiple EV chargers** (v1.4.0+). Add chargers via **Settings > Devices > Solar Energy Management > Configure > EV Chargers > Add another EV charger**.
+
+**How surplus distribution works across chargers:**
+1. Chargers are sorted by priority (configurable per charger, 1=highest)
+2. Highest-priority charger gets surplus first, up to its maximum power
+3. Remainder cascades to the next charger if it meets the minimum threshold (4140W for 3-phase, 1380W for 1-phase)
+4. 60-second hysteresis between reallocations to prevent oscillation
+5. When a charger disconnects, its budget flows immediately to the next
+
+**Night charging** distributes the nightly target equally across connected chargers.
+
+**Per-charger features:** Each charger gets its own session tracking, stall detection, enable/disable delays, and taper detection. The primary charger (first configured) drives the EV Intelligence SOC tracking and charge skip decisions.
+
 ---
 
 ## Battery Discharge Protection
@@ -384,18 +399,30 @@ Enable via integration options. Requires controllable devices with switch entiti
 
 ![Costs Tab](docs/images/sem_costs_tab.png)
 
-### Static tariffs
+SEM supports three tariff modes, selectable in **Settings > Devices > Solar Energy Management > Configure > Tariff & Advanced**:
 
-Configure a single fixed import/export rate. SEM uses this for cost tracking.
+### Static tariffs (default)
 
-### Dynamic tariffs
+Fixed import/export rates with optional HT/NT differentiation. SEM applies HT rates during weekday daytime (07:00-20:00) and NT rates at nights/weekends. Configure the rates in the Tariff & Advanced options step.
 
-Connect Tibber, Nordpool, or aWATTar for real-time pricing. SEM automatically:
+### Dynamic tariffs (Tibber / Nordpool / aWATTar)
 
-- Enables price-responsive surplus distribution
-- Identifies cheap/expensive price windows
-- Creates `sensor.sem_tariff_price_level` (cheap / normal / expensive)
-- Creates `sensor.sem_tariff_next_cheap_start` for automation triggers
+Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider by scanning for known entity patterns, or you can select the price entity manually. When active:
+
+- Reads **real-time prices** every update cycle (10s)
+- Cost calculations use actual spot prices instead of static rates
+- `sensor.sem_tariff_price_level` shows "cheap", "normal", "expensive", "very_cheap", "very_expensive"
+- `sensor.sem_tariff_next_cheap_start` shows next cheap window
+- **Price-responsive surplus**: during cheap/negative price windows, SEM adds virtual surplus to encourage device activation
+- Night charging can be scheduled for cheapest hours
+
+### Calendar tariffs (time-based HT/NT schedule)
+
+Set tariff mode to "Calendar" for custom time-of-use schedules. Define rules like "HT weekdays 07:00-20:00, NT otherwise". Features:
+- Swiss utility presets built in: EKZ, BKW, CKW, ewz
+- Custom weekly schedule via configurable rules
+- HA Schedule helper entity support
+- Holiday entity override (binary_sensor)
 
 ---
 

@@ -346,6 +346,50 @@ Single-device setups are unaffected. The list fields contain exactly one entry, 
 
 ---
 
+## Multi-EV Charger Control
+
+v1.4.0 adds active control of multiple EV chargers via `coordinator._ev_devices: Dict[str, CurrentControlDevice]`.
+
+### Architecture Pattern: Context Swap
+
+The coordinator iterates chargers in priority order and **swaps per-charger state** before calling the existing `_execute_ev_control()`:
+
+```python
+for cid, ev_dev in sorted_chargers:
+    # Save coordinator state, swap in per-charger state
+    self._ev_device = ev_dev
+    self._ev_stalled_since = self._ev_stalled_since_per_charger[cid]
+    self._ev_enable_surplus_since = self._ev_enable_surplus_per_charger[cid]
+    # ... (4 more state variables)
+    await self._execute_ev_control(state, power, energy, context)
+    # Save back per-charger state, restore coordinator state
+```
+
+This minimizes changes to `ev_control.py` — the control logic works identically for each charger.
+
+### Surplus Distribution
+
+`SurplusController.distribute_ev_budget()` implements priority-based cascade:
+1. Sort chargers by priority (lower = higher)
+2. Highest-priority charger: `min(budget, max_power)`
+3. Remainder cascades if ≥ `min_power_threshold` (4140W 3-phase / 1380W 1-phase)
+4. 60s hysteresis between reallocations
+
+### Config Migration
+
+Config entry v2→v3: flat `ev_*` keys wrapped into `ev_chargers` list automatically. The `__init__.py` registration loop creates `CurrentControlDevice` per charger.
+
+### Per-Charger State
+
+Each charger has independent:
+- `SessionData` (energy, cost, solar share)
+- Stall detection timer
+- Enable/disable delay timers
+- `EVTaperDetector` instance (taper detection, virtual SOC)
+- `ChargingStateMachine` shares mode (all chargers follow same solar/night strategy)
+
+---
+
 ## Other Key Modules
 
 ```

@@ -62,7 +62,7 @@ There are many solar/EV tools for Home Assistant — evcc, emhass, Predbat, PV E
 | Cost tracking & savings | :white_check_mark: | :x: | :x: | :x: | :x: |
 | Push notifications | :white_check_mark: | :x: | :x: | :x: | :x: |
 | Smart recommendations | :white_check_mark: | :x: | :x: | :x: | :x: |
-| Multi-language (6) | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
+| Multi-language (15) | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
 | Pure HACS integration | :white_check_mark: | standalone Go | Docker/Add-on | AppDaemon | :white_check_mark: |
 | Zero-config auto-detect | :white_check_mark: | config file | complex setup | config file | manual |
 
@@ -410,32 +410,50 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ---
 
-## Recent Improvements (v1.3.0)
+## Recent Improvements (v1.4.0)
 
-### EV Intelligence (#106)
-- **Taper detection** — detects BMS CC→CV transition (power staircase) to confirm 100% SOC without car API
-- **Virtual SOC** — tracks estimated battery level from charging energy and predicted consumption; calibrates from real vehicle SOC or taper detection when available
-- **Daily consumption learning** — EWMA predictor learns per-weekday driving patterns (adapts over 7 days)
-- **Temperature correction** — adjusts predictions for seasonal variation based on Recurrent Auto fleet data (30,000+ vehicles)
-- **Smart night charge skip** — skips night charging when estimated SOC covers tomorrow's predicted consumption (with 30% safety margin, solar forecast credit, and 3-consecutive-skip safety net)
-- **Session-based anchoring** — works from day one; first charge session bootstraps SOC estimate
-- **EV battery health** — tracks capacity degradation from partial charge sessions over months
-- **10 new sensors** — taper trend/ratio, virtual SOC, minutes to full, predicted consumption, nights until charge, charge needed, battery health, charge skip reason
+### Multi-EV Charger Control (#112)
+- **N charger support** — configure and control multiple EV chargers with priority-based surplus distribution
+- **Priority cascade** — highest-priority charger gets power first, remainder flows to next if above minimum threshold
+- **Per-charger state** — independent stall detection, enable/disable delays, session tracking, taper detection
+- **Night target split** — overnight charging target distributed equally across connected chargers
+- **Config flow** — add/remove chargers via options flow, auto-discovery of all charger brands
+- **Dashboard** — per-charger status table when >1 charger, "(N chargers)" subtitle on flow diagram
+- **Backward compatible** — single-charger configs auto-migrate with zero user effort
 
-### Multi-Device Aggregation (#112)
-- **Multiple inverters** — SEM reads all solar sources from the Energy Dashboard and sums them
-- **Multiple batteries** — summed power/energy, averaged SOC across units
-- **Multiple grid tariffs** — collected separately from Energy Dashboard flow_from/flow_to
-- **Backward compatible** — single-device setups work exactly as before
-- Config flow shows device counts: "Solar (2 inverters)", "Battery (3 units)"
+### EV Intelligence Notifications (#106)
+- **"EV nearly full"** — push notification when taper detection shows < 5 minutes to full
+- **"Night charge skipped"** — notification when SOC is sufficient, showing estimated range
+- **"Charge recommended"** — notification when SOC drops below 30% during night window
+- All three use deduplication (fire once per event, reset automatically)
 
-### Smart Night Charging Rename
-- Switch renamed from `forecast_night_reduction` → `smart_night_charging` to reflect full EV Intelligence capabilities
-- Updated description in all 7 languages
+### Heat Pump SG-Ready (#112)
+- **SG-Ready 4-state control** — BLOCKED (00), NORMAL (01), BOOST (10), FORCE_ON (11) via two relay entities
+- **Surplus-driven** — BOOST mode activates on solar surplus, FORCE_ON on high surplus (configurable threshold)
+- **Temperature boost** — optionally raises climate entity setpoint during surplus periods
+- **Config flow** — new Heat Pump step in options flow (relay1, relay2, climate, power sensor, priority)
 
-### Other
-- Hassfest compliance: alphabetical manifest key order, `recorder` added to `after_dependencies`
-- 1,000+ automated tests (was 199+) across 20+ test files
+### Dynamic Currency (#119)
+- **All costs now use HA-configured currency** — no more hardcoded CHF
+- Dashboard JS cards, YAML templates, chart presets, and sensor definitions all read from `Settings > General > Currency`
+
+### Tariff Mode Selector (#120)
+- **Three tariff modes** exposed in options flow: Static (fixed HT/NT), Dynamic (Tibber/Nordpool/aWATTar), Calendar (time-based schedule)
+- **Auto-detection** — SEM scans for Tibber/Nordpool/aWATTar entities when dynamic mode is selected
+- **Price-responsive surplus** — dynamic mode enables price-aware device activation during cheap/negative price windows
+
+### GoodWe Support (#68)
+- **Troubleshooting guide** for GoodWe + Easee setup (Energy Dashboard configuration, sign convention auto-detection)
+- **Setup guide** note for GoodWe inverters
+
+### 15 Languages
+- Added: Portuguese (pt), Polish (pl), Swedish (sv), Czech (cs), Danish (da), Finnish (fi), Hungarian (hu), Romanian (ro), Norwegian (no)
+- Was 6 (de, en, es, fr, it, nl), now 15
+
+### Previous (v1.3.0)
+- EV Intelligence: taper detection, virtual SOC, consumption learning, smart night charge skip, battery health
+- Multi-device read aggregation: sum inverters, batteries, grid tariffs from Energy Dashboard
+- Smart Night Charging rename, 1,000+ tests
 
 ### Previous (v1.1.0)
 - Dashboard Lumina redesign — glassmorphism theme, SVG glow icons, battery hero card, EV status card

@@ -342,3 +342,81 @@ def test_messages_idle_with_session(notifier):
                     "available_power": 0, "daily_ev_energy": 0}
     msgs = notifier._get_notification_messages(ChargingState.IDLE, data_without)
     assert msgs == {}
+
+
+# ──────────────────────────────────────────────
+# EV Intelligence Notifications (#106)
+# ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_ev_nearly_full_sends_once(notifier, hass):
+    """notify_ev_nearly_full fires once, then deduplicates."""
+    await notifier.notify_ev_nearly_full(3.0)
+    assert hass.bus.async_fire.call_count == 1
+    event_data = hass.bus.async_fire.call_args[0][1]
+    assert event_data["event"] == "ev_nearly_full"
+    assert event_data["minutes_remaining"] == 3.0
+
+    # Second call should be deduplicated
+    hass.bus.async_fire.reset_mock()
+    await notifier.notify_ev_nearly_full(2.0)
+    assert hass.bus.async_fire.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_ev_nearly_full_resets_when_above_threshold(notifier, hass):
+    """notify_ev_nearly_full resets flag when minutes > 10."""
+    await notifier.notify_ev_nearly_full(3.0)
+    assert "ev_nearly_full" in notifier._notified_flags
+
+    # Above threshold: flag should be cleared
+    await notifier.notify_ev_nearly_full(15.0)
+    assert "ev_nearly_full" not in notifier._notified_flags
+
+    # Now it can fire again
+    hass.bus.async_fire.reset_mock()
+    await notifier.notify_ev_nearly_full(4.0)
+    assert hass.bus.async_fire.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_ev_charge_skip_sends_once(notifier, hass):
+    """notify_ev_charge_skip fires once per night."""
+    await notifier.notify_ev_charge_skip(85.0, 3)
+    assert hass.bus.async_fire.call_count == 1
+    event_data = hass.bus.async_fire.call_args[0][1]
+    assert event_data["event"] == "ev_charge_skip"
+    assert event_data["estimated_soc"] == 85
+    assert event_data["nights_remaining"] == 3
+
+    # Deduplicated
+    hass.bus.async_fire.reset_mock()
+    await notifier.notify_ev_charge_skip(85.0, 3)
+    assert hass.bus.async_fire.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_ev_charge_recommended_sends_once(notifier, hass):
+    """notify_ev_charge_recommended fires once per night."""
+    await notifier.notify_ev_charge_recommended(25.0)
+    assert hass.bus.async_fire.call_count == 1
+    event_data = hass.bus.async_fire.call_args[0][1]
+    assert event_data["event"] == "ev_charge_recommended"
+    assert event_data["estimated_soc"] == 25
+
+    # Deduplicated
+    hass.bus.async_fire.reset_mock()
+    await notifier.notify_ev_charge_recommended(25.0)
+    assert hass.bus.async_fire.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_ev_notifications_reset_on_notifier_reset(notifier, hass):
+    """All EV flags should clear on notifier.reset()."""
+    await notifier.notify_ev_nearly_full(3.0)
+    await notifier.notify_ev_charge_skip(85.0, 3)
+    await notifier.notify_ev_charge_recommended(25.0)
+    assert len(notifier._notified_flags) >= 3
+
+    notifier.reset()
+    assert len(notifier._notified_flags) == 0

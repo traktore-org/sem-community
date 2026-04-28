@@ -2,10 +2,10 @@
   "config": {
     "step": {
       "user": {
-        "title": "Solar Energy Management Setup",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "title": "Configuração de Gestão de Energia Solar",
+        "description": "O SEM detetou os seguintes sensores do seu Painel de Energia do Home Assistant:\n\n{summary}\n\nClique **Submeter** para continuar. Os próximos dois passos detetam automaticamente o seu carregador EV e inversor.",
         "data": {
-          "observer_mode": "Test mode (read-only — do not control hardware)"
+          "observer_mode": "Modo de teste (somente leitura — sem controlo de hardware)"
         },
         "data_description": {
           "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
@@ -68,7 +68,7 @@
     },
     "error": {
       "unknown": "An unexpected error occurred. Please try again.",
-      "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
+      "entity_not_found": "Entity not found. Please verify the entity ID exists.",
       "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
       "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
       "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
@@ -104,49 +104,9 @@
           "ev_target_soc": "EV target SOC (%)"
         }
       },
-      "heat_pump": {
-        "title": "Heat Pump (SG-Ready)",
-        "description": "Configure your SG-Ready heat pump for solar surplus control. Both relay entities are required for SG-Ready operation. Leave empty to skip.",
-        "data": {
-          "heat_pump_relay1_entity": "SG-Ready Relay 1 (switch entity)",
-          "heat_pump_relay2_entity": "SG-Ready Relay 2 (switch entity)",
-          "heat_pump_climate_entity": "Climate entity for temperature boost (optional)",
-          "heat_pump_power_sensor": "Power sensor (optional)",
-          "heat_pump_boost_offset": "Temperature boost offset (°C)",
-          "heat_pump_max_setpoint": "Maximum temperature setpoint (°C)",
-          "heat_pump_priority": "Surplus priority (1=highest)"
-        }
-      },
-      "ev_charger_menu": {
-        "title": "EV Chargers",
-        "description": "Manage your EV charger configuration.",
-        "data": {
-          "action": "Action"
-        }
-      },
-      "ev_charger_add": {
-        "title": "Add EV Charger",
-        "description": "Configure a new EV charger. SEM will distribute surplus power across chargers by priority.",
-        "data": {
-          "charger_name": "Charger Name",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)"
-        }
-      },
-      "ev_charger_remove": {
-        "title": "Remove EV Charger",
-        "description": "Select a charger to remove. The primary charger cannot be removed.",
-        "data": {
-          "charger_to_remove": "Charger to remove"
-        }
-      },
       "hardware": {
         "title": "Hardware Entity Configuration",
-        "description": "Update your hardware entity mappings. The Vehicle SOC fields at the bottom are only used if you provide a Vehicle Battery SOC sensor — otherwise SEM falls back to the kWh-based daily target.",
+        "description": "Update your hardware entity mappings",
         "data": {
           "solar_production_sensor": "Solar Production Power",
           "grid_power_sensor": "Grid Power Exchange",
@@ -162,9 +122,9 @@
           "grid_export_total_energy_sensor": "Grid Export Total Energy [Optional]",
           "battery_charge_total_energy_sensor": "Battery Charge Total Energy [Optional]",
           "battery_discharge_total_energy_sensor": "Battery Discharge Total Energy [Optional]",
-          "vehicle_soc_entity": "Vehicle Battery SOC sensor [Optional]",
-          "ev_battery_capacity_kwh": "EV battery capacity (kWh) — only used with SOC sensor",
-          "ev_target_soc": "EV target SOC (%) — only used with SOC sensor"
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)"
         },
         "data_description": {
           "vehicle_soc_entity": "Optional. A sensor that exposes the vehicle's current State of Charge (0–100 %). Only a few cars provide this (Tesla, some VW IDs, MG ZS EV with custom integrations, OBD-II adapters). If empty, SEM uses the kWh-based daily target instead and the two fields below are ignored.",
@@ -173,30 +133,35 @@
         }
       },
       "settings": {
-        "title": "Battery & SOC Zones",
-        "description": "Configure the 4-zone SOC strategy. Zone 1 (< Priority): battery first. Zone 2 (Priority–Buffer): surplus only. Zone 3 (Buffer–Auto-start): battery assists EV. Zone 4 (≥ Auto-start): full battery assist.",
+        "title": "SEM Optimization Settings",
+        "description": "Update your SEM optimization parameters",
         "data": {
-          "update_interval": "Update interval (seconds)",
-          "power_delta": "Power change threshold (W)",
-          "current_delta": "Current change threshold (A)",
-          "soc_delta": "Battery SOC change threshold (%)",
-          "battery_priority_soc": "Zone 1 ceiling — Battery priority SOC (%)",
+          "update_interval": "Update Interval (seconds)",
+          "power_delta": "Power Delta Threshold (W)",
+          "current_delta": "Current Delta Threshold (A)",
+          "soc_delta": "Battery SOC Delta Threshold (%)",
+          "battery_priority_soc": "Battery Priority SOC (%)",
+          "battery_minimum_soc": "Battery Minimum SOC (%)",
+          "battery_resume_soc": "Battery Resume SOC (%)",
+          "min_solar_power": "Minimum Solar Power (W)",
+          "max_grid_import": "Maximum Grid Import (W)",
+          "daily_ev_target": "Daily EV Target (kWh)",
+          "battery_assist_max_power": "Battery Assist Max Power (W)",
+          "battery_capacity_kwh": "Battery Capacity (kWh)",
+          "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
+          "battery_max_discharge_power": "Maximum Discharge Power (W)",
+          "electricity_import_rate": "Electricity Import Rate (per kWh)",
+          "electricity_nt_rate": "Electricity NT Rate (per kWh)",
+          "electricity_export_rate": "Electricity Export Rate (per kWh)",
+          "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
+          "observer_mode": "Observer Mode (Read-Only)",
+          "smart_night_charging": "Smart Night Charging",
+          "vehicle_soc_entity": "Vehicle Battery SOC",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "ev_target_soc": "EV Target SOC (%)",
           "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
           "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
-          "min_solar_power": "Minimum solar power threshold (W)",
-          "max_grid_import": "Maximum grid import during solar charging (W)",
-          "daily_ev_target": "Daily EV charge target (kWh)",
-          "battery_assist_max_power": "Battery assist maximum power (W)",
-          "battery_capacity_kwh": "Home battery capacity (kWh)",
-          "battery_discharge_protection_enabled": "Enable battery discharge protection at night",
-          "battery_max_discharge_power": "Maximum battery discharge power (W)",
-          "electricity_import_rate": "Electricity import rate (per kWh)",
-          "electricity_nt_rate": "Electricity NT rate (per kWh)",
-          "electricity_export_rate": "Electricity export rate (per kWh)",
-          "demand_charge_rate": "Demand charge rate (CHF/kW/month)",
-          "observer_mode": "Observer mode (read-only — no hardware control)",
-          "smart_night_charging": "Forecast-driven night charging reduction",
           "battery_discharge_control_entity": "Battery discharge control entity (optional)",
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
@@ -240,11 +205,9 @@
       },
       "settings_tariff": {
         "title": "Tariff & Advanced",
-        "description": "Choose your tariff mode: **Static** for fixed rates, **Dynamic** for real-time pricing (Tibber, Nordpool, aWATTar), or **Calendar** for time-based HT/NT schedules. For dynamic mode, SEM auto-detects your provider or you can select the price entity manually.",
+        "description": "Electricity rates and advanced tuning parameters.",
         "data": {
-          "tariff_mode": "Tariff mode",
-          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
-          "electricity_import_rate": "Import rate (HT / fallback)",
+          "electricity_import_rate": "Import rate",
           "electricity_nt_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Export rate",
           "demand_charge_rate": "Demand charge rate",
@@ -650,35 +613,11 @@
       "forecast_power_now_w": {
         "name": "Forecast Power Now"
       },
-      "forecast_power_next_hour_w": {
-        "name": "Forecast Power Next Hour"
-      },
-      "forecast_peak_power_today_w": {
-        "name": "Forecast Peak Power Today"
-      },
-      "forecast_peak_time_today": {
-        "name": "Forecast Peak Time Today"
-      },
-      "best_surplus_window": {
-        "name": "Best Surplus Window"
-      },
-      "forecast_surplus_kwh": {
-        "name": "Forecast Surplus"
-      },
       "forecast_source": {
         "name": "Forecast Source"
       },
       "charging_recommendation": {
         "name": "Charging Recommendation"
-      },
-      "night_start_time": {
-        "name": "Night Start Time"
-      },
-      "night_end_time": {
-        "name": "Night End Time"
-      },
-      "night_window_hours": {
-        "name": "Night Window Hours"
       },
       "tariff_current_import_rate": {
         "name": "Electricity Price"
@@ -731,6 +670,24 @@
       "utility_signal_count_today": {
         "name": "Utility Signals Today"
       },
+      "predictor_training_status": {
+        "name": "Predictor Training Status"
+      },
+      "predictor_model_accuracy": {
+        "name": "Predictor Accuracy"
+      },
+      "predicted_consumption_next_hour": {
+        "name": "Predicted Consumption (Next Hour)"
+      },
+      "predicted_consumption_today_kwh": {
+        "name": "Predicted Consumption Today"
+      },
+      "predicted_solar_next_hour": {
+        "name": "Predicted Solar (Next Hour)"
+      },
+      "predicted_surplus_window": {
+        "name": "Predicted Surplus Window"
+      },
       "session_energy": {
         "name": "Session Energy"
       },
@@ -760,6 +717,30 @@
       },
       "vehicle_soc": {
         "name": "Vehicle SOC"
+      },
+      "best_surplus_window": {
+        "name": "Best Surplus Window"
+      },
+      "night_start_time": {
+        "name": "Night Start Time"
+      },
+      "night_end_time": {
+        "name": "Night End Time"
+      },
+      "night_window_hours": {
+        "name": "Night Window Hours"
+      },
+      "forecast_peak_power_today_w": {
+        "name": "Forecast Peak Power Today"
+      },
+      "forecast_peak_time_today": {
+        "name": "Forecast Peak Time Today"
+      },
+      "forecast_power_next_hour_w": {
+        "name": "Forecast Power Next Hour"
+      },
+      "forecast_surplus_kwh": {
+        "name": "Forecast Surplus"
       }
     },
     "binary_sensor": {
@@ -819,7 +800,7 @@
         "name": "SOC Delta"
       },
       "battery_priority_soc": {
-        "name": "Battery Priority SOC (Zone 1 floor)"
+        "name": "Battery Priority SOC"
       },
       "battery_minimum_soc": {
         "name": "Battery Minimum SOC"
@@ -866,35 +847,14 @@
       "system_size_kwp": {
         "name": "PV System Size"
       },
-      "system_investment_cost": {
-        "name": "System Investment Cost"
-      },
-      "system_install_year": {
-        "name": "System Install Year"
-      },
-      "night_earliest_start": {
-        "name": "Night Earliest Start"
-      },
-      "night_latest_end": {
-        "name": "Night Latest End"
-      },
       "ev_night_initial_current": {
         "name": "EV Night Initial Current"
       },
-      "ev_minimum_current": {
+      "ev_min_current": {
         "name": "EV Minimum Current"
       },
       "ev_stall_cooldown": {
         "name": "EV Stall Cooldown"
-      },
-      "ev_phases": {
-        "name": "EV Charger Phases"
-      },
-      "electricity_import_rate": {
-        "name": "Electricity Import Rate"
-      },
-      "electricity_export_rate": {
-        "name": "Electricity Export Rate"
       },
       "battery_buffer_soc": {
         "name": "Battery Buffer SOC"
@@ -905,35 +865,44 @@
       "battery_assist_floor_soc": {
         "name": "Battery Assist Floor SOC"
       },
-      "battery_capacity": {
+      "battery_capacity_kwh": {
         "name": "Battery Capacity"
       },
       "battery_max_discharge_power": {
         "name": "Battery Max Discharge Power"
+      },
+      "system_investment_cost": {
+        "name": "System Investment Cost"
+      },
+      "system_install_year": {
+        "name": "System Install Year"
+      },
+      "ev_minimum_current": {
+        "name": "EV Minimum Current"
+      },
+      "ev_phases": {
+        "name": "EV Phases"
+      },
+      "electricity_import_rate": {
+        "name": "Electricity Import Rate"
+      },
+      "electricity_export_rate": {
+        "name": "Electricity Export Rate"
+      },
+      "night_earliest_start": {
+        "name": "Night Earliest Start"
+      },
+      "night_latest_end": {
+        "name": "Night Latest End"
+      },
+      "battery_capacity": {
+        "name": "Battery Capacity"
       }
-    }
-  },
-  "exceptions": {
-    "load_management_not_initialized": {
-      "message": "Load management is not initialized. Please enable it in the integration settings."
     },
-    "device_registry_not_initialized": {
-      "message": "Device registry is not initialized. Please check the integration setup."
-    },
-    "invalid_device_property": {
-      "message": "Unknown device property: {property}. Expected \"controllable\" or \"critical\"."
-    },
-    "dashboard_generation_failed": {
-      "message": "Dashboard generation failed: {error}"
-    },
-    "invalid_deadline_format": {
-      "message": "Invalid deadline format: {deadline}. Use ISO format (YYYY-MM-DDTHH:MM:SS)."
-    }
-  },
-  "issues": {
-    "ev_charger_not_configured": {
-      "title": "EV charger not configured",
-      "description": "No EV charger sensors are configured. Solar EV charging optimization will not work. Go to the integration settings to configure your EV charger sensors."
+    "select": {
+      "ev_charging_mode": {
+        "name": "EV Charging Mode"
+      }
     }
   }
 }

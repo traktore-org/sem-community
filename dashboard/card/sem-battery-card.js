@@ -150,7 +150,7 @@ class SEMBatteryCard extends HTMLElement {
         // Bottom chips
         setVal('.chip-charge', this._fmt(dailyCharge, 2) + ' kWh');
         setVal('.chip-discharge', this._fmt(dailyDischarge, 2) + ' kWh');
-        setVal('.chip-savings', this._fmt(dailySavings, 2) + ' CHF');
+        setVal('.chip-savings', this._fmt(dailySavings, 2) + ' ' + (window.semGetCurrency?.(this._hass) || 'EUR'));
     }
 
     _renderSkeleton() {

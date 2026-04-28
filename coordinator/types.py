@@ -10,7 +10,7 @@ Key dataclasses:
 """
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from enum import Enum
 
 
@@ -383,8 +383,16 @@ class SEMData:
     energy_assistant: EnergyAssistantSensorData = field(default_factory=EnergyAssistantSensorData)
     utility_signal: UtilitySignalSensorData = field(default_factory=UtilitySignalSensorData)
 
-    # Session tracking
+    # Session tracking (primary charger — backward compat)
     session: SessionData = field(default_factory=SessionData)
+    # Per-charger sessions (keyed by charger_id)
+    sessions: Dict[str, SessionData] = field(default_factory=dict)
+
+    # System metadata
+    currency: str = "EUR"
+    # Multi-charger metadata
+    ev_charger_count: int = 0
+    ev_charger_ids: List[str] = field(default_factory=list)
 
     # EV intelligence
     ev_intelligence: EVIntelligenceData = field(default_factory=EVIntelligenceData)
@@ -608,7 +616,7 @@ class SEMData:
             "utility_signal_source": self.utility_signal.utility_signal_source,
             "utility_signal_count_today": self.utility_signal.utility_signal_count_today,
 
-            # Session tracking
+            # Session tracking (primary charger)
             "session_active": self.session.active,
             "session_energy": self.session.energy_kwh,
             "session_solar_share": self.session.solar_share_pct,
@@ -618,6 +626,11 @@ class SEMData:
             "session_grid_energy": self.session.grid_energy_kwh,
             "session_battery_energy": self.session.battery_energy_kwh,
             "session_avg_power": self.session.avg_power_w,
+
+            # System metadata
+            "currency": self.currency,
+            # Multi-charger
+            "ev_charger_count": self.ev_charger_count,
 
             # EV intelligence
             "ev_taper_trend": self.ev_intelligence.taper.trend,

@@ -107,10 +107,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._energy_calculator = EnergyCalculator(config, self.time_manager)
         self._flow_calculator = FlowCalculator()
         self._state_machine = ChargingStateMachine(hass, config, self.time_manager)
-        self._ev_device = None  # Set by __init__.py after EV device registration
+        self._ev_device = None  # Primary charger — set by __init__.py (backward compat)
+        self._ev_devices: Dict[str, Any] = {}  # All chargers keyed by charger_id (#112)
         self._ev_last_change_time = None  # Reactive control timing
         self._ev_charge_started_at = None  # Disable delay: min hold timer to prevent cycling
         self._ev_enable_surplus_since = None  # Enable delay: surplus must persist before starting
+        # Per-charger state dicts for multi-charger (#112)
+        self._ev_stalled_since_per_charger: Dict[str, Optional[float]] = {}
+        self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
+        self._ev_charge_started_per_charger: Dict[str, Optional[float]] = {}
+        self._ev_last_change_per_charger: Dict[str, Any] = {}
         self._notification_manager = NotificationManager(hass, config)
 
         # Storage will be initialized with entry_id later
@@ -186,7 +192,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._predictor = ConsumptionPredictor()
 
         # EV Intelligence: taper detection, virtual SOC, charge skip (#106)
-        self._ev_taper_detector = EVTaperDetector(config)
+        self._ev_taper_detector = EVTaperDetector(config)  # Primary charger
+        self._ev_taper_detectors: Dict[str, EVTaperDetector] = {}  # Per-charger (#112)
 
         # Hourly activity tracker for schedule card (#63)
         self._today_surplus_hours: list = [False] * 24
@@ -200,9 +207,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
 
-        # Session cost tracking
+        # Session cost tracking (primary charger + per-charger dict)
         self._session_data = SessionData()
+        self._session_data_per_charger: Dict[str, SessionData] = {}
         self._last_ev_connected = False
+        self._last_ev_connected_per_charger: Dict[str, bool] = {}
 
         # Initialize data with defaults
         self.data = self._get_initial_data()
@@ -356,8 +365,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._initial_update_done and not getattr(self, '_health_checked', False):
             self._health_checked = True
             issues = []
-            if not self._ev_device:
-                issues.append("EV device not registered (KEBA not discovered)")
+            if not self._ev_device and not self._ev_devices:
+                issues.append("No EV charger registered")
             if not self._storage or not self._storage.is_loaded:
                 issues.append("Storage not loaded")
             if self.hass.states.get(f"sensor.{ENTITY_SOLAR_POWER}") is None:
@@ -365,7 +374,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if issues:
                 _LOGGER.warning("SEM health check: %s", "; ".join(issues))
             else:
-                _LOGGER.info("SEM health check: all OK (EV=%s)", self._ev_device.name if self._ev_device else "none")
+                charger_names = [d.name for d in self._ev_devices.values()] if self._ev_devices else [self._ev_device.name if self._ev_device else "none"]
+                _LOGGER.info("SEM health check: all OK (EV chargers: %s)", ", ".join(charger_names))
 
         # Read observer mode from switch entity (allows runtime toggle)
         observer_state = self.hass.states.get(f"switch.{ENTITY_OBSERVER_MODE_SWITCH}")
@@ -400,10 +410,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             power_flows = self._flow_calculator.calculate_power_flows(power)
 
             # Step 4.5: Update session tracking (before charging decisions)
-            self._update_session_tracking(power, power_flows)
+            # Multi-charger (#112): track sessions for each charger
+            if self._ev_devices:
+                for cid, ev_dev in self._ev_devices.items():
+                    if cid not in self._session_data_per_charger:
+                        self._session_data_per_charger[cid] = SessionData()
+                    if cid not in self._last_ev_connected_per_charger:
+                        self._last_ev_connected_per_charger[cid] = False
+                    # Swap context for per-charger session tracking
+                    saved_dev, saved_sess, saved_conn = (
+                        self._ev_device, self._session_data, self._last_ev_connected
+                    )
+                    self._ev_device = ev_dev
+                    self._session_data = self._session_data_per_charger[cid]
+                    self._last_ev_connected = self._last_ev_connected_per_charger[cid]
+                    self._update_session_tracking(power, power_flows)
+                    # Save back per-charger state
+                    self._session_data_per_charger[cid] = self._session_data
+                    self._last_ev_connected_per_charger[cid] = self._last_ev_connected
+                    # Restore
+                    self._ev_device, self._session_data, self._last_ev_connected = (
+                        saved_dev, saved_sess, saved_conn
+                    )
+                # Primary charger session = first charger's session
+                primary_id = next(iter(self._ev_devices))
+                self._session_data = self._session_data_per_charger.get(
+                    primary_id, self._session_data
+                )
+                self._last_ev_connected = self._last_ev_connected_per_charger.get(
+                    primary_id, self._last_ev_connected
+                )
+            else:
+                self._update_session_tracking(power, power_flows)
 
             # Step 4.6: EV taper detection and intelligence (#106)
             ev_intelligence = self._update_ev_intelligence(power, energy)
+            self._last_ev_intelligence = ev_intelligence  # For notifications (#106)
 
             # Step 5: Calculate energy flows (daily totals for Sankey)
             energy_flows = self._flow_calculator.calculate_energy_flows(energy)
@@ -417,11 +459,84 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charging_state = self._state_machine.update_state(charging_context)
 
             # Step 7.5a: Unified EV control via CurrentControlDevice
-            # Retry EV device setup with exponential backoff (#27)
-            if not self._ev_device:
+            # Multi-charger (#112): control each charger in priority order
+            if not self._ev_device and not self._ev_devices:
                 await self._retry_ev_device_with_backoff()
 
-            if self._ev_device and not self._observer_mode:
+            if self._ev_devices and not self._observer_mode:
+                # Multi-charger (#112): distribute budget + night target
+                ev_budget_per_charger = {}
+                num_chargers = len(self._ev_devices)
+
+                # Night target: split equally across connected chargers
+                if num_chargers > 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                    connected_count = sum(
+                        1 for d in self._ev_devices.values()
+                        if getattr(d, '_session_active', False) or power.ev_connected
+                    )
+                    if connected_count > 1:
+                        per_charger_night_kwh = charging_context.night_target_kwh / connected_count
+                        self._night_target_per_charger = per_charger_night_kwh
+                    else:
+                        self._night_target_per_charger = None
+                else:
+                    self._night_target_per_charger = None
+
+                # Solar budget: distribute by priority
+                if num_chargers > 1 and charging_state in (
+                    ChargingState.SOLAR_CHARGING_ACTIVE,
+                    ChargingState.SOLAR_SUPER_CHARGING,
+                    ChargingState.SOLAR_CHARGING_ALLOWED,
+                    ChargingState.SOLAR_MIN_PV,
+                ):
+                    total_budget = self._calculate_solar_ev_budget(
+                        charging_state, power, charging_context
+                    )
+                    ev_budget_per_charger = self._surplus_controller.distribute_ev_budget(
+                        total_budget, self._ev_devices
+                    )
+
+                sorted_chargers = sorted(
+                    self._ev_devices.items(),
+                    key=lambda x: x[1].priority,
+                )
+                for cid, ev_dev in sorted_chargers:
+                    # Save coordinator-level state, swap in per-charger state
+                    saved = {
+                        "dev": self._ev_device,
+                        "stalled": self._ev_stalled_since,
+                        "enable": self._ev_enable_surplus_since,
+                        "started": self._ev_charge_started_at,
+                        "change": self._ev_last_change_time,
+                    }
+                    self._ev_device = ev_dev
+                    self._ev_stalled_since = self._ev_stalled_since_per_charger.get(cid)
+                    self._ev_enable_surplus_since = self._ev_enable_surplus_per_charger.get(cid)
+                    self._ev_charge_started_at = self._ev_charge_started_per_charger.get(cid)
+                    self._ev_last_change_time = self._ev_last_change_per_charger.get(cid)
+                    self._current_charger_budget = ev_budget_per_charger.get(cid)
+                    try:
+                        await self._execute_ev_control(
+                            charging_state, power, energy, charging_context
+                        )
+                    except (HomeAssistantError, ServiceValidationError) as e:
+                        _LOGGER.error("EV control service failed for %s: %s", cid, e)
+                    except ValueError as e:
+                        _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
+                    finally:
+                        # Save back per-charger state, restore coordinator state
+                        self._ev_stalled_since_per_charger[cid] = self._ev_stalled_since
+                        self._ev_enable_surplus_per_charger[cid] = self._ev_enable_surplus_since
+                        self._ev_charge_started_per_charger[cid] = self._ev_charge_started_at
+                        self._ev_last_change_per_charger[cid] = self._ev_last_change_time
+                        self._ev_device = saved["dev"]
+                        self._ev_stalled_since = saved["stalled"]
+                        self._ev_enable_surplus_since = saved["enable"]
+                        self._ev_charge_started_at = saved["started"]
+                        self._ev_last_change_time = saved["change"]
+                        self._current_charger_budget = None
+                self._save_ev_session_state()
+            elif self._ev_device and not self._observer_mode:
                 try:
                     await self._execute_ev_control(
                         charging_state, power, energy, charging_context
@@ -527,6 +642,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 energy_assistant=assistant_data,
                 utility_signal=utility_data,
                 session=self._session_data,
+                sessions=self._session_data_per_charger,
+                currency=self.hass.config.currency or "EUR",
+                ev_charger_count=len(self._ev_devices),
+                ev_charger_ids=list(self._ev_devices.keys()),
                 ev_intelligence=ev_intelligence,
                 last_update=dt_util.now(),
             )
@@ -879,6 +998,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 await self._notification_manager.notify_forecast_alert(
                     forecast_data.forecast_tomorrow_kwh
                 )
+            # EV Intelligence notifications (#106)
+            ev_intel = getattr(self, '_last_ev_intelligence', None)
+            if ev_intel:
+                # 1. Nearly full: taper detector shows < 5 minutes remaining
+                if (ev_intel.taper.minutes_to_full > 0
+                        and ev_intel.taper.minutes_to_full < 5
+                        and power.ev_charging):
+                    await self._notification_manager.notify_ev_nearly_full(
+                        ev_intel.taper.minutes_to_full
+                    )
+
+                # 2. Night charge skipped: night mode, EV connected, skip decided
+                if (self.time_manager.is_night_mode()
+                        and power.ev_connected
+                        and not ev_intel.charge_needed
+                        and ev_intel.estimated_soc_pct > 0):
+                    await self._notification_manager.notify_ev_charge_skip(
+                        ev_intel.estimated_soc_pct,
+                        ev_intel.nights_until_charge,
+                    )
+
+                # 3. Charge recommended: night mode, SOC low, charge needed
+                if (self.time_manager.is_night_mode()
+                        and power.ev_connected
+                        and ev_intel.charge_needed
+                        and ev_intel.estimated_soc_pct < 30
+                        and ev_intel.estimated_soc_pct > 0):
+                    await self._notification_manager.notify_ev_charge_recommended(
+                        ev_intel.estimated_soc_pct
+                    )
+
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Event notification failed: %s", e)
         except HomeAssistantError as e:
@@ -909,8 +1059,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         try:
             await self._retry_ev_device_setup()
-            if self._ev_device:
-                _LOGGER.info("EV device discovered on retry %d", self._ev_retry_count)
+            if self._ev_device or self._ev_devices:
+                charger_count = len(self._ev_devices) if self._ev_devices else (1 if self._ev_device else 0)
+                _LOGGER.info("EV device(s) discovered on retry %d (%d charger(s))", self._ev_retry_count, charger_count)
                 self._ev_retry_count = 999  # Stop retrying
         except (HomeAssistantError, ValueError, AttributeError) as e:
             level = logging.WARNING if self._ev_retry_count >= 3 else logging.DEBUG
@@ -1306,44 +1457,119 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
     def _restore_ev_session_state(self) -> None:
         """Restore EV session state from storage on startup."""
-        if not self._storage or not self._ev_device:
+        if not self._storage:
             return
         state = self._storage.get_ev_session_state()
         if not state:
             return
-        ev = self._ev_device
-        ev._session_active = state.get("session_active", False)
-        ev._current_setpoint = state.get("current_setpoint", 0.0)
-        self._ev_last_change_time = None  # Don't restore — let cooldown expire
-        _LOGGER.info(
-            "Restored EV session: active=%s, setpoint=%.0fA",
-            ev._session_active, ev._current_setpoint,
-        )
+
+        # Multi-charger (#112): restore all chargers
+        if self._ev_devices:
+            per_charger = state.get("chargers", {})
+            for cid, ev_dev in self._ev_devices.items():
+                cstate = per_charger.get(cid, state if cid == next(iter(self._ev_devices)) else {})
+                ev_dev._session_active = cstate.get("session_active", False)
+                ev_dev._current_setpoint = cstate.get("current_setpoint", 0.0)
+                _LOGGER.info(
+                    "Restored EV session for %s: active=%s, setpoint=%.0fA",
+                    ev_dev.name, ev_dev._session_active, ev_dev._current_setpoint,
+                )
+        elif self._ev_device:
+            ev = self._ev_device
+            ev._session_active = state.get("session_active", False)
+            ev._current_setpoint = state.get("current_setpoint", 0.0)
+            _LOGGER.info(
+                "Restored EV session: active=%s, setpoint=%.0fA",
+                ev._session_active, ev._current_setpoint,
+            )
+        self._ev_last_change_time = None
 
     def _save_ev_session_state(self) -> None:
         """Persist EV session state to storage."""
-        if not self._storage or not self._ev_device:
+        if not self._storage:
             return
-        ev = self._ev_device
-        self._storage.set_ev_session_state({
-            "session_active": ev._session_active,
-            "current_setpoint": ev._current_setpoint,
-        })
+
+        # Multi-charger (#112): save all chargers
+        if self._ev_devices:
+            per_charger = {}
+            for cid, ev_dev in self._ev_devices.items():
+                per_charger[cid] = {
+                    "session_active": ev_dev._session_active,
+                    "current_setpoint": ev_dev._current_setpoint,
+                }
+            # Also save primary charger at top level for backward compat
+            primary = next(iter(self._ev_devices.values()))
+            self._storage.set_ev_session_state({
+                "session_active": primary._session_active,
+                "current_setpoint": primary._current_setpoint,
+                "chargers": per_charger,
+            })
+        elif self._ev_device:
+            ev = self._ev_device
+            self._storage.set_ev_session_state({
+                "session_active": ev._session_active,
+                "current_setpoint": ev._current_setpoint,
+            })
 
     def _update_ev_intelligence(
         self, power: PowerReadings, energy,
     ) -> "EVIntelligenceData":
-        """Update EV taper detection, virtual SOC, and charge skip logic (#106)."""
+        """Update EV taper detection, virtual SOC, and charge skip logic (#106).
+
+        Multi-charger (#112): runs taper detection per charger using per-charger
+        power readings. The primary charger's results drive virtual SOC and
+        charge skip decisions (only one EV vehicle assumed for SOC tracking).
+        """
         from .types import EVIntelligenceData, EVTaperData
 
         now = dt_util.now()
+        interval_hours = self.update_interval.total_seconds() / 3600
+
+        # Multi-charger (#112): run per-charger taper detection
+        if self._ev_devices and len(self._ev_devices) > 1:
+            for cid, ev_dev in self._ev_devices.items():
+                if cid not in self._ev_taper_detectors:
+                    self._ev_taper_detectors[cid] = EVTaperDetector(self.config)
+                    # Restore state if available
+                    if self._storage:
+                        stored = self._storage.get_ev_intelligence_state()
+                        per_charger_state = (stored or {}).get("chargers", {}).get(cid)
+                        if per_charger_state:
+                            self._ev_taper_detectors[cid].restore_state(per_charger_state)
+
+                # Read per-charger power from device's power entity
+                charger_power = 0.0
+                if ev_dev.power_entity_id:
+                    pstate = self.hass.states.get(ev_dev.power_entity_id)
+                    if pstate and pstate.state not in ("unknown", "unavailable"):
+                        try:
+                            charger_power = float(pstate.state)
+                            # Auto-convert kW to W
+                            unit = pstate.attributes.get("unit_of_measurement", "W")
+                            if unit == "kW":
+                                charger_power *= 1000
+                        except (ValueError, TypeError):
+                            pass
+
+                charger_setpoint = getattr(ev_dev, "_current_setpoint", 0.0)
+                charger_connected = getattr(ev_dev, "_session_active", False) or power.ev_connected
+
+                if charger_power > 0 or charger_connected:
+                    self._ev_taper_detectors[cid].update(
+                        charger_power, charger_setpoint, charger_connected, now,
+                    )
+
+            # Primary charger's detector drives SOC/skip (sync with main detector)
+            primary_id = next(iter(self._ev_devices))
+            if primary_id in self._ev_taper_detectors:
+                self._ev_taper_detector = self._ev_taper_detectors[primary_id]
 
         # Get current EV setpoint (0 if no EV device)
         ev_setpoint = 0.0
         if self._ev_device:
             ev_setpoint = getattr(self._ev_device, "_current_setpoint", 0.0)
 
-        # Run taper detection
+        # Run taper detection (primary / single charger)
         if power.ev_power > 0 or power.ev_connected:
             taper_data = self._ev_taper_detector.update(
                 power.ev_power, ev_setpoint, power.ev_connected, now,
@@ -1353,8 +1579,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Track energy since last full charge
         if hasattr(energy, "daily_ev"):
-            # Use per-cycle increment: ev_power * interval / 3600 / 1000
-            interval_hours = self.update_interval.total_seconds() / 3600
             ev_increment = power.ev_power * interval_hours / 1000
             self._ev_taper_detector.update_energy(ev_increment)
 
@@ -1386,12 +1610,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             predicted_daily, self._cycle_vehicle_soc,
         )
 
-        # Track consecutive skips for safety net
+        # Track consecutive skips for safety net (once per night, not every cycle)
         if self.time_manager.is_night_mode() and power.ev_connected:
             if not charge_needed:
-                self._ev_taper_detector.record_skip()
+                if not getattr(self, '_skip_recorded_tonight', False):
+                    self._ev_taper_detector.record_skip()
+                    self._skip_recorded_tonight = True
             else:
                 self._ev_taper_detector.reset_skips()
+                self._skip_recorded_tonight = False
+        elif not self.time_manager.is_night_mode():
+            self._skip_recorded_tonight = False
 
         return EVIntelligenceData(
             taper=taper_data,

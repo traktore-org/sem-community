@@ -107,6 +107,52 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 3:
+        try:
+            # v2 → v3: Wrap flat ev_* keys into ev_chargers list for multi-charger support
+            new_data = {**entry.data}
+            new_options = {**entry.options}
+            full = {**new_data, **new_options}
+
+            # Only migrate if flat EV keys exist and ev_chargers doesn't
+            if full.get("ev_charging_power_sensor") and "ev_chargers" not in full:
+                _EV_FLAT_KEYS = [
+                    "ev_connected_sensor", "ev_charging_sensor",
+                    "ev_charging_power_sensor", "ev_charger_service",
+                    "ev_charger_service_entity_id", "ev_current_control_entity",
+                    "ev_current_sensor", "ev_total_energy_sensor",
+                    "ev_session_energy_sensor", "ev_service_param_name",
+                    "ev_service_device_id", "ev_start_stop_entity",
+                    "ev_charge_mode_entity", "ev_charge_mode_start",
+                    "ev_charge_mode_stop", "ev_start_service",
+                    "ev_start_service_data", "ev_stop_service",
+                    "ev_stop_service_data", "ev_charger_needs_cycle",
+                    "ev_surplus_priority", "ev_load_priority",
+                ]
+                charger_0 = {"id": "ev_charger", "name": "EV Charger"}
+                for k in _EV_FLAT_KEYS:
+                    val = new_options.get(k) or new_data.get(k)
+                    if val is not None:
+                        charger_0[k] = val
+                new_options["ev_chargers"] = [charger_0]
+                _LOGGER.info(
+                    "Migrated flat EV config to ev_chargers list (1 charger)"
+                )
+
+            hass.config_entries.async_update_entry(
+                entry,
+                data=new_data,
+                options=new_options,
+                version=3,
+                minor_version=1,
+            )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v3 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -212,88 +258,113 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             _LOGGER.warning("Unified device registry init failed (non-critical): %s", err)
             coordinator._device_registry = None
 
-        # Register EV charger as CurrentControlDevice for unified control
-        # Solar mode: SurplusController manages it by priority
-        # Night mode: coordinator manages it directly with grid headroom budget
+        # Register EV charger(s) as CurrentControlDevice for unified control
+        # Solar mode: SurplusController manages by priority
+        # Night mode: coordinator manages directly with grid headroom budget
         #
-        # Auto-discover EV charger from integration (KEBA, Easee, etc.)
-        # Config options take precedence over auto-discovery
-        ev_auto = {}
-        if coordinator._device_registry:
-            ev_auto = coordinator._device_registry.discover_ev_charger()
-            if ev_auto:
-                _LOGGER.info("Auto-discovered EV charger config: %s", list(ev_auto.keys()))
-                # Persist discovered config so it's available on next boot
-                # (avoids race condition where KEBA loads after SEM)
-                new_options = dict(entry.options)
-                changed = False
-                for key in ("ev_charger_service", "ev_charger_service_entity_id",
-                            "ev_charging_power_sensor", "ev_connected_sensor",
-                            "ev_charging_sensor", "ev_total_energy_sensor"):
-                    if ev_auto.get(key) and not new_options.get(key):
-                        new_options[key] = ev_auto[key]
-                        changed = True
-                if changed:
+        # Multi-charger support (#112): ev_chargers list in config
+        # Backward compat: flat ev_* keys wrapped into list by v2→v3 migration
+
+        # Build charger config list from config + auto-discovery
+        ev_chargers_config = list(full_config.get("ev_chargers") or [])
+
+        # Auto-discover if no chargers configured
+        if not ev_chargers_config:
+            ev_auto = {}
+            if coordinator._device_registry:
+                ev_auto = coordinator._device_registry.discover_ev_charger()
+                if ev_auto:
+                    _LOGGER.info("Auto-discovered EV charger config: %s", list(ev_auto.keys()))
+                    ev_auto["id"] = "ev_charger"
+                    ev_auto["name"] = "EV Charger"
+                    ev_chargers_config = [ev_auto]
+                    # Persist discovered config
+                    new_options = dict(entry.options)
+                    new_options["ev_chargers"] = ev_chargers_config
                     hass.config_entries.async_update_entry(entry, options=new_options)
-                    full_config.update(new_options)
-                    _LOGGER.info("Persisted EV charger auto-discovery to config entry")
+                    full_config["ev_chargers"] = ev_chargers_config
+            # Fallback: check flat keys (pre-migration installs)
+            if not ev_chargers_config:
+                ev_power = full_config.get("ev_charging_power_sensor")
+                ev_svc = full_config.get("ev_charger_service")
+                ev_ctl = full_config.get("ev_current_control_entity")
+                if ev_power and (ev_svc or ev_ctl):
+                    ev_chargers_config = [{
+                        "id": "ev_charger", "name": "EV Charger",
+                        **{k: full_config[k] for k in full_config
+                           if k.startswith("ev_") and full_config[k] is not None},
+                    }]
 
-        ev_charger_service = full_config.get("ev_charger_service") or ev_auto.get("ev_charger_service")
-        ev_service_entity = full_config.get("ev_charger_service_entity_id") or ev_auto.get("ev_charger_service_entity_id")
-        ev_current_entity = full_config.get("ev_current_control_entity") or ev_auto.get("ev_current_control_entity")
-        ev_power_entity = full_config.get("ev_charging_power_sensor") or ev_auto.get("ev_charging_power_sensor")
-        ev_priority = full_config.get("ev_surplus_priority", full_config.get("ev_load_priority", 3))
+        # Register each charger
+        from .devices.base import CurrentControlDevice
+        coordinator._ev_devices = {}
 
-        # Also auto-fill sensor reader config from discovery
-        if ev_auto:
-            for key in ("ev_connected_sensor", "ev_charging_sensor", "ev_total_energy_sensor"):
-                if not full_config.get(key) and ev_auto.get(key):
-                    full_config[key] = ev_auto[key]
-                    _LOGGER.debug("Auto-filled %s = %s", key, ev_auto[key])
+        for idx, charger_cfg in enumerate(ev_chargers_config):
+            charger_id = charger_cfg.get("id", f"ev_charger_{idx}")
+            charger_name = charger_cfg.get("name", f"EV Charger {idx + 1}")
 
-        if ev_power_entity and (ev_charger_service or ev_current_entity):
-            from .devices.base import CurrentControlDevice
+            # Resolve config: charger-specific keys, fall back to global config
+            def _cfg(key, default=None):
+                return charger_cfg.get(key) or full_config.get(key) or default
+
+            ev_power_entity = _cfg("ev_charging_power_sensor")
+            ev_charger_service = _cfg("ev_charger_service")
+            ev_service_entity = _cfg("ev_charger_service_entity_id")
+            ev_current_entity = _cfg("ev_current_control_entity")
+            ev_priority = int(_cfg("ev_surplus_priority", _cfg("ev_load_priority", 3 + idx)))
+
+            # Also auto-fill sensor reader config from first charger
+            if idx == 0:
+                for key in ("ev_connected_sensor", "ev_charging_sensor", "ev_total_energy_sensor"):
+                    if not full_config.get(key) and charger_cfg.get(key):
+                        full_config[key] = charger_cfg[key]
+
+            if not ev_power_entity or not (ev_charger_service or ev_current_entity):
+                _LOGGER.debug("Charger %s missing power sensor or control method, skipping", charger_id)
+                continue
+
             ev_device = CurrentControlDevice(
                 hass=hass,
-                device_id="ev_charger",
-                name="EV Charger",
+                device_id=charger_id,
+                name=charger_name,
                 priority=ev_priority,
-                min_current=float(full_config.get("ev_min_current", 6)),
-                max_current=float(full_config.get("max_charging_current", 32)),
-                phases=int(full_config.get("ev_phases", 3)),
+                min_current=float(_cfg("ev_min_current", 6)),
+                max_current=float(_cfg("max_charging_current", 32)),
+                phases=int(_cfg("ev_phases", 3)),
                 voltage=230.0,
                 power_entity_id=ev_power_entity,
                 charger_service=ev_charger_service,
                 charger_service_entity_id=ev_service_entity,
                 current_entity_id=ev_current_entity,
             )
-            ev_device.needs_pilot_cycle = full_config.get("ev_charger_needs_cycle", False)
+            ev_device.needs_pilot_cycle = _cfg("ev_charger_needs_cycle", False)
             # Per-integration charger profile (#82)
-            if full_config.get("ev_service_param_name"):
-                ev_device.service_param_name = full_config["ev_service_param_name"]
-            if full_config.get("ev_service_device_id"):
-                ev_device.service_device_id = full_config["ev_service_device_id"]
-            if full_config.get("ev_start_stop_entity"):
-                ev_device.start_stop_entity = full_config["ev_start_stop_entity"]
-            if full_config.get("ev_charge_mode_entity"):
-                ev_device.charge_mode_entity = full_config["ev_charge_mode_entity"]
-                ev_device.charge_mode_start = full_config.get("ev_charge_mode_start")
-                ev_device.charge_mode_stop = full_config.get("ev_charge_mode_stop")
-            if full_config.get("ev_start_service"):
-                ev_device.start_service = full_config["ev_start_service"]
+            if _cfg("ev_service_param_name"):
+                ev_device.service_param_name = _cfg("ev_service_param_name")
+            if _cfg("ev_service_device_id"):
+                ev_device.service_device_id = _cfg("ev_service_device_id")
+            if _cfg("ev_start_stop_entity"):
+                ev_device.start_stop_entity = _cfg("ev_start_stop_entity")
+            if _cfg("ev_charge_mode_entity"):
+                ev_device.charge_mode_entity = _cfg("ev_charge_mode_entity")
+                ev_device.charge_mode_start = _cfg("ev_charge_mode_start")
+                ev_device.charge_mode_stop = _cfg("ev_charge_mode_stop")
+            if _cfg("ev_start_service"):
+                ev_device.start_service = _cfg("ev_start_service")
                 import json as _json
-                ev_device.start_service_data = _json.loads(full_config.get("ev_start_service_data", "{}"))
-            if full_config.get("ev_stop_service"):
-                ev_device.stop_service = full_config["ev_stop_service"]
+                ev_device.start_service_data = _json.loads(_cfg("ev_start_service_data", "{}"))
+            if _cfg("ev_stop_service"):
+                ev_device.stop_service = _cfg("ev_stop_service")
                 import json as _json
-                ev_device.stop_service_data = _json.loads(full_config.get("ev_stop_service_data", "{}"))
+                ev_device.stop_service_data = _json.loads(_cfg("ev_stop_service_data", "{}"))
+
             coordinator._surplus_controller.register_device(ev_device)
-            coordinator._ev_device = ev_device
-            ev_device.managed_externally = True  # Coordinator always owns EV
+            coordinator._ev_devices[charger_id] = ev_device
+            ev_device.managed_externally = True
             _LOGGER.info(
-                "EV charger registered as CurrentControlDevice "
+                "EV charger '%s' registered as CurrentControlDevice "
                 "(priority %d, max %dA, service: %s)",
-                ev_priority,
+                charger_name, ev_priority,
                 int(ev_device.max_current),
                 ev_charger_service or ev_current_entity,
             )
@@ -307,8 +378,46 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     is_critical=False,
                     charger_service=ev_charger_service,
                 )
+
+        # Backward compat: _ev_device points to primary (first) charger
+        if coordinator._ev_devices:
+            coordinator._ev_device = next(iter(coordinator._ev_devices.values()))
+            _LOGGER.info(
+                "Registered %d EV charger(s). Primary: %s",
+                len(coordinator._ev_devices),
+                coordinator._ev_device.name,
+            )
         else:
             _LOGGER.debug("EV charger not configured (no power sensor or control method)")
+
+        # Register heat pump SG-Ready controller if configured
+        hp_relay1 = full_config.get("heat_pump_relay1_entity")
+        hp_relay2 = full_config.get("heat_pump_relay2_entity")
+        if hp_relay1 and hp_relay2:
+            from .devices.heat_pump_controller import HeatPumpController
+            hp_device = HeatPumpController(
+                hass=hass,
+                device_id="heat_pump",
+                name=full_config.get("heat_pump_name", "Heat Pump"),
+                rated_power=float(full_config.get("heat_pump_rated_power", 2000)),
+                priority=int(full_config.get("heat_pump_priority", 4)),
+                relay1_entity_id=hp_relay1,
+                relay2_entity_id=hp_relay2,
+                climate_entity_id=full_config.get("heat_pump_climate_entity"),
+                power_entity_id=full_config.get("heat_pump_power_sensor"),
+                temperature_entity_id=full_config.get("heat_pump_temperature_sensor"),
+                boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
+                max_setpoint=float(full_config.get("heat_pump_max_setpoint", 55.0)),
+                force_on_threshold=float(full_config.get("heat_pump_force_on_threshold", 5000)),
+            )
+            coordinator._surplus_controller.register_device(hp_device)
+            _LOGGER.info(
+                "Heat pump registered as SG-Ready device "
+                "(priority %d, relay1=%s, relay2=%s)",
+                hp_device.priority, hp_relay1, hp_relay2,
+            )
+        else:
+            _LOGGER.debug("Heat pump not configured (no relay entities)")
 
     except Exception as err:
         _LOGGER.warning(

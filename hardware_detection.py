@@ -708,55 +708,63 @@ HardwareDetector = EVChargerDetector
 # Queries the entity registry for entities belonging to supported
 # EV charger integrations and maps them to config keys.
 
+def discover_all_ev_chargers_from_registry(
+    hass: HomeAssistant,
+) -> List[Dict[str, str]]:
+    """Auto-discover ALL EV chargers from known integrations via entity registry.
+
+    Returns a list of charger configs, one per detected charger. Each dict
+    contains the same keys as discover_ev_charger_from_registry().
+    The first entry is the "primary" charger for backward compatibility.
+
+    For charger integrations that expose multiple devices (e.g., 2 Wallbox
+    Pulsars), each device produces a separate entry grouped by device_id.
+    """
+    entity_reg = entity_registry.async_get(hass)
+    chargers: List[Dict[str, str]] = []
+
+    for platform, discover_fn in _EV_CHARGER_PLATFORMS:
+        entities = [
+            e for e in entity_reg.entities.values()
+            if e.platform == platform and not e.disabled_by
+        ]
+        if not entities:
+            continue
+
+        # Group entities by device_id to detect multiple chargers
+        # of the same brand (e.g., 2 Wallbox Pulsars)
+        devices: Dict[Optional[str], list] = {}
+        for e in entities:
+            devices.setdefault(e.device_id, []).append(e)
+
+        for device_id, device_entities in devices.items():
+            result = discover_fn(device_entities)
+            if result:
+                result["_platform"] = platform
+                if device_id:
+                    result["_device_id"] = device_id
+                _LOGGER.info(
+                    "Auto-discovered EV charger from %s (device %s): %s",
+                    platform,
+                    device_id or "default",
+                    {k: v for k, v in result.items() if not k.startswith("_")},
+                )
+                chargers.append(result)
+
+    return chargers
+
+
 def discover_ev_charger_from_registry(hass: HomeAssistant) -> Dict[str, str]:
     """Auto-discover EV charger config from known integrations via entity registry.
 
-    Queries the HA entity registry for entities belonging to supported EV charger
-    integrations (KEBA, Easee, go-eCharger, Wallbox, Zaptec, ChargePoint, Heidelberg)
-    and maps them to SEM config keys.
+    Backward-compatible wrapper: returns the first detected charger.
 
     Returns:
         Dict with config keys (ev_connected_sensor, ev_charging_sensor, etc.)
         Only includes keys where entities were found.
     """
-    entity_reg = entity_registry.async_get(hass)
-    result: Dict[str, str] = {}
-
-    for platform, discover_fn in [
-        ("keba", _discover_keba),
-        ("easee", _discover_easee),
-        ("goecharger", _discover_goecharger),
-        ("goecharger_mqtt", _discover_goecharger_mqtt),
-        ("goecharger_api2", _discover_goecharger_mqtt),  # marq24 variant uses same entity patterns
-        ("wallbox", _discover_wallbox),
-        ("zaptec", _discover_zaptec),
-        ("chargepoint", _discover_chargepoint),
-        ("heidelberg_energy_control", _discover_heidelberg),
-        ("openwb2mqtt", _discover_openwb),
-        ("openwbmqtt", _discover_openwb),
-        ("ocpp", _discover_ocpp),
-        ("ohme", _discover_ohme),
-        ("peblar", _discover_peblar),
-        ("v2c", _discover_v2c),
-        ("alfen_wallbox", _discover_alfen),
-        ("openevse", _discover_openevse),
-        ("blue_current", _discover_blue_current),
-    ]:
-        entities = [
-            e for e in entity_reg.entities.values()
-            if e.platform == platform and not e.disabled_by
-        ]
-        if entities:
-            result = discover_fn(entities)
-            if result:
-                _LOGGER.info(
-                    "Auto-discovered EV charger from %s integration: %s",
-                    platform,
-                    {k: v for k, v in result.items() if v},
-                )
-                return result
-
-    return result
+    all_chargers = discover_all_ev_chargers_from_registry(hass)
+    return all_chargers[0] if all_chargers else {}
 
 
 def _discover_keba(entities) -> Dict[str, str]:
@@ -1171,6 +1179,29 @@ def _discover_blue_current(entities) -> Dict[str, str]:
         if eid.startswith("sensor.") and ("avg_current" in eid or "max_usage" in eid):
             result.setdefault("ev_current_sensor", eid)
     return result
+
+
+# Platform → discovery function mapping (must be after all _discover_* functions)
+_EV_CHARGER_PLATFORMS = [
+    ("keba", _discover_keba),
+    ("easee", _discover_easee),
+    ("goecharger", _discover_goecharger),
+    ("goecharger_mqtt", _discover_goecharger_mqtt),
+    ("goecharger_api2", _discover_goecharger_mqtt),
+    ("wallbox", _discover_wallbox),
+    ("zaptec", _discover_zaptec),
+    ("chargepoint", _discover_chargepoint),
+    ("heidelberg_energy_control", _discover_heidelberg),
+    ("openwb2mqtt", _discover_openwb),
+    ("openwbmqtt", _discover_openwb),
+    ("ocpp", _discover_ocpp),
+    ("ohme", _discover_ohme),
+    ("peblar", _discover_peblar),
+    ("v2c", _discover_v2c),
+    ("alfen_wallbox", _discover_alfen),
+    ("openevse", _discover_openevse),
+    ("blue_current", _discover_blue_current),
+]
 
 
 # ============================================================

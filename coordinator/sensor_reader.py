@@ -510,7 +510,9 @@ class SensorReader:
                 try:
                     val = float(state.state)
                     if 0 <= val <= 100:
-                        _LOGGER.info("Auto-detected battery SOC: %s = %.0f%%", candidate, val)
+                        if not getattr(self, '_battery_soc_logged', False):
+                            _LOGGER.info("Auto-detected battery SOC: %s = %.0f%%", candidate, val)
+                            self._battery_soc_logged = True
                         return candidate
                 except (ValueError, TypeError):
                     pass

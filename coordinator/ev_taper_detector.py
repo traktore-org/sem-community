@@ -141,8 +141,11 @@ class EVTaperDetector:
             sem_changed=sem_changed,
         ))
 
-        # Check for full charge (0W after declining)
-        if self._declining_phase and ev_power < FULL_POWER_THRESHOLD:
+        # Check for full charge (0W after declining from a real charging session)
+        # Require peak > 3000W to avoid false triggers from night charging toggles
+        if (self._declining_phase
+                and ev_power < FULL_POWER_THRESHOLD
+                and self._session_peak_w > 3000):
             if not self._full_detected:
                 self._full_detected = True
                 self._last_full_timestamp = timestamp.isoformat()
