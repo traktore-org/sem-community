@@ -127,6 +127,7 @@ Tests the peak-aware night charging feature that limits EV charging current base
 |---------|-----------|------------|----------|
 | EV Intelligence | test_ev_taper_detector.py | 64 | ✅ Comprehensive |
 | Multi-Device Aggregation | test_multi_device_aggregation.py | 15 | ✅ Comprehensive |
+| Multi-Charger Control | test_multi_charger_control.py | 41 | ✅ Comprehensive |
 | Hardware Compatibility | test_hardware_compat.py | 43 | ✅ Comprehensive |
 | Hardware Detection | test_hardware_detection.py | 56 | ✅ Comprehensive |
 | Load Management | test_load_management.py | 37 | ✅ Comprehensive |
@@ -432,7 +433,7 @@ tests/
 ## Test Metrics
 
 ### Current Status (v1.3.0)
-- **Total Tests**: 1,032 tests
+- **Total Tests**: 1,073 tests
 - **Test Files**: 28 files
 - **Coverage**: ~90% (estimated)
 - **Pass Rate**: 100%
@@ -472,4 +473,4 @@ Example PR checklist:
 
 *Last updated: 2026-04-26*
 *Version: 1.3.0*
-*Total Tests: 1,032*
+*Total Tests: 1,073*
