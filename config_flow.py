@@ -1000,6 +1000,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Tariff & Advanced settings."""
         if user_input is not None:
+            # Auto-detect dynamic tariff provider entity if mode=dynamic
+            if user_input.get("tariff_mode") == "dynamic" and not user_input.get("dynamic_tariff_entity"):
+                # Try to find Tibber/Nordpool/aWATTar entity automatically
+                for state in self.hass.states.async_all("sensor"):
+                    eid = state.entity_id
+                    if any(p in eid for p in ("electricity_price", "nordpool", "awattar")):
+                        user_input["dynamic_tariff_entity"] = eid
+                        _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
+                        break
             self._data.update(user_input)
             return await self.async_step_load_management()
 
@@ -1010,6 +1019,25 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="settings_tariff",
             data_schema=vol.Schema({
+                vol.Optional(
+                    "tariff_mode",
+                    default=_c("tariff_mode", "static"),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "static", "label": "Static (fixed HT/NT rates)"},
+                            {"value": "dynamic", "label": "Dynamic (Tibber / Nordpool / aWATTar)"},
+                            {"value": "calendar", "label": "Calendar (time-based HT/NT schedule)"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    "dynamic_tariff_entity",
+                    description={"suggested_value": current_config.get("dynamic_tariff_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
                 vol.Optional(
                     "electricity_import_rate",
                     default=_c("electricity_import_rate", 0.3387),
