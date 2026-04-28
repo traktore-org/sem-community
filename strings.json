@@ -104,6 +104,19 @@
           "ev_target_soc": "EV target SOC (%)"
         }
       },
+      "heat_pump": {
+        "title": "Heat Pump (SG-Ready)",
+        "description": "Configure your SG-Ready heat pump for solar surplus control. Both relay entities are required for SG-Ready operation. Leave empty to skip.",
+        "data": {
+          "heat_pump_relay1_entity": "SG-Ready Relay 1 (switch entity)",
+          "heat_pump_relay2_entity": "SG-Ready Relay 2 (switch entity)",
+          "heat_pump_climate_entity": "Climate entity for temperature boost (optional)",
+          "heat_pump_power_sensor": "Power sensor (optional)",
+          "heat_pump_boost_offset": "Temperature boost offset (°C)",
+          "heat_pump_max_setpoint": "Maximum temperature setpoint (°C)",
+          "heat_pump_priority": "Surplus priority (1=highest)"
+        }
+      },
       "ev_charger_menu": {
         "title": "EV Chargers",
         "description": "Manage your EV charger configuration.",
