@@ -369,8 +369,8 @@ class TestSchedulerEvaluation:
             current_soc=50.0,
             forecast_tomorrow_kwh=20.0,  # Lots of sun
             expected_consumption_kwh=10.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             correction_factor=1.0,
         )
 
@@ -385,8 +385,8 @@ class TestSchedulerEvaluation:
             current_soc=50.0,
             forecast_tomorrow_kwh=12.0,  # 12 * 0.8 = 9.6 corrected
             expected_consumption_kwh=11.0,  # deficit = 11 - 9.6 = 1.4 < 2.0
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             correction_factor=1.0,
         )
 
@@ -401,8 +401,8 @@ class TestSchedulerEvaluation:
             current_soc=30.0,
             forecast_tomorrow_kwh=5.0,  # 5 * 0.8 = 4.0
             expected_consumption_kwh=15.0,  # deficit = 11 kWh
-            nt_rate=0.28,  # 0.28 / 0.92 = 0.304 > 0.30
-            ht_rate=0.30,
+            off_peak_rate=0.28,  # 0.28 / 0.92 = 0.304 > 0.30
+            peak_rate=0.30,
             correction_factor=1.0,
         )
 
@@ -421,8 +421,8 @@ class TestSchedulerEvaluation:
             current_soc=95.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=15.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             correction_factor=1.0,
         )
 
@@ -437,8 +437,8 @@ class TestSchedulerEvaluation:
             current_soc=30.0,
             forecast_tomorrow_kwh=5.0,  # 5 * 0.8 = 4.0
             expected_consumption_kwh=12.0,  # deficit = 8 kWh
-            nt_rate=0.10,  # 0.10 / 0.92 = 0.108 < 0.30 → profitable
-            ht_rate=0.30,
+            off_peak_rate=0.10,  # 0.10 / 0.92 = 0.108 < 0.30 → profitable
+            peak_rate=0.30,
             correction_factor=1.0,
         )
 
@@ -458,8 +458,8 @@ class TestSchedulerEvaluation:
             current_soc=50.0,
             forecast_tomorrow_kwh=5.0,  # 5 * 0.8 = 4.0
             expected_consumption_kwh=10.0,  # deficit = 6 kWh
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             tariff_provider=mock_tariff_provider,
             correction_factor=1.0,
         )
@@ -479,8 +479,8 @@ class TestSchedulerEvaluation:
             current_soc=50.0,
             forecast_tomorrow_kwh=15.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             correction_factor=0.7,
         )
 
@@ -497,8 +497,8 @@ class TestSchedulerEvaluation:
             current_soc=50.0,
             forecast_tomorrow_kwh=15.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             correction_factor=1.2,
         )
 
@@ -513,8 +513,8 @@ class TestSchedulerEvaluation:
             current_soc=20.0,
             forecast_tomorrow_kwh=0.0,  # No sun
             expected_consumption_kwh=20.0,  # Huge deficit
-            nt_rate=0.05,
-            ht_rate=0.30,
+            off_peak_rate=0.05,
+            peak_rate=0.30,
             correction_factor=1.0,
         )
 
@@ -533,8 +533,8 @@ class TestSchedulerEvaluation:
             current_soc=40.0,
             forecast_tomorrow_kwh=2.0,
             expected_consumption_kwh=10.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             correction_factor=1.0,
         )
 
@@ -844,8 +844,8 @@ class TestSchedulerIntegration:
             current_soc=40.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
         assert decision.state == SchedulerState.SCHEDULED
 
@@ -879,8 +879,8 @@ class TestSchedulerIntegration:
             current_soc=40.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             tariff_provider=mock_tariff_provider,
         )
         assert decision.state == SchedulerState.SCHEDULED
@@ -908,8 +908,8 @@ class TestSchedulerIntegration:
             current_soc=20.0,
             forecast_tomorrow_kwh=3.0,  # 3 * 0.6 * 0.8 = 1.44
             expected_consumption_kwh=12.0,  # deficit = 10.56
-            nt_rate=0.08,
-            ht_rate=0.25,
+            off_peak_rate=0.08,
+            peak_rate=0.25,
             correction_factor=0.6,
         )
 
@@ -929,8 +929,8 @@ class TestSchedulerIntegration:
             current_soc=50.0,
             forecast_tomorrow_kwh=25.0,  # 25 * 1.1 * 0.8 = 22
             expected_consumption_kwh=12.0,  # deficit = -10 → no charge
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             correction_factor=1.1,
         )
 
@@ -1071,8 +1071,8 @@ class TestSchedulePlanning:
             current_soc=30.0,
             forecast_tomorrow_kwh=3.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             ev_kwh_needed=20.0,
             ev_max_power_w=11000,
         )
@@ -1097,8 +1097,8 @@ class TestSchedulePlanning:
             current_soc=30.0,
             forecast_tomorrow_kwh=3.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             ev_kwh_needed=20.0,
             ev_max_power_w=7000,  # EV takes 7kW, leaving 2kW for battery
         )
@@ -1121,8 +1121,8 @@ class TestSchedulePlanning:
             current_soc=30.0,
             forecast_tomorrow_kwh=3.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             ev_kwh_needed=20.0,
             ev_max_power_w=11000,
         )
@@ -1143,8 +1143,8 @@ class TestSchedulePlanning:
             current_soc=30.0,
             forecast_tomorrow_kwh=3.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             ev_kwh_needed=0.0,
             ev_max_power_w=0,
         )
@@ -1163,8 +1163,8 @@ class TestSchedulePlanning:
             current_soc=50.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=10.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             tariff_provider=mock_tariff_provider,
             ev_kwh_needed=5.0,
             ev_max_power_w=7000,
@@ -1186,8 +1186,8 @@ class TestSchedulePlanning:
             current_soc=65.0,
             forecast_tomorrow_kwh=5.0,  # 5*0.8=4
             expected_consumption_kwh=8.0,  # deficit = 4
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             ev_kwh_needed=0.0,
             ev_max_power_w=0,
         )
@@ -1206,8 +1206,8 @@ class TestSchedulePlanning:
             current_soc=30.0,
             forecast_tomorrow_kwh=3.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             ev_kwh_needed=10.0,
             ev_max_power_w=7000,
         )
@@ -1231,8 +1231,8 @@ class TestSchedulePlanning:
             current_soc=20.0,
             forecast_tomorrow_kwh=0.0,
             expected_consumption_kwh=15.0,
-            nt_rate=0.08,
-            ht_rate=0.25,
+            off_peak_rate=0.08,
+            peak_rate=0.25,
             ev_kwh_needed=3.0,  # EV done after ~1 slot at 7kW
             ev_max_power_w=7000,
         )
@@ -1382,8 +1382,8 @@ class TestFeatureToggle:
             current_soc=30.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=15.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         assert decision.state == SchedulerState.IDLE
@@ -1424,8 +1424,8 @@ class TestCycleCost:
             current_soc=30.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=15.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         assert decision.state == SchedulerState.NOT_PROFITABLE
@@ -1441,8 +1441,8 @@ class TestCycleCost:
             current_soc=30.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=15.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         assert decision.state == SchedulerState.SCHEDULED
@@ -1457,8 +1457,8 @@ class TestCycleCost:
             current_soc=30.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=15.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         assert decision.state == SchedulerState.SCHEDULED
@@ -1480,8 +1480,8 @@ class TestNegativeTariff:
             current_soc=50.0,
             forecast_tomorrow_kwh=30.0,
             expected_consumption_kwh=10.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             current_price=-0.05,
         )
 
@@ -1498,8 +1498,8 @@ class TestNegativeTariff:
             current_soc=96.0,
             forecast_tomorrow_kwh=30.0,
             expected_consumption_kwh=10.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             current_price=-0.05,
         )
 
@@ -1515,8 +1515,8 @@ class TestNegativeTariff:
             current_soc=50.0,
             forecast_tomorrow_kwh=30.0,
             expected_consumption_kwh=10.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             current_price=-0.05,
         )
 
@@ -1539,8 +1539,8 @@ class TestForecastFallback:
             current_soc=30.0,
             forecast_tomorrow_kwh=0.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             forecast_available=False,
         )
 
@@ -1556,8 +1556,8 @@ class TestForecastFallback:
             current_soc=30.0,
             forecast_tomorrow_kwh=15.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             forecast_available=True,
             forecast_age_hours=1.0,
         )
@@ -1568,8 +1568,8 @@ class TestForecastFallback:
             current_soc=30.0,
             forecast_tomorrow_kwh=15.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
             forecast_available=True,
             forecast_age_hours=8.0,
         )
@@ -1586,8 +1586,8 @@ class TestForecastFallback:
             current_soc=30.0,
             forecast_tomorrow_kwh=20.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         scheduler.reset()
@@ -1598,8 +1598,8 @@ class TestForecastFallback:
             current_soc=30.0,
             forecast_tomorrow_kwh=20.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         assert decision_pessimistic.deficit_kwh >= decision_optimistic.deficit_kwh
@@ -1620,8 +1620,8 @@ class TestReplanTriggers:
             current_soc=40.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         assert scheduler.should_replan(current_soc=43.0, ev_connected=False) is False
@@ -1635,8 +1635,8 @@ class TestReplanTriggers:
             current_soc=40.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         assert scheduler.should_replan(current_soc=40.0, ev_connected=False) is False
@@ -1656,8 +1656,8 @@ class TestReplanTriggers:
             current_soc=40.0,
             forecast_tomorrow_kwh=5.0,
             expected_consumption_kwh=12.0,
-            nt_rate=0.10,
-            ht_rate=0.30,
+            off_peak_rate=0.10,
+            peak_rate=0.30,
         )
 
         scheduler.should_replan(current_soc=40.0, ev_connected=False)

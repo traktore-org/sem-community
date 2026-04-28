@@ -9,7 +9,7 @@
 [![GitHub Activity][commits-shield]][commits]
 [![License][license-shield]](LICENSE)
 [![hacs][hacsbadge]][hacs]
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/O5O11XNXL1)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/traktore-org)
 
 **Intelligent solar energy orchestration for Home Assistant** — maximize self-consumption, manage EV charging, and track energy costs automatically.
 
@@ -461,6 +461,16 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - Device control modes — `off`, `peak_only`, `surplus` per device
 - Tariff calendar — user-defined HT/NT time windows with Swiss provider presets
 - Performance, stability, usability, accessibility, and code quality improvements (see v1.0.4 changelog)
+
+---
+
+## Support SEM
+
+SEM is free and open-source. If it saves you money on your energy bill, consider buying the developer a coffee:
+
+[![Sponsor on GitHub](https://img.shields.io/badge/Sponsor_on_GitHub-%E2%9D%A4-ea4aaa?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/traktore-org)
+
+Your support helps keep SEM maintained, tested on real hardware, and free for everyone.
 
 ---
 

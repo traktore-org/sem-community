@@ -261,8 +261,8 @@ class BatteryChargeScheduler:
         current_soc: float,
         forecast_tomorrow_kwh: float,
         expected_consumption_kwh: float,
-        nt_rate: float,
-        ht_rate: float,
+        off_peak_rate: float,
+        peak_rate: float,
         tariff_provider=None,
         correction_factor: float = 1.0,
         ev_kwh_needed: float = 0.0,
@@ -277,8 +277,8 @@ class BatteryChargeScheduler:
             current_soc: Current battery SOC (0-100%)
             forecast_tomorrow_kwh: Raw solar forecast for tomorrow
             expected_consumption_kwh: Expected daily consumption
-            nt_rate: Night tariff rate (cost per kWh)
-            ht_rate: Day tariff rate (cost per kWh)
+            off_peak_rate: Off-peak (night) rate per kWh
+            peak_rate: Peak (day) rate per kWh
             tariff_provider: Optional DynamicTariffProvider for cheapest-hour scheduling
             correction_factor: Forecast correction factor from ForecastTracker
             ev_kwh_needed: EV energy still needed tonight (0 = no EV charging)
@@ -379,18 +379,18 @@ class BatteryChargeScheduler:
 
         # Break-even check: is grid charging profitable?
         # Include battery degradation cost: charge must save more than it wears
-        effective_nt_cost = nt_rate / self._config.roundtrip_efficiency
+        effective_charge_cost = off_peak_rate / self._config.roundtrip_efficiency
         cycle_cost = self._config.battery_cycle_cost * 2  # Full cycle = 2x half-cycle
-        total_charge_cost = effective_nt_cost + cycle_cost
+        total_charge_cost = effective_charge_cost + cycle_cost
 
-        if total_charge_cost >= ht_rate:
+        if total_charge_cost >= peak_rate:
             self._decision = SchedulerDecision(
                 state=SchedulerState.NOT_PROFITABLE,
                 deficit_kwh=deficit_kwh,
                 reason=(
                     f"Not profitable: charge cost {total_charge_cost:.3f}/kWh "
-                    f"(NT {effective_nt_cost:.3f} + degradation {cycle_cost:.3f}) "
-                    f">= HT rate {ht_rate:.3f}/kWh"
+                    f"(off-peak {effective_charge_cost:.3f} + degradation {cycle_cost:.3f}) "
+                    f">= peak rate {peak_rate:.3f}/kWh"
                 ),
                 evaluated_at=now,
             )

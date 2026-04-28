@@ -153,7 +153,7 @@ Forecast-aware grid-to-battery charging during cheap night hours. **Disabled by 
 2. **Deficit calculation** — `expected_consumption - corrected_forecast × confidence × (1 - pessimism)`
 3. **Negative tariff override** — force-charge to max SOC during negative prices regardless of forecast
 4. **Threshold check** — skip if deficit < `min_deficit_kwh` (default 2 kWh)
-5. **Break-even check** — `(NT_rate / efficiency) + (2 × cycle_cost) < HT_rate` — includes battery degradation
+5. **Break-even check** — `(off_peak_rate / efficiency) + (2 × cycle_cost) < peak_rate` — includes battery degradation
 6. **Target SOC** — `current_soc + (deficit / usable_capacity × 100)`, capped at `max_target_soc`
 7. **Schedule planning** — time-slotted power allocation for battery + EV under peak constraints
 8. **Cheapest hours** — dynamic tariff: `find_cheapest_hours(N, 12h)` | static: full NT window

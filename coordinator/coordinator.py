@@ -1003,11 +1003,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 expected_consumption = 12.0  # Fallback: 12 kWh/day
 
             # Get tariff rates
-            nt_rate = self._tariff_provider.get_price_at(
-                now.replace(hour=2, minute=0)  # Night rate
+            off_peak_rate = self._tariff_provider.get_price_at(
+                now.replace(hour=2, minute=0)  # Night / off-peak rate
             ) if hasattr(self._tariff_provider, 'get_price_at') else self.config.get("electricity_nt_rate", 0.22)
-            ht_rate = self._tariff_provider.get_price_at(
-                now.replace(hour=14, minute=0)  # Day rate
+            peak_rate = self._tariff_provider.get_price_at(
+                now.replace(hour=14, minute=0)  # Day / peak rate
             ) if hasattr(self._tariff_provider, 'get_price_at') else self.config.get("electricity_import_rate", 0.30)
 
             # Current price for negative tariff detection
@@ -1038,8 +1038,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 current_soc=power.battery_soc,
                 forecast_tomorrow_kwh=forecast_tomorrow,
                 expected_consumption_kwh=expected_consumption,
-                nt_rate=nt_rate,
-                ht_rate=ht_rate,
+                off_peak_rate=off_peak_rate,
+                peak_rate=peak_rate,
                 tariff_provider=tariff_provider,
                 correction_factor=correction,
                 ev_kwh_needed=ev_kwh_needed,
