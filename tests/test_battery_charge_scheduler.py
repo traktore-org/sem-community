@@ -87,18 +87,27 @@ def generic_config():
 def scheduler_config():
     """Default scheduler config."""
     return SchedulerConfig(
+        enabled=True,
         battery_capacity_kwh=10.0,
         battery_usable_capacity_kwh=9.5,
         battery_min_soc=5.0,
         battery_max_charge_power_w=5000.0,
         roundtrip_efficiency=0.92,
+        battery_cycle_cost=0.0,
         trigger_hour=21,
         trigger_minute=0,
         min_deficit_kwh=2.0,
         forecast_confidence=0.8,
         max_target_soc=95.0,
+        forecast_fallback_soc=70.0,
+        stale_forecast_hours=6,
+        pessimism_weight=0.3,
+        replan_soc_deviation_pct=5.0,
+        replan_on_ev_change=True,
         peak_limit_w=0.0,
+        max_grid_import_w=0.0,
         ev_priority=True,
+        force_charge_on_negative_price=True,
     )
 
 
@@ -1355,3 +1364,380 @@ class TestActiveSlotTracking:
 
         assert state == SchedulerState.WAITING_FOR_SLOT
         adapter.start_forced_charge.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Feature Toggle Tests
+# ---------------------------------------------------------------------------
+
+class TestFeatureToggle:
+    """Test enabled/disabled behavior."""
+
+    def test_disabled_evaluate_returns_idle(self, hass, scheduler_config):
+        scheduler_config.enabled = False
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=15.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        assert decision.state == SchedulerState.IDLE
+        assert "disabled" in decision.reason
+
+    def test_disabled_trigger_returns_false(self, hass, scheduler_config):
+        scheduler_config.enabled = False
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
+        assert scheduler.should_trigger_evaluation(trigger_time) is False
+
+    def test_enabled_property(self, hass, scheduler_config):
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        assert scheduler.enabled is True
+
+        scheduler_config.enabled = False
+        scheduler2 = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        assert scheduler2.enabled is False
+
+
+# ---------------------------------------------------------------------------
+# Battery Cycle Cost / Degradation Tests
+# ---------------------------------------------------------------------------
+
+class TestCycleCost:
+    """Test degradation-aware break-even check."""
+
+    def test_cycle_cost_blocks_unprofitable_charge(self, hass, scheduler_config):
+        """High cycle cost makes arbitrage unprofitable."""
+        scheduler_config.battery_cycle_cost = 0.10
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=15.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        assert decision.state == SchedulerState.NOT_PROFITABLE
+        assert "degradation" in decision.reason
+
+    def test_low_cycle_cost_allows_charge(self, hass, scheduler_config):
+        """Low cycle cost still allows profitable charging."""
+        scheduler_config.battery_cycle_cost = 0.02
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=15.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        assert decision.state == SchedulerState.SCHEDULED
+
+    def test_zero_cycle_cost_same_as_before(self, hass, scheduler_config):
+        """Zero cycle cost = no degradation check (backward compat)."""
+        scheduler_config.battery_cycle_cost = 0.0
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=15.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        assert decision.state == SchedulerState.SCHEDULED
+
+
+# ---------------------------------------------------------------------------
+# Negative Tariff Tests
+# ---------------------------------------------------------------------------
+
+class TestNegativeTariff:
+    """Test force-charge during negative prices."""
+
+    def test_negative_price_forces_full_charge(self, hass, scheduler_config):
+        """Negative price -> charge to max SOC regardless of forecast."""
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=50.0,
+            forecast_tomorrow_kwh=30.0,
+            expected_consumption_kwh=10.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            current_price=-0.05,
+        )
+
+        assert decision.state == SchedulerState.SCHEDULED
+        assert decision.target_soc == 95.0
+        assert "Negative price" in decision.reason
+
+    def test_negative_price_respects_already_full(self, hass, scheduler_config):
+        """Already at max SOC -> no charge even with negative price."""
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=96.0,
+            forecast_tomorrow_kwh=30.0,
+            expected_consumption_kwh=10.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            current_price=-0.05,
+        )
+
+        assert decision.state in (SchedulerState.NOT_NEEDED, SchedulerState.IDLE)
+
+    def test_negative_price_feature_disabled(self, hass, scheduler_config):
+        """Feature disabled -> no force charge on negative price."""
+        scheduler_config.force_charge_on_negative_price = False
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=50.0,
+            forecast_tomorrow_kwh=30.0,
+            expected_consumption_kwh=10.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            current_price=-0.05,
+        )
+
+        assert decision.state == SchedulerState.NOT_NEEDED
+
+
+# ---------------------------------------------------------------------------
+# Forecast Fallback Tests
+# ---------------------------------------------------------------------------
+
+class TestForecastFallback:
+    """Test 3-tier forecast fallback strategy."""
+
+    def test_no_forecast_charges_conservatively(self, hass, scheduler_config):
+        """No forecast -> deficit = full consumption."""
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=0.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            forecast_available=False,
+        )
+
+        assert decision.state == SchedulerState.SCHEDULED
+        assert decision.deficit_kwh == pytest.approx(12.0)
+
+    def test_stale_forecast_increases_pessimism(self, hass, scheduler_config):
+        """Stale forecast (>6h) uses doubled pessimism weight."""
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision_fresh = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=15.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            forecast_available=True,
+            forecast_age_hours=1.0,
+        )
+
+        scheduler.reset()
+
+        decision_stale = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=15.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            forecast_available=True,
+            forecast_age_hours=8.0,
+        )
+
+        assert decision_stale.deficit_kwh > decision_fresh.deficit_kwh
+
+    def test_fresh_forecast_applies_pessimism_blend(self, hass, scheduler_config):
+        """More pessimism -> higher deficit."""
+        scheduler_config.pessimism_weight = 0.0
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision_optimistic = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=20.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        scheduler.reset()
+        scheduler_config.pessimism_weight = 0.5
+        scheduler2 = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        decision_pessimistic = scheduler2.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=20.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        assert decision_pessimistic.deficit_kwh >= decision_optimistic.deficit_kwh
+
+
+# ---------------------------------------------------------------------------
+# Re-plan Trigger Tests
+# ---------------------------------------------------------------------------
+
+class TestReplanTriggers:
+    """Test should_replan() conditions."""
+
+    def test_soc_deviation_triggers_replan(self, hass, scheduler_config):
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        scheduler.evaluate(
+            current_soc=40.0,
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        assert scheduler.should_replan(current_soc=43.0, ev_connected=False) is False
+        assert scheduler.should_replan(current_soc=50.0, ev_connected=False) is True
+
+    def test_ev_connect_triggers_replan(self, hass, scheduler_config):
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        scheduler.evaluate(
+            current_soc=40.0,
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        assert scheduler.should_replan(current_soc=40.0, ev_connected=False) is False
+        assert scheduler.should_replan(current_soc=40.0, ev_connected=True) is True
+
+    def test_no_replan_when_idle(self, hass, scheduler_config):
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        assert scheduler.should_replan(current_soc=50.0, ev_connected=True) is False
+
+    def test_ev_replan_disabled(self, hass, scheduler_config):
+        scheduler_config.replan_on_ev_change = False
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        scheduler.evaluate(
+            current_soc=40.0,
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+        )
+
+        scheduler.should_replan(current_soc=40.0, ev_connected=False)
+        assert scheduler.should_replan(current_soc=40.0, ev_connected=True) is False
+
+
+# ---------------------------------------------------------------------------
+# Grid Import Limit Tests
+# ---------------------------------------------------------------------------
+
+class TestGridImportLimit:
+    """Test max_grid_import_w constraint."""
+
+    @pytest.mark.asyncio
+    async def test_grid_import_limit_caps_battery_power(self, hass, scheduler_config):
+        """Grid import limit reduces available battery charge power."""
+        scheduler_config.max_grid_import_w = 6000
+        scheduler_config.peak_limit_w = 0
+        adapter = AsyncMock(spec=BatteryChargeAdapter)
+        adapter.is_active = False
+        adapter.start_forced_charge = AsyncMock(
+            return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
+        )
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        now = dt_util.now()
+        scheduler._decision = SchedulerDecision(
+            state=SchedulerState.SCHEDULED,
+            target_soc=80.0,
+            hours_needed=2,
+            charge_windows=[],
+            schedule=NightChargeSchedule(
+                slots=[
+                    TimeSlot(
+                        start=now - timedelta(minutes=5),
+                        end=now + timedelta(minutes=55),
+                        battery_power_w=5000,
+                        ev_power_w=3000,
+                    ),
+                ],
+            ),
+        )
+
+        state = await scheduler.update(current_soc=50.0, ev_charging_power_w=3000.0)
+
+        assert state == SchedulerState.CHARGING
+        cmd = adapter.start_forced_charge.call_args[0][0]
+        assert cmd.max_power_w == 2700
+
+
+# ---------------------------------------------------------------------------
+# Config from_config Tests (updated)
+# ---------------------------------------------------------------------------
+
+class TestSchedulerConfigExtended:
+    """Test extended SchedulerConfig.from_config()."""
+
+    def test_from_config_with_new_fields(self):
+        config = SchedulerConfig.from_config({
+            "battery_charge_scheduler_enabled": True,
+            "battery_cycle_cost": 0.067,
+            "battery_forecast_fallback_soc": 65.0,
+            "battery_stale_forecast_hours": 8,
+            "battery_pessimism_weight": 0.4,
+            "battery_replan_soc_deviation": 10.0,
+            "battery_replan_on_ev_change": False,
+            "battery_max_grid_import_w": 6000.0,
+            "battery_force_charge_negative_price": False,
+        })
+
+        assert config.enabled is True
+        assert config.battery_cycle_cost == 0.067
+        assert config.forecast_fallback_soc == 65.0
+        assert config.stale_forecast_hours == 8
+        assert config.pessimism_weight == 0.4
+        assert config.replan_soc_deviation_pct == 10.0
+        assert config.replan_on_ev_change is False
+        assert config.max_grid_import_w == 6000.0
+        assert config.force_charge_on_negative_price is False
+
+    def test_defaults_disabled(self):
+        config = SchedulerConfig.from_config({})
+        assert config.enabled is False

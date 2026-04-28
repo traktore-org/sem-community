@@ -149,12 +149,20 @@ class SchedulerDecision:
 class SchedulerConfig:
     """Configuration for the battery charge scheduler."""
 
+    # Feature toggle
+    enabled: bool = False  # Off by default — user must opt in
+
     # Battery parameters
     battery_capacity_kwh: float = 10.0
     battery_usable_capacity_kwh: float = 9.5  # Accounting for min SOC
     battery_min_soc: float = 5.0  # Don't plan below this
     battery_max_charge_power_w: float = 5000.0
     roundtrip_efficiency: float = 0.92  # Round-trip (charge + discharge losses)
+
+    # Degradation cost: battery_price / (capacity * 2 * rated_cycles)
+    # Example LUNA2000 10kWh, 6000 cycles, 8000 EUR → 0.067 EUR/kWh
+    # Set to 0 to disable degradation-aware arbitrage check
+    battery_cycle_cost: float = 0.0  # Cost per kWh throughput (half-cycle)
 
     # Scheduling parameters
     trigger_hour: int = 21  # Hour to run daily evaluation (0-23)
@@ -163,26 +171,48 @@ class SchedulerConfig:
     forecast_confidence: float = 0.8  # Safety margin on forecast (use 80%)
     max_target_soc: float = 95.0  # Never plan above this
 
+    # Forecast fallback
+    forecast_fallback_soc: float = 70.0  # Target SOC when forecast unavailable
+    stale_forecast_hours: int = 6  # Hours before forecast considered stale
+    pessimism_weight: float = 0.3  # 0.0 = trust forecast, 1.0 = full pessimistic
+
+    # Re-plan triggers
+    replan_soc_deviation_pct: float = 5.0  # Re-evaluate if SOC deviates this much
+    replan_on_ev_change: bool = True  # Re-evaluate when EV connects/disconnects
+
     # Peak management
     peak_limit_w: float = 0.0  # 0 = no limit
+    max_grid_import_w: float = 0.0  # 0 = no limit; cap total grid draw during charge
     ev_priority: bool = True  # EV gets priority over battery in peak conflicts
+
+    # Negative tariff handling
+    force_charge_on_negative_price: bool = True  # Always charge during negative prices
 
     @classmethod
     def from_config(cls, config: dict) -> "SchedulerConfig":
         """Create from HA config entry options."""
         return cls(
+            enabled=config.get("battery_charge_scheduler_enabled", False),
             battery_capacity_kwh=config.get("battery_capacity_kwh", 10.0),
             battery_usable_capacity_kwh=config.get("battery_usable_capacity_kwh", 9.5),
             battery_min_soc=config.get("battery_min_soc", 5.0),
             battery_max_charge_power_w=config.get("battery_max_charge_power_w", 5000.0),
             roundtrip_efficiency=config.get("battery_roundtrip_efficiency", 0.92),
+            battery_cycle_cost=config.get("battery_cycle_cost", 0.0),
             trigger_hour=config.get("battery_precharge_trigger_hour", 21),
             trigger_minute=config.get("battery_precharge_trigger_minute", 0),
             min_deficit_kwh=config.get("battery_min_deficit_kwh", 2.0),
             forecast_confidence=config.get("battery_forecast_confidence", 0.8),
             max_target_soc=config.get("battery_max_target_soc", 95.0),
+            forecast_fallback_soc=config.get("battery_forecast_fallback_soc", 70.0),
+            stale_forecast_hours=config.get("battery_stale_forecast_hours", 6),
+            pessimism_weight=config.get("battery_pessimism_weight", 0.3),
+            replan_soc_deviation_pct=config.get("battery_replan_soc_deviation", 5.0),
+            replan_on_ev_change=config.get("battery_replan_on_ev_change", True),
             peak_limit_w=config.get("peak_limit_w", 0.0),
+            max_grid_import_w=config.get("battery_max_grid_import_w", 0.0),
             ev_priority=config.get("ev_priority_over_battery", True),
+            force_charge_on_negative_price=config.get("battery_force_charge_negative_price", True),
         )
 
 
@@ -208,6 +238,13 @@ class BatteryChargeScheduler:
         self._decision: SchedulerDecision = SchedulerDecision(state=SchedulerState.IDLE)
         self._last_evaluation_date: Optional[datetime] = None
         self._charge_started_at: Optional[datetime] = None
+        self._planned_soc: Optional[float] = None  # For re-plan deviation check
+        self._last_ev_connected: Optional[bool] = None  # For re-plan on EV change
+
+    @property
+    def enabled(self) -> bool:
+        """Whether the scheduler feature is enabled."""
+        return self._config.enabled
 
     @property
     def decision(self) -> SchedulerDecision:
@@ -230,6 +267,9 @@ class BatteryChargeScheduler:
         correction_factor: float = 1.0,
         ev_kwh_needed: float = 0.0,
         ev_max_power_w: float = 0.0,
+        forecast_available: bool = True,
+        forecast_age_hours: float = 0.0,
+        current_price: float = 0.0,
     ) -> SchedulerDecision:
         """Run the daily charge evaluation.
 
@@ -243,6 +283,9 @@ class BatteryChargeScheduler:
             correction_factor: Forecast correction factor from ForecastTracker
             ev_kwh_needed: EV energy still needed tonight (0 = no EV charging)
             ev_max_power_w: EV max charge power (e.g. 11000W for 3-phase 16A)
+            forecast_available: Whether a solar forecast is available
+            forecast_age_hours: How old the forecast is (hours since last update)
+            current_price: Current electricity price (for negative tariff detection)
 
         Returns:
             SchedulerDecision with the charge plan
@@ -250,19 +293,67 @@ class BatteryChargeScheduler:
         now = dt_util.now()
         self._last_evaluation_date = now
 
-        # Apply forecast correction and confidence margin
-        corrected_forecast = forecast_tomorrow_kwh * correction_factor * self._config.forecast_confidence
+        # Feature toggle check
+        if not self._config.enabled:
+            self._decision = SchedulerDecision(
+                state=SchedulerState.IDLE,
+                reason="Battery charge scheduler is disabled",
+                evaluated_at=now,
+            )
+            return self._decision
+
+        # Negative tariff override — always charge during negative prices
+        if (
+            self._config.force_charge_on_negative_price
+            and current_price < 0
+            and current_soc < self._config.max_target_soc
+        ):
+            target_soc = self._config.max_target_soc
+            actual_charge_kwh = (target_soc - current_soc) / 100 * self._config.battery_usable_capacity_kwh
+            charge_power_kw = self._config.battery_max_charge_power_w / 1000
+            hours_needed = max(1, int(actual_charge_kwh / charge_power_kw + 0.5))
+
+            schedule = self._plan_night_schedule(
+                battery_kwh_needed=actual_charge_kwh,
+                ev_kwh_needed=ev_kwh_needed,
+                ev_max_power_w=ev_max_power_w,
+                cheapest_prices=[],
+                now=now,
+            )
+            self._decision = SchedulerDecision(
+                state=SchedulerState.SCHEDULED,
+                target_soc=target_soc,
+                deficit_kwh=actual_charge_kwh,
+                hours_needed=hours_needed,
+                schedule=schedule,
+                reason=f"Negative price ({current_price:.3f}/kWh) — charging to {target_soc:.0f}%",
+                evaluated_at=now,
+            )
+            self._planned_soc = current_soc
+            return self._decision
+
+        # Forecast fallback: 3-tier strategy
+        effective_forecast = self._resolve_forecast(
+            forecast_tomorrow_kwh,
+            expected_consumption_kwh,
+            correction_factor,
+            forecast_available,
+            forecast_age_hours,
+        )
 
         # Calculate energy deficit
-        deficit_kwh = expected_consumption_kwh - corrected_forecast
+        deficit_kwh = expected_consumption_kwh - effective_forecast
         _LOGGER.debug(
             "Battery scheduler evaluation: consumption=%.1f kWh, forecast=%.1f kWh "
-            "(raw=%.1f, correction=%.2f, confidence=%.0f%%), deficit=%.1f kWh",
+            "(raw=%.1f, correction=%.2f, confidence=%.0f%%, available=%s, age=%.1fh), "
+            "deficit=%.1f kWh",
             expected_consumption_kwh,
-            corrected_forecast,
+            effective_forecast,
             forecast_tomorrow_kwh,
             correction_factor,
             self._config.forecast_confidence * 100,
+            forecast_available,
+            forecast_age_hours,
             deficit_kwh,
         )
 
@@ -287,13 +378,18 @@ class BatteryChargeScheduler:
             return self._decision
 
         # Break-even check: is grid charging profitable?
+        # Include battery degradation cost: charge must save more than it wears
         effective_nt_cost = nt_rate / self._config.roundtrip_efficiency
-        if effective_nt_cost >= ht_rate:
+        cycle_cost = self._config.battery_cycle_cost * 2  # Full cycle = 2x half-cycle
+        total_charge_cost = effective_nt_cost + cycle_cost
+
+        if total_charge_cost >= ht_rate:
             self._decision = SchedulerDecision(
                 state=SchedulerState.NOT_PROFITABLE,
                 deficit_kwh=deficit_kwh,
                 reason=(
-                    f"Not profitable: NT effective cost {effective_nt_cost:.3f}/kWh "
+                    f"Not profitable: charge cost {total_charge_cost:.3f}/kWh "
+                    f"(NT {effective_nt_cost:.3f} + degradation {cycle_cost:.3f}) "
                     f">= HT rate {ht_rate:.3f}/kWh"
                 ),
                 evaluated_at=now,
@@ -322,6 +418,7 @@ class BatteryChargeScheduler:
         actual_charge_kwh = (target_soc - current_soc) / 100 * self._config.battery_usable_capacity_kwh
         charge_power_kw = self._config.battery_max_charge_power_w / 1000
         hours_needed = max(1, int(actual_charge_kwh / charge_power_kw + 0.5))
+        self._planned_soc = current_soc
 
         # Find cheapest hours if dynamic tariff available
         charge_windows: List[datetime] = []
@@ -359,6 +456,92 @@ class BatteryChargeScheduler:
             [w.strftime("%H:%M") for w in charge_windows] if charge_windows else "full NT",
         )
         return self._decision
+
+    def _resolve_forecast(
+        self,
+        forecast_tomorrow_kwh: float,
+        expected_consumption_kwh: float,
+        correction_factor: float,
+        forecast_available: bool,
+        forecast_age_hours: float,
+    ) -> float:
+        """3-tier forecast fallback strategy.
+
+        Tier 1 (primary): Fresh forecast available — apply correction + confidence + pessimism
+        Tier 2 (degraded): Forecast stale (>6h old) — use it but increase pessimism
+        Tier 3 (offline): No forecast — charge conservatively to fallback SOC
+        """
+        conf = self._config
+
+        if not forecast_available or forecast_tomorrow_kwh <= 0:
+            # Tier 3: No forecast at all — return 0 so deficit = full consumption
+            # The fallback SOC is handled by the evaluate caller or by planning
+            # a conservative target
+            _LOGGER.warning(
+                "Battery scheduler: no forecast available, using conservative fallback"
+            )
+            return 0.0
+
+        if forecast_age_hours > conf.stale_forecast_hours:
+            # Tier 2: Stale forecast — trust it less (double pessimism weight)
+            pessimism = min(1.0, conf.pessimism_weight * 2)
+            effective = forecast_tomorrow_kwh * correction_factor * (1.0 - pessimism) * conf.forecast_confidence
+            _LOGGER.info(
+                "Battery scheduler: stale forecast (%.1fh old), using degraded "
+                "confidence: %.1f kWh effective (raw=%.1f)",
+                forecast_age_hours,
+                effective,
+                forecast_tomorrow_kwh,
+            )
+            return effective
+
+        # Tier 1: Fresh forecast — apply standard correction + pessimism blend
+        # pessimism_weight 0.3 means: 70% forecast + 30% pessimistic (lower) estimate
+        optimistic = forecast_tomorrow_kwh * correction_factor * conf.forecast_confidence
+        pessimistic = forecast_tomorrow_kwh * correction_factor * conf.forecast_confidence * 0.5
+        effective = optimistic * (1.0 - conf.pessimism_weight) + pessimistic * conf.pessimism_weight
+
+        return effective
+
+    def should_replan(
+        self,
+        current_soc: float,
+        ev_connected: bool,
+    ) -> bool:
+        """Check if conditions changed enough to warrant re-evaluation.
+
+        Triggers:
+        1. SOC deviated significantly from when plan was made
+        2. EV connected/disconnected since last evaluation
+        """
+        if not self._decision.should_charge:
+            return False
+
+        # SOC deviation check
+        if self._planned_soc is not None:
+            deviation = abs(current_soc - self._planned_soc)
+            if deviation >= self._config.replan_soc_deviation_pct:
+                _LOGGER.info(
+                    "Battery scheduler re-plan triggered: SOC deviation %.1f%% "
+                    "(was %.1f%%, now %.1f%%)",
+                    deviation,
+                    self._planned_soc,
+                    current_soc,
+                )
+                return True
+
+        # EV change check
+        if self._config.replan_on_ev_change and self._last_ev_connected is not None:
+            if ev_connected != self._last_ev_connected:
+                _LOGGER.info(
+                    "Battery scheduler re-plan triggered: EV %s",
+                    "connected" if ev_connected else "disconnected",
+                )
+                self._last_ev_connected = ev_connected
+                return True
+
+        self._last_ev_connected = ev_connected
+        return False
 
     def _plan_night_schedule(
         self,
@@ -618,13 +801,20 @@ class BatteryChargeScheduler:
         return False
 
     def _calculate_available_charge_power(self, ev_power_w: float) -> float:
-        """Calculate available battery charge power respecting peak limit.
+        """Calculate available battery charge power respecting peak + grid import limits.
 
-        If peak_limit is configured and EV is charging:
-        - EV gets priority (if configured) — battery gets remainder
-        - Or proportional split
+        Constraints applied in order:
+        1. Battery max charge rate (inverter limit)
+        2. Peak limit - EV consumption (house connection limit)
+        3. Max grid import limit (utility connection limit)
         """
         max_power = self._config.battery_max_charge_power_w
+
+        # Apply grid import cap if configured
+        if self._config.max_grid_import_w > 0:
+            # Total grid import = battery charge + EV + home load (~300W estimate)
+            grid_available = self._config.max_grid_import_w - ev_power_w - 300
+            max_power = min(max_power, max(0, grid_available))
 
         if self._config.peak_limit_w <= 0:
             return max_power
@@ -645,12 +835,18 @@ class BatteryChargeScheduler:
             _LOGGER.warning("Resetting scheduler while charge still active")
         self._decision = SchedulerDecision(state=SchedulerState.IDLE)
         self._charge_started_at = None
+        self._planned_soc = None
+        self._last_ev_connected = None
 
     def should_trigger_evaluation(self, now: Optional[datetime] = None) -> bool:
         """Check if it's time to run the daily evaluation.
 
         Returns True once per day at the configured trigger time.
+        Feature must be enabled.
         """
+        if not self._config.enabled:
+            return False
+
         if now is None:
             now = dt_util.now()
 
