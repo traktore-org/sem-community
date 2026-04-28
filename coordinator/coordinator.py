@@ -403,7 +403,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             power_flows = self._flow_calculator.calculate_power_flows(power)
 
             # Step 4.5: Update session tracking (before charging decisions)
-            self._update_session_tracking(power, power_flows)
+            # Multi-charger (#112): track sessions for each charger
+            if self._ev_devices:
+                for cid, ev_dev in self._ev_devices.items():
+                    if cid not in self._session_data_per_charger:
+                        self._session_data_per_charger[cid] = SessionData()
+                    if cid not in self._last_ev_connected_per_charger:
+                        self._last_ev_connected_per_charger[cid] = False
+                    # Swap context for per-charger session tracking
+                    saved_dev, saved_sess, saved_conn = (
+                        self._ev_device, self._session_data, self._last_ev_connected
+                    )
+                    self._ev_device = ev_dev
+                    self._session_data = self._session_data_per_charger[cid]
+                    self._last_ev_connected = self._last_ev_connected_per_charger[cid]
+                    self._update_session_tracking(power, power_flows)
+                    # Save back per-charger state
+                    self._session_data_per_charger[cid] = self._session_data
+                    self._last_ev_connected_per_charger[cid] = self._last_ev_connected
+                    # Restore
+                    self._ev_device, self._session_data, self._last_ev_connected = (
+                        saved_dev, saved_sess, saved_conn
+                    )
+                # Primary charger session = first charger's session
+                primary_id = next(iter(self._ev_devices))
+                self._session_data = self._session_data_per_charger.get(
+                    primary_id, self._session_data
+                )
+                self._last_ev_connected = self._last_ev_connected_per_charger.get(
+                    primary_id, self._last_ev_connected
+                )
+            else:
+                self._update_session_tracking(power, power_flows)
 
             # Step 4.6: EV taper detection and intelligence (#106)
             ev_intelligence = self._update_ev_intelligence(power, energy)
@@ -420,11 +451,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charging_state = self._state_machine.update_state(charging_context)
 
             # Step 7.5a: Unified EV control via CurrentControlDevice
-            # Retry EV device setup with exponential backoff (#27)
-            if not self._ev_device:
+            # Multi-charger (#112): control each charger in priority order
+            if not self._ev_device and not self._ev_devices:
                 await self._retry_ev_device_with_backoff()
 
-            if self._ev_device and not self._observer_mode:
+            if self._ev_devices and not self._observer_mode:
+                # Multi-charger: iterate in priority order
+                sorted_chargers = sorted(
+                    self._ev_devices.items(),
+                    key=lambda x: x[1].priority,
+                )
+                for cid, ev_dev in sorted_chargers:
+                    saved_dev = self._ev_device
+                    self._ev_device = ev_dev
+                    try:
+                        await self._execute_ev_control(
+                            charging_state, power, energy, charging_context
+                        )
+                    except (HomeAssistantError, ServiceValidationError) as e:
+                        _LOGGER.error("EV control service failed for %s: %s", cid, e)
+                    except ValueError as e:
+                        _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
+                    finally:
+                        self._ev_device = saved_dev
+                self._save_ev_session_state()
+            elif self._ev_device and not self._observer_mode:
                 try:
                     await self._execute_ev_control(
                         charging_state, power, energy, charging_context

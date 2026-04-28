@@ -106,6 +106,9 @@ SEM_SENSORS: Final = {
     "ev_charge_needed": "sensor.sem_ev_charge_needed",
     "ev_battery_health": "sensor.sem_ev_battery_health",
     "ev_charge_skip_reason": "sensor.sem_ev_charge_skip_reason",
+
+    # Multi-charger Sensors (#112)
+    "ev_charger_count": "sensor.sem_ev_charger_count",
 }
 
 # SEM Binary Sensors - These are created from hardware binary sensors
