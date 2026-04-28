@@ -215,6 +215,25 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 
 ---
 
+## GoodWe inverter — no values after setup
+
+**Symptom:** SEM installs successfully with a GoodWe inverter, but all sensors show "unknown" or 0.
+
+**Cause:** GoodWe works with SEM, but the HA Energy Dashboard must be configured with the correct GoodWe energy sensors first. SEM reads its source sensors from the Energy Dashboard — if those aren't set up, SEM has nothing to read.
+
+**Fix:**
+1. Go to **Settings > Dashboards > Energy**
+2. Under **Solar panels**, add your GoodWe solar energy sensor (e.g., `sensor.goodwe_total_energy` or `sensor.goodwe_e_day`)
+3. Under **Grid consumption**, add your grid import/export energy sensors
+4. If you have a GoodWe battery (ES/EM/ET series), add battery charge/discharge energy sensors
+5. Restart Home Assistant, then reconfigure SEM
+
+**GoodWe sign conventions:** SEM auto-detects the sign convention by comparing power sensors against energy counters. GoodWe typically uses positive=export for grid and positive=charge for battery — SEM handles this automatically.
+
+**GoodWe + Easee charger:** If using an Easee charger with GoodWe, the Easee power sensor is disabled by default in HA. Enable it at **Settings > Devices > Easee > Entities** before configuring SEM.
+
+---
+
 ## Debug logging
 
 To enable detailed logging for SEM, add this to your `configuration.yaml`:
