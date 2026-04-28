@@ -192,7 +192,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._predictor = ConsumptionPredictor()
 
         # EV Intelligence: taper detection, virtual SOC, charge skip (#106)
-        self._ev_taper_detector = EVTaperDetector(config)
+        self._ev_taper_detector = EVTaperDetector(config)  # Primary charger
+        self._ev_taper_detectors: Dict[str, EVTaperDetector] = {}  # Per-charger (#112)
 
         # Hourly activity tracker for schedule card (#63)
         self._today_surplus_hours: list = [False] * 24
@@ -1480,17 +1481,62 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     def _update_ev_intelligence(
         self, power: PowerReadings, energy,
     ) -> "EVIntelligenceData":
-        """Update EV taper detection, virtual SOC, and charge skip logic (#106)."""
+        """Update EV taper detection, virtual SOC, and charge skip logic (#106).
+
+        Multi-charger (#112): runs taper detection per charger using per-charger
+        power readings. The primary charger's results drive virtual SOC and
+        charge skip decisions (only one EV vehicle assumed for SOC tracking).
+        """
         from .types import EVIntelligenceData, EVTaperData
 
         now = dt_util.now()
+        interval_hours = self.update_interval.total_seconds() / 3600
+
+        # Multi-charger (#112): run per-charger taper detection
+        if self._ev_devices and len(self._ev_devices) > 1:
+            for cid, ev_dev in self._ev_devices.items():
+                if cid not in self._ev_taper_detectors:
+                    self._ev_taper_detectors[cid] = EVTaperDetector(self.config)
+                    # Restore state if available
+                    if self._storage:
+                        stored = self._storage.get_ev_intelligence_state()
+                        per_charger_state = (stored or {}).get("chargers", {}).get(cid)
+                        if per_charger_state:
+                            self._ev_taper_detectors[cid].restore_state(per_charger_state)
+
+                # Read per-charger power from device's power entity
+                charger_power = 0.0
+                if ev_dev.power_entity_id:
+                    pstate = self.hass.states.get(ev_dev.power_entity_id)
+                    if pstate and pstate.state not in ("unknown", "unavailable"):
+                        try:
+                            charger_power = float(pstate.state)
+                            # Auto-convert kW to W
+                            unit = pstate.attributes.get("unit_of_measurement", "W")
+                            if unit == "kW":
+                                charger_power *= 1000
+                        except (ValueError, TypeError):
+                            pass
+
+                charger_setpoint = getattr(ev_dev, "_current_setpoint", 0.0)
+                charger_connected = getattr(ev_dev, "_session_active", False) or power.ev_connected
+
+                if charger_power > 0 or charger_connected:
+                    self._ev_taper_detectors[cid].update(
+                        charger_power, charger_setpoint, charger_connected, now,
+                    )
+
+            # Primary charger's detector drives SOC/skip (sync with main detector)
+            primary_id = next(iter(self._ev_devices))
+            if primary_id in self._ev_taper_detectors:
+                self._ev_taper_detector = self._ev_taper_detectors[primary_id]
 
         # Get current EV setpoint (0 if no EV device)
         ev_setpoint = 0.0
         if self._ev_device:
             ev_setpoint = getattr(self._ev_device, "_current_setpoint", 0.0)
 
-        # Run taper detection
+        # Run taper detection (primary / single charger)
         if power.ev_power > 0 or power.ev_connected:
             taper_data = self._ev_taper_detector.update(
                 power.ev_power, ev_setpoint, power.ev_connected, now,
@@ -1500,8 +1546,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Track energy since last full charge
         if hasattr(energy, "daily_ev"):
-            # Use per-cycle increment: ev_power * interval / 3600 / 1000
-            interval_hours = self.update_interval.total_seconds() / 3600
             ev_increment = power.ev_power * interval_hours / 1000
             self._ev_taper_detector.update_energy(ev_increment)
 

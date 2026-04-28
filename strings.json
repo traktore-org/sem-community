@@ -104,6 +104,33 @@
           "ev_target_soc": "EV target SOC (%)"
         }
       },
+      "ev_charger_menu": {
+        "title": "EV Chargers",
+        "description": "Manage your EV charger configuration.",
+        "data": {
+          "action": "Action"
+        }
+      },
+      "ev_charger_add": {
+        "title": "Add EV Charger",
+        "description": "Configure a new EV charger. SEM will distribute surplus power across chargers by priority.",
+        "data": {
+          "charger_name": "Charger Name",
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Surplus Priority (1=highest)"
+        }
+      },
+      "ev_charger_remove": {
+        "title": "Remove EV Charger",
+        "description": "Select a charger to remove. The primary charger cannot be removed.",
+        "data": {
+          "charger_to_remove": "Charger to remove"
+        }
+      },
       "hardware": {
         "title": "Hardware Entity Configuration",
         "description": "Update your hardware entity mappings. The Vehicle SOC fields at the bottom are only used if you provide a Vehicle Battery SOC sensor — otherwise SEM falls back to the kWh-based daily target.",

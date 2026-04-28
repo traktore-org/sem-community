@@ -214,6 +214,7 @@ class SEMFlowCard extends HTMLElement {
             case 'daily_battery_energy': return e.battery?.daily_energy;
             case 'daily_home_energy': return e.home?.daily_energy;
             case 'autarky_rate': return e.home?.autarky;
+            case 'ev_charger_count': return e.ev?.charger_count || 'sensor.sem_ev_charger_count';
             default: return null;
         }
     }
@@ -539,6 +540,14 @@ class SEMFlowCard extends HTMLElement {
 
         this._animateValue('val-home', home);
         this._animateValue('val-ev', ev);
+
+        // Multi-charger subtitle (#112)
+        const evCount = this._getState('ev_charger_count');
+        if (evCount > 1) {
+            this._setText('val-ev-subtitle', `(${evCount} chargers)`);
+        } else {
+            this._setText('val-ev-subtitle', '');
+        }
 
         // Animated SOC percentage
         this._animateValue('val-battery-soc', soc, 800, (v) => `${v.toFixed(0)}%`);
@@ -1206,7 +1215,8 @@ class SEMFlowCard extends HTMLElement {
                     </g>
                     <text x="${E.cx}" y="${E.cy + E.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="${evColor}">${this._getNodeName('ev')}</text>
                     <text id="val-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="${evColor}">0 W</text>
-                    <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${evColor}" opacity="0.5">\u00A0</text>` : ''}
+                    <text id="val-today-ev" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="${evColor}" opacity="0.5">\u00A0</text>
+                    <text id="val-ev-subtitle" x="${E.cx}" y="${E.cy + E.r + 18 + fv * 0.9 + (fs + 4) * 2}" text-anchor="middle" font-family="${F}" font-size="${fs - 1}" fill="${evColor}" opacity="0.4"></text>` : ''}
 
                     <!-- Device labels -->
                     <g id="device-labels"></g>
