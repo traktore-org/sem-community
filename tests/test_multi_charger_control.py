@@ -8,32 +8,22 @@ Tests the multi-EV charger architecture:
 - Session tracking: per-charger isolation
 - Backward compatibility: single-charger works identically
 """
-import sys
-import os
-import importlib
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime
 
-# Direct module imports to avoid __init__.py type statement (requires Python 3.12+)
-# The tests themselves run on 3.11 locally, 3.12+ in CI
-_repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def _load_mod(name, rel_path):
-    """Load a module directly, bypassing package __init__.py."""
-    full_path = os.path.join(_repo, rel_path)
-    spec = importlib.util.spec_from_file_location(name, full_path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
-# Pre-load types so surplus_controller can import it
-_types_mod = _load_mod("coordinator.types", "coordinator/types.py")
-SessionData = _types_mod.SessionData
-SEMData = _types_mod.SEMData
+from custom_components.solar_energy_management.coordinator.types import (
+    SessionData,
+    SEMData,
+)
+from custom_components.solar_energy_management.coordinator.surplus_controller import (
+    SurplusController,
+)
+from custom_components.solar_energy_management.consts.sensors import SEM_SENSORS
+from custom_components.solar_energy_management.hardware_detection import (
+    _discover_wallbox,
+    _discover_keba,
+)
 
 
 # ============================================================
@@ -212,9 +202,6 @@ class TestMultiChargerDetection:
 
     def test_detects_two_wallbox_chargers(self):
         """Two Wallbox Pulsars should produce two results."""
-        _hw_mod = _load_mod("hardware_detection", "hardware_detection.py")
-        _discover_wallbox = _hw_mod._discover_wallbox
-
         # Device 1 entities
         entities_1 = [
             make_mock_entity_registry_entry(
@@ -242,9 +229,6 @@ class TestMultiChargerDetection:
 
     def test_single_charger_returns_one(self):
         """Single KEBA should return exactly one result."""
-        _hw_mod2 = _load_mod("hardware_detection", "hardware_detection.py")
-        _discover_keba = _hw_mod2._discover_keba
-
         entities = [
             make_mock_entity_registry_entry(
                 "binary_sensor.keba_p30_plug", "keba", device_class="plug"),
@@ -369,10 +353,8 @@ class TestSurplusControllerDistribution:
     """Test the actual distribute_ev_budget method."""
 
     def _make_controller(self):
-        # Load surplus_controller directly to avoid __init__.py
-        _sc_mod = _load_mod("coordinator.surplus_controller", "coordinator/surplus_controller.py")
         hass = MagicMock()
-        return _sc_mod.SurplusController(hass)
+        return SurplusController(hass)
 
     def test_single_charger_gets_full_budget(self):
         """Single charger should get entire budget."""
@@ -462,7 +444,7 @@ class TestPerChargerSessionTracking:
 
     def test_separate_session_data(self):
         """Each charger should have its own SessionData instance."""
-        # SessionData already imported at module level via _load_mod
+        # SessionData imported at module level
 
         sessions = {
             "wb_1": SessionData(active=True, energy_kwh=5.5, solar_share_pct=80),
@@ -487,7 +469,7 @@ class TestPerChargerSessionTracking:
 
     def test_session_energy_not_mixed(self):
         """Energy from charger 1 should not appear in charger 2's session."""
-        # SessionData already imported at module level via _load_mod
+        # SessionData imported at module level
 
         session_1 = SessionData(active=True)
         session_2 = SessionData(active=True)
@@ -531,8 +513,7 @@ class TestSingleChargerBackwardCompat:
 
     def test_sensor_names_unchanged(self):
         """Primary charger sensors should keep existing names (no _0 suffix)."""
-        _sensors_mod = _load_mod("consts.sensors", "consts/sensors.py")
-        SEM_SENSORS = _sensors_mod.SEM_SENSORS
+        # SEM_SENSORS imported at module level
         assert SEM_SENSORS["ev_power"] == "sensor.sem_ev_power"
         # New aggregate sensor exists
         assert SEM_SENSORS["ev_charger_count"] == "sensor.sem_ev_charger_count"
@@ -625,7 +606,7 @@ class TestSEMDataMultiCharger:
 
     def test_to_dict_includes_charger_count(self):
         """SEMData.to_dict() should include ev_charger_count."""
-        # SEMData already imported at module level via _load_mod
+        # SEMData imported at module level
 
         data = SEMData(ev_charger_count=2, ev_charger_ids=["wb_1", "wb_2"])
         d = data.to_dict()
@@ -634,7 +615,7 @@ class TestSEMDataMultiCharger:
 
     def test_to_dict_single_charger(self):
         """Single charger: ev_charger_count=1."""
-        # SEMData already imported at module level via _load_mod
+        # SEMData imported at module level
 
         data = SEMData(ev_charger_count=1, ev_charger_ids=["ev_charger"])
         d = data.to_dict()
@@ -643,7 +624,7 @@ class TestSEMDataMultiCharger:
 
     def test_sessions_dict_per_charger(self):
         """Sessions dict should hold per-charger SessionData."""
-        # SEMData already imported at module level via _load_mod, SessionData
+        # SEMData imported at module level, SessionData
 
         data = SEMData(
             sessions={
