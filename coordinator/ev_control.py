@@ -80,7 +80,9 @@ class EVControlMixin:
         # === NIGHT CHARGING (peak-managed, ramp-limited) ===
         # Design: evcc-style ramp, configurable min current, IEC 61851 compliant
         if state == ChargingState.NIGHT_CHARGING_ACTIVE:
-            remaining_kwh = context.night_target_kwh
+            # Multi-charger (#112): use per-charger night target if distributed
+            per_charger_night = getattr(self, "_night_target_per_charger", None)
+            remaining_kwh = per_charger_night if per_charger_night is not None else context.night_target_kwh
 
             # Guard: target reached
             if remaining_kwh <= 0.1:

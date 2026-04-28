@@ -112,6 +112,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_last_change_time = None  # Reactive control timing
         self._ev_charge_started_at = None  # Disable delay: min hold timer to prevent cycling
         self._ev_enable_surplus_since = None  # Enable delay: surplus must persist before starting
+        # Per-charger state dicts for multi-charger (#112)
+        self._ev_stalled_since_per_charger: Dict[str, Optional[float]] = {}
+        self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
+        self._ev_charge_started_per_charger: Dict[str, Optional[float]] = {}
+        self._ev_last_change_per_charger: Dict[str, Any] = {}
         self._notification_manager = NotificationManager(hass, config)
 
         # Storage will be initialized with entry_id later
@@ -359,8 +364,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._initial_update_done and not getattr(self, '_health_checked', False):
             self._health_checked = True
             issues = []
-            if not self._ev_device:
-                issues.append("EV device not registered (KEBA not discovered)")
+            if not self._ev_device and not self._ev_devices:
+                issues.append("No EV charger registered")
             if not self._storage or not self._storage.is_loaded:
                 issues.append("Storage not loaded")
             if self.hass.states.get(f"sensor.{ENTITY_SOLAR_POWER}") is None:
@@ -368,7 +373,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if issues:
                 _LOGGER.warning("SEM health check: %s", "; ".join(issues))
             else:
-                _LOGGER.info("SEM health check: all OK (EV=%s)", self._ev_device.name if self._ev_device else "none")
+                charger_names = [d.name for d in self._ev_devices.values()] if self._ev_devices else [self._ev_device.name if self._ev_device else "none"]
+                _LOGGER.info("SEM health check: all OK (EV chargers: %s)", ", ".join(charger_names))
 
         # Read observer mode from switch entity (allows runtime toggle)
         observer_state = self.hass.states.get(f"switch.{ENTITY_OBSERVER_MODE_SWITCH}")
@@ -456,10 +462,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 await self._retry_ev_device_with_backoff()
 
             if self._ev_devices and not self._observer_mode:
-                # Multi-charger (#112): distribute budget, then control each
-                # Calculate total EV budget once, distribute across chargers
+                # Multi-charger (#112): distribute budget + night target
                 ev_budget_per_charger = {}
-                if len(self._ev_devices) > 1 and charging_state in (
+                num_chargers = len(self._ev_devices)
+
+                # Night target: split equally across connected chargers
+                if num_chargers > 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                    connected_count = sum(
+                        1 for d in self._ev_devices.values()
+                        if getattr(d, '_session_active', False) or power.ev_connected
+                    )
+                    if connected_count > 1:
+                        per_charger_night_kwh = charging_context.night_target_kwh / connected_count
+                        self._night_target_per_charger = per_charger_night_kwh
+                    else:
+                        self._night_target_per_charger = None
+                else:
+                    self._night_target_per_charger = None
+
+                # Solar budget: distribute by priority
+                if num_chargers > 1 and charging_state in (
                     ChargingState.SOLAR_CHARGING_ACTIVE,
                     ChargingState.SOLAR_SUPER_CHARGING,
                     ChargingState.SOLAR_CHARGING_ALLOWED,
@@ -477,9 +499,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     key=lambda x: x[1].priority,
                 )
                 for cid, ev_dev in sorted_chargers:
-                    saved_dev = self._ev_device
+                    # Save coordinator-level state, swap in per-charger state
+                    saved = {
+                        "dev": self._ev_device,
+                        "stalled": self._ev_stalled_since,
+                        "enable": self._ev_enable_surplus_since,
+                        "started": self._ev_charge_started_at,
+                        "change": self._ev_last_change_time,
+                    }
                     self._ev_device = ev_dev
-                    # Store per-charger budget for ev_control to use
+                    self._ev_stalled_since = self._ev_stalled_since_per_charger.get(cid)
+                    self._ev_enable_surplus_since = self._ev_enable_surplus_per_charger.get(cid)
+                    self._ev_charge_started_at = self._ev_charge_started_per_charger.get(cid)
+                    self._ev_last_change_time = self._ev_last_change_per_charger.get(cid)
                     self._current_charger_budget = ev_budget_per_charger.get(cid)
                     try:
                         await self._execute_ev_control(
@@ -490,7 +522,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     except ValueError as e:
                         _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
                     finally:
-                        self._ev_device = saved_dev
+                        # Save back per-charger state, restore coordinator state
+                        self._ev_stalled_since_per_charger[cid] = self._ev_stalled_since
+                        self._ev_enable_surplus_per_charger[cid] = self._ev_enable_surplus_since
+                        self._ev_charge_started_per_charger[cid] = self._ev_charge_started_at
+                        self._ev_last_change_per_charger[cid] = self._ev_last_change_time
+                        self._ev_device = saved["dev"]
+                        self._ev_stalled_since = saved["stalled"]
+                        self._ev_enable_surplus_since = saved["enable"]
+                        self._ev_charge_started_at = saved["started"]
+                        self._ev_last_change_time = saved["change"]
                         self._current_charger_budget = None
                 self._save_ev_session_state()
             elif self._ev_device and not self._observer_mode:
@@ -984,8 +1025,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         try:
             await self._retry_ev_device_setup()
-            if self._ev_device:
-                _LOGGER.info("EV device discovered on retry %d", self._ev_retry_count)
+            if self._ev_device or self._ev_devices:
+                charger_count = len(self._ev_devices) if self._ev_devices else (1 if self._ev_device else 0)
+                _LOGGER.info("EV device(s) discovered on retry %d (%d charger(s))", self._ev_retry_count, charger_count)
                 self._ev_retry_count = 999  # Stop retrying
         except (HomeAssistantError, ValueError, AttributeError) as e:
             level = logging.WARNING if self._ev_retry_count >= 3 else logging.DEBUG
@@ -1381,29 +1423,59 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
     def _restore_ev_session_state(self) -> None:
         """Restore EV session state from storage on startup."""
-        if not self._storage or not self._ev_device:
+        if not self._storage:
             return
         state = self._storage.get_ev_session_state()
         if not state:
             return
-        ev = self._ev_device
-        ev._session_active = state.get("session_active", False)
-        ev._current_setpoint = state.get("current_setpoint", 0.0)
-        self._ev_last_change_time = None  # Don't restore — let cooldown expire
-        _LOGGER.info(
-            "Restored EV session: active=%s, setpoint=%.0fA",
-            ev._session_active, ev._current_setpoint,
-        )
+
+        # Multi-charger (#112): restore all chargers
+        if self._ev_devices:
+            per_charger = state.get("chargers", {})
+            for cid, ev_dev in self._ev_devices.items():
+                cstate = per_charger.get(cid, state if cid == next(iter(self._ev_devices)) else {})
+                ev_dev._session_active = cstate.get("session_active", False)
+                ev_dev._current_setpoint = cstate.get("current_setpoint", 0.0)
+                _LOGGER.info(
+                    "Restored EV session for %s: active=%s, setpoint=%.0fA",
+                    ev_dev.name, ev_dev._session_active, ev_dev._current_setpoint,
+                )
+        elif self._ev_device:
+            ev = self._ev_device
+            ev._session_active = state.get("session_active", False)
+            ev._current_setpoint = state.get("current_setpoint", 0.0)
+            _LOGGER.info(
+                "Restored EV session: active=%s, setpoint=%.0fA",
+                ev._session_active, ev._current_setpoint,
+            )
+        self._ev_last_change_time = None
 
     def _save_ev_session_state(self) -> None:
         """Persist EV session state to storage."""
-        if not self._storage or not self._ev_device:
+        if not self._storage:
             return
-        ev = self._ev_device
-        self._storage.set_ev_session_state({
-            "session_active": ev._session_active,
-            "current_setpoint": ev._current_setpoint,
-        })
+
+        # Multi-charger (#112): save all chargers
+        if self._ev_devices:
+            per_charger = {}
+            for cid, ev_dev in self._ev_devices.items():
+                per_charger[cid] = {
+                    "session_active": ev_dev._session_active,
+                    "current_setpoint": ev_dev._current_setpoint,
+                }
+            # Also save primary charger at top level for backward compat
+            primary = next(iter(self._ev_devices.values()))
+            self._storage.set_ev_session_state({
+                "session_active": primary._session_active,
+                "current_setpoint": primary._current_setpoint,
+                "chargers": per_charger,
+            })
+        elif self._ev_device:
+            ev = self._ev_device
+            self._storage.set_ev_session_state({
+                "session_active": ev._session_active,
+                "current_setpoint": ev._current_setpoint,
+            })
 
     def _update_ev_intelligence(
         self, power: PowerReadings, energy,
