@@ -24,7 +24,7 @@ from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
@@ -536,6 +536,15 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update."""
     _LOGGER.info("Config options updated, reloading integration")
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant,
+    entry: SEMConfigEntry,
+    device_entry: "dr.DeviceEntry",
+) -> bool:
+    """Allow removal of stale devices (quality scale: stale-devices)."""
+    return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
