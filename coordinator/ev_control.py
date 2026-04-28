@@ -80,7 +80,9 @@ class EVControlMixin:
         # === NIGHT CHARGING (peak-managed, ramp-limited) ===
         # Design: evcc-style ramp, configurable min current, IEC 61851 compliant
         if state == ChargingState.NIGHT_CHARGING_ACTIVE:
-            remaining_kwh = context.night_target_kwh
+            # Multi-charger (#112): use per-charger night target if distributed
+            per_charger_night = getattr(self, "_night_target_per_charger", None)
+            remaining_kwh = per_charger_night if per_charger_night is not None else context.night_target_kwh
 
             # Guard: target reached
             if remaining_kwh <= 0.1:
@@ -155,19 +157,20 @@ class EVControlMixin:
 
         # === SOLAR CHARGING (unified, with evcc-style enable/disable delays) ===
         if state in self.SOLAR_CHARGING_STATES:
-            charging_mode = self.config.get("ev_charging_mode", "pv")
-            if charging_mode in ("self_consumption", "auto") and "self_consumption" in (context.charging_strategy_reason or ""):
-                # Self-consumption mode (#67): EV gets only true solar surplus
-                # No ev_power add-back (causes feedback loop inflating budget)
-                # No battery discharge for EV (that's pv/battery_assist mode)
-                auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-                budget_w = power.solar_power - power.home_consumption_power
-                if power.battery_soc < auto_start_soc:
-                    budget_w -= power.battery_charge_power  # battery charges first
-                # Zone 4 (≥90%): don't subtract battery_charge — redirect to EV
-                budget_w = max(0, budget_w)
+            # Multi-charger (#112): use pre-distributed budget if available
+            per_charger_budget = getattr(self, "_current_charger_budget", None)
+            if per_charger_budget is not None:
+                budget_w = per_charger_budget
             else:
-                budget_w = self._calculate_solar_ev_budget(state, power, context)
+                charging_mode = self.config.get("ev_charging_mode", "pv")
+                if charging_mode in ("self_consumption", "auto") and "self_consumption" in (context.charging_strategy_reason or ""):
+                    auto_start_soc = self.config.get("battery_auto_start_soc", 90)
+                    budget_w = power.solar_power - power.home_consumption_power
+                    if power.battery_soc < auto_start_soc:
+                        budget_w -= power.battery_charge_power
+                    budget_w = max(0, budget_w)
+                else:
+                    budget_w = self._calculate_solar_ev_budget(state, power, context)
 
             # Phase switching: auto-switch 1p/3p based on available surplus
             await ev.check_phase_switch(budget_w)

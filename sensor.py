@@ -1221,6 +1221,11 @@ SENSOR_TYPES = [
     SensorEntityDescription(
         key="ev_charge_skip_reason",
     ),
+    # Multi-charger (#112)
+    SensorEntityDescription(
+        key="ev_charger_count",
+        suggested_display_precision=0,
+    ),
 ]
 
 

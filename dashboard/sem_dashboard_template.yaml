@@ -1280,6 +1280,34 @@ views:
               card_mod:
                 style: *glass_card
 
+          # ── Multi-Charger Status (#112) ──
+          # Only shown when more than 1 EV charger is configured
+          - type: conditional
+            conditions:
+              - condition: numeric_state
+                entity: sensor.sem_ev_charger_count
+                above: 1
+            card:
+              type: vertical-stack
+              cards:
+                - type: custom:mushroom-title-card
+                  card_mod:
+                    style: *lumina_title
+                  title: Charger Status
+                  subtitle: >-
+                    {{ states('sensor.sem_ev_charger_count') }} chargers configured
+                - type: markdown
+                  content: >-
+                    {% set count = states('sensor.sem_ev_charger_count') | int(0) %}
+                    | Charger | Power | State |
+                    |---------|-------|-------|
+                    {% for i in range(count) %}
+                    {% set prefix = 'sensor.sem_ev_charger_' ~ i %}
+                    | {{ state_attr(prefix ~ '_power', 'friendly_name') or 'Charger ' ~ (i+1) }} | {{ states(prefix ~ '_power') | float(0) | round(0) }}W | {{ states(prefix ~ '_charging_state') or 'idle' }} |
+                    {% endfor %}
+                  card_mod:
+                    style: *glass_card
+
           # ── Charging Controls ──
           - type: custom:mushroom-title-card
             card_mod:

@@ -424,6 +424,26 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # if empty so config.get() returns "".
                     merged.setdefault("battery_discharge_control_entity", "")
 
+                # Wrap flat EV keys into ev_chargers list (#112 multi-charger)
+                if merged.get("ev_charging_power_sensor") and "ev_chargers" not in merged:
+                    _EV_KEYS = [
+                        "ev_connected_sensor", "ev_charging_sensor",
+                        "ev_charging_power_sensor", "ev_charger_service",
+                        "ev_charger_service_entity_id", "ev_current_sensor",
+                        "ev_total_energy_sensor", "ev_session_energy_sensor",
+                        "ev_service_param_name", "ev_service_device_id",
+                        "ev_start_stop_entity", "ev_charge_mode_entity",
+                        "ev_charge_mode_start", "ev_charge_mode_stop",
+                        "ev_start_service", "ev_start_service_data",
+                        "ev_stop_service", "ev_stop_service_data",
+                        "ev_charger_needs_cycle", "ev_surplus_priority",
+                    ]
+                    charger_0 = {"id": "ev_charger", "name": "EV Charger"}
+                    for k in _EV_KEYS:
+                        if merged.get(k) is not None:
+                            charger_0[k] = merged[k]
+                    merged["ev_chargers"] = [charger_0]
+
                 self._data = merged
                 return self.async_create_entry(
                     title="Solar Energy Management",
@@ -627,19 +647,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_ev_charger(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle EV charger options."""
+        """Handle EV charger options (primary charger)."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            # Update both flat keys and ev_chargers[0] (#112)
             self._data.update(user_input)
-            return await self.async_step_settings()
+            ev_chargers = list(self._data.get("ev_chargers") or self.config_entry.options.get("ev_chargers") or [])
+            if ev_chargers:
+                ev_chargers[0].update(user_input)
+            else:
+                ev_chargers = [{"id": "ev_charger", "name": "EV Charger", **user_input}]
+            self._data["ev_chargers"] = ev_chargers
+            return await self.async_step_ev_charger_menu()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
+        # Read from ev_chargers[0] if available (#112 multi-charger)
+        ev_chargers = current_config.get("ev_chargers", [])
+        if ev_chargers:
+            for k, v in ev_chargers[0].items():
+                if k not in ("id", "name") and v is not None:
+                    current_config.setdefault(k, v)
         _c = lambda key, fb: self._cfg(current_config, key, fb)
 
-        # Same suggested_value pattern as the install ev_charger step:
-        # optional EntitySelector fields cannot use default="" — HA rejects
-        # empty strings as invalid entity IDs.
         def _opt(key: str):
             v = current_config.get(key)
             return v if v else None
@@ -710,6 +740,146 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
             }),
             errors=errors
+        )
+
+    async def async_step_ev_charger_menu(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Multi-charger menu: add another charger or continue (#112)."""
+        if user_input is not None:
+            if user_input.get("action") == "add_charger":
+                return await self.async_step_ev_charger_add()
+            if user_input.get("action") == "remove_charger":
+                return await self.async_step_ev_charger_remove()
+            return await self.async_step_settings()
+
+        ev_chargers = self._data.get("ev_chargers", [])
+        charger_count = len(ev_chargers)
+
+        # Show charger list + options
+        options = [
+            {"value": "continue", "label": f"Continue ({charger_count} charger{'s' if charger_count != 1 else ''} configured)"},
+            {"value": "add_charger", "label": "Add another EV charger"},
+        ]
+        if charger_count > 1:
+            options.append(
+                {"value": "remove_charger", "label": "Remove a charger"},
+            )
+
+        return self.async_show_form(
+            step_id="ev_charger_menu",
+            data_schema=vol.Schema({
+                vol.Required("action", default="continue"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=options,
+                        mode=selector.SelectSelectorMode.LIST,
+                    )
+                ),
+            }),
+        )
+
+    async def async_step_ev_charger_add(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Add an additional EV charger (#112)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            ev_chargers = list(self._data.get("ev_chargers", []))
+            idx = len(ev_chargers)
+            charger_name = user_input.pop("charger_name", f"EV Charger {idx + 1}")
+            new_charger = {
+                "id": f"ev_charger_{idx}",
+                "name": charger_name,
+                **user_input,
+            }
+            ev_chargers.append(new_charger)
+            self._data["ev_chargers"] = ev_chargers
+            _LOGGER.info("Added EV charger '%s' (total: %d)", charger_name, len(ev_chargers))
+            return await self.async_step_ev_charger_menu()
+
+        # Auto-discover additional chargers
+        from .hardware_detection import discover_all_ev_chargers_from_registry
+        all_discovered = discover_all_ev_chargers_from_registry(self.hass)
+        existing_ids = {c.get("_device_id") for c in self._data.get("ev_chargers", []) if c.get("_device_id")}
+        # Filter to undiscovered chargers
+        new_discoveries = [c for c in all_discovered if c.get("_device_id") not in existing_ids]
+        suggestions = new_discoveries[0] if new_discoveries else {}
+
+        return self.async_show_form(
+            step_id="ev_charger_add",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "charger_name",
+                    default=suggestions.get("name", f"EV Charger {len(self._data.get('ev_chargers', [])) + 1}"),
+                ): selector.TextSelector(),
+                vol.Required(
+                    "ev_connected_sensor",
+                    default=suggestions.get("ev_connected_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+                ),
+                vol.Required(
+                    "ev_charging_sensor",
+                    default=suggestions.get("ev_charging_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+                ),
+                vol.Required(
+                    "ev_charging_power_sensor",
+                    default=suggestions.get("ev_charging_power_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
+                ),
+                vol.Optional(
+                    "ev_charger_service",
+                    default=suggestions.get("ev_charger_service", ""),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "ev_charger_service_entity_id",
+                    description={"suggested_value": suggestions.get("ev_charger_service_entity_id")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
+                ),
+                vol.Optional(
+                    "ev_surplus_priority",
+                    default=5,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
+                ),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_ev_charger_remove(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Remove an EV charger (#112)."""
+        if user_input is not None:
+            remove_id = user_input.get("charger_to_remove")
+            ev_chargers = [c for c in self._data.get("ev_chargers", []) if c.get("id") != remove_id]
+            self._data["ev_chargers"] = ev_chargers
+            _LOGGER.info("Removed EV charger '%s' (remaining: %d)", remove_id, len(ev_chargers))
+            return await self.async_step_ev_charger_menu()
+
+        ev_chargers = self._data.get("ev_chargers", [])
+        # Don't allow removing the last charger
+        removable = [c for c in ev_chargers[1:]]  # Skip primary
+        if not removable:
+            return await self.async_step_ev_charger_menu()
+
+        options = [{"value": c["id"], "label": c.get("name", c["id"])} for c in removable]
+
+        return self.async_show_form(
+            step_id="ev_charger_remove",
+            data_schema=vol.Schema({
+                vol.Required("charger_to_remove"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=options,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }),
         )
 
     async def async_step_settings(
