@@ -58,7 +58,7 @@ const C = (typeof SEM_COLORS !== 'undefined') ? SEM_COLORS : {
 const PRESETS = {
     costs: {
         title: 'Energy Costs',
-        y_label: 'CHF',
+        y_label: '_currency_',  // Replaced at render time with HA currency (#119)
         stacked: false,
         daily: [
             { suffix: 'daily_costs', name: 'Import', color: C.gridImport, type: 'bar' },
@@ -73,7 +73,7 @@ const PRESETS = {
     },
     savings: {
         title: 'Energy Savings',
-        y_label: 'CHF',
+        y_label: '_currency_',
         stacked: true,
         daily: [
             { suffix: 'daily_savings', name: 'Solar Savings', color: C.solar, type: 'area' },
@@ -300,7 +300,8 @@ class SEMChartCard extends HTMLElement {
 
         const preset = this._preset || {};
         const stacked = this.config.stacked ?? preset.stacked ?? false;
-        const yLabel = this.config.y_label || preset.y_label || '';
+        let yLabel = this.config.y_label || preset.y_label || '';
+        if (yLabel === '_currency_') yLabel = window.semGetCurrency?.(this._hass) || 'EUR';
         const y2Label = preset.y2_label || '';
         const hasY2 = series.some(s => s.y_axis === 1);
         const granularity = this._period?.granularity || 'day';

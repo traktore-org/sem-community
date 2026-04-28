@@ -90,8 +90,9 @@ class SEMSolarSummaryCard extends HTMLElement {
         setVal('.forecast-tomorrow', this._fmt(forecastTomorrow, 1) + ' kWh');
         setVal('.self-use', this._fmt(selfUse, 1) + '%');
         setVal('.autarky', this._fmt(autarky, 1) + '%');
-        setVal('.daily-cost', this._fmt(dailyCost, 2) + ' CHF');
-        setVal('.daily-savings', this._fmt(dailySavings, 2) + ' CHF');
+        const _c = window.semGetCurrency?.(this._hass) || 'EUR';
+        setVal('.daily-cost', this._fmt(dailyCost, 2) + ' ' + _c);
+        setVal('.daily-savings', this._fmt(dailySavings, 2) + ' ' + _c);
         setVal('.daily-ev', this._fmt(dailyEv, 1) + ' kWh');
         setVal('.grid-today', this._fmt(gridToday, 2) + ' kWh');
 
