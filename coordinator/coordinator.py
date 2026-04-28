@@ -107,7 +107,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._energy_calculator = EnergyCalculator(config, self.time_manager)
         self._flow_calculator = FlowCalculator()
         self._state_machine = ChargingStateMachine(hass, config, self.time_manager)
-        self._ev_device = None  # Set by __init__.py after EV device registration
+        self._ev_device = None  # Primary charger — set by __init__.py (backward compat)
+        self._ev_devices: Dict[str, Any] = {}  # All chargers keyed by charger_id (#112)
         self._ev_last_change_time = None  # Reactive control timing
         self._ev_charge_started_at = None  # Disable delay: min hold timer to prevent cycling
         self._ev_enable_surplus_since = None  # Enable delay: surplus must persist before starting
@@ -200,9 +201,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
 
-        # Session cost tracking
+        # Session cost tracking (primary charger + per-charger dict)
         self._session_data = SessionData()
+        self._session_data_per_charger: Dict[str, SessionData] = {}
         self._last_ev_connected = False
+        self._last_ev_connected_per_charger: Dict[str, bool] = {}
 
         # Initialize data with defaults
         self.data = self._get_initial_data()
@@ -527,6 +530,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 energy_assistant=assistant_data,
                 utility_signal=utility_data,
                 session=self._session_data,
+                sessions=self._session_data_per_charger,
+                ev_charger_count=len(self._ev_devices),
+                ev_charger_ids=list(self._ev_devices.keys()),
                 ev_intelligence=ev_intelligence,
                 last_update=dt_util.now(),
             )
