@@ -34,6 +34,8 @@ Make sure you have the following ready before you begin:
 
 > **Note:** Easee's power sensor is disabled by default in HA. Enable it in **Settings > Devices > Easee** before installing SEM.
 
+> **Note:** GoodWe inverters work with SEM via the HA [GoodWe integration](https://www.home-assistant.io/integrations/goodwe). Make sure your Energy Dashboard is configured with GoodWe solar and grid energy sensors before installing SEM. SEM auto-detects GoodWe's sign conventions.
+
 If you are unsure whether your Energy Dashboard is set up, go to
 **Settings > Dashboards > Energy**. You should see at least "Solar panels"
 and "Grid consumption" sections with sensors assigned.
