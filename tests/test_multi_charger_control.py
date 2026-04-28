@@ -8,11 +8,32 @@ Tests the multi-EV charger architecture:
 - Session tracking: per-charger isolation
 - Backward compatibility: single-charger works identically
 """
+import sys
+import os
+import importlib
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime
 
-from homeassistant.core import HomeAssistant
+# Direct module imports to avoid __init__.py type statement (requires Python 3.12+)
+# The tests themselves run on 3.11 locally, 3.12+ in CI
+_repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_mod(name, rel_path):
+    """Load a module directly, bypassing package __init__.py."""
+    full_path = os.path.join(_repo, rel_path)
+    spec = importlib.util.spec_from_file_location(name, full_path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# Pre-load types so surplus_controller can import it
+_types_mod = _load_mod("coordinator.types", "coordinator/types.py")
+SessionData = _types_mod.SessionData
+SEMData = _types_mod.SEMData
 
 
 # ============================================================
@@ -191,7 +212,8 @@ class TestMultiChargerDetection:
 
     def test_detects_two_wallbox_chargers(self):
         """Two Wallbox Pulsars should produce two results."""
-        from hardware_detection import _discover_wallbox
+        _hw_mod = _load_mod("hardware_detection", "hardware_detection.py")
+        _discover_wallbox = _hw_mod._discover_wallbox
 
         # Device 1 entities
         entities_1 = [
@@ -220,7 +242,8 @@ class TestMultiChargerDetection:
 
     def test_single_charger_returns_one(self):
         """Single KEBA should return exactly one result."""
-        from hardware_detection import _discover_keba
+        _hw_mod2 = _load_mod("hardware_detection", "hardware_detection.py")
+        _discover_keba = _hw_mod2._discover_keba
 
         entities = [
             make_mock_entity_registry_entry(
@@ -339,6 +362,98 @@ class TestMultiChargerSurplusDistribution:
 
 
 # ============================================================
+# Tests: SurplusController.distribute_ev_budget
+# ============================================================
+
+class TestSurplusControllerDistribution:
+    """Test the actual distribute_ev_budget method."""
+
+    def _make_controller(self):
+        # Load surplus_controller directly to avoid __init__.py
+        _sc_mod = _load_mod("coordinator.surplus_controller", "coordinator/surplus_controller.py")
+        hass = MagicMock()
+        return _sc_mod.SurplusController(hass)
+
+    def test_single_charger_gets_full_budget(self):
+        """Single charger should get entire budget."""
+        sc = self._make_controller()
+        charger = make_mock_charger("ev", "EV", priority=3)
+        result = sc.distribute_ev_budget(8000, {"ev": charger})
+        assert result["ev"] == 8000
+
+    def test_two_chargers_priority_order(self):
+        """Higher priority charger gets budget first."""
+        sc = self._make_controller()
+        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
+        c2 = make_mock_charger("wb_2", "WB2", priority=5)
+        result = sc.distribute_ev_budget(16000, {"wb_1": c1, "wb_2": c2})
+        # P3 (max 11040W) gets 11040, P5 gets 4960 (≥ 4140 threshold)
+        assert result["wb_1"] == 11040
+        assert result["wb_2"] == 4960
+
+    def test_remainder_below_threshold_gives_zero(self):
+        """If remainder < min_power_threshold, second charger gets 0."""
+        sc = self._make_controller()
+        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
+        c2 = make_mock_charger("wb_2", "WB2", priority=5, phases=3)
+        result = sc.distribute_ev_budget(15000, {"wb_1": c1, "wb_2": c2})
+        # P3 gets 11040, remainder 3960 < 4140 threshold → P5 gets 0
+        assert result["wb_1"] == 11040
+        assert result["wb_2"] == 0
+
+    def test_zero_budget(self):
+        """Zero budget gives zero to all chargers."""
+        sc = self._make_controller()
+        c1 = make_mock_charger("wb_1", "WB1", priority=3)
+        c2 = make_mock_charger("wb_2", "WB2", priority=5)
+        result = sc.distribute_ev_budget(0, {"wb_1": c1, "wb_2": c2})
+        assert result["wb_1"] == 0
+        assert result["wb_2"] == 0
+
+    def test_empty_chargers(self):
+        """No chargers gives empty result."""
+        sc = self._make_controller()
+        result = sc.distribute_ev_budget(8000, {})
+        assert result == {}
+
+    def test_1phase_charger_lower_threshold(self):
+        """1-phase charger can receive lower budget."""
+        sc = self._make_controller()
+        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
+        c2 = make_mock_charger("wb_2", "WB2", priority=5, phases=1)
+        # 1-phase min = 1380W
+        result = sc.distribute_ev_budget(13000, {"wb_1": c1, "wb_2": c2})
+        # P3 gets 11040, remainder 1960 ≥ 1380 → P5 gets 1960
+        assert result["wb_1"] == 11040
+        assert result["wb_2"] == 1960
+
+    def test_hysteresis_prevents_rapid_reallocation(self):
+        """Budget change < 500W within 60s should keep previous allocation."""
+        sc = self._make_controller()
+        c1 = make_mock_charger("wb_1", "WB1", priority=3)
+        c2 = make_mock_charger("wb_2", "WB2", priority=5)
+
+        # First call: establishes allocation
+        result1 = sc.distribute_ev_budget(8000, {"wb_1": c1, "wb_2": c2})
+        # Second call: small change (< 500W) within 60s
+        result2 = sc.distribute_ev_budget(8300, {"wb_1": c1, "wb_2": c2})
+        # Should keep previous allocation due to hysteresis
+        assert result2 == result1
+
+    def test_large_budget_change_overrides_hysteresis(self):
+        """Budget change > 500W should reallocate even within 60s."""
+        sc = self._make_controller()
+        c1 = make_mock_charger("wb_1", "WB1", priority=3, max_current=16)
+        c2 = make_mock_charger("wb_2", "WB2", priority=5)
+
+        result1 = sc.distribute_ev_budget(8000, {"wb_1": c1, "wb_2": c2})
+        # Large change: +8kW
+        result2 = sc.distribute_ev_budget(16000, {"wb_1": c1, "wb_2": c2})
+        assert result2["wb_1"] == 11040  # max for 16A charger
+        assert result2["wb_2"] == 4960  # remainder
+
+
+# ============================================================
 # Tests: Session tracking isolation
 # ============================================================
 
@@ -347,7 +462,7 @@ class TestPerChargerSessionTracking:
 
     def test_separate_session_data(self):
         """Each charger should have its own SessionData instance."""
-        from coordinator.types import SessionData
+        # SessionData already imported at module level via _load_mod
 
         sessions = {
             "wb_1": SessionData(active=True, energy_kwh=5.5, solar_share_pct=80),
@@ -372,7 +487,7 @@ class TestPerChargerSessionTracking:
 
     def test_session_energy_not_mixed(self):
         """Energy from charger 1 should not appear in charger 2's session."""
-        from coordinator.types import SessionData
+        # SessionData already imported at module level via _load_mod
 
         session_1 = SessionData(active=True)
         session_2 = SessionData(active=True)
@@ -416,7 +531,8 @@ class TestSingleChargerBackwardCompat:
 
     def test_sensor_names_unchanged(self):
         """Primary charger sensors should keep existing names (no _0 suffix)."""
-        from consts.sensors import SEM_SENSORS
+        _sensors_mod = _load_mod("consts.sensors", "consts/sensors.py")
+        SEM_SENSORS = _sensors_mod.SEM_SENSORS
         assert SEM_SENSORS["ev_power"] == "sensor.sem_ev_power"
         # New aggregate sensor exists
         assert SEM_SENSORS["ev_charger_count"] == "sensor.sem_ev_charger_count"
@@ -431,7 +547,7 @@ class TestSEMDataMultiCharger:
 
     def test_to_dict_includes_charger_count(self):
         """SEMData.to_dict() should include ev_charger_count."""
-        from coordinator.types import SEMData
+        # SEMData already imported at module level via _load_mod
 
         data = SEMData(ev_charger_count=2, ev_charger_ids=["wb_1", "wb_2"])
         d = data.to_dict()
@@ -440,7 +556,7 @@ class TestSEMDataMultiCharger:
 
     def test_to_dict_single_charger(self):
         """Single charger: ev_charger_count=1."""
-        from coordinator.types import SEMData
+        # SEMData already imported at module level via _load_mod
 
         data = SEMData(ev_charger_count=1, ev_charger_ids=["ev_charger"])
         d = data.to_dict()
@@ -449,7 +565,7 @@ class TestSEMDataMultiCharger:
 
     def test_sessions_dict_per_charger(self):
         """Sessions dict should hold per-charger SessionData."""
-        from coordinator.types import SEMData, SessionData
+        # SEMData already imported at module level via _load_mod, SessionData
 
         data = SEMData(
             sessions={
