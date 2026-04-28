@@ -445,6 +445,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Step 4.6: EV taper detection and intelligence (#106)
             ev_intelligence = self._update_ev_intelligence(power, energy)
+            self._last_ev_intelligence = ev_intelligence  # For notifications (#106)
 
             # Step 5: Calculate energy flows (daily totals for Sankey)
             energy_flows = self._flow_calculator.calculate_energy_flows(energy)
@@ -996,6 +997,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 await self._notification_manager.notify_forecast_alert(
                     forecast_data.forecast_tomorrow_kwh
                 )
+            # EV Intelligence notifications (#106)
+            ev_intel = getattr(self, '_last_ev_intelligence', None)
+            if ev_intel:
+                # 1. Nearly full: taper detector shows < 5 minutes remaining
+                if (ev_intel.taper.minutes_to_full > 0
+                        and ev_intel.taper.minutes_to_full < 5
+                        and power.ev_charging):
+                    await self._notification_manager.notify_ev_nearly_full(
+                        ev_intel.taper.minutes_to_full
+                    )
+
+                # 2. Night charge skipped: night mode, EV connected, skip decided
+                if (self.time_manager.is_night_mode()
+                        and power.ev_connected
+                        and not ev_intel.charge_needed
+                        and ev_intel.estimated_soc_pct > 0):
+                    await self._notification_manager.notify_ev_charge_skip(
+                        ev_intel.estimated_soc_pct,
+                        ev_intel.nights_until_charge,
+                    )
+
+                # 3. Charge recommended: night mode, SOC low, charge needed
+                if (self.time_manager.is_night_mode()
+                        and power.ev_connected
+                        and ev_intel.charge_needed
+                        and ev_intel.estimated_soc_pct < 30
+                        and ev_intel.estimated_soc_pct > 0):
+                    await self._notification_manager.notify_ev_charge_recommended(
+                        ev_intel.estimated_soc_pct
+                    )
+
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Event notification failed: %s", e)
         except HomeAssistantError as e:
