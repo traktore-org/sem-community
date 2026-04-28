@@ -1610,12 +1610,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             predicted_daily, self._cycle_vehicle_soc,
         )
 
-        # Track consecutive skips for safety net
+        # Track consecutive skips for safety net (once per night, not every cycle)
         if self.time_manager.is_night_mode() and power.ev_connected:
             if not charge_needed:
-                self._ev_taper_detector.record_skip()
+                if not getattr(self, '_skip_recorded_tonight', False):
+                    self._ev_taper_detector.record_skip()
+                    self._skip_recorded_tonight = True
             else:
                 self._ev_taper_detector.reset_skips()
+                self._skip_recorded_tonight = False
+        elif not self.time_manager.is_night_mode():
+            self._skip_recorded_tonight = False
 
         return EVIntelligenceData(
             taper=taper_data,
