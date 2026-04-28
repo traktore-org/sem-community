@@ -424,6 +424,26 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # if empty so config.get() returns "".
                     merged.setdefault("battery_discharge_control_entity", "")
 
+                # Wrap flat EV keys into ev_chargers list (#112 multi-charger)
+                if merged.get("ev_charging_power_sensor") and "ev_chargers" not in merged:
+                    _EV_KEYS = [
+                        "ev_connected_sensor", "ev_charging_sensor",
+                        "ev_charging_power_sensor", "ev_charger_service",
+                        "ev_charger_service_entity_id", "ev_current_sensor",
+                        "ev_total_energy_sensor", "ev_session_energy_sensor",
+                        "ev_service_param_name", "ev_service_device_id",
+                        "ev_start_stop_entity", "ev_charge_mode_entity",
+                        "ev_charge_mode_start", "ev_charge_mode_stop",
+                        "ev_start_service", "ev_start_service_data",
+                        "ev_stop_service", "ev_stop_service_data",
+                        "ev_charger_needs_cycle", "ev_surplus_priority",
+                    ]
+                    charger_0 = {"id": "ev_charger", "name": "EV Charger"}
+                    for k in _EV_KEYS:
+                        if merged.get(k) is not None:
+                            charger_0[k] = merged[k]
+                    merged["ev_chargers"] = [charger_0]
+
                 self._data = merged
                 return self.async_create_entry(
                     title="Solar Energy Management",
@@ -627,19 +647,27 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_ev_charger(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle EV charger options."""
+        """Handle EV charger options (primary charger)."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            # Update both flat keys and ev_chargers[0] (#112)
             self._data.update(user_input)
+            ev_chargers = self._data.get("ev_chargers") or self.config_entry.options.get("ev_chargers") or []
+            if ev_chargers:
+                ev_chargers[0].update(user_input)
+                self._data["ev_chargers"] = ev_chargers
             return await self.async_step_settings()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
+        # Read from ev_chargers[0] if available (#112 multi-charger)
+        ev_chargers = current_config.get("ev_chargers", [])
+        if ev_chargers:
+            for k, v in ev_chargers[0].items():
+                if k not in ("id", "name") and v is not None:
+                    current_config.setdefault(k, v)
         _c = lambda key, fb: self._cfg(current_config, key, fb)
 
-        # Same suggested_value pattern as the install ev_charger step:
-        # optional EntitySelector fields cannot use default="" — HA rejects
-        # empty strings as invalid entity IDs.
         def _opt(key: str):
             v = current_config.get(key)
             return v if v else None

@@ -456,7 +456,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 await self._retry_ev_device_with_backoff()
 
             if self._ev_devices and not self._observer_mode:
-                # Multi-charger: iterate in priority order
+                # Multi-charger (#112): distribute budget, then control each
+                # Calculate total EV budget once, distribute across chargers
+                ev_budget_per_charger = {}
+                if len(self._ev_devices) > 1 and charging_state in (
+                    ChargingState.SOLAR_CHARGING_ACTIVE,
+                    ChargingState.SOLAR_SUPER_CHARGING,
+                    ChargingState.SOLAR_CHARGING_ALLOWED,
+                    ChargingState.SOLAR_MIN_PV,
+                ):
+                    total_budget = self._calculate_solar_ev_budget(
+                        charging_state, power, charging_context
+                    )
+                    ev_budget_per_charger = self._surplus_controller.distribute_ev_budget(
+                        total_budget, self._ev_devices
+                    )
+
                 sorted_chargers = sorted(
                     self._ev_devices.items(),
                     key=lambda x: x[1].priority,
@@ -464,6 +479,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 for cid, ev_dev in sorted_chargers:
                     saved_dev = self._ev_device
                     self._ev_device = ev_dev
+                    # Store per-charger budget for ev_control to use
+                    self._current_charger_budget = ev_budget_per_charger.get(cid)
                     try:
                         await self._execute_ev_control(
                             charging_state, power, energy, charging_context
@@ -474,6 +491,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
                     finally:
                         self._ev_device = saved_dev
+                        self._current_charger_budget = None
                 self._save_ev_session_state()
             elif self._ev_device and not self._observer_mode:
                 try:
