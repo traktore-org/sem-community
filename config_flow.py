@@ -1045,8 +1045,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
-                    "electricity_nt_rate",
-                    default=_c("electricity_nt_rate", 0.3387),
+                    "electricity_off_peak_rate",
+                    default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
@@ -1157,7 +1157,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_notifications()
+            return await self.async_step_battery_scheduler()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -1217,6 +1217,111 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=1, max=10, step=1, mode="slider"
                     )
                 ),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_battery_scheduler(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle battery charge scheduler options (#6)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_notifications()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
+
+        return self.async_show_form(
+            step_id="battery_scheduler",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "battery_charge_scheduler_enabled",
+                    default=_c("battery_charge_scheduler_enabled", False),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "battery_capacity_kwh",
+                    default=_c("battery_capacity_kwh", 10.0),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1, max=100, step=0.5,
+                        unit_of_measurement="kWh",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    "battery_max_charge_power_w",
+                    default=_c("battery_max_charge_power_w", 5000),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=500, max=25000, step=100,
+                        unit_of_measurement="W",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    "battery_roundtrip_efficiency",
+                    default=_c("battery_roundtrip_efficiency", 0.92),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.70, max=0.99, step=0.01,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    "battery_cycle_cost",
+                    default=_c("battery_cycle_cost", 0.0),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=0.50, step=0.001,
+                        unit_of_measurement="EUR/kWh",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    "battery_precharge_trigger_hour",
+                    default=_c("battery_precharge_trigger_hour", 21),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=18, max=23, step=1,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    "battery_max_target_soc",
+                    default=_c("battery_max_target_soc", 95.0),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=50, max=100, step=5,
+                        unit_of_measurement="%",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    "battery_min_deficit_kwh",
+                    default=_c("battery_min_deficit_kwh", 2.0),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=10, step=0.5,
+                        unit_of_measurement="kWh",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Optional(
+                    "battery_pessimism_weight",
+                    default=_c("battery_pessimism_weight", 0.3),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0, max=1.0, step=0.1,
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    "battery_force_charge_negative_price",
+                    default=_c("battery_force_charge_negative_price", True),
+                ): selector.BooleanSelector(),
             }),
             errors=errors,
         )

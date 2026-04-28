@@ -143,6 +143,74 @@ SOC  0%  ───────────────────────�
 
 ---
 
+## Battery Charge Scheduler (#6)
+
+Forecast-aware grid-to-battery charging during cheap night hours. **Disabled by default** — enable via config flow.
+
+### Decision Pipeline (runs daily at configurable trigger hour, default 21:00)
+
+1. **Forecast resolve** — 3-tier fallback: fresh Solcast → stale (doubled pessimism) → offline (conservative)
+2. **Deficit calculation** — `expected_consumption - corrected_forecast × confidence × (1 - pessimism)`
+3. **Negative tariff override** — force-charge to max SOC during negative prices regardless of forecast
+4. **Threshold check** — skip if deficit < `min_deficit_kwh` (default 2 kWh)
+5. **Break-even check** — `(off_peak_rate / efficiency) + (2 × cycle_cost) < peak_rate` — includes battery degradation
+6. **Target SOC** — `current_soc + (deficit / usable_capacity × 100)`, capped at `max_target_soc`
+7. **Schedule planning** — time-slotted power allocation for battery + EV under peak constraints
+8. **Cheapest hours** — dynamic tariff: `find_cheapest_hours(N, 12h)` | static: full NT window
+
+### Night Charge Schedule
+
+Both battery and EV are variable-power loads co-scheduled per hour:
+- **No peak limit**: both charge simultaneously at max power
+- **EV priority mode**: EV gets full demand, battery gets remainder
+- **Proportional mode**: power split by demand ratio
+
+The schedule adapts at runtime when actual EV power differs from planned.
+
+### Re-plan Triggers
+
+- SOC deviation > 5% from evaluation time
+- EV connects/disconnects
+
+### Inverter Adapters
+
+| Platform | Adapter | Control Method |
+|----------|---------|---------------|
+| Huawei SUN2000 | `HuaweiChargeAdapter` | `huawei_solar.forcible_charge_soc` service |
+| GoodWe | `GoodWeChargeAdapter` | Work mode select + SOC target number |
+| Generic | `GenericChargeAdapter` | Force-charge switch + SOC target number |
+| Auto | Factory detection | Checks `hass.config.components` |
+
+### Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `battery_charge_scheduler_enabled` | `false` | Feature toggle |
+| `battery_capacity_kwh` | 10.0 | Usable battery capacity |
+| `battery_max_charge_power_w` | 5000 | Inverter max charge rate |
+| `battery_roundtrip_efficiency` | 0.92 | Round-trip efficiency |
+| `battery_cycle_cost` | 0.0 | Degradation cost per kWh throughput |
+| `battery_precharge_trigger_hour` | 21 | Daily evaluation hour |
+| `battery_max_target_soc` | 95% | Never plan above this |
+| `battery_min_deficit_kwh` | 2.0 | Minimum deficit to bother charging |
+| `battery_pessimism_weight` | 0.3 | Forecast pessimism (0=trust, 1=worst case) |
+| `battery_force_charge_negative_price` | `true` | Charge during negative prices |
+| `peak_limit_w` | 0 | House connection peak limit |
+| `battery_max_grid_import_w` | 0 | Max grid draw during charging |
+
+### Sensors
+
+| Sensor | Type | Description |
+|--------|------|-------------|
+| `battery_scheduler_state` | Diagnostic | idle/scheduled/charging/target_reached/not_needed/not_profitable |
+| `battery_scheduler_target_soc` | % | Planned target SOC for tonight |
+| `battery_scheduler_deficit_kwh` | kWh | Calculated energy deficit |
+| `battery_scheduler_reason` | Diagnostic | Human-readable decision explanation |
+
+The `battery_scheduler_state` sensor has a `schedule` attribute containing the full time-slotted plan (serialized via `NightChargeSchedule.as_dict()`).
+
+---
+
 ## EV Control Flow
 
 The coordinator owns all EV control (`ev.managed_externally = True`). The EV is never managed by the SurplusController due to unique requirements (session lifecycle, minimum 4140W cliff, charger-specific service calls).
