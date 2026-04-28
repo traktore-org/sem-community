@@ -1069,7 +1069,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         if user_input is not None:
             self._data.update(user_input)
-            return await self.async_step_notifications()
+            return await self.async_step_heat_pump()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -1119,6 +1119,78 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.BooleanSelector(),
             }),
             errors=errors
+        )
+
+    async def async_step_heat_pump(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle heat pump SG-Ready configuration."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_notifications()
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
+
+        def _opt(key):
+            v = current_config.get(key)
+            return v if v else None
+
+        return self.async_show_form(
+            step_id="heat_pump",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "heat_pump_relay1_entity",
+                    description={"suggested_value": _opt("heat_pump_relay1_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="switch")
+                ),
+                vol.Optional(
+                    "heat_pump_relay2_entity",
+                    description={"suggested_value": _opt("heat_pump_relay2_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="switch")
+                ),
+                vol.Optional(
+                    "heat_pump_climate_entity",
+                    description={"suggested_value": _opt("heat_pump_climate_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="climate")
+                ),
+                vol.Optional(
+                    "heat_pump_power_sensor",
+                    description={"suggested_value": _opt("heat_pump_power_sensor")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
+                ),
+                vol.Optional(
+                    "heat_pump_boost_offset",
+                    default=_c("heat_pump_boost_offset", 2.0),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=10.0, step=0.5, unit_of_measurement="°C", mode="slider"
+                    )
+                ),
+                vol.Optional(
+                    "heat_pump_max_setpoint",
+                    default=_c("heat_pump_max_setpoint", 55.0),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=30.0, max=80.0, step=1.0, unit_of_measurement="°C", mode="slider"
+                    )
+                ),
+                vol.Optional(
+                    "heat_pump_priority",
+                    default=_c("heat_pump_priority", 4),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1, max=10, step=1, mode="slider"
+                    )
+                ),
+            }),
+            errors=errors,
         )
 
     async def async_step_notifications(

@@ -390,6 +390,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         else:
             _LOGGER.debug("EV charger not configured (no power sensor or control method)")
 
+        # Register heat pump SG-Ready controller if configured
+        hp_relay1 = full_config.get("heat_pump_relay1_entity")
+        hp_relay2 = full_config.get("heat_pump_relay2_entity")
+        if hp_relay1 and hp_relay2:
+            from .devices.heat_pump_controller import HeatPumpController
+            hp_device = HeatPumpController(
+                hass=hass,
+                device_id="heat_pump",
+                name=full_config.get("heat_pump_name", "Heat Pump"),
+                rated_power=float(full_config.get("heat_pump_rated_power", 2000)),
+                priority=int(full_config.get("heat_pump_priority", 4)),
+                relay1_entity_id=hp_relay1,
+                relay2_entity_id=hp_relay2,
+                climate_entity_id=full_config.get("heat_pump_climate_entity"),
+                power_entity_id=full_config.get("heat_pump_power_sensor"),
+                temperature_entity_id=full_config.get("heat_pump_temperature_sensor"),
+                boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
+                max_setpoint=float(full_config.get("heat_pump_max_setpoint", 55.0)),
+                force_on_threshold=float(full_config.get("heat_pump_force_on_threshold", 5000)),
+            )
+            coordinator._surplus_controller.register_device(hp_device)
+            _LOGGER.info(
+                "Heat pump registered as SG-Ready device "
+                "(priority %d, relay1=%s, relay2=%s)",
+                hp_device.priority, hp_relay1, hp_relay2,
+            )
+        else:
+            _LOGGER.debug("Heat pump not configured (no relay entities)")
+
     except Exception as err:
         _LOGGER.warning(
             "Load management initialization failed (non-critical): %s. "
