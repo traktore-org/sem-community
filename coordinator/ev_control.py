@@ -416,8 +416,9 @@ class EVControlMixin:
         adjusted = max(0, remaining_kwh - reduction)
 
         # EV Intelligence: SOC-based charge skip (#106)
+        # Skip runs when SOC is anchored (taper detection, car API, or session bootstrap)
         ev_taper = getattr(self, "_ev_taper_detector", None)
-        if ev_taper and ev_taper.last_full_timestamp:
+        if ev_taper and (ev_taper.last_full_timestamp or ev_taper._soc_anchored):
             estimated_soc = ev_taper.get_virtual_soc(
                 getattr(self, "_cycle_vehicle_soc", None)
             )
