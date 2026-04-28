@@ -153,19 +153,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             schedule = config.get("tariff_schedule", {})
             self._tariff_provider = CalendarTariffProvider(
                 hass,
-                ht_rate=config.get("electricity_import_rate", 0.35),
-                nt_rate=config.get("electricity_nt_rate", 0.22),
+                peak_rate=config.get("electricity_import_rate", 0.35),
+                off_peak_rate=config.get("electricity_off_peak_rate") or config.get("electricity_nt_rate", 0.22),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 rules=schedule.get("rules", []),
-                default_tariff=schedule.get("default_tariff", "nt"),
+                default_tariff=schedule.get("default_tariff", "off_peak"),
                 holiday_entity=schedule.get("holiday_entity"),
                 schedule_entity=schedule.get("schedule_entity"),
                 currency=currency,
             )
         else:
             self._tariff_provider = StaticTariffProvider(
-                ht_rate=config.get("electricity_import_rate", 0.3387),
-                nt_rate=config.get("electricity_nt_rate", 0.3387),
+                peak_rate=config.get("electricity_import_rate", 0.3387),
+                off_peak_rate=config.get("electricity_off_peak_rate") or config.get("electricity_nt_rate", 0.3387),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 currency=currency,
             )
@@ -1005,7 +1005,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Get tariff rates
             off_peak_rate = self._tariff_provider.get_price_at(
                 now.replace(hour=2, minute=0)  # Night / off-peak rate
-            ) if hasattr(self._tariff_provider, 'get_price_at') else self.config.get("electricity_nt_rate", 0.22)
+            ) if hasattr(self._tariff_provider, 'get_price_at') else self.config.get("electricity_off_peak_rate") or self.config.get("electricity_nt_rate", 0.22)
             peak_rate = self._tariff_provider.get_price_at(
                 now.replace(hour=14, minute=0)  # Day / peak rate
             ) if hasattr(self._tariff_provider, 'get_price_at') else self.config.get("electricity_import_rate", 0.30)

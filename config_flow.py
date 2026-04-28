@@ -1045,8 +1045,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
-                    "electricity_nt_rate",
-                    default=_c("electricity_nt_rate", 0.3387),
+                    "electricity_off_peak_rate",
+                    default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),

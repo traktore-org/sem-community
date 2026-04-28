@@ -65,18 +65,21 @@ class CalendarTariffProvider(TariffProvider):
     def __init__(
         self,
         hass: HomeAssistant,
-        ht_rate: float = 0.35,
-        nt_rate: float = 0.22,
+        peak_rate: float = 0.35,
+        off_peak_rate: float = 0.22,
         export_rate: float = 0.075,
         rules: Optional[List[Dict[str, Any]]] = None,
-        default_tariff: str = "nt",
+        default_tariff: str = "off_peak",
         holiday_entity: Optional[str] = None,
         schedule_entity: Optional[str] = None,
         currency: str = "CHF",
+        # Backward compat kwargs
+        ht_rate: float = None,
+        nt_rate: float = None,
     ):
         self.hass = hass
-        self.ht_rate = ht_rate
-        self.nt_rate = nt_rate
+        self.peak_rate = ht_rate if ht_rate is not None else peak_rate
+        self.off_peak_rate = nt_rate if nt_rate is not None else off_peak_rate
         self.export_rate = export_rate
         self.default_tariff = default_tariff
         self.holiday_entity = holiday_entity
@@ -89,13 +92,13 @@ class CalendarTariffProvider(TariffProvider):
             days = rule.get("days", [])
             start = self._parse_time(rule.get("start", "00:00"))
             end = self._parse_time(rule.get("end", "00:00"))
-            tariff = rule.get("tariff", "ht")
+            tariff = rule.get("tariff", "peak")
             self._rules.append((days, start, end, tariff))
 
         if self._rules:
             _LOGGER.info(
-                "Calendar tariff: %d rules, HT=%.4f, NT=%.4f %s",
-                len(self._rules), ht_rate, nt_rate, currency,
+                "Calendar tariff: %d rules, peak=%.4f, off_peak=%.4f %s",
+                len(self._rules), self.peak_rate, self.off_peak_rate, currency,
             )
         elif schedule_entity:
             _LOGGER.info(
@@ -158,7 +161,7 @@ class CalendarTariffProvider(TariffProvider):
         return self._get_tariff_at(now) == "ht"
 
     def get_current_import_rate(self) -> float:
-        return self.ht_rate if self._is_high_tariff() else self.nt_rate
+        return self.peak_rate if self._is_high_tariff() else self.off_peak_rate
 
     def get_current_export_rate(self) -> float:
         return self.export_rate
@@ -167,22 +170,22 @@ class CalendarTariffProvider(TariffProvider):
         return PriceLevel.NORMAL if self._is_high_tariff() else PriceLevel.CHEAP
 
     def get_price_at(self, when: datetime) -> Optional[float]:
-        return self.ht_rate if self._is_high_tariff(when) else self.nt_rate
+        return self.peak_rate if self._is_high_tariff(when) else self.off_peak_rate
 
     def get_tariff_data(self) -> TariffData:
         now = dt_util.now()
         is_ht = self._is_high_tariff(now)
 
         data = TariffData(
-            current_import_rate=self.ht_rate if is_ht else self.nt_rate,
+            current_import_rate=self.peak_rate if is_ht else self.off_peak_rate,
             current_export_rate=self.export_rate,
             price_level=PriceLevel.NORMAL if is_ht else PriceLevel.CHEAP,
             currency=self.currency,
             provider="calendar",
             is_dynamic=False,
-            today_min_price=self.nt_rate,
-            today_max_price=self.ht_rate,
-            today_avg_price=(self.ht_rate + self.nt_rate) / 2,
+            today_min_price=self.off_peak_rate,
+            today_max_price=self.peak_rate,
+            today_avg_price=(self.peak_rate + self.off_peak_rate) / 2,
         )
 
         # Calculate next tariff transition
