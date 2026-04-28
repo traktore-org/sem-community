@@ -44,6 +44,89 @@ class SchedulerState(Enum):
 
 
 @dataclass
+class TimeSlot:
+    """A planned power allocation for a specific hour."""
+
+    start: datetime
+    end: datetime
+    battery_power_w: float = 0.0  # Planned battery charge power
+    ev_power_w: float = 0.0  # Planned EV charge power
+    price: float = 0.0  # Cost per kWh in this slot
+    is_active: bool = False  # Currently executing
+
+    @property
+    def total_power_w(self) -> float:
+        return self.battery_power_w + self.ev_power_w
+
+    @property
+    def battery_energy_kwh(self) -> float:
+        hours = (self.end - self.start).total_seconds() / 3600
+        return self.battery_power_w * hours / 1000
+
+    @property
+    def ev_energy_kwh(self) -> float:
+        hours = (self.end - self.start).total_seconds() / 3600
+        return self.ev_power_w * hours / 1000
+
+
+@dataclass
+class NightChargeSchedule:
+    """Complete night charge plan showing battery + EV allocation per time slot.
+
+    This is the "today's schedule" view — shows what will charge when and at
+    what power level. Both battery and EV are variable-power loads that can
+    be co-scheduled:
+    - No peak limit: both charge simultaneously at max power
+    - With peak limit: power is distributed across time slots dynamically
+    """
+
+    slots: List[TimeSlot] = field(default_factory=list)
+    total_battery_kwh: float = 0.0
+    total_ev_kwh: float = 0.0
+    peak_limit_w: float = 0.0
+    created_at: Optional[datetime] = None
+
+    @property
+    def total_energy_kwh(self) -> float:
+        return self.total_battery_kwh + self.total_ev_kwh
+
+    @property
+    def estimated_cost(self) -> float:
+        """Total estimated cost for the night charge plan."""
+        return sum(
+            (s.battery_energy_kwh + s.ev_energy_kwh) * s.price
+            for s in self.slots
+        )
+
+    @property
+    def active_slot(self) -> Optional[TimeSlot]:
+        """Currently active time slot."""
+        return next((s for s in self.slots if s.is_active), None)
+
+    def as_dict(self) -> dict:
+        """Serialize for HA sensor attributes."""
+        return {
+            "slots": [
+                {
+                    "start": s.start.isoformat(),
+                    "end": s.end.isoformat(),
+                    "battery_w": s.battery_power_w,
+                    "ev_w": s.ev_power_w,
+                    "total_w": s.total_power_w,
+                    "price": s.price,
+                    "active": s.is_active,
+                }
+                for s in self.slots
+            ],
+            "total_battery_kwh": round(self.total_battery_kwh, 2),
+            "total_ev_kwh": round(self.total_ev_kwh, 2),
+            "total_kwh": round(self.total_energy_kwh, 2),
+            "estimated_cost": round(self.estimated_cost, 3),
+            "peak_limit_w": self.peak_limit_w,
+        }
+
+
+@dataclass
 class SchedulerDecision:
     """Result of the daily charge evaluation."""
 
@@ -52,6 +135,7 @@ class SchedulerDecision:
     deficit_kwh: float = 0.0
     hours_needed: int = 0
     charge_windows: List[datetime] = field(default_factory=list)
+    schedule: Optional[NightChargeSchedule] = None
     reason: str = ""
     evaluated_at: Optional[datetime] = None
 
@@ -144,6 +228,8 @@ class BatteryChargeScheduler:
         ht_rate: float,
         tariff_provider=None,
         correction_factor: float = 1.0,
+        ev_kwh_needed: float = 0.0,
+        ev_max_power_w: float = 0.0,
     ) -> SchedulerDecision:
         """Run the daily charge evaluation.
 
@@ -155,6 +241,8 @@ class BatteryChargeScheduler:
             ht_rate: Day tariff rate (cost per kWh)
             tariff_provider: Optional DynamicTariffProvider for cheapest-hour scheduling
             correction_factor: Forecast correction factor from ForecastTracker
+            ev_kwh_needed: EV energy still needed tonight (0 = no EV charging)
+            ev_max_power_w: EV max charge power (e.g. 11000W for 3-phase 16A)
 
         Returns:
             SchedulerDecision with the charge plan
@@ -237,9 +325,19 @@ class BatteryChargeScheduler:
 
         # Find cheapest hours if dynamic tariff available
         charge_windows: List[datetime] = []
+        cheapest_prices: List = []
         if tariff_provider and hasattr(tariff_provider, "find_cheapest_hours"):
-            cheapest = tariff_provider.find_cheapest_hours(hours_needed, within_hours=12)
-            charge_windows = [p.timestamp for p in cheapest]
+            cheapest_prices = tariff_provider.find_cheapest_hours(hours_needed, within_hours=12)
+            charge_windows = [p.timestamp for p in cheapest_prices]
+
+        # Build the night charge schedule with time-slotted power allocation
+        schedule = self._plan_night_schedule(
+            battery_kwh_needed=actual_charge_kwh,
+            ev_kwh_needed=ev_kwh_needed,
+            ev_max_power_w=ev_max_power_w,
+            cheapest_prices=cheapest_prices,
+            now=now,
+        )
 
         self._decision = SchedulerDecision(
             state=SchedulerState.SCHEDULED,
@@ -247,6 +345,7 @@ class BatteryChargeScheduler:
             deficit_kwh=deficit_kwh,
             hours_needed=hours_needed,
             charge_windows=charge_windows,
+            schedule=schedule,
             reason=(
                 f"Charge {actual_charge_kwh:.1f} kWh "
                 f"({current_soc:.0f}% → {target_soc:.0f}%) "
@@ -260,6 +359,127 @@ class BatteryChargeScheduler:
             [w.strftime("%H:%M") for w in charge_windows] if charge_windows else "full NT",
         )
         return self._decision
+
+    def _plan_night_schedule(
+        self,
+        battery_kwh_needed: float,
+        ev_kwh_needed: float,
+        ev_max_power_w: float,
+        cheapest_prices: List,
+        now: datetime,
+    ) -> NightChargeSchedule:
+        """Plan time-slotted power allocation for battery + EV.
+
+        Both battery and EV are dynamic loads. This method creates a schedule
+        showing what charges when and at what power level:
+        - No peak limit: both charge simultaneously at full power
+        - With peak limit: distribute power across slots, prioritizing EV
+          (has departure deadline) then filling remaining capacity with battery
+
+        The schedule is exposed as a sensor attribute for dashboard display.
+        """
+        peak_limit = self._config.peak_limit_w
+        battery_max_w = self._config.battery_max_charge_power_w
+        slots: List[TimeSlot] = []
+
+        # Determine available hours (from cheapest prices or default NT window)
+        if cheapest_prices:
+            available_hours = [
+                (p.timestamp, p.timestamp + timedelta(hours=1), getattr(p, "price", 0.0))
+                for p in cheapest_prices
+            ]
+        else:
+            # Default: 8 hours starting from now (full NT window)
+            available_hours = [
+                (now + timedelta(hours=i), now + timedelta(hours=i + 1), 0.0)
+                for i in range(8)
+            ]
+
+        battery_remaining_kwh = battery_kwh_needed
+        ev_remaining_kwh = ev_kwh_needed
+
+        for start, end, price in available_hours:
+            if battery_remaining_kwh <= 0 and ev_remaining_kwh <= 0:
+                break
+
+            # Calculate power allocation for this slot
+            if peak_limit <= 0:
+                # No peak limit — both at max simultaneously
+                slot_battery_w = min(
+                    battery_max_w,
+                    battery_remaining_kwh * 1000,  # Don't overshoot
+                )
+                slot_ev_w = min(
+                    ev_max_power_w,
+                    ev_remaining_kwh * 1000,
+                )
+            else:
+                # Peak-constrained: EV gets priority, battery gets remainder
+                if self._config.ev_priority:
+                    slot_ev_w = min(
+                        ev_max_power_w,
+                        ev_remaining_kwh * 1000,
+                        peak_limit,
+                    )
+                    remaining_capacity = max(0, peak_limit - slot_ev_w)
+                    slot_battery_w = min(
+                        battery_max_w,
+                        battery_remaining_kwh * 1000,
+                        remaining_capacity,
+                    )
+                else:
+                    # Proportional split
+                    total_demand = (
+                        min(battery_max_w, battery_remaining_kwh * 1000)
+                        + min(ev_max_power_w, ev_remaining_kwh * 1000)
+                    )
+                    if total_demand > 0 and total_demand > peak_limit:
+                        ratio = peak_limit / total_demand
+                        slot_battery_w = min(battery_max_w, battery_remaining_kwh * 1000) * ratio
+                        slot_ev_w = min(ev_max_power_w, ev_remaining_kwh * 1000) * ratio
+                    else:
+                        slot_battery_w = min(battery_max_w, battery_remaining_kwh * 1000)
+                        slot_ev_w = min(ev_max_power_w, ev_remaining_kwh * 1000)
+
+            # Clamp to zero
+            slot_battery_w = max(0, slot_battery_w)
+            slot_ev_w = max(0, slot_ev_w)
+
+            if slot_battery_w > 0 or slot_ev_w > 0:
+                slot = TimeSlot(
+                    start=start,
+                    end=end,
+                    battery_power_w=round(slot_battery_w),
+                    ev_power_w=round(slot_ev_w),
+                    price=price,
+                )
+                slots.append(slot)
+
+                # Deduct energy delivered in this slot (1 hour per slot)
+                battery_remaining_kwh -= slot.battery_energy_kwh
+                ev_remaining_kwh -= slot.ev_energy_kwh
+
+        total_battery = sum(s.battery_energy_kwh for s in slots)
+        total_ev = sum(s.ev_energy_kwh for s in slots)
+
+        schedule = NightChargeSchedule(
+            slots=slots,
+            total_battery_kwh=round(total_battery, 2),
+            total_ev_kwh=round(total_ev, 2),
+            peak_limit_w=peak_limit,
+            created_at=now,
+        )
+
+        _LOGGER.debug(
+            "Night schedule planned: %d slots, battery=%.1f kWh, EV=%.1f kWh, "
+            "peak_limit=%dW, est_cost=%.3f",
+            len(slots),
+            total_battery,
+            total_ev,
+            peak_limit,
+            schedule.estimated_cost,
+        )
+        return schedule
 
     async def update(
         self,
@@ -305,14 +525,24 @@ class BatteryChargeScheduler:
 
         # Determine if we should be charging right now
         now = dt_util.now()
-        should_charge_now = self._is_in_charge_window(now)
 
-        if should_charge_now and not self._adapter.is_active:
-            # Calculate available power (respect peak limit)
-            charge_power = self._calculate_available_charge_power(ev_charging_power_w)
+        # Update active slot tracking in the schedule
+        active_slot = self._get_active_slot(now)
+
+        if active_slot and not self._adapter.is_active:
+            # Use planned power from schedule, or fall back to dynamic calculation
+            charge_power = active_slot.battery_power_w
             if charge_power <= 0:
+                # Schedule says no battery power in this slot (EV-only slot)
                 self._decision.state = SchedulerState.WAITING_FOR_SLOT
                 return SchedulerState.WAITING_FOR_SLOT
+
+            # Override with real-time peak adjustment if EV actual differs from planned
+            if self._config.peak_limit_w > 0 and ev_charging_power_w != active_slot.ev_power_w:
+                charge_power = self._calculate_available_charge_power(ev_charging_power_w)
+                if charge_power <= 0:
+                    self._decision.state = SchedulerState.WAITING_FOR_SLOT
+                    return SchedulerState.WAITING_FOR_SLOT
 
             command = ChargeCommand(
                 target_soc=self._decision.target_soc,
@@ -329,18 +559,50 @@ class BatteryChargeScheduler:
                 self._decision.reason = status.message
                 _LOGGER.error("Battery charge start failed: %s", status.message)
 
-        elif not should_charge_now and self._adapter.is_active:
+        elif not active_slot and self._adapter.is_active:
             # Outside charge window but still charging — stop
             await self._adapter.stop_forced_charge()
             self._decision.state = SchedulerState.WAITING_FOR_SLOT
 
-        elif should_charge_now and self._adapter.is_active:
+        elif active_slot and self._adapter.is_active:
             self._decision.state = SchedulerState.CHARGING
+            # Adjust power if EV load changed since plan was made
+            if self._config.peak_limit_w > 0 and ev_charging_power_w != active_slot.ev_power_w:
+                new_power = self._calculate_available_charge_power(ev_charging_power_w)
+                if new_power > 0:
+                    command = ChargeCommand(
+                        target_soc=self._decision.target_soc,
+                        max_power_w=new_power,
+                    )
+                    await self._adapter.start_forced_charge(command)
 
         else:
             self._decision.state = SchedulerState.WAITING_FOR_SLOT
 
         return self._decision.state
+
+    def _get_active_slot(self, now: datetime) -> Optional[TimeSlot]:
+        """Find and mark the currently active time slot from the schedule."""
+        schedule = self._decision.schedule
+        if not schedule:
+            # No schedule — fall back to charge window check
+            if self._is_in_charge_window(now):
+                return TimeSlot(
+                    start=now,
+                    end=now + timedelta(hours=1),
+                    battery_power_w=self._config.battery_max_charge_power_w,
+                )
+            return None
+
+        # Clear previous active flags and find current slot
+        active = None
+        for slot in schedule.slots:
+            slot.is_active = False
+            if slot.start <= now < slot.end:
+                slot.is_active = True
+                active = slot
+
+        return active
 
     def _is_in_charge_window(self, now: datetime) -> bool:
         """Check if current time is within a scheduled charge window."""

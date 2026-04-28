@@ -26,9 +26,11 @@ from custom_components.solar_energy_management.coordinator.battery_charge_adapte
 )
 from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (
     BatteryChargeScheduler,
+    NightChargeSchedule,
     SchedulerConfig,
     SchedulerDecision,
     SchedulerState,
+    TimeSlot,
 )
 
 
@@ -924,3 +926,432 @@ class TestSchedulerIntegration:
         )
 
         assert decision.state == SchedulerState.NOT_NEEDED
+
+
+# ---------------------------------------------------------------------------
+# TimeSlot & NightChargeSchedule Tests
+# ---------------------------------------------------------------------------
+
+class TestTimeSlot:
+    """Test TimeSlot dataclass properties."""
+
+    def test_total_power(self):
+        slot = TimeSlot(
+            start=dt_util.now(),
+            end=dt_util.now() + timedelta(hours=1),
+            battery_power_w=3000,
+            ev_power_w=7000,
+        )
+        assert slot.total_power_w == 10000
+
+    def test_energy_calculation_one_hour(self):
+        now = dt_util.now()
+        slot = TimeSlot(
+            start=now,
+            end=now + timedelta(hours=1),
+            battery_power_w=5000,
+            ev_power_w=11000,
+        )
+        assert slot.battery_energy_kwh == pytest.approx(5.0)
+        assert slot.ev_energy_kwh == pytest.approx(11.0)
+
+    def test_energy_calculation_half_hour(self):
+        now = dt_util.now()
+        slot = TimeSlot(
+            start=now,
+            end=now + timedelta(minutes=30),
+            battery_power_w=4000,
+            ev_power_w=0,
+        )
+        assert slot.battery_energy_kwh == pytest.approx(2.0)
+
+
+class TestNightChargeSchedule:
+    """Test NightChargeSchedule properties and serialization."""
+
+    def test_total_energy(self):
+        schedule = NightChargeSchedule(
+            total_battery_kwh=5.0,
+            total_ev_kwh=11.0,
+        )
+        assert schedule.total_energy_kwh == 16.0
+
+    def test_estimated_cost(self):
+        now = dt_util.now()
+        schedule = NightChargeSchedule(
+            slots=[
+                TimeSlot(
+                    start=now,
+                    end=now + timedelta(hours=1),
+                    battery_power_w=3000,
+                    ev_power_w=7000,
+                    price=0.08,
+                ),
+                TimeSlot(
+                    start=now + timedelta(hours=1),
+                    end=now + timedelta(hours=2),
+                    battery_power_w=3000,
+                    ev_power_w=0,
+                    price=0.10,
+                ),
+            ],
+        )
+        # Slot 1: (3+7) * 0.08 = 0.80, Slot 2: 3 * 0.10 = 0.30
+        assert schedule.estimated_cost == pytest.approx(1.10)
+
+    def test_active_slot(self):
+        now = dt_util.now()
+        s1 = TimeSlot(start=now, end=now + timedelta(hours=1), is_active=False)
+        s2 = TimeSlot(start=now + timedelta(hours=1), end=now + timedelta(hours=2), is_active=True)
+        schedule = NightChargeSchedule(slots=[s1, s2])
+
+        assert schedule.active_slot is s2
+
+    def test_no_active_slot(self):
+        schedule = NightChargeSchedule(slots=[])
+        assert schedule.active_slot is None
+
+    def test_as_dict_serialization(self):
+        now = dt_util.now()
+        schedule = NightChargeSchedule(
+            slots=[
+                TimeSlot(
+                    start=now,
+                    end=now + timedelta(hours=1),
+                    battery_power_w=3000,
+                    ev_power_w=7000,
+                    price=0.08,
+                ),
+            ],
+            total_battery_kwh=3.0,
+            total_ev_kwh=7.0,
+            peak_limit_w=9000,
+        )
+        d = schedule.as_dict()
+
+        assert len(d["slots"]) == 1
+        assert d["slots"][0]["battery_w"] == 3000
+        assert d["slots"][0]["ev_w"] == 7000
+        assert d["slots"][0]["total_w"] == 10000
+        assert d["total_battery_kwh"] == 3.0
+        assert d["total_ev_kwh"] == 7.0
+        assert d["total_kwh"] == 10.0
+        assert d["peak_limit_w"] == 9000
+
+
+# ---------------------------------------------------------------------------
+# Schedule Planning Tests
+# ---------------------------------------------------------------------------
+
+class TestSchedulePlanning:
+    """Test _plan_night_schedule power allocation logic."""
+
+    def _make_scheduler(self, hass, scheduler_config, adapter=None):
+        if adapter is None:
+            adapter = MagicMock(spec=BatteryChargeAdapter)
+            adapter.is_active = False
+        return BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+    def test_no_peak_limit_both_at_max(self, hass, scheduler_config):
+        """No peak limit — battery and EV charge simultaneously at full power."""
+        scheduler_config.peak_limit_w = 0  # No limit
+        scheduler_config.battery_max_charge_power_w = 5000
+        scheduler = self._make_scheduler(hass, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=3.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            ev_kwh_needed=20.0,
+            ev_max_power_w=11000,
+        )
+
+        assert decision.schedule is not None
+        schedule = decision.schedule
+        assert schedule.total_battery_kwh > 0
+        assert schedule.total_ev_kwh > 0
+        # First slot should have both battery and EV power
+        first_slot = schedule.slots[0]
+        assert first_slot.battery_power_w > 0
+        assert first_slot.ev_power_w > 0
+
+    def test_peak_limit_ev_priority(self, hass, scheduler_config):
+        """With peak limit and EV priority — EV gets power first, battery gets remainder."""
+        scheduler_config.peak_limit_w = 9000
+        scheduler_config.battery_max_charge_power_w = 5000
+        scheduler_config.ev_priority = True
+        scheduler = self._make_scheduler(hass, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=3.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            ev_kwh_needed=20.0,
+            ev_max_power_w=7000,  # EV takes 7kW, leaving 2kW for battery
+        )
+
+        assert decision.schedule is not None
+        first_slot = decision.schedule.slots[0]
+        # EV gets its full 7kW (within peak limit)
+        assert first_slot.ev_power_w == 7000
+        # Battery gets remainder: 9000 - 7000 = 2000W
+        assert first_slot.battery_power_w == 2000
+
+    def test_peak_limit_proportional_split(self, hass, scheduler_config):
+        """With peak limit and proportional mode — power split by demand ratio."""
+        scheduler_config.peak_limit_w = 8000
+        scheduler_config.battery_max_charge_power_w = 5000
+        scheduler_config.ev_priority = False  # Proportional
+        scheduler = self._make_scheduler(hass, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=3.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            ev_kwh_needed=20.0,
+            ev_max_power_w=11000,
+        )
+
+        assert decision.schedule is not None
+        first_slot = decision.schedule.slots[0]
+        # Total demand = 5000 + 11000 = 16000, peak = 8000
+        # ratio = 0.5, battery = 2500, ev = 5500
+        assert first_slot.total_power_w <= 8000
+        assert first_slot.battery_power_w > 0
+        assert first_slot.ev_power_w > 0
+
+    def test_battery_only_no_ev(self, hass, scheduler_config):
+        """No EV needed — all slots are battery-only."""
+        scheduler = self._make_scheduler(hass, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=3.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            ev_kwh_needed=0.0,
+            ev_max_power_w=0,
+        )
+
+        assert decision.schedule is not None
+        for slot in decision.schedule.slots:
+            assert slot.ev_power_w == 0
+            assert slot.battery_power_w > 0
+        assert decision.schedule.total_ev_kwh == 0
+
+    def test_schedule_with_dynamic_tariff_prices(self, hass, scheduler_config, mock_tariff_provider):
+        """Schedule slots inherit prices from tariff provider."""
+        scheduler = self._make_scheduler(hass, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=50.0,
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=10.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            tariff_provider=mock_tariff_provider,
+            ev_kwh_needed=5.0,
+            ev_max_power_w=7000,
+        )
+
+        assert decision.schedule is not None
+        # Prices should be populated from mock_tariff_provider
+        for slot in decision.schedule.slots:
+            assert slot.price >= 0
+
+    def test_schedule_stops_when_energy_met(self, hass, scheduler_config):
+        """Schedule doesn't create more slots than needed."""
+        scheduler_config.battery_max_charge_power_w = 5000
+        scheduler = self._make_scheduler(hass, scheduler_config)
+
+        # Only need 3 kWh of battery charge at 5kW = ~0.6 hours
+        # Should only create 1 slot even though 8 are available
+        decision = scheduler.evaluate(
+            current_soc=65.0,
+            forecast_tomorrow_kwh=5.0,  # 5*0.8=4
+            expected_consumption_kwh=8.0,  # deficit = 4
+            nt_rate=0.10,
+            ht_rate=0.30,
+            ev_kwh_needed=0.0,
+            ev_max_power_w=0,
+        )
+
+        if decision.schedule:
+            total_planned = decision.schedule.total_battery_kwh
+            # Should not massively over-plan
+            actual_needed = (decision.target_soc - 65.0) / 100 * 9.5
+            assert total_planned <= actual_needed + 5.1  # 1 slot = max 5kWh
+
+    def test_schedule_as_dict_for_sensor(self, hass, scheduler_config):
+        """Schedule serializes to dict suitable for HA sensor attributes."""
+        scheduler = self._make_scheduler(hass, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=30.0,
+            forecast_tomorrow_kwh=3.0,
+            expected_consumption_kwh=12.0,
+            nt_rate=0.10,
+            ht_rate=0.30,
+            ev_kwh_needed=10.0,
+            ev_max_power_w=7000,
+        )
+
+        assert decision.schedule is not None
+        d = decision.schedule.as_dict()
+        assert "slots" in d
+        assert "total_battery_kwh" in d
+        assert "total_ev_kwh" in d
+        assert "total_kwh" in d
+        assert "estimated_cost" in d
+        assert "peak_limit_w" in d
+
+    def test_ev_finishes_before_battery(self, hass, scheduler_config):
+        """EV needs less energy — later slots are battery-only."""
+        scheduler_config.peak_limit_w = 0
+        scheduler_config.battery_max_charge_power_w = 3000
+        scheduler = self._make_scheduler(hass, scheduler_config)
+
+        decision = scheduler.evaluate(
+            current_soc=20.0,
+            forecast_tomorrow_kwh=0.0,
+            expected_consumption_kwh=15.0,
+            nt_rate=0.08,
+            ht_rate=0.25,
+            ev_kwh_needed=3.0,  # EV done after ~1 slot at 7kW
+            ev_max_power_w=7000,
+        )
+
+        assert decision.schedule is not None
+        slots = decision.schedule.slots
+        assert len(slots) >= 2
+        # First slot: both battery + EV
+        assert slots[0].ev_power_w > 0
+        assert slots[0].battery_power_w > 0
+        # Later slots: battery only (EV done)
+        ev_done = False
+        for slot in slots[1:]:
+            if slot.ev_power_w == 0:
+                ev_done = True
+            if ev_done:
+                assert slot.ev_power_w == 0
+
+
+# ---------------------------------------------------------------------------
+# Active Slot Tracking Tests
+# ---------------------------------------------------------------------------
+
+class TestActiveSlotTracking:
+    """Test _get_active_slot and schedule-aware update cycle."""
+
+    @pytest.mark.asyncio
+    async def test_uses_schedule_power_level(self, hass, scheduler_config):
+        """Update uses planned power from schedule, not just max."""
+        scheduler_config.peak_limit_w = 9000
+        adapter = AsyncMock(spec=BatteryChargeAdapter)
+        adapter.is_active = False
+        adapter.start_forced_charge = AsyncMock(
+            return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
+        )
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        now = dt_util.now()
+        # Create a decision with a schedule that has specific power levels
+        scheduler._decision = SchedulerDecision(
+            state=SchedulerState.SCHEDULED,
+            target_soc=80.0,
+            hours_needed=2,
+            charge_windows=[],
+            schedule=NightChargeSchedule(
+                slots=[
+                    TimeSlot(
+                        start=now - timedelta(minutes=5),
+                        end=now + timedelta(minutes=55),
+                        battery_power_w=2500,
+                        ev_power_w=6000,
+                    ),
+                ],
+                total_battery_kwh=2.5,
+                total_ev_kwh=6.0,
+                peak_limit_w=9000,
+            ),
+        )
+
+        state = await scheduler.update(current_soc=50.0, ev_charging_power_w=6000.0)
+
+        assert state == SchedulerState.CHARGING
+        cmd = adapter.start_forced_charge.call_args[0][0]
+        # Should use the planned 2500W, not max power
+        assert cmd.max_power_w == 2500
+
+    @pytest.mark.asyncio
+    async def test_adjusts_power_when_ev_differs_from_plan(self, hass, scheduler_config):
+        """When actual EV power differs from planned, recalculate dynamically."""
+        scheduler_config.peak_limit_w = 9000
+        scheduler_config.battery_max_charge_power_w = 5000
+        adapter = AsyncMock(spec=BatteryChargeAdapter)
+        adapter.is_active = True  # Already charging
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        now = dt_util.now()
+        scheduler._decision = SchedulerDecision(
+            state=SchedulerState.CHARGING,
+            target_soc=80.0,
+            hours_needed=2,
+            charge_windows=[],
+            schedule=NightChargeSchedule(
+                slots=[
+                    TimeSlot(
+                        start=now - timedelta(minutes=5),
+                        end=now + timedelta(minutes=55),
+                        battery_power_w=2000,
+                        ev_power_w=7000,  # Planned 7kW
+                    ),
+                ],
+                peak_limit_w=9000,
+            ),
+        )
+
+        # EV actually using only 4kW (e.g., tapering) → more room for battery
+        state = await scheduler.update(current_soc=60.0, ev_charging_power_w=4000.0)
+
+        assert state == SchedulerState.CHARGING
+        # Should have issued a new command with more power: 9000-4000-200 = 4800W
+        cmd = adapter.start_forced_charge.call_args[0][0]
+        assert cmd.max_power_w == 4800
+
+    @pytest.mark.asyncio
+    async def test_ev_only_slot_skips_battery(self, hass, scheduler_config):
+        """Slot with 0 battery power = waiting, not charging."""
+        adapter = AsyncMock(spec=BatteryChargeAdapter)
+        adapter.is_active = False
+        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+
+        now = dt_util.now()
+        scheduler._decision = SchedulerDecision(
+            state=SchedulerState.SCHEDULED,
+            target_soc=80.0,
+            hours_needed=2,
+            charge_windows=[],
+            schedule=NightChargeSchedule(
+                slots=[
+                    TimeSlot(
+                        start=now - timedelta(minutes=5),
+                        end=now + timedelta(minutes=55),
+                        battery_power_w=0,  # EV-only slot
+                        ev_power_w=9000,
+                    ),
+                ],
+            ),
+        )
+
+        state = await scheduler.update(current_soc=50.0)
+
+        assert state == SchedulerState.WAITING_FOR_SLOT
+        adapter.start_forced_charge.assert_not_called()
