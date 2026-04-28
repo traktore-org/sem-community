@@ -240,9 +240,11 @@
       },
       "settings_tariff": {
         "title": "Tariff & Advanced",
-        "description": "Electricity rates and advanced tuning parameters.",
+        "description": "Choose your tariff mode: **Static** for fixed rates, **Dynamic** for real-time pricing (Tibber, Nordpool, aWATTar), or **Calendar** for time-based HT/NT schedules. For dynamic mode, SEM auto-detects your provider or you can select the price entity manually.",
         "data": {
-          "electricity_import_rate": "Import rate",
+          "tariff_mode": "Tariff mode",
+          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
+          "electricity_import_rate": "Import rate (HT / fallback)",
           "electricity_nt_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Export rate",
           "demand_charge_rate": "Demand charge rate",

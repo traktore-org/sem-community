@@ -144,7 +144,7 @@ class SEMEVStatusCard extends HTMLElement {
         setVal('.mode-value', modeLabels[mode] || mode);
 
         // Bottom chips
-        setVal('.cost-chip-value', this._fmt(sessionCost, 2) + ' CHF');
+        setVal('.cost-chip-value', this._fmt(sessionCost, 2) + ' ' + (window.semGetCurrency?.(this._hass) || 'EUR'));
 
         // Translate labels
         const setLabel = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
@@ -473,7 +473,7 @@ class SEMEVStatusCard extends HTMLElement {
                     <div class="bottom-bar">
                         <div class="chip">
                             <span class="chip-label lbl-session-cost">Session cost</span>
-                            <span class="cost-chip-value">\u2014 CHF</span>
+                            <span class="cost-chip-value">\u2014</span>
                         </div>
                     </div>
                 </div>

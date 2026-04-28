@@ -174,12 +174,13 @@ class SEMTabHeader extends HTMLElement {
             stat2.textContent = this._getState('controllable_devices_count', 0).toFixed(0);
             stat3.textContent = this._getState('surplus_active_devices', 0).toFixed(0);
         } else if (tab === 'costs') {
-            stat1.textContent = this._getState('daily_costs', 0).toFixed(2) + ' CHF';
-            stat2.textContent = this._getState('daily_savings', 0).toFixed(2) + ' CHF';
-            stat3.textContent = this._getState('daily_net_cost', 0).toFixed(2) + ' CHF';
+            const _c = window.semGetCurrency?.(this._hass) || 'EUR';
+            stat1.textContent = this._getState('daily_costs', 0).toFixed(2) + ' ' + _c;
+            stat2.textContent = this._getState('daily_savings', 0).toFixed(2) + ' ' + _c;
+            stat3.textContent = this._getState('daily_net_cost', 0).toFixed(2) + ' ' + _c;
         } else if (tab === 'system') {
             stat1.textContent = this._getState('energy_optimization_score', 0).toFixed(0);
-            stat2.textContent = this._getState('lifetime_savings', 0).toFixed(0) + ' CHF';
+            stat2.textContent = this._getState('lifetime_savings', 0).toFixed(0) + ' ' + (window.semGetCurrency?.(this._hass) || 'EUR');
             stat3.textContent = this._getState('lifetime_co2_avoided', 0).toFixed(0) + ' kg';
         }
     }

@@ -643,6 +643,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 utility_signal=utility_data,
                 session=self._session_data,
                 sessions=self._session_data_per_charger,
+                currency=self.hass.config.currency or "EUR",
                 ev_charger_count=len(self._ev_devices),
                 ev_charger_ids=list(self._ev_devices.keys()),
                 ev_intelligence=ev_intelligence,
