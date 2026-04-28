@@ -62,7 +62,7 @@ There are many solar/EV tools for Home Assistant — evcc, emhass, Predbat, PV E
 | Cost tracking & savings | :white_check_mark: | :x: | :x: | :x: | :x: |
 | Push notifications | :white_check_mark: | :x: | :x: | :x: | :x: |
 | Smart recommendations | :white_check_mark: | :x: | :x: | :x: | :x: |
-| Multi-language (10) | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
+| Multi-language (15) | :white_check_mark: | :white_check_mark: | :x: | :x: | :x: |
 | Pure HACS integration | :white_check_mark: | standalone Go | Docker/Add-on | AppDaemon | :white_check_mark: |
 | Zero-config auto-detect | :white_check_mark: | config file | complex setup | config file | manual |
 
