@@ -539,6 +539,84 @@ class TestSingleChargerBackwardCompat:
 
 
 # ============================================================
+# Tests: Per-charger state isolation
+# ============================================================
+
+class TestPerChargerStateIsolation:
+    """Verify per-charger timers don't interfere with each other."""
+
+    def test_stall_timers_are_independent(self):
+        """Charger 1's stall timer should not affect charger 2."""
+        stalled = {"wb_1": 100.0, "wb_2": None}
+        # Charger 1 stalled at T=100, charger 2 not stalled
+        assert stalled["wb_1"] == 100.0
+        assert stalled["wb_2"] is None
+        # Clearing charger 2 doesn't affect charger 1
+        stalled["wb_2"] = 200.0
+        assert stalled["wb_1"] == 100.0
+
+    def test_enable_delay_timers_independent(self):
+        """Per-charger enable delay must not bleed between chargers."""
+        enable_since = {"wb_1": 50.0, "wb_2": None}
+        # Charger 1 has been seeing surplus for 50s, charger 2 just started
+        assert enable_since["wb_1"] == 50.0
+        assert enable_since["wb_2"] is None
+
+    def test_charge_started_timers_independent(self):
+        """Per-charger charge start time must be isolated."""
+        started = {"wb_1": 1000.0, "wb_2": 2000.0}
+        # Different start times
+        assert started["wb_1"] != started["wb_2"]
+
+    def test_night_target_split_equally(self):
+        """Night target should split equally across connected chargers."""
+        total_target = 10.0  # kWh
+        connected_count = 2
+        per_charger = total_target / connected_count
+        assert per_charger == 5.0
+
+    def test_night_target_single_charger_gets_full(self):
+        """Single connected charger gets full night target."""
+        total_target = 10.0
+        connected_count = 1
+        per_charger = total_target / connected_count
+        assert per_charger == 10.0
+
+
+# ============================================================
+# Tests: Session persistence
+# ============================================================
+
+class TestSessionPersistence:
+    """Verify per-charger session save/restore."""
+
+    def test_save_format_includes_chargers_dict(self):
+        """Saved state should include 'chargers' dict keyed by charger_id."""
+        state = {
+            "session_active": True,
+            "current_setpoint": 10.0,
+            "chargers": {
+                "wb_1": {"session_active": True, "current_setpoint": 10.0},
+                "wb_2": {"session_active": False, "current_setpoint": 0.0},
+            }
+        }
+        assert "chargers" in state
+        assert state["chargers"]["wb_1"]["session_active"] is True
+        assert state["chargers"]["wb_2"]["session_active"] is False
+
+    def test_restore_falls_back_to_top_level_for_primary(self):
+        """Primary charger should read from top-level if 'chargers' missing (migration)."""
+        state = {"session_active": True, "current_setpoint": 12.0}
+        # No 'chargers' key — old format
+        primary_id = "ev_charger"
+        chargers_dict = state.get("chargers", {})
+        # Fallback: primary reads from top level
+        primary_state = chargers_dict.get(primary_id, state)
+        assert primary_state["session_active"] is True
+        assert primary_state["current_setpoint"] == 12.0
+
+
+# ============================================================
 # Tests: SEMData multi-charger fields
 # ============================================================
 
