@@ -38,7 +38,7 @@ Open an issue with the `enhancement` label. Describe the use case, not just the 
 - Python: follow existing patterns in the codebase
 - No new dependencies unless absolutely necessary
 - Add tests for new features
-- Update translations (6 languages) for user-facing text
+- Update translations (15 languages: de, en, es, fr, it, nl, pt, pl, sv, cs, da, fi, hu, ro, no) for user-facing text
 
 ## Development Setup
 

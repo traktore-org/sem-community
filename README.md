@@ -446,6 +446,10 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - **Troubleshooting guide** for GoodWe + Easee setup (Energy Dashboard configuration, sign convention auto-detection)
 - **Setup guide** note for GoodWe inverters
 
+### 15 Languages
+- Added: Portuguese (pt), Polish (pl), Swedish (sv), Czech (cs), Danish (da), Finnish (fi), Hungarian (hu), Romanian (ro), Norwegian (no)
+- Was 6 (de, en, es, fr, it, nl), now 15
+
 ### Previous (v1.3.0)
 - EV Intelligence: taper detection, virtual SOC, consumption learning, smart night charge skip, battery health
 - Multi-device read aggregation: sum inverters, batteries, grid tariffs from Energy Dashboard
