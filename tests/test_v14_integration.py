@@ -647,9 +647,10 @@ class TestPerChargerTaperDetection:
         d1 = EVTaperDetector(config)
         d2 = EVTaperDetector(config)
 
-        d1._estimated_soc = 80.0
+        # Set SOC via energy_since_full (get_virtual_soc recalculates)
+        d1._energy_since_full = 8.0   # 100 - 8/40*100 = 80%
         d1._soc_anchored = True
-        d2._estimated_soc = 40.0
+        d2._energy_since_full = 24.0  # 100 - 24/40*100 = 40%
         d2._soc_anchored = True
 
         assert d1.get_virtual_soc() == 80.0
@@ -660,18 +661,18 @@ class TestPerChargerTaperDetection:
         config = {"ev_battery_capacity_kwh": 40, "ev_target_soc": 80,
                   "ev_min_soc_threshold": 20, "ev_max_consecutive_skips": 3}
         d1 = EVTaperDetector(config)
-        d1._estimated_soc = 70.0
+        d1._energy_since_full = 12.0  # SOC = 70%
         d1._soc_anchored = True
 
         d2 = EVTaperDetector(config)
-        d2._estimated_soc = 15.0
+        d2._energy_since_full = 34.0  # SOC = 15%
         d2._soc_anchored = True
 
         _, needed1, _ = d1.calculate_nights_until_charge(4.4)
         _, needed2, _ = d2.calculate_nights_until_charge(4.4)
 
         assert needed1 is False  # 70% SOC → skip
-        assert needed2 is True   # 15% SOC → charge
+        assert needed2 is True   # 15% SOC → charge needed
 
 
 # ============================================================
