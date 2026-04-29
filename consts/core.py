@@ -211,6 +211,17 @@ DEFAULT_SYSTEM_SIZE_KWP: Final = 10.0
 DEFAULT_INVERTER_MAX_POWER_W: Final = 10000
 
 # ============================================
+# AUTO ERROR REPORTING
+# ============================================
+# Off by default — opt-in via the options flow. When enabled, the integration
+# files exceptions and detected anomalies as GitHub issues against the
+# configured repo. Token must be a fine-grained PAT scoped to ``issues:write``.
+DEFAULT_ERROR_REPORTING_ENABLED: Final = False
+DEFAULT_ERROR_REPORTING_REPO: Final = "traktore-org/sem-community"
+DEFAULT_ERROR_REPORTING_DAILY_CAP: Final = 10
+DEFAULT_ERROR_REPORTING_DEDUPE_WINDOW_S: Final = 24 * 60 * 60
+
+# ============================================
 # ENTITY ID REFERENCES
 # ============================================
 # Used for internal state lookups — avoids magic strings scattered across modules.

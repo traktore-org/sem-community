@@ -280,6 +280,16 @@
           "ev_target_soc": "EV Target SOC (%)"
         }
       },
+      "error_reporting": {
+        "title": "Automatic Error Reporting",
+        "description": "Optionally file exceptions and detected anomalies as GitHub issues. Off by default. The token must be a fine-grained PAT scoped to issues:write on the target repo only. Sensor IDs are hashed and secrets redacted before posting.",
+        "data": {
+          "enable_error_reporting": "Enable automatic error reporting",
+          "github_repo": "GitHub repository (owner/name)",
+          "github_token": "GitHub Personal Access Token",
+          "error_reporting_daily_cap": "Max issues per day"
+        }
+      },
       "dashboard_options": {
         "title": "Dashboard Installation",
         "description": "Install or reinstall the SEM dashboard",

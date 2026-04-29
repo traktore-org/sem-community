@@ -119,6 +119,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_last_change_per_charger: Dict[str, Any] = {}
         self._notification_manager = NotificationManager(hass, config)
 
+        # Error reporter — set externally by __init__.py once entry_id is known.
+        # Optional: only enabled if user opts in via options flow.
+        self._error_reporter = None  # type: ignore[assignment]
+        self._anomaly_detector = None  # type: ignore[assignment]
+        self._update_failure_streak: int = 0
+        self._last_update_error: Optional[str] = None
+        self._charging_state_last_change: Optional[float] = None
+        self._charging_state_prev: Optional[str] = None
+
         # Storage will be initialized with entry_id later
         self._storage: Optional[SEMStorage] = None
 
@@ -787,10 +796,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if surplus_window:
                 result["predicted_surplus_window"] = surplus_window
 
+            # Success path — clear failure streak and run anomaly checks.
+            self._update_failure_streak = 0
+            self._last_update_error = None
+            self._track_charging_state_change(result.get("charging_state"))
+            await self._run_anomaly_checks(result)
+
             return result
 
         except Exception as e:
+            self._update_failure_streak += 1
+            self._last_update_error = f"{type(e).__name__}: {e}"
             _LOGGER.error(f"Error updating SEM data: {e}", exc_info=True)
+            await self._maybe_report_exception(e, component="coordinator._async_update_data")
             raise UpdateFailed(f"Update failed: {e}") from e
 
     async def _update_analytics_phases(
@@ -1954,3 +1972,68 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 _LOGGER.debug(f"Could not get load management data: {e}")
 
         return lm_data
+
+    # ============================================
+    # Auto error / anomaly reporting
+    # ============================================
+    def attach_error_reporter(self, reporter, detector) -> None:
+        """Wire the optional error reporter + anomaly detector.
+
+        Called by ``__init__.py`` after the config entry is loaded if the
+        user has opted in. Both arguments may be ``None`` to disable.
+        """
+        self._error_reporter = reporter
+        self._anomaly_detector = detector
+
+    def _track_charging_state_change(self, current_state: Any) -> None:
+        """Track when charging_state last changed for the stuck-state check."""
+        import time as _time
+
+        if current_state is None:
+            return
+        if current_state != self._charging_state_prev:
+            self._charging_state_prev = current_state
+            self._charging_state_last_change = _time.time()
+
+    async def _maybe_report_exception(self, exc: BaseException, *, component: str) -> None:
+        """Best-effort exception report. Never raises."""
+        if self._error_reporter is None:
+            return
+        try:
+            ha_version = getattr(self.hass, "config", None)
+            ha_version = getattr(ha_version, "version", "unknown") if ha_version else "unknown"
+            await self._error_reporter.async_report_exception(
+                exc,
+                component=component,
+                context={
+                    "ha_version": str(ha_version),
+                    "update_failure_streak": self._update_failure_streak,
+                    "update_interval_s": (
+                        self.update_interval.total_seconds()
+                        if self.update_interval else None
+                    ),
+                },
+            )
+        except Exception:
+            _LOGGER.debug("error reporter raised; ignoring", exc_info=True)
+
+    async def _run_anomaly_checks(self, result: Dict[str, Any]) -> None:
+        """Run anomaly checks against the latest result. Never raises."""
+        if self._anomaly_detector is None or self._error_reporter is None:
+            return
+        try:
+            # Inject internal coordinator state the checks need.
+            snapshot = dict(result)
+            snapshot["_update_failure_streak"] = self._update_failure_streak
+            snapshot["_last_update_error"] = self._last_update_error
+            snapshot["_charging_state_last_change"] = self._charging_state_last_change
+
+            fired = self._anomaly_detector.step(snapshot)
+            for anomaly in fired:
+                await self._error_reporter.async_report_anomaly(
+                    signature=anomaly.signature,
+                    title=anomaly.title,
+                    details=dict(anomaly.details),
+                )
+        except Exception:
+            _LOGGER.debug("anomaly detector raised; ignoring", exc_info=True)

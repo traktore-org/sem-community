@@ -1350,7 +1350,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
             if not errors:
                 self._data.update(user_input)
-                return self.async_create_entry(data=self._data)
+                return await self.async_step_error_reporting()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)
@@ -1402,4 +1402,59 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
             }),
             errors=errors
+        )
+
+    async def async_step_error_reporting(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle automatic error reporting options.
+
+        Off by default. When enabled, exceptions and detected anomalies are
+        filed as GitHub issues against the configured repo. Token must be a
+        fine-grained PAT scoped to ``issues:write`` on that repo only.
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if user_input.get("enable_error_reporting"):
+                token = (user_input.get("github_token") or "").strip()
+                repo = (user_input.get("github_repo") or "").strip()
+                if not token:
+                    errors["github_token"] = "required"
+                if not repo or "/" not in repo:
+                    errors["github_repo"] = "invalid"
+            if not errors:
+                self._data.update(user_input)
+                return self.async_create_entry(data=self._data)
+
+        current_config = {**self.config_entry.data, **self.config_entry.options}
+        _c = lambda key, fb: self._cfg(current_config, key, fb)
+
+        return self.async_show_form(
+            step_id="error_reporting",
+            data_schema=vol.Schema({
+                vol.Optional(
+                    "enable_error_reporting",
+                    default=_c("enable_error_reporting", False),
+                ): selector.BooleanSelector(),
+                vol.Optional(
+                    "github_repo",
+                    default=_c("github_repo", "traktore-org/sem-community"),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                ),
+                vol.Optional(
+                    "github_token",
+                    default=_c("github_token", ""),
+                ): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+                vol.Optional(
+                    "error_reporting_daily_cap",
+                    default=_c("error_reporting_daily_cap", 10),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=100, step=1, mode="box")
+                ),
+            }),
+            errors=errors,
         )

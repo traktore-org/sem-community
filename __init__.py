@@ -28,8 +28,16 @@ from homeassistant.helpers import device_registry as dr, issue_registry as ir
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    DEFAULT_ERROR_REPORTING_ENABLED,
+    DEFAULT_ERROR_REPORTING_REPO,
+    DEFAULT_ERROR_REPORTING_DAILY_CAP,
+    DEFAULT_ERROR_REPORTING_DEDUPE_WINDOW_S,
+)
 from .coordinator import SEMCoordinator
+from .error_reporter import ErrorReporter, AnomalyDetector
+from .error_reporter.anomaly_detector import build_default_checks
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -187,6 +195,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     except Exception as err:
         _LOGGER.error("Failed to create coordinator: %s", err, exc_info=True)
         raise ConfigEntryNotReady(f"Coordinator creation failed: {err}") from err
+
+    # Optional: auto error / anomaly reporter (off by default; opt-in).
+    await _async_attach_error_reporter(hass, entry, coordinator, full_config)
 
     # Try to initialize from HA Energy Dashboard (HA 2025.12+)
     # This reads sensor configuration from the Energy Dashboard instead of manual config
@@ -508,6 +519,65 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
     _LOGGER.info("Solar Energy Management integration setup completed successfully")
     return True
+
+
+async def _async_attach_error_reporter(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    coordinator: SEMCoordinator,
+    full_config: Dict[str, Any],
+) -> None:
+    """Wire the optional GitHub error/anomaly reporter onto the coordinator.
+
+    Off by default. Activated when ``enable_error_reporting`` is set and a
+    ``github_token`` is provided in the entry options.
+    """
+    enabled = full_config.get(
+        "enable_error_reporting", DEFAULT_ERROR_REPORTING_ENABLED
+    )
+    if not enabled:
+        return
+
+    token = full_config.get("github_token") or ""
+    repo = full_config.get("github_repo", DEFAULT_ERROR_REPORTING_REPO)
+    if not token or not repo:
+        _LOGGER.info(
+            "Error reporting enabled but token/repo missing — skipping"
+        )
+        return
+
+    # Read integration version from manifest (single source of truth).
+    import json as _json
+    manifest_path = os.path.join(os.path.dirname(__file__), "manifest.json")
+    try:
+        with open(manifest_path) as f:
+            integration_version = _json.load(f).get("version", "0")
+    except Exception:
+        integration_version = "0"
+
+    try:
+        reporter = ErrorReporter(
+            hass,
+            github_token=token,
+            github_repo=repo,
+            integration_version=integration_version,
+            enabled=True,
+            dedupe_window_s=int(full_config.get(
+                "error_reporting_dedupe_window_s",
+                DEFAULT_ERROR_REPORTING_DEDUPE_WINDOW_S,
+            )),
+            daily_cap=int(full_config.get(
+                "error_reporting_daily_cap",
+                DEFAULT_ERROR_REPORTING_DAILY_CAP,
+            )),
+            entry_id=entry.entry_id,
+        )
+        await reporter.async_load()
+        detector = AnomalyDetector(build_default_checks())
+        coordinator.attach_error_reporter(reporter, detector)
+        _LOGGER.info("Auto error reporting enabled — repo=%s", repo)
+    except Exception:
+        _LOGGER.exception("Failed to initialize error reporter; continuing without it")
 
 
 def _schedule_post_startup_tasks(
