@@ -280,3 +280,63 @@ def test_calculate_performance_autarky(mock_dt, calculator):
     # Clamped to [0, 100]
     assert 0 <= metrics.self_consumption_rate <= 100
     assert 0 <= metrics.autarky_rate <= 100
+
+
+# ──────────────────────────────────────────────
+# Integration gap protection (#123)
+# ──────────────────────────────────────────────
+
+@patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
+def test_integration_gap_skips_accumulation(mock_dt, calculator, time_manager):
+    """Test that a large time gap skips energy integration to prevent spikes."""
+    from custom_components.solar_energy_management.coordinator.energy_calculator import (
+        MAX_INTEGRATION_GAP_SECONDS,
+    )
+
+    time_manager.get_current_meter_day_sunrise_based.return_value = date(2026, 4, 29)
+
+    # First update at T=0
+    t0 = datetime(2026, 4, 29, 12, 0, 0)
+    mock_dt.now.return_value = t0
+    power = _make_power(solar=5000, home=3000, grid_export=2000)
+    energy1 = calculator.calculate_energy(power)
+    solar_after_first = energy1.daily_solar
+
+    # Second update at T+10s (normal) — should accumulate
+    t1 = t0 + timedelta(seconds=10)
+    mock_dt.now.return_value = t1
+    energy2 = calculator.calculate_energy(power)
+    assert energy2.daily_solar > solar_after_first
+
+    # Third update at T+5min (gap > MAX) — should NOT accumulate
+    t2 = t1 + timedelta(seconds=MAX_INTEGRATION_GAP_SECONDS + 60)
+    mock_dt.now.return_value = t2
+    solar_before_gap = energy2.daily_solar
+    energy3 = calculator.calculate_energy(power)
+    assert energy3.daily_solar == solar_before_gap  # No change
+
+    # Fourth update at T+5min+10s (normal again) — should accumulate
+    t3 = t2 + timedelta(seconds=10)
+    mock_dt.now.return_value = t3
+    energy4 = calculator.calculate_energy(power)
+    assert energy4.daily_solar > solar_before_gap
+
+
+@patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
+def test_normal_interval_accumulates(mock_dt, calculator, time_manager):
+    """Test that normal intervals accumulate energy correctly."""
+    time_manager.get_current_meter_day_sunrise_based.return_value = date(2026, 4, 29)
+
+    t0 = datetime(2026, 4, 29, 12, 0, 0)
+    mock_dt.now.return_value = t0
+    power = _make_power(solar=10000, battery_discharge=5000, home=15000)
+    calculator.calculate_energy(power)
+
+    # 30 seconds later
+    t1 = t0 + timedelta(seconds=30)
+    mock_dt.now.return_value = t1
+    energy = calculator.calculate_energy(power)
+
+    # 10000W * 30s/3600 / 1000 = 0.0833 kWh
+    assert energy.daily_solar == pytest.approx(0.0833, abs=0.01)
+    assert energy.daily_battery_discharge == pytest.approx(0.0417, abs=0.01)

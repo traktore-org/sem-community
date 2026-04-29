@@ -14,6 +14,10 @@ _LOGGER = logging.getLogger(__name__)
 # Minimum power thresholds to prevent ghost accumulation
 MIN_POWER_THRESHOLD = 10  # Watts
 
+# Maximum integration gap — skip cycle if sensors were unavailable longer
+# than this (prevents energy spikes from sensor restarts / integration updates)
+MAX_INTEGRATION_GAP_SECONDS = 120  # 2 minutes
+
 # Threshold for hardware reconciliation (kWh)
 RECONCILIATION_THRESHOLD = 0.5
 
@@ -63,6 +67,15 @@ class EnergyCalculator:
             interval_hours = self.config.get("update_interval", 30) / 3600
         else:
             interval_seconds = (now - self._last_update).total_seconds()
+            if interval_seconds > MAX_INTEGRATION_GAP_SECONDS:
+                _LOGGER.warning(
+                    "Energy integration gap: %.0fs > %ds limit — skipping cycle "
+                    "to prevent accumulator spike (sensor restart/update?)",
+                    interval_seconds, MAX_INTEGRATION_GAP_SECONDS,
+                )
+                self._last_update = now
+                # Return current totals without integrating
+                return self._build_current_totals(now.date(), month_key, year_key)
             interval_hours = interval_seconds / 3600
 
         self._last_update = now
@@ -130,6 +143,35 @@ class EnergyCalculator:
         energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
 
+        return energy
+
+    def _build_current_totals(self, today: date, month_key: str, year_key: str) -> EnergyTotals:
+        """Return current accumulated totals without integrating new power.
+
+        Used when a gap is detected to avoid energy spikes.
+        """
+        ev_day = self._time_manager.get_current_meter_day_sunrise_based()
+        energy = EnergyTotals()
+        energy.daily_solar = self._get_daily("solar", today)
+        energy.monthly_solar = self._get_monthly("solar", month_key)
+        energy.yearly_solar = self._get_yearly("solar", year_key)
+        energy.daily_home = self._get_daily("home", today)
+        energy.monthly_home = self._get_monthly("home", month_key)
+        energy.yearly_home = self._get_yearly("home", year_key)
+        energy.daily_ev = self._get_daily("ev_daily_sun", ev_day)
+        energy.yearly_ev = self._get_yearly("ev", year_key)
+        energy.daily_grid_import = self._get_daily("grid_import", today)
+        energy.monthly_grid_import = self._get_monthly("grid_import", month_key)
+        energy.yearly_grid_import = self._get_yearly("grid_import", year_key)
+        energy.daily_grid_export = self._get_daily("grid_export", today)
+        energy.monthly_grid_export = self._get_monthly("grid_export", month_key)
+        energy.yearly_grid_export = self._get_yearly("grid_export", year_key)
+        energy.daily_battery_charge = self._get_daily("battery_charge", today)
+        energy.monthly_battery_charge = self._get_monthly("battery_charge", month_key)
+        energy.yearly_battery_charge = self._get_yearly("battery_charge", year_key)
+        energy.daily_battery_discharge = self._get_daily("battery_discharge", today)
+        energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
+        energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
         return energy
 
     def set_ev_daily_energy_sensor(self, hass: HomeAssistant, entity_id: Optional[str]) -> None:
