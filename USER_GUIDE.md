@@ -80,7 +80,9 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 |---------|---------|-------------|
 | `enable_keba_notifications` | true | Show status on KEBA display |
 | `enable_mobile_notifications` | false | Send push notifications |
-| `mobile_notification_service` | — | Notification service (`notify.*` or `rest_command.*`) |
+| `mobile_notification_service` | — | Notification service: `notify.mobile_app_*` (HA Companion), `rest_command.*` (webhooks), or any `notify.*` (Matrix, Slack, etc.) |
+
+> **Note:** Android notification channels, groups, and action buttons are only sent to `notify.mobile_app_*` services. Other services receive message + title only.
 
 ### Load Management Settings
 
