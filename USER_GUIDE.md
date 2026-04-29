@@ -80,7 +80,7 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 |---------|---------|-------------|
 | `enable_keba_notifications` | true | Show status on KEBA display |
 | `enable_mobile_notifications` | false | Send push notifications |
-| `mobile_notification_service` | — | Which notify service to use |
+| `mobile_notification_service` | — | Notification service (`notify.*` or `rest_command.*`) |
 
 ### Load Management Settings
 

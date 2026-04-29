@@ -16,7 +16,7 @@ coordinator/
 ├── ev_taper_detector.py    — EVTaperDetector (taper detection, virtual SOC, skip logic)
 ├── surplus_controller.py   — SurplusController (multi-device surplus routing)
 ├── forecast_reader.py      — ForecastReader (Solcast / Forecast.Solar)
-├── notifications.py        — NotificationManager (KEBA display + mobile)
+├── notifications.py        — NotificationManager (KEBA display + mobile/REST/webhook)
 ├── storage.py              — SEMStorage (persistent state)
 └── types.py                — All dataclasses (PowerReadings, SessionData, SEMData, etc.)
 ```

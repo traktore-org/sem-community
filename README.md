@@ -143,7 +143,7 @@ SEM auto-detects chargers from the entity registry: **KEBA**, **Wallbox Pulsar**
 ### Step 4: Notifications (Optional)
 
 - **KEBA display messages** — show charging status on the charger's built-in display
-- **Mobile notifications** — push notifications via HA Companion App
+- **Notifications** — push notifications via HA Companion App (`notify.mobile_app_*`), REST webhooks (`rest_command.*`), or any `notify.*` service (Matrix, Slack, Telegram, etc.)
 
 ### Step 5: Optimization Settings
 
