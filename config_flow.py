@@ -529,7 +529,9 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Validate notification service if provided
             mobile_service = user_input.get("mobile_notification_service", "").strip()
             if user_input.get("enable_mobile_notifications", False) and mobile_service:
-                if not self.hass.services.has_service("notify", mobile_service.replace("notify.", "")):
+                svc_name = mobile_service.replace("notify.", "").split(".")[-1]
+                if not (self.hass.services.has_service("notify", svc_name)
+                        or self.hass.services.has_service("rest_command", svc_name)):
                     errors["mobile_notification_service"] = "service_not_found"
 
             if not errors:
@@ -538,7 +540,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data_updates=user_input,
                 )
 
-        # Get available notification services
+        # Get available notification services (notify.* and rest_command.*)
         notify_services = [{"value": "", "label": "None"}]
         try:
             services_dict = self.hass.services.async_services()
@@ -548,7 +550,13 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "value": service,
                         "label": f"notify.{service}"
                     })
-                notify_services[1:] = sorted(notify_services[1:], key=lambda x: x["label"])
+            if "rest_command" in services_dict:
+                for service in services_dict["rest_command"].keys():
+                    notify_services.append({
+                        "value": service,
+                        "label": f"rest_command.{service}"
+                    })
+            notify_services[1:] = sorted(notify_services[1:], key=lambda x: x["label"])
         except Exception:
             pass
 
@@ -1335,7 +1343,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             mobile_service = user_input.get("mobile_notification_service", "").strip()
             if user_input.get("enable_mobile_notifications", False) and mobile_service:
-                if not self.hass.services.has_service("notify", mobile_service.replace("notify.", "")):
+                svc_name = mobile_service.replace("notify.", "").split(".")[-1]
+                if not (self.hass.services.has_service("notify", svc_name)
+                        or self.hass.services.has_service("rest_command", svc_name)):
                     errors["mobile_notification_service"] = "service_not_found"
 
             if not errors:
@@ -1360,7 +1370,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         "value": service,
                         "label": f"notify.{service}"
                     })
-                notify_services[1:] = sorted(notify_services[1:], key=lambda x: x["label"])
+            if "rest_command" in services_dict:
+                for service in services_dict["rest_command"].keys():
+                    notify_services.append({
+                        "value": service,
+                        "label": f"rest_command.{service}"
+                    })
+            notify_services[1:] = sorted(notify_services[1:], key=lambda x: x["label"])
         except Exception as e:
             _LOGGER.warning(f"Failed to get notification services: {e}")
 
