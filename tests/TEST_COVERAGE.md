@@ -23,7 +23,7 @@ The Solar Energy Management integration has comprehensive test coverage across 2
 | **test_integration.py** | 25 | End-to-end integration tests |
 | **test_utility_signals.py** | 22 | Utility signal monitoring, ripple control |
 | **test_pv_performance.py** | 21 | PV analytics, specific yield, degradation |
-| **test_notifications.py** | 19 | KEBA display + mobile push, flap suppression |
+| **test_notifications.py** | 26 | KEBA display + mobile push, flap suppression, rest_command/notify service detection |
 | **test_peak_aware_charging.py** | 18 | Peak-aware night charging, current limiting |
 | **test_sensor.py** | 16 | Sensor entities, attributes, units, state reporting |
 | **test_services.py** | 15 | Service calls, parameter validation, error handling |

@@ -124,18 +124,18 @@ class StaticTariffProvider(TariffProvider):
 
     def __init__(
         self,
-        ht_rate: float = 0.3387,   # /kWh daytime incl. VAT
-        nt_rate: float = 0.3387,   # /kWh nighttime incl. VAT (default flat rate)
+        peak_rate: float = 0.3387,   # /kWh daytime incl. VAT
+        off_peak_rate: float = 0.3387,   # /kWh nighttime incl. VAT (default flat rate)
         export_rate: float = 0.075,  # /kWh feed-in
-        ht_start: int = 7,   # HT starts at 07:00
-        ht_end: int = 20,    # HT ends at 20:00
+        peak_start: int = 7,   # Peak starts at 07:00
+        peak_end: int = 20,    # Peak ends at 20:00
         currency: str = "CHF",
     ):
-        self.ht_rate = ht_rate
-        self.nt_rate = nt_rate
+        self.peak_rate = peak_rate
+        self.off_peak_rate = off_peak_rate
         self.export_rate = export_rate
-        self.ht_start = ht_start
-        self.ht_end = ht_end
+        self.peak_start = peak_start
+        self.peak_end = peak_end
         self.currency = currency
 
     def _is_high_tariff(self, when: Optional[datetime] = None) -> bool:
@@ -144,10 +144,10 @@ class StaticTariffProvider(TariffProvider):
         # Weekend is always NT
         if now.weekday() >= 5:
             return False
-        return self.ht_start <= now.hour < self.ht_end
+        return self.peak_start <= now.hour < self.peak_end
 
     def get_current_import_rate(self) -> float:
-        return self.ht_rate if self._is_high_tariff() else self.nt_rate
+        return self.peak_rate if self._is_high_tariff() else self.off_peak_rate
 
     def get_current_export_rate(self) -> float:
         return self.export_rate
@@ -158,7 +158,7 @@ class StaticTariffProvider(TariffProvider):
         return PriceLevel.CHEAP
 
     def get_price_at(self, when: datetime) -> Optional[float]:
-        return self.ht_rate if self._is_high_tariff(when) else self.nt_rate
+        return self.peak_rate if self._is_high_tariff(when) else self.off_peak_rate
 
     def get_tariff_data(self) -> TariffData:
         now = dt_util.now()
@@ -169,19 +169,19 @@ class StaticTariffProvider(TariffProvider):
             currency=self.currency,
             provider="static",
             is_dynamic=False,
-            today_min_price=self.nt_rate,
-            today_max_price=self.ht_rate,
-            today_avg_price=(self.ht_rate + self.nt_rate) / 2,
+            today_min_price=self.off_peak_rate,
+            today_max_price=self.peak_rate,
+            today_avg_price=(self.peak_rate + self.off_peak_rate) / 2,
         )
 
         # Calculate next cheap window (next NT period)
         if self._is_high_tariff():
             # Next NT starts at ht_end today
-            next_nt = now.replace(hour=self.ht_end, minute=0, second=0, microsecond=0)
-            data.next_cheap_window_start = next_nt
-            # NT ends at ht_start next day
-            data.next_cheap_window_end = (next_nt + timedelta(days=1)).replace(
-                hour=self.ht_start
+            next_off_peak = now.replace(hour=self.peak_end, minute=0, second=0, microsecond=0)
+            data.next_cheap_window_start = next_off_peak
+            # Off-peak ends at peak_start next day
+            data.next_cheap_window_end = (next_off_peak + timedelta(days=1)).replace(
+                hour=self.peak_start
             )
 
         return data

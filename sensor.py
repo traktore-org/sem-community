@@ -1093,6 +1093,32 @@ SENSOR_TYPES = [
     ),
 
     # ============================================================================
+    # BATTERY CHARGE SCHEDULER (Phase 9, #6)
+    # ============================================================================
+
+    SensorEntityDescription(
+        key="battery_scheduler_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="battery_scheduler_target_soc",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="battery_scheduler_deficit_kwh",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="battery_scheduler_reason",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+
+    # ============================================================================
     # EV SESSION TRACKING
     # ============================================================================
 
@@ -1453,8 +1479,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 else:
                     value = 0
 
+            # Convert ISO timestamp strings to datetime for TIMESTAMP sensors
+            if (isinstance(value, str)
+                    and self.entity_description.device_class == SensorDeviceClass.TIMESTAMP):
+                try:
+                    value = datetime.fromisoformat(value)
+                except (ValueError, TypeError):
+                    value = None
+
             # Convert string numbers to float/int for numeric sensors
-            if isinstance(value, str):
+            elif isinstance(value, str):
                 if value.replace('.', '').replace('-', '').isdigit():
                     try:
                         value = float(value) if '.' in value else int(value)
@@ -1618,6 +1652,12 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if self.entity_description.key == "surplus_total_w":
             attrs["schedule_surplus_hours"] = self.coordinator.data.get("schedule_surplus_hours", [])
             attrs["schedule_ev_hours"] = self.coordinator.data.get("schedule_ev_hours", [])
+
+        # Battery charge scheduler (#6) — attach schedule to state sensor
+        if self.entity_description.key == "battery_scheduler_state":
+            schedule = self.coordinator.data.get("battery_scheduler_schedule", {})
+            if schedule:
+                attrs["schedule"] = schedule
 
         return attrs
 

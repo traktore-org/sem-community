@@ -256,3 +256,20 @@ logger:
     custom_components.solar_energy_management.coordinator.charging_control: debug
     custom_components.solar_energy_management.coordinator.surplus_controller: debug
 ```
+
+---
+
+## Energy values spiked after integration update or restart
+
+**Cause:** When a hardware integration (e.g. Huawei Solar) restarts or updates, its sensors go `unavailable` briefly. When they come back, SEM's energy integrator could multiply the returned power value by the entire gap duration, producing unrealistic energy spikes (e.g. 40+ kWh battery discharge on a 15 kWh battery).
+
+**Protection (v1.4.1+):** SEM automatically skips energy accumulation when the time gap between updates exceeds 120 seconds. Look for this log message:
+
+```
+Energy integration gap: XXXs > 120s limit — skipping cycle to prevent accumulator spike
+```
+
+**If values already spiked:**
+1. The daily accumulators reset at midnight — wait for the next day
+2. For immediate correction: compare SEM values against hardware daily counters (e.g. `sensor.batteries_tagesentladung`) and adjust storage if needed
+3. Restart the integration after corrections: **Settings > Devices & Services > Solar Energy Management > Reload**

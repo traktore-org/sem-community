@@ -255,7 +255,7 @@ Controls how the battery and EV share solar energy:
 |---------|---------|-------------|
 | KEBA display | ON | Show charging info on KEBA P30 display |
 | Mobile notifications | OFF | Push notifications for charging events |
-| Mobile service | — | HA notify service (e.g. `notify.mobile_app_phone`) |
+| Mobile service | — | Any `notify.*` or `rest_command.*` service (e.g. `notify.mobile_app_phone`, `rest_command.send_matrix_notification`) |
 
 > **Quick alternative:** Most settings are also adjustable directly on the **Control tab** of the dashboard using number sliders and toggles.
 

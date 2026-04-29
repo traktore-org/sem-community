@@ -48,19 +48,19 @@ def _make_price_state(price, attributes=None):
 
 class TestStaticTariffProvider:
 
-    def test_ht_rate_weekday_daytime(self):
+    def test_peak_rate_weekday_daytime(self):
         provider = StaticTariffProvider()
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = _weekday_noon()
             assert provider.get_current_import_rate() == 0.3387
 
-    def test_nt_rate_weekday_night(self):
+    def test_off_peak_rate_weekday_night(self):
         provider = StaticTariffProvider()
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = _weekday_night()
             assert provider.get_current_import_rate() == 0.3387
 
-    def test_nt_rate_weekend(self):
+    def test_off_peak_rate_weekend(self):
         provider = StaticTariffProvider()
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = _weekend_noon()

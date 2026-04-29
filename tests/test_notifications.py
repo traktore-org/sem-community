@@ -420,3 +420,151 @@ async def test_ev_notifications_reset_on_notifier_reset(notifier, hass):
 
     notifier.reset()
     assert len(notifier._notified_flags) == 0
+
+
+# ──────────────────────────────────────────────
+# Service type detection (#123)
+# ──────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_rest_command_service_detection(hass, sample_data):
+    """Test that rest_command services are detected and used correctly."""
+    cfg = {
+        "daily_ev_target": 10,
+        "mobile_notification_service": "send_matrix_notification",
+        "enable_keba_notifications": False,
+        "enable_mobile_notifications": True,
+    }
+    # rest_command.send_matrix_notification exists, notify.send_matrix_notification does not
+    def has_service(domain, name):
+        return domain == "rest_command" and name == "send_matrix_notification"
+    hass.services.has_service = MagicMock(side_effect=has_service)
+
+    nm = NotificationManager(hass, cfg)
+    await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
+
+    assert nm._mobile_service_domain == "rest_command"
+    assert nm._mobile_service_name == "send_matrix_notification"
+    assert nm._mobile_service_is_companion is False
+
+    # Verify the call went to rest_command domain
+    call = hass.services.async_call.call_args
+    assert call[0][0] == "rest_command"
+    assert call[0][1] == "send_matrix_notification"
+    # No Android data payload for rest_command
+    assert "data" not in call[0][2]
+
+
+@pytest.mark.asyncio
+async def test_notify_service_detection(hass, sample_data):
+    """Test that notify.* (non-mobile_app) services send without Android data."""
+    cfg = {
+        "daily_ev_target": 10,
+        "mobile_notification_service": "matrix",
+        "enable_keba_notifications": False,
+        "enable_mobile_notifications": True,
+    }
+    # notify.matrix exists, rest_command.matrix does not
+    def has_service(domain, name):
+        return domain == "notify" and name == "matrix"
+    hass.services.has_service = MagicMock(side_effect=has_service)
+
+    nm = NotificationManager(hass, cfg)
+    await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
+
+    assert nm._mobile_service_domain == "notify"
+    assert nm._mobile_service_name == "matrix"
+    assert nm._mobile_service_is_companion is False
+
+    # Verify message + title only, no Android data
+    call = hass.services.async_call.call_args
+    assert call[0][0] == "notify"
+    assert call[0][1] == "matrix"
+    assert "data" not in call[0][2]
+    assert call[0][2]["title"] == "Solar Energy Management"
+
+
+@pytest.mark.asyncio
+async def test_mobile_app_service_sends_android_data(hass, sample_data):
+    """Test that mobile_app_* services get full Android companion payload."""
+    cfg = {
+        "daily_ev_target": 10,
+        "mobile_notification_service": "mobile_app_phone",
+        "enable_keba_notifications": False,
+        "enable_mobile_notifications": True,
+    }
+    def has_service(domain, name):
+        return domain == "notify" and name == "mobile_app_phone"
+    hass.services.has_service = MagicMock(side_effect=has_service)
+
+    nm = NotificationManager(hass, cfg)
+    await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
+
+    assert nm._mobile_service_domain == "notify"
+    assert nm._mobile_service_is_companion is True
+
+    # Verify Android data payload is present
+    call = hass.services.async_call.call_args
+    assert call[0][0] == "notify"
+    assert "data" in call[0][2]
+    assert call[0][2]["data"]["channel"] == "sem_charging"
+    assert call[0][2]["data"]["group"] == "sem_charging"
+    assert call[0][2]["data"]["importance"] == "default"
+
+
+@pytest.mark.asyncio
+async def test_rest_command_preferred_over_notify(hass, sample_data):
+    """Test that rest_command is preferred when both exist for same name."""
+    cfg = {
+        "daily_ev_target": 10,
+        "mobile_notification_service": "matrix",
+        "enable_keba_notifications": False,
+        "enable_mobile_notifications": True,
+    }
+    # Both rest_command.matrix and notify.matrix exist
+    hass.services.has_service = MagicMock(return_value=True)
+
+    nm = NotificationManager(hass, cfg)
+    await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
+
+    # rest_command should be preferred
+    assert nm._mobile_service_domain == "rest_command"
+
+
+@pytest.mark.asyncio
+async def test_service_unavailable_neither_domain(hass, sample_data):
+    """Test graceful handling when service exists in neither domain."""
+    cfg = {
+        "daily_ev_target": 10,
+        "mobile_notification_service": "nonexistent",
+        "enable_keba_notifications": False,
+        "enable_mobile_notifications": True,
+    }
+    hass.services.has_service = MagicMock(return_value=False)
+
+    nm = NotificationManager(hass, cfg)
+    await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
+
+    assert nm._mobile_service_available is False
+    hass.services.async_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_rest_command_battery_full_no_actions(hass):
+    """Test battery_full via rest_command omits action buttons."""
+    cfg = {
+        "daily_ev_target": 10,
+        "mobile_notification_service": "send_matrix_notification",
+        "enable_mobile_notifications": True,
+    }
+    def has_service(domain, name):
+        return domain == "rest_command" and name == "send_matrix_notification"
+    hass.services.has_service = MagicMock(side_effect=has_service)
+
+    nm = NotificationManager(hass, cfg)
+    await nm.notify_battery_full(100.0)
+
+    call = hass.services.async_call.call_args
+    assert call[0][0] == "rest_command"
+    # No "data" key with actions for rest_command
+    assert "data" not in call[0][2]

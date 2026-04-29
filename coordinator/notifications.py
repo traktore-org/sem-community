@@ -63,6 +63,9 @@ class NotificationManager:
         self._charger_notify_service: str = ""
         self._mobile_service_checked: bool = False
         self._mobile_service_available: bool = True
+        self._mobile_service_name: str = ""
+        self._mobile_service_domain: str = "notify"
+        self._mobile_service_is_companion: bool = False
 
     async def notify_state_change(
         self,
@@ -167,47 +170,74 @@ class NotificationManager:
         group: str = "sem",
         actions: Optional[list] = None,
     ) -> None:
-        """Send mobile notification with channel and optional action buttons (#47)."""
+        """Send mobile notification with channel and optional action buttons (#47).
+
+        Supports three service types:
+        - notify.mobile_app_* — Android/iOS companion app (full data payload)
+        - notify.* (other)     — REST/generic notify (message + title only)
+        - rest_command.*       — direct REST command (message + title only)
+        """
         mobile_service = self.config.get("mobile_notification_service", "")
         if not mobile_service:
             return
 
-        # Cache service validation (#47)
+        # Cache service validation and type detection (#47)
         if not self._mobile_service_checked:
             self._mobile_service_checked = True
             service_name = mobile_service.replace("notify.", "").split(".")[-1]
             self._mobile_service_name = service_name
-            self._mobile_service_available = self.hass.services.has_service("notify", service_name)
-            if not self._mobile_service_available:
-                _LOGGER.info("Mobile notification service 'notify.%s' not available", service_name)
+
+            # Detect service type: rest_command.* vs notify.*
+            if self.hass.services.has_service("rest_command", service_name):
+                self._mobile_service_domain = "rest_command"
+                self._mobile_service_available = True
+                self._mobile_service_is_companion = False
+            elif self.hass.services.has_service("notify", service_name):
+                self._mobile_service_domain = "notify"
+                self._mobile_service_available = True
+                # Only mobile_app_* services support Android notification channels
+                self._mobile_service_is_companion = service_name.startswith("mobile_app_")
+            else:
+                self._mobile_service_domain = "notify"
+                self._mobile_service_available = False
+                self._mobile_service_is_companion = False
+                _LOGGER.info("Notification service '%s' not available", mobile_service)
 
         if not self._mobile_service_available:
             return
 
-        notification_data: Dict[str, Any] = {
-            "group": group,
-            "channel": channel,
-            "importance": "default",
+        service_call: Dict[str, Any] = {
+            "message": message,
+            "title": "Solar Energy Management",
         }
 
-        # Add action buttons if provided
-        if actions:
-            notification_data["actions"] = actions
+        # Add Android companion app data for mobile_app_* services
+        if self._mobile_service_is_companion:
+            notification_data: Dict[str, Any] = {
+                "group": group,
+                "channel": channel,
+                "importance": "default",
+            }
+            if actions:
+                notification_data["actions"] = actions
+            service_call["data"] = notification_data
+
+        # Add routing fields for rest_command webhook relays
+        if self._mobile_service_domain == "rest_command":
+            service_call["type"] = "sem"
+            service_call["severity"] = "info"
 
         try:
             await self.hass.services.async_call(
-                "notify",
+                self._mobile_service_domain,
                 self._mobile_service_name,
-                {
-                    "message": message,
-                    "title": "Solar Energy Management",
-                    "data": notification_data,
-                }
+                service_call,
             )
             self._last_mobile_time = time.monotonic()
-            _LOGGER.debug("Sent mobile notification: %s", message)
+            _LOGGER.debug("Sent notification via %s.%s: %s",
+                          self._mobile_service_domain, self._mobile_service_name, message)
         except Exception as e:
-            _LOGGER.debug("Failed to send mobile notification: %s", e)
+            _LOGGER.debug("Failed to send notification: %s", e)
 
     def _get_notification_messages(
         self,
