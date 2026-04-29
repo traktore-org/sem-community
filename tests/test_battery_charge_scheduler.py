@@ -381,10 +381,14 @@ class TestSchedulerEvaluation:
         """Small deficit below min_deficit_kwh — not worth charging."""
         scheduler = self._make_scheduler(hass, scheduler_config)
 
+        # With pessimism_weight=0.3:
+        # optimistic = 15 * 1.0 * 0.8 = 12.0, pessimistic = 6.0
+        # effective = 12.0 * 0.7 + 6.0 * 0.3 = 8.4 + 1.8 = 10.2
+        # deficit = 11 - 10.2 = 0.8 < 2.0 threshold
         decision = scheduler.evaluate(
             current_soc=50.0,
-            forecast_tomorrow_kwh=12.0,  # 12 * 0.8 = 9.6 corrected
-            expected_consumption_kwh=11.0,  # deficit = 11 - 9.6 = 1.4 < 2.0
+            forecast_tomorrow_kwh=15.0,
+            expected_consumption_kwh=11.0,
             off_peak_rate=0.10,
             peak_rate=0.30,
             correction_factor=1.0,
