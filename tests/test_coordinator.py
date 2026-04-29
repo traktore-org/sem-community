@@ -31,6 +31,7 @@ def mock_hass():
     hass.data = {}
     hass.config = Mock()
     hass.config.config_dir = "/config"
+    hass.config.components = set()  # For battery_charge_adapter._has_integration()
     hass.states = Mock()
     hass.states.get = Mock(return_value=None)
     hass.states.is_state = Mock(return_value=False)

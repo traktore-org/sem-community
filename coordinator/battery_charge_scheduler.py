@@ -720,8 +720,10 @@ class BatteryChargeScheduler:
                 self._decision.state = SchedulerState.WAITING_FOR_SLOT
                 return SchedulerState.WAITING_FOR_SLOT
 
-            # Override with real-time peak adjustment if EV actual differs from planned
-            if self._config.peak_limit_w > 0 and ev_charging_power_w != active_slot.ev_power_w:
+            # Always apply real-time constraints (grid import cap, peak limit)
+            if self._config.max_grid_import_w > 0 or (
+                self._config.peak_limit_w > 0 and ev_charging_power_w != active_slot.ev_power_w
+            ):
                 charge_power = self._calculate_available_charge_power(ev_charging_power_w)
                 if charge_power <= 0:
                     self._decision.state = SchedulerState.WAITING_FOR_SLOT
@@ -749,8 +751,10 @@ class BatteryChargeScheduler:
 
         elif active_slot and self._adapter.is_active:
             self._decision.state = SchedulerState.CHARGING
-            # Adjust power if EV load changed since plan was made
-            if self._config.peak_limit_w > 0 and ev_charging_power_w != active_slot.ev_power_w:
+            # Adjust power if constraints changed since plan was made
+            if self._config.max_grid_import_w > 0 or (
+                self._config.peak_limit_w > 0 and ev_charging_power_w != active_slot.ev_power_w
+            ):
                 new_power = self._calculate_available_charge_power(ev_charging_power_w)
                 if new_power > 0:
                     command = ChargeCommand(

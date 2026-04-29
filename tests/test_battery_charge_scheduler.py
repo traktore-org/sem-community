@@ -433,18 +433,22 @@ class TestSchedulerEvaluation:
         """Profitable deficit with no dynamic tariff — schedule charge."""
         scheduler = self._make_scheduler(hass, scheduler_config)
 
+        # With pessimism_weight=0.3:
+        # optimistic = 5 * 1.0 * 0.8 = 4.0, pessimistic = 4.0 * 0.5 = 2.0
+        # effective = 4.0 * 0.7 + 2.0 * 0.3 = 3.4
+        # deficit = 12 - 3.4 = 8.6
         decision = scheduler.evaluate(
             current_soc=30.0,
-            forecast_tomorrow_kwh=5.0,  # 5 * 0.8 = 4.0
-            expected_consumption_kwh=12.0,  # deficit = 8 kWh
-            off_peak_rate=0.10,  # 0.10 / 0.92 = 0.108 < 0.30 → profitable
+            forecast_tomorrow_kwh=5.0,
+            expected_consumption_kwh=12.0,
+            off_peak_rate=0.10,
             peak_rate=0.30,
             correction_factor=1.0,
         )
 
         assert decision.state == SchedulerState.SCHEDULED
         assert decision.should_charge
-        assert decision.deficit_kwh == pytest.approx(8.0)
+        assert decision.deficit_kwh == pytest.approx(8.6)
         # target_soc = 30 + (8/9.5)*100 = 30 + 84.2 → capped at 95
         assert decision.target_soc == 95.0
         assert decision.hours_needed >= 1
@@ -472,9 +476,10 @@ class TestSchedulerEvaluation:
         """Correction factor < 1 reduces effective forecast (increases deficit)."""
         scheduler = self._make_scheduler(hass, scheduler_config)
 
-        # Raw forecast 15 kWh, correction 0.7, confidence 0.8
-        # Effective: 15 * 0.7 * 0.8 = 8.4
-        # Deficit: 12 - 8.4 = 3.6 kWh
+        # With pessimism_weight=0.3, correction=0.7:
+        # optimistic = 15 * 0.7 * 0.8 = 8.4, pessimistic = 8.4 * 0.5 = 4.2
+        # effective = 8.4 * 0.7 + 4.2 * 0.3 = 7.14
+        # deficit = 12 - 7.14 = 4.86
         decision = scheduler.evaluate(
             current_soc=50.0,
             forecast_tomorrow_kwh=15.0,
@@ -485,7 +490,7 @@ class TestSchedulerEvaluation:
         )
 
         assert decision.state == SchedulerState.SCHEDULED
-        assert decision.deficit_kwh == pytest.approx(3.6)
+        assert decision.deficit_kwh == pytest.approx(4.86)
 
     def test_high_correction_eliminates_deficit(self, hass, scheduler_config):
         """Good correction factor can eliminate deficit entirely."""
