@@ -63,10 +63,14 @@ class EnergyCalculator:
 
         # Calculate time delta
         if self._last_update is None:
-            # First update - use config interval
+            # First update - use config interval as safe default
             interval_hours = self.config.get("update_interval", 30) / 3600
         else:
             interval_seconds = (now - self._last_update).total_seconds()
+            if interval_seconds < 0:
+                # Clock went backwards (NTP correction, etc.) — skip
+                self._last_update = now
+                return self._build_current_totals(today, month_key, year_key)
             if interval_seconds > MAX_INTEGRATION_GAP_SECONDS:
                 _LOGGER.warning(
                     "Energy integration gap: %.0fs > %ds limit — skipping cycle "
@@ -74,8 +78,7 @@ class EnergyCalculator:
                     interval_seconds, MAX_INTEGRATION_GAP_SECONDS,
                 )
                 self._last_update = now
-                # Return current totals without integrating
-                return self._build_current_totals(now.date(), month_key, year_key)
+                return self._build_current_totals(today, month_key, year_key)
             interval_hours = interval_seconds / 3600
 
         self._last_update = now

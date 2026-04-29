@@ -137,6 +137,17 @@ class TestEnergyAccumulation:
             energy_1 = energy_calculator.calculate_energy(readings)
             solar_1 = energy_1.daily_solar
 
+        # Step through in small increments to avoid gap protection (120s limit)
+        with freeze_time("2025-11-01 16:21:00"):
+            energy_calculator.calculate_energy(readings)
+        with freeze_time("2025-11-01 16:22:00"):
+            energy_calculator.calculate_energy(readings)
+        with freeze_time("2025-11-01 16:23:00"):
+            energy_calculator.calculate_energy(readings)
+        with freeze_time("2025-11-01 16:24:00"):
+            energy_calculator.calculate_energy(readings)
+        with freeze_time("2025-11-01 16:25:00"):
+            energy_calculator.calculate_energy(readings)
         with freeze_time("2025-11-01 16:26:00"):
             energy_2 = energy_calculator.calculate_energy(readings)
             solar_2 = energy_2.daily_solar
@@ -157,6 +168,7 @@ class TestDayRollover:
         Daily reset happens at sunrise, not midnight, so we must freeze time
         to after sunrise on the next calendar day to trigger rollover.
         With sun.sun unavailable the fallback sunrise is 06:00, so 08:00 is safe.
+        Steps through time in small increments to avoid gap protection (120s limit).
         """
         readings = power_readings_factory(
             solar_power=5000,
@@ -167,7 +179,12 @@ class TestDayRollover:
             energy_day1 = energy_calculator.calculate_energy(readings)
             solar_day1 = energy_day1.daily_solar
 
-        # After sunrise on Nov 2 (fallback 06:00 → use 08:00) to trigger rollover
+        # Bridge the gap with intermediate steps to avoid gap protection
+        with freeze_time("2025-11-01 16:21:30"):
+            energy_calculator.calculate_energy(readings)
+
+        # After sunrise on Nov 2 — set _last_update close to target to bridge gap
+        energy_calculator._last_update = None  # Force fresh start on new day
         with freeze_time("2025-11-02 08:00:00"):
             energy_day2 = energy_calculator.calculate_energy(readings)
 
@@ -187,8 +204,9 @@ class TestDayRollover:
 
         previous_solar = 0
 
+        # Step by 1 minute to stay within gap protection limit (120s)
         with freeze_time("2025-11-01 16:00:00") as frozen_time:
-            for minute in range(0, 60, 5):
+            for minute in range(0, 60, 1):
                 frozen_time.move_to(f"2025-11-01 16:{minute:02d}:00")
                 energy = energy_calculator.calculate_energy(readings)
                 current_solar = energy.daily_solar
@@ -215,6 +233,10 @@ class TestMonthlyAccumulation:
             energy_1 = energy_calculator.calculate_energy(readings)
             monthly_solar_1 = energy_1.monthly_solar
 
+        # Step in small increments to avoid gap protection
+        with freeze_time("2025-11-15 12:01:30"):
+            energy_calculator.calculate_energy(readings)
+
         with freeze_time("2025-11-15 12:30:00"):
             energy_2 = energy_calculator.calculate_energy(readings)
             monthly_solar_2 = energy_2.monthly_solar
@@ -235,6 +257,8 @@ class TestMonthlyAccumulation:
         with freeze_time("2025-11-30 12:00:00"):
             energy_nov = energy_calculator.calculate_energy(readings)
 
+        # Force fresh start to bridge month boundary
+        energy_calculator._last_update = None
         with freeze_time("2025-12-01 08:00:00"):
             energy_dec = energy_calculator.calculate_energy(readings)
 
@@ -379,7 +403,8 @@ class TestStatePersistence:
         calc2 = EnergyCalculator(config, TimeManager(mock_hass))
         calc2.restore_state(state)
 
-        with freeze_time("2025-11-01 16:30:00"):
+        # Use small time step to avoid gap protection
+        with freeze_time("2025-11-01 16:01:00"):
             energy2 = calc2.calculate_energy(readings)
             solar_after = energy2.daily_solar
 
@@ -401,7 +426,7 @@ class TestPowerThresholds:
         with freeze_time("2025-11-01 16:00:00"):
             energy_1 = energy_calculator.calculate_energy(readings)
 
-        with freeze_time("2025-11-01 16:30:00"):
+        with freeze_time("2025-11-01 16:01:00"):
             energy_2 = energy_calculator.calculate_energy(readings)
 
         # Solar should not have accumulated (below threshold)
@@ -418,7 +443,7 @@ class TestPowerThresholds:
         with freeze_time("2025-11-01 16:00:00"):
             energy_1 = energy_calculator.calculate_energy(readings)
 
-        with freeze_time("2025-11-01 16:30:00"):
+        with freeze_time("2025-11-01 16:01:00"):
             energy_2 = energy_calculator.calculate_energy(readings)
 
         # Solar should have accumulated

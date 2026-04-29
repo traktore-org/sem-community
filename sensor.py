@@ -1479,8 +1479,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 else:
                     value = 0
 
+            # Convert ISO timestamp strings to datetime for TIMESTAMP sensors
+            if (isinstance(value, str)
+                    and self.entity_description.device_class == SensorDeviceClass.TIMESTAMP):
+                try:
+                    value = datetime.fromisoformat(value)
+                except (ValueError, TypeError):
+                    value = None
+
             # Convert string numbers to float/int for numeric sensors
-            if isinstance(value, str):
+            elif isinstance(value, str):
                 if value.replace('.', '').replace('-', '').isdigit():
                     try:
                         value = float(value) if '.' in value else int(value)
