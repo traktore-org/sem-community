@@ -330,8 +330,8 @@ NUMBER_TYPES = [
     NumberEntityDescription(
         key="system_install_year",
         native_min_value=2015,
-        native_max_value=2040,
-        native_step=1,
+        native_max_value=2035.12,
+        native_step=0.01,
         mode=NumberMode.BOX,
     ),
     # Night charging schedule
