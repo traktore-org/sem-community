@@ -461,7 +461,7 @@ class EVTaperDetector:
         if no useful history found.
         """
         if not ev_power_entity:
-            return False
+            return None
 
         try:
             from homeassistant.components.recorder import get_instance
