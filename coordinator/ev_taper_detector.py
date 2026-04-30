@@ -215,7 +215,11 @@ class EVTaperDetector:
         """Accumulate energy consumed since last full charge.
 
         Called each coordinator cycle with the incremental EV energy.
+        Skips accumulation when full charge was detected this session
+        (trickle current from retry attempts shouldn't count).
         """
+        if self._full_detected:
+            return
         if ev_energy_increment_kwh > 0:
             self._energy_since_full += ev_energy_increment_kwh
 
@@ -247,6 +251,12 @@ class EVTaperDetector:
 
         if capacity <= 0:
             return 0.0
+
+        # After a full charge anchor, treat < 0.1 kWh as still at 100%
+        # (prevents noise/rounding from drifting SOC on restarts)
+        if self._soc_anchored and self._energy_since_full < 0.1:
+            self._estimated_soc = 100.0
+            return 100.0
 
         self._estimated_soc = max(
             0.0,

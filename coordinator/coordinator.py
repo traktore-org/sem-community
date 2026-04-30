@@ -372,7 +372,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._sensor_reader.config.ev_power_sensor
                 or (self._energy_dashboard_config.ev_power if self._energy_dashboard_config else None)
             )
-            if ev_power_entity:
+            # Only seed if the detector doesn't already have good state
+            # (anchored SOC with a recent full charge detection)
+            needs_seed = ev_power_entity and not (
+                self._ev_taper_detector._soc_anchored
+                and self._ev_taper_detector._last_full_timestamp
+            )
+            if needs_seed:
                 try:
                     seed_result = await self._ev_taper_detector.async_seed_from_history(
                         self.hass, ev_power_entity, days=60,
@@ -438,6 +444,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()
+
+            # Self-healing sign inversion: if balance goes negative with real
+            # grid activity, the grid sign is wrong — auto-correct by flipping
+            if power.grid_power != 0 and power.solar_power > 0:
+                energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+                energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
+                raw_balance = energy_in - energy_out
+                if raw_balance < -500:
+                    self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
+                    if self._negative_balance_count >= 18:  # ~3 min sustained negative
+                        # Auto-correct: flip the grid sign
+                        self._sensor_reader._grid_sign_inverted = not self._sensor_reader._grid_sign_inverted
+                        self._sensor_reader._grid_sign_detected = True
+                        _LOGGER.warning(
+                            "Energy balance negative (%.0fW) for 3+ min — auto-correcting grid sign "
+                            "(now %s). Solar=%.0fW Grid=%.0fW Battery=%.0fW",
+                            raw_balance,
+                            "negated" if self._sensor_reader._grid_sign_inverted else "normal",
+                            power.solar_power, power.grid_power, power.battery_power,
+                        )
+                        self._negative_balance_count = 0
+                        # Re-read with corrected sign
+                        power = self._sensor_reader.read_power()
+                else:
+                    self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
 
             # Step 2: Calculate energy from power integration
             energy = self._energy_calculator.calculate_energy(power)

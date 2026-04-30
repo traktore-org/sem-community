@@ -51,6 +51,9 @@ class SensorReader:
         self._sensor_unavailable: set[str] = set()
         # Cache last valid SOC to avoid 0% during sensor gaps
         self._last_valid_soc: float = 0.0
+        # Split grid power sensors (Growatt, etc.) — discovered on first read
+        self._split_grid_import_power: str | None = None
+        self._split_grid_export_power: str | None = None
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -295,12 +298,27 @@ class SensorReader:
             readings.solar_power = self._read_sensor(ed.solar_power, "solar")
 
         # Grid power from Energy Dashboard.
-        # SEM convention: negative = import, positive = export.
-        # The stat_rate sensor may follow either inverter convention (+ = export,
-        # matching SEM) or HA convention (+ = import, opposite of SEM).
-        # read_power() auto-detects and corrects the sign after calculate_derived().
+        # Two modes:
+        # 1. Combined sensor (Huawei, SolarEdge, Fronius): single stat_rate sensor
+        #    SEM convention: negative = import, positive = export
+        #    read_power() auto-detects and corrects the sign after calculate_derived()
+        # 2. Split sensors (Growatt, some others): separate import + export power sensors
+        #    Both always positive — SEM calculates: grid_power = export - import
         if ed.grid_import_power:
             readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
+        elif not ed.grid_import_power and ed.grid_import_energy:
+            # No combined power sensor — try to find split import/export power sensors
+            # from the same device as the energy sensors
+            if not hasattr(self, '_split_grid_import_power') or self._split_grid_import_power is None:
+                self._split_grid_import_power, self._split_grid_export_power = (
+                    self._discover_split_grid_power(ed)
+                )
+            if self._split_grid_import_power:
+                import_w = self._read_sensor(self._split_grid_import_power, "grid_import")
+                export_w = self._read_sensor(self._split_grid_export_power, "grid_export") if self._split_grid_export_power else 0.0
+                # SEM convention: negative = import, positive = export
+                readings.grid_power = export_w - import_w
+                self._grid_sign_detected = True  # No sign correction needed
 
         # Battery power — sum all battery units if multiple configured.
         # Sign auto-detection (in read_power → _detect_battery_sign) uses the
@@ -353,6 +371,55 @@ class SensorReader:
             )
 
         return readings
+
+    def _discover_split_grid_power(self, ed) -> tuple:
+        """Discover separate import/export power sensors for inverters without combined grid power.
+
+        Growatt, and some other inverters, provide split sensors:
+        - sensor.*_import_from_grid / sensor.*_pac_to_user_total (import, always positive)
+        - sensor.*_export_to_grid / sensor.*_pac_to_grid_total (export, always positive)
+
+        Searches the entity registry for power sensors on the same device as the
+        Energy Dashboard grid energy sensors.
+        """
+        import_power = None
+        export_power = None
+
+        # Known patterns for split grid power sensors
+        import_patterns = ["import_from_grid", "pac_to_user", "grid_import", "from_grid_power"]
+        export_patterns = ["export_to_grid", "pac_to_grid", "grid_export", "to_grid_power"]
+
+        try:
+            # Find all power sensors in the system
+            import fnmatch
+            for state in self.hass.states.async_all("sensor"):
+                eid = state.entity_id.lower()
+                attrs = state.attributes
+                # Must be a power sensor
+                if attrs.get("device_class") != "power" and attrs.get("unit_of_measurement") not in ("W", "kW"):
+                    continue
+
+                for pattern in import_patterns:
+                    if pattern in eid:
+                        import_power = state.entity_id
+                        break
+                for pattern in export_patterns:
+                    if pattern in eid:
+                        export_power = state.entity_id
+                        break
+
+            if import_power or export_power:
+                _LOGGER.info(
+                    "Discovered split grid power sensors: import=%s, export=%s",
+                    import_power, export_power,
+                )
+            else:
+                _LOGGER.debug("No split grid power sensors found")
+
+        except Exception as e:
+            _LOGGER.debug("Split grid power discovery failed: %s", e)
+
+        return import_power, export_power
 
     def _read_battery_soc_average(self, battery_power_entities: list) -> float:
         """Average SOC across multiple battery units.

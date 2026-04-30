@@ -392,3 +392,100 @@ class TestBatteryCapacityAutoDetect:
 
         result = reader.auto_detect_battery_capacity_kwh()
         assert result is None
+
+
+# ════════════════════════════════════════════
+# Split grid power sensor discovery (#129)
+# ════════════════════════════════════════════
+
+class TestSplitGridPowerDiscovery:
+    """Test auto-discovery of split import/export grid power sensors (Growatt, etc.)."""
+
+    def _make_reader(self, hass):
+        config = {"update_interval": 10}
+        return SensorReader(hass, config)
+
+    def _make_power_state(self, entity_id, value=1000, unit="W"):
+        state = Mock()
+        state.entity_id = entity_id
+        state.state = str(value)
+        state.attributes = {"unit_of_measurement": unit, "device_class": "power"}
+        return state
+
+    def test_discovers_growatt_sph_sensors(self):
+        """Discover Growatt SPH import/export sensors."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        ed = Mock()
+        ed.grid_import_energy = "sensor.mix_import_from_grid_today"
+        hass.states.async_all.return_value = [
+            self._make_power_state("sensor.mix_import_from_grid", 500),
+            self._make_power_state("sensor.mix_export_to_grid", 2000),
+        ]
+        imp, exp = reader._discover_split_grid_power(ed)
+        assert imp == "sensor.mix_import_from_grid"
+        assert exp == "sensor.mix_export_to_grid"
+
+    def test_discovers_growatt_tlx_sensors(self):
+        """Discover Growatt TLX pac_to sensors."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        ed = Mock()
+        ed.grid_import_energy = "sensor.tlx_import_energy"
+        hass.states.async_all.return_value = [
+            self._make_power_state("sensor.tlx_pac_to_user_total", 800),
+            self._make_power_state("sensor.tlx_pac_to_grid_total", 3000),
+        ]
+        imp, exp = reader._discover_split_grid_power(ed)
+        assert imp == "sensor.tlx_pac_to_user_total"
+        assert exp == "sensor.tlx_pac_to_grid_total"
+
+    def test_returns_none_when_no_split_sensors(self):
+        """Return None when no split sensors found."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        ed = Mock()
+        ed.grid_import_energy = "sensor.grid_import_total"
+        hass.states.async_all.return_value = [
+            self._make_power_state("sensor.solar_power", 5000),
+        ]
+        imp, exp = reader._discover_split_grid_power(ed)
+        assert imp is None
+        assert exp is None
+
+    def test_split_grid_export(self):
+        """Split sensors: positive grid_power when exporting."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        hass.states.get = lambda eid: {
+            "sensor.mix_import_from_grid": _make_sensor_state(0),
+            "sensor.mix_export_to_grid": _make_sensor_state(2000),
+        }.get(eid)
+        import_w = reader._read_sensor("sensor.mix_import_from_grid", "grid_import")
+        export_w = reader._read_sensor("sensor.mix_export_to_grid", "grid_export")
+        assert export_w - import_w == 2000
+
+    def test_split_grid_import(self):
+        """Split sensors: negative grid_power when importing."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        hass.states.get = lambda eid: {
+            "sensor.mix_import_from_grid": _make_sensor_state(1500),
+            "sensor.mix_export_to_grid": _make_sensor_state(0),
+        }.get(eid)
+        import_w = reader._read_sensor("sensor.mix_import_from_grid", "grid_import")
+        export_w = reader._read_sensor("sensor.mix_export_to_grid", "grid_export")
+        assert export_w - import_w == -1500
+
+    def test_import_only_discovered(self):
+        """Only import sensor found, no export."""
+        hass = MagicMock()
+        reader = self._make_reader(hass)
+        ed = Mock()
+        ed.grid_import_energy = "sensor.grid_import_total"
+        hass.states.async_all.return_value = [
+            self._make_power_state("sensor.growatt_import_from_grid", 500),
+        ]
+        imp, exp = reader._discover_split_grid_power(ed)
+        assert imp == "sensor.growatt_import_from_grid"
+        assert exp is None
