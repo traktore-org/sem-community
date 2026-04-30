@@ -87,6 +87,16 @@ There are many solar/EV tools for Home Assistant — evcc, emhass, Predbat, PV E
 3. Search for **Solar Energy Management** and click **Download**
 4. **Restart Home Assistant**
 
+### Beta Releases
+
+Want to help test new features before they go stable? Enable beta updates in HACS:
+
+1. Open **HACS** > **Integrations** > find **Solar Energy Management**
+2. Click the three-dot menu > **Redownload** > enable **Show beta versions**
+3. Select the latest beta (e.g. `v1.5.0-beta.1`) and install
+
+Beta releases are tested on real hardware before publishing but may contain rough edges. Your feedback helps us ship stable releases faster — report issues on [GitHub](https://github.com/traktore-org/sem-community/issues).
+
 ### Manual Installation
 
 1. Download the [latest release](https://github.com/traktore-org/sem-community/releases)
