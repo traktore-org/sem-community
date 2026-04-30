@@ -366,6 +366,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_intel_state = self._storage.get_ev_intelligence_state()
             self._ev_taper_detector.restore_state(ev_intel_state)
 
+            # Seed EV intelligence from recorder history (improves cold starts
+            # and upgrades from older versions without EV intelligence data)
+            ev_power_entity = (
+                self._sensor_reader.config.ev_power_sensor
+                or (self._energy_dashboard_config.ev_power if self._energy_dashboard_config else None)
+            )
+            if ev_power_entity:
+                try:
+                    if await self._ev_taper_detector.async_seed_from_history(
+                        self.hass, ev_power_entity, days=60,
+                    ):
+                        self._storage.set_ev_intelligence_state(
+                            self._ev_taper_detector.get_state()
+                        )
+                except Exception as e:
+                    _LOGGER.debug("EV history seeding skipped: %s", e)
+
             # Ensure battery discharge limit is restored after restart
             # (protects against stale limit left by previous run)
             await self._restore_battery_discharge_limit_on_startup()

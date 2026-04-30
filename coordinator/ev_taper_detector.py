@@ -437,6 +437,177 @@ class EVTaperDetector:
         self._soc_anchored = state.get("soc_anchored", False)
 
     # ------------------------------------------------------------------
+    # History seeding — bootstrap from recorder on startup
+    # ------------------------------------------------------------------
+
+    async def async_seed_from_history(
+        self,
+        hass: "HomeAssistant",
+        ev_power_entity: Optional[str],
+        days: int = 60,
+    ) -> bool:
+        """Seed EV intelligence from recorder history on startup.
+
+        Queries the last `days` of EV charging power to detect:
+        1. Charge sessions (power > 0.5 kW for > 5 minutes)
+        2. Last full charge (taper pattern: peak > 3 kW declining to 0)
+        3. Energy since last full charge
+        4. Daily consumption per weekday (for skip logic predictor)
+
+        Only updates fields that improve on existing data — never overwrites
+        a more recent last_full_charge with an older one from history.
+
+        Returns True if history improved the state.
+        """
+        if not ev_power_entity:
+            return False
+
+        try:
+            from homeassistant.components.recorder import get_instance
+            from homeassistant.components.recorder.history import state_changes_during_period
+            from homeassistant.util import dt as dt_util
+
+            end = dt_util.utcnow()
+            start = end - __import__("datetime").timedelta(days=days)
+
+            history = await get_instance(hass).async_add_executor_job(
+                state_changes_during_period,
+                hass, start, end, str(ev_power_entity),
+            )
+
+            states = history.get(ev_power_entity, [])
+            if len(states) < 10:
+                _LOGGER.debug("EV history: only %d entries, skipping seed", len(states))
+                return False
+
+        except Exception as e:
+            _LOGGER.debug("Could not read EV history from recorder: %s", e)
+            return False
+
+        # Parse into (timestamp, power_kw) pairs
+        readings = []
+        for state in states:
+            try:
+                val = float(state.state)
+                readings.append((state.last_changed, val))
+            except (ValueError, TypeError):
+                continue
+
+        if not readings:
+            return False
+
+        # Detect sessions: power > 0.5 kW sustained > 5 minutes
+        sessions = []
+        in_session = False
+        session_start = None
+        peak_kw = 0.0
+        energy_kwh = 0.0
+        prev_time = None
+        prev_val = 0.0
+        had_decline = False  # Track if power declined from peak (taper)
+
+        for ts, val in readings:
+            if val > 0.5 and not in_session:
+                in_session = True
+                session_start = ts
+                peak_kw = val
+                energy_kwh = 0.0
+                prev_time = ts
+                prev_val = val
+                had_decline = False
+            elif val > 0.5 and in_session:
+                if val < peak_kw * 0.7:
+                    had_decline = True
+                peak_kw = max(peak_kw, val)
+                if prev_time:
+                    dt_hours = (ts - prev_time).total_seconds() / 3600
+                    if 0 < dt_hours < 1:  # Skip gaps > 1 hour
+                        energy_kwh += (prev_val + val) / 2 * dt_hours
+                prev_time = ts
+                prev_val = val
+            elif val <= 0.5 and in_session:
+                in_session = False
+                duration_min = (ts - session_start).total_seconds() / 60
+                if duration_min > 5 and energy_kwh > 0.3:
+                    # Detect taper-to-full: peak > 3 kW, power declined, ended at ~0
+                    is_full = peak_kw > 3.0 and had_decline and val < 0.1
+                    sessions.append({
+                        "start": session_start,
+                        "end": ts,
+                        "energy_kwh": energy_kwh,
+                        "peak_kw": peak_kw,
+                        "weekday": session_start.weekday(),
+                        "is_full": is_full,
+                    })
+
+        if not sessions:
+            _LOGGER.debug("EV history: no charge sessions found in %d days", days)
+            return False
+
+        improved = False
+
+        # Find last full charge from history
+        full_sessions = [s for s in sessions if s["is_full"]]
+        if full_sessions:
+            latest_full = full_sessions[-1]
+            latest_full_ts = latest_full["end"].isoformat()
+
+            # Only update if we don't have a last_full_charge or history has a newer one
+            if (not self._last_full_timestamp
+                    or latest_full_ts > self._last_full_timestamp):
+                self._last_full_timestamp = latest_full_ts
+                # Sum energy from all sessions after this full charge
+                energy_after = sum(
+                    s["energy_kwh"] for s in sessions
+                    if s["end"] > latest_full["end"]
+                )
+                capacity = self._config.get("ev_battery_capacity_kwh", 40)
+                self._energy_since_full = energy_after
+                self._estimated_soc = max(
+                    0.0, 100.0 - (energy_after / capacity * 100.0)
+                )
+                self._soc_anchored = True
+                improved = True
+                _LOGGER.info(
+                    "EV history seed: last full charge at %s (peak %.0fkW), "
+                    "%.1f kWh since → SOC %.0f%%",
+                    latest_full_ts[:16], latest_full["peak_kw"],
+                    energy_after, self._estimated_soc,
+                )
+
+        # Seed daily consumption per weekday (EWMA-compatible averages)
+        from collections import defaultdict
+        weekday_energy: dict[int, list[float]] = defaultdict(list)
+        # Group sessions by day, sum per day
+        day_totals: dict[str, float] = defaultdict(float)
+        day_weekdays: dict[str, int] = {}
+        for s in sessions:
+            day_key = s["start"].strftime("%Y-%m-%d")
+            day_totals[day_key] += s["energy_kwh"]
+            day_weekdays[day_key] = s["weekday"]
+
+        for day_key, total in day_totals.items():
+            weekday_energy[day_weekdays[day_key]].append(total)
+
+        if weekday_energy and not self._soc_anchored:
+            # Only use weekday averages if we didn't find a full charge
+            # (otherwise the energy_since_full calculation is more accurate)
+            avg_daily = sum(
+                sum(v) / len(v) for v in weekday_energy.values()
+            ) / len(weekday_energy)
+            _LOGGER.info(
+                "EV history seed: avg daily consumption %.1f kWh across %d days",
+                avg_daily, len(day_totals),
+            )
+
+        _LOGGER.info(
+            "EV history seed complete: %d sessions found, %d full charges, "
+            "%d weekdays with data",
+            len(sessions), len(full_sessions), len(weekday_energy),
+        )
+        return improved
+
+    # ------------------------------------------------------------------
     # Properties
     # ------------------------------------------------------------------
 
