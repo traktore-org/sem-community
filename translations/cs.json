@@ -874,9 +874,6 @@
       "system_investment_cost": {
         "name": "System Investment Cost"
       },
-      "system_install_year": {
-        "name": "System Install Year"
-      },
       "ev_minimum_current": {
         "name": "EV Minimum Current"
       },

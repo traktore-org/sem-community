@@ -1919,12 +1919,6 @@ views:
                 icon: mdi:cash
                 card_mod:
                   style: *glass_card
-              - type: custom:mushroom-number-card
-                entity: number.sem_system_install_year
-                name: Install Year
-                icon: mdi:calendar
-                card_mod:
-                  style: *glass_card
           - type: conditional
             conditions:
               - condition: numeric_state

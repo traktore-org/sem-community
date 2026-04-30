@@ -872,9 +872,6 @@
       "system_investment_cost": {
         "name": "Coût Investissement Installation"
       },
-      "system_install_year": {
-        "name": "Année d'Installation"
-      },
       "ev_minimum_current": {
         "name": "Courant Minimum VE"
       },

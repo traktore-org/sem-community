@@ -52,6 +52,8 @@ class EnergyCalculator:
         self._ev_daily_energy_sensor: Optional[str] = None
         self._lifetime_seeded: bool = False
         self._yearly_seeded: bool = False
+        # Auto-detected from recorder statistics (first solar energy entry)
+        self._install_year_decimal: Optional[float] = None
 
     def calculate_energy(self, power: PowerReadings) -> EnergyTotals:
         """Calculate energy totals by integrating power over time."""
@@ -146,6 +148,36 @@ class EnergyCalculator:
         energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
 
+        # Sanity checks — warn and cap if values exceed physical limits
+        battery_capacity = self.config.get("battery_capacity_kwh", 15)
+        max_daily_battery = battery_capacity * 3  # 3 full cycles/day is generous limit
+        inverter_kwp = self.config.get("system_size_kwp", 10)
+        max_daily_solar = inverter_kwp * 16  # 16 peak sun hours is extreme max
+
+        if energy.daily_battery_discharge > max_daily_battery:
+            _LOGGER.warning(
+                "Battery discharge %.1f kWh exceeds %.0f kWh daily limit (3x %.0f kWh capacity) — capping",
+                energy.daily_battery_discharge, max_daily_battery, battery_capacity,
+            )
+            self._daily_accumulators[f"battery_discharge_{today}"] = max_daily_battery
+            energy.daily_battery_discharge = max_daily_battery
+
+        if energy.daily_battery_charge > max_daily_battery:
+            _LOGGER.warning(
+                "Battery charge %.1f kWh exceeds %.0f kWh daily limit — capping",
+                energy.daily_battery_charge, max_daily_battery,
+            )
+            self._daily_accumulators[f"battery_charge_{today}"] = max_daily_battery
+            energy.daily_battery_charge = max_daily_battery
+
+        if energy.daily_solar > max_daily_solar:
+            _LOGGER.warning(
+                "Solar %.1f kWh exceeds %.0f kWh daily limit (%d kWp × 16h) — capping",
+                energy.daily_solar, max_daily_solar, inverter_kwp,
+            )
+            self._daily_accumulators[f"solar_{today}"] = max_daily_solar
+            energy.daily_solar = max_daily_solar
+
         return energy
 
     def _build_current_totals(self, today: date, month_key: str, year_key: str) -> EnergyTotals:
@@ -183,6 +215,59 @@ class EnergyCalculator:
         self._ev_daily_energy_sensor = entity_id
         if entity_id:
             _LOGGER.info("EV energy reconciliation enabled: %s", entity_id)
+
+    async def async_detect_install_date(self, hass: HomeAssistant) -> None:
+        """Detect system install date from recorder statistics.
+
+        Queries the statistics table for the earliest solar energy entry.
+        The statistics table is never purged, so this finds the true
+        first day the system produced energy — more accurate than any
+        manual configuration.
+        """
+        if self._install_year_decimal is not None:
+            return
+
+        try:
+            from homeassistant.components.recorder import get_instance
+
+            def _query_first_solar_stat():
+                """Find earliest solar statistics entry."""
+                import sqlite3
+                db_url = hass.config.config_dir + "/home-assistant_v2.db"
+                conn = sqlite3.connect(db_url)
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT MIN(s.start_ts)
+                    FROM statistics s
+                    JOIN statistics_meta sm ON s.metadata_id = sm.id
+                    WHERE sm.statistic_id LIKE '%solar%'
+                       OR sm.statistic_id LIKE '%inverter%ertrag%'
+                       OR sm.statistic_id LIKE '%gesamtenergieertrag%'
+                       OR sm.statistic_id LIKE '%pv%energy%'
+                """)
+                row = cur.fetchone()
+                conn.close()
+                return row[0] if row and row[0] else None
+
+            first_ts = await get_instance(hass).async_add_executor_job(
+                _query_first_solar_stat
+            )
+
+            if first_ts:
+                first_dt = datetime.fromtimestamp(first_ts)
+                self._install_year_decimal = round(
+                    first_dt.year + first_dt.month / 12, 2
+                )
+                _LOGGER.info(
+                    "System install date auto-detected from statistics: %s (%.2f)",
+                    first_dt.strftime("%Y-%m-%d"),
+                    self._install_year_decimal,
+                )
+            else:
+                _LOGGER.debug("No solar statistics found — using current year as fallback")
+
+        except Exception as e:
+            _LOGGER.debug("Could not detect install date from statistics: %s", e)
 
     def seed_lifetime_from_hardware(self, hass: HomeAssistant, ed_config) -> None:
         """Seed lifetime accumulators from hardware energy counters.
@@ -526,8 +611,8 @@ class EnergyCalculator:
                 (costs.lifetime_total_savings / system_cost) * 100, 1
             )
             # Calculate annual savings from lifetime data + system age
-            # system_install_year supports decimal: 2024.09 = September 2024
-            install_year_decimal = self.config.get("system_install_year", dt_util.now().year)
+            # Auto-detected from recorder statistics (first solar energy entry)
+            install_year_decimal = self._install_year_decimal or dt_util.now().year
             now_decimal = dt_util.now().year + (dt_util.now().month / 12)
             age_years = max(0.5, now_decimal - install_year_decimal)
             if costs.lifetime_total_savings > 100:

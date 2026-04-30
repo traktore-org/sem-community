@@ -47,6 +47,10 @@ class SensorReader:
         self._battery_sign_detected = False
         self._battery_charge_baseline: Optional[float] = None
         self._battery_discharge_baseline: Optional[float] = None
+        # Track sensor availability transitions (#5: robustness)
+        self._sensor_unavailable: set[str] = set()
+        # Cache last valid SOC to avoid 0% during sensor gaps
+        self._last_valid_soc: float = 0.0
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -307,16 +311,26 @@ class SensorReader:
             readings.battery_power = self._read_sensor(ed.battery_power, "battery")
 
         # Battery SOC — from config, or auto-detect and average across all units
+        # Use allow_none so 0% SOC is distinguishable from "unavailable"
+        soc_val = None
         if self.config.battery_soc_sensor:
-            readings.battery_soc = self._read_sensor(
-                self.config.battery_soc_sensor, "battery_soc"
+            soc_val = self._read_sensor(
+                self.config.battery_soc_sensor, "battery_soc", allow_none=True,
             )
         elif len(ed.battery_power_list) > 1:
-            readings.battery_soc = self._read_battery_soc_average(ed.battery_power_list)
+            soc_val = self._read_battery_soc_average(ed.battery_power_list) or None
         elif ed.battery_power:
             soc_entity = self._auto_detect_battery_soc(ed.battery_power)
             if soc_entity:
-                readings.battery_soc = self._read_sensor(soc_entity, "battery_soc")
+                soc_val = self._read_sensor(soc_entity, "battery_soc", allow_none=True)
+
+        if soc_val is not None:
+            readings.battery_soc = soc_val
+            self._last_valid_soc = soc_val
+        else:
+            # Use last known SOC to avoid charging logic seeing 0% during sensor gaps
+            readings.battery_soc = self._last_valid_soc
+            readings.battery_soc_unavailable = True
 
         # EV power — Energy Dashboard first, then config fallback
         if ed.ev_power:
@@ -379,11 +393,17 @@ class SensorReader:
                 self.config.battery_power_sensor, "battery"
             )
 
-        # Battery SOC
+        # Battery SOC — use allow_none to distinguish 0% from unavailable
         if self.config.battery_soc_sensor:
-            readings.battery_soc = self._read_sensor(
-                self.config.battery_soc_sensor, "battery_soc"
+            soc_val = self._read_sensor(
+                self.config.battery_soc_sensor, "battery_soc", allow_none=True,
             )
+            if soc_val is not None:
+                readings.battery_soc = soc_val
+                self._last_valid_soc = soc_val
+            else:
+                readings.battery_soc = self._last_valid_soc
+                readings.battery_soc_unavailable = True
 
         # Battery temperature
         if self.config.battery_temperature_sensor:
@@ -407,15 +427,27 @@ class SensorReader:
 
         return readings
 
-    def _read_sensor(self, entity_id: Optional[str], name: str) -> float:
-        """Read a numeric sensor value."""
+    def _read_sensor(
+        self, entity_id: Optional[str], name: str, *, allow_none: bool = False,
+    ) -> float | None:
+        """Read a numeric sensor value.
+
+        Args:
+            entity_id: HA entity ID to read.
+            name: Human label for logging.
+            allow_none: If True, return None when sensor is unavailable
+                        instead of 0.0.  Use for sensors where 0 is a
+                        valid reading (e.g. battery_soc: 0% vs unavailable).
+        """
         if not entity_id:
-            return 0.0
+            return None if allow_none else 0.0
 
         state = self.hass.states.get(entity_id)
         if not state or state.state in ("unknown", "unavailable", None):
             _LOGGER.debug(f"Sensor {entity_id} ({name}) unavailable")
-            return 0.0
+            # Track unavailability for transition detection
+            self._sensor_unavailable.add(entity_id)
+            return None if allow_none else 0.0
 
         try:
             value = float(state.state)
@@ -425,10 +457,18 @@ class SensorReader:
             if unit.lower() == "kw":
                 value *= 1000
 
+            # Detect transition from unavailable → available
+            if entity_id in self._sensor_unavailable:
+                self._sensor_unavailable.discard(entity_id)
+                _LOGGER.info(
+                    "Sensor %s (%s) recovered — now reading %.1f",
+                    entity_id, name, value,
+                )
+
             return value
         except (ValueError, TypeError) as e:
             _LOGGER.debug(f"Could not parse {entity_id} ({name}): {e}")
-            return 0.0
+            return None if allow_none else 0.0
 
     def _read_binary_sensor(self, entity_id: Optional[str], name: str) -> bool:
         """Read a binary sensor or status sensor value.

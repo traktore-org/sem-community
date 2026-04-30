@@ -5,6 +5,7 @@ from typing import Any
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -19,12 +20,15 @@ PARALLEL_UPDATES = 0  # Coordinator handles all updates
 SWITCH_TYPES = [
     SwitchEntityDescription(
         key="night_charging",
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key="observer_mode",
+        entity_category=EntityCategory.CONFIG,
     ),
     SwitchEntityDescription(
         key="smart_night_charging",
+        entity_category=EntityCategory.CONFIG,
     ),
 ]
 

@@ -366,6 +366,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_intel_state = self._storage.get_ev_intelligence_state()
             self._ev_taper_detector.restore_state(ev_intel_state)
 
+            # Seed EV intelligence from recorder history (improves cold starts
+            # and upgrades from older versions without EV intelligence data)
+            ev_power_entity = (
+                self._sensor_reader.config.ev_power_sensor
+                or (self._energy_dashboard_config.ev_power if self._energy_dashboard_config else None)
+            )
+            if ev_power_entity:
+                try:
+                    seed_result = await self._ev_taper_detector.async_seed_from_history(
+                        self.hass, ev_power_entity, days=60,
+                    )
+                    if seed_result:
+                        if seed_result.get("improved"):
+                            self._storage.set_ev_intelligence_state(
+                                self._ev_taper_detector.get_state()
+                            )
+                        # Feed weekday consumption to predictor
+                        weekday_totals = seed_result.get("weekday_totals", {})
+                        if weekday_totals and hasattr(self, '_predictor') and self._predictor:
+                            for dow, avg_kwh in weekday_totals.items():
+                                # Only seed if predictor has no data for this weekday
+                                existing = self._predictor._ev_profile.predict(dow, 12)
+                                if existing is None or existing == 0:
+                                    self._predictor._ev_profile.update(dow, 12, avg_kwh)
+                                    _LOGGER.info(
+                                        "EV predictor seeded from history: weekday %d → %.1f kWh/day",
+                                        dow, avg_kwh,
+                                    )
+                except Exception as e:
+                    _LOGGER.debug("EV history seeding skipped: %s", e)
+
             # Ensure battery discharge limit is restored after restart
             # (protects against stale limit left by previous run)
             await self._restore_battery_discharge_limit_on_startup()
@@ -574,7 +605,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 try:
                     await self._execute_battery_charge_scheduler(power)
                 except Exception as e:
-                    _LOGGER.debug("Battery charge scheduler error: %s", e)
+                    _LOGGER.warning("Battery charge scheduler error: %s", e, exc_info=True)
 
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
@@ -607,6 +638,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._energy_calculator.seed_lifetime_from_hardware(
                     self.hass, self._energy_dashboard_config
                 )
+
+            # Step 9a2: Detect system install date from statistics (runs once)
+            if self._energy_calculator._install_year_decimal is None:
+                try:
+                    await self._energy_calculator.async_detect_install_date(self.hass)
+                except Exception as e:
+                    _LOGGER.debug("Install date detection skipped: %s", e)
 
             # Step 9b: Seed yearly accumulators from recorder statistics (runs once)
             if self._energy_dashboard_config and not self._energy_calculator._yearly_seeded:
@@ -1378,8 +1416,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             f"Zone 3: SOC={power.battery_soc:.0f}% >= buffer={buffer_soc}%, "
                             f"forecast surplus {estimated_surplus:.1f}kWh >> need {remaining_need:.1f}kWh"
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
 
             # Battery assist: bridge gaps when surplus alone won't reach KEBA minimum
             usable_battery = max(0, (power.battery_soc - battery_floor) / 100 * battery_capacity)
@@ -1406,8 +1444,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     surplus_factor = 0.5
                     estimated_surplus = forecast.forecast_remaining_today_kwh * surplus_factor
                     reason += f" (forecast surplus={estimated_surplus:.1f}kWh, need={remaining_need:.1f}kWh)"
-            except Exception:
-                pass
+            except Exception as e:
+                _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
             return ("solar_only", reason)
 
         # Zone 1: SOC < priority_soc → battery priority

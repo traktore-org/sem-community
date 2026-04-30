@@ -109,19 +109,41 @@ class SEMStorage:
         """
         if not isinstance(data, dict):
             return False
-        accumulators = data.get("accumulators", {})
-        if not isinstance(accumulators, dict):
+
+        # Validate all accumulator dicts
+        for acc_key in ("accumulators", "daily_accumulators", "monthly_accumulators",
+                        "yearly_accumulators", "lifetime_accumulators"):
+            accumulators = data.get(acc_key)
+            if accumulators is None:
+                continue
+            if not isinstance(accumulators, dict):
+                _LOGGER.warning("Storage key '%s' is not a dict", acc_key)
+                return False
+            for key, value in accumulators.items():
+                if not isinstance(value, (int, float)):
+                    _LOGGER.warning("Non-numeric accumulator %s.%s=%s", acc_key, key, value)
+                    return False
+                # Daily accumulators should never be negative
+                if acc_key == "daily_accumulators" and value < -0.01:
+                    _LOGGER.warning(
+                        "Negative daily accumulator %s=%.2f kWh — resetting to 0",
+                        key, value,
+                    )
+                    accumulators[key] = 0.0
+                # Sane range: no single accumulator should exceed 100 MWh
+                if abs(value) > 100_000:
+                    _LOGGER.warning(
+                        "Accumulator %s.%s=%.1f kWh exceeds 100 MWh limit",
+                        acc_key, key, value,
+                    )
+                    return False
+
+        # Validate last_update timestamp if present
+        last_update = data.get("last_update")
+        if last_update is not None and not isinstance(last_update, str):
+            _LOGGER.warning("Invalid last_update type: %s", type(last_update))
             return False
-        for key, value in accumulators.items():
-            if not isinstance(value, (int, float)):
-                _LOGGER.warning("Non-numeric accumulator %s=%s", key, value)
-                return False
-            # Sane range: no single accumulator should exceed 100 MWh
-            if abs(value) > 100_000:
-                _LOGGER.warning(
-                    "Accumulator %s=%.1f kWh exceeds 100 MWh limit", key, value
-                )
-                return False
+
         return True
 
     def _get_default_energy_data(self) -> Dict[str, Any]:

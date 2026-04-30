@@ -874,9 +874,6 @@
       "system_investment_cost": {
         "name": "Systeeminvesteringskosten"
       },
-      "system_install_year": {
-        "name": "Installatiejaar"
-      },
       "ev_minimum_current": {
         "name": "EV Minimale Stroom"
       },

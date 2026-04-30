@@ -51,6 +51,87 @@ from .hardware_detection import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
+    """Auto-detect battery capacity, system size, and max discharge from hardware.
+
+    Searches the entity registry for known sensor patterns across inverter brands.
+    Returns a dict of detected values (only includes keys that were found).
+    """
+    detected: Dict[str, float] = {}
+
+    # Battery capacity (Wh or kWh)
+    capacity_patterns = [
+        "sensor.*akkukapazitat*",      # Huawei (Wh)
+        "sensor.*battery_capacity*",    # Generic (kWh or Wh)
+        "sensor.*usable_capacity*",     # SolarEdge, generic
+        "sensor.*rated_capacity*",      # BYD, generic
+    ]
+    for pattern in capacity_patterns:
+        import fnmatch
+        for state in hass.states.async_all("sensor"):
+            if fnmatch.fnmatch(state.entity_id, pattern):
+                try:
+                    val = float(state.state)
+                    unit = state.attributes.get("unit_of_measurement", "")
+                    if val > 0:
+                        # Convert Wh to kWh if needed
+                        if unit.lower() == "wh" or val > 500:
+                            val = val / 1000
+                        detected["battery_capacity_kwh"] = round(val, 1)
+                        break
+                except (ValueError, TypeError):
+                    continue
+        if "battery_capacity_kwh" in detected:
+            break
+
+    # Inverter rated power (W → kWp)
+    power_patterns = [
+        "sensor.*nennleistung*",         # Huawei (W)
+        "sensor.*rated_power*",          # Generic (W)
+        "sensor.*nominal_power*",        # SolarEdge (W)
+        "sensor.*max_power*",            # Generic
+    ]
+    for pattern in power_patterns:
+        import fnmatch
+        for state in hass.states.async_all("sensor"):
+            if fnmatch.fnmatch(state.entity_id, pattern) and "inverter" in state.entity_id.lower():
+                try:
+                    val = float(state.state)
+                    if val > 100:  # Must be in W
+                        detected["system_size_kwp"] = round(val / 1000, 1)
+                        break
+                except (ValueError, TypeError):
+                    continue
+        if "system_size_kwp" in detected:
+            break
+
+    # Battery max discharge power (W)
+    discharge_patterns = [
+        "number.*maximale_entladeleistung*",  # Huawei
+        "number.*max_discharge*",              # Generic
+        "sensor.*max_discharge_power*",        # SolarEdge, generic
+    ]
+    for pattern in discharge_patterns:
+        import fnmatch
+        for state in hass.states.async_all(["number", "sensor"]):
+            if fnmatch.fnmatch(state.entity_id, pattern):
+                try:
+                    val = float(state.state)
+                    if val > 0:
+                        detected["battery_max_discharge_power"] = round(val, 0)
+                        detected["battery_assist_max_power"] = round(val, 0)
+                        break
+                except (ValueError, TypeError):
+                    continue
+        if "battery_max_discharge_power" in detected:
+            break
+
+    if detected:
+        _LOGGER.info("Hardware auto-detected: %s", detected)
+
+    return detected
+
+
 class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Solar Energy Management."""
 
@@ -407,10 +488,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(DOMAIN)
                 self._abort_if_unique_id_configured()
 
-                # Apply silent defaults first, then layer the user's hardware
-                # answers + auto-detected discharge entity on top.
+                # Apply silent defaults first, then layer hardware auto-detection,
+                # user's hardware answers, and discharge entity on top.
                 merged: dict[str, Any] = {}
                 merged.update(self._install_defaults())
+                merged.update(_detect_hardware_specs(self.hass))
                 merged.update(self._data)
                 merged.update(user_input)
 
@@ -465,14 +547,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="hardware",
             data_schema=vol.Schema({
-                vol.Required(
-                    "battery_capacity_kwh",
-                    default=DEFAULT_BATTERY_CAPACITY_KWH,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=5, max=100, step=1, unit_of_measurement="kWh", mode="box"
-                    )
-                ),
                 vol.Required(
                     "target_peak_limit",
                     default=DEFAULT_TARGET_PEAK_LIMIT,
