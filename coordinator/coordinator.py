@@ -445,6 +445,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()
 
+            # Detect sign inversion: if balance goes negative with real grid
+            # activity, the grid sign is likely wrong (import/export swapped)
+            if power.grid_power != 0 and power.solar_power > 0:
+                energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+                energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
+                raw_balance = energy_in - energy_out
+                if raw_balance < -500:
+                    self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
+                    if self._negative_balance_count == 30:  # ~5 min of consistent negative
+                        _LOGGER.warning(
+                            "Energy balance consistently negative (%.0fW) — possible grid sign "
+                            "inversion. Check Energy Dashboard import/export sensor configuration. "
+                            "Solar=%.0fW Grid=%.0fW (import=%.0f export=%.0f) Battery=%.0fW",
+                            raw_balance, power.solar_power, power.grid_power,
+                            power.grid_import_power, power.grid_export_power, power.battery_power,
+                        )
+                else:
+                    self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
+
             # Step 2: Calculate energy from power integration
             energy = self._energy_calculator.calculate_energy(power)
 
