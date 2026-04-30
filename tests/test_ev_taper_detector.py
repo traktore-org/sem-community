@@ -244,6 +244,7 @@ class TestVirtualSOC:
         _feed_taper_profile(det)
 
         # Simulate 8 kWh consumed (20% of 40 kWh)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(8.0)
         soc = det.get_virtual_soc()
         assert soc == pytest.approx(80.0, abs=0.5)
@@ -252,6 +253,7 @@ class TestVirtualSOC:
         """SOC should not go below 0."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(50.0)  # More than capacity
         soc = det.get_virtual_soc()
         assert soc == 0.0
@@ -260,6 +262,7 @@ class TestVirtualSOC:
         """Real vehicle SOC should override virtual estimate."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(8.0)
 
         # Virtual would be 80%, but real is 65%
@@ -270,6 +273,7 @@ class TestVirtualSOC:
         """When real SOC arrives, virtual SOC should calibrate."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(8.0)
 
         # Real SOC = 72% → internal state should sync
@@ -288,6 +292,7 @@ class TestVirtualSOC:
         """SOC should reset to 100% when next full charge detected."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(20.0)
         assert det.get_virtual_soc() == pytest.approx(50.0, abs=0.5)
 
@@ -432,6 +437,7 @@ class TestNightsUntilCharge:
         """Should recommend charge when SOC is low."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(35.0)  # SOC ~12.5%
         det.get_virtual_soc()
 
@@ -443,6 +449,7 @@ class TestNightsUntilCharge:
         """With high SOC and moderate daily use, should have multi-night range."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(8.0)  # SOC ~80%
         det.get_virtual_soc()
 
@@ -461,6 +468,7 @@ class TestPersistence:
         """get_state/restore_state should preserve key data."""
         det1 = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det1)
+        det.reset_session()  # Clear full_detected for energy tracking
         det1.update_energy(8.0)
         det1.get_virtual_soc()
 
@@ -822,6 +830,7 @@ class TestNightChargeSkip:
         """SOC 98% > target 80% → skip, multi-night range."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)  # full detected → SOC 100%
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(0.8)  # small drain → SOC ~98%
         det.get_virtual_soc()
 
@@ -834,6 +843,7 @@ class TestNightChargeSkip:
         """SOC 70%, daily 8 kWh (20%), plenty of range → skip."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(12.0)  # 100% - 12/40*100 = 70%
         det.get_virtual_soc()
 
@@ -846,6 +856,7 @@ class TestNightChargeSkip:
         """SOC 25%, daily 8 kWh → only 1 day range → charge needed."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(30.0)  # 100% - 30/40*100 = 25%
         det.get_virtual_soc()
 
@@ -874,6 +885,7 @@ class TestNightChargeSkip:
         """SOC 60%, weekend trip 15 kWh (37.5%) → charge needed."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(16.0)  # 100% - 16/40*100 = 60%
         det.get_virtual_soc()
 
@@ -884,6 +896,7 @@ class TestNightChargeSkip:
         """SOC 45%, daily 8 kWh (20%), margin 1.3×20=26% → 45-26=19% < 20% min → charge."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(22.0)  # 100% - 22/40*100 = 45%
         det.get_virtual_soc()
 
@@ -914,6 +927,7 @@ class TestNightChargeSkip:
         }
         det = EVTaperDetector(config)
         _feed_taper_profile(det)
+        det.reset_session()  # Clear full_detected for energy tracking
         det.update_energy(0.68)  # SOC ~98.3%
         det.get_virtual_soc()
 
