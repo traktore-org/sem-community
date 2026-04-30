@@ -869,9 +869,6 @@
       "system_investment_cost": {
         "name": "System Investment Cost"
       },
-      "system_install_year": {
-        "name": "System Install Year"
-      },
       "night_earliest_start": {
         "name": "Night Earliest Start"
       },

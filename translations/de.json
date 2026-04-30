@@ -875,9 +875,6 @@
       "system_investment_cost": {
         "name": "Anlageninvestitionskosten"
       },
-      "system_install_year": {
-        "name": "Installationsjahr"
-      },
       "ev_minimum_current": {
         "name": "EV Minimalstrom"
       },

@@ -639,6 +639,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self.hass, self._energy_dashboard_config
                 )
 
+            # Step 9a2: Detect system install date from statistics (runs once)
+            if self._energy_calculator._install_year_decimal is None:
+                try:
+                    await self._energy_calculator.async_detect_install_date(self.hass)
+                except Exception as e:
+                    _LOGGER.debug("Install date detection skipped: %s", e)
+
             # Step 9b: Seed yearly accumulators from recorder statistics (runs once)
             if self._energy_dashboard_config and not self._energy_calculator._yearly_seeded:
                 try:

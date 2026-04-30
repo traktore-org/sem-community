@@ -327,13 +327,7 @@ NUMBER_TYPES = [
         native_step=100,
         mode=NumberMode.BOX,
     ),
-    NumberEntityDescription(
-        key="system_install_year",
-        native_min_value=2015,
-        native_max_value=2035.12,
-        native_step=0.01,
-        mode=NumberMode.BOX,
-    ),
+    # system_install_year removed — auto-detected from recorder statistics
     # Night charging schedule
     NumberEntityDescription(
         key="night_earliest_start",
