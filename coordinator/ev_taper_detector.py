@@ -215,10 +215,11 @@ class EVTaperDetector:
         """Accumulate energy consumed since last full charge.
 
         Called each coordinator cycle with the incremental EV energy.
-        Skips accumulation when full charge detected (car is done,
-        trickle current from retry attempts shouldn't count).
+        Skips accumulation when:
+        - Full charge was detected this session (trickle current)
+        - SOC is at 100% (car was just anchored at full)
         """
-        if self._full_detected:
+        if self._full_detected or self._estimated_soc >= 99.5:
             return
         if ev_energy_increment_kwh > 0:
             self._energy_since_full += ev_energy_increment_kwh
@@ -428,7 +429,6 @@ class EVTaperDetector:
             "battery_health_pct": round(self._battery_health_pct, 1),
             "consecutive_skips": self._consecutive_skips,
             "soc_anchored": self._soc_anchored,
-            "full_detected": self._full_detected,
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
@@ -440,7 +440,6 @@ class EVTaperDetector:
         self._battery_health_pct = state.get("battery_health_pct", 0.0)
         self._consecutive_skips = state.get("consecutive_skips", 0)
         self._soc_anchored = state.get("soc_anchored", False)
-        self._full_detected = state.get("full_detected", False)
 
     # ------------------------------------------------------------------
     # History seeding — bootstrap from recorder on startup
