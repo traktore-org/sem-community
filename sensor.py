@@ -1330,17 +1330,22 @@ def _cleanup_stale_entities(
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != platform:
                 continue
-            # SEM unique_id format: "{entry_id}_{key}"
+            # SEM uses two unique_id formats:
+            #   sensors: "sem_{key}"
+            #   numbers/switches: "{entry_id}_{key}"
             unique_id = entity_entry.unique_id or ""
-            key = unique_id.replace(f"{entry.entry_id}_", "", 1)
+            key = None
+            if unique_id.startswith("sem_"):
+                key = unique_id[4:]  # Strip "sem_" prefix
+            elif unique_id.startswith(f"{entry.entry_id}_"):
+                key = unique_id[len(entry.entry_id) + 1:]  # Strip entry_id prefix
             if key and key not in valid_keys:
-                stale.append(entity_entry)
+                stale.append((entity_entry, key))
 
-        for entity_entry in stale:
+        for entity_entry, key in stale:
             _LOGGER.info(
                 "Removing stale entity %s (key '%s' no longer exists)",
-                entity_entry.entity_id,
-                entity_entry.unique_id,
+                entity_entry.entity_id, key,
             )
             registry.async_remove(entity_entry.entity_id)
     except Exception as e:
