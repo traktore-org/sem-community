@@ -374,12 +374,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             )
             if ev_power_entity:
                 try:
-                    if await self._ev_taper_detector.async_seed_from_history(
+                    seed_result = await self._ev_taper_detector.async_seed_from_history(
                         self.hass, ev_power_entity, days=60,
-                    ):
-                        self._storage.set_ev_intelligence_state(
-                            self._ev_taper_detector.get_state()
-                        )
+                    )
+                    if seed_result:
+                        if seed_result.get("improved"):
+                            self._storage.set_ev_intelligence_state(
+                                self._ev_taper_detector.get_state()
+                            )
+                        # Feed weekday consumption to predictor
+                        weekday_totals = seed_result.get("weekday_totals", {})
+                        if weekday_totals and hasattr(self, '_predictor') and self._predictor:
+                            from homeassistant.util import dt as dt_util
+                            now = dt_util.now()
+                            for dow, avg_kwh in weekday_totals.items():
+                                # Only seed if predictor has no data for this weekday
+                                existing = self._predictor._ev_profile.predict(dow, 12)
+                                if existing is None or existing == 0:
+                                    self._predictor._ev_profile.update(dow, 12, avg_kwh)
+                                    _LOGGER.info(
+                                        "EV predictor seeded from history: weekday %d → %.1f kWh/day",
+                                        dow, avg_kwh,
+                                    )
                 except Exception as e:
                     _LOGGER.debug("EV history seeding skipped: %s", e)
 

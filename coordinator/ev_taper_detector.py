@@ -445,7 +445,7 @@ class EVTaperDetector:
         hass: "HomeAssistant",
         ev_power_entity: Optional[str],
         days: int = 60,
-    ) -> bool:
+    ) -> Optional[Dict[str, Any]]:
         """Seed EV intelligence from recorder history on startup.
 
         Queries the last `days` of EV charging power to detect:
@@ -457,7 +457,8 @@ class EVTaperDetector:
         Only updates fields that improve on existing data — never overwrites
         a more recent last_full_charge with an older one from history.
 
-        Returns True if history improved the state.
+        Returns dict with 'weekday_totals' for predictor seeding, or None
+        if no useful history found.
         """
         if not ev_power_entity:
             return False
@@ -478,11 +479,11 @@ class EVTaperDetector:
             states = history.get(ev_power_entity, [])
             if len(states) < 10:
                 _LOGGER.debug("EV history: only %d entries, skipping seed", len(states))
-                return False
+                return None
 
         except Exception as e:
             _LOGGER.debug("Could not read EV history from recorder: %s", e)
-            return False
+            return None
 
         # Parse into (timestamp, power_kw) pairs
         readings = []
@@ -494,7 +495,7 @@ class EVTaperDetector:
                 continue
 
         if not readings:
-            return False
+            return None
 
         # Detect sessions: power > 0.5 kW sustained > 5 minutes
         sessions = []
@@ -542,7 +543,7 @@ class EVTaperDetector:
 
         if not sessions:
             _LOGGER.debug("EV history: no charge sessions found in %d days", days)
-            return False
+            return None
 
         improved = False
 
@@ -589,15 +590,21 @@ class EVTaperDetector:
         for day_key, total in day_totals.items():
             weekday_energy[day_weekdays[day_key]].append(total)
 
-        if weekday_energy and not self._soc_anchored:
-            # Only use weekday averages if we didn't find a full charge
-            # (otherwise the energy_since_full calculation is more accurate)
-            avg_daily = sum(
-                sum(v) / len(v) for v in weekday_energy.values()
-            ) / len(weekday_energy)
+        # Build weekday averages for predictor seeding
+        weekday_averages: Dict[int, float] = {}
+        for dow, values in weekday_energy.items():
+            weekday_averages[dow] = round(sum(values) / len(values), 1)
+
+        if weekday_averages:
+            avg_daily = sum(weekday_averages.values()) / len(weekday_averages)
             _LOGGER.info(
-                "EV history seed: avg daily consumption %.1f kWh across %d days",
+                "EV history seed: avg daily consumption %.1f kWh across %d days "
+                "(Mon=%.1f, Tue=%.1f, Wed=%.1f, Thu=%.1f, Fri=%.1f, Sat=%.1f, Sun=%.1f)",
                 avg_daily, len(day_totals),
+                weekday_averages.get(0, 0), weekday_averages.get(1, 0),
+                weekday_averages.get(2, 0), weekday_averages.get(3, 0),
+                weekday_averages.get(4, 0), weekday_averages.get(5, 0),
+                weekday_averages.get(6, 0),
             )
 
         _LOGGER.info(
@@ -605,7 +612,12 @@ class EVTaperDetector:
             "%d weekdays with data",
             len(sessions), len(full_sessions), len(weekday_energy),
         )
-        return improved
+
+        return {
+            "improved": improved,
+            "weekday_totals": weekday_averages,
+            "session_count": len(sessions),
+        }
 
     # ------------------------------------------------------------------
     # Properties
