@@ -385,8 +385,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         # Feed weekday consumption to predictor
                         weekday_totals = seed_result.get("weekday_totals", {})
                         if weekday_totals and hasattr(self, '_predictor') and self._predictor:
-                            from homeassistant.util import dt as dt_util
-                            now = dt_util.now()
                             for dow, avg_kwh in weekday_totals.items():
                                 # Only seed if predictor has no data for this weekday
                                 existing = self._predictor._ev_profile.predict(dow, 12)
