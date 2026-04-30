@@ -8,6 +8,7 @@ from homeassistant.components.number import (
     NumberMode,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers import entity_registry as er
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -360,6 +361,26 @@ async def async_setup_entry(
     ]
 
     async_add_entities(entities)
+
+    # Clean up stale number entities from previous versions
+    _cleanup_stale_entities(hass, entry, NUMBER_TYPES, "number")
+
+
+def _cleanup_stale_entities(hass, entry, descriptions, platform):
+    """Remove orphaned entities from previous SEM versions."""
+    try:
+        registry = er.async_get(hass)
+        valid_keys = {d.key for d in descriptions}
+        for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+            if entity_entry.domain != platform:
+                continue
+            unique_id = entity_entry.unique_id or ""
+            key = unique_id.replace(f"{entry.entry_id}_", "", 1)
+            if key and key not in valid_keys:
+                _LOGGER.info("Removing stale entity %s (key '%s' removed)", entity_entry.entity_id, key)
+                registry.async_remove(entity_entry.entity_id)
+    except Exception as e:
+        _LOGGER.debug("Stale entity cleanup skipped: %s", e)
 
 
 class EMSSolarNumber(CoordinatorEntity, NumberEntity):
