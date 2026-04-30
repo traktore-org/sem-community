@@ -445,22 +445,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()
 
-            # Detect sign inversion: if balance goes negative with real grid
-            # activity, the grid sign is likely wrong (import/export swapped)
+            # Self-healing sign inversion: if balance goes negative with real
+            # grid activity, the grid sign is wrong — auto-correct by flipping
             if power.grid_power != 0 and power.solar_power > 0:
                 energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
                 energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
                 raw_balance = energy_in - energy_out
                 if raw_balance < -500:
                     self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
-                    if self._negative_balance_count == 30:  # ~5 min of consistent negative
+                    if self._negative_balance_count >= 18:  # ~3 min sustained negative
+                        # Auto-correct: flip the grid sign
+                        self._sensor_reader._grid_sign_inverted = not self._sensor_reader._grid_sign_inverted
+                        self._sensor_reader._grid_sign_detected = True
                         _LOGGER.warning(
-                            "Energy balance consistently negative (%.0fW) — possible grid sign "
-                            "inversion. Check Energy Dashboard import/export sensor configuration. "
-                            "Solar=%.0fW Grid=%.0fW (import=%.0f export=%.0f) Battery=%.0fW",
-                            raw_balance, power.solar_power, power.grid_power,
-                            power.grid_import_power, power.grid_export_power, power.battery_power,
+                            "Energy balance negative (%.0fW) for 3+ min — auto-correcting grid sign "
+                            "(now %s). Solar=%.0fW Grid=%.0fW Battery=%.0fW",
+                            raw_balance,
+                            "negated" if self._sensor_reader._grid_sign_inverted else "normal",
+                            power.solar_power, power.grid_power, power.battery_power,
                         )
+                        self._negative_balance_count = 0
+                        # Re-read with corrected sign
+                        power = self._sensor_reader.read_power()
                 else:
                     self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
 
