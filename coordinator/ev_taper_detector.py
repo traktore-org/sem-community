@@ -424,6 +424,7 @@ class EVTaperDetector:
             "battery_health_pct": round(self._battery_health_pct, 1),
             "consecutive_skips": self._consecutive_skips,
             "soc_anchored": self._soc_anchored,
+            "full_detected": self._full_detected,
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
@@ -435,6 +436,7 @@ class EVTaperDetector:
         self._battery_health_pct = state.get("battery_health_pct", 0.0)
         self._consecutive_skips = state.get("consecutive_skips", 0)
         self._soc_anchored = state.get("soc_anchored", False)
+        self._full_detected = state.get("full_detected", False)
 
     # ------------------------------------------------------------------
     # History seeding — bootstrap from recorder on startup
