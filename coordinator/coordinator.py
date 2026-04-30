@@ -372,7 +372,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._sensor_reader.config.ev_power_sensor
                 or (self._energy_dashboard_config.ev_power if self._energy_dashboard_config else None)
             )
-            if ev_power_entity:
+            # Only seed if the detector doesn't already have good state
+            # (anchored SOC with a recent full charge detection)
+            needs_seed = ev_power_entity and not (
+                self._ev_taper_detector._soc_anchored
+                and self._ev_taper_detector._last_full_timestamp
+            )
+            if needs_seed:
                 try:
                     seed_result = await self._ev_taper_detector.async_seed_from_history(
                         self.hass, ev_power_entity, days=60,
