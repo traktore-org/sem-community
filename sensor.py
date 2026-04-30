@@ -1311,6 +1311,39 @@ async def _apply_labels_to_sensors(hass: HomeAssistant, sensors) -> None:
                 )
 
 
+def _cleanup_stale_entities(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    descriptions: list,
+    platform: str,
+) -> None:
+    """Remove orphaned entities from previous SEM versions.
+
+    Compares registered entities against current entity descriptions
+    and removes any that no longer exist in the code.
+    """
+    registry = er.async_get(hass)
+    valid_keys = {d.key for d in descriptions}
+
+    stale = []
+    for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if entity_entry.domain != platform:
+            continue
+        # SEM unique_id format: "{entry_id}_{key}"
+        unique_id = entity_entry.unique_id or ""
+        key = unique_id.replace(f"{entry.entry_id}_", "", 1)
+        if key and key not in valid_keys:
+            stale.append(entity_entry)
+
+    for entity_entry in stale:
+        _LOGGER.info(
+            "Removing stale entity %s (key '%s' no longer exists)",
+            entity_entry.entity_id,
+            entity_entry.unique_id,
+        )
+        registry.async_remove(entity_entry.entity_id)
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -1335,6 +1368,9 @@ async def async_setup_entry(
 
     _LOGGER.info("Adding %d sensors to Home Assistant", len(sensors))
     async_add_entities(sensors)
+
+    # Clean up stale sensor entities from previous versions
+    _cleanup_stale_entities(hass, entry, SENSOR_TYPES, "sensor")
 
     # Apply labels to entities after they are created
     await _apply_labels_to_sensors(hass, sensors)
