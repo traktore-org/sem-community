@@ -468,7 +468,7 @@ class TestPersistence:
         """get_state/restore_state should preserve key data."""
         det1 = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det1)
-        det.reset_session()  # Clear full_detected for energy tracking
+        det1.reset_session()  # Clear full_detected for energy tracking
         det1.update_energy(8.0)
         det1.get_virtual_soc()
 
