@@ -297,7 +297,7 @@ class TestSolarEnergyManagementConfigFlow:
         # Bucket-C defaults silently merged
         assert data["update_interval"] == 10  # DEFAULT_UPDATE_INTERVAL
         assert data["daily_ev_target"] == 10  # DEFAULT_DAILY_EV_TARGET
-        assert data["enable_keba_notifications"] is True
+        assert data["enable_charger_notifications"] is True
         assert data["load_management_enabled"] is True
         # Energy Dashboard sensors are still present
         assert data["solar_power_sensor"] == "sensor.solar_power"
@@ -376,7 +376,7 @@ class TestSolarEnergyManagementConfigFlow:
         assert data["target_peak_limit"] == 5.0
         # Defaults silently filled in
         assert data["update_interval"] == 10
-        assert data["enable_keba_notifications"] is True
+        assert data["enable_charger_notifications"] is True
 
     @pytest.mark.asyncio
     async def test_duplicate_entry_prevention(self, hass):

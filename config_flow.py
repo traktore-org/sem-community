@@ -459,7 +459,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Optional / opt-in feature
             "smart_night_charging": False,
             # Notifications — sensible defaults; tune in OptionsFlow
-            "enable_keba_notifications": True,
+            "enable_charger_notifications": True,
             "enable_mobile_notifications": False,
             "mobile_notification_service": "",
             # Load management — only target_peak_limit is asked at install,
@@ -674,8 +674,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.EntitySelectorConfig(domain="sensor", device_class="energy")
                 ),
                 vol.Optional(
-                    "enable_keba_notifications",
-                    default=current_config.get("enable_keba_notifications", True),
+                    "enable_charger_notifications",
+                    default=current_config.get("enable_charger_notifications", True),
                 ): selector.BooleanSelector(),
                 vol.Optional(
                     "enable_mobile_notifications",
@@ -1430,7 +1430,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         _c = lambda key, fb: self._cfg(current_config, key, fb)
 
         suggestions = {
-            "enable_keba_notifications": _c("enable_keba_notifications", True),
+            "enable_charger_notifications": _c("enable_charger_notifications", True),
             "enable_mobile_notifications": _c("enable_mobile_notifications", False),
             "mobile_notification_service": _c("mobile_notification_service", ""),
         }
@@ -1458,8 +1458,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             step_id="notifications",
             data_schema=vol.Schema({
                 vol.Optional(
-                    "enable_keba_notifications",
-                    default=suggestions.get("enable_keba_notifications", True),
+                    "enable_charger_notifications",
+                    default=suggestions.get("enable_charger_notifications", True),
                 ): selector.BooleanSelector(),
                 vol.Optional(
                     "enable_mobile_notifications",
