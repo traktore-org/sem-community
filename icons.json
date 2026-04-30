@@ -347,7 +347,7 @@
       "night_charging": {
         "default": "mdi:weather-night"
       },
-      "keba_notifications": {
+      "charger_notifications": {
         "default": "mdi:message-processing"
       },
       "mobile_notifications": {

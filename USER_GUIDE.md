@@ -78,7 +78,7 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `enable_keba_notifications` | true | Show status on KEBA display |
+| `enable_charger_notifications` | true | Show status on charger display (KEBA, Easee, etc.) |
 | `enable_mobile_notifications` | false | Send push notifications |
 | `mobile_notification_service` | — | Notification service: `notify.mobile_app_*` (HA Companion), `rest_command.*` (webhooks), or any `notify.*` (Matrix, Slack, etc.) |
 

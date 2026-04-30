@@ -37,7 +37,7 @@ def config():
         "daily_ev_target": 10,
         "battery_priority_soc": 80,
         "mobile_notification_service": "notify.mobile_app_phone",
-        "enable_keba_notifications": True,
+        "enable_charger_notifications": True,
         "enable_mobile_notifications": True,
     }
 
@@ -47,9 +47,9 @@ def notifier(hass, config):
     """Return a NotificationManager with both KEBA and mobile enabled."""
     nm = NotificationManager(hass, config)
     # Pre-validate services to skip cached validation in tests
-    nm._keba_service_checked = True
-    nm._keba_service_available = True
-    nm._keba_service_name = "keba_display"
+    nm._charger_notify_checked = True
+    nm._charger_notify_available = True
+    nm._charger_notify_service = "keba_display"
     nm._mobile_service_checked = True
     nm._mobile_service_available = True
     nm._mobile_service_name = "mobile_app_phone"
@@ -71,12 +71,12 @@ def sample_data():
 
 def _make_notifier(hass, config, keba_on=True, mobile_on=True):
     """Helper to create notifier with specific notification settings."""
-    cfg = {**config, "enable_keba_notifications": keba_on, "enable_mobile_notifications": mobile_on}
+    cfg = {**config, "enable_charger_notifications": keba_on, "enable_mobile_notifications": mobile_on}
     nm = NotificationManager(hass, cfg)
     # Pre-validate services to skip cached validation in tests
-    nm._keba_service_checked = True
-    nm._keba_service_available = True
-    nm._keba_service_name = "keba_display"
+    nm._charger_notify_checked = True
+    nm._charger_notify_available = True
+    nm._charger_notify_service = "keba_display"
     nm._mobile_service_checked = True
     nm._mobile_service_available = True
     nm._mobile_service_name = "mobile_app_phone"
@@ -248,7 +248,7 @@ async def test_notify_mobile_service_not_found(hass, config, sample_data):
     nm = _make_notifier(hass, config, keba_on=False, mobile_on=True)
     # Override cached service availability to let validation run
     nm._mobile_service_checked = False
-    nm._keba_service_checked = False
+    nm._charger_notify_checked = False
     _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     hass.services.async_call.assert_not_called()
@@ -302,7 +302,7 @@ def test_messages_all_states(notifier, sample_data):
     ]
     for state in states_with_keba:
         messages = notifier._get_notification_messages(state, sample_data)
-        assert "keba" in messages, f"Missing KEBA message for {state}"
+        assert "charger" in messages, f"Missing KEBA message for {state}"
 
     # Only important states get mobile notifications
     states_with_mobile = [
@@ -322,7 +322,7 @@ def test_messages_solar_idle_with_session(notifier):
     data_with = {"ev_session_energy": 5.0, "battery_soc": 50, "calculated_current": 0,
                  "available_power": 0, "daily_ev_energy": 5.0}
     msgs = notifier._get_notification_messages(ChargingState.SOLAR_IDLE, data_with)
-    assert "keba" in msgs
+    assert "charger" in msgs
 
     data_without = {"ev_session_energy": 0, "battery_soc": 50, "calculated_current": 0,
                     "available_power": 0, "daily_ev_energy": 0}
@@ -335,8 +335,8 @@ def test_messages_idle_with_session(notifier):
     data_with = {"ev_session_energy": 3.0, "battery_soc": 50, "calculated_current": 0,
                  "available_power": 0, "daily_ev_energy": 3.0}
     msgs = notifier._get_notification_messages(ChargingState.IDLE, data_with)
-    assert "keba" in msgs
-    assert msgs["keba"] == "Complete"
+    assert "charger" in msgs
+    assert msgs["charger"] == "Complete"
 
     data_without = {"ev_session_energy": 0, "battery_soc": 50, "calculated_current": 0,
                     "available_power": 0, "daily_ev_energy": 0}
@@ -432,7 +432,7 @@ async def test_rest_command_service_detection(hass, sample_data):
     cfg = {
         "daily_ev_target": 10,
         "mobile_notification_service": "send_matrix_notification",
-        "enable_keba_notifications": False,
+        "enable_charger_notifications": False,
         "enable_mobile_notifications": True,
     }
     # rest_command.send_matrix_notification exists, notify.send_matrix_notification does not
@@ -461,7 +461,7 @@ async def test_notify_service_detection(hass, sample_data):
     cfg = {
         "daily_ev_target": 10,
         "mobile_notification_service": "matrix",
-        "enable_keba_notifications": False,
+        "enable_charger_notifications": False,
         "enable_mobile_notifications": True,
     }
     # notify.matrix exists, rest_command.matrix does not
@@ -490,7 +490,7 @@ async def test_mobile_app_service_sends_android_data(hass, sample_data):
     cfg = {
         "daily_ev_target": 10,
         "mobile_notification_service": "mobile_app_phone",
-        "enable_keba_notifications": False,
+        "enable_charger_notifications": False,
         "enable_mobile_notifications": True,
     }
     def has_service(domain, name):
@@ -518,7 +518,7 @@ async def test_rest_command_preferred_over_notify(hass, sample_data):
     cfg = {
         "daily_ev_target": 10,
         "mobile_notification_service": "matrix",
-        "enable_keba_notifications": False,
+        "enable_charger_notifications": False,
         "enable_mobile_notifications": True,
     }
     # Both rest_command.matrix and notify.matrix exist
@@ -537,7 +537,7 @@ async def test_service_unavailable_neither_domain(hass, sample_data):
     cfg = {
         "daily_ev_target": 10,
         "mobile_notification_service": "nonexistent",
-        "enable_keba_notifications": False,
+        "enable_charger_notifications": False,
         "enable_mobile_notifications": True,
     }
     hass.services.has_service = MagicMock(return_value=False)

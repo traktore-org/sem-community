@@ -94,7 +94,7 @@ class NotificationManager:
         self._pending_state = None
         self._last_notified_state = new_state
 
-        # Backward compat: accept both enable_keba_notifications and enable_charger_notifications (#85)
+        # Accept enable_charger_notifications (new) or enable_keba_notifications (legacy)
         keba_enabled = self.config.get("enable_charger_notifications",
                                        self.config.get("enable_keba_notifications", True))
         mobile_enabled = self.config.get("enable_mobile_notifications", False)
@@ -105,15 +105,15 @@ class NotificationManager:
         messages = self._get_notification_messages(new_state, data)
 
         # Fire HA event for automation triggers (#47)
-        if messages.get("mobile") or messages.get("keba"):
+        if messages.get("mobile") or messages.get("charger"):
             self.hass.bus.async_fire(f"{DOMAIN}_notification", {
                 "state": new_state,
                 "message": messages.get("mobile") or messages.get("keba", ""),
                 "category": "charging",
             })
 
-        if keba_enabled and messages.get("keba"):
-            await self._send_charger_notification(messages["keba"])
+        if keba_enabled and messages.get("charger"):
+            await self._send_charger_notification(messages["charger"])
 
         if mobile_enabled and messages.get("mobile"):
             elapsed = time.monotonic() - self._last_mobile_time
@@ -130,22 +130,24 @@ class NotificationManager:
                 )
 
     async def _send_charger_notification(self, message: str) -> None:
-        """Send notification to EV charger display (#85).
+        """Send notification to EV charger display.
 
-        Supports KEBA (notify service with min/max_time), and any other
-        charger that exposes a notify.* service. Falls back gracefully
-        if no charger notification service is available.
+        Supports any charger that exposes a notify.* service (KEBA, Easee,
+        Wallbox, etc.). Auto-detects available charger notification services.
+        Falls back gracefully if none available.
         """
         if not self._charger_notify_checked:
             self._charger_notify_checked = True
-            # Try configured service, then KEBA default
+            # Try configured service, then auto-detect from available notify services
             service = (self.config.get("charger_notification_service")
                        or self.config.get("keba_notification_service")
-                       or "keba_display")
+                       or self._auto_detect_charger_notify_service())
             self._charger_notify_service = service
-            self._charger_notify_available = self.hass.services.has_service("notify", service)
+            self._charger_notify_available = bool(service) and self.hass.services.has_service("notify", service)
             if not self._charger_notify_available:
-                _LOGGER.info("Charger notification service 'notify.%s' not available", service)
+                _LOGGER.info("No charger notification service available")
+            else:
+                _LOGGER.info("Using charger notification service: notify.%s", service)
 
         if not self._charger_notify_available:
             return
@@ -162,6 +164,27 @@ class NotificationManager:
             _LOGGER.debug("Sent charger notification: %s", message)
         except Exception as e:
             _LOGGER.warning("Failed to send charger notification: %s", e)
+
+    def _auto_detect_charger_notify_service(self) -> str:
+        """Auto-detect charger notification service from available notify services.
+
+        Checks for known charger display services: KEBA, Easee, Wallbox, etc.
+        Returns the first match or empty string if none found.
+        """
+        charger_patterns = [
+            "keba_display", "keba",
+            "easee", "wallbox", "goecharger", "go_echarger",
+            "ocpp", "openevse", "zaptec",
+        ]
+        try:
+            services = self.hass.services.async_services().get("notify", {})
+            for pattern in charger_patterns:
+                for service_name in services:
+                    if pattern in service_name.lower():
+                        return service_name
+        except Exception:
+            pass
+        return ""
 
     async def _send_mobile_notification(
         self,
@@ -259,63 +282,63 @@ class NotificationManager:
         _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
 
         if state == ChargingState.SOLAR_CHARGING_ACTIVE:
-            messages["keba"] = f"Solar: {calculated_current}A"
+            messages["charger"] = f"Solar: {calculated_current}A"
             messages["mobile"] = _t("notif_solar_started",
                 "Solar charging started: {current}A ({power:.0f}W)",
                 current=calculated_current, power=available_power)
 
         elif state == ChargingState.SOLAR_SUPER_CHARGING:
-            messages["keba"] = f"Bat+Sol: {calculated_current}A"
+            messages["charger"] = f"Bat+Sol: {calculated_current}A"
 
         elif state == ChargingState.SOLAR_PAUSE_LOW_BATTERY:
-            messages["keba"] = f"Pause: Bat {battery_soc}%"
+            messages["charger"] = f"Pause: Bat {battery_soc}%"
 
         elif state == ChargingState.SOLAR_TARGET_REACHED:
-            messages["keba"] = "Target reached"
+            messages["charger"] = "Target reached"
             messages["mobile"] = _t("notif_target_reached",
                 "Daily target reached: {charged:.1f}/{target}kWh",
                 charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.SOLAR_WAITING_BATTERY_PRIORITY:
-            messages["keba"] = f"Wait: Bat {battery_soc}%"
+            messages["charger"] = f"Wait: Bat {battery_soc}%"
 
         elif state == ChargingState.SOLAR_MIN_PV:
-            messages["keba"] = f"Min+PV: {calculated_current}A"
+            messages["charger"] = f"Min+PV: {calculated_current}A"
 
         elif state == ChargingState.SOLAR_IDLE:
             if ev_session_energy > 0:
-                messages["keba"] = "Session done"
+                messages["charger"] = "Session done"
                 messages["mobile"] = _t("notif_solar_stopped",
                     "Solar charging stopped: {energy:.1f}kWh charged",
                     energy=ev_session_energy)
 
         elif state == ChargingState.NIGHT_CHARGING_ACTIVE:
-            messages["keba"] = f"Night: {remaining_needed:.0f}kWh"
+            messages["charger"] = f"Night: {remaining_needed:.0f}kWh"
             messages["mobile"] = _t("notif_night_started",
                 "Night charging started: {remaining:.1f}kWh remaining",
                 remaining=remaining_needed)
 
         elif state == ChargingState.NIGHT_TARGET_REACHED:
-            messages["keba"] = "Night: Done"
+            messages["charger"] = "Night: Done"
             messages["mobile"] = _t("notif_night_complete",
                 "Night charging complete: {charged:.1f}/{target}kWh",
                 charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.NIGHT_DISABLED:
-            messages["keba"] = "Night: Off"
+            messages["charger"] = "Night: Off"
 
         elif state == ChargingState.NIGHT_IDLE:
-            messages["keba"] = "Night: No EV"
+            messages["charger"] = "Night: No EV"
 
         elif state == ChargingState.TARGET_REACHED:
-            messages["keba"] = "Target done"
+            messages["charger"] = "Target done"
             messages["mobile"] = _t("notif_target_reached",
                 "Daily target reached: {charged:.1f}/{target}kWh",
                 charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.IDLE:
             if ev_session_energy > 0:
-                messages["keba"] = "Complete"
+                messages["charger"] = "Complete"
 
         return messages
 
