@@ -1740,9 +1740,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             taper_data = EVTaperData()
 
         # Track energy since last full charge
-        # Skip accumulation if full charge was detected this session —
-        # the car is done, any trickle current shouldn't count as consumption
-        if hasattr(energy, "daily_ev") and not self._ev_taper_detector.full_detected:
+        if hasattr(energy, "daily_ev"):
             ev_increment = power.ev_power * interval_hours / 1000
             self._ev_taper_detector.update_energy(ev_increment)
 

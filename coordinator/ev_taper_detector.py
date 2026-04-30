@@ -215,7 +215,11 @@ class EVTaperDetector:
         """Accumulate energy consumed since last full charge.
 
         Called each coordinator cycle with the incremental EV energy.
+        Skips accumulation when full charge detected (car is done,
+        trickle current from retry attempts shouldn't count).
         """
+        if self._full_detected:
+            return
         if ev_energy_increment_kwh > 0:
             self._energy_since_full += ev_energy_increment_kwh
 
