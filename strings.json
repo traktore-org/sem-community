@@ -135,6 +135,19 @@
           "ev_surplus_priority": "Surplus Priority (1=highest)"
         }
       },
+      "ev_charger_edit": {
+        "title": "Edit EV Charger",
+        "description": "Update the sensor mappings and priority for this charger.",
+        "data": {
+          "charger_name": "Charger Name",
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Surplus Priority (1=highest)"
+        }
+      },
       "ev_charger_remove": {
         "title": "Remove EV Charger",
         "description": "Select a charger to remove. The primary charger cannot be removed.",
