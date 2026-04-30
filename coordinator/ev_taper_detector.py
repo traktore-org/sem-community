@@ -467,9 +467,10 @@ class EVTaperDetector:
             from homeassistant.components.recorder import get_instance
             from homeassistant.components.recorder.history import state_changes_during_period
             from homeassistant.util import dt as dt_util
+            from datetime import timedelta as _timedelta
 
             end = dt_util.utcnow()
-            start = end - __import__("datetime").timedelta(days=days)
+            start = end - _timedelta(days=days)
 
             history = await get_instance(hass).async_add_executor_job(
                 state_changes_during_period,

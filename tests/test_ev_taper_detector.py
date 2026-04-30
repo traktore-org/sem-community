@@ -921,3 +921,224 @@ class TestNightChargeSkip:
         assert needed is False
         assert nights >= 3
         assert "above target" in reason
+
+
+# ════════════════════════════════════════════
+# History seeding tests
+# ════════════════════════════════════════════
+
+def _make_mock_state(entity_id, value, last_changed):
+    """Create a mock state object for recorder history."""
+    s = MagicMock()
+    s.state = str(value)
+    s.entity_id = entity_id
+    s.last_changed = last_changed
+    return s
+
+
+def _generate_charge_session_history(
+    entity_id,
+    start,
+    peak_kw=10.0,
+    duration_min=30,
+    taper=False,
+):
+    """Generate a synthetic charge session as recorder history states."""
+    states = []
+    # Ramp up
+    for i in range(4):
+        t = start + timedelta(seconds=i * 30)
+        power = peak_kw * (i + 1) / 4
+        states.append(_make_mock_state(entity_id, round(power, 1), t))
+
+    # Steady state
+    steady_samples = max(1, (duration_min - 4) * 2 // (2 if taper else 1))
+    for i in range(steady_samples):
+        t = start + timedelta(minutes=2, seconds=i * 30)
+        states.append(_make_mock_state(entity_id, round(peak_kw, 1), t))
+
+    if taper:
+        taper_start = start + timedelta(minutes=duration_min // 2)
+        for i in range(8):
+            t = taper_start + timedelta(minutes=i * 2)
+            power = peak_kw * (8 - i) / 8
+            states.append(_make_mock_state(entity_id, round(power, 1), t))
+        states.append(_make_mock_state(entity_id, 0.0, taper_start + timedelta(minutes=16)))
+    else:
+        states.append(_make_mock_state(entity_id, 0.0, start + timedelta(minutes=duration_min)))
+
+    # Idle after
+    for i in range(3):
+        states.append(_make_mock_state(entity_id, 0.0, start + timedelta(minutes=duration_min + 5 + i * 30)))
+    return states
+
+
+def _patch_recorder(entity_id, history_states):
+    """Return context managers to patch recorder for history seeding tests."""
+
+    async def mock_add_executor_job(func, *args):
+        return func(*args)
+
+    mock_recorder = MagicMock()
+    mock_recorder.async_add_executor_job = mock_add_executor_job
+
+    # Patch at the source modules since ev_taper_detector uses local imports
+    return (
+        patch(
+            "homeassistant.components.recorder.get_instance",
+            return_value=mock_recorder,
+        ),
+        patch(
+            "homeassistant.components.recorder.history.state_changes_during_period",
+            return_value={entity_id: history_states},
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_history_seed_detects_sessions():
+    """Test that history seeding detects charge sessions from power data."""
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    eid = "sensor.keba_p30_charging_power"
+    base = datetime(2026, 4, 25, 14, 0, 0)
+    states = (
+        _generate_charge_session_history(eid, base, peak_kw=9.5, duration_min=30)
+        + _generate_charge_session_history(eid, base + timedelta(days=1, hours=2), peak_kw=8.0, duration_min=20)
+    )
+
+    p1, p2 = _patch_recorder(eid, states)
+    with p1, p2:
+        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+
+    assert result is not None
+    assert result["session_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_history_seed_detects_full_charge():
+    """Test that taper-to-zero pattern is detected as full charge."""
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    eid = "sensor.keba_p30_charging_power"
+    base = datetime(2026, 4, 25, 14, 0, 0)
+    states = (
+        _generate_charge_session_history(eid, base, peak_kw=10.0, duration_min=40, taper=True)
+        + _generate_charge_session_history(eid, base + timedelta(days=1), peak_kw=8.0, duration_min=20)
+    )
+
+    p1, p2 = _patch_recorder(eid, states)
+    with p1, p2:
+        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+
+    assert result is not None
+    assert result["improved"] is True
+    assert det._soc_anchored is True
+    assert det._last_full_timestamp is not None
+    assert det._estimated_soc < 100.0
+    assert det._estimated_soc > 0.0
+
+
+@pytest.mark.asyncio
+async def test_history_seed_weekday_totals():
+    """Test weekday consumption totals are computed from sessions."""
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    eid = "sensor.keba_p30_charging_power"
+    mon = datetime(2026, 4, 27, 14, 0, 0)
+    tue = datetime(2026, 4, 28, 14, 0, 0)
+    wed = datetime(2026, 4, 29, 14, 0, 0)
+    states = (
+        _generate_charge_session_history(eid, mon, peak_kw=9.0, duration_min=25)
+        + _generate_charge_session_history(eid, tue, peak_kw=10.0, duration_min=30)
+        + _generate_charge_session_history(eid, wed, peak_kw=8.0, duration_min=20)
+    )
+
+    p1, p2 = _patch_recorder(eid, states)
+    with p1, p2:
+        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+
+    assert result is not None
+    wt = result["weekday_totals"]
+    assert 0 in wt  # Monday
+    assert 1 in wt  # Tuesday
+    assert 2 in wt  # Wednesday
+    assert all(v > 0 for v in wt.values())
+
+
+@pytest.mark.asyncio
+async def test_history_seed_no_overwrite_newer():
+    """Test that a more recent existing last_full_charge is preserved."""
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    det._last_full_timestamp = "2026-04-28T18:00:00+00:00"
+    det._energy_since_full = 5.0
+    det._estimated_soc = 87.5
+    det._soc_anchored = True
+
+    eid = "sensor.keba_p30_charging_power"
+    base = datetime(2026, 4, 25, 14, 0, 0)
+    states = _generate_charge_session_history(eid, base, peak_kw=10.0, duration_min=40, taper=True)
+
+    p1, p2 = _patch_recorder(eid, states)
+    with p1, p2:
+        await det.async_seed_from_history(MagicMock(), eid, days=7)
+
+    assert det._last_full_timestamp == "2026-04-28T18:00:00+00:00"
+    assert det._energy_since_full == 5.0
+
+
+@pytest.mark.asyncio
+async def test_history_seed_empty_history():
+    """Test graceful handling of empty recorder data."""
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    eid = "sensor.keba_p30_charging_power"
+
+    p1, p2 = _patch_recorder(eid, [])
+    with p1, p2:
+        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+
+    assert result is None
+    assert det._soc_anchored is False
+
+
+@pytest.mark.asyncio
+async def test_history_seed_recorder_unavailable():
+    """Test graceful handling when recorder raises."""
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    eid = "sensor.keba_p30_charging_power"
+
+    with patch(
+        "homeassistant.components.recorder.get_instance",
+        side_effect=Exception("Recorder not ready"),
+    ):
+        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_history_seed_no_entity():
+    """Test that None entity returns None immediately."""
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    result = await det.async_seed_from_history(MagicMock(), None, days=7)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_history_seed_kw_values():
+    """Test that kW power values produce reasonable session energy."""
+    det = EVTaperDetector(DEFAULT_CONFIG)
+    eid = "sensor.keba_p30_charging_power"
+    base = datetime(2026, 4, 27, 14, 0, 0)
+    # 10 kW for 20 minutes
+    states = []
+    for i in range(40):
+        states.append(_make_mock_state(eid, 10.0, base + timedelta(seconds=i * 30)))
+    states.append(_make_mock_state(eid, 0.0, base + timedelta(minutes=20)))
+    states.append(_make_mock_state(eid, 0.0, base + timedelta(minutes=25)))
+
+    p1, p2 = _patch_recorder(eid, states)
+    with p1, p2:
+        result = await det.async_seed_from_history(MagicMock(), eid, days=7)
+
+    assert result is not None
+    assert result["session_count"] == 1
+    total = list(result["weekday_totals"].values())[0]
+    assert 2.0 < total < 5.0  # 10kW × 20min ≈ 3.3 kWh
