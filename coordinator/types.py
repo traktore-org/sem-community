@@ -38,6 +38,7 @@ class PowerReadings:
 
     # Battery state
     battery_soc: float = 0.0
+    battery_soc_unavailable: bool = False  # True when SOC sensor is offline
     battery_temperature: float = 25.0
 
     # Battery health (calculated from energy data)
@@ -413,7 +414,7 @@ class SEMData:
             "grid_export_power": self.power.grid_export_power,
             "battery_charge_power": self.power.battery_charge_power,
             "battery_discharge_power": self.power.battery_discharge_power,
-            "battery_soc": self.power.battery_soc,
+            "battery_soc": None if self.power.battery_soc_unavailable else self.power.battery_soc,
             "battery_temperature": self.power.battery_temperature,
             "battery_cycles_estimated": self.power.battery_cycles_estimated,
             "battery_health_score": self.power.battery_health_score,

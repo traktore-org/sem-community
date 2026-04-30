@@ -146,6 +146,36 @@ class EnergyCalculator:
         energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
 
+        # Sanity checks — warn and cap if values exceed physical limits
+        battery_capacity = self.config.get("battery_capacity_kwh", 15)
+        max_daily_battery = battery_capacity * 3  # 3 full cycles/day is generous limit
+        inverter_kwp = self.config.get("system_size_kwp", 10)
+        max_daily_solar = inverter_kwp * 16  # 16 peak sun hours is extreme max
+
+        if energy.daily_battery_discharge > max_daily_battery:
+            _LOGGER.warning(
+                "Battery discharge %.1f kWh exceeds %.0f kWh daily limit (3x %.0f kWh capacity) — capping",
+                energy.daily_battery_discharge, max_daily_battery, battery_capacity,
+            )
+            self._daily_accumulators[f"battery_discharge_{today}"] = max_daily_battery
+            energy.daily_battery_discharge = max_daily_battery
+
+        if energy.daily_battery_charge > max_daily_battery:
+            _LOGGER.warning(
+                "Battery charge %.1f kWh exceeds %.0f kWh daily limit — capping",
+                energy.daily_battery_charge, max_daily_battery,
+            )
+            self._daily_accumulators[f"battery_charge_{today}"] = max_daily_battery
+            energy.daily_battery_charge = max_daily_battery
+
+        if energy.daily_solar > max_daily_solar:
+            _LOGGER.warning(
+                "Solar %.1f kWh exceeds %.0f kWh daily limit (%d kWp × 16h) — capping",
+                energy.daily_solar, max_daily_solar, inverter_kwp,
+            )
+            self._daily_accumulators[f"solar_{today}"] = max_daily_solar
+            energy.daily_solar = max_daily_solar
+
         return energy
 
     def _build_current_totals(self, today: date, month_key: str, year_key: str) -> EnergyTotals:

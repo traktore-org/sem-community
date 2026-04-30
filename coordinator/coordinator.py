@@ -574,7 +574,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 try:
                     await self._execute_battery_charge_scheduler(power)
                 except Exception as e:
-                    _LOGGER.debug("Battery charge scheduler error: %s", e)
+                    _LOGGER.warning("Battery charge scheduler error: %s", e, exc_info=True)
 
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
@@ -1378,8 +1378,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             f"Zone 3: SOC={power.battery_soc:.0f}% >= buffer={buffer_soc}%, "
                             f"forecast surplus {estimated_surplus:.1f}kWh >> need {remaining_need:.1f}kWh"
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
 
             # Battery assist: bridge gaps when surplus alone won't reach KEBA minimum
             usable_battery = max(0, (power.battery_soc - battery_floor) / 100 * battery_capacity)
@@ -1406,8 +1406,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     surplus_factor = 0.5
                     estimated_surplus = forecast.forecast_remaining_today_kwh * surplus_factor
                     reason += f" (forecast surplus={estimated_surplus:.1f}kWh, need={remaining_need:.1f}kWh)"
-            except Exception:
-                pass
+            except Exception as e:
+                _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
             return ("solar_only", reason)
 
         # Zone 1: SOC < priority_soc → battery priority
