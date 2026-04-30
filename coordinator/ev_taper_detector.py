@@ -253,6 +253,11 @@ class EVTaperDetector:
         if capacity <= 0:
             return 0.0
 
+        # Treat < 0.1 kWh since full as effectively 100% (noise/rounding)
+        if self._energy_since_full < 0.1:
+            self._estimated_soc = 100.0
+            return 100.0
+
         self._estimated_soc = max(
             0.0,
             min(100.0, 100.0 - (self._energy_since_full / capacity * 100.0)),
