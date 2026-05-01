@@ -1345,6 +1345,50 @@ async def _apply_labels_to_sensors(hass: HomeAssistant, sensors) -> None:
                 )
 
 
+def _fix_entity_ids(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    descriptions: list,
+    platform: str,
+) -> None:
+    """Fix entity_ids from pre-translation installs.
+
+    When translations were missing, HA generated wrong entity_ids
+    (e.g. sensor.sem instead of sensor.sem_forecast_peak_time_today).
+    This finds entities by unique_id and renames them to the correct
+    entity_id based on the description key.
+    """
+    try:
+        registry = er.async_get(hass)
+        # Build unique_id → expected entity_id map
+        expected = {}
+        for desc in descriptions:
+            uid = f"sem_{desc.key}"
+            expected_eid = f"{platform}.sem_{desc.key}"
+            expected[uid] = expected_eid
+
+        for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+            if entity_entry.domain != platform:
+                continue
+            uid = entity_entry.unique_id or ""
+            if uid in expected:
+                correct_eid = expected[uid]
+                if entity_entry.entity_id != correct_eid:
+                    # Check if the correct entity_id is available
+                    existing = registry.async_get(correct_eid)
+                    if existing is None:
+                        registry.async_update_entity(
+                            entity_entry.entity_id,
+                            new_entity_id=correct_eid,
+                        )
+                        _LOGGER.info(
+                            "Fixed entity_id: %s → %s (translation was missing at creation)",
+                            entity_entry.entity_id, correct_eid,
+                        )
+    except Exception as e:
+        _LOGGER.debug("Entity ID fix skipped: %s", e)
+
+
 def _cleanup_stale_entities(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -1461,9 +1505,9 @@ async def async_setup_entry(
     _LOGGER.info("Adding %d sensors to Home Assistant", len(sensors))
     async_add_entities(sensors)
 
-    # Clean up stale sensor entities from previous versions
-    # Include per-charger descriptions so they're not removed as stale
+    # Fix entity_ids from pre-translation installs and clean up stale entities
     all_descriptions = list(SENSOR_TYPES) + per_charger_descriptions
+    _fix_entity_ids(hass, entry, all_descriptions, "sensor")
     _cleanup_stale_entities(hass, entry, all_descriptions, "sensor")
 
     # Apply labels to entities after they are created

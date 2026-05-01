@@ -362,8 +362,38 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
-    # Clean up stale number entities from previous versions
+    # Fix entity_ids from pre-translation installs and clean up stale entities
+    _fix_entity_ids(hass, entry, NUMBER_TYPES, "number")
     _cleanup_stale_entities(hass, entry, NUMBER_TYPES, "number")
+
+
+def _fix_entity_ids(hass, entry, descriptions, platform):
+    """Fix entity_ids from pre-translation installs."""
+    try:
+        registry = er.async_get(hass)
+        expected = {}
+        for desc in descriptions:
+            # Numbers use {entry_id}_{key} unique_id, with legacy map
+            _LEGACY = {"battery_capacity": "battery_capacity_kwh"}
+            uid_key = _LEGACY.get(desc.key, desc.key)
+            uid = f"{entry.entry_id}_{uid_key}"
+            expected[uid] = f"{platform}.sem_{desc.key}"
+
+        for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+            if entity_entry.domain != platform:
+                continue
+            uid = entity_entry.unique_id or ""
+            if uid in expected:
+                correct_eid = expected[uid]
+                if entity_entry.entity_id != correct_eid:
+                    existing = registry.async_get(correct_eid)
+                    if existing is None:
+                        registry.async_update_entity(
+                            entity_entry.entity_id, new_entity_id=correct_eid,
+                        )
+                        _LOGGER.info("Fixed entity_id: %s → %s", entity_entry.entity_id, correct_eid)
+    except Exception as e:
+        _LOGGER.debug("Entity ID fix skipped: %s", e)
 
 
 def _cleanup_stale_entities(hass, entry, descriptions, platform):
