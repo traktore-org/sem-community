@@ -1278,6 +1278,40 @@ SENSOR_TYPES = [
         key="ev_charger_count",
         suggested_display_precision=0,
     ),
+
+    # Diagnostics (System tab)
+    SensorEntityDescription(
+        key="diag_version",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_grid_mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_grid_sign",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_charger_control",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_battery_capacity",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_update_interval",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_observer_mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_sensors_unavailable",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 ]
 
 

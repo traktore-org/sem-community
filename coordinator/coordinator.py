@@ -830,6 +830,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 if dep_state and dep_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     result["ev_departure_time"] = dep_state.state
 
+            # Diagnostics summary for dashboard System tab
+            result["diag_version"] = self._get_version()
+            result["diag_grid_mode"] = "split" if hasattr(self._sensor_reader, '_split_grid_import_power') and self._sensor_reader._split_grid_import_power else "combined"
+            result["diag_grid_sign"] = "negated" if self._sensor_reader._grid_sign_inverted else "normal"
+            result["diag_charger_count"] = len(self._ev_devices)
+            result["diag_charger_control"] = "number" if any(
+                getattr(d, 'current_entity_id', None) for d in self._ev_devices.values()
+            ) else "service" if self._ev_devices else "none"
+            result["diag_battery_capacity"] = self.config.get("battery_capacity_kwh", 0)
+            result["diag_update_interval"] = self.update_interval.total_seconds()
+            result["diag_observer_mode"] = self._observer_mode
+            unavail_count = sum(1 for eid in self._sensor_reader._sensor_unavailable)
+            result["diag_sensors_unavailable"] = unavail_count
+
             # Tariff schedule for dashboard card (#25)
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
                 result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
