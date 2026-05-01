@@ -2110,6 +2110,53 @@ views:
             tab: system
 
           # ══════════════════════════════════════════════════════
+          # 0. QUICK ACTIONS — report issue + docs
+          # ══════════════════════════════════════════════════════
+          - type: custom:mushroom-chips-card
+            alignment: end
+            card_mod:
+              style: *glass_card
+            chips:
+              - type: action
+                icon: mdi:bug
+                content: Report Issue
+                tap_action:
+                  action: url
+                  url_path: >-
+                    https://github.com/traktore-org/sem-community/issues/new?title=Bug:+&body=**SEM+version:**+{{ states('sensor.sem_diag_version') | default('unknown') }}%0A**Chargers:**+{{ states('sensor.sem_ev_charger_count') | default('?') }}%0A**Grid+mode:**+{{ states('sensor.sem_diag_grid_mode') | default('?') }}%0A%0A**What+happened?**%0A
+              - type: action
+                icon: mdi:book-open-variant
+                content: Docs
+                tap_action:
+                  action: url
+                  url_path: https://github.com/traktore-org/sem-community/blob/main/docs/QUICK_START.md
+              - type: action
+                icon: mdi:forum
+                content: Community
+                tap_action:
+                  action: url
+                  url_path: https://community.home-assistant.io/t/solar-energy-management-sem-smart-solar-ev-battery-orchestration/1003701
+
+          # ══════════════════════════════════════════════════════
+          # 0b. DIAGNOSTICS SUMMARY
+          # ══════════════════════════════════════════════════════
+          - type: markdown
+            content: >-
+              ### System Diagnostics
+
+              | | |
+              |---|---|
+              | **Version** | {{ states('sensor.sem_diag_version') or 'unknown' }} |
+              | **Grid mode** | {{ states('sensor.sem_diag_grid_mode') or '?' }} (sign: {{ states('sensor.sem_diag_grid_sign') or '?' }}) |
+              | **Chargers** | {{ states('sensor.sem_ev_charger_count') or '0' }} (control: {{ states('sensor.sem_diag_charger_control') or '?' }}) |
+              | **Battery** | {{ states('sensor.sem_diag_battery_capacity') or '?' }} kWh |
+              | **Update interval** | {{ states('sensor.sem_diag_update_interval') or '?' }}s |
+              | **Observer mode** | {{ states('sensor.sem_diag_observer_mode') or 'off' }} |
+              | **Sensors unavailable** | {{ states('sensor.sem_diag_sensors_unavailable') or '0' }} |
+            card_mod:
+              style: *glass_card
+
+          # ══════════════════════════════════════════════════════
           # 1. HEALTH OVERVIEW — traffic light + sensor status
           # ══════════════════════════════════════════════════════
           - type: custom:mushroom-title-card
