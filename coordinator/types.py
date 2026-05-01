@@ -8,10 +8,13 @@ Key dataclasses:
 - SessionData: Per-EV-session cost attribution and energy source tracking
 - SEMData: Complete coordinator output (flat dict via to_dict())
 """
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from enum import Enum
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class EnergySource(Enum):
@@ -403,7 +406,7 @@ class SEMData:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to flat dictionary for coordinator.data."""
-        return {
+        data = {
             # Power readings
             "solar_power": self.power.solar_power,
             "grid_power": self.power.grid_power,
@@ -645,14 +648,12 @@ class SEMData:
                     f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
                 })
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning("Per-charger to_dict failed: %s", e)
+            _LOGGER.warning("Per-charger to_dict failed: %s", e)
 
         # EV intelligence — access safely in case taper data is incomplete
         try:
             _ei = self.ev_intelligence
-            import logging as _log
-            _log.getLogger(__name__).debug(
+            _LOGGER.warning(
                 "EV intel to_dict: soc=%.1f, full=%s, energy=%.1f, skip=%s",
                 _ei.estimated_soc_pct, _ei.last_full_charge,
                 _ei.energy_since_full_kwh, _ei.charge_skip_reason,
@@ -671,8 +672,7 @@ class SEMData:
                 "ev_charge_skip_reason": _ei.charge_skip_reason,
             })
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning("EV intelligence to_dict failed: %s", e)
+            _LOGGER.warning("EV intelligence to_dict failed: %s", e)
 
         return data
 
