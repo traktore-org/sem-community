@@ -742,6 +742,78 @@
       },
       "forecast_surplus_kwh": {
         "name": "Prognose Überschuss"
+      },
+      "battery_scheduler_state": {
+        "name": "Battery Scheduler State"
+      },
+      "battery_scheduler_target_soc": {
+        "name": "Battery Scheduler Target SOC"
+      },
+      "battery_scheduler_deficit_kwh": {
+        "name": "Battery Scheduler Deficit"
+      },
+      "battery_scheduler_reason": {
+        "name": "Battery Scheduler Reason"
+      },
+      "ev_estimated_soc": {
+        "name": "EV Estimated SOC"
+      },
+      "ev_last_full_charge": {
+        "name": "EV Last Full Charge"
+      },
+      "ev_energy_since_full": {
+        "name": "EV Energy Since Full"
+      },
+      "ev_nights_until_charge": {
+        "name": "EV Nights Until Charge"
+      },
+      "ev_predicted_daily_consumption": {
+        "name": "EV Predicted Daily Consumption"
+      },
+      "ev_battery_health": {
+        "name": "EV Battery Health"
+      },
+      "ev_charge_needed": {
+        "name": "EV Charge Needed"
+      },
+      "ev_charge_skip_reason": {
+        "name": "EV Charge Skip Reason"
+      },
+      "ev_charger_count": {
+        "name": "EV Charger Count"
+      },
+      "ev_taper_trend": {
+        "name": "EV Taper Trend"
+      },
+      "ev_taper_ratio": {
+        "name": "EV Taper Ratio"
+      },
+      "ev_taper_minutes_to_full": {
+        "name": "EV Minutes to Full"
+      },
+      "diag_version": {
+        "name": "SEM Version"
+      },
+      "diag_grid_mode": {
+        "name": "Grid Sensor Mode"
+      },
+      "diag_grid_sign": {
+        "name": "Grid Sign Convention"
+      },
+      "diag_charger_control": {
+        "name": "Charger Control Method"
+      },
+      "diag_battery_capacity": {
+        "name": "Battery Capacity (config)"
+      },
+      "diag_update_interval": {
+        "name": "Update Interval"
+      },
+      "diag_observer_mode": {
+        "name": "Observer Mode"
+      },
+      "diag_sensors_unavailable": {
+        "name": "Sensors Unavailable"
       }
     },
     "binary_sensor": {

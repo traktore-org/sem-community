@@ -818,6 +818,30 @@
       },
       "ev_taper_minutes_to_full": {
         "name": "EV Minutes to Full"
+      },
+      "diag_version": {
+        "name": "SEM Version"
+      },
+      "diag_grid_mode": {
+        "name": "Grid Sensor Mode"
+      },
+      "diag_grid_sign": {
+        "name": "Grid Sign Convention"
+      },
+      "diag_charger_control": {
+        "name": "Charger Control Method"
+      },
+      "diag_battery_capacity": {
+        "name": "Battery Capacity (config)"
+      },
+      "diag_update_interval": {
+        "name": "Update Interval"
+      },
+      "diag_observer_mode": {
+        "name": "Observer Mode"
+      },
+      "diag_sensors_unavailable": {
+        "name": "Sensors Unavailable"
       }
     },
     "binary_sensor": {

@@ -370,7 +370,11 @@ def _cleanup_stale_entities(hass, entry, descriptions, platform):
     """Remove orphaned entities from previous SEM versions."""
     try:
         registry = er.async_get(hass)
+        # Valid keys: both description keys AND legacy UID mapped keys
         valid_keys = {d.key for d in descriptions}
+        _LEGACY_UID_MAP = {"battery_capacity": "battery_capacity_kwh"}
+        valid_keys.update(_LEGACY_UID_MAP.values())
+
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != platform:
                 continue
