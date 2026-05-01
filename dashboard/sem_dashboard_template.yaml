@@ -309,7 +309,7 @@ views:
               primary: >-
                 {{ states('sensor.sem_charging_state') }}
               secondary: >-
-                {{ states('sensor.keba_p30_max_current') | float(0) | round(0) }}A · {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }} kWh
+                {{ states('sensor.sem_calculated_current') | float(0) | round(0) }}A · {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }} kWh
                 {% set remaining = (states('number.sem_daily_ev_target') | float(10)) - (states('sensor.sem_daily_ev_energy') | float(0)) %}
                 {% set power = states('sensor.sem_ev_power') | float(0) %}
                 {% if power > 100 and remaining > 0 %} · ~{{ (remaining / (power / 1000)) | round(1) }}h left{% endif %}
