@@ -1377,6 +1377,7 @@ async def async_setup_entry(
     # Per-charger sensors (#131): create power + session sensors for each configured charger
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
+    _LOGGER.info("Per-charger setup: %d charger(s) in config", len(ev_chargers))
     per_charger_descriptions = []
     for charger_cfg in ev_chargers:
         cid = charger_cfg.get("id", "ev_charger")
@@ -1417,7 +1418,9 @@ async def async_setup_entry(
     async_add_entities(sensors)
 
     # Clean up stale sensor entities from previous versions
-    _cleanup_stale_entities(hass, entry, SENSOR_TYPES, "sensor")
+    # Include per-charger descriptions so they're not removed as stale
+    all_descriptions = list(SENSOR_TYPES) + per_charger_descriptions
+    _cleanup_stale_entities(hass, entry, all_descriptions, "sensor")
 
     # Apply labels to entities after they are created
     await _apply_labels_to_sensors(hass, sensors)
