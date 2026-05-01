@@ -995,6 +995,15 @@
       },
       "battery_capacity": {
         "name": "Battery Capacity"
+      },
+      "hot_water_solar_target": {
+        "name": "Hot Water Solar Target"
+      },
+      "legionella_target_temp": {
+        "name": "Legionella Target Temperature"
+      },
+      "legionella_interval_hours": {
+        "name": "Legionella Interval Hours"
       }
     },
     "select": {
