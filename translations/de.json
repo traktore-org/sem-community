@@ -980,7 +980,7 @@
     },
     "select": {
       "ev_charging_mode": {
-        "name": "EV-Lademodus"
+        "name": "EV Charging Mode"
       }
     }
   }

@@ -979,7 +979,7 @@
     },
     "select": {
       "ev_charging_mode": {
-        "name": "EV-laadmodus"
+        "name": "EV Charging Mode"
       }
     }
   }
