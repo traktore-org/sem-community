@@ -309,7 +309,7 @@ views:
               primary: >-
                 {{ states('sensor.sem_charging_state') }}
               secondary: >-
-                {{ states('sensor.keba_p30_max_current') | float(0) | round(0) }}A · {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }} kWh
+                {{ states('sensor.sem_calculated_current') | float(0) | round(0) }}A · {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }} kWh
                 {% set remaining = (states('number.sem_daily_ev_target') | float(10)) - (states('sensor.sem_daily_ev_energy') | float(0)) %}
                 {% set power = states('sensor.sem_ev_power') | float(0) %}
                 {% if power > 100 and remaining > 0 %} · ~{{ (remaining / (power / 1000)) | round(1) }}h left{% endif %}
@@ -1281,7 +1281,7 @@ views:
                 style: *glass_card
 
           # ── Multi-Charger Status (#112) ──
-          # Only shown when more than 1 EV charger is configured
+          # Per-charger status — shown when more than 1 EV charger is configured
           - type: conditional
             conditions:
               - condition: numeric_state
@@ -1298,12 +1298,12 @@ views:
                     {{ states('sensor.sem_ev_charger_count') }} chargers configured
                 - type: markdown
                   content: >-
-                    {% set count = states('sensor.sem_ev_charger_count') | int(0) %}
-                    | Charger | Power | State |
-                    |---------|-------|-------|
-                    {% for i in range(count) %}
-                    {% set prefix = 'sensor.sem_ev_charger_' ~ i %}
-                    | {{ state_attr(prefix ~ '_power', 'friendly_name') or 'Charger ' ~ (i+1) }} | {{ states(prefix ~ '_power') | float(0) | round(0) }}W | {{ states(prefix ~ '_charging_state') or 'idle' }} |
+                    | Charger | Power | Session | Solar |
+                    |---------|-------|---------|-------|
+                    {% for eid in states.sensor | selectattr('entity_id', 'match', 'sensor.sem_charger_.*_power') | map(attribute='entity_id') | list %}
+                    {% set base = eid | replace('_power', '') %}
+                    {% set name = state_attr(eid, 'friendly_name') | replace(' Power', '') | replace('SEM ', '') %}
+                    | {{ name }} | {{ states(eid) | float(0) | round(0) }}W | {{ states(base ~ '_session_energy') | float(0) | round(1) }}kWh | {{ states(base ~ '_session_solar_share') | float(0) | round(0) }}% |
                     {% endfor %}
                   card_mod:
                     style: *glass_card
