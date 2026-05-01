@@ -8,10 +8,13 @@ Key dataclasses:
 - SessionData: Per-EV-session cost attribution and energy source tracking
 - SEMData: Complete coordinator output (flat dict via to_dict())
 """
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from enum import Enum
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class EnergySource(Enum):
@@ -403,7 +406,7 @@ class SEMData:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to flat dictionary for coordinator.data."""
-        return {
+        data = {
             # Power readings
             "solar_power": self.power.solar_power,
             "grid_power": self.power.grid_power,
@@ -636,29 +639,40 @@ class SEMData:
         }
 
         # Per-charger data (dynamic keys: charger_{id}_power, charger_{id}_session_energy, etc.)
-        for cid in self.ev_charger_ids:
-            session = self.sessions.get(cid, SessionData())
+        try:
+            for cid in self.ev_charger_ids:
+                session = self.sessions.get(cid, SessionData())
+                data.update({
+                    f"charger_{cid}_session_energy": round(session.energy_kwh, 2),
+                    f"charger_{cid}_session_solar_share": round(session.solar_share_pct, 1),
+                    f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
+                })
+        except Exception as e:
+            _LOGGER.warning("Per-charger to_dict failed: %s", e)
+
+        # EV intelligence — access safely in case taper data is incomplete
+        try:
+            _ei = self.ev_intelligence
+            _LOGGER.warning(
+                "EV intel to_dict: soc=%.1f, full=%s, energy=%.1f, skip=%s",
+                _ei.estimated_soc_pct, _ei.last_full_charge,
+                _ei.energy_since_full_kwh, _ei.charge_skip_reason,
+            )
             data.update({
-                f"charger_{cid}_session_energy": round(session.energy_kwh, 2),
-                f"charger_{cid}_session_solar_share": round(session.solar_share_pct, 1),
-                f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
+                "ev_taper_trend": _ei.taper.trend,
+                "ev_taper_ratio": _ei.taper.taper_ratio_pct,
+                "ev_taper_minutes_to_full": _ei.taper.minutes_to_full,
+                "ev_estimated_soc": _ei.estimated_soc_pct,
+                "ev_last_full_charge": _ei.last_full_charge,
+                "ev_energy_since_full": _ei.energy_since_full_kwh,
+                "ev_predicted_daily_consumption": _ei.predicted_daily_ev_kwh,
+                "ev_nights_until_charge": _ei.nights_until_charge,
+                "ev_charge_needed": _ei.charge_needed,
+                "ev_battery_health": _ei.ev_battery_health_pct,
+                "ev_charge_skip_reason": _ei.charge_skip_reason,
             })
-
-        data.update({
-
-            # EV intelligence
-            "ev_taper_trend": self.ev_intelligence.taper.trend,
-            "ev_taper_ratio": self.ev_intelligence.taper.taper_ratio_pct,
-            "ev_taper_minutes_to_full": self.ev_intelligence.taper.minutes_to_full,
-            "ev_estimated_soc": self.ev_intelligence.estimated_soc_pct,
-            "ev_last_full_charge": self.ev_intelligence.last_full_charge,
-            "ev_energy_since_full": self.ev_intelligence.energy_since_full_kwh,
-            "ev_predicted_daily_consumption": self.ev_intelligence.predicted_daily_ev_kwh,
-            "ev_nights_until_charge": self.ev_intelligence.nights_until_charge,
-            "ev_charge_needed": self.ev_intelligence.charge_needed,
-            "ev_battery_health": self.ev_intelligence.ev_battery_health_pct,
-            "ev_charge_skip_reason": self.ev_intelligence.charge_skip_reason,
-        })
+        except Exception as e:
+            _LOGGER.warning("EV intelligence to_dict failed: %s", e)
 
         return data
 
