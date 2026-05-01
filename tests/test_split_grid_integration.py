@@ -1,13 +1,16 @@
-"""Integration tests for split grid power sensor pipeline.
+"""Integration tests for the full sensor pipeline.
 
-Tests the full chain that the Growatt issue (#129) exposed:
-  Energy Dashboard config (no grid power) → SensorReader → split discovery →
-  grid_power calculation → calculate_derived() → correct import/export
+Tests the complete chain for ALL supported hardware patterns:
+1. Grid power: combined vs split vs solar-only (6 sign convention patterns)
+2. EV charger: service vs number entity, kW vs W units
+3. Energy balance: validates balance holds for every configuration
 
-These tests verify that the components work together, not just in isolation.
+These tests verify that components work TOGETHER, not just in isolation.
+The Growatt issue (#129) exposed that unit tests pass individually but
+the full pipeline was never tested.
 """
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
@@ -397,3 +400,165 @@ class TestEnergyBalance:
         energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
         energy_out = power.home_consumption_power + power.grid_export_power + power.battery_charge_power + power.ev_power
         assert abs(energy_in - energy_out) < 1, f"Balance off: in={energy_in}, out={energy_out}"
+
+
+# ════════════════════════════════════════════
+# EV charger control pipeline
+# ════════════════════════════════════════════
+
+class TestChargerControlPipeline:
+    """Test EV charger current control for all control patterns.
+
+    Two methods: service call (KEBA, Easee, Zaptec) vs number entity
+    (Wallbox, go-eCharger, ChargePoint, Heidelberg, OpenWB, OCPP, Ohme,
+    Peblar, V2C, Blue Current, OpenEVSE, Alfen).
+    Two power units: W (most) vs kW (KEBA, Easee, Wallbox, Ohme, Alfen).
+    """
+
+    @pytest.mark.asyncio
+    async def test_service_control_keba(self):
+        """KEBA: service call keba.set_current with 'current' param."""
+        from custom_components.solar_energy_management.devices.base import CurrentControlDevice
+
+        hass = MagicMock()
+        hass.services = MagicMock()
+        hass.services.async_call = AsyncMock()
+
+        device = CurrentControlDevice(
+            hass=hass, device_id="ev", name="KEBA",
+            priority=1, min_current=6, max_current=32, phases=3, voltage=230,
+            power_entity_id="sensor.keba_power",
+            charger_service="keba.set_current",
+            charger_service_entity_id="binary_sensor.keba_plug",
+            current_entity_id=None,
+        )
+        await device.set_current(16)
+
+        hass.services.async_call.assert_called_once()
+        call = hass.services.async_call.call_args
+        assert call[0][0] == "keba"
+        assert call[0][1] == "set_current"
+        assert call[0][2]["current"] == 16
+
+    @pytest.mark.asyncio
+    async def test_number_control_wallbox(self):
+        """Wallbox: number.set_value on max current entity."""
+        from custom_components.solar_energy_management.devices.base import CurrentControlDevice
+
+        hass = MagicMock()
+        hass.services = MagicMock()
+        hass.services.async_call = AsyncMock()
+
+        device = CurrentControlDevice(
+            hass=hass, device_id="ev", name="Wallbox",
+            priority=1, min_current=6, max_current=32, phases=3, voltage=230,
+            power_entity_id="sensor.wallbox_power",
+            charger_service=None,
+            charger_service_entity_id=None,
+            current_entity_id="number.wallbox_max_current",
+        )
+        await device.set_current(10)
+
+        hass.services.async_call.assert_called_once()
+        call = hass.services.async_call.call_args
+        assert call[0][0] == "number"
+        assert call[0][1] == "set_value"
+        assert call[0][2]["value"] == 10
+
+    @pytest.mark.asyncio
+    async def test_service_with_custom_param(self):
+        """Easee: service with custom param name 'dynamicChargerCurrent'."""
+        from custom_components.solar_energy_management.devices.base import CurrentControlDevice
+
+        hass = MagicMock()
+        hass.services = MagicMock()
+        hass.services.async_call = AsyncMock()
+
+        device = CurrentControlDevice(
+            hass=hass, device_id="ev", name="Easee",
+            priority=1, min_current=6, max_current=32, phases=3, voltage=230,
+            power_entity_id="sensor.easee_power",
+            charger_service="easee.set_charger_dynamic_limit",
+            charger_service_entity_id=None,
+            current_entity_id=None,
+        )
+        device.service_param_name = "dynamicChargerCurrent"
+        await device.set_current(20)
+
+        call = hass.services.async_call.call_args
+        assert call[0][2]["dynamicChargerCurrent"] == 20
+
+    def test_ev_power_kw_conversion(self):
+        """Charger reporting power in kW should be converted to W."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar",
+            grid_import_power="sensor.grid",
+        )
+
+        # KEBA reports in kW
+        states = {
+            "sensor.solar": _state(6000),
+            "sensor.grid": _state(-2000),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+
+        # Simulate reading an EV power sensor in kW
+        kw_state = _state(7.5, unit="kW", device_class="power")
+        hass.states.get = lambda eid: kw_state if eid == "sensor.keba_power" else states.get(eid)
+
+        val = reader._read_sensor("sensor.keba_power", "ev")
+        assert val == 7500  # Converted from 7.5 kW to 7500 W
+
+    def test_ev_power_w_no_conversion(self):
+        """Charger reporting power in W should not be converted."""
+        hass = MagicMock()
+        reader = SensorReader(hass, {"update_interval": 10})
+
+        w_state = _state(4500, unit="W", device_class="power")
+        hass.states.get = lambda eid: w_state
+
+        val = reader._read_sensor("sensor.wallbox_power", "ev")
+        assert val == 4500  # Already in W
+
+    @pytest.mark.asyncio
+    async def test_number_entity_with_all_charger_brands(self):
+        """All number-entity chargers use the same control path."""
+        from custom_components.solar_energy_management.devices.base import CurrentControlDevice
+
+        brands = [
+            ("Wallbox", "number.wallbox_max_current"),
+            ("go-eCharger", "number.goe_amp_current"),
+            ("ChargePoint", "number.chargepoint_amperage"),
+            ("Heidelberg", "number.heidelberg_current_limit"),
+            ("OpenWB", "number.openwb_chargepoint_current"),
+            ("OCPP", "number.ocpp_max_current"),
+            ("Ohme", "number.ohme_max_current"),
+            ("Peblar", "number.peblar_charge_limit"),
+            ("V2C Trydan", "number.v2c_intensity"),
+            ("OpenEVSE", "number.openevse_max_current"),
+            ("Alfen Eve", "number.alfen_max_current"),
+            ("Blue Current", "number.bluecurrent_max_current"),
+        ]
+
+        for brand, entity in brands:
+            hass = MagicMock()
+            hass.services = MagicMock()
+            hass.services.async_call = AsyncMock()
+
+            device = CurrentControlDevice(
+                hass=hass, device_id=f"ev_{brand.lower()}", name=brand,
+                priority=1, min_current=6, max_current=32, phases=3, voltage=230,
+                power_entity_id=f"sensor.{brand.lower()}_power",
+                charger_service=None,
+                charger_service_entity_id=None,
+                current_entity_id=entity,
+            )
+            await device.set_current(12)
+
+            assert hass.services.async_call.called, f"{brand} set_current failed"
+            call = hass.services.async_call.call_args
+            assert call[0][0] == "number", f"{brand} wrong domain: {call[0][0]}"
+            assert call[0][1] == "set_value", f"{brand} wrong service: {call[0][1]}"
+            assert call[0][2]["value"] == 12, f"{brand} wrong value: {call[0][2]}"
