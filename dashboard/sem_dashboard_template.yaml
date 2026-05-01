@@ -2168,13 +2168,10 @@ views:
           # Copy-friendly diagnostics for bug reports
           - type: markdown
             content: >-
-              <details><summary>📋 Copy diagnostics for bug report</summary>
+              **Copy for bug report:**
 
-              ```
-              SEM {{ states('sensor.sem_diag_version') }} | Grid: {{ states('sensor.sem_diag_grid_mode') }} ({{ states('sensor.sem_diag_grid_sign') }}) | Chargers: {{ states('sensor.sem_ev_charger_count') }} ({{ states('sensor.sem_diag_charger_control') }}) | Battery: {{ states('sensor.sem_diag_battery_capacity') }} kWh | Interval: {{ states('sensor.sem_diag_update_interval') }}s | Observer: {{ states('sensor.sem_diag_observer_mode') }} | Unavailable: {{ states('sensor.sem_diag_sensors_unavailable') }}
-              ```
 
-              </details>
+              `SEM {{ states('sensor.sem_diag_version') }} | Grid: {{ states('sensor.sem_diag_grid_mode') }} ({{ states('sensor.sem_diag_grid_sign') }}) | Chargers: {{ states('sensor.sem_ev_charger_count') }} ({{ states('sensor.sem_diag_charger_control') }}) | Battery: {{ states('sensor.sem_diag_battery_capacity') }}kWh | Unavailable: {{ states('sensor.sem_diag_sensors_unavailable') }}`
             card_mod:
               style: *glass_card
 
