@@ -2110,19 +2110,13 @@ views:
             tab: system
 
           # ══════════════════════════════════════════════════════
-          # 0. QUICK ACTIONS — report issue + docs
+          # 0. QUICK ACTIONS — always visible (docs + community)
           # ══════════════════════════════════════════════════════
           - type: custom:mushroom-chips-card
             alignment: end
             card_mod:
               style: *glass_card
             chips:
-              - type: action
-                icon: mdi:bug
-                content: Report Issue
-                tap_action:
-                  action: url
-                  url_path: https://github.com/traktore-org/sem-community/issues/new?template=bug_report.yml
               - type: action
                 icon: mdi:book-open-variant
                 content: Docs
@@ -2137,43 +2131,68 @@ views:
                   url_path: https://community.home-assistant.io/t/solar-energy-management-sem-smart-solar-ev-battery-orchestration/1003701
 
           # ══════════════════════════════════════════════════════
-          # 0b. DIAGNOSTICS SUMMARY
+          # 0b. BETA DIAGNOSTICS — only shown for pre-release versions
           # ══════════════════════════════════════════════════════
-          - type: horizontal-stack
-            cards:
-              - type: custom:mushroom-template-card
-                primary: System Info
-                secondary: >-
-                  Version: {{ states('sensor.sem_diag_version') or '?' }}
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.sem_diag_version
+                state_not: ""
+            card:
+              type: vertical-stack
+              cards:
+                - type: conditional
+                  conditions:
+                    - condition: template
+                      value_template: >-
+                        {{ 'beta' in states('sensor.sem_diag_version') or 'rc' in states('sensor.sem_diag_version') }}
+                  card:
+                    type: vertical-stack
+                    cards:
+                      - type: custom:mushroom-chips-card
+                        alignment: end
+                        card_mod:
+                          style: *glass_card
+                        chips:
+                          - type: action
+                            icon: mdi:bug
+                            content: Report Issue
+                            tap_action:
+                              action: url
+                              url_path: https://github.com/traktore-org/sem-community/issues/new?template=bug_report.yml
+                      - type: horizontal-stack
+                        cards:
+                          - type: custom:mushroom-template-card
+                            primary: System Info
+                            secondary: >-
+                              Version: {{ states('sensor.sem_diag_version') or '?' }}
 
-                  Grid: {{ states('sensor.sem_diag_grid_mode') or '?' }} ({{ states('sensor.sem_diag_grid_sign') or '?' }}) · Battery: {{ states('sensor.sem_diag_battery_capacity') or '?' }} kWh · Interval: {{ states('sensor.sem_diag_update_interval') or '?' }}s
-                icon: mdi:information
-                icon_color: cyan
-                multiline_secondary: true
-                card_mod:
-                  style: *glass_card
-              - type: custom:mushroom-template-card
-                primary: Charger & Sensors
-                secondary: >-
-                  Chargers: {{ states('sensor.sem_ev_charger_count') or '0' }} ({{ states('sensor.sem_diag_charger_control') or '?' }})
+                              Grid: {{ states('sensor.sem_diag_grid_mode') or '?' }} ({{ states('sensor.sem_diag_grid_sign') or '?' }}) · Battery: {{ states('sensor.sem_diag_battery_capacity') or '?' }} kWh · Interval: {{ states('sensor.sem_diag_update_interval') or '?' }}s
+                            icon: mdi:information
+                            icon_color: cyan
+                            multiline_secondary: true
+                            card_mod:
+                              style: *glass_card
+                          - type: custom:mushroom-template-card
+                            primary: Charger & Sensors
+                            secondary: >-
+                              Chargers: {{ states('sensor.sem_ev_charger_count') or '0' }} ({{ states('sensor.sem_diag_charger_control') or '?' }})
 
-                  Observer: {{ states('sensor.sem_diag_observer_mode') or 'off' }} · Unavailable: {{ states('sensor.sem_diag_sensors_unavailable') or '0' }} sensors
-                icon: mdi:ev-station
-                icon_color: >-
-                  {% if states('sensor.sem_diag_sensors_unavailable') | int(0) > 5 %}red{% elif states('sensor.sem_diag_sensors_unavailable') | int(0) > 0 %}amber{% else %}green{% endif %}
-                multiline_secondary: true
-                card_mod:
-                  style: *glass_card
-
-          # Copy-friendly diagnostics for bug reports
-          - type: markdown
-            content: >-
-              **Copy for bug report:**
+                              Observer: {{ states('sensor.sem_diag_observer_mode') or 'off' }} · Unavailable: {{ states('sensor.sem_diag_sensors_unavailable') or '0' }} sensors
+                            icon: mdi:ev-station
+                            icon_color: >-
+                              {% if states('sensor.sem_diag_sensors_unavailable') | int(0) > 5 %}red{% elif states('sensor.sem_diag_sensors_unavailable') | int(0) > 0 %}amber{% else %}green{% endif %}
+                            multiline_secondary: true
+                            card_mod:
+                              style: *glass_card
+                      - type: markdown
+                        content: >-
+                          **Copy for bug report:**
 
 
-              `SEM {{ states('sensor.sem_diag_version') }} | Grid: {{ states('sensor.sem_diag_grid_mode') }} ({{ states('sensor.sem_diag_grid_sign') }}) | Chargers: {{ states('sensor.sem_ev_charger_count') }} ({{ states('sensor.sem_diag_charger_control') }}) | Battery: {{ states('sensor.sem_diag_battery_capacity') }}kWh | Unavailable: {{ states('sensor.sem_diag_sensors_unavailable') }}`
-            card_mod:
-              style: *glass_card
+                          `SEM {{ states('sensor.sem_diag_version') }} | Grid: {{ states('sensor.sem_diag_grid_mode') }} ({{ states('sensor.sem_diag_grid_sign') }}) | Chargers: {{ states('sensor.sem_ev_charger_count') }} ({{ states('sensor.sem_diag_charger_control') }}) | Battery: {{ states('sensor.sem_diag_battery_capacity') }}kWh | Unavailable: {{ states('sensor.sem_diag_sensors_unavailable') }}`
+                        card_mod:
+                          style: *glass_card
 
           # ══════════════════════════════════════════════════════
           # 1. HEALTH OVERVIEW — traffic light + sensor status
