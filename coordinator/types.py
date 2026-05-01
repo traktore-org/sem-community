@@ -632,6 +632,19 @@ class SEMData:
             "currency": self.currency,
             # Multi-charger
             "ev_charger_count": self.ev_charger_count,
+            "ev_charger_ids": self.ev_charger_ids,
+        }
+
+        # Per-charger data (dynamic keys: charger_{id}_power, charger_{id}_session_energy, etc.)
+        for cid in self.ev_charger_ids:
+            session = self.sessions.get(cid, SessionData())
+            data.update({
+                f"charger_{cid}_session_energy": round(session.energy_kwh, 2),
+                f"charger_{cid}_session_solar_share": round(session.solar_share_pct, 1),
+                f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
+            })
+
+        data.update({
 
             # EV intelligence
             "ev_taper_trend": self.ev_intelligence.taper.trend,
@@ -645,7 +658,9 @@ class SEMData:
             "ev_charge_needed": self.ev_intelligence.charge_needed,
             "ev_battery_health": self.ev_intelligence.ev_battery_health_pct,
             "ev_charge_skip_reason": self.ev_intelligence.charge_skip_reason,
-        }
+        })
+
+        return data
 
     def _get_solar_charging_status(self) -> str:
         """Get solar charging status from charging state."""

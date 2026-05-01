@@ -762,6 +762,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             self._initial_update_done = True
             result = sem_data.to_dict()
 
+            # Add per-charger power readings (#131)
+            for cid, ev_dev in self._ev_devices.items():
+                charger_power = 0.0
+                if ev_dev.power_entity_id:
+                    pstate = self.hass.states.get(ev_dev.power_entity_id)
+                    if pstate and pstate.state not in ("unknown", "unavailable"):
+                        try:
+                            charger_power = float(pstate.state)
+                            unit = pstate.attributes.get("unit_of_measurement", "W")
+                            if unit.lower() == "kw":
+                                charger_power *= 1000
+                        except (ValueError, TypeError):
+                            pass
+                result[f"charger_{cid}_power"] = round(charger_power, 0)
+                result[f"charger_{cid}_name"] = ev_dev.name
+
             # Add forecast tracker data (accuracy, correction factor)
             if tracker_data:
                 result.update(tracker_data)
