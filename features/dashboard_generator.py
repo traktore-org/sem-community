@@ -111,12 +111,32 @@ class DashboardGenerator:
         return config
 
     async def _load_comprehensive_dashboard_template(self) -> Optional[Dict[str, Any]]:
-        """Load the comprehensive dashboard template from YAML file."""
+        """Load the comprehensive dashboard template from YAML file.
+
+        For stable releases, strips the beta diagnostics section
+        (between SEM_BETA_START and SEM_BETA_END markers).
+        """
         try:
             if os.path.exists(self._dashboard_template_path):
                 def _read():
                     with open(self._dashboard_template_path, "r", encoding="utf-8") as f:
-                        return yaml.safe_load(f)
+                        content = f.read()
+                    # Strip beta section for stable releases
+                    import re as _re
+                    manifest_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "manifest.json")
+                    try:
+                        import json as _json
+                        with open(manifest_path) as mf:
+                            version = _json.load(mf).get("version", "")
+                        if "beta" not in version and "rc" not in version:
+                            content = _re.sub(
+                                r'^\s*# SEM_BETA_START.*?# SEM_BETA_END\s*$',
+                                '', content, flags=_re.MULTILINE | _re.DOTALL,
+                            )
+                            _LOGGER.info("Stripped beta diagnostics from dashboard (stable release %s)", version)
+                    except Exception as strip_err:
+                        _LOGGER.debug("Beta strip skipped: %s", strip_err)
+                    return yaml.safe_load(content)
                 template = await self.hass.async_add_executor_job(_read)
                 _LOGGER.info("Loaded comprehensive dashboard template from %s", self._dashboard_template_path)
                 return template
