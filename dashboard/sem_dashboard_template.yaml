@@ -229,7 +229,7 @@ views:
               {% else %}{{ tip[:60] }}{% if tip | length > 60 %}…{% endif %}{% endif %}
             secondary: >-
               {% set window = states('sensor.sem_best_surplus_window') %}
-              {% set surplus = states('sensor.sem_forecast_surplus_kwh') | float(0) %}
+              {% set surplus = states('sensor.sem_forecast_remaining_today_kwh') | float(0) %}
               {% if window != '' and window != 'unknown' %}
               Best window: {{ window }} · Surplus: {{ surplus | round(1) }} kWh
               {% elif surplus > 0 %}
@@ -771,7 +771,7 @@ views:
                 primary: Today
                 secondary: >-
                   {{ states('sensor.sem_forecast_today_kwh') | float(0) | round(1) }} kWh
-                  {% set peak = states('sensor.sem_forecast_peak_time_today') %}
+                  {% set peak = states('sensor.sem_forecast_peak_power_today_w') %}
                   {% if peak and peak != 'unknown' and peak != '' %}· Peak {{ peak }}{% endif %}
                 icon: mdi:weather-sunny
                 icon_color: amber
@@ -1562,7 +1562,7 @@ views:
                 card_mod:
                   style: *glass_card
               - type: custom:mushroom-number-card
-                entity: number.sem_battery_capacity
+                entity: sensor.sem_diag_battery_capacity
                 name: Capacity (kWh)
                 card_mod:
                   style: *glass_card

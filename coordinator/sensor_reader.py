@@ -319,6 +319,12 @@ class SensorReader:
                 # SEM convention: negative = import, positive = export
                 readings.grid_power = export_w - import_w
                 self._grid_sign_detected = True  # No sign correction needed
+            elif not hasattr(self, '_split_grid_warned'):
+                self._split_grid_warned = True
+                _LOGGER.warning(
+                    "No grid power sensor found (no combined and no split import/export). "
+                    "Grid power will be 0. Check Energy Dashboard grid configuration."
+                )
 
         # Battery power — sum all battery units if multiple configured.
         # Sign auto-detection (in read_power → _detect_battery_sign) uses the

@@ -54,8 +54,13 @@ async def async_setup_entry(
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != "switch":
                 continue
+            # SEM uses two unique_id formats: "sem_{key}" or "{entry_id}_{key}"
             unique_id = entity_entry.unique_id or ""
-            key = unique_id.replace(f"{entry.entry_id}_", "", 1)
+            key = None
+            if unique_id.startswith("sem_"):
+                key = unique_id[4:]
+            elif unique_id.startswith(f"{entry.entry_id}_"):
+                key = unique_id[len(entry.entry_id) + 1:]
             if key and key not in valid_keys:
                 _LOGGER.info("Removing stale switch entity %s (key '%s' removed)", entity_entry.entity_id, key)
                 registry.async_remove(entity_entry.entity_id)
