@@ -636,29 +636,36 @@ class SEMData:
         }
 
         # Per-charger data (dynamic keys: charger_{id}_power, charger_{id}_session_energy, etc.)
-        for cid in self.ev_charger_ids:
-            session = self.sessions.get(cid, SessionData())
+        try:
+            for cid in self.ev_charger_ids:
+                session = self.sessions.get(cid, SessionData())
+                data.update({
+                    f"charger_{cid}_session_energy": round(session.energy_kwh, 2),
+                    f"charger_{cid}_session_solar_share": round(session.solar_share_pct, 1),
+                    f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
+                })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Per-charger to_dict failed: %s", e)
+
+        # EV intelligence — access safely in case taper data is incomplete
+        try:
             data.update({
-                f"charger_{cid}_session_energy": round(session.energy_kwh, 2),
-                f"charger_{cid}_session_solar_share": round(session.solar_share_pct, 1),
-                f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
+                "ev_taper_trend": self.ev_intelligence.taper.trend,
+                "ev_taper_ratio": self.ev_intelligence.taper.taper_ratio_pct,
+                "ev_taper_minutes_to_full": self.ev_intelligence.taper.minutes_to_full,
+                "ev_estimated_soc": self.ev_intelligence.estimated_soc_pct,
+                "ev_last_full_charge": self.ev_intelligence.last_full_charge,
+                "ev_energy_since_full": self.ev_intelligence.energy_since_full_kwh,
+                "ev_predicted_daily_consumption": self.ev_intelligence.predicted_daily_ev_kwh,
+                "ev_nights_until_charge": self.ev_intelligence.nights_until_charge,
+                "ev_charge_needed": self.ev_intelligence.charge_needed,
+                "ev_battery_health": self.ev_intelligence.ev_battery_health_pct,
+                "ev_charge_skip_reason": self.ev_intelligence.charge_skip_reason,
             })
-
-        data.update({
-
-            # EV intelligence
-            "ev_taper_trend": self.ev_intelligence.taper.trend,
-            "ev_taper_ratio": self.ev_intelligence.taper.taper_ratio_pct,
-            "ev_taper_minutes_to_full": self.ev_intelligence.taper.minutes_to_full,
-            "ev_estimated_soc": self.ev_intelligence.estimated_soc_pct,
-            "ev_last_full_charge": self.ev_intelligence.last_full_charge,
-            "ev_energy_since_full": self.ev_intelligence.energy_since_full_kwh,
-            "ev_predicted_daily_consumption": self.ev_intelligence.predicted_daily_ev_kwh,
-            "ev_nights_until_charge": self.ev_intelligence.nights_until_charge,
-            "ev_charge_needed": self.ev_intelligence.charge_needed,
-            "ev_battery_health": self.ev_intelligence.ev_battery_health_pct,
-            "ev_charge_skip_reason": self.ev_intelligence.charge_skip_reason,
-        })
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("EV intelligence to_dict failed: %s", e)
 
         return data
 

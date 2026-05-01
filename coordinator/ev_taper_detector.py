@@ -182,6 +182,8 @@ class EVTaperDetector:
         self._energy_since_full += decay
 
         capacity = self._config.get("ev_battery_capacity_kwh", 40)
+        # Cap at capacity
+        self._energy_since_full = min(self._energy_since_full, capacity)
         if capacity > 0:
             self._estimated_soc = max(
                 0.0, 100.0 - (self._energy_since_full / capacity * 100.0)
@@ -222,6 +224,14 @@ class EVTaperDetector:
             return
         if ev_energy_increment_kwh > 0:
             self._energy_since_full += ev_energy_increment_kwh
+            # Cap at battery capacity to prevent runaway accumulation
+            capacity = self._config.get("ev_battery_capacity_kwh", 40)
+            if self._energy_since_full > capacity:
+                _LOGGER.warning(
+                    "energy_since_full (%.1f) exceeds capacity (%.0f) — capping",
+                    self._energy_since_full, capacity,
+                )
+                self._energy_since_full = capacity
 
     def get_virtual_soc(self, vehicle_soc: Optional[float] = None) -> float:
         """Get estimated SOC, preferring real vehicle SOC if available.
