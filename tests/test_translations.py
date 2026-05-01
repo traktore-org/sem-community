@@ -9,9 +9,17 @@ and select.py MUST have a translation in strings.json AND every
 translations/*.json file.
 """
 import json
+import os
 import re
 import glob
 import pytest
+
+# Resolve paths relative to the component root (parent of tests/)
+_COMPONENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _path(filename):
+    return os.path.join(_COMPONENT_DIR, filename)
 
 
 def _extract_entity_keys():
@@ -22,7 +30,7 @@ def _extract_entity_keys():
         ("sensor.py", "SENSOR_TYPES"),
         ("number.py", "NUMBER_TYPES"),
     ]:
-        with open(fname) as f:
+        with open(_path(fname)) as f:
             content = f.read()
         start = content.find(f"{list_pattern} = [")
         if start < 0:
@@ -33,7 +41,7 @@ def _extract_entity_keys():
             keys[(domain, key)] = fname
 
     for fname in ["switch.py", "binary_sensor.py", "select.py"]:
-        with open(fname) as f:
+        with open(_path(fname)) as f:
             content = f.read()
         domain = fname.replace(".py", "")
         for key in re.findall(r'key="([^"]+)"', content):
@@ -45,7 +53,7 @@ def _extract_entity_keys():
 def test_strings_json_has_all_keys():
     """strings.json must have translations for every entity key."""
     keys = _extract_entity_keys()
-    with open("strings.json") as f:
+    with open(_path("strings.json")) as f:
         strings = json.load(f)
 
     missing = []
@@ -63,7 +71,7 @@ def test_strings_json_has_all_keys():
 def test_all_languages_have_all_keys():
     """Every translations/*.json must have translations for every entity key."""
     keys = _extract_entity_keys()
-    lang_files = sorted(glob.glob("translations/*.json"))
+    lang_files = sorted(glob.glob(os.path.join(_COMPONENT_DIR, "translations", "*.json")))
 
     assert len(lang_files) >= 15, f"Expected 15+ language files, found {len(lang_files)}"
 
@@ -97,7 +105,7 @@ def test_no_orphaned_translations():
     keys = _extract_entity_keys()
     valid_keys = {(domain, key) for domain, key in keys}
 
-    with open("strings.json") as f:
+    with open(_path("strings.json")) as f:
         strings = json.load(f)
 
     orphaned = []
