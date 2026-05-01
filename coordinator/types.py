@@ -653,11 +653,6 @@ class SEMData:
         # EV intelligence — access safely in case taper data is incomplete
         try:
             _ei = self.ev_intelligence
-            _LOGGER.warning(
-                "EV intel to_dict: soc=%.1f, full=%s, energy=%.1f, skip=%s",
-                _ei.estimated_soc_pct, _ei.last_full_charge,
-                _ei.energy_since_full_kwh, _ei.charge_skip_reason,
-            )
             data.update({
                 "ev_taper_trend": _ei.taper.trend,
                 "ev_taper_ratio": _ei.taper.taper_ratio_pct,
