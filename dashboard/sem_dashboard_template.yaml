@@ -665,14 +665,14 @@ views:
           # ── Trees Saved (environmental impact) ──
           - type: custom:mushroom-template-card
             primary: >-
-              {% set trees = states('sensor.sem_trees_equivalent_this_year') | float(0) %}
+              {% set trees = states('sensor.sem_yearly_trees_equivalent') | float(0) %}
               {% if trees >= 10 %}{{ trees | round(0) }} Trees Equivalent
               {% else %}{{ trees | round(1) }} Trees Equivalent{% endif %}
             secondary: >-
-              {{ states('sensor.sem_co2_avoided_this_year') | float(0) | round(1) }} kg CO₂ avoided this year
+              {{ states('sensor.sem_yearly_co2_avoided') | float(0) | round(1) }} kg CO₂ avoided this year
               · Lifetime: {{ states('sensor.sem_lifetime_co2_avoided') | float(0) | round(0) }} kg · {{ states('sensor.sem_lifetime_trees_equivalent') | float(0) | round(0) }} trees
             icon: >-
-              {% set trees = states('sensor.sem_trees_equivalent_this_year') | float(0) %}
+              {% set trees = states('sensor.sem_yearly_trees_equivalent') | float(0) %}
               {% if trees >= 50 %}mdi:forest
               {% elif trees >= 10 %}mdi:pine-tree
               {% elif trees >= 1 %}mdi:tree
