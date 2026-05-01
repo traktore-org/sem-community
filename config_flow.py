@@ -923,6 +923,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.EntitySelectorConfig(domain="sensor", device_class="power")
                 ),
                 vol.Optional(
+                    "ev_current_control_entity",
+                    description={"suggested_value": suggestions.get("ev_current_control_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="number")
+                ),
+                vol.Optional(
                     "ev_charger_service",
                     default=suggestions.get("ev_charger_service", ""),
                 ): selector.TextSelector(),
@@ -987,6 +993,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=charger.get("ev_charging_power_sensor", ""),
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional(
+                    "ev_current_control_entity",
+                    description={"suggested_value": charger.get("ev_current_control_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="number")
                 ),
                 vol.Optional(
                     "ev_charger_service",

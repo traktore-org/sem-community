@@ -84,6 +84,26 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 
 > **Note:** Android notification channels, groups, and action buttons are only sent to `notify.mobile_app_*` services. Other services receive message + title only.
 
+### Multi-Charger Setup
+
+SEM supports multiple EV chargers with priority-based surplus distribution:
+
+1. Go to **Settings → Devices & Services → Solar Energy Management → Configure**
+2. In the **EV Chargers** menu, select **Add another EV charger**
+3. Configure sensors for each charger. For current control, use EITHER:
+   - **Current Control Entity** (number entity) — for Wallbox, go-eCharger, and chargers with a `number.*` entity
+   - **Set-Current Service** — for KEBA (`keba.set_current`), Easee, and service-based chargers
+4. Set **Surplus Priority** (1=highest) — highest-priority charger gets power first
+
+Each charger gets its own sensor entities:
+- `sensor.sem_charger_{id}_power` — real-time charging power
+- `sensor.sem_charger_{id}_session_energy` — current session energy
+- `sensor.sem_charger_{id}_session_solar_share` — solar percentage
+- `sensor.sem_charger_{id}_taper_trend` — BMS taper detection
+- `sensor.sem_charger_{id}_taper_ratio` — taper ratio
+
+To **edit** an existing charger, select it from the charger menu. To **remove**, select "Remove a charger" (primary charger cannot be removed).
+
 ### Load Management Settings
 
 | Setting | Default | Description |

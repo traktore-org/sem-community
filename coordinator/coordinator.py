@@ -785,6 +785,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 else:
                     result[f"charger_{cid}_session_energy"] = 0.0
                     result[f"charger_{cid}_session_solar_share"] = 0.0
+                # Per-charger taper detection (#138)
+                taper_det = self._ev_taper_detectors.get(cid)
+                if taper_det:
+                    result[f"charger_{cid}_taper_trend"] = taper_det._declining_phase and "declining" or "stable"
+                    result[f"charger_{cid}_taper_ratio"] = round(
+                        (charger_power / taper_det._session_peak_w * 100) if taper_det._session_peak_w > 0 else 0, 1
+                    )
 
             # Add forecast tracker data (accuracy, correction factor)
             if tracker_data:

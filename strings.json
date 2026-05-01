@@ -124,27 +124,29 @@
       },
       "ev_charger_add": {
         "title": "Add EV Charger",
-        "description": "Configure a new EV charger. SEM will distribute surplus power across chargers by priority.",
+        "description": "Configure a new EV charger. SEM will distribute surplus power across chargers by priority.\n\nFor current control, use EITHER the number entity (Wallbox, go-eCharger) OR the service (KEBA). Leave the other blank.",
         "data": {
           "charger_name": "Charger Name",
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",
           "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_charger_service": "Set-Current Service (KEBA, Easee — optional)",
+          "ev_charger_service_entity_id": "Service Target Entity (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)"
         }
       },
       "ev_charger_edit": {
         "title": "Edit EV Charger",
-        "description": "Update the sensor mappings and priority for this charger.",
+        "description": "Update the sensor mappings and priority for this charger.\n\nFor current control, use EITHER the number entity OR the service. Leave the other blank.",
         "data": {
           "charger_name": "Charger Name",
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",
           "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_charger_service": "Set-Current Service (KEBA, Easee — optional)",
+          "ev_charger_service_entity_id": "Service Target Entity (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)"
         }
       },

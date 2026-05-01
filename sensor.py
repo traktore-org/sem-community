@@ -1405,6 +1405,16 @@ async def async_setup_entry(
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_taper_trend",
+                name=f"{cname} Taper Trend",
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_taper_ratio",
+                name=f"{cname} Taper Ratio",
+                native_unit_of_measurement=PERCENTAGE,
+                suggested_display_precision=0,
+            ),
         ])
 
     for desc in per_charger_descriptions:
