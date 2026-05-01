@@ -66,7 +66,7 @@ There are many solar/EV tools for Home Assistant — evcc, emhass, Predbat, PV E
 | Pure HACS integration | :white_check_mark: | standalone Go | Docker/Add-on | AppDaemon | :white_check_mark: |
 | Zero-config auto-detect | :white_check_mark: | config file | complex setup | config file | manual |
 
-**SEM's approach:** Install one integration, get everything — EV charging, battery zones, cost analytics, 8-tab dashboard, and smart notifications. No separate services, no Docker containers, no YAML configuration files.
+**SEM's approach:** Install one integration, get everything — EV charging, battery zones, cost analytics, 7-tab dashboard, and smart notifications. No separate services, no Docker containers, no YAML configuration files.
 
 **When to use something else:**
 - **evcc** if you need support for 100+ charger brands or vehicle SoC from car APIs
