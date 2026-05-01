@@ -2122,7 +2122,7 @@ views:
                 content: Report Issue
                 tap_action:
                   action: url
-                  url_path: https://github.com/traktore-org/sem-community/issues/new
+                  url_path: https://github.com/traktore-org/sem-community/issues/new?template=bug_report.yml
               - type: action
                 icon: mdi:book-open-variant
                 content: Docs
