@@ -432,7 +432,7 @@ class TestChargerControlPipeline:
             charger_service_entity_id="binary_sensor.keba_plug",
             current_entity_id=None,
         )
-        await device.set_current(16)
+        await device._set_current(16)
 
         hass.services.async_call.assert_called_once()
         call = hass.services.async_call.call_args
@@ -457,7 +457,7 @@ class TestChargerControlPipeline:
             charger_service_entity_id=None,
             current_entity_id="number.wallbox_max_current",
         )
-        await device.set_current(10)
+        await device._set_current(10)
 
         hass.services.async_call.assert_called_once()
         call = hass.services.async_call.call_args
@@ -483,7 +483,7 @@ class TestChargerControlPipeline:
             current_entity_id=None,
         )
         device.service_param_name = "dynamicChargerCurrent"
-        await device.set_current(20)
+        await device._set_current(20)
 
         call = hass.services.async_call.call_args
         assert call[0][2]["dynamicChargerCurrent"] == 20
@@ -555,7 +555,7 @@ class TestChargerControlPipeline:
                 charger_service_entity_id=None,
                 current_entity_id=entity,
             )
-            await device.set_current(12)
+            await device._set_current(12)
 
             assert hass.services.async_call.called, f"{brand} set_current failed"
             call = hass.services.async_call.call_args
