@@ -68,6 +68,14 @@ body:
     validations:
       required: true
   - type: textarea
+    id: diagnostics
+    attributes:
+      label: System Diagnostics
+      description: |
+        Copy the info from the **System tab → Diagnostics** cards on your SEM dashboard.
+        Example: Version 1.4.2, Grid: combined (normal), Chargers: 1 (service), Battery: 15 kWh
+      placeholder: "Version: ..., Grid: ..., Chargers: ..., Battery: ..."
+  - type: textarea
     id: logs
     attributes:
       label: Relevant log entries
