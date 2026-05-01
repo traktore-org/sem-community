@@ -47,6 +47,21 @@ async def async_setup_entry(
 
     async_add_entities(switches)
 
+    # Fix entity_ids from pre-translation installs
+    try:
+        registry = er.async_get(hass)
+        for desc in SWITCH_TYPES:
+            uid = f"sem_{desc.key}"
+            correct_eid = f"switch.sem_{desc.key}"
+            for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+                if entity_entry.unique_id == uid and entity_entry.entity_id != correct_eid:
+                    existing = registry.async_get(correct_eid)
+                    if existing is None:
+                        registry.async_update_entity(entity_entry.entity_id, new_entity_id=correct_eid)
+                        _LOGGER.info("Fixed switch entity_id: %s → %s", entity_entry.entity_id, correct_eid)
+    except Exception as e:
+        _LOGGER.debug("Switch entity ID fix skipped: %s", e)
+
     # Clean up stale switch entities from previous versions
     try:
         registry = er.async_get(hass)
