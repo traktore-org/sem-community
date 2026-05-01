@@ -1374,11 +1374,53 @@ async def async_setup_entry(
         for description in SENSOR_TYPES
     ]
 
+    # Per-charger sensors (#131): create power + session sensors for each configured charger
+    full_config = {**entry.data, **entry.options}
+    ev_chargers = full_config.get("ev_chargers", [])
+    _LOGGER.info("Per-charger setup: %d charger(s) in config", len(ev_chargers))
+    per_charger_descriptions = []
+    for charger_cfg in ev_chargers:
+        cid = charger_cfg.get("id", "ev_charger")
+        cname = charger_cfg.get("name", "EV Charger")
+        per_charger_descriptions.extend([
+            SensorEntityDescription(
+                key=f"charger_{cid}_power",
+                name=f"{cname} Power",
+                device_class=SensorDeviceClass.POWER,
+                state_class=SensorStateClass.MEASUREMENT,
+                native_unit_of_measurement=UnitOfPower.WATT,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_session_energy",
+                name=f"{cname} Session Energy",
+                device_class=SensorDeviceClass.ENERGY,
+                state_class=SensorStateClass.TOTAL,
+                native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                suggested_display_precision=2,
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_session_solar_share",
+                name=f"{cname} Solar Share",
+                native_unit_of_measurement=PERCENTAGE,
+                suggested_display_precision=0,
+            ),
+        ])
+
+    for desc in per_charger_descriptions:
+        sensors.append(SEMSolarSensor(coordinator, desc, entry.entry_id))
+
+    if per_charger_descriptions:
+        _LOGGER.info("Created %d per-charger sensors for %d charger(s)",
+                      len(per_charger_descriptions), len(ev_chargers))
+
     _LOGGER.info("Adding %d sensors to Home Assistant", len(sensors))
     async_add_entities(sensors)
 
     # Clean up stale sensor entities from previous versions
-    _cleanup_stale_entities(hass, entry, SENSOR_TYPES, "sensor")
+    # Include per-charger descriptions so they're not removed as stale
+    all_descriptions = list(SENSOR_TYPES) + per_charger_descriptions
+    _cleanup_stale_entities(hass, entry, all_descriptions, "sensor")
 
     # Apply labels to entities after they are created
     await _apply_labels_to_sensors(hass, sensors)

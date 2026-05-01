@@ -279,6 +279,19 @@
           "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
           "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows."
         }
+      },
+      "ev_charger_edit": {
+        "title": "Edit EV Charger",
+        "description": "Update the sensor mappings and priority for this charger.",
+        "data": {
+          "charger_name": "Charger Name",
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Surplus Priority (1=highest)"
+        }
       }
     }
   },
@@ -690,16 +703,16 @@
         "name": "Predictor Training Status"
       },
       "predictor_model_accuracy": {
-        "name": "Predictor Accuracy"
+        "name": "Predictor Model Accuracy"
       },
       "predicted_consumption_next_hour": {
-        "name": "Predicted Consumption (Next Hour)"
+        "name": "Predicted Consumption Next Hour"
       },
       "predicted_consumption_today_kwh": {
         "name": "Predicted Consumption Today"
       },
       "predicted_solar_next_hour": {
-        "name": "Predicted Solar (Next Hour)"
+        "name": "Predicted Solar Next Hour"
       },
       "predicted_surplus_window": {
         "name": "Predicted Surplus Window"
@@ -805,24 +818,6 @@
       },
       "ev_taper_minutes_to_full": {
         "name": "EV Minutes to Full"
-      },
-      "predictor_training_status": {
-        "name": "Predictor Training Status"
-      },
-      "predictor_model_accuracy": {
-        "name": "Predictor Model Accuracy"
-      },
-      "predicted_consumption_next_hour": {
-        "name": "Predicted Consumption Next Hour"
-      },
-      "predicted_consumption_today_kwh": {
-        "name": "Predicted Consumption Today"
-      },
-      "predicted_solar_next_hour": {
-        "name": "Predicted Solar Next Hour"
-      },
-      "predicted_surplus_window": {
-        "name": "Predicted Surplus Window"
       }
     },
     "binary_sensor": {

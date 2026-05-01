@@ -829,10 +829,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Multi-charger menu: add another charger or continue (#112)."""
         if user_input is not None:
-            if user_input.get("action") == "add_charger":
+            action = user_input.get("action", "continue")
+            if action == "add_charger":
                 return await self.async_step_ev_charger_add()
-            if user_input.get("action") == "remove_charger":
+            if action == "remove_charger":
                 return await self.async_step_ev_charger_remove()
+            if action.startswith("edit_charger:"):
+                self._edit_charger_id = action.split(":", 1)[1]
+                return await self.async_step_ev_charger_edit()
             return await self.async_step_settings()
 
         ev_chargers = self._data.get("ev_chargers", [])
@@ -841,8 +845,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         # Show charger list + options
         options = [
             {"value": "continue", "label": f"Continue ({charger_count} charger{'s' if charger_count != 1 else ''} configured)"},
-            {"value": "add_charger", "label": "Add another EV charger"},
         ]
+        # Edit option per charger
+        for c in ev_chargers:
+            options.append(
+                {"value": f"edit_charger:{c['id']}", "label": f"Edit: {c.get('name', c['id'])}"},
+            )
+        options.append({"value": "add_charger", "label": "Add another EV charger"})
         if charger_count > 1:
             options.append(
                 {"value": "remove_charger", "label": "Remove a charger"},
@@ -926,6 +935,72 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_surplus_priority",
                     default=5,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
+                ),
+            }),
+            errors=errors,
+        )
+
+    async def async_step_ev_charger_edit(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Edit an existing EV charger's configuration (#130)."""
+        errors: dict[str, str] = {}
+        charger_id = getattr(self, '_edit_charger_id', None)
+        ev_chargers = list(self._data.get("ev_chargers", []))
+        charger = next((c for c in ev_chargers if c.get("id") == charger_id), None)
+
+        if not charger:
+            return await self.async_step_ev_charger_menu()
+
+        if user_input is not None:
+            # Update charger with new values
+            charger_name = user_input.pop("charger_name", charger.get("name", "EV Charger"))
+            charger.update(user_input)
+            charger["name"] = charger_name
+            self._data["ev_chargers"] = ev_chargers
+            _LOGGER.info("Updated EV charger '%s'", charger_name)
+            return await self.async_step_ev_charger_menu()
+
+        return self.async_show_form(
+            step_id="ev_charger_edit",
+            data_schema=vol.Schema({
+                vol.Required(
+                    "charger_name",
+                    default=charger.get("name", "EV Charger"),
+                ): selector.TextSelector(),
+                vol.Required(
+                    "ev_connected_sensor",
+                    default=charger.get("ev_connected_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+                ),
+                vol.Required(
+                    "ev_charging_sensor",
+                    default=charger.get("ev_charging_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor"])
+                ),
+                vol.Required(
+                    "ev_charging_power_sensor",
+                    default=charger.get("ev_charging_power_sensor", ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional(
+                    "ev_charger_service",
+                    default=charger.get("ev_charger_service", ""),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    "ev_charger_service_entity_id",
+                    description={"suggested_value": charger.get("ev_charger_service_entity_id")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
+                ),
+                vol.Optional(
+                    "ev_surplus_priority",
+                    default=charger.get("ev_surplus_priority", 5),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
                 ),

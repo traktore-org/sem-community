@@ -51,10 +51,12 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/v}"
           MANIFEST=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
-          echo "Tag version: $TAG"
-          echo "Manifest version: $MANIFEST"
-          if [ "$TAG" != "$MANIFEST" ]; then
-            echo "::error::Tag version ($TAG) does not match manifest version ($MANIFEST)"
+          # Strip beta/rc suffix for comparison (v1.4.2-beta.1 → 1.4.2)
+          TAG_BASE="${TAG%%-*}"
+          echo "Tag: $TAG (base: $TAG_BASE)"
+          echo "Manifest: $MANIFEST"
+          if [ "$TAG_BASE" != "$MANIFEST" ]; then
+            echo "::error::Tag base version ($TAG_BASE) does not match manifest version ($MANIFEST)"
             exit 1
           fi
 
