@@ -227,30 +227,110 @@ class TestGrowattSplitGrid:
 # ════════════════════════════════════════════
 
 class TestCombinedGridSensor:
-    """Verify combined grid sensor pipeline still works correctly."""
+    """Verify combined grid sensor pipeline for all sign convention patterns."""
 
-    def test_huawei_exporting(self):
-        """Huawei: positive=export (SEM convention match, no correction)."""
+    def test_pattern_a_export_charge(self):
+        """Pattern A (Huawei, SMA, Victron): grid +=export, battery +=charge."""
         hass = MagicMock()
         ed = _make_energy_dashboard_config(
             solar_power="sensor.inverter_power",
-            grid_import_power="sensor.power_meter_wirkleistung",
-            battery_power="sensor.battery_1_power",
+            grid_import_power="sensor.grid_power",
+            battery_power="sensor.battery_power",
         )
-
         states = {
             "sensor.inverter_power": _state(6000),
-            "sensor.power_meter_wirkleistung": _state(3000),  # Positive = export
-            "sensor.battery_1_power": _state(1000),  # Positive = charge
+            "sensor.grid_power": _state(3000),    # +3kW export
+            "sensor.battery_power": _state(1000),  # +1kW charge
         }
-
         reader = _make_reader_with_states(hass, states, ed)
         power = reader.read_power()
-
-        assert power.grid_power == 3000
         power.calculate_derived()
+
         assert power.grid_export_power == 3000
         assert power.grid_import_power == 0
+        assert power.battery_charge_power == 1000
+        assert power.battery_discharge_power == 0
+        assert power.home_consumption_power == 2000  # 6000 - 3000 - 1000
+
+    def test_pattern_b_import_discharge(self):
+        """Pattern B (Fronius, Enphase, Powerwall, Kostal, SolarEdge): grid +=import, battery +=discharge.
+
+        SEM auto-detects and negates both. Raw values are opposite of SEM convention.
+        After sign correction: grid_power becomes negative (import), battery_power becomes negative (discharge).
+        """
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.grid_power",
+            battery_power="sensor.battery_power",
+        )
+        # Raw: +1500 means importing, +500 means discharging
+        states = {
+            "sensor.solar_power": _state(3000),
+            "sensor.grid_power": _state(1500),    # +1500 = importing (opposite)
+            "sensor.battery_power": _state(500),   # +500 = discharging (opposite)
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        # Simulate sign correction (normally done by auto-detect over multiple cycles)
+        reader._grid_sign_inverted = True
+        reader._battery_sign_inverted = True
+        reader._grid_sign_detected = True
+        reader._battery_sign_detected = True
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # After negation: grid=-1500 (import), battery=-500 (discharge)
+        assert power.grid_import_power == 1500
+        assert power.grid_export_power == 0
+        assert power.battery_discharge_power == 500
+        assert power.battery_charge_power == 0
+        assert power.home_consumption_power > 0
+
+    def test_pattern_c_export_discharge(self):
+        """Pattern C (GoodWe, Sonnen): grid +=export, battery +=discharge."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.grid_power",
+            battery_power="sensor.battery_power",
+        )
+        states = {
+            "sensor.solar_power": _state(4000),
+            "sensor.grid_power": _state(1000),     # +1kW export (SEM match)
+            "sensor.battery_power": _state(800),    # +800W discharge (opposite)
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        reader._battery_sign_inverted = True
+        reader._battery_sign_detected = True
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_export_power == 1000
+        assert power.battery_discharge_power == 800
+        assert power.home_consumption_power > 0
+
+    def test_pattern_d_import_charge(self):
+        """Pattern D (SolaX): grid +=import, battery +=charge."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.grid_power",
+            battery_power="sensor.battery_power",
+        )
+        states = {
+            "sensor.solar_power": _state(2000),
+            "sensor.grid_power": _state(500),      # +500W import (opposite)
+            "sensor.battery_power": _state(300),    # +300W charge (SEM match)
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        reader._grid_sign_inverted = True
+        reader._grid_sign_detected = True
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_import_power == 500
+        assert power.battery_charge_power == 300
+        assert power.home_consumption_power > 0
 
 
 # ════════════════════════════════════════════
