@@ -2139,21 +2139,31 @@ views:
           # ══════════════════════════════════════════════════════
           # 0b. DIAGNOSTICS SUMMARY
           # ══════════════════════════════════════════════════════
-          - type: markdown
-            content: >-
-              ### System Diagnostics
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                primary: System Info
+                secondary: >-
+                  Version: {{ states('sensor.sem_diag_version') or '?' }}
 
-              | | |
-              |---|---|
-              | **Version** | {{ states('sensor.sem_diag_version') or 'unknown' }} |
-              | **Grid mode** | {{ states('sensor.sem_diag_grid_mode') or '?' }} (sign: {{ states('sensor.sem_diag_grid_sign') or '?' }}) |
-              | **Chargers** | {{ states('sensor.sem_ev_charger_count') or '0' }} (control: {{ states('sensor.sem_diag_charger_control') or '?' }}) |
-              | **Battery** | {{ states('sensor.sem_diag_battery_capacity') or '?' }} kWh |
-              | **Update interval** | {{ states('sensor.sem_diag_update_interval') or '?' }}s |
-              | **Observer mode** | {{ states('sensor.sem_diag_observer_mode') or 'off' }} |
-              | **Sensors unavailable** | {{ states('sensor.sem_diag_sensors_unavailable') or '0' }} |
-            card_mod:
-              style: *glass_card
+                  Grid: {{ states('sensor.sem_diag_grid_mode') or '?' }} ({{ states('sensor.sem_diag_grid_sign') or '?' }}) · Battery: {{ states('sensor.sem_diag_battery_capacity') or '?' }} kWh · Interval: {{ states('sensor.sem_diag_update_interval') or '?' }}s
+                icon: mdi:information
+                icon_color: cyan
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-template-card
+                primary: Charger & Sensors
+                secondary: >-
+                  Chargers: {{ states('sensor.sem_ev_charger_count') or '0' }} ({{ states('sensor.sem_diag_charger_control') or '?' }})
+
+                  Observer: {{ states('sensor.sem_diag_observer_mode') or 'off' }} · Unavailable: {{ states('sensor.sem_diag_sensors_unavailable') or '0' }} sensors
+                icon: mdi:ev-station
+                icon_color: >-
+                  {% if states('sensor.sem_diag_sensors_unavailable') | int(0) > 5 %}red{% elif states('sensor.sem_diag_sensors_unavailable') | int(0) > 0 %}amber{% else %}green{% endif %}
+                multiline_secondary: true
+                card_mod:
+                  style: *glass_card
 
           # ══════════════════════════════════════════════════════
           # 1. HEALTH OVERVIEW — traffic light + sensor status
