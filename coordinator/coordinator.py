@@ -1814,7 +1814,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_increment = power.ev_power * interval_hours / 1000
             # Read hardware total energy counter for drift-free tracking
             hw_total = None
-            ev_total_entity = self._sensor_reader.config.ev_total_energy_sensor
+            ev_total_entity = self.config.get("ev_total_energy_sensor") or getattr(
+                self._sensor_reader.config, 'ev_daily_energy_sensor', None
+            )
             if ev_total_entity:
                 hw_state = self.hass.states.get(ev_total_entity)
                 if hw_state and hw_state.state not in ("unknown", "unavailable"):
