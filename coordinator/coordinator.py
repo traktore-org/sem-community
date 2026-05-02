@@ -1809,10 +1809,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         else:
             taper_data = EVTaperData()
 
-        # Track energy since last full charge
+        # Track energy since last full charge (hardware counter preferred)
         if hasattr(energy, "daily_ev"):
             ev_increment = power.ev_power * interval_hours / 1000
-            self._ev_taper_detector.update_energy(ev_increment)
+            # Read hardware total energy counter for drift-free tracking
+            hw_total = None
+            ev_total_entity = self._sensor_reader.config.ev_total_energy_sensor
+            if ev_total_entity:
+                hw_state = self.hass.states.get(ev_total_entity)
+                if hw_state and hw_state.state not in ("unknown", "unavailable"):
+                    try:
+                        hw_total = float(hw_state.state)
+                    except (ValueError, TypeError):
+                        pass
+            self._ev_taper_detector.update_energy(ev_increment, hw_total)
 
         # Reset on disconnect
         if self._last_ev_connected and not power.ev_connected:
@@ -1833,6 +1843,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Virtual SOC (prefer real vehicle SOC if available)
         estimated_soc = self._ev_taper_detector.get_virtual_soc(self._cycle_vehicle_soc)
+
+        # Self-healing: if SOC is at 0% but car just charged, something is wrong
+        # Reset to a reasonable estimate based on recent session energy
+        if estimated_soc <= 0 and self._session_data.energy_kwh > 1.0 and power.ev_connected:
+            capacity = self._config.get("ev_battery_capacity_kwh", 40)
+            session_soc = min(95.0, self._session_data.energy_kwh / capacity * 100 * 0.92)
+            self._ev_taper_detector._energy_since_full = (100 - session_soc) / 100 * capacity
+            self._ev_taper_detector._estimated_soc = session_soc
+            estimated_soc = session_soc
+            _LOGGER.warning(
+                "SOC self-healed: was 0%% after %.1f kWh session → %.0f%%",
+                self._session_data.energy_kwh, session_soc,
+            )
 
         # EV consumption prediction
         predicted_daily = self._predictor.predict_ev_consumption_tomorrow(now)

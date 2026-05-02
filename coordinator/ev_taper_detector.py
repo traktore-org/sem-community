@@ -91,6 +91,9 @@ class EVTaperDetector:
         self._consecutive_skips: int = 0
         # Session SOC tracking for partial-charge health estimates
         self._session_start_soc: Optional[float] = None
+        # Hardware counter tracking for drift-free energy accounting
+        self._hw_total_at_full: Optional[float] = None  # Charger total kWh when SOC was 100%
+        self._hw_total_last: Optional[float] = None  # Last known charger total kWh
 
     # ------------------------------------------------------------------
     # Public API — called each coordinator cycle
@@ -152,9 +155,13 @@ class EVTaperDetector:
                 self._energy_since_full = 0.0
                 self._estimated_soc = 100.0
                 self._soc_anchored = True
+                # Snapshot hardware counter at full for drift-free tracking
+                if self._hw_total_last is not None:
+                    self._hw_total_at_full = self._hw_total_last
                 _LOGGER.info(
-                    "EV full charge detected at %s (peak was %.0fW) — SOC anchored at 100%%",
+                    "EV full charge detected at %s (peak was %.0fW, hw_total=%.1f) — SOC anchored at 100%%",
                     self._last_full_timestamp, self._session_peak_w,
+                    self._hw_total_at_full or 0,
                 )
 
         return self._analyze(ev_power)
@@ -213,25 +220,45 @@ class EVTaperDetector:
             return 1.0 + (outdoor_temp_c - 28) * 0.046
         return 1.0
 
-    def update_energy(self, ev_energy_increment_kwh: float) -> None:
-        """Accumulate energy consumed since last full charge.
+    def update_energy(
+        self,
+        ev_energy_increment_kwh: float,
+        hw_total_energy_kwh: Optional[float] = None,
+    ) -> None:
+        """Update energy since full charge, preferring hardware counter.
 
-        Called each coordinator cycle with the incremental EV energy.
-        Skips accumulation when full charge was detected this session
-        (trickle current from retry attempts shouldn't count).
+        When a hardware total energy counter is available (e.g. KEBA
+        total_energy), uses the delta since last full charge for drift-free
+        tracking. Falls back to power integration when hardware unavailable.
+
+        Args:
+            ev_energy_increment_kwh: Power-integrated increment (fallback).
+            hw_total_energy_kwh: Current charger lifetime total (ground truth).
         """
         if self._full_detected:
             return
+
+        capacity = self._config.get("ev_battery_capacity_kwh", 40)
+
+        # Prefer hardware counter (drift-free)
+        if hw_total_energy_kwh is not None and hw_total_energy_kwh > 0:
+            self._hw_total_last = hw_total_energy_kwh
+            if self._hw_total_at_full is not None:
+                # Calculate energy since full from hardware delta
+                hw_energy = hw_total_energy_kwh - self._hw_total_at_full
+                if 0 <= hw_energy <= capacity:
+                    if abs(hw_energy - self._energy_since_full) > 0.5:
+                        _LOGGER.debug(
+                            "SOC reconciled from hardware: %.1f kWh (was %.1f from integration)",
+                            hw_energy, self._energy_since_full,
+                        )
+                    self._energy_since_full = hw_energy
+                    return
+
+        # Fallback: power integration
         if ev_energy_increment_kwh > 0:
             self._energy_since_full += ev_energy_increment_kwh
-            # Cap at battery capacity to prevent runaway accumulation
-            capacity = self._config.get("ev_battery_capacity_kwh", 40)
-            if self._energy_since_full > capacity:
-                _LOGGER.warning(
-                    "energy_since_full (%.1f) exceeds capacity (%.0f) — capping",
-                    self._energy_since_full, capacity,
-                )
-                self._energy_since_full = capacity
+            self._energy_since_full = min(self._energy_since_full, capacity)
 
     def get_virtual_soc(self, vehicle_soc: Optional[float] = None) -> float:
         """Get estimated SOC, preferring real vehicle SOC if available.
@@ -444,6 +471,7 @@ class EVTaperDetector:
             "battery_health_pct": round(self._battery_health_pct, 1),
             "consecutive_skips": self._consecutive_skips,
             "soc_anchored": self._soc_anchored,
+            "hw_total_at_full": self._hw_total_at_full,
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
@@ -455,6 +483,7 @@ class EVTaperDetector:
         self._battery_health_pct = state.get("battery_health_pct", 0.0)
         self._consecutive_skips = state.get("consecutive_skips", 0)
         self._soc_anchored = state.get("soc_anchored", False)
+        self._hw_total_at_full = state.get("hw_total_at_full")
 
     # ------------------------------------------------------------------
     # History seeding — bootstrap from recorder on startup
