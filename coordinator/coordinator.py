@@ -1843,6 +1843,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     })
             self._ev_taper_detector.reset_session()
 
+        # Stall detection → full charge: if car is connected, SEM is sending current,
+        # but power stays 0W for extended period, the car is full (BMS refusing)
+        if (power.ev_connected and not power.ev_charging
+                and power.ev_power < 50
+                and not self._ev_taper_detector._full_detected):
+            stall_count = getattr(self, '_full_stall_count', 0) + 1
+            self._full_stall_count = stall_count
+            if stall_count >= 18:  # ~3 minutes of 0W while connected
+                self._ev_taper_detector._full_detected = True
+                self._ev_taper_detector._last_full_timestamp = dt_util.now().isoformat()
+                self._ev_taper_detector._energy_since_full = 0.0
+                self._ev_taper_detector._estimated_soc = 100.0
+                self._ev_taper_detector._soc_anchored = True
+                if self._ev_taper_detector._hw_total_last is not None:
+                    self._ev_taper_detector._hw_total_at_full = self._ev_taper_detector._hw_total_last
+                self._full_stall_count = 0
+                _LOGGER.info(
+                    "EV full charge detected from stall: car connected, 0W for 3+ min → SOC 100%%"
+                )
+        else:
+            self._full_stall_count = 0
+
         # Virtual SOC (prefer real vehicle SOC if available)
         estimated_soc = self._ev_taper_detector.get_virtual_soc(self._cycle_vehicle_soc)
 
