@@ -2,24 +2,24 @@
   "config": {
     "step": {
       "user": {
-        "title": "Solar Energy Management Setup",
+        "title": "Solar Energy Management Einrichtung",
         "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
         "data": {
-          "observer_mode": "Test mode (read-only — do not control hardware)"
+          "observer_mode": "Testmodus (nur lesen — keine Hardwaresteuerung)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Für normale Installation AUS lassen. Nur auf Test-/Staging-HA aktivieren."
         }
       },
       "ev_charger": {
-        "title": "EV Charger",
+        "title": "EV-Lader",
         "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
         "data": {
           "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
           "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
           "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
+          "ev_charger_service": "EV-Lader Strom-Service (optional)",
+          "ev_charger_service_entity_id": "EV-Lader Service-Zielentität (optional)",
           "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
           "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
         },
@@ -48,33 +48,33 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "title": "Solar Energy Management neu konfigurieren",
+        "description": "EV-Lader und Benachrichtigungseinstellungen aktualisieren",
         "data": {
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_connected_sensor": "EV Verbindungsstatus",
+          "ev_charging_sensor": "EV Ladestatus",
+          "ev_charging_power_sensor": "EV Ladeleistung",
           "ev_charger_service": "EV Charger Service",
           "ev_charger_service_entity_id": "EV Charger Service Entity",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
+          "ev_total_energy_sensor": "EV Gesamtenergie-Zähler",
           "enable_charger_notifications": "Ladegerät-Display-Benachrichtigungen aktivieren",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "enable_mobile_notifications": "Mobile Benachrichtigungen aktivieren",
+          "mobile_notification_service": "Mobiler Benachrichtigungsdienst",
+          "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
+          "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         }
       }
     },
     "error": {
-      "unknown": "An unexpected error occurred. Please try again.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
       "entity_not_found": "Entität nicht gefunden. Bitte überprüfen Sie die Entity-ID.",
       "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
       "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
       "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
       "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
+      "service_not_found": "Benachrichtigungsdienst {service} nicht gefunden. Bitte überprüfen Sie den Dienstnamen.",
+      "validation_failed": "Validierung für einen oder mehrere Sensoren fehlgeschlagen. Bitte überprüfen Sie die Fehlermeldungen.",
       "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
       "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
       "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
@@ -84,7 +84,7 @@
       "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
     },
     "abort": {
-      "already_configured": "Solar Energy Management is already configured. Only one instance is allowed."
+      "already_configured": "Solar Energy Management ist bereits konfiguriert. Nur eine Instanz erlaubt."
     }
   },
   "options": {
@@ -122,9 +122,9 @@
           "grid_export_total_energy_sensor": "Netz-Export Gesamtenergie [Optional]",
           "battery_charge_total_energy_sensor": "Batterie-Ladung Gesamtenergie [Optional]",
           "battery_discharge_total_energy_sensor": "Batterie-Entladung Gesamtenergie [Optional]",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
+          "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         },
         "data_description": {
           "vehicle_soc_entity": "Optional. A sensor that exposes the vehicle's current State of Charge (0–100 %). Only a few cars provide this (Tesla, some VW IDs, MG ZS EV with custom integrations, OBD-II adapters). If empty, SEM uses the kWh-based daily target instead and the two fields below are ignored.",
@@ -153,9 +153,9 @@
           "battery_max_discharge_power": "Maximale Entladeleistung (W)",
           "electricity_import_rate": "Stromimporttarif (pro kWh)",
           "electricity_export_rate": "Stromexporttarif (pro kWh)",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)",
+          "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
+          "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "ev_target_soc": "EV-Ziel-SOC (%)",
           "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
           "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
@@ -227,9 +227,9 @@
           "warning_peak_level": "Warn-Spitzenlaststufe (kW)",
           "emergency_peak_level": "Notfall-Spitzenlaststufe (kW)",
           "critical_device_protection": "Kritische Geräte schützen",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
+          "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         }
       },
       "notifications": {
@@ -239,9 +239,9 @@
           "enable_charger_notifications": "Ladegerät-Display-Benachrichtigungen aktivieren",
           "enable_mobile_notifications": "Mobile Benachrichtigungen aktivieren",
           "mobile_notification_service": "Mobiler Benachrichtigungsdienst",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
+          "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         }
       },
       "dashboard_options": {
@@ -253,9 +253,9 @@
           "dashboard_path": "Dashboard-Pfad (URL)",
           "include_financial": "Finanzverfolgung einschließen",
           "include_flows": "Energiefluss-Visualisierung einschließen",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
+          "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         },
         "data_description": {
           "generate_dashboard": "Erstellen Sie ein neues Lovelace-Dashboard für SEM. Wenn bereits ein Dashboard mit demselben Pfad existiert, wird es ersetzt.",
@@ -266,7 +266,7 @@
         }
       },
       "battery_scheduler": {
-        "title": "Battery Charge Scheduler",
+        "title": "Batterie-Ladeplaner",
         "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
         "data": {
           "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
@@ -282,16 +282,16 @@
         }
       },
       "ev_charger_edit": {
-        "title": "Edit EV Charger",
-        "description": "Update the sensor mappings and priority for this charger.",
+        "title": "EV-Lader bearbeiten",
+        "description": "Sensorzuordnungen und Priorität für diesen Lader aktualisieren.",
         "data": {
-          "charger_name": "Charger Name",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
+          "charger_name": "Ladername",
+          "ev_connected_sensor": "EV Verbindungsstatus",
+          "ev_charging_sensor": "EV Ladestatus",
+          "ev_charging_power_sensor": "EV Ladeleistung",
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)"
+          "ev_surplus_priority": "Überschuss-Priorität (1=höchste)"
         }
       }
     }
@@ -773,76 +773,76 @@
         "name": "Prognose Überschuss"
       },
       "battery_scheduler_state": {
-        "name": "Battery Scheduler State"
+        "name": "Batterie-Ladeplaner Status"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "Batterie-Ladeplaner Ziel-SOC"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Batterie-Ladeplaner Defizit"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Batterie-Ladeplaner Grund"
       },
       "ev_estimated_soc": {
-        "name": "EV Estimated SOC"
+        "name": "EV Geschätzter SOC"
       },
       "ev_last_full_charge": {
-        "name": "EV Last Full Charge"
+        "name": "EV Letzte Vollladung"
       },
       "ev_energy_since_full": {
-        "name": "EV Energy Since Full"
+        "name": "EV Energie seit Vollladung"
       },
       "ev_nights_until_charge": {
-        "name": "EV Nights Until Charge"
+        "name": "EV Nächte bis Ladung"
       },
       "ev_predicted_daily_consumption": {
-        "name": "EV Predicted Daily Consumption"
+        "name": "EV Vorhergesagter Tagesverbrauch"
       },
       "ev_battery_health": {
-        "name": "EV Battery Health"
+        "name": "EV Batteriegesundheit"
       },
       "ev_charge_needed": {
-        "name": "EV Charge Needed"
+        "name": "EV Ladung benötigt"
       },
       "ev_charge_skip_reason": {
-        "name": "EV Charge Skip Reason"
+        "name": "EV Ladeübersprungsgrund"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "Anzahl EV-Lader"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "EV Taper-Trend"
       },
       "ev_taper_ratio": {
-        "name": "EV Taper Ratio"
+        "name": "EV Taper-Verhältnis"
       },
       "ev_taper_minutes_to_full": {
-        "name": "EV Minutes to Full"
+        "name": "EV Minuten bis voll"
       },
       "diag_version": {
-        "name": "SEM Version"
+        "name": "SEM-Version"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Netzsensor-Modus"
       },
       "diag_grid_sign": {
-        "name": "Grid Sign Convention"
+        "name": "Netzvorzeichen"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Lader-Steuerungsmethode"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Batteriekapazität (Konfig.)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Aktualisierungsintervall"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Beobachtermodus"
       },
       "diag_sensors_unavailable": {
-        "name": "Sensors Unavailable"
+        "name": "Sensoren nicht verfügbar"
       }
     },
     "binary_sensor": {
@@ -998,18 +998,18 @@
         "name": "Batteriekapazität"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Warmwasser Solar-Ziel"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Legionellen-Zieltemperatur"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
+        "name": "Legionellen-Intervall (Stunden)"
       }
     },
     "select": {
       "ev_charging_mode": {
-        "name": "EV Charging Mode"
+        "name": "EV-Lademodus"
       }
     }
   }

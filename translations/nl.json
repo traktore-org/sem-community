@@ -67,7 +67,7 @@
       }
     },
     "error": {
-      "unknown": "An unexpected error occurred. Please try again.",
+      "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
       "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
       "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
       "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
@@ -281,16 +281,16 @@
         }
       },
       "ev_charger_edit": {
-        "title": "Edit EV Charger",
+        "title": "EV-lader bewerken",
         "description": "Update the sensor mappings and priority for this charger.",
         "data": {
-          "charger_name": "Charger Name",
+          "charger_name": "Ladernaam",
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",
           "ev_charging_power_sensor": "EV Charging Power",
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)"
+          "ev_surplus_priority": "Overschotprioriteit (1=hoogste)"
         }
       }
     }
@@ -772,43 +772,43 @@
         "name": "Voorspeld Overschot"
       },
       "battery_scheduler_state": {
-        "name": "Battery Scheduler State"
+        "name": "Batterijplanner Status"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "Batterijplanner Doel-SOC"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Batterijplanner Tekort"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Batterijplanner Reden"
       },
       "ev_estimated_soc": {
-        "name": "EV Estimated SOC"
+        "name": "EV Geschatte SOC"
       },
       "ev_last_full_charge": {
-        "name": "EV Last Full Charge"
+        "name": "EV Laatste Volle Lading"
       },
       "ev_energy_since_full": {
-        "name": "EV Energy Since Full"
+        "name": "EV Energie sinds vol"
       },
       "ev_nights_until_charge": {
-        "name": "EV Nights Until Charge"
+        "name": "EV Nachten tot laden"
       },
       "ev_predicted_daily_consumption": {
-        "name": "EV Predicted Daily Consumption"
+        "name": "EV Voorspeld dagverbruik"
       },
       "ev_battery_health": {
-        "name": "EV Battery Health"
+        "name": "EV Batterijgezondheid"
       },
       "ev_charge_needed": {
-        "name": "EV Charge Needed"
+        "name": "EV Laden nodig"
       },
       "ev_charge_skip_reason": {
-        "name": "EV Charge Skip Reason"
+        "name": "EV Overslaan reden"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "Aantal EV-laders"
       },
       "ev_taper_trend": {
         "name": "EV Taper Trend"
@@ -820,10 +820,10 @@
         "name": "EV Minutes to Full"
       },
       "diag_version": {
-        "name": "SEM Version"
+        "name": "SEM-versie"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Netsensor modus"
       },
       "diag_grid_sign": {
         "name": "Grid Sign Convention"
@@ -841,7 +841,7 @@
         "name": "Observer Mode"
       },
       "diag_sensors_unavailable": {
-        "name": "Sensors Unavailable"
+        "name": "Sensoren niet beschikbaar"
       }
     },
     "binary_sensor": {

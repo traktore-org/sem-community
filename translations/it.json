@@ -281,10 +281,10 @@
         }
       },
       "ev_charger_edit": {
-        "title": "Edit EV Charger",
+        "title": "Modifica caricatore VE",
         "description": "Update the sensor mappings and priority for this charger.",
         "data": {
-          "charger_name": "Charger Name",
+          "charger_name": "Nome caricatore",
           "ev_connected_sensor": "EV Connected Status",
           "ev_charging_sensor": "EV Charging Status",
           "ev_charging_power_sensor": "EV Charging Power",
@@ -772,40 +772,40 @@
         "name": "Eccedenza Prevista"
       },
       "battery_scheduler_state": {
-        "name": "Battery Scheduler State"
+        "name": "Stato pianificatore batteria"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "SOC obiettivo pianificatore"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Deficit pianificatore"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Motivo pianificatore"
       },
       "ev_estimated_soc": {
-        "name": "EV Estimated SOC"
+        "name": "SOC stimato VE"
       },
       "ev_last_full_charge": {
-        "name": "EV Last Full Charge"
+        "name": "Ultima ricarica completa"
       },
       "ev_energy_since_full": {
-        "name": "EV Energy Since Full"
+        "name": "Energia da ultima ricarica"
       },
       "ev_nights_until_charge": {
-        "name": "EV Nights Until Charge"
+        "name": "Notti prima della ricarica"
       },
       "ev_predicted_daily_consumption": {
-        "name": "EV Predicted Daily Consumption"
+        "name": "Consumo giornaliero previsto"
       },
       "ev_battery_health": {
-        "name": "EV Battery Health"
+        "name": "Salute batteria VE"
       },
       "ev_charge_needed": {
-        "name": "EV Charge Needed"
+        "name": "Ricarica necessaria"
       },
       "ev_charge_skip_reason": {
-        "name": "EV Charge Skip Reason"
+        "name": "Motivo salto ricarica"
       },
       "ev_charger_count": {
         "name": "EV Charger Count"
@@ -820,10 +820,10 @@
         "name": "EV Minutes to Full"
       },
       "diag_version": {
-        "name": "SEM Version"
+        "name": "Versione SEM"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Modalità sensore rete"
       },
       "diag_grid_sign": {
         "name": "Grid Sign Convention"
@@ -841,7 +841,7 @@
         "name": "Observer Mode"
       },
       "diag_sensors_unavailable": {
-        "name": "Sensors Unavailable"
+        "name": "Sensori non disponibili"
       }
     },
     "binary_sensor": {
