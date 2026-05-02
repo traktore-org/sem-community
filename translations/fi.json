@@ -12,7 +12,7 @@
         }
       },
       "ev_charger": {
-        "title": "EV Charger",
+        "title": "Sähköauton laturi",
         "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
         "data": {
           "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
@@ -34,7 +34,7 @@
         }
       },
       "hardware": {
-        "title": "Hardware",
+        "title": "Laitteisto",
         "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
         "data": {
           "battery_capacity_kwh": "Home Battery Capacity (kWh)",
@@ -90,7 +90,7 @@
   "options": {
     "step": {
       "ev_charger": {
-        "title": "EV Charger",
+        "title": "Sähköauton laturi",
         "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
           "ev_connected_sensor": "EV Connected Status",
@@ -193,7 +193,7 @@
         }
       },
       "settings_ev": {
-        "title": "EV Charging & Solar",
+        "title": "Sähköauton lataus ja aurinko",
         "description": "Configure EV charging targets and solar thresholds.",
         "data": {
           "daily_ev_target": "Night charge target (kWh)",
@@ -204,7 +204,7 @@
         }
       },
       "settings_tariff": {
-        "title": "Tariff & Advanced",
+        "title": "Tariffi ja lisäasetukset",
         "description": "Electricity rates and advanced tuning parameters.",
         "data": {
           "electricity_import_rate": "Import rate",
@@ -218,7 +218,7 @@
         }
       },
       "load_management": {
-        "title": "Load Management Settings",
+        "title": "Kuormanhallinta",
         "description": "Update load management configuration",
         "data": {
           "load_management_enabled": "Enable Load Management",
@@ -232,7 +232,7 @@
         }
       },
       "notifications": {
-        "title": "Notification Settings",
+        "title": "Ilmoitusasetukset",
         "description": "Update notification configuration",
         "data": {
           "enable_charger_notifications": "Enable Charger Display Notifications",
@@ -262,6 +262,35 @@
           "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
           "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
           "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows."
+        }
+      },
+      "battery_scheduler": {
+        "title": "Battery Charge Scheduler",
+        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "data": {
+          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
+          "battery_capacity_kwh": "Battery Capacity",
+          "battery_max_charge_power_w": "Max Charge Power",
+          "battery_roundtrip_efficiency": "Round-trip Efficiency",
+          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
+          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
+          "battery_max_target_soc": "Maximum Target SOC",
+          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
+          "battery_pessimism_weight": "Forecast Pessimism",
+          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+        }
+      },
+      "ev_charger_edit": {
+        "title": "Edit EV Charger",
+        "description": "Update the sensor mappings and priority for this charger.",
+        "data": {
+          "charger_name": "Charger Name",
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Surplus Priority (1=highest)"
         }
       }
     }
