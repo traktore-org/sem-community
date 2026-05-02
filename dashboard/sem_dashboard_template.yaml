@@ -1049,12 +1049,15 @@ views:
           - type: custom:sem-ev-status-card
             entity_prefix: sensor.sem_
 
-          # ── Vehicle SOC (conditional) ──
+          # ── Vehicle SOC (conditional — only when car API provides SOC) ──
           - type: conditional
             conditions:
-              - condition: numeric_state
+              - condition: state
                 entity: sensor.sem_vehicle_soc
-                above: 0
+                state_not: unavailable
+              - condition: state
+                entity: sensor.sem_vehicle_soc
+                state_not: unknown
             card:
               type: gauge
               entity: sensor.sem_vehicle_soc
