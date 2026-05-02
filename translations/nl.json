@@ -12,16 +12,16 @@
         }
       },
       "ev_charger": {
-        "title": "EV Charger",
+        "title": "EV Lader",
         "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
         "data": {
-          "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
-          "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
-          "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
+          "ev_connected_sensor": "🔌 EV Verbonden — voertuig stekker",
+          "ev_charging_sensor": "⚡ EV Laden Actief — huidige laadstatus",
+          "ev_charging_power_sensor": "🚗 EV Laadvermogen — vermogen geleverd (W)",
+          "ev_charger_service": "EV Lader Stroom Service (optioneel)",
+          "ev_charger_service_entity_id": "EV Lader Service Entiteit (optioneel)",
+          "ev_current_sensor": "⚡ EV Laadstroom — amperage (A)",
+          "ev_total_energy_sensor": "🔋 EV Totale Energie — geleverde energie (kWh)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
@@ -48,21 +48,21 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "title": "SEM Herconfigureren",
+        "description": "Werk uw EV lader en meldingsinstellingen bij",
         "data": {
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "EV Charger Service",
-          "ev_charger_service_entity_id": "EV Charger Service Entity",
+          "ev_connected_sensor": "EV Verbonden Status",
+          "ev_charging_sensor": "EV Laadstatus",
+          "ev_charging_power_sensor": "EV Laadvermogen",
+          "ev_charger_service": "EV Lader Service",
+          "ev_charger_service_entity_id": "EV Lader Service Entiteit",
           "ev_total_energy_sensor": "EV Total Energy Counter",
           "enable_charger_notifications": "Lader-displaymeldingen inschakelen",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
-          "mobile_notification_service": "Mobile Notification Service",
+          "enable_mobile_notifications": "Mobiele meldingen inschakelen",
+          "mobile_notification_service": "Mobiele meldingsservice",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "EV Doel SOC (%)"
         }
       }
     },
@@ -105,8 +105,8 @@
         }
       },
       "hardware": {
-        "title": "Hardware Entity Configuration",
-        "description": "Update your hardware entity mappings",
+        "title": "Hardware Entiteit Configuratie",
+        "description": "Werk uw hardware entiteit koppelingen bij",
         "data": {
           "solar_production_sensor": "Solar Production Power",
           "grid_power_sensor": "Grid Power Exchange",
@@ -232,12 +232,12 @@
         }
       },
       "notifications": {
-        "title": "Notification Settings",
+        "title": "Meldingsinstellingen",
         "description": "Update notification configuration",
         "data": {
           "enable_charger_notifications": "Lader-displaymeldingen inschakelen",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
-          "mobile_notification_service": "Mobile Notification Service",
+          "enable_mobile_notifications": "Mobiele meldingen inschakelen",
+          "mobile_notification_service": "Mobiele meldingsservice",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
           "ev_target_soc": "EV Target SOC (%)"
