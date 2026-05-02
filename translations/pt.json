@@ -51,14 +51,14 @@
         "title": "Reconfigure Solar Energy Management",
         "description": "Update your EV charger and notification settings",
         "data": {
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_connected_sensor": "Estado de conexão VE",
+          "ev_charging_sensor": "Estado de carregamento VE",
+          "ev_charging_power_sensor": "Potência de carregamento VE",
           "ev_charger_service": "EV Charger Service",
           "ev_charger_service_entity_id": "EV Charger Service Entity",
           "ev_total_energy_sensor": "EV Total Energy Counter",
           "enable_charger_notifications": "Enable Charger Display Notifications",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
+          "enable_mobile_notifications": "Ativar notificações móveis",
           "mobile_notification_service": "Mobile Notification Service",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
@@ -67,7 +67,7 @@
       }
     },
     "error": {
-      "unknown": "An unexpected error occurred. Please try again.",
+      "unknown": "Ocorreu um erro inesperado. Tente novamente.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
       "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
       "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
@@ -84,7 +84,7 @@
       "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
     },
     "abort": {
-      "already_configured": "Solar Energy Management is already configured. Only one instance is allowed."
+      "already_configured": "Solar Energy Management já está configurado. Apenas uma instância é permitida."
     }
   },
   "options": {
@@ -93,9 +93,9 @@
         "title": "Carregador EV",
         "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_connected_sensor": "Estado de conexão VE",
+          "ev_charging_sensor": "Estado de carregamento VE",
+          "ev_charging_power_sensor": "Potência de carregamento VE",
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
           "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
@@ -113,9 +113,9 @@
           "battery_soc_sensor": "Battery State of Charge",
           "battery_power_sensor": "Battery Charge/Discharge Power",
           "battery_temperature_sensor": "Battery Temperature [Optional]",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_connected_sensor": "Estado de conexão VE",
+          "ev_charging_sensor": "Estado de carregamento VE",
+          "ev_charging_power_sensor": "Potência de carregamento VE",
           "ev_total_energy_sensor": "EV Total Energy Counter [Optional]",
           "solar_total_energy_sensor": "Solar Total Energy Counter [Optional]",
           "grid_import_total_energy_sensor": "Grid Import Total Energy [Optional]",
@@ -209,7 +209,7 @@
         "data": {
           "electricity_import_rate": "Import rate",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
-          "electricity_export_rate": "Export rate",
+          "electricity_export_rate": "Taxa de exportação",
           "demand_charge_rate": "Demand charge rate",
           "update_interval": "Update interval (s)",
           "power_delta": "Power change threshold (W)",
@@ -236,7 +236,7 @@
         "description": "Update notification configuration",
         "data": {
           "enable_charger_notifications": "Enable Charger Display Notifications",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
+          "enable_mobile_notifications": "Ativar notificações móveis",
           "mobile_notification_service": "Mobile Notification Service",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
@@ -247,7 +247,7 @@
         "title": "Dashboard Installation",
         "description": "Install or reinstall the SEM dashboard",
         "data": {
-          "generate_dashboard": "Generate Dashboard",
+          "generate_dashboard": "Gerar dashboard",
           "dashboard_title": "Dashboard Title",
           "dashboard_path": "Dashboard Path (URL)",
           "include_financial": "Include Financial Tracking",
@@ -265,7 +265,7 @@
         }
       },
       "battery_scheduler": {
-        "title": "Battery Charge Scheduler",
+        "title": "Agendador de carga da bateria",
         "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
         "data": {
           "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
@@ -281,13 +281,13 @@
         }
       },
       "ev_charger_edit": {
-        "title": "Edit EV Charger",
+        "title": "Editar carregador VE",
         "description": "Update the sensor mappings and priority for this charger.",
         "data": {
-          "charger_name": "Charger Name",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
+          "charger_name": "Nome do carregador",
+          "ev_connected_sensor": "Estado de conexão VE",
+          "ev_charging_sensor": "Estado de carregamento VE",
+          "ev_charging_power_sensor": "Potência de carregamento VE",
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)"
@@ -772,7 +772,7 @@
         "name": "Forecast Surplus"
       },
       "battery_scheduler_state": {
-        "name": "Battery Scheduler State"
+        "name": "Estado do agendador"
       },
       "battery_scheduler_target_soc": {
         "name": "Battery Scheduler Target SOC"
@@ -784,10 +784,10 @@
         "name": "Battery Scheduler Reason"
       },
       "ev_estimated_soc": {
-        "name": "EV Estimated SOC"
+        "name": "SOC estimado VE"
       },
       "ev_last_full_charge": {
-        "name": "EV Last Full Charge"
+        "name": "Última carga completa VE"
       },
       "ev_energy_since_full": {
         "name": "EV Energy Since Full"
@@ -799,10 +799,10 @@
         "name": "EV Predicted Daily Consumption"
       },
       "ev_battery_health": {
-        "name": "EV Battery Health"
+        "name": "Saúde da bateria VE"
       },
       "ev_charge_needed": {
-        "name": "EV Charge Needed"
+        "name": "Carregamento necessário"
       },
       "ev_charge_skip_reason": {
         "name": "EV Charge Skip Reason"
@@ -820,7 +820,7 @@
         "name": "EV Minutes to Full"
       },
       "diag_version": {
-        "name": "SEM Version"
+        "name": "Versão SEM"
       },
       "diag_grid_mode": {
         "name": "Grid Sensor Mode"
@@ -841,7 +841,7 @@
         "name": "Observer Mode"
       },
       "diag_sensors_unavailable": {
-        "name": "Sensors Unavailable"
+        "name": "Sensores indisponíveis"
       }
     },
     "binary_sensor": {
@@ -1008,7 +1008,7 @@
     },
     "select": {
       "ev_charging_mode": {
-        "name": "EV Charging Mode"
+        "name": "Modo de carregamento VE"
       }
     }
   }
