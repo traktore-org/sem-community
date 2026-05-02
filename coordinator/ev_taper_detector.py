@@ -155,6 +155,7 @@ class EVTaperDetector:
             self._full_confirm_count = 0
 
         if self._full_confirm_count >= 3 and not self._full_detected:
+                self._full_detected = True
                 self._last_full_timestamp = timestamp.isoformat()
                 self._energy_since_full = 0.0
                 self._estimated_soc = 100.0
