@@ -145,12 +145,16 @@ class EVTaperDetector:
         ))
 
         # Check for full charge (0W after declining from a real charging session)
-        # Require peak > 3000W to avoid false triggers from night charging toggles
+        # Require peak > 3000W and 3 consecutive low-power samples (~30s)
+        # to avoid false triggers from brief BMS power dips
         if (self._declining_phase
                 and ev_power < FULL_POWER_THRESHOLD
                 and self._session_peak_w > 3000):
-            if not self._full_detected:
-                self._full_detected = True
+            self._full_confirm_count = getattr(self, '_full_confirm_count', 0) + 1
+        else:
+            self._full_confirm_count = 0
+
+        if self._full_confirm_count >= 3 and not self._full_detected:
                 self._last_full_timestamp = timestamp.isoformat()
                 self._energy_since_full = 0.0
                 self._estimated_soc = 100.0
@@ -235,14 +239,25 @@ class EVTaperDetector:
             ev_energy_increment_kwh: Power-integrated increment (fallback).
             hw_total_energy_kwh: Current charger lifetime total (ground truth).
         """
-        if self._full_detected:
-            return
-
         capacity = self._config.get("ev_battery_capacity_kwh", 40)
 
-        # Prefer hardware counter (drift-free)
+        # Always track hardware counter (even after full detection)
         if hw_total_energy_kwh is not None and hw_total_energy_kwh > 0:
             self._hw_total_last = hw_total_energy_kwh
+
+        if self._full_detected:
+            # Still update hw_total_at_full if car keeps charging after taper
+            # (false taper: BMS briefly reduced then resumed)
+            if self._hw_total_at_full is not None and hw_total_energy_kwh is not None:
+                extra = hw_total_energy_kwh - self._hw_total_at_full
+                if extra > 0.5:
+                    # Car charged more after taper — update the anchor
+                    self._hw_total_at_full = hw_total_energy_kwh
+                    _LOGGER.info(
+                        "Post-taper charging detected: +%.1f kWh — updating hw anchor to %.1f",
+                        extra, hw_total_energy_kwh,
+                    )
+            return
             if self._hw_total_at_full is not None:
                 # Calculate energy since full from hardware delta
                 hw_energy = hw_total_energy_kwh - self._hw_total_at_full
@@ -394,6 +409,7 @@ class EVTaperDetector:
         self._session_peak_w = 0.0
         self._declining_phase = False
         self._full_detected = False
+        self._full_confirm_count = 0
         self._settling_counter = 0
         self._last_setpoint = 0.0
         self._session_start_soc = None
