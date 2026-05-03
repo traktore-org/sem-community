@@ -202,10 +202,11 @@ class SurplusController:
         """Register a device for surplus control."""
         self._devices[device.device_id] = device
         device._controller = self  # Allow device to look up dependencies (#122)
+        depends = getattr(device, 'depends_on', None) or "none"
         _LOGGER.info(
             "Registered device: %s (priority=%d, min=%dW, type=%s, depends_on=%s)",
             device.name, device.priority, device.min_power_threshold,
-            device.device_type.value, device.depends_on or "none",
+            device.device_type.value, depends,
         )
 
     def get_device(self, device_id: str) -> Optional[ControllableDevice]:
@@ -214,20 +215,25 @@ class SurplusController:
 
     def get_dependents(self, device_id: str) -> list:
         """Get all devices that depend on the given device (#122)."""
-        return [d for d in self._devices.values() if device_id in d.depends_on]
+        return [d for d in self._devices.values()
+                if device_id in getattr(d, 'depends_on', [])]
 
     def validate_dependencies(self) -> list:
         """Check for circular dependencies. Returns list of errors."""
         errors = []
         for device in self._devices.values():
+            dep_list = getattr(device, 'depends_on', None)
+            if not dep_list:
+                continue
             visited = set()
             current = device.device_id
             chain = [current]
             while True:
                 deps = self._devices.get(current)
-                if not deps or not deps.depends_on:
+                dep_list = getattr(deps, 'depends_on', None) if deps else None
+                if not deps or not dep_list:
                     break
-                next_dep = deps.depends_on[0]  # Check first dependency for cycles
+                next_dep = dep_list[0]  # Check first dependency for cycles
                 if next_dep in visited:
                     errors.append(f"Circular dependency: {' → '.join(chain + [next_dep])}")
                     break
