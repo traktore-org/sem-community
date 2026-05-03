@@ -310,7 +310,7 @@ class SEMSolarSummaryCard extends HTMLElement {
                             </div>
                             <div class="hero-row">
                                 <span class="hero-label">Tomorrow</span>
-                                <span class="hero-value forecast-tomorrow" style="color:${textSecCol}">—</span>
+                                <span class="hero-value forecast-tomorrow" style="color:var(--secondary-text-color)">—</span>
                             </div>
                         </div>
                     </div>

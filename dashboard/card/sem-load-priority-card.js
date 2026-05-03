@@ -542,35 +542,35 @@ class SEMLoadPriorityCard extends HTMLElement {
                 background-size: 100% 100%, 50px 50px !important;
                 backdrop-filter: blur(18px) saturate(160%) !important;
                 -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
-                border: 1px solid ${surfBorder} !important;
+                border: 1px solid var(--divider-color, ${surfBorder}) !important;
                 border-radius: 16px !important;
                 box-shadow: var(--ha-card-box-shadow, 0 4px 24px rgba(0, 0, 0, 0.35)) !important;
             }
             .card-content { padding: 14px 16px; font-family: 'Segoe UI','Roboto',sans-serif; color: var(--primary-text-color); }
-            .status-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid ${divider}; font-size:0.85em; }
+            .status-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--divider-color, ${divider}); font-size:0.85em; }
             .status-text { text-transform:uppercase; letter-spacing:0.5px; font-weight:600; opacity:0.85; }
             .peak-dot { width:9px; height:9px; border-radius:50%; }
-            .peak-box { background:${surfaceCol}; border:1px solid ${surfBorder}; border-radius:12px; padding:12px; margin-bottom:10px; backdrop-filter: blur(8px); }
+            .peak-box { background:var(--secondary-background-color, ${surfaceCol}); border:1px solid var(--divider-color, ${surfBorder}); border-radius:12px; padding:12px; margin-bottom:10px; backdrop-filter: blur(8px); }
             .peak-row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.9em; }
             .peak-row:last-of-type { margin-bottom:0; }
             .dim { opacity:0.55; font-size:0.9em; }
             .mono { font-variant-numeric:tabular-nums; font-weight:500; }
-            .bar { width:100%; height:5px; background:${divider}; border-radius:3px; overflow:hidden; margin-top:8px; }
+            .bar { width:100%; height:5px; background:var(--divider-color, ${divider}); border-radius:3px; overflow:hidden; margin-top:8px; }
             .bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease, background 0.4s ease; }
             .target-row { display:flex; align-items:center; gap:8px; margin-top:6px; }
-            .target-row input { width:70px; padding:5px 8px; border:1px solid ${surfBorder}; border-radius:8px; background:${inputBg}; color:var(--primary-text-color, inherit); text-align:center; font-size:0.9em; }
+            .target-row input { width:70px; padding:5px 8px; border:1px solid var(--divider-color, ${surfBorder}); border-radius:8px; background:var(--card-background-color, ${inputBg}); color:var(--primary-text-color, inherit); text-align:center; font-size:0.9em; }
             .target-row input:focus { outline:none; border-color:#ff9800; }
             .target-row button { padding:5px 14px; border:none; border-radius:8px; background:#ff9800; color:#fff; cursor:pointer; font-size:0.85em; }
             .target-row button:hover { background:#e68900; }
             .section-label { font-size:0.85em; opacity:0.55; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
             .device-list { min-height:40px; }
-            .device { display:flex; align-items:stretch; background:${surfaceCol}; border:1px solid ${surfBorder}; border-radius:12px; margin-bottom:6px; transition:transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; overflow:hidden; backdrop-filter: blur(8px); }
+            .device { display:flex; align-items:stretch; background:var(--secondary-background-color, ${surfaceCol}); border:1px solid var(--divider-color, ${surfBorder}); border-radius:12px; margin-bottom:6px; transition:transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; overflow:hidden; backdrop-filter: blur(8px); }
             .device.ghost { opacity:0.3; }
             .device.chosen { box-shadow:0 4px 20px rgba(0,0,0,0.15); border-color:#ff9800; z-index:10; }
             .device.dragging { opacity:0; }
             .device.moved { border-color:#ff9800; transition:border-color 0.1s ease; }
-            .drag-handle { display:flex; align-items:center; justify-content:center; width:32px; min-width:32px; cursor:grab; font-size:16px; opacity:0.3; user-select:none; touch-action:none; border-right:1px solid ${divider}; }
-            .drag-handle:hover { opacity:0.6; background:${surfaceCol}; }
+            .drag-handle { display:flex; align-items:center; justify-content:center; width:32px; min-width:32px; cursor:grab; font-size:16px; opacity:0.3; user-select:none; touch-action:none; border-right:1px solid var(--divider-color, ${divider}); }
+            .drag-handle:hover { opacity:0.6; background:var(--secondary-background-color, ${surfaceCol}); }
             .drag-handle:active { cursor:grabbing; }
             .device-body { flex:1; padding:10px 12px; min-width:0; }
             .device-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
@@ -578,22 +578,22 @@ class SEMLoadPriorityCard extends HTMLElement {
             .device-name span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
             .device-power { font-size:0.9em; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; opacity:0.7; }
             .device-bottom { display:flex; align-items:center; gap:8px; font-size:0.8em; flex-wrap:wrap; }
-            .status-dot { width:7px; height:7px; border-radius:50%; background:${divider}; flex-shrink:0; }
+            .status-dot { width:7px; height:7px; border-radius:50%; background:var(--divider-color, ${divider}); flex-shrink:0; }
             .status-dot.on { background:#4caf50; box-shadow:0 0 6px #4caf50; }
             .spacer { flex:1; }
             .badge { padding:2px 7px; border-radius:8px; font-size:0.8em; font-weight:600; }
             .badge.priority { background:#ff9800; color:#fff; min-width:14px; text-align:center; }
             .toggle-label { display:flex; align-items:center; gap:4px; }
-            .toggle { width:30px; height:16px; background:${divider}; border-radius:8px; cursor:pointer; position:relative; transition:background 0.2s; flex-shrink:0; }
+            .toggle { width:30px; height:16px; background:var(--divider-color, ${divider}); border-radius:8px; cursor:pointer; position:relative; transition:background 0.2s; flex-shrink:0; }
             .toggle.on { background:#ff9800; }
             .knob { position:absolute; top:2px; left:2px; width:12px; height:12px; background:#fff; border-radius:50%; transition:transform 0.2s; }
             .toggle.on .knob { transform:translateX(14px); }
             .arrows { display:flex; flex-direction:column; gap:1px; }
             .arrow-btn { border:none; background:none; cursor:pointer; font-size:10px; padding:0 4px; opacity:0.35; line-height:1; color:var(--primary-text-color, inherit); }
             .arrow-btn:hover { opacity:0.8; }
-            .mode-select { background:${selectBg}; color:var(--primary-text-color, ${textCol}); border:1px solid ${surfBorder}; border-radius:6px; padding:2px 6px; font-size:11px; font-family:'Segoe UI','Roboto',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none; }
+            .mode-select { background:var(--card-background-color, ${selectBg}); color:var(--primary-text-color); border:1px solid var(--divider-color, ${surfBorder}); border-radius:6px; padding:2px 6px; font-size:11px; font-family:'Segoe UI','Roboto',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none; }
             .mode-select:focus { outline:none; border-color:rgba(255,152,0,0.5); }
-            .mode-select option { background:${selectOptBg}; color:var(--primary-text-color, ${textCol}); }
+            .mode-select option { background:var(--card-background-color, ${selectOptBg}); color:var(--primary-text-color); }
             .configure-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.25); border-radius:5px; color:#ffc107; cursor:pointer; font-size:0.75em; }
             .configure-btn:hover { background:rgba(255,193,7,0.22); }
             .hint { text-align:center; font-size:0.8em; opacity:0.4; margin-top:10px; }
