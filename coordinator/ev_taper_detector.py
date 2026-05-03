@@ -444,8 +444,16 @@ class EVTaperDetector:
 
         soc = self.get_virtual_soc(vehicle_soc)
 
-        if capacity <= 0 or predicted_daily_kwh <= 0:
+        if capacity <= 0:
             return (99, False, "Insufficient data")
+
+        # Use fallback if predictor has no data for this weekday yet
+        if predicted_daily_kwh <= 0:
+            fallback_kwh = self._config.get("daily_ev_target", 10)
+            if fallback_kwh > 0:
+                predicted_daily_kwh = fallback_kwh
+            else:
+                return (99, False, "Insufficient data")
 
         predicted_soc_drop = predicted_daily_kwh / capacity * 100.0
         safety = 1.3  # 30% safety margin
