@@ -379,6 +379,20 @@ class SEMLoadPriorityCard extends HTMLElement {
                     const depValue = depTarget.value;
                     device.dependsOn = depValue ? [depValue] : [];
                     this._sendDeviceUpdate(deviceId, 'depends_on', depValue);
+
+                    // Auto-reorder: move parent above child if needed
+                    if (depValue) {
+                        const childIdx = this.devices.findIndex(d => d.id === deviceId);
+                        const parentIdx = this.devices.findIndex(d => d.id === depValue);
+                        if (parentIdx > childIdx) {
+                            // Parent is below child — move parent just above child
+                            const [parent] = this.devices.splice(parentIdx, 1);
+                            this.devices.splice(childIdx, 0, parent);
+                            // Re-render and save new priorities
+                            this._fullRender();
+                            this._savePriorities();
+                        }
+                    }
                 }
             }
         });
@@ -403,6 +417,27 @@ class SEMLoadPriorityCard extends HTMLElement {
 
         // Swap in data
         [this.devices[idx], this.devices[newIdx]] = [this.devices[newIdx], this.devices[idx]];
+
+        // Validate: don't allow child above its parent (#122)
+        const moved = this.devices[newIdx];
+        if (moved.dependsOn.length) {
+            const parentIdx = this.devices.findIndex(d => moved.dependsOn.includes(d.id));
+            if (parentIdx >= 0 && newIdx < parentIdx) {
+                // Revert: child can't be above parent
+                [this.devices[idx], this.devices[newIdx]] = [this.devices[newIdx], this.devices[idx]];
+                return;
+            }
+        }
+        // Also check: if moved device is a parent, don't allow it below its children
+        const children = this.devices.filter(d => d.dependsOn.includes(moved.id));
+        for (const child of children) {
+            const childIdx = this.devices.indexOf(child);
+            if (newIdx > childIdx) {
+                [this.devices[idx], this.devices[newIdx]] = [this.devices[newIdx], this.devices[idx]];
+                return;
+            }
+        }
+
         this.devices.forEach((d, i) => { d.priority = i + 1; });
 
         // Update badges
