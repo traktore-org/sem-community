@@ -102,6 +102,15 @@ class SEMPeriodSelectorCard extends HTMLElement {
             { key: 'year', label: this._t('period_this_year') || 'This Year' },
         ];
 
+        const T = (typeof semTheme === 'function') ? semTheme() : {};
+        const textSecCol = T.textSec     || '#9e9e9e';
+        const textCol    = T.text        || '#e0e0e0';
+        const surfaceCol = T.surface     || 'rgba(255,255,255,0.05)';
+        const surfBorder = T.surfaceBorder || 'rgba(255,255,255,0.08)';
+        const surfHover  = T.surfaceHover  || 'rgba(255,255,255,0.08)';
+        const dotCol     = T.dotColor    || 'rgba(128,128,128,0.04)';
+        const accent     = T.accent      || '#42a5f5';
+
         this.shadowRoot.innerHTML = `
             <style>
                 :host { display: block; }
@@ -113,13 +122,13 @@ class SEMPeriodSelectorCard extends HTMLElement {
                     flex-wrap: wrap;
                     background:
                         radial-gradient(ellipse 80% 60% at 50% 50%, rgba(200,220,240,0.04) 0%, transparent 100%),
-                        radial-gradient(circle at 2px 2px, rgba(128,128,128,0.04) 0.7px, transparent 0.7px);
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                 }
                 .btn {
-                    border: 1px solid rgba(255,255,255,0.08);
-                    background: rgba(255,255,255,0.05);
-                    color: #9e9e9e;
+                    border: 1px solid ${surfBorder};
+                    background: ${surfaceCol};
+                    color: ${textSecCol};
                     padding: 8px 18px;
                     border-radius: 12px;
                     font-size: 13px;
@@ -133,14 +142,14 @@ class SEMPeriodSelectorCard extends HTMLElement {
                     user-select: none;
                 }
                 .btn:hover {
-                    background: rgba(255,255,255,0.08);
-                    color: #e0e0e0;
-                    border-color: rgba(255,255,255,0.14);
+                    background: ${surfHover};
+                    color: ${textCol};
+                    border-color: ${surfBorder};
                 }
                 .btn.active {
                     background: rgba(66,165,245,0.18);
                     border-color: rgba(66,165,245,0.40);
-                    color: #42a5f5;
+                    color: ${accent};
                     box-shadow: 0 0 16px rgba(66,165,245,0.12), 0 0 4px rgba(66,165,245,0.08);
                     font-weight: 600;
                 }

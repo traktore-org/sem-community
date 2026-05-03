@@ -163,7 +163,7 @@ views:
                 show: true
                 position: top
                 labels:
-                  colors: "#9e9e9e"
+                  colors: var(--secondary-text-color)
               plotOptions:
                 bar:
                   columnWidth: 55%
@@ -179,7 +179,7 @@ views:
                   decimalsInFloat: 1
                   labels:
                     style:
-                      colors: "#757575"
+                      colors: var(--secondary-text-color)
             series:
               - entity: sensor.sem_daily_solar_energy
                 name: Solar
@@ -505,13 +505,14 @@ views:
                 float_precision: 1
             apex_config:
               chart:
+                height: 260
                 background: transparent
                 foreColor: var(--primary-text-color)
               legend:
                 show: true
                 position: bottom
                 labels:
-                  colors: "#9e9e9e"
+                  colors: var(--secondary-text-color)
               dataLabels:
                 enabled: false
               tooltip:
@@ -519,16 +520,17 @@ views:
               plotOptions:
                 pie:
                   donut:
+                    size: "65%"
                     labels:
                       show: true
                       total:
                         show: true
                         label: Total
-                        color: "#9e9e9e"
+                        color: var(--secondary-text-color)
                         formatter: |
                           EVAL:function(w) { return w.globals.seriesTotals.reduce(function(a,b){return a+b},0).toFixed(1); }
                       value:
-                        color: "#e0e0e0"
+                        color: var(--primary-text-color)
                         formatter: |
                           EVAL:function(val) { return parseFloat(val).toFixed(1); }
             card_mod:
@@ -581,14 +583,14 @@ views:
                   decimalsInFloat: 0
                   labels:
                     style:
-                      colors: "#757575"
+                      colors: var(--secondary-text-color)
               tooltip:
                 theme: dark
                 x:
                   format: HH:mm
               legend:
                 labels:
-                  colors: "#9e9e9e"
+                  colors: var(--secondary-text-color)
             card_mod:
               style: *glass_card
 
@@ -635,14 +637,14 @@ views:
                   decimalsInFloat: 0
                   labels:
                     style:
-                      colors: "#757575"
+                      colors: var(--secondary-text-color)
               tooltip:
                 theme: dark
                 x:
                   format: HH:mm
               legend:
                 labels:
-                  colors: "#9e9e9e"
+                  colors: var(--secondary-text-color)
             card_mod:
               style: *glass_card
 
@@ -703,14 +705,14 @@ views:
                   decimalsInFloat: 0
                   labels:
                     style:
-                      colors: "#757575"
+                      colors: var(--secondary-text-color)
               tooltip:
                 theme: dark
                 x:
                   format: dd MMM
               legend:
                 labels:
-                  colors: "#9e9e9e"
+                  colors: var(--secondary-text-color)
             series:
               - entity: sensor.sem_self_consumption_rate
                 name: Self-consumption
@@ -835,7 +837,7 @@ views:
                   format: dd MMM
               legend:
                 labels:
-                  colors: "#9e9e9e"
+                  colors: var(--secondary-text-color)
             card_mod:
               style: *glass_card
 
@@ -913,12 +915,12 @@ views:
                 - title:
                     text: Watts
                     style:
-                      color: "#9e9e9e"
+                      color: var(--secondary-text-color)
                   seriesName: Power
                   decimalsInFloat: 0
                   labels:
                     style:
-                      colors: "#9e9e9e"
+                      colors: var(--secondary-text-color)
                 - id: soc
                   opposite: true
                   title:
@@ -935,14 +937,14 @@ views:
               xaxis:
                 labels:
                   style:
-                    colors: "#757575"
+                    colors: var(--secondary-text-color)
               tooltip:
                 theme: dark
                 x:
                   format: HH:mm
               legend:
                 labels:
-                  colors: "#9e9e9e"
+                  colors: var(--secondary-text-color)
               annotations:
                 yaxis:
                   - y: 0
@@ -1163,7 +1165,7 @@ views:
                   format: HH:mm
               legend:
                 labels:
-                  colors: "#9e9e9e"
+                  colors: var(--secondary-text-color)
             card_mod:
               style: *glass_card
 

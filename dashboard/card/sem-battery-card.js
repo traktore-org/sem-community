@@ -133,7 +133,8 @@ class SEMBatteryCard extends HTMLElement {
         // Status color
         const statusEl = $('.m-status');
         if (statusEl) {
-            statusEl.style.color = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : '#888';
+            const idleColor = (typeof semTheme === 'function') ? semTheme().textSec : '#888';
+            statusEl.style.color = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : idleColor;
         }
 
         // Translate labels
@@ -155,6 +156,14 @@ class SEMBatteryCard extends HTMLElement {
 
     _renderSkeleton() {
         const circumference = (2 * Math.PI * 42).toFixed(1);
+        const T = (typeof semTheme === 'function') ? semTheme() : {};
+        const textCol    = T.text       || '#e0e0e0';
+        const textSecCol = T.textSec    || '#999';
+        const chipLblCol = T.textTertiary || '#888';
+        const surfaceCol = T.surface    || 'rgba(255,255,255,0.06)';
+        const surfBorder = T.surfaceBorder || 'rgba(255,255,255,0.05)';
+        const surfHover  = T.surfaceHover  || 'rgba(255,255,255,0.12)';
+        const dotCol     = T.dotColor   || 'rgba(128,128,128,0.05)';
 
         this.shadowRoot.innerHTML = `
             <style>
@@ -164,10 +173,10 @@ class SEMBatteryCard extends HTMLElement {
                     position: relative;
                     background:
                         radial-gradient(ellipse 70% 60% at 50% 30%, rgba(77,182,172,0.06) 0%, transparent 100%),
-                        radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: #e0e0e0;
+                    color: ${textCol};
                 }
                 .glow-svg { position: absolute; width: 0; height: 0; }
 
@@ -258,7 +267,7 @@ class SEMBatteryCard extends HTMLElement {
                 }
                 .metric-label {
                     font-size: 12px;
-                    color: #999;
+                    color: ${textSecCol};
                     font-weight: 500;
                 }
                 .metric-val {
@@ -278,21 +287,19 @@ class SEMBatteryCard extends HTMLElement {
                 .chip {
                     flex: 1;
                     min-width: 80px;
-                    background:
-                        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(200,220,240,0.03) 0%, transparent 100%),
-                        rgba(40, 40, 55, 0.4);
-                    border: 1px solid rgba(255,255,255,0.05);
+                    background: ${surfaceCol};
+                    border: 1px solid ${surfBorder};
                     border-radius: 10px;
                     padding: 8px 10px;
                     text-align: center;
                     transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1);
                 }
                 .chip:hover {
-                    border-color: rgba(255,255,255,0.12);
+                    border-color: ${surfHover};
                 }
                 .chip-label {
                     font-size: 10px;
-                    color: #888;
+                    color: ${chipLblCol};
                     font-weight: 500;
                     letter-spacing: 0.3px;
                     margin-bottom: 3px;

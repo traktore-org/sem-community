@@ -205,6 +205,11 @@ class SEMTabHeader extends HTMLElement {
         const color = cfg.color;
         const labels = this._getStatLabels();
         const F = "'Segoe UI','Roboto',sans-serif";
+        const T = (typeof semTheme === 'function') ? semTheme() : {};
+        const textCol     = T.text       || '#e0e0e0';
+        const textSecCol  = T.textSec    || '#888';
+        const textTertCol = T.textTertiary || '#777';
+        const dotCol      = T.dotColor   || 'rgba(128,128,128,0.05)';
 
         this.shadowRoot.innerHTML = `
             <style>
@@ -218,7 +223,7 @@ class SEMTabHeader extends HTMLElement {
                     overflow: hidden;
                     background:
                         radial-gradient(ellipse 80% 70% at 20% 50%, ${color}0D 0%, transparent 70%),
-                        radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: ${F};
                 }
@@ -245,7 +250,7 @@ class SEMTabHeader extends HTMLElement {
                 }
                 .tab-subtitle {
                     font-size: 12px;
-                    color: #888;
+                    color: ${textSecCol};
                     margin-top: 2px;
                     font-weight: 500;
                 }
@@ -262,11 +267,11 @@ class SEMTabHeader extends HTMLElement {
                     font-size: 15px;
                     font-weight: 700;
                     font-variant-numeric: tabular-nums;
-                    color: #e0e0e0;
+                    color: ${textCol};
                 }
                 .stat-label {
                     font-size: 10px;
-                    color: #777;
+                    color: ${textTertCol};
                     font-weight: 500;
                     margin-top: 1px;
                 }
