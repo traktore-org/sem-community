@@ -232,3 +232,96 @@ class TestSerialization:
 
         d = pump.to_dict()
         assert "depends_on" not in d
+
+
+# ════════════════════════════════════════════
+# Dependency lifecycle (set, release, reorder)
+# ════════════════════════════════════════════
+
+class TestDependencyLifecycle:
+    """Test setting and releasing dependencies at runtime."""
+
+    def test_set_dependency_runtime(self, hass):
+        """Setting depends_on at runtime blocks activation."""
+        pump = _make_switch(hass, "pump", "Pump", priority=1)
+        heater = _make_switch(hass, "heater", "Heater", priority=2)
+
+        controller = _make_controller(hass)
+        controller.register_device(pump)
+        controller.register_device(heater)
+
+        # Initially no dependency — heater can activate
+        assert heater.can_activate() is True
+
+        # Set dependency at runtime
+        heater.depends_on = ["pump"]
+        assert heater.can_activate() is False
+
+        # Activate pump — heater unblocked
+        pump._status.state = DeviceState.ACTIVE
+        assert heater.can_activate() is True
+
+    def test_release_dependency(self, hass):
+        """Clearing depends_on releases the device."""
+        pump = _make_switch(hass, "pump", "Pump", priority=1)
+        heater = _make_switch(hass, "heater", "Heater", priority=2, depends_on=["pump"])
+
+        controller = _make_controller(hass)
+        controller.register_device(pump)
+        controller.register_device(heater)
+
+        # Blocked
+        assert heater.can_activate() is False
+
+        # Release
+        heater.depends_on = []
+        assert heater.can_activate() is True
+        assert heater.blocked_by_dependency is None
+
+    def test_unknown_dependency_does_not_block(self, hass):
+        """Depending on a non-existent device does not block."""
+        heater = _make_switch(hass, "heater", "Heater", depends_on=["nonexistent"])
+
+        controller = _make_controller(hass)
+        controller.register_device(heater)
+
+        # Unknown device — don't block
+        assert heater.can_activate() is True
+
+    def test_parent_below_child_priority(self, hass):
+        """Even if parent has lower priority (higher number), dependency still works."""
+        pump = _make_switch(hass, "pump", "Pump", priority=5)
+        heater = _make_switch(hass, "heater", "Heater", priority=1, depends_on=["pump"])
+
+        controller = _make_controller(hass)
+        controller.register_device(pump)
+        controller.register_device(heater)
+
+        # Heater has higher priority but depends on pump
+        assert heater.can_activate() is False
+
+        pump._status.state = DeviceState.ACTIVE
+        assert heater.can_activate() is True
+
+    def test_chain_dependency(self, hass):
+        """A→B→C: C can only activate when both A and B are active."""
+        a = _make_switch(hass, "a", "A", priority=1)
+        b = _make_switch(hass, "b", "B", priority=2, depends_on=["a"])
+        c = _make_switch(hass, "c", "C", priority=3, depends_on=["b"])
+
+        controller = _make_controller(hass)
+        for d in [a, b, c]:
+            controller.register_device(d)
+
+        # Nothing active
+        assert c.can_activate() is False
+        assert b.can_activate() is False
+
+        # Only A active — B can activate, C still blocked
+        a._status.state = DeviceState.ACTIVE
+        assert b.can_activate() is True
+        assert c.can_activate() is False
+
+        # A + B active — C can activate
+        b._status.state = DeviceState.ACTIVE
+        assert c.can_activate() is True

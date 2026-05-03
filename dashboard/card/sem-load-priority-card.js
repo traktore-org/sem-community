@@ -178,8 +178,8 @@ class SEMLoadPriorityCard extends HTMLElement {
         const isChild = device.dependsOn.length > 0;
         const indent = isChild ? 'margin-left:24px;border-left:2px solid rgba(255,152,0,0.3);' : '';
         return `
-        <div class="device" data-id="${device.id}" style="${indent}">
-            <div class="drag-handle" title="Drag to reorder">≡</div>
+        <div class="device${isChild ? ' is-child' : ''}" data-id="${device.id}" style="${indent}">
+            <div class="drag-handle" title="${isChild ? 'Locked under parent — change Requires to release' : 'Drag to reorder'}" style="${isChild ? 'opacity:0.3;cursor:default' : ''}">${isChild ? '·' : '≡'}</div>
             <div class="device-body">
                 <div class="device-top">
                     <div class="device-name">
@@ -383,19 +383,11 @@ class SEMLoadPriorityCard extends HTMLElement {
                     device.dependsOn = depValue ? [depValue] : [];
                     this._sendDeviceUpdate(deviceId, 'depends_on', depValue);
 
-                    // Auto-reorder: move parent above child if needed
-                    if (depValue) {
-                        const childIdx = this.devices.findIndex(d => d.id === deviceId);
-                        const parentIdx = this.devices.findIndex(d => d.id === depValue);
-                        if (parentIdx > childIdx) {
-                            // Parent is below child — move parent just above child
-                            const [parent] = this.devices.splice(parentIdx, 1);
-                            this.devices.splice(childIdx, 0, parent);
-                            // Re-render and save new priorities
-                            this._fullRender();
-                            this._savePriorities();
-                        }
-                    }
+                    // Regroup: place child under parent, or release to independent
+                    this._regroupChildren();
+                    this.devices.forEach((d, i) => { d.priority = i + 1; });
+                    this._fullRender();
+                    this._sendPriorityUpdate();
                 }
             }
         });
@@ -418,28 +410,15 @@ class SEMLoadPriorityCard extends HTMLElement {
             list.insertBefore(target, current);
         }
 
+        // Children can't be moved via arrows — only parents (#122)
+        const device = this.devices[idx];
+        if (device.dependsOn.length) return;
+
         // Swap in data
         [this.devices[idx], this.devices[newIdx]] = [this.devices[newIdx], this.devices[idx]];
 
-        // Validate: don't allow child above its parent (#122)
-        const moved = this.devices[newIdx];
-        if (moved.dependsOn.length) {
-            const parentIdx = this.devices.findIndex(d => moved.dependsOn.includes(d.id));
-            if (parentIdx >= 0 && newIdx < parentIdx) {
-                // Revert: child can't be above parent
-                [this.devices[idx], this.devices[newIdx]] = [this.devices[newIdx], this.devices[idx]];
-                return;
-            }
-        }
-        // Also check: if moved device is a parent, don't allow it below its children
-        const children = this.devices.filter(d => d.dependsOn.includes(moved.id));
-        for (const child of children) {
-            const childIdx = this.devices.indexOf(child);
-            if (newIdx > childIdx) {
-                [this.devices[idx], this.devices[newIdx]] = [this.devices[newIdx], this.devices[idx]];
-                return;
-            }
-        }
+        // Skip over children when moving parent — keep children grouped under parent
+        this._regroupChildren();
 
         this.devices.forEach((d, i) => { d.priority = i + 1; });
 
@@ -462,6 +441,41 @@ class SEMLoadPriorityCard extends HTMLElement {
         this._hass.callService('solar_energy_management', 'update_device_priorities', {
             priorities: this.devices.map(d => ({ device_id: d.id, priority: d.priority })),
         });
+    }
+
+    _regroupChildren() {
+        // Ensure each child is directly after its parent (#122)
+        // Build parent → children map
+        const parentChildren = {};
+        this.devices.forEach(d => {
+            if (d.dependsOn.length) {
+                const parentId = d.dependsOn[0];
+                if (!parentChildren[parentId]) parentChildren[parentId] = [];
+                parentChildren[parentId].push(d);
+            }
+        });
+        // Rebuild: parents in current order, children grouped after each parent
+        const result = [];
+        const placed = new Set();
+        this.devices.forEach(d => {
+            if (placed.has(d.id)) return;
+            if (!d.dependsOn.length) {
+                result.push(d);
+                placed.add(d.id);
+                // Add children right after
+                (parentChildren[d.id] || []).forEach(child => {
+                    if (!placed.has(child.id)) {
+                        result.push(child);
+                        placed.add(child.id);
+                    }
+                });
+            }
+        });
+        // Add any orphaned children (parent not found)
+        this.devices.forEach(d => {
+            if (!placed.has(d.id)) result.push(d);
+        });
+        this.devices = result;
     }
 
     _sendDeviceUpdate(deviceId, property, value) {
