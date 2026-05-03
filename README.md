@@ -36,7 +36,7 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 - **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
 - **Dynamic tariff support** — Tibber, Nordpool, aWATTar price-responsive charging
 - **200+ sensors and entities** — power, energy, flows, costs, performance, forecasts, and more
-- **Built-in dashboard** — glassmorphism dark theme with animated system diagram, Sankey, and native HA energy cards
+- **Built-in dashboard** — theme-aware styling (works on both dark and light HA themes), animated system diagram, Sankey, and native HA energy cards
 - **PV performance analytics** — specific yield, forecast accuracy, degradation tracking
 - **Smart recommendations** — forecast-aware tips ("Best window for appliances: 11:00-14:00", "Low solar tomorrow — charge EV tonight")
 - **Consumption/solar predictor** — learns hourly patterns (weekday/weekend), predicts next-hour power and daily consumption
