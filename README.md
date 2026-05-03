@@ -34,7 +34,7 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority, with appliance dependency chains (e.g. heater only runs when pump is active)
 - **Peak load management** — automatic device shedding to stay under your grid limit
 - **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
-- **Dynamic tariff support** — Tibber, Nordpool, aWATTar price-responsive charging
+- **Dynamic tariff support** — Tibber, Nordpool, aWATTar, Amber Electric price-responsive charging
 - **200+ sensors and entities** — power, energy, flows, costs, performance, forecasts, and more
 - **Built-in dashboard** — theme-aware styling (works on both dark and light HA themes), animated system diagram, Sankey, and native HA energy cards
 - **PV performance analytics** — specific yield, forecast accuracy, degradation tracking
@@ -448,8 +448,8 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - Dashboard JS cards, YAML templates, chart presets, and sensor definitions all read from `Settings > General > Currency`
 
 ### Tariff Mode Selector (#120)
-- **Three tariff modes** exposed in options flow: Static (fixed HT/NT), Dynamic (Tibber/Nordpool/aWATTar), Calendar (time-based schedule)
-- **Auto-detection** — SEM scans for Tibber/Nordpool/aWATTar entities when dynamic mode is selected
+- **Three tariff modes** exposed in options flow: Static (fixed HT/NT), Dynamic (Tibber/Nordpool/aWATTar/Amber Electric), Calendar (time-based schedule)
+- **Auto-detection** — SEM scans for Tibber/Nordpool/aWATTar/Amber Electric entities when dynamic mode is selected
 - **Price-responsive surplus** — dynamic mode enables price-aware device activation during cheap/negative price windows
 
 ### GoodWe Support (#68)
