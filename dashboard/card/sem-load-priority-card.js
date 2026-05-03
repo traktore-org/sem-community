@@ -175,12 +175,15 @@ class SEMLoadPriorityCard extends HTMLElement {
 
     _renderDevice(device, priority) {
         const onOff = device.isOn;
+        const isChild = device.dependsOn.length > 0;
+        const indent = isChild ? 'margin-left:24px;border-left:2px solid rgba(255,152,0,0.3);' : '';
         return `
-        <div class="device" data-id="${device.id}">
+        <div class="device" data-id="${device.id}" style="${indent}">
             <div class="drag-handle" title="Drag to reorder">≡</div>
             <div class="device-body">
                 <div class="device-top">
                     <div class="device-name">
+                        ${isChild ? '<span style="color:#ff9800;font-size:12px;margin-right:4px">↳</span>' : ''}
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
                         ${device.hasManualMapping ? '<ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px;color:#ffc107;opacity:0.6"></ha-icon>' : ''}
