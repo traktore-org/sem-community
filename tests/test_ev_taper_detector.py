@@ -873,13 +873,14 @@ class TestNightChargeSkip:
         assert "No charge history" in reason
 
     def test_skip_with_zero_daily_consumption(self):
-        """WFH day, 0 kWh predicted → skip with 99 nights range."""
+        """WFH day, 0 kWh predicted → falls back to daily_ev_target (10 kWh).
+        SOC 100%, target 80%, min 20%, daily 10 kWh → 3 nights range."""
         det = EVTaperDetector(DEFAULT_CONFIG)
         _feed_taper_profile(det)
 
         nights, needed, reason = det.calculate_nights_until_charge(0.0)
         assert needed is False
-        assert nights == 99
+        assert nights == 3  # Fallback to daily_ev_target=10
 
     def test_skip_weekend_high_consumption(self):
         """SOC 60%, weekend trip 15 kWh (37.5%) → charge needed."""
