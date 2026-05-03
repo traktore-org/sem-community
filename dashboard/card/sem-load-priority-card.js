@@ -280,6 +280,8 @@ class SEMLoadPriorityCard extends HTMLElement {
             if (this._sortable) this._sortable.destroy();
             this._sortable = Sortable.create(list, {
                 handle: '.drag-handle',
+                filter: '.is-child',  // Prevent dragging children (#122)
+                preventOnFilter: false,
                 animation: 200,
                 easing: 'cubic-bezier(0.4, 0, 0.2, 1)',
                 ghostClass: 'ghost',
@@ -292,6 +294,10 @@ class SEMLoadPriorityCard extends HTMLElement {
                     this._interacting = false;
                     if (evt.oldIndex !== evt.newIndex) {
                         this._applyReorder();
+                        this._regroupChildren();
+                        this.devices.forEach((d, i) => { d.priority = i + 1; });
+                        this._fullRender();
+                        this._sendPriorityUpdate();
                     }
                 },
             });
