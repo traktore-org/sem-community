@@ -163,7 +163,7 @@ class SEMWeatherCard extends HTMLElement {
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                 }
 
                 /* Clock section */
@@ -204,7 +204,7 @@ class SEMWeatherCard extends HTMLElement {
                 }
                 .weather-label {
                     font-size: 12px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     margin-top: 2px;
                     font-weight: 500;
                 }
@@ -229,7 +229,7 @@ class SEMWeatherCard extends HTMLElement {
                     align-items: center;
                     gap: 6px;
                     font-size: 12px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                 }
                 .detail-icon {
                     font-size: 14px;
@@ -252,7 +252,7 @@ class SEMWeatherCard extends HTMLElement {
                 }
                 .f-day {
                     width: 32px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     font-weight: 500;
                     font-size: 12px;
                 }

@@ -190,7 +190,7 @@ class SEMEVStatusCard extends HTMLElement {
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                     min-height: 108px;
                     overflow: hidden;
                 }
@@ -327,7 +327,7 @@ class SEMEVStatusCard extends HTMLElement {
                 }
                 .status-value.charging { color: #8DC892; text-shadow: 0 0 8px rgba(141,200,146,0.4); }
                 .status-value.connected { color: #8DC892; }
-                .status-value.disconnected { color: ${textSecCol}; }
+                .status-value.disconnected { color: var(--secondary-text-color, ${textSecCol}); }
 
                 /* Power value (large) */
                 .power-row .metric-value {
@@ -372,7 +372,7 @@ class SEMEVStatusCard extends HTMLElement {
                     padding: 3px 10px;
                     font-size: 11px;
                     font-weight: 500;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                     font-variant-numeric: tabular-nums;
                 }
                 .chip-label { color: var(--secondary-text-color, ${textTertCol}); }

@@ -128,7 +128,7 @@ class SEMPeriodSelectorCard extends HTMLElement {
                 .btn {
                     border: 1px solid ${surfBorder};
                     background: ${surfaceCol};
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     padding: 8px 18px;
                     border-radius: 12px;
                     font-size: 13px;
@@ -143,7 +143,7 @@ class SEMPeriodSelectorCard extends HTMLElement {
                 }
                 .btn:hover {
                     background: ${surfHover};
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                     border-color: ${surfBorder};
                 }
                 .btn.active {

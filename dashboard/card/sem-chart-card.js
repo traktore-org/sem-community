@@ -504,7 +504,7 @@ class SEMChartCard extends HTMLElement {
                     display: none;
                     align-items: center;
                     justify-content: center;
-                    color: ${textTertCol};
+                    color: var(--secondary-text-color, ${textTertCol});
                     font-size: 13px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
                 }

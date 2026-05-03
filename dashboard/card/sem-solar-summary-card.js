@@ -131,7 +131,7 @@ class SEMSolarSummaryCard extends HTMLElement {
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                 }
                 /* SVG glow filter */
                 .glow-svg { position: absolute; width: 0; height: 0; }
