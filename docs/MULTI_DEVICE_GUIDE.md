@@ -184,9 +184,43 @@ data:
 | `must_active` (default) | Dependent only activates when dependency IS running |
 | `must_inactive` | Dependent only activates when dependency is NOT running (backup/fallback) |
 
+### Setting Dependencies from the Dashboard
+
+1. Go to the **Control** tab on the SEM dashboard
+2. Find the device you want to make dependent
+3. In the **Requires** dropdown, select the parent device
+4. The child device automatically indents under the parent
+5. To release: set **Requires** back to **None** — the device becomes independent
+
+### Dependency Patterns
+
+**Chain (A → B → C):**
+```
+≡  Pool Pump                    Requires: None
+  ↳  Pool Heater                Requires: Pool Pump
+    ↳  Pool Lights              Requires: Pool Heater
+```
+- Pump must be on before heater can start
+- Heater must be on before lights can start
+- Shutting down pump → cascades to heater → cascades to lights
+
+**Siblings (A with B and C):**
+```
+≡  Heat Pump                    Requires: None
+  ↳  Circulation Pump           Requires: Heat Pump
+  ↳  Buffer Valve               Requires: Heat Pump
+```
+- Heat pump must be on before either can start
+- Circulation and valve are independent of each other
+- Shutting down heat pump → both children shut down
+
 ### How It Works
 
 1. **Activation gate**: when SEM has surplus and tries to activate a device, it first checks all `depends_on` devices are in the required state
 2. **Deactivation cascade**: when a device is deactivated (surplus dropped), all devices that depend on it are also deactivated
-3. **Dashboard**: blocked devices show "Waiting for: {device name}" status
-4. **Circular detection**: SEM validates that dependencies don't form circular chains (A→B→A)
+3. **Surplus mode**: child only turns on when parent is already running AND surplus is available
+4. **Peak mode**: when shedding load, shutting down the parent also shuts down all children
+5. **Dashboard**: blocked devices show "⏳ Waiting for: {device}" and are visually indented
+6. **Drag protection**: children can't be dragged — they stay locked under their parent. Only parents can be reordered
+7. **Persistence**: dependency settings survive HA restarts
+8. **Circular detection**: SEM validates that dependencies don't form circular chains (A→B→A)

@@ -104,6 +104,21 @@ Each charger gets its own sensor entities:
 
 To **edit** an existing charger, select it from the charger menu. To **remove**, select "Remove a charger" (primary charger cannot be removed).
 
+### Appliance Dependencies
+
+Devices can require other devices to be active before they turn on. Set this from the **Control** tab on the dashboard:
+
+1. Find the device in the priority list
+2. Use the **Requires** dropdown to select a parent device
+3. The child indents under the parent automatically
+4. To release: set Requires back to **None**
+
+Dependencies work for both surplus and peak modes:
+- **Surplus**: child only activates when parent is running and surplus available
+- **Peak shedding**: shutting down parent cascades to all children
+
+See [Multi-Device Guide](docs/MULTI_DEVICE_GUIDE.md) for examples.
+
 ### Load Management Settings
 
 | Setting | Default | Description |

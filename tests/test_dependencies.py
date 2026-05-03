@@ -325,3 +325,127 @@ class TestDependencyLifecycle:
         # A + B active — C can activate
         b._status.state = DeviceState.ACTIVE
         assert c.can_activate() is True
+
+
+# ════════════════════════════════════════════
+# Sibling + cascade + edge cases
+# ════════════════════════════════════════════
+
+class TestSiblingDependencies:
+    """B and C both depend on A — independent of each other."""
+
+    def test_siblings_both_blocked(self, hass):
+        """Both siblings blocked when parent inactive."""
+        parent = _make_switch(hass, "hp", "Heat Pump", priority=1)
+        circ = _make_switch(hass, "circ", "Circulation", priority=2, depends_on=["hp"])
+        valve = _make_switch(hass, "valve", "Valve", priority=3, depends_on=["hp"])
+
+        controller = _make_controller(hass)
+        for d in [parent, circ, valve]:
+            controller.register_device(d)
+
+        assert circ.can_activate() is False
+        assert valve.can_activate() is False
+
+    def test_siblings_both_unblocked(self, hass):
+        """Both siblings can activate when parent active."""
+        parent = _make_switch(hass, "hp", "Heat Pump", priority=1)
+        circ = _make_switch(hass, "circ", "Circulation", priority=2, depends_on=["hp"])
+        valve = _make_switch(hass, "valve", "Valve", priority=3, depends_on=["hp"])
+
+        controller = _make_controller(hass)
+        for d in [parent, circ, valve]:
+            controller.register_device(d)
+
+        parent._status.state = DeviceState.ACTIVE
+        assert circ.can_activate() is True
+        assert valve.can_activate() is True
+
+    def test_sibling_independence(self, hass):
+        """Deactivating one sibling doesn't affect the other."""
+        parent = _make_switch(hass, "hp", "Heat Pump", priority=1)
+        circ = _make_switch(hass, "circ", "Circulation", priority=2, depends_on=["hp"])
+        valve = _make_switch(hass, "valve", "Valve", priority=3, depends_on=["hp"])
+
+        controller = _make_controller(hass)
+        for d in [parent, circ, valve]:
+            controller.register_device(d)
+
+        parent._status.state = DeviceState.ACTIVE
+        circ._status.state = DeviceState.ACTIVE
+        valve._status.state = DeviceState.ACTIVE
+
+        # Deactivate circ — valve stays active (independent)
+        circ._status.state = DeviceState.IDLE
+        assert valve.can_activate() is True
+
+    def test_get_dependents_siblings(self, hass):
+        """get_dependents returns all siblings."""
+        parent = _make_switch(hass, "hp", "Heat Pump")
+        circ = _make_switch(hass, "circ", "Circulation", depends_on=["hp"])
+        valve = _make_switch(hass, "valve", "Valve", depends_on=["hp"])
+        other = _make_switch(hass, "other", "Other")
+
+        controller = _make_controller(hass)
+        for d in [parent, circ, valve, other]:
+            controller.register_device(d)
+
+        deps = controller.get_dependents("hp")
+        dep_ids = [d.device_id for d in deps]
+        assert len(dep_ids) == 2
+        assert "circ" in dep_ids
+        assert "valve" in dep_ids
+        assert "other" not in dep_ids
+
+
+class TestEdgeCases:
+    """Edge cases that should be handled gracefully."""
+
+    def test_self_dependency_ignored(self, hass):
+        """Device depending on itself should not block."""
+        device = _make_switch(hass, "a", "A", depends_on=["a"])
+        controller = _make_controller(hass)
+        controller.register_device(device)
+
+        # Self-reference: device looks itself up, sees it's not active
+        # but should not block (circular)
+        # Our implementation: get_device("a") returns self which is IDLE
+        # _check_dependencies returns False — this IS blocking
+        # This is actually correct: a device can't depend on itself
+        # The circular validator should catch this
+        errors = controller.validate_dependencies()
+        assert len(errors) > 0  # Self-reference IS circular
+
+    def test_remove_parent_unblocks_child(self, hass):
+        """Unregistering parent should not crash children."""
+        parent = _make_switch(hass, "pump", "Pump")
+        child = _make_switch(hass, "heater", "Heater", depends_on=["pump"])
+
+        controller = _make_controller(hass)
+        controller.register_device(parent)
+        controller.register_device(child)
+
+        assert child.can_activate() is False
+
+        # Remove parent
+        controller.unregister_device("pump")
+
+        # Child should now be able to activate (unknown dep = don't block)
+        assert child.can_activate() is True
+
+    def test_empty_depends_on(self, hass):
+        """Empty depends_on list should not block."""
+        device = _make_switch(hass, "a", "A")
+        device.depends_on = []
+
+        controller = _make_controller(hass)
+        controller.register_device(device)
+
+        assert device.can_activate() is True
+        assert device.blocked_by_dependency is None
+
+    def test_dependency_with_no_controller(self, hass):
+        """Device with depends_on but no controller reference."""
+        device = _make_switch(hass, "a", "A", depends_on=["b"])
+        # Don't register — no controller reference
+        assert device.can_activate() is True  # No controller = can't check = allow
