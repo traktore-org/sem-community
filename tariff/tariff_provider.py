@@ -272,6 +272,28 @@ class DynamicTariffProvider(TariffProvider):
                 _LOGGER.info("Detected Amber Electric price entity: %s", entity_id)
                 return "amber"
 
+        # Try Octopus Energy (UK)
+        for state in self.hass.states.async_all("sensor"):
+            entity_id = state.entity_id
+            if "octopus_energy" in entity_id and "current_rate" in entity_id:
+                self._price_entity = entity_id
+                self._provider_name = "octopus"
+                # Discover event entities for today/tomorrow rate arrays
+                base = entity_id.replace("sensor.", "event.").replace("_current_rate", "")
+                for suffix in ("_current_day_rates", "_next_day_rates"):
+                    event_id = base + suffix
+                    event_state = self.hass.states.get(event_id)
+                    if event_state and event_state.state not in ("unknown", "unavailable"):
+                        self._forecast_entity = event_id
+                        break
+                # Try export rate sensor
+                export_id = entity_id.replace("current_rate", "export_current_rate")
+                export_state = self.hass.states.get(export_id)
+                if export_state and export_state.state not in ("unknown", "unavailable"):
+                    self._feedin_entity = export_id
+                _LOGGER.info("Detected Octopus Energy price entity: %s", entity_id)
+                return "octopus"
+
         # Try Nordpool
         for state in self.hass.states.async_all("sensor"):
             entity_id = state.entity_id
@@ -364,8 +386,8 @@ class DynamicTariffProvider(TariffProvider):
                             except (ValueError, TypeError):
                                 continue
 
-        # Generic forecast: "forecasts" attribute (Amber Electric, or any provider
-        # that stores an array of {start_time/start, per_kwh/price/value} dicts).
+        # Generic forecast: "forecasts" or "rates" attribute (Amber Electric,
+        # Octopus Energy, or any provider that stores an array of price dicts).
         # Checks the price entity first, then the dedicated forecast entity if set.
         if not prices:
             forecast_sources = [attrs]
@@ -374,28 +396,32 @@ class DynamicTariffProvider(TariffProvider):
                 if fc_state:
                     forecast_sources.append(fc_state.attributes)
             for src_attrs in forecast_sources:
-                forecast_list = src_attrs.get("forecasts", [])
-                if isinstance(forecast_list, list) and forecast_list:
-                    for item in forecast_list:
-                        if not isinstance(item, dict):
-                            continue
-                        ts = item.get("start_time", item.get("start", item.get("startsAt")))
-                        price = item.get("per_kwh", item.get("price", item.get("total", item.get("value"))))
-                        if ts and price is not None:
-                            try:
-                                if isinstance(ts, str):
-                                    dt = datetime.fromisoformat(ts)
-                                else:
-                                    dt = ts
-                                prices.append(PricePoint(
-                                    timestamp=dt,
-                                    price=float(price),
-                                    currency=self.currency,
-                                    level=self._classify_price(float(price)),
-                                ))
-                            except (ValueError, TypeError):
+                for attr_key in ("forecasts", "rates"):
+                    forecast_list = src_attrs.get(attr_key, [])
+                    if isinstance(forecast_list, list) and forecast_list:
+                        for item in forecast_list:
+                            if not isinstance(item, dict):
                                 continue
-                    break  # Only use first source that has forecasts
+                            ts = item.get("start_time", item.get("start", item.get("startsAt")))
+                            price = item.get("per_kwh", item.get("price", item.get("total",
+                                    item.get("value", item.get("value_inc_vat")))))
+                            if ts and price is not None:
+                                try:
+                                    if isinstance(ts, str):
+                                        dt = datetime.fromisoformat(ts)
+                                    else:
+                                        dt = ts
+                                    prices.append(PricePoint(
+                                        timestamp=dt,
+                                        price=float(price),
+                                        currency=self.currency,
+                                        level=self._classify_price(float(price)),
+                                    ))
+                                except (ValueError, TypeError):
+                                    continue
+                        break  # Found data in this attribute, stop
+                if prices:
+                    break  # Found data in this source, stop
 
         return sorted(prices, key=lambda p: p.timestamp)
 
@@ -506,6 +532,51 @@ class DynamicTariffProvider(TariffProvider):
         # Find cheapest non-consecutive hours
         sorted_by_price = sorted(future_prices, key=lambda p: p.price)
         return sorted(sorted_by_price[:hours_needed], key=lambda p: p.timestamp)
+
+    def get_schedule_for_day(
+        self, date: Optional[datetime] = None,
+    ) -> List[Dict[str, Any]]:
+        """Generate tariff schedule blocks from dynamic price forecast.
+
+        Maps price levels to HT/NT for the schedule card:
+        - cheap/very_cheap/negative → NT (green)
+        - normal/expensive/very_expensive → HT (orange)
+
+        Returns list of {"start": "HH:MM", "end": "HH:MM", "tariff": "HT"|"NT"}.
+        """
+        prices = self._read_prices_list()
+        target_date = (date or dt_util.now()).date()
+        today_prices = sorted(
+            [p for p in prices if p.timestamp.date() == target_date],
+            key=lambda p: p.timestamp,
+        )
+        if not today_prices:
+            return []
+
+        _CHEAP = (PriceLevel.NEGATIVE, PriceLevel.VERY_CHEAP, PriceLevel.CHEAP)
+        schedule: List[Dict[str, Any]] = []
+        current_tariff: Optional[str] = None
+        block_start: Optional[str] = None
+
+        for p in today_prices:
+            tariff = "NT" if p.level in _CHEAP else "HT"
+            time_str = f"{p.timestamp.hour:02d}:{p.timestamp.minute:02d}"
+            if tariff != current_tariff:
+                if current_tariff is not None and block_start is not None:
+                    schedule.append({
+                        "start": block_start, "end": time_str,
+                        "tariff": current_tariff,
+                    })
+                block_start = time_str
+                current_tariff = tariff
+
+        if current_tariff is not None and block_start is not None:
+            schedule.append({
+                "start": block_start, "end": "24:00",
+                "tariff": current_tariff,
+            })
+
+        return schedule
 
 
 class SpotMarketProvider(DynamicTariffProvider):

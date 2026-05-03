@@ -461,6 +461,7 @@ Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider
 | **Nordpool** | Nordics, Baltics | Auto (`sensor.nordpool*`) | 60 min | Static |
 | **aWATTar** | Austria, Germany | Auto (`sensor.awattar`) | 60 min | Static |
 | **Amber Electric** | Australia | Auto (`sensor.amber_*_general_price`) | 30 min | Dynamic (live feed-in rate) |
+| **Octopus Energy** | UK | Auto (`sensor.octopus_energy_*_current_rate`) | 30 min | Dynamic (export rate sensor) |
 | **Any other** | Any | Manual (select price entity) | Auto-detected | Static or dynamic |
 
 #### Amber Electric setup (Australia)
