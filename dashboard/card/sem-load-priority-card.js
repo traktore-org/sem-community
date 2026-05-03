@@ -85,6 +85,8 @@ class SEMLoadPriorityCard extends HTMLElement {
                     hasManualMapping: info.has_manual_mapping || false,
                     energySensor: info.energy_sensor || '',
                     controlMode: info.control_mode || 'peak_only',
+                    dependsOn: info.depends_on || [],
+                    blockedBy: info.blocked_by || null,
                     icon: this._getDeviceIcon(info.device_type),
                 }))
                 .sort((a, b) => a.priority - b.priority);
@@ -186,6 +188,8 @@ class SEMLoadPriorityCard extends HTMLElement {
                     </div>
                     <div class="device-power" data-field="power-${device.id}">${onOff ? device.power.toFixed(1) + ' kW' : 'OFF'}</div>
                 </div>
+                ${device.blockedBy ? `<div class="dependency-blocked" style="font-size:11px;color:#ff9800;padding:2px 0 0 28px">⏳ Waiting for: ${device.blockedBy}</div>` : ''}
+                ${device.dependsOn.length ? `<div class="dependency-info" style="font-size:11px;color:#888;padding:0 0 0 28px">↳ Depends on: ${device.dependsOn.join(', ')}</div>` : ''}
                 <div class="device-bottom">
                     <div class="status-dot ${onOff ? 'on' : ''}" data-field="status-${device.id}"></div>
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? 'ON' : 'OFF'}</span>
