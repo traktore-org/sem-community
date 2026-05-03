@@ -202,6 +202,14 @@ class SEMLoadPriorityCard extends HTMLElement {
                             <option value="surplus"${device.controlMode === 'surplus' ? ' selected' : ''}>${this._t('surplus_mode')}</option>
                         </select>
                     </label>
+                    <label class="toggle-label"><span class="dim">Requires</span>
+                        <select class="mode-select" data-action="depends_on" data-device="${device.id}">
+                            <option value=""${!device.dependsOn.length ? ' selected' : ''}>None</option>
+                            ${this.devices.filter(d => d.id !== device.id).map(d =>
+                                `<option value="${d.id}"${device.dependsOn.includes(d.id) ? ' selected' : ''}>${d.name}</option>`
+                            ).join('')}
+                        </select>
+                    </label>
                     <div class="arrows">
                         <button class="arrow-btn" data-action="move-up" data-device="${device.id}" title="Move up">▲</button>
                         <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="Move down">▼</button>
@@ -351,15 +359,27 @@ class SEMLoadPriorityCard extends HTMLElement {
             }
         });
 
-        // Control mode select handler (#49)
+        // Control mode + dependency select handler
         root.addEventListener('change', (e) => {
-            const target = e.target.closest('[data-action="control_mode"]');
-            if (!target) return;
-            const deviceId = target.dataset.device;
-            const device = this.devices.find(d => d.id === deviceId);
-            if (device) {
-                device.controlMode = target.value;
-                this._sendDeviceUpdate(deviceId, 'control_mode', target.value);
+            const modeTarget = e.target.closest('[data-action="control_mode"]');
+            if (modeTarget) {
+                const deviceId = modeTarget.dataset.device;
+                const device = this.devices.find(d => d.id === deviceId);
+                if (device) {
+                    device.controlMode = modeTarget.value;
+                    this._sendDeviceUpdate(deviceId, 'control_mode', modeTarget.value);
+                }
+                return;
+            }
+            const depTarget = e.target.closest('[data-action="depends_on"]');
+            if (depTarget) {
+                const deviceId = depTarget.dataset.device;
+                const device = this.devices.find(d => d.id === deviceId);
+                if (device) {
+                    const depValue = depTarget.value;
+                    device.dependsOn = depValue ? [depValue] : [];
+                    this._sendDeviceUpdate(deviceId, 'depends_on', depValue);
+                }
             }
         });
     }
