@@ -452,7 +452,7 @@ class DynamicTariffProvider(TariffProvider):
 
         data = TariffData(
             current_import_rate=current_price,
-            current_export_rate=self.export_rate,
+            current_export_rate=self.get_current_export_rate(),
             price_level=self._classify_price(current_price),
             currency=self.currency,
             provider=self._provider_name,
