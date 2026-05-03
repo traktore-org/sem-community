@@ -442,7 +442,7 @@ SEM supports three tariff modes, selectable in **Settings > Devices > Solar Ener
 
 Fixed import/export rates with optional HT/NT differentiation. SEM applies HT rates during weekday daytime (07:00-20:00) and NT rates at nights/weekends. Configure the rates in the Tariff & Advanced options step.
 
-### Dynamic tariffs (Tibber / Nordpool / aWATTar)
+### Dynamic tariffs (Tibber / Nordpool / aWATTar / Amber Electric)
 
 Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider by scanning for known entity patterns, or you can select the price entity manually. When active:
 
@@ -452,6 +452,30 @@ Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider
 - `sensor.sem_tariff_next_cheap_start` shows next cheap window
 - **Price-responsive surplus**: during cheap/negative price windows, SEM adds virtual surplus to encourage device activation
 - Night charging can be scheduled for cheapest hours
+
+#### Supported providers
+
+| Provider | Region | Detection | Intervals | Feed-in |
+|----------|--------|-----------|-----------|---------|
+| **Tibber** | Nordics, Germany, NL | Auto (`sensor.*electricity_price*`) | 60 min | Static |
+| **Nordpool** | Nordics, Baltics | Auto (`sensor.nordpool*`) | 60 min | Static |
+| **aWATTar** | Austria, Germany | Auto (`sensor.awattar`) | 60 min | Static |
+| **Amber Electric** | Australia | Auto (`sensor.amber_*_general_price`) | 30 min | Dynamic (live feed-in rate) |
+| **Any other** | Any | Manual (select price entity) | Auto-detected | Static or dynamic |
+
+#### Amber Electric setup (Australia)
+
+SEM auto-detects Amber when the [Amber Electric integration](https://www.home-assistant.io/integrations/amberelectric/) is installed. No manual configuration needed — SEM finds:
+
+- **Price sensor** (`sensor.amber_*_general_price`) — live import price in $/kWh
+- **Forecast sensor** (`sensor.amber_*_general_forecast`) — 12-hour price forecast (30-min intervals)
+- **Feed-in sensor** (`sensor.amber_*_feed_in_price`) — live feed-in rate (dynamic export revenue)
+
+With Amber forecasts, SEM optimizes EV charging and battery scheduling around the cheapest 30-minute slots, and avoids price spikes.
+
+#### Generic provider support
+
+Any HA integration that exposes a price sensor works with SEM. If the sensor has a `forecasts` attribute containing an array of `{start_time, per_kwh}` or `{start, price}` objects, SEM will use the forecast data for scheduling optimization. Set the price entity manually in the tariff options.
 
 ### Calendar tariffs (time-based HT/NT schedule)
 

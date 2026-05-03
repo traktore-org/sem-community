@@ -250,6 +250,426 @@ class TestDynamicTariffProvider:
 
 
 # ---------------------------------------------------------------------------
+# Amber Electric / Generic Forecast Provider
+# ---------------------------------------------------------------------------
+
+class TestAmberElectricProvider:
+    """Tests for Amber Electric and generic forecast attribute parsing."""
+
+    def _amber_price_state(self, price=0.28):
+        """Create a mock Amber price sensor state."""
+        return _make_price_state(price, attributes={
+            "duration": 30,
+            "per_kwh": price,
+            "spot_per_kwh": 0.045,
+            "renewables": 42.5,
+            "spike_status": "none",
+            "descriptor": "neutral",
+        })
+
+    def _amber_forecast_state(self, base_time, count=12, interval_min=30, base_price=0.20):
+        """Create a mock Amber forecast sensor with forecasts attribute."""
+        forecasts = []
+        for i in range(count):
+            start = base_time + timedelta(minutes=interval_min * i)
+            end = start + timedelta(minutes=interval_min)
+            price = base_price + (i % 5) * 0.05  # Varying prices
+            forecasts.append({
+                "duration": interval_min,
+                "date": start.strftime("%Y-%m-%d"),
+                "per_kwh": round(price, 4),
+                "spot_per_kwh": round(price * 0.3, 4),
+                "start_time": start.isoformat(),
+                "end_time": end.isoformat(),
+                "renewables": 40.0 + i,
+                "spike_status": "none",
+                "descriptor": "neutral" if price < 0.35 else "high",
+                "channel_type": "general",
+            })
+        state = MagicMock()
+        state.state = str(forecasts[0]["per_kwh"]) if forecasts else "0"
+        state.attributes = {"forecasts": forecasts}
+        return state, forecasts
+
+    def _amber_feedin_state(self, price=-0.05):
+        """Create a mock Amber feed-in price sensor (negative = earning)."""
+        return _make_price_state(price)
+
+    # ── Auto-detection ──
+
+    def test_detect_amber_by_entity_name(self, hass):
+        """Amber detected from sensor name pattern."""
+        amber = MagicMock()
+        amber.entity_id = "sensor.amber_my_home_general_price"
+        amber.attributes = {}
+        amber.state = "0.28"
+
+        hass.states.get = MagicMock(return_value=None)
+        hass.states.async_all = MagicMock(return_value=[amber])
+
+        provider = DynamicTariffProvider(hass)
+        result = provider.detect_provider()
+        assert result == "amber"
+        assert provider._price_entity == "sensor.amber_my_home_general_price"
+        assert provider._provider_name == "amber"
+
+    def test_detect_amber_finds_forecast_entity(self, hass):
+        """Detection also discovers the forecast entity."""
+        amber_price = MagicMock()
+        amber_price.entity_id = "sensor.amber_my_home_general_price"
+        amber_price.attributes = {}
+        amber_price.state = "0.28"
+
+        forecast_state = MagicMock()
+        forecast_state.state = "0.25"
+        forecast_state.attributes = {"forecasts": []}
+
+        feedin_state = MagicMock()
+        feedin_state.state = "-0.05"
+
+        def mock_get(entity_id):
+            if "forecast" in entity_id:
+                return forecast_state
+            if "feed_in" in entity_id:
+                return feedin_state
+            return None
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        hass.states.async_all = MagicMock(return_value=[amber_price])
+
+        provider = DynamicTariffProvider(hass)
+        provider.detect_provider()
+        assert provider._forecast_entity == "sensor.amber_my_home_general_forecast"
+        assert provider._feedin_entity == "sensor.amber_my_home_feed_in_price"
+
+    def test_detect_amber_no_forecast_entity(self, hass):
+        """Works without forecast entity (fallback to current price only)."""
+        amber_price = MagicMock()
+        amber_price.entity_id = "sensor.amber_general_price"
+        amber_price.attributes = {}
+        amber_price.state = "0.28"
+
+        hass.states.get = MagicMock(return_value=None)
+        hass.states.async_all = MagicMock(return_value=[amber_price])
+
+        provider = DynamicTariffProvider(hass)
+        provider.detect_provider()
+        assert provider._provider_name == "amber"
+        assert provider._forecast_entity is None
+        assert provider._feedin_entity is None
+
+    # ── Current price reading ──
+
+    def test_amber_current_price(self, hass):
+        """Read current price from Amber price sensor."""
+        hass.states.get = MagicMock(return_value=self._amber_price_state(0.32))
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        assert provider.get_current_import_rate() == 0.32
+
+    # ── Dynamic export rate from feed-in sensor ──
+
+    def test_dynamic_export_rate_from_feedin(self, hass):
+        """Export rate read from feed-in entity (abs of negative value)."""
+        def mock_get(entity_id):
+            if entity_id == "sensor.amber_general_price":
+                return self._amber_price_state(0.28)
+            if entity_id == "sensor.amber_feed_in_price":
+                return self._amber_feedin_state(-0.08)
+            return None
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        provider._feedin_entity = "sensor.amber_feed_in_price"
+        assert provider.get_current_export_rate() == pytest.approx(0.08)
+
+    def test_dynamic_export_rate_positive_feedin(self, hass):
+        """Feed-in price that's already positive."""
+        def mock_get(entity_id):
+            if "feed_in" in entity_id:
+                return _make_price_state(0.06)
+            return self._amber_price_state(0.28)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        provider._feedin_entity = "sensor.amber_feed_in_price"
+        assert provider.get_current_export_rate() == pytest.approx(0.06)
+
+    def test_export_rate_fallback_no_feedin_entity(self, hass):
+        """Falls back to static export_rate when no feed-in entity."""
+        hass.states.get = MagicMock(return_value=self._amber_price_state(0.28))
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price", export_rate=0.075)
+        assert provider.get_current_export_rate() == 0.075
+
+    def test_export_rate_fallback_feedin_unavailable(self, hass):
+        """Falls back when feed-in entity is unavailable."""
+        def mock_get(entity_id):
+            if "feed_in" in entity_id:
+                state = MagicMock()
+                state.state = "unavailable"
+                return state
+            return self._amber_price_state(0.28)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price", export_rate=0.075)
+        provider._feedin_entity = "sensor.amber_feed_in_price"
+        assert provider.get_current_export_rate() == 0.075
+
+    # ── Forecast price parsing ──
+
+    def test_read_amber_forecasts_from_forecast_entity(self, hass):
+        """Parse forecasts from dedicated forecast sensor."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        forecast_state, raw_forecasts = self._amber_forecast_state(now, count=12)
+
+        def mock_get(entity_id):
+            if "forecast" in entity_id:
+                return forecast_state
+            return self._amber_price_state(0.28)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        provider._forecast_entity = "sensor.amber_general_forecast"
+        prices = provider._read_prices_list()
+
+        assert len(prices) == 12
+        assert prices[0].price == raw_forecasts[0]["per_kwh"]
+        assert prices[0].timestamp == datetime.fromisoformat(raw_forecasts[0]["start_time"])
+        # Verify sorted by time
+        for i in range(1, len(prices)):
+            assert prices[i].timestamp >= prices[i - 1].timestamp
+
+    def test_read_amber_forecasts_from_price_entity_attrs(self, hass):
+        """Parse forecasts from price entity attributes (if provider puts them there)."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        forecasts = [
+            {"start_time": (now + timedelta(minutes=30 * i)).isoformat(), "per_kwh": 0.20 + i * 0.03}
+            for i in range(6)
+        ]
+        state = _make_price_state(0.20, attributes={"forecasts": forecasts})
+        hass.states.get = MagicMock(return_value=state)
+
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        prices = provider._read_prices_list()
+
+        assert len(prices) == 6
+        assert prices[0].price == 0.20
+        assert prices[5].price == pytest.approx(0.35)
+
+    def test_amber_30min_intervals_get_price_at(self, hass):
+        """get_price_at works with 30-minute intervals."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        forecasts = [
+            {"start_time": (now + timedelta(minutes=30 * i)).isoformat(), "per_kwh": 0.20 + i * 0.05}
+            for i in range(6)
+        ]
+        state = _make_price_state(0.20, attributes={"forecasts": forecasts})
+        hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+
+            # At 14:00 exactly → first interval (0.20)
+            assert provider.get_price_at(now) == pytest.approx(0.20)
+            # At 14:15 → still first interval
+            assert provider.get_price_at(now + timedelta(minutes=15)) == pytest.approx(0.20)
+            # At 14:30 → second interval (0.25)
+            assert provider.get_price_at(now + timedelta(minutes=30)) == pytest.approx(0.25)
+            # At 14:45 → still second interval
+            assert provider.get_price_at(now + timedelta(minutes=45)) == pytest.approx(0.25)
+            # At 15:00 → third interval (0.30)
+            assert provider.get_price_at(now + timedelta(minutes=60)) == pytest.approx(0.30)
+
+    def test_amber_hourly_intervals_still_work(self, hass):
+        """get_price_at still works with hourly intervals (Tibber/Nordpool)."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        prices = [
+            {"start": (now + timedelta(hours=i)).isoformat(), "total": 0.10 + i * 0.05}
+            for i in range(4)
+        ]
+        state = _make_price_state(0.10, attributes={"prices_today": prices})
+        hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(hass, price_entity="sensor.tibber_price")
+            assert provider.get_price_at(now) == pytest.approx(0.10)
+            assert provider.get_price_at(now + timedelta(minutes=30)) == pytest.approx(0.10)
+            assert provider.get_price_at(now + timedelta(hours=1)) == pytest.approx(0.15)
+
+    def test_amber_forecast_negative_prices(self, hass):
+        """Handle negative prices (renewable oversupply)."""
+        now = datetime(2026, 5, 3, 12, 0, 0)
+        forecasts = [
+            {"start_time": (now + timedelta(minutes=30 * i)).isoformat(), "per_kwh": -0.05 + i * 0.03}
+            for i in range(6)
+        ]
+        state = _make_price_state(-0.05, attributes={"forecasts": forecasts})
+        hass.states.get = MagicMock(return_value=state)
+
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        prices = provider._read_prices_list()
+
+        assert len(prices) == 6
+        assert prices[0].price == -0.05
+        assert prices[0].level == PriceLevel.NEGATIVE
+
+    def test_amber_forecast_spike_detection(self, hass):
+        """Classify spike prices as very_expensive."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        forecasts = [
+            {"start_time": now.isoformat(), "per_kwh": 0.25},
+            {"start_time": (now + timedelta(minutes=30)).isoformat(), "per_kwh": 2.50},  # Spike!
+        ]
+        state = _make_price_state(0.25, attributes={"forecasts": forecasts})
+        hass.states.get = MagicMock(return_value=state)
+
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        prices = provider._read_prices_list()
+
+        assert prices[0].level == PriceLevel.NORMAL
+        assert prices[1].level == PriceLevel.VERY_EXPENSIVE
+
+    # ── E2E: full tariff data pipeline ──
+
+    def test_amber_full_tariff_data(self, hass):
+        """End-to-end: detection → price → forecasts → tariff data."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+
+        # Create Amber entities
+        amber_price = MagicMock()
+        amber_price.entity_id = "sensor.amber_my_home_general_price"
+        amber_price.attributes = {}
+        amber_price.state = "0.28"
+
+        forecast_state, _ = self._amber_forecast_state(now, count=24, base_price=0.15)
+        feedin_state = self._amber_feedin_state(-0.06)
+
+        def mock_get(entity_id):
+            if "forecast" in entity_id:
+                return forecast_state
+            if "feed_in" in entity_id:
+                return feedin_state
+            if "general_price" in entity_id:
+                return self._amber_price_state(0.28)
+            return None
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        hass.states.async_all = MagicMock(return_value=[amber_price])
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+
+            provider = DynamicTariffProvider(hass, currency="AUD")
+            result = provider.detect_provider()
+            assert result == "amber"
+
+            data = provider.get_tariff_data()
+            assert data.is_dynamic is True
+            assert data.provider == "amber"
+            assert data.current_import_rate == 0.28
+            assert data.current_export_rate == pytest.approx(0.06)
+            assert data.currency == "AUD"
+            assert data.today_min_price is not None
+            assert data.today_max_price is not None
+            assert len(data.upcoming_prices) > 0
+
+            # Serialization works
+            d = data.to_dict()
+            assert d["tariff_provider"] == "amber"
+            assert d["tariff_is_dynamic"] is True
+            assert d["tariff_current_import_rate"] == 0.28
+            assert d["tariff_current_export_rate"] == pytest.approx(0.06)
+
+    def test_amber_find_cheapest_hours(self, hass):
+        """find_cheapest_hours works with 30-minute Amber intervals."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        forecasts = [
+            {"start_time": (now + timedelta(minutes=30 * i)).isoformat(), "per_kwh": price}
+            for i, price in enumerate([0.30, 0.05, 0.25, 0.02, 0.40, 0.08])
+        ]
+        state = _make_price_state(0.30, attributes={"forecasts": forecasts})
+        hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+            cheapest = provider.find_cheapest_hours(2, within_hours=6)
+
+        assert len(cheapest) == 2
+        # Two cheapest are 0.02 and 0.05
+        prices_found = sorted([p.price for p in cheapest])
+        assert prices_found == [0.02, 0.05]
+
+    # ── Edge cases ──
+
+    def test_empty_forecasts_array(self, hass):
+        """Empty forecasts array doesn't crash."""
+        state = _make_price_state(0.28, attributes={"forecasts": []})
+        hass.states.get = MagicMock(return_value=state)
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        assert provider._read_prices_list() == []
+
+    def test_malformed_forecast_items_skipped(self, hass):
+        """Malformed items in forecasts array are skipped gracefully."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        forecasts = [
+            {"start_time": now.isoformat(), "per_kwh": 0.25},    # Good
+            {"start_time": "not-a-date", "per_kwh": 0.30},        # Bad timestamp
+            {"per_kwh": 0.35},                                      # Missing timestamp
+            {"start_time": now.isoformat()},                        # Missing price
+            "not-a-dict",                                           # Not a dict
+            {"start_time": (now + timedelta(minutes=30)).isoformat(), "per_kwh": 0.28},  # Good
+        ]
+        state = _make_price_state(0.25, attributes={"forecasts": forecasts})
+        hass.states.get = MagicMock(return_value=state)
+
+        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        prices = provider._read_prices_list()
+        assert len(prices) == 2  # Only the two valid entries
+
+    def test_forecasts_not_used_when_tibber_prices_exist(self, hass):
+        """If Tibber prices_today exists, forecasts attribute is ignored."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        tibber_prices = [
+            {"start": (now + timedelta(hours=i)).isoformat(), "total": 0.10 + i * 0.02}
+            for i in range(3)
+        ]
+        amber_forecasts = [
+            {"start_time": (now + timedelta(minutes=30 * i)).isoformat(), "per_kwh": 0.50 + i * 0.10}
+            for i in range(3)
+        ]
+        # Both attributes present — Tibber format should win
+        state = _make_price_state(0.10, attributes={
+            "prices_today": tibber_prices,
+            "forecasts": amber_forecasts,
+        })
+        hass.states.get = MagicMock(return_value=state)
+
+        provider = DynamicTariffProvider(hass, price_entity="sensor.tibber_price")
+        prices = provider._read_prices_list()
+        # Should use Tibber prices (0.10, 0.12, 0.14), NOT Amber (0.50, 0.60, 0.70)
+        assert len(prices) == 3
+        assert prices[0].price == pytest.approx(0.10)
+
+    def test_generic_forecast_attribute_with_price_key(self, hass):
+        """Generic provider using 'price' instead of 'per_kwh'."""
+        now = datetime(2026, 5, 3, 14, 0, 0)
+        forecasts = [
+            {"start": now.isoformat(), "price": 0.22},
+            {"start": (now + timedelta(hours=1)).isoformat(), "price": 0.18},
+        ]
+        state = _make_price_state(0.22, attributes={"forecasts": forecasts})
+        hass.states.get = MagicMock(return_value=state)
+
+        provider = DynamicTariffProvider(hass, price_entity="sensor.some_provider")
+        prices = provider._read_prices_list()
+        assert len(prices) == 2
+        assert prices[0].price == 0.22
+        assert prices[1].price == 0.18
+
+
+# ---------------------------------------------------------------------------
 # SpotMarketProvider
 # ---------------------------------------------------------------------------
 

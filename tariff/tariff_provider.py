@@ -229,6 +229,8 @@ class DynamicTariffProvider(TariffProvider):
         self.currency = currency
         self._price_entity = price_entity
         self._provider_name = "unknown"
+        self._forecast_entity: Optional[str] = None  # Amber Electric forecast sensor
+        self._feedin_entity: Optional[str] = None     # Amber Electric feed-in price sensor
         self._prices_cache: List[PricePoint] = []
         self._last_cache_update: Optional[datetime] = None
 
@@ -250,6 +252,25 @@ class DynamicTariffProvider(TariffProvider):
                 self._provider_name = "tibber"
                 _LOGGER.info("Detected Tibber price entity: %s", entity_id)
                 return "tibber"
+
+        # Try Amber Electric (Australia)
+        for state in self.hass.states.async_all("sensor"):
+            entity_id = state.entity_id
+            if "amber" in entity_id and "general_price" in entity_id:
+                self._price_entity = entity_id
+                self._provider_name = "amber"
+                # Try to find the forecast entity for price forecasts
+                forecast_id = entity_id.replace("general_price", "general_forecast")
+                forecast_state = self.hass.states.get(forecast_id)
+                if forecast_state and forecast_state.state not in ("unknown", "unavailable"):
+                    self._forecast_entity = forecast_id
+                # Try to find the feed-in price entity for dynamic export rate
+                feedin_id = entity_id.replace("general_price", "feed_in_price")
+                feedin_state = self.hass.states.get(feedin_id)
+                if feedin_state and feedin_state.state not in ("unknown", "unavailable"):
+                    self._feedin_entity = feedin_id
+                _LOGGER.info("Detected Amber Electric price entity: %s", entity_id)
+                return "amber"
 
         # Try Nordpool
         for state in self.hass.states.async_all("sensor"):
@@ -343,6 +364,39 @@ class DynamicTariffProvider(TariffProvider):
                             except (ValueError, TypeError):
                                 continue
 
+        # Generic forecast: "forecasts" attribute (Amber Electric, or any provider
+        # that stores an array of {start_time/start, per_kwh/price/value} dicts).
+        # Checks the price entity first, then the dedicated forecast entity if set.
+        if not prices:
+            forecast_sources = [attrs]
+            if self._forecast_entity:
+                fc_state = self.hass.states.get(self._forecast_entity)
+                if fc_state:
+                    forecast_sources.append(fc_state.attributes)
+            for src_attrs in forecast_sources:
+                forecast_list = src_attrs.get("forecasts", [])
+                if isinstance(forecast_list, list) and forecast_list:
+                    for item in forecast_list:
+                        if not isinstance(item, dict):
+                            continue
+                        ts = item.get("start_time", item.get("start", item.get("startsAt")))
+                        price = item.get("per_kwh", item.get("price", item.get("total", item.get("value"))))
+                        if ts and price is not None:
+                            try:
+                                if isinstance(ts, str):
+                                    dt = datetime.fromisoformat(ts)
+                                else:
+                                    dt = ts
+                                prices.append(PricePoint(
+                                    timestamp=dt,
+                                    price=float(price),
+                                    currency=self.currency,
+                                    level=self._classify_price(float(price)),
+                                ))
+                            except (ValueError, TypeError):
+                                continue
+                    break  # Only use first source that has forecasts
+
         return sorted(prices, key=lambda p: p.timestamp)
 
     def _classify_price(self, price: float) -> PriceLevel:
@@ -363,6 +417,15 @@ class DynamicTariffProvider(TariffProvider):
         return self._read_current_price()
 
     def get_current_export_rate(self) -> float:
+        """Read export rate from feed-in entity if available, else static."""
+        if self._feedin_entity:
+            state = self.hass.states.get(self._feedin_entity)
+            if state and state.state not in ("unknown", "unavailable"):
+                try:
+                    # Feed-in prices may be negative (= earning), take abs
+                    return abs(float(state.state))
+                except (ValueError, TypeError):
+                    pass
         return self.export_rate
 
     def get_price_level(self) -> PriceLevel:
@@ -370,8 +433,16 @@ class DynamicTariffProvider(TariffProvider):
 
     def get_price_at(self, when: datetime) -> Optional[float]:
         prices = self._read_prices_list()
+        if not prices:
+            return None
+        # Determine interval from gap between first two prices (30min or 60min)
+        interval = timedelta(hours=1)
+        if len(prices) >= 2:
+            gap = (prices[1].timestamp - prices[0].timestamp).total_seconds()
+            if 0 < gap <= 3600:
+                interval = timedelta(seconds=gap)
         for p in prices:
-            if p.timestamp <= when < p.timestamp + timedelta(hours=1):
+            if p.timestamp <= when < p.timestamp + interval:
                 return p.price
         return None
 
@@ -381,7 +452,7 @@ class DynamicTariffProvider(TariffProvider):
 
         data = TariffData(
             current_import_rate=current_price,
-            current_export_rate=self.export_rate,
+            current_export_rate=self.get_current_export_rate(),
             price_level=self._classify_price(current_price),
             currency=self.currency,
             provider=self._provider_name,
