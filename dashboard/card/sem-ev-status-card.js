@@ -170,6 +170,15 @@ class SEMEVStatusCard extends HTMLElement {
     }
 
     _renderSkeleton() {
+        const T = (typeof semTheme === 'function') ? semTheme() : {};
+        const textCol    = T.text        || '#e0e0e0';
+        const textSecCol = T.textSec     || '#999';
+        const textTertCol = T.textTertiary || '#888';
+        const surfaceCol = T.surface     || 'rgba(255,255,255,0.06)';
+        const surfBorder = T.surfaceBorder || 'rgba(255,255,255,0.12)';
+        const dotCol     = T.dotColor    || 'rgba(128,128,128,0.05)';
+        const disabledCol = T.textDisabled || '#666';
+
         this.shadowRoot.innerHTML = `
             <style>
                 :host { display: block; }
@@ -178,10 +187,10 @@ class SEMEVStatusCard extends HTMLElement {
                     position: relative;
                     background:
                         radial-gradient(ellipse 70% 60% at 50% 30%, rgba(141,200,146,0.06) 0%, transparent 100%),
-                        radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: #e0e0e0;
+                    color: var(--primary-text-color, ${textCol});
                     min-height: 108px;
                     overflow: hidden;
                 }
@@ -245,12 +254,12 @@ class SEMEVStatusCard extends HTMLElement {
                     transition: opacity 0.4s ease;
                 }
                 .state-disconnected .charger-icon {
-                    stroke: #666;
+                    stroke: ${disabledCol};
                     opacity: 0.35;
                 }
                 .state-disconnected .ring-bg { stroke: rgba(100,100,100,0.12); }
                 .state-disconnected .ring-fill { fill: rgba(100,100,100,0.05); }
-                .state-disconnected .glow-ring { stroke: #666; }
+                .state-disconnected .glow-ring { stroke: ${disabledCol}; }
 
                 /* Lightning bolt */
                 .lightning-bolt {
@@ -269,7 +278,7 @@ class SEMEVStatusCard extends HTMLElement {
 
                 /* Indicator dot */
                 .indicator-dot {
-                    fill: #666;
+                    fill: ${disabledCol};
                     opacity: 0.3;
                     transition: fill 0.4s ease, opacity 0.4s ease;
                 }
@@ -300,14 +309,14 @@ class SEMEVStatusCard extends HTMLElement {
                 }
                 .metric-label {
                     font-size: 11px;
-                    color: #999;
+                    color: var(--secondary-text-color, ${textSecCol});
                     font-weight: 500;
                 }
                 .metric-value {
                     font-size: 12px;
                     font-weight: 600;
                     font-variant-numeric: tabular-nums;
-                    color: #e0e0e0;
+                    color: var(--primary-text-color, ${textCol});
                 }
 
                 /* Status text colors */
@@ -318,7 +327,7 @@ class SEMEVStatusCard extends HTMLElement {
                 }
                 .status-value.charging { color: #8DC892; text-shadow: 0 0 8px rgba(141,200,146,0.4); }
                 .status-value.connected { color: #8DC892; }
-                .status-value.disconnected { color: #777; }
+                .status-value.disconnected { color: var(--secondary-text-color, ${textSecCol}); }
 
                 /* Power value (large) */
                 .power-row .metric-value {
@@ -357,17 +366,17 @@ class SEMEVStatusCard extends HTMLElement {
                     display: inline-flex;
                     align-items: center;
                     gap: 4px;
-                    background: rgba(40, 40, 55, 0.5);
-                    border: 1px solid rgba(141,200,146,0.12);
+                    background: var(--secondary-background-color, ${surfaceCol});
+                    border: 1px solid var(--divider-color, ${surfBorder});
                     border-radius: 12px;
                     padding: 3px 10px;
                     font-size: 11px;
                     font-weight: 500;
-                    color: #ccc;
+                    color: var(--primary-text-color, ${textCol});
                     font-variant-numeric: tabular-nums;
                 }
-                .chip-label { color: #888; }
-                .chip-value { color: #e0e0e0; }
+                .chip-label { color: var(--secondary-text-color, ${textTertCol}); }
+                .chip-value { color: var(--primary-text-color, ${textCol}); }
                 .cost-chip-value { color: #f06292; }
 
                 /* Responsive: stack on narrow */

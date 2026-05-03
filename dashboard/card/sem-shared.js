@@ -75,6 +75,70 @@ function semGetCurrency(hass) {
     return hass.config?.currency || 'EUR';
 }
 
+/* ── Theme helper — reads HA CSS variables for light/dark adaptation ── */
+/**
+ * Returns a theme object with colors derived from HA's active theme.
+ * All SEM cards should use this instead of hardcoded colors.
+ *
+ * @param {HTMLElement} [root] - Element to read computed styles from (default: document.documentElement)
+ * @returns {object} Theme palette with text, background, surface, and derived values
+ */
+function semTheme(root) {
+    const el = root || document.documentElement;
+    const cs = getComputedStyle(el);
+    const v = (name, fb) => {
+        const val = cs.getPropertyValue(name).trim();
+        return val || fb;
+    };
+
+    // Core HA theme variables
+    const text       = v('--primary-text-color', '#e0e0e0');
+    const textSec    = v('--secondary-text-color', '#888888');
+    const cardBg     = v('--card-background-color', 'rgba(30,35,45,0.5)');
+    const divider    = v('--divider-color', 'rgba(255,255,255,0.12)');
+    const bgSec      = v('--secondary-background-color', 'rgba(255,255,255,0.06)');
+    const shadow     = v('--ha-card-box-shadow', '0 2px 8px rgba(0,0,0,0.15)');
+    const accent     = v('--primary-color', '#42a5f5');
+
+    // Detect dark vs light by parsing background luminance
+    const isDark = (() => {
+        const bg = v('--primary-background-color', '#111');
+        const m = bg.match(/\d+/g);
+        if (m && m.length >= 3) {
+            const lum = (0.299 * +m[0] + 0.587 * +m[1] + 0.114 * +m[2]) / 255;
+            return lum < 0.5;
+        }
+        return !bg.startsWith('#f') && !bg.startsWith('#e') && !bg.startsWith('#d')
+            && !bg.startsWith('#c') && !bg.startsWith('rgb(2');
+    })();
+
+    return {
+        // Core colors
+        text, textSec, cardBg, divider, bgSec, shadow, accent, isDark,
+        // Text hierarchy
+        textTertiary:  isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.50)',
+        textDisabled:  isDark ? 'rgba(255,255,255,0.26)' : 'rgba(0,0,0,0.30)',
+        // Surfaces
+        surface:       isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+        surfaceHover:  isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
+        surfaceBorder: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
+        // Dot grid & glow for background patterns
+        dotColor:      isDark ? 'rgba(128,128,128,0.05)' : 'rgba(128,128,128,0.06)',
+        glowAlpha:     isDark ? 0.05 : 0.03,
+        // Tooltip
+        tooltipBg:     isDark ? 'rgba(20,20,30,0.95)'    : 'rgba(255,255,255,0.95)',
+        tooltipText:   isDark ? '#e0e0e0'                 : '#333333',
+        tooltipBorder: isDark ? 'rgba(255,255,255,0.15)'  : 'rgba(0,0,0,0.12)',
+    };
+}
+
+/* ── Common CSS snippet for dot-grid background ── */
+function semDotGridCSS(color, glowColor, glowAlpha) {
+    const ga = glowAlpha != null ? glowAlpha : 0.05;
+    return `radial-gradient(ellipse 80% 70% at 20% 50%, ${glowColor}${Math.round(ga * 255).toString(16).padStart(2,'0')} 0%, transparent 70%),
+            radial-gradient(circle at 2px 2px, ${color} 0.7px, transparent 0.7px)`;
+}
+
 /* ── Export for use in other cards ── */
 if (typeof window !== 'undefined') {
     window.SEM_COLORS = SEM_COLORS;
@@ -83,4 +147,6 @@ if (typeof window !== 'undefined') {
     window.semFormatEnergy = semFormatEnergy;
     window.semCalcDuration = semCalcDuration;
     window.semGetCurrency = semGetCurrency;
+    window.semTheme = semTheme;
+    window.semDotGridCSS = semDotGridCSS;
 }

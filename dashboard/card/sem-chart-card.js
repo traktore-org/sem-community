@@ -298,6 +298,7 @@ class SEMChartCard extends HTMLElement {
         const canvas = this.shadowRoot.querySelector('canvas');
         if (!canvas) return;
 
+        const T = this._theme || ((typeof semTheme === 'function') ? semTheme() : {});
         const preset = this._preset || {};
         const stacked = this.config.stacked ?? preset.stacked ?? false;
         let yLabel = this.config.y_label || preset.y_label || '';
@@ -345,7 +346,7 @@ class SEMChartCard extends HTMLElement {
                         display: true,
                         position: 'bottom',
                         labels: {
-                            color: '#9e9e9e',
+                            color: T.textSec || '#9e9e9e',
                             font: { size: 11, weight: '500', family: "'Segoe UI','Roboto',sans-serif" },
                             boxWidth: 12,
                             boxHeight: 12,
@@ -355,12 +356,12 @@ class SEMChartCard extends HTMLElement {
                         },
                     },
                     tooltip: {
-                        backgroundColor: 'rgba(20, 20, 30, 0.95)',
-                        titleColor: '#e0e0e0',
+                        backgroundColor: T.tooltipBg || 'rgba(20, 20, 30, 0.95)',
+                        titleColor: T.tooltipText || '#e0e0e0',
                         titleFont: { family: "'Segoe UI','Roboto',sans-serif", weight: '600' },
-                        bodyColor: '#b0b0b0',
+                        bodyColor: T.textSec || '#b0b0b0',
                         bodyFont: { family: "'Segoe UI','Roboto',sans-serif" },
-                        borderColor: 'rgba(255,255,255,0.06)',
+                        borderColor: T.tooltipBorder || 'rgba(255,255,255,0.06)',
                         borderWidth: 1,
                         cornerRadius: 12,
                         padding: 12,
@@ -388,22 +389,22 @@ class SEMChartCard extends HTMLElement {
                                 month: 'MMM',
                             },
                         },
-                        grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
-                        ticks: { color: '#757575', font: { size: 10, family: "'Segoe UI','Roboto',sans-serif" }, maxRotation: 0 },
+                        grid: { color: T.surface || 'rgba(255,255,255,0.03)', drawBorder: false },
+                        ticks: { color: T.textSec || '#757575', font: { size: 10, family: "'Segoe UI','Roboto',sans-serif" }, maxRotation: 0 },
                         stacked,
                     },
                     y: {
                         position: 'left',
-                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
+                        grid: { color: T.surface || 'rgba(255,255,255,0.04)', drawBorder: false },
                         ticks: {
-                            color: '#757575', font: { size: 10, family: "'Segoe UI','Roboto',sans-serif" },
+                            color: T.textSec || '#757575', font: { size: 10, family: "'Segoe UI','Roboto',sans-serif" },
                             callback: (v) => {
                                 const abs = Math.abs(v);
                                 if (abs >= 1000) return (v / 1000).toFixed(1) + 'k';
                                 return v % 1 === 0 ? v : v.toFixed(1);
                             },
                         },
-                        title: { display: !!yLabel, text: yLabel, color: '#757575', font: { size: 11 } },
+                        title: { display: !!yLabel, text: yLabel, color: T.textSec || '#757575', font: { size: 11 } },
                         stacked,
                         beginAtZero: true,
                     },
@@ -450,6 +451,12 @@ class SEMChartCard extends HTMLElement {
     _renderSkeleton() {
         const preset = this._preset || {};
         const title = this.config.title || preset.title || 'SEM Chart';
+        const T = (typeof semTheme === 'function') ? semTheme() : {};
+        this._theme = T;
+        const textCol    = T.text        || '#e0e0e0';
+        const textSecCol = T.textSec     || '#757575';
+        const textTertCol = T.textTertiary || '#616161';
+        const dotCol     = T.dotColor    || 'rgba(128,128,128,0.05)';
 
         this.shadowRoot.innerHTML = `
             <style>
@@ -460,7 +467,7 @@ class SEMChartCard extends HTMLElement {
                     position: relative;
                     background:
                         radial-gradient(ellipse 70% 60% at 50% 40%, rgba(200,220,240,0.05) 0%, transparent 100%),
-                        radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                 }
                 .chart-header {
@@ -469,14 +476,14 @@ class SEMChartCard extends HTMLElement {
                 .chart-title {
                     font-size: 15px;
                     font-weight: 600;
-                    color: #e0e0e0;
+                    color: var(--primary-text-color, ${textCol});
                     font-family: 'Segoe UI','Roboto',sans-serif;
                     letter-spacing: 0.3px;
                     font-variant-numeric: tabular-nums;
                 }
                 .chart-subtitle {
                     font-size: 12px;
-                    color: #757575;
+                    color: var(--secondary-text-color, ${textSecCol});
                     margin-top: 2px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
                     font-variant-numeric: tabular-nums;
@@ -497,7 +504,7 @@ class SEMChartCard extends HTMLElement {
                     display: none;
                     align-items: center;
                     justify-content: center;
-                    color: #616161;
+                    color: var(--secondary-text-color, ${textTertCol});
                     font-size: 13px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
                 }

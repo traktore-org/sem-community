@@ -208,11 +208,16 @@ class SEMScheduleCard extends HTMLElement {
 
         let svgContent = '';
 
+        const T = this._theme || {};
+        const textSecCol = T.textSec || '#888';
+        const textTertCol = T.textTertiary || '#777';
+        const rowBg = T.surface || 'rgba(255,255,255,0.03)';
+
         // ── Hour labels ──
         for (let h = 0; h <= 24; h += 2) {
             const x = this._toX(h / 24);
             svgContent += `<text x="${x}" y="${SEMScheduleCard.LABEL_Y}"
-                text-anchor="middle" fill="#888" font-size="9"
+                text-anchor="middle" fill="${textSecCol}" font-size="9"
                 font-family="'Segoe UI','Roboto',sans-serif"
                 font-variant-numeric="tabular-nums">${h.toString().padStart(2, '0')}</text>`;
         }
@@ -222,14 +227,14 @@ class SEMScheduleCard extends HTMLElement {
         rowLabels.forEach((label, i) => {
             const y = FRY + i * (RH + RG) + RH / 2 + 3.5;
             svgContent += `<text x="${ML - 4}" y="${y}" text-anchor="end"
-                fill="#777" font-size="9" font-family="'Segoe UI','Roboto',sans-serif">${label}</text>`;
+                fill="${textTertCol}" font-size="9" font-family="'Segoe UI','Roboto',sans-serif">${label}</text>`;
         });
 
         // ── Row backgrounds (subtle) ──
         for (let i = 0; i < 4; i++) {
             const y = FRY + i * (RH + RG);
             svgContent += `<rect x="${ML}" y="${y}" width="${BW}" height="${RH}"
-                rx="3" fill="rgba(255,255,255,0.03)"/>`;
+                rx="3" fill="${rowBg}"/>`;
         }
 
         // ── Row 0: Tariff ──
@@ -335,6 +340,11 @@ class SEMScheduleCard extends HTMLElement {
         const FRY = SEMScheduleCard.FIRST_ROW_Y;
         const totalHeight = FRY + 4 * (RH + RG) + 4;
 
+        const T = (typeof semTheme === 'function') ? semTheme() : {};
+        this._theme = T;
+        const textCol = T.text    || '#e0e0e0';
+        const dotCol  = T.dotColor || 'rgba(128,128,128,0.04)';
+
         this.shadowRoot.innerHTML = `
             <style>
                 :host { display: block; }
@@ -343,10 +353,10 @@ class SEMScheduleCard extends HTMLElement {
                     position: relative;
                     background:
                         radial-gradient(ellipse 70% 60% at 50% 30%, rgba(72,143,194,0.04) 0%, transparent 100%),
-                        radial-gradient(circle at 2px 2px, rgba(128,128,128,0.04) 0.7px, transparent 0.7px);
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: #e0e0e0;
+                    color: var(--primary-text-color, ${textCol});
                 }
                 .timeline-svg {
                     width: 100%;

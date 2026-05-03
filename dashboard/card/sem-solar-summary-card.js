@@ -111,6 +111,15 @@ class SEMSolarSummaryCard extends HTMLElement {
     }
 
     _renderSkeleton() {
+        const T = (typeof semTheme === 'function') ? semTheme() : {};
+        const textCol    = T.text        || '#e0e0e0';
+        const textSecCol = T.textSec     || '#999';
+        const textTertCol = T.textTertiary || '#888';
+        const surfaceCol = T.surface     || 'rgba(255,255,255,0.06)';
+        const surfBorder = T.surfaceBorder || 'rgba(255,255,255,0.05)';
+        const surfHover  = T.surfaceHover  || 'rgba(255,255,255,0.12)';
+        const dotCol     = T.dotColor    || 'rgba(128,128,128,0.05)';
+
         this.shadowRoot.innerHTML = `
             <style>
                 :host { display: block; }
@@ -119,10 +128,10 @@ class SEMSolarSummaryCard extends HTMLElement {
                     position: relative;
                     background:
                         radial-gradient(ellipse 70% 60% at 50% 30%, rgba(255,152,0,0.06) 0%, transparent 100%),
-                        radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: #e0e0e0;
+                    color: var(--primary-text-color, ${textCol});
                 }
                 /* SVG glow filter */
                 .glow-svg { position: absolute; width: 0; height: 0; }
@@ -205,7 +214,7 @@ class SEMSolarSummaryCard extends HTMLElement {
                 }
                 .hero-label {
                     font-size: 12px;
-                    color: #999;
+                    color: var(--secondary-text-color, ${textSecCol});
                     font-weight: 500;
                 }
                 .hero-value {
@@ -221,21 +230,19 @@ class SEMSolarSummaryCard extends HTMLElement {
                     gap: 10px;
                 }
                 .metric {
-                    background:
-                        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(200,220,240,0.03) 0%, transparent 100%),
-                        rgba(40, 40, 55, 0.4);
-                    border: 1px solid rgba(255,255,255,0.05);
+                    background: var(--secondary-background-color, ${surfaceCol});
+                    border: 1px solid var(--divider-color, ${surfBorder});
                     border-radius: 10px;
                     padding: 10px;
                     text-align: center;
                     transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1);
                 }
                 .metric:hover {
-                    border-color: rgba(255,255,255,0.12);
+                    border-color: var(--divider-color, ${surfHover});
                 }
                 .metric-label {
                     font-size: 10px;
-                    color: #888;
+                    color: var(--secondary-text-color, ${textTertCol});
                     font-weight: 500;
                     letter-spacing: 0.3px;
                     margin-bottom: 4px;
@@ -303,7 +310,7 @@ class SEMSolarSummaryCard extends HTMLElement {
                             </div>
                             <div class="hero-row">
                                 <span class="hero-label">Tomorrow</span>
-                                <span class="hero-value forecast-tomorrow" style="color:#b0b0b0">—</span>
+                                <span class="hero-value forecast-tomorrow" style="color:var(--secondary-text-color)">—</span>
                             </div>
                         </div>
                     </div>

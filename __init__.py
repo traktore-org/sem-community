@@ -1055,6 +1055,23 @@ async def _async_register_services(
                 await registry.update_device_control_mode(device_id, str(value))
             else:
                 raise HomeAssistantError("Device registry not initialized")
+        elif prop == "depends_on":
+            # Update device dependency (#122)
+            device = coordinator._surplus_controller.get_device(device_id)
+            if device:
+                device.depends_on = [str(value)] if value else []
+                _LOGGER.info("Updated %s depends_on = %s", device_id, device.depends_on)
+                # Persist to storage
+                if coordinator._load_manager and hasattr(coordinator._load_manager, '_store'):
+                    try:
+                        store_data = await coordinator._load_manager._store.async_load() or {"devices": {}}
+                        dev_data = store_data.setdefault("devices", {}).setdefault(device_id, {})
+                        dev_data["depends_on"] = device.depends_on
+                        await coordinator._load_manager._store.async_save(store_data)
+                    except Exception as e:
+                        _LOGGER.debug("Could not persist dependency: %s", e)
+            else:
+                raise HomeAssistantError(f"Device {device_id} not found in surplus controller")
         else:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -1071,7 +1088,7 @@ async def _async_register_services(
             async_update_device_config,
             schema=vol.Schema({
                 vol.Required("device_id"): cv.string,
-                vol.Required("property"): vol.In(["controllable", "critical", "control_mode"]),
+                vol.Required("property"): vol.In(["controllable", "critical", "control_mode", "depends_on"]),
                 vol.Required("value"): cv.string,
             }),
         )

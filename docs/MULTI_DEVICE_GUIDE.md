@@ -145,3 +145,82 @@ On the **System tab** of the dashboard, the Diagnostics section shows:
 - Update to latest beta, then regenerate dashboard
 - Check that per-charger entities appear: `sensor.sem_charger_{id}_*`
 - Verify the charger's power sensor is configured correctly
+
+---
+
+## Appliance Dependencies
+
+Devices can declare dependencies so they only activate when other devices are already running. This prevents wasted energy or equipment damage.
+
+### Use Cases
+
+| Dependent | Depends On | Why |
+|---|---|---|
+| Pool heater | Pool pump | Heater without pump = equipment damage |
+| Circulation pump | Heat pump | Pump alone = wasted energy |
+| Heating element 2 | Heating element 1 | Stage 2 only when stage 1 is saturated |
+| Hot water boost | Battery SOC > 80% | Only boost when battery is sufficiently charged |
+
+### Configuration
+
+When registering a surplus device, set the `depends_on` field to the device ID(s) that must be active:
+
+```yaml
+# Via service call:
+service: solar_energy_management.register_surplus_device
+data:
+  device_id: pool_heater
+  entity_id: switch.pool_heater
+  name: Pool Heater
+  priority: 6
+  depends_on:
+    - pool_pump
+```
+
+### Dependency Modes
+
+| Mode | Behavior |
+|---|---|
+| `must_active` (default) | Dependent only activates when dependency IS running |
+| `must_inactive` | Dependent only activates when dependency is NOT running (backup/fallback) |
+
+### Setting Dependencies from the Dashboard
+
+1. Go to the **Control** tab on the SEM dashboard
+2. Find the device you want to make dependent
+3. In the **Requires** dropdown, select the parent device
+4. The child device automatically indents under the parent
+5. To release: set **Requires** back to **None** — the device becomes independent
+
+### Dependency Patterns
+
+**Chain (A → B → C):**
+```
+≡  Pool Pump                    Requires: None
+  ↳  Pool Heater                Requires: Pool Pump
+    ↳  Pool Lights              Requires: Pool Heater
+```
+- Pump must be on before heater can start
+- Heater must be on before lights can start
+- Shutting down pump → cascades to heater → cascades to lights
+
+**Siblings (A with B and C):**
+```
+≡  Heat Pump                    Requires: None
+  ↳  Circulation Pump           Requires: Heat Pump
+  ↳  Buffer Valve               Requires: Heat Pump
+```
+- Heat pump must be on before either can start
+- Circulation and valve are independent of each other
+- Shutting down heat pump → both children shut down
+
+### How It Works
+
+1. **Activation gate**: when SEM has surplus and tries to activate a device, it first checks all `depends_on` devices are in the required state
+2. **Deactivation cascade**: when a device is deactivated (surplus dropped), all devices that depend on it are also deactivated
+3. **Surplus mode**: child only turns on when parent is already running AND surplus is available
+4. **Peak mode**: when shedding load, shutting down the parent also shuts down all children
+5. **Dashboard**: blocked devices show "⏳ Waiting for: {device}" and are visually indented
+6. **Drag protection**: children can't be dragged — they stay locked under their parent. Only parents can be reordered
+7. **Persistence**: dependency settings survive HA restarts
+8. **Circular detection**: SEM validates that dependencies don't form circular chains (A→B→A)

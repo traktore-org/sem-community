@@ -70,8 +70,9 @@ class SEMWeatherCard extends HTMLElement {
 
         // Current time
         const now = new Date();
-        const timeStr = now.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
-        const dateStr = now.toLocaleDateString('de-CH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const locale = this._hass?.language || navigator.language || 'en';
+        const timeStr = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+        const dateStr = now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
         const $ = (sel) => this.shadowRoot.querySelector(sel);
 
@@ -92,7 +93,7 @@ class SEMWeatherCard extends HTMLElement {
         if (forecastEl && forecast.length) {
             const rows = forecast.slice(0, this._forecastRows).map(f => {
                 const dt = new Date(f.datetime);
-                const day = dt.toLocaleDateString('de-CH', { weekday: 'short' });
+                const day = dt.toLocaleDateString(this._hass?.language || navigator.language || 'en', { weekday: 'short' });
                 const fIcon = WEATHER_ICONS[f.condition]?.icon || '\u2753';
                 const low = f.templow != null ? Math.round(f.templow) : '—';
                 const high = f.temperature != null ? Math.round(f.temperature) : '—';
@@ -125,7 +126,8 @@ class SEMWeatherCard extends HTMLElement {
         if (!this._clockInterval) {
             this._clockInterval = setInterval(() => {
                 const n = new Date();
-                setVal('.time', n.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }));
+                const loc = this._hass?.language || navigator.language || 'en';
+                setVal('.time', n.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' }));
             }, 30000);
         }
     }
@@ -143,6 +145,13 @@ class SEMWeatherCard extends HTMLElement {
     }
 
     _renderSkeleton() {
+        const T = (typeof semTheme === 'function') ? semTheme() : {};
+        const textCol    = T.text        || '#e0e0e0';
+        const textSecCol = T.textSec     || '#999';
+        const surfaceCol = T.surface     || 'rgba(255,255,255,0.06)';
+        const surfBorder = T.surfaceBorder || 'rgba(255,255,255,0.06)';
+        const dotCol     = T.dotColor    || 'rgba(128,128,128,0.05)';
+
         this.shadowRoot.innerHTML = `
             <style>
                 :host { display: block; }
@@ -151,10 +160,10 @@ class SEMWeatherCard extends HTMLElement {
                     position: relative;
                     background:
                         radial-gradient(ellipse 70% 60% at 50% 35%, rgba(200,220,240,0.06) 0%, transparent 100%),
-                        radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: #e0e0e0;
+                    color: var(--primary-text-color, ${textCol});
                 }
 
                 /* Clock section */
@@ -173,12 +182,12 @@ class SEMWeatherCard extends HTMLElement {
                     font-variant-numeric: tabular-nums;
                     letter-spacing: -1px;
                     line-height: 1;
-                    color: #e8e8e8;
+                    color: var(--primary-text-color, ${textCol});
                     text-shadow: 0 0 20px rgba(200,220,240,0.15);
                 }
                 .date {
                     font-size: 13px;
-                    color: #999;
+                    color: var(--secondary-text-color, ${textSecCol});
                     margin-top: 6px;
                     font-weight: 500;
                 }
@@ -195,7 +204,7 @@ class SEMWeatherCard extends HTMLElement {
                 }
                 .weather-label {
                     font-size: 12px;
-                    color: #aaa;
+                    color: var(--secondary-text-color, ${textSecCol});
                     margin-top: 2px;
                     font-weight: 500;
                 }
@@ -203,7 +212,7 @@ class SEMWeatherCard extends HTMLElement {
                     font-size: 28px;
                     font-weight: 700;
                     font-variant-numeric: tabular-nums;
-                    color: #e0e0e0;
+                    color: var(--primary-text-color, ${textCol});
                     text-shadow: 0 0 12px rgba(200,220,240,0.1);
                 }
 
@@ -213,14 +222,14 @@ class SEMWeatherCard extends HTMLElement {
                     gap: 16px;
                     margin-bottom: 16px;
                     padding-bottom: 14px;
-                    border-bottom: 1px solid rgba(255,255,255,0.06);
+                    border-bottom: 1px solid var(--divider-color, ${surfBorder});
                 }
                 .detail {
                     display: flex;
                     align-items: center;
                     gap: 6px;
                     font-size: 12px;
-                    color: #999;
+                    color: var(--secondary-text-color, ${textSecCol});
                 }
                 .detail-icon {
                     font-size: 14px;
@@ -243,7 +252,7 @@ class SEMWeatherCard extends HTMLElement {
                 }
                 .f-day {
                     width: 32px;
-                    color: #aaa;
+                    color: var(--secondary-text-color, ${textSecCol});
                     font-weight: 500;
                     font-size: 12px;
                 }
@@ -262,7 +271,7 @@ class SEMWeatherCard extends HTMLElement {
                 .f-bar-wrap {
                     flex: 1;
                     height: 4px;
-                    background: rgba(255,255,255,0.06);
+                    background: var(--secondary-background-color, ${surfaceCol});
                     border-radius: 2px;
                     overflow: hidden;
                 }

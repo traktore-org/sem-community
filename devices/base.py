@@ -121,6 +121,11 @@ class ControllableDevice(ABC):
         self._daily_runtime_meter_day: Optional[date] = None
         self._offpeak_forced: bool = False
 
+        # Appliance dependencies (#122): device only activates when dependencies are met
+        self.depends_on: List[str] = []  # device_ids that must be active
+        self.dependency_mode: str = "must_active"  # must_active | must_inactive
+        self._controller = None  # set by SurplusController after registration
+
     @property
     def device_type(self) -> DeviceType:
         """Return the device type."""
@@ -245,7 +250,10 @@ class ControllableDevice(ABC):
         """
 
     def can_activate(self) -> bool:
-        """Check if device can be activated (respects min_off_seconds + activation_delay)."""
+        """Check if device can be activated (respects dependencies, min_off, activation_delay)."""
+        # Dependency check (#122): all depends_on devices must be in required state
+        if not self._check_dependencies():
+            return False
         if self.min_off_seconds > 0 and self._last_deactivated:
             elapsed = (datetime.now() - self._last_deactivated).total_seconds()
             if elapsed < self.min_off_seconds:
@@ -259,6 +267,37 @@ class ControllableDevice(ABC):
             if elapsed < self.activation_delay_seconds:
                 return False
         return True
+
+    def _check_dependencies(self) -> bool:
+        """Check if all dependency constraints are satisfied (#122)."""
+        if not self.depends_on or not self._controller:
+            return True
+        for dep_id in self.depends_on:
+            dep_device = self._controller.get_device(dep_id)
+            if dep_device is None:
+                continue  # Unknown device — don't block
+            dep_active = dep_device.status.state == DeviceState.ACTIVE
+            if self.dependency_mode == "must_active" and not dep_active:
+                return False
+            if self.dependency_mode == "must_inactive" and dep_active:
+                return False
+        return True
+
+    @property
+    def blocked_by_dependency(self) -> Optional[str]:
+        """Return the device_id blocking this device, or None if not blocked."""
+        if not self.depends_on or not self._controller:
+            return None
+        for dep_id in self.depends_on:
+            dep_device = self._controller.get_device(dep_id)
+            if dep_device is None:
+                continue
+            dep_active = dep_device.status.state == DeviceState.ACTIVE
+            if self.dependency_mode == "must_active" and not dep_active:
+                return dep_id
+            if self.dependency_mode == "must_inactive" and dep_active:
+                return dep_id
+        return None
 
     def reset_surplus_timer(self) -> None:
         """Reset surplus timer when surplus drops below device threshold."""
@@ -313,6 +352,12 @@ class ControllableDevice(ABC):
                 "daily_energy_budget_kwh": round(self.daily_energy_budget_kwh, 3),
                 "offpeak_forced": self._offpeak_forced,
             })
+        # Dependency info (#122)
+        if self.depends_on:
+            d["depends_on"] = self.depends_on
+            d["dependency_mode"] = self.dependency_mode
+            blocked = self.blocked_by_dependency
+            d["blocked_by"] = blocked
         return d
 
 

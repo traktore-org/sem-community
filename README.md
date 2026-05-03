@@ -31,12 +31,12 @@ SEM monitors your solar production, battery, grid, and EV charger every 10 secon
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
 - **Night charging with battery protection** — charges EV from grid overnight without draining home battery
 - **Hot water solar boost** — SEM supplements your existing heating system with solar surplus (does not replace your boiler/heat pump), with mandatory Legionella prevention cycle (DVGW W 551, SIA 385/1, ÖNORM B 5019)
-- **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority
+- **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority, with appliance dependency chains (e.g. heater only runs when pump is active)
 - **Peak load management** — automatic device shedding to stay under your grid limit
 - **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
 - **Dynamic tariff support** — Tibber, Nordpool, aWATTar price-responsive charging
 - **200+ sensors and entities** — power, energy, flows, costs, performance, forecasts, and more
-- **Built-in dashboard** — glassmorphism dark theme with animated system diagram, Sankey, and native HA energy cards
+- **Built-in dashboard** — theme-aware styling (works on both dark and light HA themes), animated system diagram, Sankey, and native HA energy cards
 - **PV performance analytics** — specific yield, forecast accuracy, degradation tracking
 - **Smart recommendations** — forecast-aware tips ("Best window for appliances: 11:00-14:00", "Low solar tomorrow — charge EV tonight")
 - **Consumption/solar predictor** — learns hourly patterns (weekday/weekend), predicts next-hour power and daily consumption
