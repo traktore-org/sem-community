@@ -309,14 +309,14 @@ class SEMEVStatusCard extends HTMLElement {
                 }
                 .metric-label {
                     font-size: 11px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     font-weight: 500;
                 }
                 .metric-value {
                     font-size: 12px;
                     font-weight: 600;
                     font-variant-numeric: tabular-nums;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                 }
 
                 /* Status text colors */
@@ -375,8 +375,8 @@ class SEMEVStatusCard extends HTMLElement {
                     color: ${textCol};
                     font-variant-numeric: tabular-nums;
                 }
-                .chip-label { color: ${textTertCol}; }
-                .chip-value { color: ${textCol}; }
+                .chip-label { color: var(--secondary-text-color, ${textTertCol}); }
+                .chip-value { color: var(--primary-text-color, ${textCol}); }
                 .cost-chip-value { color: #f06292; }
 
                 /* Responsive: stack on narrow */

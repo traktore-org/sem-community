@@ -176,7 +176,7 @@ class SEMBatteryCard extends HTMLElement {
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                 }
                 .glow-svg { position: absolute; width: 0; height: 0; }
 
@@ -267,7 +267,7 @@ class SEMBatteryCard extends HTMLElement {
                 }
                 .metric-label {
                     font-size: 12px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     font-weight: 500;
                 }
                 .metric-val {
@@ -299,7 +299,7 @@ class SEMBatteryCard extends HTMLElement {
                 }
                 .chip-label {
                     font-size: 10px;
-                    color: ${chipLblCol};
+                    color: var(--secondary-text-color, ${chipLblCol});
                     font-weight: 500;
                     letter-spacing: 0.3px;
                     margin-bottom: 3px;

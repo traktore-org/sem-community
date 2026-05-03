@@ -476,14 +476,14 @@ class SEMChartCard extends HTMLElement {
                 .chart-title {
                     font-size: 15px;
                     font-weight: 600;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                     font-family: 'Segoe UI','Roboto',sans-serif;
                     letter-spacing: 0.3px;
                     font-variant-numeric: tabular-nums;
                 }
                 .chart-subtitle {
                     font-size: 12px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     margin-top: 2px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
                     font-variant-numeric: tabular-nums;
