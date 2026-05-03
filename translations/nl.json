@@ -2,18 +2,18 @@
   "config": {
     "step": {
       "user": {
-        "title": "Solar Energy Management Setup",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "title": "Solar Energy Management Configuratie",
+        "description": "SEM heeft de volgende sensors gevonden in je Home Assistant Energie Dashboard:\n\n{summary}\n\nClick **Submit** om door te gaan. De volgende 2 stappen onderzoeken je EV lader(s) en zonnepaneel omvormer(s) — bijna alles wordt automatisch voor je ingevuld.",
         "data": {
-          "observer_mode": "Test mode (read-only — do not control hardware)"
+          "observer_mode": "Test mode (read-only — geen hardware wijzigingen)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Laat deze instelling uit staan for een normale installatie. Zet deze instelling alleen aan als je een testinstallatie hebt of wil experimenteren met wat er potentieel mogelijk is."
         }
       },
       "ev_charger": {
         "title": "EV Lader",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
+        "description": "SEM heeft je EV Lader(s) automatisch ingelezen vanuit de Home Assistant entity registry. Controleer of deze kloppen en klik op **Submit** — normaal gesproken zou alles moeten kloppen. Optionele velden kunnen leeg gelaten worden.",
         "data": {
           "ev_connected_sensor": "🔌 EV Verbonden — voertuig stekker",
           "ev_charging_sensor": "⚡ EV Laden Actief — huidige laadstatus",
@@ -24,27 +24,27 @@
           "ev_total_energy_sensor": "🔋 EV Totale Energie — geleverde energie (kWh)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
-          "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
-          "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking."
+          "ev_connected_sensor": "Binaire sensor die aangeeft we je electrische auto is aangesloten op de lader. Automatische detectie voor de volgende merken: KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
+          "ev_charging_sensor": "Binaire sensor die aangeeft of je lader actief aan opladen is. Automatische detectie vanuit je lader intergratie.",
+          "ev_charging_power_sensor": "Numerieke sensor (W) die rapporteert met hoeveel vermogen je electrische auto oplaadt. Automatische detectie vanuit je lader intergratie.",
+          "ev_charger_service": "Home Assistant service die aangeroepen moet worden om de lader amperage aan te passent (bijvoorbeeld keba.set_current, easee.set_charger_max_limit). Automatisch ingevuld voor KEBA. Laat dit veld leeg voor laders die een number entiry gebruiken.",
+          "ev_charger_service_entity_id": "Entiteits ID die gebruikt wordt in de service call.",
+          "ev_current_sensor": "Optioneell. Numerieke sensor (A) die het werkelijke stroomverbruik rapporteert. Wordt gebruikt voor diagnostiek.",
+          "ev_total_energy_sensor": "Optioneel. Cumulatieve kWh sensor voor de totale energie die je electrische auto heeft ontvangen."
         }
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "De twee laatste waardes zijn afhankelijk van je installatie:\n\n• Thuis Batterij capaciteit — de bruikbare capaciteit van je thuis batterij.\n• Piek Vermogen Limiet. Het maximale aantal kW dat uw energie leverancier toestaat voordat SEM begint met het afschakelen van de energie verbruikers. — \n\nSEM detecteert automatich je omvormer ontlaad schakelaar entity: {discharge_entity}\n\nLaat deze optie aan staan zodat SEM automatisch je dashboards creeert. **Let op!!: Home Assistant rwordt automatisch opnieuw opgestart na 5 seconden nadat de installatie voltooid is.**\n\nGebruik verder de (veilige) standaard waardes, deze kan je altijd achteraf nog wijzigen.",
         "data": {
-          "battery_capacity_kwh": "Home Battery Capacity (kWh)",
-          "target_peak_limit": "Peak Power Limit (kW)",
-          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)"
+          "battery_capacity_kwh": "Thuis Batterij Capaciteit (kWh)",
+          "target_peak_limit": "Piek Vermogen Limiet (kW)",
+          "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)"
         },
         "data_description": {
-          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service."
+          "battery_capacity_kwh": "Totale capaciteit van je thuis batterij in kWh. Wordt gebruikt om voorspellingen te doen ten behoeve van de laad en ontlaad strategie.",
+          "target_peak_limit": "Maximaal aantal kW je maximaal mag gebruiken op je energie aansluiting voordat SEM automatisch apparaten gaat uitschakelen.",
+          "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen."
         }
       },
       "reconfigure": {
@@ -56,35 +56,54 @@
           "ev_charging_power_sensor": "EV Laadvermogen",
           "ev_charger_service": "EV Lader Service",
           "ev_charger_service_entity_id": "EV Lader Service Entiteit",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
+          "ev_total_energy_sensor": "EV Totaal Energie verbruik",
           "enable_charger_notifications": "Lader-displaymeldingen inschakelen",
           "enable_mobile_notifications": "Mobiele meldingen inschakelen",
           "mobile_notification_service": "Mobiele meldingsservice",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "vehicle_soc_entity": "Vehicle Batterij SOC",
+          "ev_battery_capacity_kwh": "EV Batterij Capaciteit (kWh)",
           "ev_target_soc": "EV Doel SOC (%)"
         }
       }
     },
-    "error": {
+"error": {
+  "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
+  "entity_not_found": "Entiteit {entity_id} is niet gevonden. Controleer of de entiteit bestaat en correct gespeld is.",
+  "incorrect_device_class": "Entiteit {entity_id} heeft een onjuiste device_class {actual}, verwacht werd {expected}. Selecteer een sensor met de juiste device class.",
+  "incorrect_state_class": "Entiteit {entity_id} heeft een onjuiste state_class {actual}, verwacht werd {expected}. Energiesensoren moeten state_class: total_increasing gebruiken.",
+  "entity_unavailable": "Entiteit {entity_id} is momenteel niet beschikbaar. Zorg ervoor dat het apparaat online is en gegevens levert.",
+  "invalid_value": "Entiteit {entity_id} heeft een ongeldige waarde {value}. Een numerieke waarde wordt verwacht.",
+  "service_not_found": "Notificatieservice {service} is niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_uw_telefoon).",
+  "validation_failed": "Validatie is mislukt voor één of meer sensoren. Controleer de foutmeldingen hieronder en los de problemen op.",
+  "solar_production_sensor": "Sensor voor zonne-energieproductie is verplicht en moet vermogensmetingen in Watt (W) leveren.",
+  "grid_power_sensor": "Netsensor (grid) is verplicht en moet vermogensmetingen in Watt (W) leveren. Negatief = afname, Positief = teruglevering.",
+  "battery_soc_sensor": "Batterij SOC-sensor is verplicht en moet procentuele waarden (0-100%) leveren.",
+  "battery_power_sensor": "Batterij vermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren. Positief = laden, Negatief = ontladen.",
+  "ev_connected_sensor": "EV verbonden sensor is verplicht en moet een binary_sensor zijn (AAN/UIT).",
+  "ev_charging_sensor": "EV laadsensor is verplicht en moet een binary_sensor zijn (AAN/UIT).",
+  "ev_charging_power_sensor": "EV laadvermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren."
+},
+"abort": {
+  "already_configured": "Solar Energy Management is al geconfigureerd. Slechts één instantie is toegestaan."
+}    "error": {
       "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
-      "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
-      "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
-      "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
-      "entity_unavailable": "Entity {entity_id} is currently unavailable. Please ensure the device is online and providing data.",
-      "invalid_value": "Entity {entity_id} has an invalid value {value}. Expected a numeric value.",
-      "service_not_found": "Notification service {service} was not found. Please check the service name (e.g., notify.mobile_app_your_phone).",
-      "validation_failed": "Validation failed for one or more sensors. Please check the error messages below and correct the issues.",
-      "solar_production_sensor": "Solar production sensor is required and must provide power readings in Watts (W).",
-      "grid_power_sensor": "Grid power sensor is required and must provide power readings in Watts (W). Negative = import, Positive = export.",
-      "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
-      "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
-      "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
-      "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
+      "entity_not_found": "Entiteit {entity_id} is niet gevonden. Controleer of de entiteit bestaat en correct gespeld is.",
+      "incorrect_device_class": "Entiteit {entity_id} heeft een onjuiste device_class {actual}, verwacht werd {expected}. Selecteer een sensor met de juiste device class.",
+      "incorrect_state_class": "Entiteit {entity_id} heeft een onjuiste state_class {actual}, verwacht werd {expected}. Energiesensoren moeten state_class: total_increasing gebruiken.",
+      "entity_unavailable": "Entiteit {entity_id} is momenteel niet beschikbaar. Zorg ervoor dat het apparaat online is en gegevens levert.",
+      "invalid_value": "Entiteit {entity_id} heeft een ongeldige waarde {value}. Een numerieke waarde wordt verwacht.",
+      "service_not_found": "Notificatieservice {service} is niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_uw_telefoon).",
+      "validation_failed": "Validatie is mislukt voor één of meer sensoren. Controleer de foutmeldingen hieronder en los de problemen op.",
+      "solar_production_sensor": "Sensor voor zonne-energieproductie is verplicht en moet vermogensmetingen in Watt (W) leveren.",
+      "grid_power_sensor": "Netsensor (grid) is verplicht en moet vermogensmetingen in Watt (W) leveren. Negatief = afname, Positief = teruglevering.",
+      "battery_soc_sensor": "Batterij SOC-sensor is verplicht en moet procentuele waarden (0-100%) leveren.",
+      "battery_power_sensor": "Batterij vermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren. Positief = laden, Negatief = ontladen.",
+      "ev_connected_sensor": "EV verbonden sensor is verplicht en moet een binary_sensor zijn (AAN/UIT).",
+      "ev_charging_sensor": "EV laadsensor is verplicht en moet een binary_sensor zijn (AAN/UIT).",
+      "ev_charging_power_sensor": "EV laadvermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren."
     },
     "abort": {
-      "already_configured": "Solar Energy Management is already configured. Only one instance is allowed."
+      "already_configured": "Solar Energy Management is all geconfigureerd. Er is maar 1 configuratie toegestaan."
     }
   },
   "options": {
@@ -108,88 +127,89 @@
         "title": "Hardware Entiteit Configuratie",
         "description": "Werk uw hardware entiteit koppelingen bij",
         "data": {
-          "solar_production_sensor": "Solar Production Power",
-          "grid_power_sensor": "Grid Power Exchange",
-          "battery_soc_sensor": "Battery State of Charge",
-          "battery_power_sensor": "Battery Charge/Discharge Power",
-          "battery_temperature_sensor": "Battery Temperature [Optional]",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_total_energy_sensor": "EV Total Energy Counter [Optional]",
-          "solar_total_energy_sensor": "Solar Total Energy Counter [Optional]",
-          "grid_import_total_energy_sensor": "Grid Import Total Energy [Optional]",
-          "grid_export_total_energy_sensor": "Grid Export Total Energy [Optional]",
-          "battery_charge_total_energy_sensor": "Battery Charge Total Energy [Optional]",
-          "battery_discharge_total_energy_sensor": "Battery Discharge Total Energy [Optional]",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "solar_production_sensor": "Zonnepanelen Productie Vermogen",
+          "grid_power_sensor": "Netvermogen (uitwisseling)",
+          "battery_soc_sensor": "Laadstatus batterij (SOC)",
+          "battery_power_sensor": "Laad-/ontlaadvermogen batterij",
+          "battery_temperature_sensor": "Batterijtemperatuur [optioneel]",
+          "ev_connected_sensor": "EV verbonden status",
+          "ev_charging_sensor": "EV laadstatus",
+          "ev_charging_power_sensor": "EV laadvermogen",
+          "ev_total_energy_sensor": "Totaal energieverbruik EV [optioneel]",
+          "solar_total_energy_sensor": "Totale zonne-energie [optioneel]",
+          "grid_import_total_energy_sensor": "Totale netafname [optioneel]",
+          "grid_export_total_energy_sensor": "Totale teruglevering aan net [optioneel]",
+          "battery_charge_total_energy_sensor": "Totale batterij laadenergie [optioneel]",
+          "battery_discharge_total_energy_sensor": "Totale batterij ontlaadenergie [optioneel]",
+          "vehicle_soc_entity": "Voertuig batterij SOC",
+          "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
+          "ev_target_soc": "EV gewenste SOC (%)"
         },
         "data_description": {
-          "vehicle_soc_entity": "Optional. A sensor that exposes the vehicle's current State of Charge (0–100 %). Only a few cars provide this (Tesla, some VW IDs, MG ZS EV with custom integrations, OBD-II adapters). If empty, SEM uses the kWh-based daily target instead and the two fields below are ignored.",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery. ONLY used when the Vehicle SOC sensor above is configured — SEM combines it with the SOC reading to compute the remaining energy needed to reach the target. Without a SOC sensor this value is ignored entirely.",
-          "ev_target_soc": "SOC % SEM aims to reach when night charging. ONLY used when the Vehicle SOC sensor is configured. Without one, the kWh-based 'Daily EV target' field on the Optimization Settings step is used instead."
+          "vehicle_soc_entity": "Optioneel. Een sensor die de huidige laadstatus (State of Charge, 0–100%) van het voertuig weergeeft. Slechts enkele auto's bieden dit (Tesla, sommige VW ID-modellen, MG ZS EV met custom integraties, OBD-II adapters). Indien leeg, gebruikt SEM in plaats daarvan de kWh-gebaseerde dagdoelstelling en worden de twee onderstaande velden genegeerd.",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-batterij. Wordt ALLEEN gebruikt wanneer de bovenstaande Vehicle SOC-sensor is geconfigureerd — SEM combineert dit met de SOC-waarde om de nog benodigde energie te berekenen om het doel te bereiken. Zonder SOC-sensor wordt deze waarde volledig genegeerd.",
+          "ev_target_soc": "SOC-percentage dat SEM probeert te bereiken tijdens nachtelijk laden. Wordt ALLEEN gebruikt wanneer de Vehicle SOC-sensor is geconfigureerd. Zonder deze sensor wordt in plaats daarvan het kWh-gebaseerde veld 'Dagelijks EV-doel' uit de optimalisatie-instellingen gebruikt."
         }
       },
       "settings": {
-        "title": "SEM Optimization Settings",
-        "description": "Update your SEM optimization parameters",
+        "title": "SEM Optimalisatie instellingen",
+        "description": "Pas je SEM optimalisatie instelling aan",
         "data": {
-          "update_interval": "Update Interval (seconds)",
-          "power_delta": "Power Delta Threshold (W)",
-          "current_delta": "Current Delta Threshold (A)",
-          "soc_delta": "Battery SOC Delta Threshold (%)",
-          "battery_priority_soc": "Battery Priority SOC (%)",
-          "battery_minimum_soc": "Battery Minimum SOC (%)",
-          "battery_resume_soc": "Battery Resume SOC (%)",
-          "min_solar_power": "Minimum Solar Power (W)",
-          "max_grid_import": "Maximum Grid Import (W)",
-          "daily_ev_target": "Daily EV Target (kWh)",
-          "battery_assist_max_power": "Battery Assist Max Power (W)",
-          "battery_capacity_kwh": "Battery Capacity (kWh)",
-          "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
-          "battery_max_discharge_power": "Maximum Discharge Power (W)",
-          "electricity_import_rate": "Electricity Import Rate (per kWh)",
-          "electricity_off_peak_rate": "Electricity NT Rate (per kWh)",
-          "electricity_export_rate": "Electricity Export Rate (per kWh)",
-          "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
-          "observer_mode": "Observer Mode (Read-Only)",
-          "smart_night_charging": "Forecast Night Reduction",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)",
-          "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
-          "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
-          "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
-          "battery_discharge_control_entity": "Battery discharge control entity (optional)",
-          "hot_water_solar_target": "Hot water solar heating target (°C)",
-          "legionella_target_temp": "Legionella disinfection target (°C)",
-          "legionella_interval_hours": "Max hours between disinfection cycles"
+
+          "update_interval": "Update-interval (seconden)",
+          "power_delta": "Vermogen delta-drempel (W)",
+          "current_delta": "Stroom delta-drempel (A)",
+          "soc_delta": "Batterij SOC delta-drempel (%)",
+          "battery_priority_soc": "Batterij prioriteit SOC (%)",
+          "battery_minimum_soc": "Minimale batterij SOC (%)",
+          "battery_resume_soc": "Batterij hervat SOC (%)",
+          "min_solar_power": "Minimaal zonnevermogen (W)",
+          "max_grid_import": "Maximale netafname (W)",
+          "daily_ev_target": "Dagelijkse EV-doel (kWh)",
+          "battery_assist_max_power": "Maximaal batterij-ondersteuningsvermogen (W)",
+          "battery_capacity_kwh": "Batterijcapaciteit (kWh)",
+          "battery_discharge_protection_enabled": "Batterij ontladingsbescherming inschakelen",
+          "battery_max_discharge_power": "Maximaal ontlaadvermogen (W)",
+          "electricity_import_rate": "Elektriciteit importtarief (per kWh)",
+          "electricity_off_peak_rate": "Elektriciteit nachttarief (per kWh)",
+          "electricity_export_rate": "Elektriciteit terugleververgoeding (per kWh)",
+          "demand_charge_rate": "Capaciteitstarief (CHF/kW/maand)",
+          "observer_mode": "Observatiemodus (alleen-lezen)",
+          "smart_night_charging": "Slimme nachtelijke laadreductie",
+          "vehicle_soc_entity": "Voertuig batterij SOC",
+          "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
+          "ev_target_soc": "EV doel SOC (%)",
+          "battery_buffer_soc": "Zone 2/3 grens — batterijbuffer SOC (%)",
+          "battery_auto_start_soc": "Zone 3/4 grens — batterij auto-start SOC (%)",
+          "battery_assist_floor_soc": "Batterij ondersteuning hysterese ondergrens (%)",
+          "battery_discharge_control_entity": "Batterij ontladingsregel-entiteit (optioneel)",
+          "hot_water_solar_target": "Doeltemperatuur zonneboiler (°C)",
+          "legionella_target_temp": "Legionella desinfectie doeltemperatuur (°C)",
+          "legionella_interval_hours": "Maximaal aantal uren tussen desinfectiecycli"
         },
         "data_description": {
-          "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
-          "power_delta": "Change-detection threshold for power sensors. Lower = more updates (more sensitive but heavier on the recorder). Default 1000 W is fine for most installs; tune down to 100–200 W for finer control.",
-          "current_delta": "Minimum charging-current change (A) before SEM updates the EV charger. Higher = less ramping.",
-          "soc_delta": "Minimum battery SOC change (%) before SEM reacts. Battery SOC moves slowly so 10 % is usually fine.",
-          "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
-          "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
-          "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
-          "battery_assist_floor_soc": "Hysteresis floor — once battery assist is active, it stays active until SOC drops below this value. Default 60 %.",
-          "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
-          "max_grid_import": "Hard cap on grid power that SEM will pull while doing solar charging. 0 = pure-PV mode (the recommended SEM default).",
-          "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
-          "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
-          "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
-          "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
-          "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
-          "electricity_import_rate": "Day / flat tariff (CHF/kWh, incl. VAT). Used for cost tracking.",
-          "electricity_off_peak_rate": "Night tariff (CHF/kWh). Set equal to import rate if you don't have a dual tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (CHF/kWh).",
-          "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
-          "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
-          "smart_night_charging": "When ON, SEM intelligently skips or reduces night charging based on estimated EV SOC, solar forecast, temperature-adjusted consumption prediction, and learned driving patterns.",
-          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed."
+          "update_interval": "Hoe vaak de coördinator sensoren uitleest en hardware aanstuurt. 10 s geeft de meest nauwkeurige energie-integratie; waarden boven 30 s zullen energie onderschatten. Bereik 10–60 s.",
+          "power_delta": "Drempel voor veranderingdetectie van vermogenssensoren. Lager = meer updates (gevoeliger maar zwaarder voor de recorder). Standaard 1000 W is prima voor de meeste installaties; stel bij naar 100–200 W voor fijnere regeling.",
+          "current_delta": "Minimale verandering in laadstroom (A) voordat SEM de EV-lader bijwerkt. Hoger = minder op- en afregelen.",
+          "soc_delta": "Minimale verandering in batterij SOC (%) voordat SEM reageert. Batterij SOC verandert langzaam, dus 10% is meestal prima.",
+          "battery_priority_soc": "Grens tussen zone 1 en zone 2. Onder deze SOC gaat alle zonne-energie naar de batterij en wordt de EV geblokkeerd. Standaard 30%. De vierzone-strategie vereist dat deze waarde LAAG is (5–60%) — verwar dit niet met de oude 3-zonebetekenis waarbij dit een hoge doelwaarde was.",
+          "battery_buffer_soc": "Grens tussen zone 2 en zone 3. Boven deze SOC mag de batterij ontladen om tekorten in zonne-energie op te vangen terwijl de EV wordt geladen. Standaard 70%.",
+          "battery_auto_start_soc": "Grens tussen zone 3 en zone 4. Boven deze SOC kan de EV beginnen met laden, zelfs zonder zonne-overschot, gebruikmakend van de batterij. Standaard 90%.",
+          "battery_assist_floor_soc": "Hysterese-ondergrens — zodra batterijondersteuning actief is, blijft deze actief totdat de SOC onder deze waarde zakt. Standaard 60%.",
+          "min_solar_power": "Ondergrens voor overschot waarbij laden van de EV op zonne-energie niet wordt gestart. Houd dit ruim onder het minimum van de EV-lader (~4140 W bij 3-fase, ~1380 W bij 1-fase).",
+          "max_grid_import": "Harde limiet voor netafname tijdens laden op zonne-energie. 0 = pure PV-modus (aanbevolen SEM-standaard).",
+          "daily_ev_target": "Doelwaarde kWh per dag voor nachtelijk laden via het net. Zet op 0 om nachtelijk laden volledig uit te schakelen.",
+          "battery_assist_max_power": "Maximaal vermogen dat de thuisbatterij kan ontladen om de EV te ondersteunen in zone 3/4. Standaard 4500 W.",
+          "battery_capacity_kwh": "Totale bruikbare capaciteit van de thuisbatterij (NIET de EV-batterij — dat is een aparte instelling). Wordt gebruikt voor forecast-gestuurd laden.",
+          "battery_discharge_protection_enabled": "Indien AAN, beperkt SEM het ontladingsvermogen van de omvormer tijdens nachtelijk EV-laden zodat de batterij alleen het huis voedt (niet de EV).",
+          "battery_max_discharge_power": "Harde bovengrens voor batterijontlading die door de beschermingsfunctie wordt afgedwongen.",
+          "electricity_import_rate": "Dag-/vlaktarief (CHF/kWh, incl. btw). Gebruikt voor kostenregistratie.",
+          "electricity_off_peak_rate": "Nachtelijk tarief (CHF/kWh). Stel gelijk aan het importtarief als je geen dubbeltarief hebt.",
+          "electricity_export_rate": "Terugleververgoeding van de energieleverancier (CHF/kWh).",
+          "demand_charge_rate": "Maandelijkse capaciteitstarief per kW piekvermogen (CHF/kW/maand). Zet op 0 als dit niet van toepassing is.",
+          "observer_mode": "Indien AAN, monitort en berekent SEM alles, maar stuurt geen commando's naar hardware. Te gebruiken in een test-/acceptatieomgeving.",
+          "smart_night_charging": "Indien AAN, slaat SEM nachtelijk laden slim over of vermindert dit op basis van geschatte EV SOC, zonneverwachting, temperatuurgecorrigeerde verbruiksvoorspelling en geleerde rijpatronen.",
+          "battery_discharge_control_entity": "Number-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig."
         }
       },
       "settings_ev": {
@@ -218,79 +238,79 @@
         }
       },
       "load_management": {
-        "title": "Load Management Settings",
-        "description": "Update load management configuration",
+        "title": "Instellingen voor load management",
+        "description": "Configuratie voor load management bijwerken",
         "data": {
-          "load_management_enabled": "Enable Load Management",
-          "target_peak_limit": "Target Peak Limit (kW)",
-          "warning_peak_level": "Warning Peak Level (kW)",
-          "emergency_peak_level": "Emergency Peak Level (kW)",
-          "critical_device_protection": "Protect Critical Devices",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "load_management_enabled": "Load management inschakelen",
+          "target_peak_limit": "Doel piekvermogen (kW)",
+          "warning_peak_level": "Waarschuwingsniveau piekvermogen (kW)",
+          "emergency_peak_level": "Noodniveau piekvermogen (kW)",
+          "critical_device_protection": "Bescherming van kritische apparaten",
+          "vehicle_soc_entity": "Voertuig batterij SOC",
+          "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
+          "ev_target_soc": "EV doel SOC (%)"
         }
       },
       "notifications": {
-        "title": "Meldingsinstellingen",
-        "description": "Update notification configuration",
+        "title": "Meldings Instellingen",
+        "description": "Aanpassen Meldings Instellingen",
         "data": {
           "enable_charger_notifications": "Lader-displaymeldingen inschakelen",
           "enable_mobile_notifications": "Mobiele meldingen inschakelen",
           "mobile_notification_service": "Mobiele meldingsservice",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "vehicle_soc_entity": "Vehicle Batterij SOC",
+          "ev_battery_capacity_kwh": "EV Batterij Capaciteit (kWh)",
+          "ev_target_soc": "EV Doel SOC (%)"
         }
       },
       "dashboard_options": {
-        "title": "Dashboard Installation",
-        "description": "Install or reinstall the SEM dashboard",
+        "title": "Dashboard Installatie",
+        "description": "Installeer of herinstalleer het SEM dashboard",
         "data": {
-          "generate_dashboard": "Generate Dashboard",
-          "dashboard_title": "Dashboard Title",
-          "dashboard_path": "Dashboard Path (URL)",
-          "include_financial": "Include Financial Tracking",
-          "include_flows": "Include Power Flow Visualization",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "generate_dashboard": "Dashboard genereren",
+          "dashboard_title": "Dashboardtitel",
+          "dashboard_path": "Dashboardpad (URL)",
+          "include_financial": "Financiële gegevens opnemen",
+          "include_flows": "Powerflow-visualisatie opnemen",
+          "vehicle_soc_entity": "Voertuig batterij SOC",
+          "ev_battery_capacity_kwh": "EV batterij capaciteit (kWh)",
+          "ev_target_soc": "EV doel SOC (%)"
         },
         "data_description": {
-          "generate_dashboard": "Create a new Lovelace dashboard for SEM. If a dashboard with the same path already exists, it will be replaced.",
-          "dashboard_title": "Display name for the dashboard in the sidebar. Example: 'Solar Energy Management'",
-          "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
-          "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
-          "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows."
+          "generate_dashboard": "Maak een nieuw Lovelace-dashboard voor SEM. Als er al een dashboard met hetzelfde pad bestaat, wordt dit vervangen.",
+          "dashboard_title": "Weergavenaam voor het dashboard in de zijbalk. Voorbeeld: 'Solar Energy Management'",
+          "dashboard_path": "URL-pad voor het dashboard (kleine letters, gebruik streepjes). Voorbeeld: 'sem-dashboard'",
+          "include_financial": "Voeg een tabblad toe voor financiële tracking met kosten, besparingen en ROI-metrieken.",
+          "include_flows": "Voeg een tabblad toe voor een visualisatie van energiestromen met een Sankey-diagram dat de energiestromen weergeeft."
         }
       },
       "battery_scheduler": {
-        "title": "Battery Charge Scheduler",
-        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "title": "Batterij laadschema",
+        "description": "Configureer voorspellingsgestuurd laden van het net naar de batterij tijdens goedkope uren",
         "data": {
-          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
-          "battery_capacity_kwh": "Battery Capacity",
-          "battery_max_charge_power_w": "Max Charge Power",
-          "battery_roundtrip_efficiency": "Round-trip Efficiency",
-          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
-          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
-          "battery_max_target_soc": "Maximum Target SOC",
-          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
-          "battery_pessimism_weight": "Forecast Pessimism",
-          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+          "battery_charge_scheduler_enabled": "Batterij laadschema inschakelen",
+          "battery_capacity_kwh": "Batterijcapaciteit",
+          "battery_max_charge_power_w": "Maximaal laadvermogen",
+          "battery_roundtrip_efficiency": "Rendement (round-trip)",
+          "battery_cycle_cost": "Batterij cycluskosten (slijtage)",
+          "battery_precharge_trigger_hour": "Dagelijks evaluatie-uur",
+          "battery_max_target_soc": "Maximale doel SOC",
+          "battery_min_deficit_kwh": "Minimale tekortdrempel",
+          "battery_pessimism_weight": "Forecast pessimisme",
+          "battery_force_charge_negative_price": "Geforceerd laden bij negatieve prijs"
         }
       },
       "ev_charger_edit": {
         "title": "EV-lader bewerken",
-        "description": "Update the sensor mappings and priority for this charger.",
+        "description": "Werk de sensorkoppelingen en prioriteit voor deze lader bij.",
         "data": {
-          "charger_name": "Ladernaam",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
-          "ev_surplus_priority": "Overschotprioriteit (1=hoogste)"
+        "charger_name": "Ladernaam",
+        "ev_connected_sensor": "EV verbonden status",
+        "ev_charging_sensor": "EV laadstatus",
+        "ev_charging_power_sensor": "EV laadvermogen",
+        "ev_charger_service": "Lader stroom-instel service (optioneel)",
+        "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
+        "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)"
         }
       }
     }
@@ -460,7 +480,7 @@
         "name": "Eigenverbruik"
       },
       "autarky_rate": {
-        "name": "Autarkie"
+        "name": "zelfvoorzienend"
       },
       "daily_savings": {
         "name": "Besparing Vandaag"
@@ -706,16 +726,16 @@
         "name": "Voorspeller Nauwkeurigheid"
       },
       "predicted_consumption_next_hour": {
-        "name": "Voorsp. Verbruik (Volgend Uur)"
+        "name": "Voorspeld Verbruik (Volgend Uur)"
       },
       "predicted_consumption_today_kwh": {
-        "name": "Voorsp. Verbruik Vandaag"
+        "name": "Voorspeld Verbruik Vandaag"
       },
       "predicted_solar_next_hour": {
-        "name": "Voorsp. Zon (Volgend Uur)"
+        "name": "Voorspeld Zon (Volgend Uur)"
       },
       "predicted_surplus_window": {
-        "name": "Voorsp. Overschotvenster"
+        "name": "Voorspeld Overschotvenster"
       },
       "session_energy": {
         "name": "Sessie-energie"
@@ -742,7 +762,7 @@
         "name": "Totaal EV-sessies"
       },
       "lifetime_ev_solar_share": {
-        "name": "Totaal EV Zonneaandeel"
+        "name": "Totaal EV Zonne Aandeel"
       },
       "vehicle_soc": {
         "name": "Voertuig SOC"
@@ -760,13 +780,13 @@
         "name": "Nachtvenster Uren"
       },
       "forecast_peak_power_today_w": {
-        "name": "Voorsp. Piekvermogen Vandaag"
+        "name": "Voorspeld Piekvermogen Vandaag"
       },
       "forecast_peak_time_today": {
-        "name": "Voorsp. Piektijd Vandaag"
+        "name": "Voorspeld Piektijd Vandaag"
       },
       "forecast_power_next_hour_w": {
-        "name": "Voorsp. Vermogen Volgend Uur"
+        "name": "Voorspeld Vermogen Volgend Uur"
       },
       "forecast_surplus_kwh": {
         "name": "Voorspeld Overschot"
@@ -817,7 +837,7 @@
         "name": "EV Taper Ratio"
       },
       "ev_taper_minutes_to_full": {
-        "name": "EV Minutes to Full"
+        "name": "EV Minuten tot Vol"
       },
       "diag_version": {
         "name": "SEM-versie"
@@ -829,16 +849,16 @@
         "name": "Grid Sign Convention"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Lader Besturings Methode"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Batterij Capaciteit (configuratie)"
       },
       "diag_update_interval": {
         "name": "Update Interval"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Observer Modus"
       },
       "diag_sensors_unavailable": {
         "name": "Sensoren niet beschikbaar"
@@ -967,19 +987,19 @@
         "name": "Batterij Ondersteuning Min-SOC"
       },
       "battery_capacity_kwh": {
-        "name": "Batterijcapaciteit"
+        "name": "Batterij capaciteit"
       },
       "battery_max_discharge_power": {
         "name": "Batterij Max Ontlaadvermogen"
       },
       "system_investment_cost": {
-        "name": "Systeeminvesteringskosten"
+        "name": "Systeem Investeringskosten"
       },
       "ev_minimum_current": {
         "name": "EV Minimale Stroom"
       },
       "ev_phases": {
-        "name": "EV Fasen"
+        "name": "EV Fases"
       },
       "electricity_import_rate": {
         "name": "Stroomimporttarief"
@@ -997,18 +1017,18 @@
         "name": "Batterijcapaciteit"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Heet Water Zonnepanelen Doel"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Legionella Doel Temperatuur"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
+        "name": "Legionella Interval uren"
       }
     },
     "select": {
       "ev_charging_mode": {
-        "name": "EV Charging Mode"
+        "name": "EV Laad Modus"
       }
     }
   }
