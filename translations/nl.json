@@ -66,26 +66,7 @@
         }
       }
     },
-"error": {
-  "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
-  "entity_not_found": "Entiteit {entity_id} is niet gevonden. Controleer of de entiteit bestaat en correct gespeld is.",
-  "incorrect_device_class": "Entiteit {entity_id} heeft een onjuiste device_class {actual}, verwacht werd {expected}. Selecteer een sensor met de juiste device class.",
-  "incorrect_state_class": "Entiteit {entity_id} heeft een onjuiste state_class {actual}, verwacht werd {expected}. Energiesensoren moeten state_class: total_increasing gebruiken.",
-  "entity_unavailable": "Entiteit {entity_id} is momenteel niet beschikbaar. Zorg ervoor dat het apparaat online is en gegevens levert.",
-  "invalid_value": "Entiteit {entity_id} heeft een ongeldige waarde {value}. Een numerieke waarde wordt verwacht.",
-  "service_not_found": "Notificatieservice {service} is niet gevonden. Controleer de servicenaam (bijv. notify.mobile_app_uw_telefoon).",
-  "validation_failed": "Validatie is mislukt voor één of meer sensoren. Controleer de foutmeldingen hieronder en los de problemen op.",
-  "solar_production_sensor": "Sensor voor zonne-energieproductie is verplicht en moet vermogensmetingen in Watt (W) leveren.",
-  "grid_power_sensor": "Netsensor (grid) is verplicht en moet vermogensmetingen in Watt (W) leveren. Negatief = afname, Positief = teruglevering.",
-  "battery_soc_sensor": "Batterij SOC-sensor is verplicht en moet procentuele waarden (0-100%) leveren.",
-  "battery_power_sensor": "Batterij vermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren. Positief = laden, Negatief = ontladen.",
-  "ev_connected_sensor": "EV verbonden sensor is verplicht en moet een binary_sensor zijn (AAN/UIT).",
-  "ev_charging_sensor": "EV laadsensor is verplicht en moet een binary_sensor zijn (AAN/UIT).",
-  "ev_charging_power_sensor": "EV laadvermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren."
-},
-"abort": {
-  "already_configured": "Solar Energy Management is al geconfigureerd. Slechts één instantie is toegestaan."
-}    "error": {
+    "error": {
       "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
       "entity_not_found": "Entiteit {entity_id} is niet gevonden. Controleer of de entiteit bestaat en correct gespeld is.",
       "incorrect_device_class": "Entiteit {entity_id} heeft een onjuiste device_class {actual}, verwacht werd {expected}. Selecteer een sensor met de juiste device class.",
@@ -103,7 +84,7 @@
       "ev_charging_power_sensor": "EV laadvermogenssensor is verplicht en moet vermogensmetingen in Watt (W) leveren."
     },
     "abort": {
-      "already_configured": "Solar Energy Management is all geconfigureerd. Er is maar 1 configuratie toegestaan."
+      "already_configured": "Solar Energy Management is al geconfigureerd. Slechts één instantie is toegestaan."
     }
   },
   "options": {
