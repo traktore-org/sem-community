@@ -2,18 +2,18 @@
   "config": {
     "step": {
       "user": {
-        "title": "Solar Energy Management Setup",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "title": "Solar Energy Management Configuratie",
+        "description": "SEM heeft de volgende sensors gevonden in je Home Assistant Energie Dashboard:\n\n{summary}\n\nClick **Submit** om door te gaan. De volgende 2 stappen onderzoeken je EV lader(s) en zonnepaneel omvormer(s) — bijna alles wordt automatisch voor je ingevuld.",
         "data": {
-          "observer_mode": "Test mode (read-only — do not control hardware)"
+          "observer_mode": "Test mode (read-only — geen hardware wijzigingen)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Laat deze instelling uit staan for een normale installatie. Zet deze instelling alleen aan als je een testinstallatie hebt of wil experimenteren met wat er potentieel mogelijk is."
         }
       },
       "ev_charger": {
         "title": "EV Lader",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
+        "description": "SEM heeft je EV Lader(s) automatisch ingelezen vanuit de Home Assistant entity registry. Controleer of deze kloppen en klik op **Submit** — normaal gesproken zou alles moeten kloppen. Optionele velden kunnen leeg gelaten worden.",
         "data": {
           "ev_connected_sensor": "🔌 EV Verbonden — voertuig stekker",
           "ev_charging_sensor": "⚡ EV Laden Actief — huidige laadstatus",
