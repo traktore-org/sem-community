@@ -12,16 +12,16 @@
         }
       },
       "ev_charger": {
-        "title": "EV Charger",
+        "title": "EV Lader",
         "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
         "data": {
-          "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
-          "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
-          "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
-          "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
+          "ev_connected_sensor": "🔌 EV Verbonden — voertuig stekker",
+          "ev_charging_sensor": "⚡ EV Laden Actief — huidige laadstatus",
+          "ev_charging_power_sensor": "🚗 EV Laadvermogen — vermogen geleverd (W)",
+          "ev_charger_service": "EV Lader Stroom Service (optioneel)",
+          "ev_charger_service_entity_id": "EV Lader Service Entiteit (optioneel)",
+          "ev_current_sensor": "⚡ EV Laadstroom — amperage (A)",
+          "ev_total_energy_sensor": "🔋 EV Totale Energie — geleverde energie (kWh)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
@@ -48,26 +48,26 @@
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Solar Energy Management",
-        "description": "Update your EV charger and notification settings",
+        "title": "SEM Herconfigureren",
+        "description": "Werk uw EV lader en meldingsinstellingen bij",
         "data": {
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "EV Charger Service",
-          "ev_charger_service_entity_id": "EV Charger Service Entity",
+          "ev_connected_sensor": "EV Verbonden Status",
+          "ev_charging_sensor": "EV Laadstatus",
+          "ev_charging_power_sensor": "EV Laadvermogen",
+          "ev_charger_service": "EV Lader Service",
+          "ev_charger_service_entity_id": "EV Lader Service Entiteit",
           "ev_total_energy_sensor": "EV Total Energy Counter",
           "enable_charger_notifications": "Lader-displaymeldingen inschakelen",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
-          "mobile_notification_service": "Mobile Notification Service",
+          "enable_mobile_notifications": "Mobiele meldingen inschakelen",
+          "mobile_notification_service": "Mobiele meldingsservice",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "EV Doel SOC (%)"
         }
       }
     },
     "error": {
-      "unknown": "An unexpected error occurred. Please try again.",
+      "unknown": "Er is een onverwachte fout opgetreden. Probeer het opnieuw.",
       "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
       "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
       "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
@@ -105,8 +105,8 @@
         }
       },
       "hardware": {
-        "title": "Hardware Entity Configuration",
-        "description": "Update your hardware entity mappings",
+        "title": "Hardware Entiteit Configuratie",
+        "description": "Werk uw hardware entiteit koppelingen bij",
         "data": {
           "solar_production_sensor": "Solar Production Power",
           "grid_power_sensor": "Grid Power Exchange",
@@ -232,12 +232,12 @@
         }
       },
       "notifications": {
-        "title": "Notification Settings",
+        "title": "Meldingsinstellingen",
         "description": "Update notification configuration",
         "data": {
           "enable_charger_notifications": "Lader-displaymeldingen inschakelen",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
-          "mobile_notification_service": "Mobile Notification Service",
+          "enable_mobile_notifications": "Mobiele meldingen inschakelen",
+          "mobile_notification_service": "Mobiele meldingsservice",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
           "ev_target_soc": "EV Target SOC (%)"
@@ -262,6 +262,35 @@
           "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
           "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
           "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows."
+        }
+      },
+      "battery_scheduler": {
+        "title": "Battery Charge Scheduler",
+        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "data": {
+          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
+          "battery_capacity_kwh": "Battery Capacity",
+          "battery_max_charge_power_w": "Max Charge Power",
+          "battery_roundtrip_efficiency": "Round-trip Efficiency",
+          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
+          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
+          "battery_max_target_soc": "Maximum Target SOC",
+          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
+          "battery_pessimism_weight": "Forecast Pessimism",
+          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+        }
+      },
+      "ev_charger_edit": {
+        "title": "EV-lader bewerken",
+        "description": "Update the sensor mappings and priority for this charger.",
+        "data": {
+          "charger_name": "Ladernaam",
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Overschotprioriteit (1=hoogste)"
         }
       }
     }
@@ -743,43 +772,43 @@
         "name": "Voorspeld Overschot"
       },
       "battery_scheduler_state": {
-        "name": "Battery Scheduler State"
+        "name": "Batterijplanner Status"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "Batterijplanner Doel-SOC"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Batterijplanner Tekort"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Batterijplanner Reden"
       },
       "ev_estimated_soc": {
-        "name": "EV Estimated SOC"
+        "name": "EV Geschatte SOC"
       },
       "ev_last_full_charge": {
-        "name": "EV Last Full Charge"
+        "name": "EV Laatste Volle Lading"
       },
       "ev_energy_since_full": {
-        "name": "EV Energy Since Full"
+        "name": "EV Energie sinds vol"
       },
       "ev_nights_until_charge": {
-        "name": "EV Nights Until Charge"
+        "name": "EV Nachten tot laden"
       },
       "ev_predicted_daily_consumption": {
-        "name": "EV Predicted Daily Consumption"
+        "name": "EV Voorspeld dagverbruik"
       },
       "ev_battery_health": {
-        "name": "EV Battery Health"
+        "name": "EV Batterijgezondheid"
       },
       "ev_charge_needed": {
-        "name": "EV Charge Needed"
+        "name": "EV Laden nodig"
       },
       "ev_charge_skip_reason": {
-        "name": "EV Charge Skip Reason"
+        "name": "EV Overslaan reden"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "Aantal EV-laders"
       },
       "ev_taper_trend": {
         "name": "EV Taper Trend"
@@ -791,10 +820,10 @@
         "name": "EV Minutes to Full"
       },
       "diag_version": {
-        "name": "SEM Version"
+        "name": "SEM-versie"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Netsensor modus"
       },
       "diag_grid_sign": {
         "name": "Grid Sign Convention"
@@ -812,7 +841,7 @@
         "name": "Observer Mode"
       },
       "diag_sensors_unavailable": {
-        "name": "Sensors Unavailable"
+        "name": "Sensoren niet beschikbaar"
       }
     },
     "binary_sensor": {

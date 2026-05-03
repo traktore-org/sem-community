@@ -143,7 +143,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if tariff_mode == "dynamic":
             self._tariff_provider = DynamicTariffProvider(
                 hass,
-                price_entity=config.get("price_entity"),
+                price_entity=config.get("dynamic_tariff_entity") or config.get("price_entity"),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 cheap_threshold=config.get("cheap_price_threshold", 0.15),
                 expensive_threshold=config.get("expensive_price_threshold", 0.35),

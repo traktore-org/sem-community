@@ -12,14 +12,14 @@
         }
       },
       "ev_charger": {
-        "title": "EV Charger",
+        "title": "Nabíječka EV",
         "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
         "data": {
           "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
           "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
           "ev_charging_power_sensor": "🚗 EV Charging Power — power delivered to vehicle (W)",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
+          "ev_charger_service": "Služba nastavení proudu nabíječky (volitelné)",
+          "ev_charger_service_entity_id": "Cílová entita služby nabíječky (volitelné)",
           "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
           "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
         },
@@ -51,23 +51,23 @@
         "title": "Reconfigure Solar Energy Management",
         "description": "Update your EV charger and notification settings",
         "data": {
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_connected_sensor": "Stav připojení EV",
+          "ev_charging_sensor": "Stav nabíjení EV",
+          "ev_charging_power_sensor": "Nabíjecí výkon EV",
           "ev_charger_service": "EV Charger Service",
           "ev_charger_service_entity_id": "EV Charger Service Entity",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
-          "enable_charger_notifications": "Enable Charger Display Notifications",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_total_energy_sensor": "Celkový čítač energie EV",
+          "enable_charger_notifications": "Povolit oznámení na displeji nabíječky",
+          "enable_mobile_notifications": "Povolit mobilní oznámení",
+          "mobile_notification_service": "Služba mobilních oznámení",
+          "vehicle_soc_entity": "SOC baterie vozidla",
+          "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "ev_target_soc": "Cílový SOC EV (%)"
         }
       }
     },
     "error": {
-      "unknown": "An unexpected error occurred. Please try again.",
+      "unknown": "Došlo k neočekávané chybě. Zkuste to prosím znovu.",
       "entity_not_found": "Entity not found. Please verify the entity ID exists.",
       "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
       "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
@@ -84,20 +84,20 @@
       "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
     },
     "abort": {
-      "already_configured": "Solar Energy Management is already configured. Only one instance is allowed."
+      "already_configured": "Solar Energy Management je již nakonfigurován. Povolena je pouze jedna instance."
     }
   },
   "options": {
     "step": {
       "ev_charger": {
-        "title": "EV Charger",
+        "title": "Nabíječka EV",
         "description": "Review and update your EV charger entity mappings. The Vehicle SOC fields are only used if you provide a Vehicle Battery SOC sensor.",
         "data": {
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
-          "ev_charger_service": "EV Charger Set-Current Service (optional)",
-          "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
+          "ev_connected_sensor": "Stav připojení EV",
+          "ev_charging_sensor": "Stav nabíjení EV",
+          "ev_charging_power_sensor": "Nabíjecí výkon EV",
+          "ev_charger_service": "Služba nastavení proudu nabíječky (volitelné)",
+          "ev_charger_service_entity_id": "Cílová entita služby nabíječky (volitelné)",
           "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
@@ -105,7 +105,7 @@
         }
       },
       "hardware": {
-        "title": "Hardware Entity Configuration",
+        "title": "Konfigurace hardwarových entit",
         "description": "Update your hardware entity mappings",
         "data": {
           "solar_production_sensor": "Solar Production Power",
@@ -113,18 +113,18 @@
           "battery_soc_sensor": "Battery State of Charge",
           "battery_power_sensor": "Battery Charge/Discharge Power",
           "battery_temperature_sensor": "Battery Temperature [Optional]",
-          "ev_connected_sensor": "EV Connected Status",
-          "ev_charging_sensor": "EV Charging Status",
-          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_connected_sensor": "Stav připojení EV",
+          "ev_charging_sensor": "Stav nabíjení EV",
+          "ev_charging_power_sensor": "Nabíjecí výkon EV",
           "ev_total_energy_sensor": "EV Total Energy Counter [Optional]",
           "solar_total_energy_sensor": "Solar Total Energy Counter [Optional]",
           "grid_import_total_energy_sensor": "Grid Import Total Energy [Optional]",
           "grid_export_total_energy_sensor": "Grid Export Total Energy [Optional]",
           "battery_charge_total_energy_sensor": "Battery Charge Total Energy [Optional]",
           "battery_discharge_total_energy_sensor": "Battery Discharge Total Energy [Optional]",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "vehicle_soc_entity": "SOC baterie vozidla",
+          "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "ev_target_soc": "Cílový SOC EV (%)"
         },
         "data_description": {
           "vehicle_soc_entity": "Optional. A sensor that exposes the vehicle's current State of Charge (0–100 %). Only a few cars provide this (Tesla, some VW IDs, MG ZS EV with custom integrations, OBD-II adapters). If empty, SEM uses the kWh-based daily target instead and the two fields below are ignored.",
@@ -156,9 +156,9 @@
           "demand_charge_rate": "Demand Charge Rate (CHF/kW/month)",
           "observer_mode": "Observer Mode (Read-Only)",
           "smart_night_charging": "Smart Night Charging",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)",
+          "vehicle_soc_entity": "SOC baterie vozidla",
+          "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "ev_target_soc": "Cílový SOC EV (%)",
           "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
           "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
@@ -193,68 +193,68 @@
         }
       },
       "settings_ev": {
-        "title": "EV Charging & Solar",
+        "title": "Nabíjení EV a solární",
         "description": "Configure EV charging targets and solar thresholds.",
         "data": {
-          "daily_ev_target": "Night charge target (kWh)",
-          "min_solar_power": "Minimum solar power to start EV charging (W)",
-          "max_grid_import": "Max grid import during solar charging (W, 0 = pure solar)",
-          "observer_mode": "Observer mode (read-only, no hardware control)",
-          "smart_night_charging": "Reduce night target based on tomorrow's forecast"
+          "daily_ev_target": "Cíl nočního nabíjení (kWh)",
+          "min_solar_power": "Minimální solární výkon pro nabíjení (W)",
+          "max_grid_import": "Max. import ze sítě (W, 0 = čistý solár)",
+          "observer_mode": "Režim pozorovatele (pouze čtení)",
+          "smart_night_charging": "Snížit noční cíl na základě předpovědi"
         }
       },
       "settings_tariff": {
-        "title": "Tariff & Advanced",
+        "title": "Tarif a pokročilé",
         "description": "Electricity rates and advanced tuning parameters.",
         "data": {
           "electricity_import_rate": "Import rate",
-          "electricity_off_peak_rate": "Night tariff rate (if different)",
-          "electricity_export_rate": "Export rate",
-          "demand_charge_rate": "Demand charge rate",
+          "electricity_off_peak_rate": "Noční sazba",
+          "electricity_export_rate": "Sazba exportu",
+          "demand_charge_rate": "Sazba poptávky",
           "update_interval": "Update interval (s)",
-          "power_delta": "Power change threshold (W)",
-          "current_delta": "Current change threshold (A)",
+          "power_delta": "Práh změny výkonu (W)",
+          "current_delta": "Práh změny proudu (A)",
           "soc_delta": "SOC change threshold (%)"
         }
       },
       "load_management": {
-        "title": "Load Management Settings",
+        "title": "Správa zátěže",
         "description": "Update load management configuration",
         "data": {
-          "load_management_enabled": "Enable Load Management",
-          "target_peak_limit": "Target Peak Limit (kW)",
+          "load_management_enabled": "Povolit správu zátěže",
+          "target_peak_limit": "Cílový limit špičky (kW)",
           "warning_peak_level": "Warning Peak Level (kW)",
           "emergency_peak_level": "Emergency Peak Level (kW)",
-          "critical_device_protection": "Protect Critical Devices",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "critical_device_protection": "Chránit kritická zařízení",
+          "vehicle_soc_entity": "SOC baterie vozidla",
+          "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "ev_target_soc": "Cílový SOC EV (%)"
         }
       },
       "notifications": {
-        "title": "Notification Settings",
+        "title": "Nastavení oznámení",
         "description": "Update notification configuration",
         "data": {
-          "enable_charger_notifications": "Enable Charger Display Notifications",
-          "enable_mobile_notifications": "Enable Mobile Notifications",
-          "mobile_notification_service": "Mobile Notification Service",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "enable_charger_notifications": "Povolit oznámení na displeji nabíječky",
+          "enable_mobile_notifications": "Povolit mobilní oznámení",
+          "mobile_notification_service": "Služba mobilních oznámení",
+          "vehicle_soc_entity": "SOC baterie vozidla",
+          "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "ev_target_soc": "Cílový SOC EV (%)"
         }
       },
       "dashboard_options": {
-        "title": "Dashboard Installation",
+        "title": "Instalace dashboardu",
         "description": "Install or reinstall the SEM dashboard",
         "data": {
-          "generate_dashboard": "Generate Dashboard",
-          "dashboard_title": "Dashboard Title",
-          "dashboard_path": "Dashboard Path (URL)",
-          "include_financial": "Include Financial Tracking",
-          "include_flows": "Include Power Flow Visualization",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "generate_dashboard": "Generovat dashboard",
+          "dashboard_title": "Název dashboardu",
+          "dashboard_path": "Cesta dashboardu (URL)",
+          "include_financial": "Zahrnout finanční sledování",
+          "include_flows": "Zahrnout vizualizaci toku energie",
+          "vehicle_soc_entity": "SOC baterie vozidla",
+          "ev_battery_capacity_kwh": "Kapacita baterie EV (kWh)",
+          "ev_target_soc": "Cílový SOC EV (%)"
         },
         "data_description": {
           "generate_dashboard": "Create a new Lovelace dashboard for SEM. If a dashboard with the same path already exists, it will be replaced.",
@@ -262,6 +262,35 @@
           "dashboard_path": "URL path for the dashboard (lowercase, use dashes). Example: 'sem-dashboard'",
           "include_financial": "Add a financial tracking tab showing costs, savings, and ROI metrics.",
           "include_flows": "Add a power flow visualization tab with Sankey diagram showing energy flows."
+        }
+      },
+      "battery_scheduler": {
+        "title": "Plánovač nabíjení baterie",
+        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "data": {
+          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
+          "battery_capacity_kwh": "Battery Capacity",
+          "battery_max_charge_power_w": "Max Charge Power",
+          "battery_roundtrip_efficiency": "Round-trip Efficiency",
+          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
+          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
+          "battery_max_target_soc": "Maximum Target SOC",
+          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
+          "battery_pessimism_weight": "Forecast Pessimism",
+          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+        }
+      },
+      "ev_charger_edit": {
+        "title": "Upravit nabíječku EV",
+        "description": "Update the sensor mappings and priority for this charger.",
+        "data": {
+          "charger_name": "Název nabíječky",
+          "ev_connected_sensor": "Stav připojení EV",
+          "ev_charging_sensor": "Stav nabíjení EV",
+          "ev_charging_power_sensor": "Nabíjecí výkon EV",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Priorita přebytku (1=nejvyšší)"
         }
       }
     }
@@ -671,7 +700,7 @@
         "name": "Utility Signals Today"
       },
       "predictor_training_status": {
-        "name": "Predictor Training Status"
+        "name": "Stav trénování prediktoru"
       },
       "predictor_model_accuracy": {
         "name": "Predictor Accuracy"
@@ -743,84 +772,84 @@
         "name": "Forecast Surplus"
       },
       "battery_scheduler_state": {
-        "name": "Battery Scheduler State"
+        "name": "Stav plánovače baterie"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "Cílový SOC plánovače"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Deficit plánovače"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Důvod plánovače"
       },
       "ev_estimated_soc": {
-        "name": "EV Estimated SOC"
+        "name": "Odhadovaný SOC EV"
       },
       "ev_last_full_charge": {
-        "name": "EV Last Full Charge"
+        "name": "Poslední plné nabití EV"
       },
       "ev_energy_since_full": {
-        "name": "EV Energy Since Full"
+        "name": "Energie od plného nabití"
       },
       "ev_nights_until_charge": {
-        "name": "EV Nights Until Charge"
+        "name": "Nocí do nabíjení"
       },
       "ev_predicted_daily_consumption": {
-        "name": "EV Predicted Daily Consumption"
+        "name": "Předpovězená denní spotřeba EV"
       },
       "ev_battery_health": {
-        "name": "EV Battery Health"
+        "name": "Zdraví baterie EV"
       },
       "ev_charge_needed": {
-        "name": "EV Charge Needed"
+        "name": "Nabíjení potřeba"
       },
       "ev_charge_skip_reason": {
-        "name": "EV Charge Skip Reason"
+        "name": "Důvod vynechání nabíjení"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "Počet nabíječek"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "EV trend útlumu"
       },
       "ev_taper_ratio": {
-        "name": "EV Taper Ratio"
+        "name": "EV poměr útlumu"
       },
       "ev_taper_minutes_to_full": {
-        "name": "EV Minutes to Full"
+        "name": "EV minut do plného"
       },
       "diag_version": {
-        "name": "SEM Version"
+        "name": "Verze SEM"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Režim síťového senzoru"
       },
       "diag_grid_sign": {
-        "name": "Grid Sign Convention"
+        "name": "Znaménková konvence sítě"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Metoda ovládání nabíječky"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Kapacita baterie (konfig.)"
       },
       "diag_update_interval": {
-        "name": "Update Interval"
+        "name": "Interval aktualizace"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Režim pozorovatele"
       },
       "diag_sensors_unavailable": {
-        "name": "Sensors Unavailable"
+        "name": "Senzory nedostupné"
       }
     },
     "binary_sensor": {
       "ev_connected": {
-        "name": "EV Connected"
+        "name": "EV připojeno"
       },
       "ev_charging": {
-        "name": "EV Charging"
+        "name": "EV nabíjení"
       },
       "battery_charging": {
         "name": "Battery Charging"
@@ -852,7 +881,7 @@
         "name": "Night Charging"
       },
       "observer_mode": {
-        "name": "Observer Mode"
+        "name": "Režim pozorovatele"
       },
       "smart_night_charging": {
         "name": "Forecast Night Reduction"
@@ -860,7 +889,7 @@
     },
     "number": {
       "update_interval": {
-        "name": "Update Interval"
+        "name": "Interval aktualizace"
       },
       "power_delta": {
         "name": "Power Delta"
@@ -968,18 +997,18 @@
         "name": "Battery Capacity"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Solární cíl teplé vody"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Cílová teplota legionely"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
+        "name": "Interval legionely (hodiny)"
       }
     },
     "select": {
       "ev_charging_mode": {
-        "name": "EV Charging Mode"
+        "name": "Režim nabíjení EV"
       }
     }
   }

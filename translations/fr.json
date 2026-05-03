@@ -67,7 +67,7 @@
       }
     },
     "error": {
-      "unknown": "An unexpected error occurred. Please try again.",
+      "unknown": "Une erreur inattendue s'est produite. Veuillez réessayer.",
       "entity_not_found": "Entity {entity_id} was not found. Please check that the entity exists and is spelled correctly.",
       "incorrect_device_class": "Entity {entity_id} has incorrect device_class {actual}, expected {expected}. Please select a sensor with the correct device class.",
       "incorrect_state_class": "Entity {entity_id} has incorrect state_class {actual}, expected {expected}. Energy sensors must use state_class: total_increasing.",
@@ -84,7 +84,7 @@
       "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
     },
     "abort": {
-      "already_configured": "Solar Energy Management is already configured. Only one instance is allowed."
+      "already_configured": "Solar Energy Management est déjà configuré. Une seule instance est autorisée."
     }
   },
   "options": {
@@ -163,7 +163,10 @@
           "battery_discharge_control_entity": "Battery discharge control entity (optional)",
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
-          "legionella_interval_hours": "Max hours between disinfection cycles"
+          "legionella_interval_hours": "Max hours between disinfection cycles",
+          "ev_battery_capacity_kwh": "Capacité batterie EV (kWh)",
+          "ev_target_soc": "SOC cible EV (%)",
+          "vehicle_soc_entity": "Capteur SOC véhicule"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -260,6 +263,35 @@
           "dashboard_path": "Chemin URL du tableau de bord (minuscules, utilisez des tirets). Exemple: 'sem-dashboard'",
           "include_financial": "Ajoutez un onglet de suivi financier montrant les coûts, économies et métriques ROI.",
           "include_flows": "Ajoutez un onglet de visualisation des flux d'énergie avec diagramme Sankey montrant les flux d'énergie."
+        }
+      },
+      "battery_scheduler": {
+        "title": "Battery Charge Scheduler",
+        "description": "Configure forecast-aware grid-to-battery charging during cheap hours",
+        "data": {
+          "battery_charge_scheduler_enabled": "Enable Battery Charge Scheduler",
+          "battery_capacity_kwh": "Battery Capacity",
+          "battery_max_charge_power_w": "Max Charge Power",
+          "battery_roundtrip_efficiency": "Round-trip Efficiency",
+          "battery_cycle_cost": "Battery Cycle Cost (degradation)",
+          "battery_precharge_trigger_hour": "Daily Evaluation Hour",
+          "battery_max_target_soc": "Maximum Target SOC",
+          "battery_min_deficit_kwh": "Minimum Deficit Threshold",
+          "battery_pessimism_weight": "Forecast Pessimism",
+          "battery_force_charge_negative_price": "Force Charge on Negative Price"
+        }
+      },
+      "ev_charger_edit": {
+        "title": "Modifier le chargeur VE",
+        "description": "Update the sensor mappings and priority for this charger.",
+        "data": {
+          "charger_name": "Nom du chargeur",
+          "ev_connected_sensor": "EV Connected Status",
+          "ev_charging_sensor": "EV Charging Status",
+          "ev_charging_power_sensor": "EV Charging Power",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Priorité surplus (1=plus haute)"
         }
       }
     }
@@ -741,43 +773,43 @@
         "name": "Surplus Prévu"
       },
       "battery_scheduler_state": {
-        "name": "Battery Scheduler State"
+        "name": "État du planificateur batterie"
       },
       "battery_scheduler_target_soc": {
-        "name": "Battery Scheduler Target SOC"
+        "name": "SOC cible du planificateur"
       },
       "battery_scheduler_deficit_kwh": {
-        "name": "Battery Scheduler Deficit"
+        "name": "Déficit du planificateur"
       },
       "battery_scheduler_reason": {
-        "name": "Battery Scheduler Reason"
+        "name": "Raison du planificateur"
       },
       "ev_estimated_soc": {
-        "name": "EV Estimated SOC"
+        "name": "SOC estimé VE"
       },
       "ev_last_full_charge": {
-        "name": "EV Last Full Charge"
+        "name": "Dernière charge complète VE"
       },
       "ev_energy_since_full": {
-        "name": "EV Energy Since Full"
+        "name": "Énergie depuis charge complète"
       },
       "ev_nights_until_charge": {
-        "name": "EV Nights Until Charge"
+        "name": "Nuits avant recharge"
       },
       "ev_predicted_daily_consumption": {
-        "name": "EV Predicted Daily Consumption"
+        "name": "Consommation quotidienne prévue"
       },
       "ev_battery_health": {
-        "name": "EV Battery Health"
+        "name": "Santé batterie VE"
       },
       "ev_charge_needed": {
-        "name": "EV Charge Needed"
+        "name": "Recharge nécessaire"
       },
       "ev_charge_skip_reason": {
-        "name": "EV Charge Skip Reason"
+        "name": "Raison du saut de charge"
       },
       "ev_charger_count": {
-        "name": "EV Charger Count"
+        "name": "Nombre de chargeurs"
       },
       "ev_taper_trend": {
         "name": "EV Taper Trend"
@@ -789,10 +821,10 @@
         "name": "EV Minutes to Full"
       },
       "diag_version": {
-        "name": "SEM Version"
+        "name": "Version SEM"
       },
       "diag_grid_mode": {
-        "name": "Grid Sensor Mode"
+        "name": "Mode capteur réseau"
       },
       "diag_grid_sign": {
         "name": "Grid Sign Convention"
@@ -810,7 +842,7 @@
         "name": "Observer Mode"
       },
       "diag_sensors_unavailable": {
-        "name": "Sensors Unavailable"
+        "name": "Capteurs indisponibles"
       }
     },
     "binary_sensor": {
