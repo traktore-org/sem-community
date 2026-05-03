@@ -24,22 +24,22 @@
           "ev_total_energy_sensor": "🔋 EV Totale Energie — geleverde energie (kWh)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
-          "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
-          "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking."
+          "ev_connected_sensor": "Binaire sensor die aangeeft we je electrische auto is aangesloten op de lader. Automatische detectie voor de volgende merken: KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
+          "ev_charging_sensor": "Binaire sensor die aangeeft of je lader actief aan opladen is. Automatische detectie vanuit je lader intergratie.",
+          "ev_charging_power_sensor": "Numerieke sensor (W) die rapporteert met hoeveel vermogen je electrische auto oplaadt. Automatische detectie vanuit je lader intergratie.",
+          "ev_charger_service": "Home Assistant service die aangeroepen moet worden om de lader amperage aan te passent (bijvoorbeeld keba.set_current, easee.set_charger_max_limit). Automatisch ingevuld voor KEBA. Laat dit veld leeg voor laders die een number entiry gebruiken.",
+          "ev_charger_service_entity_id": "Entiteits ID die gebruikt wordt in de service call.",
+          "ev_current_sensor": "Optioneell. Numerieke sensor (A) die het werkelijke stroomverbruik rapporteert. Wordt gebruikt voor diagnostiek.",
+          "ev_total_energy_sensor": "Optioneel. Cumulatieve kWh sensor voor de totale energie die je electrische auto heeft ontvangen."
         }
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "De twee laatste waardes zijn afhankelijk van je installatie:\n\n• Thuis Batterij capaciteit — de bruikbare capaciteit van je thuis batterij.\n• Piek Vermogen Limiet. Het maximale aantal kW dat uw energie leverancier toestaat voordat SEM begint met het afschakelen van de energie verbruikers. — \n\nSEM detecteert automatich je omvormer ontlaad schakelaar entity: {discharge_entity}\n\nLaat deze optie aan staan zodat SEM automatisch je dashboards creeert. **Let op!!: Home Assistant rwordt automatisch opnieuw opgestart na 5 seconden nadat de installatie voltooid is.**\n\nGebruik verder de (veilige) standaard waardes, deze kan je altijd achteraf nog wijzigen.",
         "data": {
-          "battery_capacity_kwh": "Home Battery Capacity (kWh)",
-          "target_peak_limit": "Peak Power Limit (kW)",
-          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)"
+          "battery_capacity_kwh": "Thuis Batterij Capaciteit (kWh)",
+          "target_peak_limit": "Piek Vermogen Limiet (kW)",
+          "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)"
         },
         "data_description": {
           "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
