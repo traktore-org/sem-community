@@ -176,7 +176,9 @@ class SEMLoadPriorityCard extends HTMLElement {
     _renderDevice(device, priority) {
         const onOff = device.isOn;
         const isChild = device.dependsOn.length > 0;
-        const indent = isChild ? 'margin-left:24px;border-left:2px solid rgba(255,152,0,0.3);' : '';
+        // Calculate indent depth for chain dependencies (A→B→C)
+        const depth = this._getDependencyDepth(device);
+        const indent = depth > 0 ? `margin-left:${depth * 24}px;border-left:2px solid rgba(255,152,0,${0.3 + depth * 0.1});` : '';
         return `
         <div class="device${isChild ? ' is-child' : ''}" data-id="${device.id}" style="${indent}">
             <div class="drag-handle" title="${isChild ? 'Locked under parent — change Requires to release' : 'Drag to reorder'}" style="${isChild ? 'opacity:0.3;cursor:default' : ''}">${isChild ? '·' : '≡'}</div>
@@ -449,34 +451,42 @@ class SEMLoadPriorityCard extends HTMLElement {
         });
     }
 
+    _getDependencyDepth(device) {
+        // Calculate how deep in the chain: A=0, B(→A)=1, C(→B→A)=2
+        let depth = 0;
+        let current = device;
+        const visited = new Set();
+        while (current.dependsOn.length > 0 && depth < 5) {
+            visited.add(current.id);
+            const parentId = current.dependsOn[0];
+            if (visited.has(parentId)) break; // Circular protection
+            const parent = this.devices.find(d => d.id === parentId);
+            if (!parent) break;
+            depth++;
+            current = parent;
+        }
+        return depth;
+    }
+
     _regroupChildren() {
         // Ensure each child is directly after its parent (#122)
-        // Build parent → children map
-        const parentChildren = {};
-        this.devices.forEach(d => {
-            if (d.dependsOn.length) {
-                const parentId = d.dependsOn[0];
-                if (!parentChildren[parentId]) parentChildren[parentId] = [];
-                parentChildren[parentId].push(d);
-            }
-        });
-        // Rebuild: parents in current order, children grouped after each parent
+        // Handles chains: A → B → C (B after A, C after B)
         const result = [];
         const placed = new Set();
-        this.devices.forEach(d => {
-            if (placed.has(d.id)) return;
-            if (!d.dependsOn.length) {
-                result.push(d);
-                placed.add(d.id);
-                // Add children right after
-                (parentChildren[d.id] || []).forEach(child => {
-                    if (!placed.has(child.id)) {
-                        result.push(child);
-                        placed.add(child.id);
-                    }
-                });
-            }
-        });
+
+        const addWithChildren = (device) => {
+            if (placed.has(device.id)) return;
+            result.push(device);
+            placed.add(device.id);
+            // Find and add direct children recursively
+            this.devices
+                .filter(d => d.dependsOn.includes(device.id) && !placed.has(d.id))
+                .forEach(child => addWithChildren(child));
+        };
+
+        // Start with root devices (no dependencies)
+        this.devices.filter(d => !d.dependsOn.length).forEach(d => addWithChildren(d));
+
         // Add any orphaned children (parent not found)
         this.devices.forEach(d => {
             if (!placed.has(d.id)) result.push(d);
