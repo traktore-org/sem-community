@@ -214,7 +214,7 @@ class SEMSolarSummaryCard extends HTMLElement {
                 }
                 .hero-label {
                     font-size: 12px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     font-weight: 500;
                 }
                 .hero-value {
@@ -242,7 +242,7 @@ class SEMSolarSummaryCard extends HTMLElement {
                 }
                 .metric-label {
                     font-size: 10px;
-                    color: ${textTertCol};
+                    color: var(--secondary-text-color, ${textTertCol});
                     font-weight: 500;
                     letter-spacing: 0.3px;
                     margin-bottom: 4px;

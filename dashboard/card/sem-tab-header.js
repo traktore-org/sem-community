@@ -250,7 +250,7 @@ class SEMTabHeader extends HTMLElement {
                 }
                 .tab-subtitle {
                     font-size: 12px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     margin-top: 2px;
                     font-weight: 500;
                 }
@@ -267,11 +267,11 @@ class SEMTabHeader extends HTMLElement {
                     font-size: 15px;
                     font-weight: 700;
                     font-variant-numeric: tabular-nums;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                 }
                 .stat-label {
                     font-size: 10px;
-                    color: ${textTertCol};
+                    color: var(--secondary-text-color, ${textTertCol});
                     font-weight: 500;
                     margin-top: 1px;
                 }

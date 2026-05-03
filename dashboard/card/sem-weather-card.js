@@ -182,12 +182,12 @@ class SEMWeatherCard extends HTMLElement {
                     font-variant-numeric: tabular-nums;
                     letter-spacing: -1px;
                     line-height: 1;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                     text-shadow: 0 0 20px rgba(200,220,240,0.15);
                 }
                 .date {
                     font-size: 13px;
-                    color: ${textSecCol};
+                    color: var(--secondary-text-color, ${textSecCol});
                     margin-top: 6px;
                     font-weight: 500;
                 }
@@ -212,7 +212,7 @@ class SEMWeatherCard extends HTMLElement {
                     font-size: 28px;
                     font-weight: 700;
                     font-variant-numeric: tabular-nums;
-                    color: ${textCol};
+                    color: var(--primary-text-color, ${textCol});
                     text-shadow: 0 0 12px rgba(200,220,240,0.1);
                 }
 

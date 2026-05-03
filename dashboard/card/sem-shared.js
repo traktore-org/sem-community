@@ -116,12 +116,12 @@ function semTheme(root) {
         // Core colors
         text, textSec, cardBg, divider, bgSec, shadow, accent, isDark,
         // Text hierarchy
-        textTertiary:  isDark ? 'rgba(255,255,255,0.38)' : 'rgba(0,0,0,0.38)',
-        textDisabled:  isDark ? 'rgba(255,255,255,0.26)' : 'rgba(0,0,0,0.26)',
+        textTertiary:  isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.50)',
+        textDisabled:  isDark ? 'rgba(255,255,255,0.26)' : 'rgba(0,0,0,0.30)',
         // Surfaces
-        surface:       isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-        surfaceHover:  isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)',
-        surfaceBorder: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
+        surface:       isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+        surfaceHover:  isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
+        surfaceBorder: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
         // Dot grid & glow for background patterns
         dotColor:      isDark ? 'rgba(128,128,128,0.05)' : 'rgba(128,128,128,0.06)',
         glowAlpha:     isDark ? 0.05 : 0.03,
