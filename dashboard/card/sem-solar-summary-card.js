@@ -230,15 +230,15 @@ class SEMSolarSummaryCard extends HTMLElement {
                     gap: 10px;
                 }
                 .metric {
-                    background: ${surfaceCol};
-                    border: 1px solid ${surfBorder};
+                    background: var(--secondary-background-color, ${surfaceCol});
+                    border: 1px solid var(--divider-color, ${surfBorder});
                     border-radius: 10px;
                     padding: 10px;
                     text-align: center;
                     transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1);
                 }
                 .metric:hover {
-                    border-color: ${surfHover};
+                    border-color: var(--divider-color, ${surfHover});
                 }
                 .metric-label {
                     font-size: 10px;

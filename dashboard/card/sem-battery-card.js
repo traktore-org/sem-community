@@ -287,15 +287,15 @@ class SEMBatteryCard extends HTMLElement {
                 .chip {
                     flex: 1;
                     min-width: 80px;
-                    background: ${surfaceCol};
-                    border: 1px solid ${surfBorder};
+                    background: var(--secondary-background-color, ${surfaceCol});
+                    border: 1px solid var(--divider-color, ${surfBorder});
                     border-radius: 10px;
                     padding: 8px 10px;
                     text-align: center;
                     transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1);
                 }
                 .chip:hover {
-                    border-color: ${surfHover};
+                    border-color: var(--divider-color, ${surfHover});
                 }
                 .chip-label {
                     font-size: 10px;

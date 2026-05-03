@@ -126,8 +126,8 @@ class SEMPeriodSelectorCard extends HTMLElement {
                     background-size: 100% 100%, 50px 50px;
                 }
                 .btn {
-                    border: 1px solid ${surfBorder};
-                    background: ${surfaceCol};
+                    border: 1px solid var(--divider-color, ${surfBorder});
+                    background: var(--secondary-background-color, ${surfaceCol});
                     color: var(--secondary-text-color, ${textSecCol});
                     padding: 8px 18px;
                     border-radius: 12px;
@@ -142,9 +142,9 @@ class SEMPeriodSelectorCard extends HTMLElement {
                     user-select: none;
                 }
                 .btn:hover {
-                    background: ${surfHover};
+                    background: var(--secondary-background-color, ${surfHover});
                     color: var(--primary-text-color, ${textCol});
-                    border-color: ${surfBorder};
+                    border-color: var(--divider-color, ${surfBorder});
                 }
                 .btn.active {
                     background: rgba(66,165,245,0.18);

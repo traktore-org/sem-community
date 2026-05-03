@@ -366,8 +366,8 @@ class SEMEVStatusCard extends HTMLElement {
                     display: inline-flex;
                     align-items: center;
                     gap: 4px;
-                    background: ${surfaceCol};
-                    border: 1px solid ${surfBorder};
+                    background: var(--secondary-background-color, ${surfaceCol});
+                    border: 1px solid var(--divider-color, ${surfBorder});
                     border-radius: 12px;
                     padding: 3px 10px;
                     font-size: 11px;

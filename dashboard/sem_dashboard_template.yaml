@@ -110,19 +110,19 @@ views:
             card_mod:
               style: &glass_card |
                 ha-card {
-                  background-color: var(--card-background-color, rgba(30, 35, 45, 0.5)) !important;
+                  background-color: var(--card-background-color) !important;
                   color: var(--primary-text-color) !important;
-                  border: 1px solid var(--divider-color, rgba(255,255,255,0.12)) !important;
+                  border: 1px solid var(--divider-color) !important;
                   border-radius: 16px !important;
-                  box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.15)) !important;
+                  box-shadow: var(--ha-card-box-shadow, 0 2px 8px rgba(0,0,0,0.08)) !important;
                   max-width: 900px !important;
                   font-family: 'Segoe UI','Roboto',sans-serif !important;
                   transition: box-shadow 0.3s cubic-bezier(0.4,0,0.2,1), border-color 0.3s cubic-bezier(0.4,0,0.2,1) !important;
-                  --chip-background: var(--secondary-background-color, rgba(255, 255, 255, 0.06));
+                  --chip-background: var(--secondary-background-color);
                   --primary-font-family: 'Segoe UI','Roboto',sans-serif;
                 }
                 ha-card:hover {
-                  box-shadow: var(--ha-card-box-shadow, 0 4px 16px rgba(0,0,0,0.2)) !important;
+                  box-shadow: var(--ha-card-box-shadow, 0 4px 16px rgba(0,0,0,0.12)) !important;
                 }
 
           # ── Flow Card (full width) ──

@@ -222,7 +222,7 @@ class SEMWeatherCard extends HTMLElement {
                     gap: 16px;
                     margin-bottom: 16px;
                     padding-bottom: 14px;
-                    border-bottom: 1px solid ${surfBorder};
+                    border-bottom: 1px solid var(--divider-color, ${surfBorder});
                 }
                 .detail {
                     display: flex;
@@ -271,7 +271,7 @@ class SEMWeatherCard extends HTMLElement {
                 .f-bar-wrap {
                     flex: 1;
                     height: 4px;
-                    background: ${surfaceCol};
+                    background: var(--secondary-background-color, ${surfaceCol});
                     border-radius: 2px;
                     overflow: hidden;
                 }
