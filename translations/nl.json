@@ -42,9 +42,9 @@
           "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)"
         },
         "data_description": {
-          "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
-          "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service."
+          "battery_capacity_kwh": "Totale capaciteit van je thuis batterij in kWh. Wordt gebruikt om voorspellingen te doen ten behoeve van de laad en ontlaad strategie.",
+          "target_peak_limit": "Maximaal aantal kW je maximaal mag gebruiken op je energie aansluiting voordat SEM automatisch apparaten gaat uitschakelen.",
+          "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen."
         }
       },
       "reconfigure": {
@@ -56,12 +56,12 @@
           "ev_charging_power_sensor": "EV Laadvermogen",
           "ev_charger_service": "EV Lader Service",
           "ev_charger_service_entity_id": "EV Lader Service Entiteit",
-          "ev_total_energy_sensor": "EV Total Energy Counter",
+          "ev_total_energy_sensor": "EV Totaal Energie verbruik",
           "enable_charger_notifications": "Lader-displaymeldingen inschakelen",
           "enable_mobile_notifications": "Mobiele meldingen inschakelen",
           "mobile_notification_service": "Mobiele meldingsservice",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
+          "vehicle_soc_entity": "Vehicle Batterij SOC",
+          "ev_battery_capacity_kwh": "EV Batterij Capaciteit (kWh)",
           "ev_target_soc": "EV Doel SOC (%)"
         }
       }
@@ -460,7 +460,7 @@
         "name": "Eigenverbruik"
       },
       "autarky_rate": {
-        "name": "Autarkie"
+        "name": "zelfvoorzienend"
       },
       "daily_savings": {
         "name": "Besparing Vandaag"
@@ -706,16 +706,16 @@
         "name": "Voorspeller Nauwkeurigheid"
       },
       "predicted_consumption_next_hour": {
-        "name": "Voorsp. Verbruik (Volgend Uur)"
+        "name": "Voorspeld Verbruik (Volgend Uur)"
       },
       "predicted_consumption_today_kwh": {
-        "name": "Voorsp. Verbruik Vandaag"
+        "name": "Voorspeld Verbruik Vandaag"
       },
       "predicted_solar_next_hour": {
-        "name": "Voorsp. Zon (Volgend Uur)"
+        "name": "Voorspeld Zon (Volgend Uur)"
       },
       "predicted_surplus_window": {
-        "name": "Voorsp. Overschotvenster"
+        "name": "Voorspeld Overschotvenster"
       },
       "session_energy": {
         "name": "Sessie-energie"
@@ -742,7 +742,7 @@
         "name": "Totaal EV-sessies"
       },
       "lifetime_ev_solar_share": {
-        "name": "Totaal EV Zonneaandeel"
+        "name": "Totaal EV Zonne Aandeel"
       },
       "vehicle_soc": {
         "name": "Voertuig SOC"
@@ -760,13 +760,13 @@
         "name": "Nachtvenster Uren"
       },
       "forecast_peak_power_today_w": {
-        "name": "Voorsp. Piekvermogen Vandaag"
+        "name": "Voorspeld Piekvermogen Vandaag"
       },
       "forecast_peak_time_today": {
-        "name": "Voorsp. Piektijd Vandaag"
+        "name": "Voorspeld Piektijd Vandaag"
       },
       "forecast_power_next_hour_w": {
-        "name": "Voorsp. Vermogen Volgend Uur"
+        "name": "Voorspeld Vermogen Volgend Uur"
       },
       "forecast_surplus_kwh": {
         "name": "Voorspeld Overschot"
@@ -817,7 +817,7 @@
         "name": "EV Taper Ratio"
       },
       "ev_taper_minutes_to_full": {
-        "name": "EV Minutes to Full"
+        "name": "EV Minuten tot Vol"
       },
       "diag_version": {
         "name": "SEM-versie"
@@ -829,16 +829,16 @@
         "name": "Grid Sign Convention"
       },
       "diag_charger_control": {
-        "name": "Charger Control Method"
+        "name": "Lader Besturings Methode"
       },
       "diag_battery_capacity": {
-        "name": "Battery Capacity (config)"
+        "name": "Batterij Capaciteit (configuratie)"
       },
       "diag_update_interval": {
         "name": "Update Interval"
       },
       "diag_observer_mode": {
-        "name": "Observer Mode"
+        "name": "Observer Modus"
       },
       "diag_sensors_unavailable": {
         "name": "Sensoren niet beschikbaar"
@@ -967,19 +967,19 @@
         "name": "Batterij Ondersteuning Min-SOC"
       },
       "battery_capacity_kwh": {
-        "name": "Batterijcapaciteit"
+        "name": "Batterij capaciteit"
       },
       "battery_max_discharge_power": {
         "name": "Batterij Max Ontlaadvermogen"
       },
       "system_investment_cost": {
-        "name": "Systeeminvesteringskosten"
+        "name": "Systeem Investeringskosten"
       },
       "ev_minimum_current": {
         "name": "EV Minimale Stroom"
       },
       "ev_phases": {
-        "name": "EV Fasen"
+        "name": "EV Fases"
       },
       "electricity_import_rate": {
         "name": "Stroomimporttarief"
@@ -997,18 +997,18 @@
         "name": "Batterijcapaciteit"
       },
       "hot_water_solar_target": {
-        "name": "Hot Water Solar Target"
+        "name": "Heet Water Zonnepanelen Doel"
       },
       "legionella_target_temp": {
-        "name": "Legionella Target Temperature"
+        "name": "Legionella Doel Temperatuur"
       },
       "legionella_interval_hours": {
-        "name": "Legionella Interval Hours"
+        "name": "Legionella Interval uren"
       }
     },
     "select": {
       "ev_charging_mode": {
-        "name": "EV Charging Mode"
+        "name": "EV Laad Modus"
       }
     }
   }
