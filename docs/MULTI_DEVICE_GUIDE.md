@@ -145,3 +145,48 @@ On the **System tab** of the dashboard, the Diagnostics section shows:
 - Update to latest beta, then regenerate dashboard
 - Check that per-charger entities appear: `sensor.sem_charger_{id}_*`
 - Verify the charger's power sensor is configured correctly
+
+---
+
+## Appliance Dependencies
+
+Devices can declare dependencies so they only activate when other devices are already running. This prevents wasted energy or equipment damage.
+
+### Use Cases
+
+| Dependent | Depends On | Why |
+|---|---|---|
+| Pool heater | Pool pump | Heater without pump = equipment damage |
+| Circulation pump | Heat pump | Pump alone = wasted energy |
+| Heating element 2 | Heating element 1 | Stage 2 only when stage 1 is saturated |
+| Hot water boost | Battery SOC > 80% | Only boost when battery is sufficiently charged |
+
+### Configuration
+
+When registering a surplus device, set the `depends_on` field to the device ID(s) that must be active:
+
+```yaml
+# Via service call:
+service: solar_energy_management.register_surplus_device
+data:
+  device_id: pool_heater
+  entity_id: switch.pool_heater
+  name: Pool Heater
+  priority: 6
+  depends_on:
+    - pool_pump
+```
+
+### Dependency Modes
+
+| Mode | Behavior |
+|---|---|
+| `must_active` (default) | Dependent only activates when dependency IS running |
+| `must_inactive` | Dependent only activates when dependency is NOT running (backup/fallback) |
+
+### How It Works
+
+1. **Activation gate**: when SEM has surplus and tries to activate a device, it first checks all `depends_on` devices are in the required state
+2. **Deactivation cascade**: when a device is deactivated (surplus dropped), all devices that depend on it are also deactivated
+3. **Dashboard**: blocked devices show "Waiting for: {device name}" status
+4. **Circular detection**: SEM validates that dependencies don't form circular chains (A→B→A)

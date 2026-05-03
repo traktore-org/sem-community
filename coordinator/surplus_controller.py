@@ -201,11 +201,40 @@ class SurplusController:
     def register_device(self, device: ControllableDevice) -> None:
         """Register a device for surplus control."""
         self._devices[device.device_id] = device
+        device._controller = self  # Allow device to look up dependencies (#122)
         _LOGGER.info(
-            "Registered device: %s (priority=%d, min=%dW, type=%s)",
+            "Registered device: %s (priority=%d, min=%dW, type=%s, depends_on=%s)",
             device.name, device.priority, device.min_power_threshold,
-            device.device_type.value,
+            device.device_type.value, device.depends_on or "none",
         )
+
+    def get_device(self, device_id: str) -> Optional[ControllableDevice]:
+        """Look up a registered device by ID (used for dependency checks)."""
+        return self._devices.get(device_id)
+
+    def get_dependents(self, device_id: str) -> list:
+        """Get all devices that depend on the given device (#122)."""
+        return [d for d in self._devices.values() if device_id in d.depends_on]
+
+    def validate_dependencies(self) -> list:
+        """Check for circular dependencies. Returns list of errors."""
+        errors = []
+        for device in self._devices.values():
+            visited = set()
+            current = device.device_id
+            chain = [current]
+            while True:
+                deps = self._devices.get(current)
+                if not deps or not deps.depends_on:
+                    break
+                next_dep = deps.depends_on[0]  # Check first dependency for cycles
+                if next_dep in visited:
+                    errors.append(f"Circular dependency: {' → '.join(chain + [next_dep])}")
+                    break
+                visited.add(next_dep)
+                chain.append(next_dep)
+                current = next_dep
+        return errors
 
     def unregister_device(self, device_id: str) -> None:
         """Remove a device from surplus control."""
@@ -347,6 +376,19 @@ class SurplusController:
                         _LOGGER.info(
                             "Deactivated %s (priority %d) to recover %.0fW",
                             device.name, device.priority, consumption,
+                        )
+                        # Cascade: deactivate dependents (#122)
+                        for dep in self.get_dependents(device.device_id):
+                            if dep.is_active and dep.can_deactivate():
+                                dep_consumption = dep.get_current_consumption()
+                                await dep.deactivate()
+                                if not dep.is_active:
+                                    dep.record_deactivated()
+                                    remaining_surplus += dep_consumption
+                                    active_count -= 1
+                                    _LOGGER.info(
+                                        "Cascade deactivated %s (depends on %s)",
+                                        dep.name, device.name,
                         )
                         # Update allocation
                         for a in allocations:
