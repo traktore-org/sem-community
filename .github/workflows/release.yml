@@ -53,10 +53,11 @@ jobs:
           MANIFEST=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
           # Strip beta/rc suffix for comparison (v1.4.2-beta.1 → 1.4.2)
           TAG_BASE="${TAG%%-*}"
+          MANIFEST_BASE="${MANIFEST%%-*}"
           echo "Tag: $TAG (base: $TAG_BASE)"
-          echo "Manifest: $MANIFEST"
-          if [ "$TAG_BASE" != "$MANIFEST" ]; then
-            echo "::error::Tag base version ($TAG_BASE) does not match manifest version ($MANIFEST)"
+          echo "Manifest: $MANIFEST (base: $MANIFEST_BASE)"
+          if [ "$TAG_BASE" != "$MANIFEST_BASE" ]; then
+            echo "::error::Tag base version ($TAG_BASE) does not match manifest base version ($MANIFEST_BASE)"
             exit 1
           fi
 
