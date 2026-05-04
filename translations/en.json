@@ -207,6 +207,10 @@
         "title": "Tariff & Advanced",
         "description": "Electricity rates and advanced tuning parameters.",
         "data": {
+          "tariff_mode": "Tariff mode",
+          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
+          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
+          "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
           "electricity_import_rate": "Import rate",
           "electricity_off_peak_rate": "Off-peak rate (if different)",
           "electricity_export_rate": "Export rate",

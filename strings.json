@@ -253,10 +253,12 @@
       },
       "settings_tariff": {
         "title": "Tariff & Advanced",
-        "description": "Choose your tariff mode: **Static** for fixed rates, **Dynamic** for real-time pricing (Tibber, Nordpool, aWATTar), or **Calendar** for time-based HT/NT schedules. For dynamic mode, SEM auto-detects your provider or you can select the price entity manually.",
+        "description": "Choose your tariff mode: **Static** for fixed rates, **Dynamic** for real-time pricing (Tibber, Nordpool, aWATTar, Amber Electric, Octopus Energy), or **Calendar** for time-based HT/NT schedules. SEM auto-detects your provider — if detection fails (e.g. renamed integration), select the entities manually.",
         "data": {
           "tariff_mode": "Tariff mode",
           "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
+          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
+          "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
           "electricity_import_rate": "Import rate (HT / fallback)",
           "electricity_off_peak_rate": "Night tariff rate (if different)",
           "electricity_export_rate": "Export rate",

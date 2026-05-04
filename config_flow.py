@@ -1195,7 +1195,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.SelectSelectorConfig(
                         options=[
                             {"value": "static", "label": "Static (fixed HT/NT rates)"},
-                            {"value": "dynamic", "label": "Dynamic (Tibber / Nordpool / aWATTar)"},
+                            {"value": "dynamic", "label": "Dynamic (Tibber / Nordpool / aWATTar / Amber / Octopus)"},
                             {"value": "calendar", "label": "Calendar (time-based HT/NT schedule)"},
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
@@ -1204,6 +1204,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "dynamic_tariff_entity",
                     description={"suggested_value": current_config.get("dynamic_tariff_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional(
+                    "dynamic_forecast_entity",
+                    description={"suggested_value": current_config.get("dynamic_forecast_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain=["sensor", "event"])
+                ),
+                vol.Optional(
+                    "dynamic_feedin_entity",
+                    description={"suggested_value": current_config.get("dynamic_feedin_entity")},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),

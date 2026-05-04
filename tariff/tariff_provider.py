@@ -217,6 +217,8 @@ class DynamicTariffProvider(TariffProvider):
         self,
         hass: HomeAssistant,
         price_entity: Optional[str] = None,
+        forecast_entity: Optional[str] = None,
+        feedin_entity: Optional[str] = None,
         export_rate: float = 0.075,
         cheap_threshold: float = 0.15,
         expensive_threshold: float = 0.35,
@@ -229,8 +231,8 @@ class DynamicTariffProvider(TariffProvider):
         self.currency = currency
         self._price_entity = price_entity
         self._provider_name = "unknown"
-        self._forecast_entity: Optional[str] = None  # Amber Electric forecast sensor
-        self._feedin_entity: Optional[str] = None     # Amber Electric feed-in price sensor
+        self._forecast_entity: Optional[str] = forecast_entity
+        self._feedin_entity: Optional[str] = feedin_entity
         self._prices_cache: List[PricePoint] = []
         self._last_cache_update: Optional[datetime] = None
 

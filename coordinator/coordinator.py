@@ -144,6 +144,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             self._tariff_provider = DynamicTariffProvider(
                 hass,
                 price_entity=config.get("dynamic_tariff_entity") or config.get("price_entity"),
+                forecast_entity=config.get("dynamic_forecast_entity"),
+                feedin_entity=config.get("dynamic_feedin_entity"),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 cheap_threshold=config.get("cheap_price_threshold", 0.15),
                 expensive_threshold=config.get("expensive_price_threshold", 0.35),
