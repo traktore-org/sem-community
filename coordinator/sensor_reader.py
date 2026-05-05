@@ -396,6 +396,7 @@ class SensorReader:
         - Growatt: *_import_from_grid / *_export_to_grid
         - Growatt TLX: *_pac_to_user* / *_pac_to_grid*
         - DSMR/P1 (NL/BE): *_power_consumption / *_power_production
+        - E3DC: *_consumption_from_grid / *_export_to_grid
         - Generic: *_grid_import / *_grid_export
 
         Prefers sensors on the same device as the grid energy sensors to avoid
@@ -405,6 +406,7 @@ class SensorReader:
         import_patterns = [
             "import_from_grid", "pac_to_user", "grid_import", "from_grid_power",
             "power_consumption",    # DSMR/P1 (NL/BE)
+            "consumption_from_grid",  # E3DC
         ]
         export_patterns = [
             "export_to_grid", "pac_to_grid", "grid_export", "to_grid_power",

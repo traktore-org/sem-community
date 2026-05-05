@@ -379,6 +379,66 @@ class TestDSMRSplitGrid:
 
 
 # ════════════════════════════════════════════
+# E3DC: split grid sensors
+# ════════════════════════════════════════════
+
+class TestE3DCSplitGrid:
+    """Test full pipeline for E3DC with split consumption/export sensors."""
+
+    def test_e3dc_exporting(self):
+        """E3DC exporting: consumption_from_grid=0, export_to_grid=3000."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.s10x_solar_production",
+            grid_import_power=None,
+            grid_import_energy="sensor.s10x_grid_import_energy",
+            grid_export_energy="sensor.s10x_grid_export_energy",
+            battery_power="sensor.s10x_battery_power",
+        )
+
+        states = {
+            "sensor.s10x_solar_production": _state(6000),
+            "sensor.s10x_battery_power": _state(1000),  # Charging
+            "sensor.s10x_consumption_from_grid": _state(0, device_class="power"),
+            "sensor.s10x_export_to_grid": _state(2000, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        assert power.grid_power == 2000
+        power.calculate_derived()
+        assert power.grid_export_power == 2000
+        assert power.grid_import_power == 0
+        assert power.home_consumption_power == 3000  # 6000 - 2000 - 1000
+
+    def test_e3dc_importing(self):
+        """E3DC importing: consumption_from_grid=1500, export_to_grid=0."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.s10x_solar_production",
+            grid_import_power=None,
+            grid_import_energy="sensor.s10x_grid_import_energy",
+            grid_export_energy="sensor.s10x_grid_export_energy",
+            battery_power=None,
+        )
+
+        states = {
+            "sensor.s10x_solar_production": _state(500),
+            "sensor.s10x_consumption_from_grid": _state(1500, device_class="power"),
+            "sensor.s10x_export_to_grid": _state(0, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        assert power.grid_power == -1500
+        power.calculate_derived()
+        assert power.grid_import_power == 1500
+        assert power.grid_export_power == 0
+
+
+# ════════════════════════════════════════════
 # Manual grid power entity override
 # ════════════════════════════════════════════
 
