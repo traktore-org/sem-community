@@ -413,15 +413,19 @@ class NotificationManager:
         ev = data.get("daily_ev", 0)
         net_cost = data.get("daily_net_cost", 0)
         tomorrow = data.get("forecast_tomorrow", 0)
+        currency = self.hass.config.currency or "EUR"
 
-        msg = (
-            f"Today: {solar:.1f} kWh solar · {autarky:.0f}% autarky · "
-            f"Saved {savings:.2f} CHF · Net cost {net_cost:.2f} CHF"
-        )
+        from ..utils.translate import get_text
+        msg = get_text(self.hass, "notif_daily_summary",
+            "Today: {solar:.1f} kWh solar · {autarky:.0f}% autarky · "
+            "Saved {savings:.2f} {currency} · Net cost {net_cost:.2f} {currency}",
+            solar=solar, autarky=autarky, savings=savings, net_cost=net_cost, currency=currency)
         if ev > 0:
-            msg += f" · EV {ev:.1f} kWh"
+            msg += " · " + get_text(self.hass, "notif_daily_summary_ev",
+                "EV {ev:.1f} kWh", ev=ev)
         if tomorrow > 0:
-            msg += f"\nTomorrow: {tomorrow:.1f} kWh forecast"
+            msg += "\n" + get_text(self.hass, "notif_daily_summary_forecast",
+                "Tomorrow: {tomorrow:.1f} kWh forecast", tomorrow=tomorrow)
 
         self.hass.bus.async_fire(f"{DOMAIN}_notification", {
             "category": "summary",
@@ -478,8 +482,11 @@ class NotificationManager:
             "event": "ev_nearly_full",
             "minutes_remaining": round(minutes_remaining, 0),
         })
+        from ..utils.translate import get_text
         await self._send_mobile_notification(
-            f"EV nearly full — ~{minutes_remaining:.0f} min remaining",
+            get_text(self.hass, "notif_ev_nearly_full",
+                "EV nearly full — ~{minutes:.0f} min remaining",
+                minutes=minutes_remaining),
             channel=_CHANNEL_CHARGING,
             group="sem_charging",
         )
@@ -498,9 +505,11 @@ class NotificationManager:
             "estimated_soc": round(estimated_soc, 0),
             "nights_remaining": nights,
         })
+        from ..utils.translate import get_text
         await self._send_mobile_notification(
-            f"Night charge skipped — EV SOC {estimated_soc:.0f}%, "
-            f"{nights} night(s) range remaining",
+            get_text(self.hass, "notif_ev_charge_skip",
+                "Night charge skipped — EV SOC {soc:.0f}%, {nights} night(s) range remaining",
+                soc=estimated_soc, nights=nights),
             channel=_CHANNEL_CHARGING,
             group="sem_charging",
         )
@@ -516,8 +525,11 @@ class NotificationManager:
             "event": "ev_charge_recommended",
             "estimated_soc": round(estimated_soc, 0),
         })
+        from ..utils.translate import get_text
         await self._send_mobile_notification(
-            f"EV charge recommended tonight — estimated SOC {estimated_soc:.0f}%",
+            get_text(self.hass, "notif_ev_charge_recommended",
+                "EV charge recommended tonight — estimated SOC {soc:.0f}%",
+                soc=estimated_soc),
             channel=_CHANNEL_CHARGING,
             group="sem_charging",
         )
