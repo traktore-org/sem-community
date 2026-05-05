@@ -107,3 +107,4 @@ scripts/sync_to_community.py
 
 # Temporary screenshots
 tmp/
+stats/
