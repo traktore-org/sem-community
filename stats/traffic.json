@@ -1,0 +1,107 @@
+{
+  "total_unique_clones": 1495,
+  "total_clones": 7121,
+  "total_unique_views": 63,
+  "total_views": 1328,
+  "daily": [
+    {
+      "date": "2026-04-21",
+      "clones": 420,
+      "unique_clones": 104,
+      "views": 50,
+      "unique_views": 3
+    },
+    {
+      "date": "2026-04-22",
+      "clones": 403,
+      "unique_clones": 117,
+      "views": 13,
+      "unique_views": 3
+    },
+    {
+      "date": "2026-04-23",
+      "clones": 551,
+      "unique_clones": 144,
+      "views": 10,
+      "unique_views": 2
+    },
+    {
+      "date": "2026-04-24",
+      "clones": 272,
+      "unique_clones": 62,
+      "views": 10,
+      "unique_views": 2
+    },
+    {
+      "date": "2026-04-25",
+      "clones": 334,
+      "unique_clones": 90,
+      "views": 15,
+      "unique_views": 5
+    },
+    {
+      "date": "2026-04-26",
+      "clones": 665,
+      "unique_clones": 173,
+      "views": 41,
+      "unique_views": 7
+    },
+    {
+      "date": "2026-04-27",
+      "clones": 12,
+      "unique_clones": 4,
+      "views": 20,
+      "unique_views": 1
+    },
+    {
+      "date": "2026-04-28",
+      "clones": 761,
+      "unique_clones": 117,
+      "views": 21,
+      "unique_views": 3
+    },
+    {
+      "date": "2026-04-29",
+      "clones": 372,
+      "unique_clones": 87,
+      "views": 74,
+      "unique_views": 3
+    },
+    {
+      "date": "2026-04-30",
+      "clones": 815,
+      "unique_clones": 120,
+      "views": 228,
+      "unique_views": 6
+    },
+    {
+      "date": "2026-05-01",
+      "clones": 1076,
+      "unique_clones": 174,
+      "views": 297,
+      "unique_views": 4
+    },
+    {
+      "date": "2026-05-02",
+      "clones": 346,
+      "unique_clones": 86,
+      "views": 157,
+      "unique_views": 5
+    },
+    {
+      "date": "2026-05-03",
+      "clones": 986,
+      "unique_clones": 172,
+      "views": 238,
+      "unique_views": 7
+    },
+    {
+      "date": "2026-05-04",
+      "clones": 108,
+      "unique_clones": 45,
+      "views": 154,
+      "unique_views": 12
+    }
+  ],
+  "last_updated": "2026-05-05T21:53:03Z"
+}
