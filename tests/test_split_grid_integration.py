@@ -60,7 +60,7 @@ def _make_energy_dashboard_config(
     return ed
 
 
-def _make_reader_with_states(hass, states_dict, ed_config):
+def _make_reader_with_states(hass, states_dict, ed_config, extra_config=None):
     """Create a SensorReader with mock states and Energy Dashboard config."""
     def mock_get(entity_id):
         return states_dict.get(entity_id)
@@ -79,7 +79,11 @@ def _make_reader_with_states(hass, states_dict, ed_config):
     hass.states.get = mock_get
     hass.states.async_all = mock_async_all
 
-    reader = SensorReader(hass, {"update_interval": 10})
+    config = {"update_interval": 10}
+    if extra_config:
+        config.update(extra_config)
+
+    reader = SensorReader(hass, config)
     reader._energy_dashboard_config = ed_config
     return reader
 
@@ -372,6 +376,180 @@ class TestDSMRSplitGrid:
         assert reader._split_grid_import_power == "sensor.electricity_meter_power_consumption"
         assert reader._split_grid_export_power == "sensor.electricity_meter_power_production"
         assert power.grid_power == 3000  # export - import = 3000 - 0
+
+
+# ════════════════════════════════════════════
+# Manual grid power entity override
+# ════════════════════════════════════════════
+
+class TestManualGridConfig:
+    """Test manual grid import/export power entity configuration.
+
+    When auto-detection fails, users can manually set grid power sensors
+    in Tariff & Advanced settings. These override all auto-detection.
+    """
+
+    def test_manual_override_exporting(self):
+        """Manual grid sensors: exporting 2kW."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.grid_energy_import",
+            grid_export_energy="sensor.grid_energy_export",
+            battery_power=None,
+        )
+
+        states = {
+            "sensor.solar_power": _state(5000),
+            "sensor.my_grid_import_w": _state(0, device_class="power"),
+            "sensor.my_grid_export_w": _state(2000, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed, extra_config={
+            "grid_import_power_entity": "sensor.my_grid_import_w",
+            "grid_export_power_entity": "sensor.my_grid_export_w",
+        })
+        power = reader.read_power()
+
+        assert power.grid_power == 2000
+        power.calculate_derived()
+        assert power.grid_export_power == 2000
+        assert power.grid_import_power == 0
+
+    def test_manual_override_importing(self):
+        """Manual grid sensors: importing 1.5kW."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.grid_energy_import",
+            grid_export_energy="sensor.grid_energy_export",
+            battery_power=None,
+        )
+
+        states = {
+            "sensor.solar_power": _state(500),
+            "sensor.my_grid_import_w": _state(1500, device_class="power"),
+            "sensor.my_grid_export_w": _state(0, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed, extra_config={
+            "grid_import_power_entity": "sensor.my_grid_import_w",
+            "grid_export_power_entity": "sensor.my_grid_export_w",
+        })
+        power = reader.read_power()
+
+        assert power.grid_power == -1500
+        power.calculate_derived()
+        assert power.grid_import_power == 1500
+        assert power.grid_export_power == 0
+
+    def test_manual_overrides_auto_detection(self):
+        """Manual config takes priority over Energy Dashboard stat_rate."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.wrong_combined_sensor",  # Would be used by auto
+            grid_import_energy="sensor.grid_energy_import",
+            grid_export_energy="sensor.grid_energy_export",
+            battery_power=None,
+        )
+
+        states = {
+            "sensor.solar_power": _state(3000),
+            "sensor.wrong_combined_sensor": _state(9999, device_class="power"),
+            "sensor.correct_import": _state(500, device_class="power"),
+            "sensor.correct_export": _state(0, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed, extra_config={
+            "grid_import_power_entity": "sensor.correct_import",
+            "grid_export_power_entity": "sensor.correct_export",
+        })
+        power = reader.read_power()
+
+        # Manual config wins — should NOT use wrong_combined_sensor (9999)
+        assert power.grid_power == -500  # 0 - 500
+        power.calculate_derived()
+        assert power.grid_import_power == 500
+
+    def test_manual_import_only(self):
+        """Only import entity set, export defaults to 0."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.grid_energy_import",
+            grid_export_energy="sensor.grid_energy_export",
+            battery_power=None,
+        )
+
+        states = {
+            "sensor.solar_power": _state(1000),
+            "sensor.my_grid_import_w": _state(800, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed, extra_config={
+            "grid_import_power_entity": "sensor.my_grid_import_w",
+        })
+        power = reader.read_power()
+
+        assert power.grid_power == -800  # 0 - 800
+        power.calculate_derived()
+        assert power.grid_import_power == 800
+        assert power.grid_export_power == 0
+
+    def test_no_manual_config_falls_through(self):
+        """Without manual config, normal auto-detection runs."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.grid_combined",
+            battery_power=None,
+        )
+
+        states = {
+            "sensor.solar_power": _state(3000),
+            "sensor.grid_combined": _state(1500, device_class="power"),
+        }
+
+        # No manual override in config
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        # Should use Energy Dashboard combined sensor
+        assert power.grid_power == 1500
+
+    def test_manual_energy_balance(self):
+        """Full energy balance with manual grid sensors + battery."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.grid_energy_import",
+            grid_export_energy="sensor.grid_energy_export",
+            battery_power="sensor.battery_power",
+        )
+
+        states = {
+            "sensor.solar_power": _state(6000),
+            "sensor.battery_power": _state(1000),  # Charging
+            "sensor.manual_import": _state(0, device_class="power"),
+            "sensor.manual_export": _state(3000, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed, extra_config={
+            "grid_import_power_entity": "sensor.manual_import",
+            "grid_export_power_entity": "sensor.manual_export",
+        })
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # Balance: solar(6000) = home(2000) + export(3000) + charge(1000)
+        energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+        energy_out = power.home_consumption_power + power.grid_export_power + power.battery_charge_power + power.ev_power
+        assert abs(energy_in - energy_out) < 1, f"Balance off: in={energy_in}, out={energy_out}"
 
 
 # ════════════════════════════════════════════
