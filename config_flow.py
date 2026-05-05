@@ -1267,6 +1267,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1, max=20, step=1, unit_of_measurement="%", mode="slider")
                 ),
+                vol.Optional(
+                    "grid_import_power_entity",
+                    description={"suggested_value": current_config.get("grid_import_power_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
+                ),
+                vol.Optional(
+                    "grid_export_power_entity",
+                    description={"suggested_value": current_config.get("grid_export_power_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="power")
+                ),
             }),
         )
 

@@ -39,6 +39,7 @@ class SensorReader:
         """Initialize sensor reader."""
         self.hass = hass
         self.config = self._parse_config(config)
+        self._raw_config = config
         self._energy_dashboard_config = None
         self._grid_sign_inverted = False
         self._grid_sign_detected = False  # True once sign is reliably determined
@@ -299,13 +300,22 @@ class SensorReader:
             readings.solar_power = self._read_sensor(ed.solar_power, "solar")
 
         # Grid power from Energy Dashboard.
-        # Two modes:
+        # Three modes:
+        # 0. Manual override: user sets grid_import/export_power_entity in config
         # 1. Combined sensor (Huawei, SolarEdge, Fronius): single stat_rate sensor
         #    SEM convention: negative = import, positive = export
         #    read_power() auto-detects and corrects the sign after calculate_derived()
-        # 2. Split sensors (Growatt, some others): separate import + export power sensors
+        # 2. Split sensors (Growatt, DSMR/P1): separate import + export power sensors
         #    Both always positive — SEM calculates: grid_power = export - import
-        if ed.grid_import_power:
+        manual_import = self._raw_config.get("grid_import_power_entity")
+        manual_export = self._raw_config.get("grid_export_power_entity")
+        if manual_import or manual_export:
+            # Manual override — user explicitly set grid power sensors
+            import_w = self._read_sensor(manual_import, "grid_import") if manual_import else 0.0
+            export_w = self._read_sensor(manual_export, "grid_export") if manual_export else 0.0
+            readings.grid_power = export_w - import_w
+            self._grid_sign_detected = True
+        elif ed.grid_import_power:
             readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
         elif not ed.grid_import_power and ed.grid_import_energy:
             # No combined power sensor — try to find split import/export power sensors

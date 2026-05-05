@@ -266,7 +266,9 @@
           "update_interval": "Update interval (s)",
           "power_delta": "Power change threshold (W)",
           "current_delta": "Current change threshold (A)",
-          "soc_delta": "SOC change threshold (%)"
+          "soc_delta": "SOC change threshold (%)",
+          "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
+          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
         }
       },
       "load_management": {
