@@ -280,7 +280,7 @@ SEM creates 70+ sensors organized by category:
 
 ## Supported Hardware
 
-**Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe, Tesla Powerwall, Kostal Plenticore, Sungrow, Victron, Sonnenbatterie — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
+**Solar Inverters:** Huawei Solar, SolaX, DEYE/Sunsynk, Growatt, Sofar, Solis, Fronius, SMA, SolarEdge, Enphase, GoodWe, Tesla Powerwall, Kostal Plenticore, Sungrow, Victron, Sonnenbatterie, E3DC — or any inverter with HA sensors. SEM reads from the HA Energy Dashboard and auto-detects both grid and battery sign conventions.
 
 **Battery discharge control auto-detected for:** Huawei Solar, SolaX (solax-modbus), DEYE/Sunsynk (ha-solarman), Growatt, Sofar, Solis, GoodWe, SolarEdge (solaredge-modbus-multi), Enphase (IQ Battery), Tesla Powerwall, Victron, Kostal Plenticore, Sungrow
 
@@ -293,6 +293,8 @@ SEM creates 70+ sensors organized by category:
 > **Note:** KSTAR inverters are supported via the [ha-solarman](https://github.com/davidrapan/ha-solarman) integration with KSTAR YAML profiles, not via a dedicated KSTAR integration.
 
 > **Note:** Fronius and SMA core integrations are read-only for battery control. Battery discharge protection requires the Modbus variant (e.g., `fronius_modbus`) or works without discharge limiting.
+
+> **Note:** DSMR/P1 smart meters (NL/BE) are auto-detected for grid power. If your grid is metered by a separate smart meter (not by the inverter), SEM discovers the split import/export power sensors automatically.
 
 **Hot Water:** Any hot water system exposed as a `water_heater`, `climate`, or `switch` entity in HA. Includes automatic Legionella prevention cycling per DVGW W 551 / SIA 385/1 / ÖNORM B 5019.
 
