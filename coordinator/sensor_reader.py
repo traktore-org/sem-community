@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from .types import PowerReadings
 
@@ -379,25 +380,35 @@ class SensorReader:
         return readings
 
     def _discover_split_grid_power(self, ed) -> tuple:
-        """Discover separate import/export power sensors for inverters without combined grid power.
+        """Discover separate import/export power sensors for setups without combined grid power.
 
-        Growatt, and some other inverters, provide split sensors:
-        - sensor.*_import_from_grid / sensor.*_pac_to_user_total (import, always positive)
-        - sensor.*_export_to_grid / sensor.*_pac_to_grid_total (export, always positive)
+        Supported naming patterns:
+        - Growatt: *_import_from_grid / *_export_to_grid
+        - Growatt TLX: *_pac_to_user* / *_pac_to_grid*
+        - DSMR/P1 (NL/BE): *_power_consumption / *_power_production
+        - Generic: *_grid_import / *_grid_export
 
-        Searches the entity registry for power sensors on the same device as the
-        Energy Dashboard grid energy sensors.
+        Prefers sensors on the same device as the grid energy sensors to avoid
+        false positives (e.g. heat pump power_consumption vs meter power_consumption).
         """
-        import_power = None
-        export_power = None
-
         # Known patterns for split grid power sensors
-        import_patterns = ["import_from_grid", "pac_to_user", "grid_import", "from_grid_power"]
-        export_patterns = ["export_to_grid", "pac_to_grid", "grid_export", "to_grid_power"]
+        import_patterns = [
+            "import_from_grid", "pac_to_user", "grid_import", "from_grid_power",
+            "power_consumption",    # DSMR/P1 (NL/BE)
+        ]
+        export_patterns = [
+            "export_to_grid", "pac_to_grid", "grid_export", "to_grid_power",
+            "power_production",     # DSMR/P1 (NL/BE)
+        ]
 
         try:
-            # Find all power sensors in the system
-            import fnmatch
+            # Get device_id of grid energy sensor for same-device preference
+            grid_device_id = self._get_device_for_entity(ed.grid_import_energy)
+
+            # Two-pass: same-device matches are preferred over any-device matches
+            same_device = {"import": None, "export": None}
+            any_device = {"import": None, "export": None}
+
             for state in self.hass.states.async_all("sensor"):
                 eid = state.entity_id.lower()
                 attrs = state.attributes
@@ -405,27 +416,58 @@ class SensorReader:
                 if attrs.get("device_class") != "power" and attrs.get("unit_of_measurement") not in ("W", "kW"):
                     continue
 
-                for pattern in import_patterns:
-                    if pattern in eid:
-                        import_power = state.entity_id
-                        break
-                for pattern in export_patterns:
-                    if pattern in eid:
-                        export_power = state.entity_id
-                        break
+                is_import = any(p in eid for p in import_patterns)
+                is_export = any(p in eid for p in export_patterns)
+                if not is_import and not is_export:
+                    continue
+
+                # Check if sensor is on the same device as grid energy
+                on_same_device = False
+                if grid_device_id:
+                    sensor_device_id = self._get_device_for_entity(state.entity_id)
+                    on_same_device = sensor_device_id == grid_device_id
+
+                if is_import:
+                    if on_same_device:
+                        same_device["import"] = state.entity_id
+                    elif not any_device["import"]:
+                        any_device["import"] = state.entity_id
+                if is_export:
+                    if on_same_device:
+                        same_device["export"] = state.entity_id
+                    elif not any_device["export"]:
+                        any_device["export"] = state.entity_id
+
+            # Prefer same-device matches, fall back to any match
+            import_power = same_device["import"] or any_device["import"]
+            export_power = same_device["export"] or any_device["export"]
 
             if import_power or export_power:
+                source = "same-device" if same_device["import"] or same_device["export"] else "pattern-match"
                 _LOGGER.info(
-                    "Discovered split grid power sensors: import=%s, export=%s",
-                    import_power, export_power,
+                    "Discovered split grid power sensors (%s): import=%s, export=%s",
+                    source, import_power, export_power,
                 )
             else:
                 _LOGGER.debug("No split grid power sensors found")
 
         except Exception as e:
             _LOGGER.debug("Split grid power discovery failed: %s", e)
+            import_power = None
+            export_power = None
 
         return import_power, export_power
+
+    def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
+        """Get device_id for an entity from the entity registry."""
+        if not entity_id:
+            return None
+        try:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(entity_id)
+            return entry.device_id if entry else None
+        except Exception:
+            return None
 
     def _read_battery_soc_average(self, battery_power_entities: list) -> float:
         """Average SOC across multiple battery units.

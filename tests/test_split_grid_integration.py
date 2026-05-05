@@ -226,6 +226,155 @@ class TestGrowattSplitGrid:
 
 
 # ════════════════════════════════════════════
+# DSMR/P1 smart meter: split grid sensors (NL/BE)
+# ════════════════════════════════════════════
+
+class TestDSMRSplitGrid:
+    """Test full pipeline for DSMR/P1 smart meter with split power sensors.
+
+    Common in Netherlands and Belgium — dual-tariff metering with separate
+    power_consumption (import) and power_production (export) sensors.
+    """
+
+    def test_dsmr_exporting(self):
+        """DSMR exporting 2kW: power_production=2000, power_consumption=0."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power="sensor.sessy_power",
+        )
+
+        states = {
+            "sensor.growatt_solar_power": _state(5000),
+            "sensor.sessy_power": _state(0),
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(2000, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        assert power.grid_power == 2000  # export - import = 2000 - 0
+        power.calculate_derived()
+        assert power.grid_export_power == 2000
+        assert power.grid_import_power == 0
+        assert power.home_consumption_power == 3000  # 5000 - 2000
+
+    def test_dsmr_importing(self):
+        """DSMR importing 1.5kW: power_consumption=1500, power_production=0."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power="sensor.sessy_power",
+        )
+
+        states = {
+            "sensor.growatt_solar_power": _state(500),
+            "sensor.sessy_power": _state(0),
+            "sensor.electricity_meter_power_consumption": _state(1500, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(0, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        assert power.grid_power == -1500  # export - import = 0 - 1500
+        power.calculate_derived()
+        assert power.grid_import_power == 1500
+        assert power.grid_export_power == 0
+        assert power.home_consumption_power == 2000  # 500 + 1500
+
+    def test_dsmr_dual_tariff_with_battery(self):
+        """DSMR dual-tariff + two Sessy batteries: full energy balance."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power="sensor.sessy_power",
+        )
+
+        states = {
+            "sensor.growatt_solar_power": _state(6000),
+            "sensor.sessy_power": _state(1000),  # Charging 1kW
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(3000, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # Balance: solar(6000) = home(2000) + export(3000) + charge(1000)
+        assert power.grid_export_power == 3000
+        assert power.battery_charge_power == 1000
+        assert power.home_consumption_power == 2000
+        energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+        energy_out = power.home_consumption_power + power.grid_export_power + power.battery_charge_power + power.ev_power
+        assert abs(energy_in - energy_out) < 1, f"Balance off: in={energy_in}, out={energy_out}"
+
+    def test_dsmr_no_false_positive_heat_pump(self):
+        """Heat pump power_consumption should NOT match when device filtering is active."""
+        from unittest.mock import patch
+
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power=None,
+        )
+
+        states = {
+            "sensor.growatt_solar_power": _state(5000),
+            # DSMR meter sensors (device_id = "meter_device")
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(3000, device_class="power"),
+            # Heat pump sensor (different device_id = "heatpump_device")
+            "sensor.heat_pump_power_consumption": _state(2000, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+
+        # Mock entity registry to return device_ids
+        mock_registry = MagicMock()
+        def mock_async_get_entry(entity_id):
+            entry = MagicMock()
+            if "electricity_meter" in entity_id:
+                entry.device_id = "meter_device"
+            elif "heat_pump" in entity_id:
+                entry.device_id = "heatpump_device"
+            else:
+                entry.device_id = "other_device"
+            return entry
+        mock_registry.async_get = mock_async_get_entry
+
+        reader = _make_reader_with_states(hass, states, ed)
+
+        with patch("custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get", return_value=mock_registry):
+            power = reader.read_power()
+
+        # Should pick meter sensors (same device), NOT heat pump
+        assert reader._split_grid_import_power == "sensor.electricity_meter_power_consumption"
+        assert reader._split_grid_export_power == "sensor.electricity_meter_power_production"
+        assert power.grid_power == 3000  # export - import = 3000 - 0
+
+
+# ════════════════════════════════════════════
 # Combined grid sensor (Huawei, SolarEdge, etc.)
 # ════════════════════════════════════════════
 
