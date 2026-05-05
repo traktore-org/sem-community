@@ -439,6 +439,318 @@ class TestE3DCSplitGrid:
 
 
 # ════════════════════════════════════════════
+# GivEnergy: Pattern C (grid +=export, battery +=discharge)
+# ════════════════════════════════════════════
+
+class TestGivEnergySplitGrid:
+    """Test GivEnergy with split import_power/export_power sensors."""
+
+    def test_givenergy_exporting(self):
+        """GivEnergy exporting 3kW via split sensors."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.givtcp_abc123_pv_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.givtcp_abc123_grid_import_energy",
+            grid_export_energy="sensor.givtcp_abc123_grid_export_energy",
+            battery_power="sensor.givtcp_abc123_battery_power",
+        )
+
+        states = {
+            "sensor.givtcp_abc123_pv_power": _state(6000),
+            "sensor.givtcp_abc123_battery_power": _state(0),
+            "sensor.givtcp_abc123_import_power": _state(0, device_class="power"),
+            "sensor.givtcp_abc123_export_power": _state(3000, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        assert power.grid_power == 3000  # export - import
+        power.calculate_derived()
+        assert power.grid_export_power == 3000
+        assert power.grid_import_power == 0
+        assert power.home_consumption_power == 3000
+
+    def test_givenergy_importing(self):
+        """GivEnergy importing 2kW at night."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.givtcp_abc123_pv_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.givtcp_abc123_grid_import_energy",
+            grid_export_energy="sensor.givtcp_abc123_grid_export_energy",
+            battery_power="sensor.givtcp_abc123_battery_power",
+        )
+
+        states = {
+            "sensor.givtcp_abc123_pv_power": _state(0),
+            "sensor.givtcp_abc123_battery_power": _state(0),
+            "sensor.givtcp_abc123_import_power": _state(2000, device_class="power"),
+            "sensor.givtcp_abc123_export_power": _state(0, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        assert power.grid_power == -2000
+        power.calculate_derived()
+        assert power.grid_import_power == 2000
+        assert power.grid_export_power == 0
+
+
+# ════════════════════════════════════════════
+# Fox ESS: Pattern A (grid +=export, battery +=charge) — combined
+# ════════════════════════════════════════════
+
+class TestFoxESSCombined:
+    """Test Fox ESS with combined grid_ct sensor (Pattern A)."""
+
+    def test_foxess_exporting(self):
+        """Fox ESS exporting: grid_ct positive = export."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.foxess_pv1_power",
+            grid_import_power="sensor.foxess_grid_ct",
+            battery_power="sensor.foxess_battery_power",
+        )
+
+        states = {
+            "sensor.foxess_pv1_power": _state(5000),
+            "sensor.foxess_grid_ct": _state(2000),     # +2kW = export
+            "sensor.foxess_battery_power": _state(1000),  # +1kW = charge
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # Pattern A: same as SEM convention
+        assert power.grid_export_power == 2000
+        assert power.grid_import_power == 0
+        assert power.battery_charge_power == 1000
+        assert power.home_consumption_power == 2000  # 5000 - 2000 - 1000
+
+
+# ════════════════════════════════════════════
+# Alpha ESS: Pattern C (grid +=export, battery +=discharge) — combined
+# ════════════════════════════════════════════
+
+class TestAlphaESSCombined:
+    """Test Alpha ESS Modbus with combined pmeter (Pattern C)."""
+
+    def test_alphaess_exporting_discharging(self):
+        """Alpha ESS exporting 1kW, battery discharging 500W."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.alpha_ess_ppv1",
+            grid_import_power="sensor.alpha_ess_pmeter_l1",
+            battery_power="sensor.alpha_ess_pbat",
+        )
+
+        states = {
+            "sensor.alpha_ess_ppv1": _state(3000),
+            "sensor.alpha_ess_pmeter_l1": _state(1000),   # +1kW = export
+            "sensor.alpha_ess_pbat": _state(500),          # +500W = discharge
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        # Pattern C: grid +=export (same as SEM), battery +=discharge (opposite of SEM)
+        reader._battery_sign_inverted = True
+        reader._battery_sign_detected = True
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_export_power == 1000
+        assert power.battery_discharge_power == 500
+        assert power.home_consumption_power == 2500  # 3000 + 500 - 1000
+
+
+# ════════════════════════════════════════════
+# Senec: Pattern B (grid +=import, battery +=discharge) — split
+# ════════════════════════════════════════════
+
+class TestSenecSplitGrid:
+    """Test Senec with split grid_imported/exported_power sensors."""
+
+    def test_senec_exporting(self):
+        """Senec exporting via split sensors."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.senec_solar_generated_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.senec_grid_imported_energy",
+            grid_export_energy="sensor.senec_grid_exported_energy",
+            battery_power="sensor.senec_battery_state_power",
+        )
+
+        states = {
+            "sensor.senec_solar_generated_power": _state(5000),
+            "sensor.senec_battery_state_power": _state(0),
+            "sensor.senec_grid_imported_power": _state(0, device_class="power"),
+            "sensor.senec_grid_exported_power": _state(3000, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        assert power.grid_power == 3000
+        power.calculate_derived()
+        assert power.grid_export_power == 3000
+        assert power.home_consumption_power == 2000
+
+    def test_senec_importing(self):
+        """Senec importing via split sensors."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.senec_solar_generated_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.senec_grid_imported_energy",
+            grid_export_energy="sensor.senec_grid_exported_energy",
+            battery_power=None,
+        )
+
+        states = {
+            "sensor.senec_solar_generated_power": _state(500),
+            "sensor.senec_grid_imported_power": _state(1500, device_class="power"),
+            "sensor.senec_grid_exported_power": _state(0, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        assert power.grid_power == -1500
+        power.calculate_derived()
+        assert power.grid_import_power == 1500
+
+
+# ════════════════════════════════════════════
+# RCT Power: Pattern B (grid +=import, battery +=discharge) — combined
+# ════════════════════════════════════════════
+
+class TestRCTPowerCombined:
+    """Test RCT Power with combined grid sensor (Pattern B)."""
+
+    def test_rctpower_importing(self):
+        """RCT Power importing: grid positive = import."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.rct_generators_power",
+            grid_import_power="sensor.rct_grid_power",
+            battery_power="sensor.rct_battery_power",
+        )
+
+        states = {
+            "sensor.rct_generators_power": _state(2000),
+            "sensor.rct_grid_power": _state(1500),     # +1500 = import (Pattern B)
+            "sensor.rct_battery_power": _state(500),   # +500 = discharge (Pattern B)
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        # Pattern B: grid +=import, battery +=discharge — both opposite of SEM
+        reader._grid_sign_inverted = True
+        reader._battery_sign_inverted = True
+        reader._grid_sign_detected = True
+        reader._battery_sign_detected = True
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_import_power == 1500
+        assert power.battery_discharge_power == 500
+        assert power.home_consumption_power > 0
+
+
+# ════════════════════════════════════════════
+# KSTAR: Pattern A (grid +=export, battery +=charge) — combined
+# ════════════════════════════════════════════
+
+class TestKSTARCombined:
+    """Test KSTAR via ha-solarman with combined grid sensor (Pattern A)."""
+
+    def test_kstar_exporting_charging(self):
+        """KSTAR exporting 2kW, battery charging 1kW."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.kstar_total_pv_power",
+            grid_import_power="sensor.kstar_total_grid_power",
+            battery_power="sensor.kstar_battery_power",
+        )
+
+        states = {
+            "sensor.kstar_total_pv_power": _state(6000),
+            "sensor.kstar_total_grid_power": _state(2000),  # +2kW = export
+            "sensor.kstar_battery_power": _state(1000),     # +1kW = charge
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # Pattern A: same as SEM convention
+        assert power.grid_export_power == 2000
+        assert power.battery_charge_power == 1000
+        assert power.home_consumption_power == 3000  # 6000 - 2000 - 1000
+
+
+# ════════════════════════════════════════════
+# Sessy: Battery-only with external P1 meter
+# ════════════════════════════════════════════
+
+class TestSessyBatteryOnly:
+    """Test Sessy battery system (no PV, grid via DSMR P1 meter)."""
+
+    def test_sessy_charging_from_grid(self):
+        """Sessy charging from grid: battery negative = charge, grid importing."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power=None,
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption",
+            grid_export_energy="sensor.electricity_meter_energy_production",
+            battery_power="sensor.sessy_battery_power",
+        )
+
+        states = {
+            "sensor.sessy_battery_power": _state(2000),  # Charging
+            "sensor.electricity_meter_power_consumption": _state(3000, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(0, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_import_power == 3000
+        assert power.battery_charge_power == 2000
+        assert power.home_consumption_power == 1000  # 3000 - 2000
+
+    def test_sessy_discharging_to_home(self):
+        """Sessy discharging to home, reducing grid import."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power=None,
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption",
+            grid_export_energy="sensor.electricity_meter_energy_production",
+            battery_power="sensor.sessy_battery_power",
+        )
+
+        states = {
+            "sensor.sessy_battery_power": _state(-1500),  # Discharging
+            "sensor.electricity_meter_power_consumption": _state(500, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(0, device_class="power"),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        assert power.grid_import_power == 500
+        assert power.battery_discharge_power == 1500
+        assert power.home_consumption_power == 2000  # 500 + 1500
+
+
+# ════════════════════════════════════════════
 # Manual grid power entity override
 # ════════════════════════════════════════════
 
