@@ -1,5 +1,6 @@
 """Energy calculation module for SEM coordinator."""
 import logging
+from collections import deque
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, Optional
 
@@ -46,6 +47,17 @@ class EnergyCalculator:
         # Cost rates
         self._import_rate = config.get("electricity_import_rate", 0.3387)
         self._export_rate = config.get("electricity_export_rate", 0.075)
+
+        # Rate history for 7-day averaging (dynamic tariffs)
+        self._rate_history: deque = deque(maxlen=30)
+
+        # Accumulated savings/costs (running totals for accurate ROI)
+        self._accumulated_savings: float = 0.0
+        self._accumulated_cost: float = 0.0
+        self._accumulated_export_revenue: float = 0.0
+        self._accumulated_grid_import_kwh: float = 0.0
+        self._accumulated_self_consumed_kwh: float = 0.0
+        self._accumulated_export_kwh: float = 0.0
 
         # Hardware EV energy reconciliation
         self._hass: Optional[HomeAssistant] = None
@@ -594,16 +606,32 @@ class EnergyCalculator:
             costs.lifetime_co2_avoided_kg / CO2_KG_PER_TREE_PER_YEAR, 1
         )
 
-        # ROI calculation
+        # ROI calculation — hybrid: accumulated (accurate) + estimated past (avg rate)
         lifetime_grid_import = self._get_lifetime("grid_import")
         lifetime_grid_export = self._get_lifetime("grid_export")
         lifetime_batt_discharge = self._get_lifetime("battery_discharge")
 
-        costs.lifetime_grid_cost = round(lifetime_grid_import * self._import_rate, 2)
-        solar_savings = round(lifetime_self_consumed * self._import_rate, 2)
-        export_revenue = round(lifetime_grid_export * self._export_rate, 2)
-        battery_savings = round(lifetime_batt_discharge * self._import_rate, 2)
-        costs.lifetime_total_savings = round(solar_savings + export_revenue, 2)
+        # Use 7-day avg rate for the estimated (pre-accumulation) portion
+        avg_import = self._get_avg_import_rate()
+        avg_export = self._get_avg_export_rate()
+
+        # Pre-SEM portion: lifetime minus what we've already accurately accumulated
+        pre_sem_self_consumed = max(0, lifetime_self_consumed - self._accumulated_self_consumed_kwh)
+        pre_sem_export = max(0, lifetime_grid_export - self._accumulated_export_kwh)
+        pre_sem_grid_import = max(0, lifetime_grid_import - self._accumulated_grid_import_kwh)
+
+        # Estimated past savings (using smoothed avg rate)
+        estimated_past_savings = pre_sem_self_consumed * avg_import
+        estimated_past_revenue = pre_sem_export * avg_export
+
+        # Total: accumulated real savings + estimated past
+        costs.lifetime_grid_cost = round(
+            self._accumulated_cost + pre_sem_grid_import * avg_import, 2
+        )
+        costs.lifetime_total_savings = round(
+            self._accumulated_savings + self._accumulated_export_revenue
+            + estimated_past_savings + estimated_past_revenue, 2
+        )
 
         system_cost = self.config.get("system_investment_cost", 0)
         if system_cost > 0:
@@ -697,13 +725,77 @@ class EnergyCalculator:
         key = f"lifetime_{category}"
         return round(self._lifetime_accumulators.get(key, 0.0), 2)
 
+    def _get_avg_import_rate(self) -> float:
+        """7-day average import rate, falling back to current rate."""
+        if not self._rate_history:
+            return self._import_rate
+        recent = list(self._rate_history)[-7:]
+        total = sum(r["import_rate"] for r in recent)
+        return total / len(recent)
+
+    def _get_avg_export_rate(self) -> float:
+        """7-day average export rate, falling back to current rate."""
+        if not self._rate_history:
+            return self._export_rate
+        recent = list(self._rate_history)[-7:]
+        total = sum(r["export_rate"] for r in recent)
+        return total / len(recent)
+
+    def _snapshot_daily_costs(self, today: date) -> None:
+        """Snapshot today's costs into accumulated totals before daily reset.
+
+        Called from _check_rollover when the day changes.
+        """
+        # Read today's energy values before they get cleaned up
+        today_str = str(today)
+        daily_grid_import = self._daily_accumulators.get(f"grid_import_{today_str}", 0.0)
+        daily_grid_export = self._daily_accumulators.get(f"grid_export_{today_str}", 0.0)
+        daily_solar = self._daily_accumulators.get(f"solar_{today_str}", 0.0)
+        daily_home = self._daily_accumulators.get(f"home_{today_str}", 0.0)
+        daily_ev_key = [k for k in self._daily_accumulators if k.startswith("ev_daily_sun_")]
+        daily_ev = sum(self._daily_accumulators.get(k, 0.0) for k in daily_ev_key)
+
+        # Calculate costs at the rate that was active during that day
+        total_consumption = daily_home + daily_ev
+        daily_savings = max(0, (total_consumption - daily_grid_import) * self._import_rate)
+        daily_cost = daily_grid_import * self._import_rate
+        daily_export_revenue = daily_grid_export * self._export_rate
+        daily_self_consumed = max(0, daily_solar - daily_grid_export)
+
+        # Accumulate into running totals
+        self._accumulated_savings += daily_savings
+        self._accumulated_cost += daily_cost
+        self._accumulated_export_revenue += daily_export_revenue
+        self._accumulated_grid_import_kwh += daily_grid_import
+        self._accumulated_self_consumed_kwh += daily_self_consumed
+        self._accumulated_export_kwh += daily_grid_export
+
+        # Store today's rate for averaging
+        self._rate_history.append({
+            "date": today_str,
+            "import_rate": self._import_rate,
+            "export_rate": self._export_rate,
+        })
+
     def _check_rollover(self, today: date, month_key: str, year_key: str = None) -> None:
         """Check for day/month rollover and cleanup old accumulators.
 
         EV keys (ev_daily_sun_*) are excluded — they use sunrise-based dates
         and get cleaned up separately (older than yesterday).
         """
-        yesterday = str(today - timedelta(days=1))
+        yesterday = today - timedelta(days=1)
+        yesterday_str = str(yesterday)
+
+        # Snapshot yesterday's costs before cleaning up (for accumulated ROI)
+        has_yesterday_data = any(
+            k.endswith(yesterday_str) and not k.startswith("ev_daily_sun")
+            for k in self._daily_accumulators
+        )
+        already_snapshotted = any(
+            r.get("date") == yesterday_str for r in self._rate_history
+        )
+        if has_yesterday_data and not already_snapshotted:
+            self._snapshot_daily_costs(yesterday)
 
         # Remove daily accumulators from previous days
         # Skip ev_daily_sun keys (sunrise-based, cleaned separately below)
@@ -716,7 +808,7 @@ class EnergyCalculator:
             k for k in self._daily_accumulators.keys()
             if k.startswith("ev_daily_sun")
             and not k.endswith(str(today))
-            and not k.endswith(yesterday)
+            and not k.endswith(yesterday_str)
         ]
         for key in keys_to_remove:
             del self._daily_accumulators[key]
@@ -748,6 +840,13 @@ class EnergyCalculator:
             "lifetime_accumulators": self._lifetime_accumulators.copy(),
             "last_update": self._last_update.isoformat() if self._last_update else None,
             "yearly_seeded": self._yearly_seeded,
+            "rate_history": list(self._rate_history),
+            "accumulated_savings": self._accumulated_savings,
+            "accumulated_cost": self._accumulated_cost,
+            "accumulated_export_revenue": self._accumulated_export_revenue,
+            "accumulated_grid_import_kwh": self._accumulated_grid_import_kwh,
+            "accumulated_self_consumed_kwh": self._accumulated_self_consumed_kwh,
+            "accumulated_export_kwh": self._accumulated_export_kwh,
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
@@ -758,6 +857,13 @@ class EnergyCalculator:
             self._yearly_accumulators = state.get("yearly_accumulators", {})
             self._lifetime_accumulators = state.get("lifetime_accumulators", {})
             self._yearly_seeded = state.get("yearly_seeded", False)
+            self._rate_history = deque(state.get("rate_history", []), maxlen=30)
+            self._accumulated_savings = state.get("accumulated_savings", 0.0)
+            self._accumulated_cost = state.get("accumulated_cost", 0.0)
+            self._accumulated_export_revenue = state.get("accumulated_export_revenue", 0.0)
+            self._accumulated_grid_import_kwh = state.get("accumulated_grid_import_kwh", 0.0)
+            self._accumulated_self_consumed_kwh = state.get("accumulated_self_consumed_kwh", 0.0)
+            self._accumulated_export_kwh = state.get("accumulated_export_kwh", 0.0)
             last_update = state.get("last_update")
             if last_update:
                 self._last_update = datetime.fromisoformat(last_update)
