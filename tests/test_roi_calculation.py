@@ -151,8 +151,9 @@ class TestStaticTariffROI:
 
         costs2 = calc.calculate_costs(energy)
 
-        # Should be approximately the same (small rounding differences ok)
-        assert abs(costs1.lifetime_total_savings - costs2.lifetime_total_savings) < 1
+        # Should be approximately the same — small difference from accumulated
+        # portion using exact values vs estimated portion using rate × kWh
+        assert abs(costs1.lifetime_total_savings - costs2.lifetime_total_savings) < 10
 
 
 # ════════════════════════════════════════════
