@@ -23,6 +23,8 @@ class SEMEVStatusCard extends HTMLElement {
 
     set hass(hass) {
         this._hass = hass;
+        const hasLocalize = typeof semLocalize === 'function';
+        const lang = hass?.language;
         const key = [
             'ev_connected', 'ev_charging', 'ev_power', 'calculated_current',
             'session_energy', 'session_solar_share', 'session_cost',
@@ -31,9 +33,13 @@ class SEMEVStatusCard extends HTMLElement {
             const pfx = s.startsWith('ev_connected') || s.startsWith('ev_charging')
                 ? 'binary_sensor.sem_' : this._prefix;
             return this._hass?.states[`${pfx}${s}`]?.state || '';
-        }).join(',');
+        }).join(',') + '|' + hasLocalize + '|' + lang;
         if (key === this._lastKey) return;
         this._lastKey = key;
+        if (hasLocalize && !this._localizeReady) {
+            this._localizeReady = true;
+            this._rendered = false;
+        }
         this._update();
     }
 
@@ -140,7 +146,7 @@ class SEMEVStatusCard extends HTMLElement {
         // Charging mode (from select entity)
         const modeEntity = this._hass?.states['select.sem_ev_charging_mode'];
         const mode = modeEntity?.state || 'auto';
-        const modeLabels = { auto: 'Auto', minpv: 'Min+PV', now: 'Maximum', off: 'Off' };
+        const modeLabels = { auto: 'Auto', minpv: 'Min+PV', now: this._t('maximum'), off: this._t('off') };
         setVal('.mode-value', modeLabels[mode] || mode);
 
         // Bottom chips
@@ -445,35 +451,35 @@ class SEMEVStatusCard extends HTMLElement {
 
                         <div class="metrics-col">
                             <div class="metric-row">
-                                <span class="metric-label lbl-status">Status</span>
-                                <span class="status-value disconnected">Disconnected</span>
+                                <span class="metric-label lbl-status">${this._t('status')}</span>
+                                <span class="status-value disconnected">${this._t('disconnected')}</span>
                             </div>
                             <div class="metric-row power-row" style="display:none">
-                                <span class="metric-label lbl-power">Power</span>
+                                <span class="metric-label lbl-power">${this._t('power')}</span>
                                 <span class="metric-value power-value">\u2014 W</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-current">Current</span>
+                                <span class="metric-label lbl-current">${this._t('current')}</span>
                                 <span class="metric-value current-value">\u2014 A</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-session">Session</span>
+                                <span class="metric-label lbl-session">${this._t('session')}</span>
                                 <span class="metric-value session-value">\u2014 kWh</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-today">Today</span>
+                                <span class="metric-label lbl-today">${this._t('today')}</span>
                                 <span class="metric-value daily-value">\u2014 kWh</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-solar-share">Solar share</span>
+                                <span class="metric-label lbl-solar-share">${this._t('solar_share')}</span>
                                 <span class="metric-value solar-share-value">\u2014%</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-strategy">Strategy</span>
+                                <span class="metric-label lbl-strategy">${this._t('strategy')}</span>
                                 <span class="strategy-value">\u2014</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-mode">Mode</span>
+                                <span class="metric-label lbl-mode">${this._t('mode')}</span>
                                 <span class="mode-value">\u2014</span>
                             </div>
                         </div>
@@ -481,7 +487,7 @@ class SEMEVStatusCard extends HTMLElement {
 
                     <div class="bottom-bar">
                         <div class="chip">
-                            <span class="chip-label lbl-session-cost">Session cost</span>
+                            <span class="chip-label lbl-session-cost">${this._t('session_cost')}</span>
                             <span class="cost-chip-value">\u2014</span>
                         </div>
                     </div>

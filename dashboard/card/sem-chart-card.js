@@ -175,8 +175,12 @@ class SEMChartCard extends HTMLElement {
 
     set hass(hass) {
         this._hass = hass;
+        const hasLocalize = typeof semLocalize === 'function';
         if (!this.shadowRoot.querySelector('.sem-chart-wrap')) {
             this._renderSkeleton();
+        } else if (hasLocalize && !this._localizeReady) {
+            this._localizeReady = true;
+            this._renderSkeleton();  // Re-render with translations
         }
         // If no period received yet, use a sensible default
         if (!this._period) {

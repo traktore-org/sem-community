@@ -24,14 +24,22 @@ class SEMBatteryCard extends HTMLElement {
 
     set hass(hass) {
         this._hass = hass;
+        // Force re-render when semLocalize becomes available (fixes English skeleton flash)
+        const hasLocalize = typeof semLocalize === 'function';
+        const lang = hass?.language;
         const key = [
             'battery_soc', 'battery_power', 'battery_status',
             'battery_health_score', 'battery_cycles_estimated',
             'daily_battery_charge_energy', 'daily_battery_discharge_energy',
             'daily_battery_savings',
-        ].map(s => this._hass?.states[`${this._prefix}${s}`]?.state || '').join(',');
+        ].map(s => this._hass?.states[`${this._prefix}${s}`]?.state || '').join(',')
+            + '|' + hasLocalize + '|' + lang;
         if (key === this._lastKey) return;
         this._lastKey = key;
+        if (hasLocalize && !this._localizeReady) {
+            this._localizeReady = true;
+            this._rendered = false;  // Force skeleton re-render with translations
+        }
         this._update();
     }
 
@@ -353,27 +361,27 @@ class SEMBatteryCard extends HTMLElement {
                         </div>
                         <div class="metrics-col">
                             <div class="metric-row">
-                                <span class="metric-label lbl-soc">SOC</span>
+                                <span class="metric-label lbl-soc">${this._t('soc')}</span>
                                 <span class="metric-val m-soc">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-power">Power</span>
+                                <span class="metric-label lbl-power">${this._t('power')}</span>
                                 <span class="metric-val m-power">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-status">Status</span>
+                                <span class="metric-label lbl-status">${this._t('status')}</span>
                                 <span class="metric-val m-status" style="color:#888">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-health">Health</span>
+                                <span class="metric-label lbl-health">${this._t('health')}</span>
                                 <span class="metric-val m-health">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-cycles">Cycles</span>
+                                <span class="metric-label lbl-cycles">${this._t('cycles')}</span>
                                 <span class="metric-val m-cycles">—</span>
                             </div>
                             <div class="metric-row">
-                                <span class="metric-label lbl-temp">Temperature</span>
+                                <span class="metric-label lbl-temp">${this._t('temperature')}</span>
                                 <span class="metric-val m-temp">—</span>
                             </div>
                         </div>
@@ -381,15 +389,15 @@ class SEMBatteryCard extends HTMLElement {
 
                     <div class="chips">
                         <div class="chip">
-                            <div class="chip-label lbl-charge-today">Charge today</div>
+                            <div class="chip-label lbl-charge-today">${this._t('charge_today')}</div>
                             <div class="chip-value c-charge chip-charge">—</div>
                         </div>
                         <div class="chip">
-                            <div class="chip-label lbl-discharge-today">Discharge today</div>
+                            <div class="chip-label lbl-discharge-today">${this._t('discharge_today')}</div>
                             <div class="chip-value c-discharge chip-discharge">—</div>
                         </div>
                         <div class="chip">
-                            <div class="chip-label lbl-savings-today">Savings today</div>
+                            <div class="chip-label lbl-savings-today">${this._t('savings_today')}</div>
                             <div class="chip-value c-savings chip-savings">—</div>
                         </div>
                     </div>
