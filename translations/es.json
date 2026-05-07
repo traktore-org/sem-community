@@ -771,6 +771,9 @@
       "forecast_surplus_kwh": {
         "name": "Excedente Previsto"
       },
+      "forecast_dampening_factor": {
+        "name": "Forecast Dampening Factor"
+      },
       "battery_scheduler_state": {
         "name": "Estado planificador batería"
       },

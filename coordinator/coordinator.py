@@ -29,7 +29,6 @@ from ..const import (
     ENTITY_OBSERVER_MODE_SWITCH,
     ENTITY_SOLAR_POWER,
     ENTITY_SMART_NIGHT_CHARGING,
-    WEATHER_ENTITY_CANDIDATES,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
 )
@@ -940,29 +939,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 forecast_data.charging_recommendation = self._forecast_reader.get_charging_recommendation(
                     daily_ev_target, energy.daily_ev,
                 )
-                forecast_sig = f"{forecast.forecast_remaining_today_kwh:.1f}:{forecast.peak_time_today}"
-                if forecast_sig != getattr(self, '_last_forecast_sig', ''):
-                    self._last_forecast_sig = forecast_sig
-                    self._cached_surplus_window = self._estimate_best_surplus_window(
-                        forecast, power, energy
-                    )
-                forecast_data.best_surplus_window = getattr(self, '_cached_surplus_window', '')
-                forecast_data.forecast_surplus_kwh = max(
-                    0, forecast.forecast_remaining_today_kwh - (energy.daily_home * 0.5)
-                )
         except (ValueError, TypeError) as e:
             _LOGGER.debug("Forecast data parsing error: %s", e)
         except AttributeError as e:
             _LOGGER.debug("Forecast source not available: %s", e)
 
-        # Forecast tracker
+        # Forecast tracker — update BEFORE applying dampening to remaining/surplus
         tracker_data = {}
         try:
+            # Dynamic weather entity detection — find any weather.* entity,
+            # skip forecast_* subentities (HA auto-generated, unusable)
             weather_state = None
-            for candidate in WEATHER_ENTITY_CANDIDATES:
-                weather_state = self.hass.states.get(candidate)
-                if weather_state:
-                    break
+            for state in self.hass.states.async_all("weather"):
+                if state.entity_id.startswith("weather.forecast_"):
+                    continue
+                weather_state = state
+                break
             weather_condition = weather_state.state if weather_state else STATE_UNKNOWN
             self._forecast_tracker.update(
                 forecast_data.forecast_today_kwh, energy.daily_solar, weather_condition,
@@ -973,6 +965,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             )
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Forecast tracker update failed: %s", e)
+
+        # Apply real-time dampening to forecast remaining and surplus
+        try:
+            if forecast_data.forecast_available:
+                dampening = self._forecast_tracker.dampening_factor
+                forecast_data.forecast_dampening_factor = dampening
+                dampened_remaining = round(
+                    forecast_data.forecast_remaining_today_kwh * dampening, 2
+                )
+                forecast_data.forecast_remaining_today_kwh = dampened_remaining
+                battery_target_soc = self.config.get("battery_priority_soc", 90)
+                battery_need_kwh = max(0, (battery_target_soc - power.battery_soc) / 100 * self.battery_capacity_kwh)
+                predicted_home = self._predictor.predict_consumption_today_kwh(dt_util.now())
+                remaining_home = predicted_home if predicted_home > 0 else energy.daily_home * 0.5
+                forecast_data.forecast_surplus_kwh = max(
+                    0, dampened_remaining - remaining_home - battery_need_kwh
+                )
+                # Surplus window uses dampened remaining
+                forecast_sig = f"{dampened_remaining:.1f}:{forecast_data.forecast_peak_time_today}"
+                if forecast_sig != getattr(self, '_last_forecast_sig', ''):
+                    self._last_forecast_sig = forecast_sig
+                    self._cached_surplus_window = self._estimate_best_surplus_window(
+                        self._cycle_forecast, power, energy, dampened_remaining
+                    )
+                forecast_data.best_surplus_window = getattr(self, '_cached_surplus_window', '')
+        except (ValueError, TypeError, AttributeError) as e:
+            _LOGGER.debug("Forecast dampening failed: %s", e)
 
         # Tariff (Phase 1)
         tariff_data = TariffSensorData()
@@ -1049,7 +1068,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self_consumption_rate=performance.self_consumption_rate,
                 autarky_rate=performance.autarky_rate,
                 current_price_level=tariff_data.tariff_price_level,
-                forecast_remaining_kwh=forecast_data.forecast_remaining_today_kwh,
+                forecast_remaining_kwh=forecast_data.forecast_surplus_kwh,
                 forecast_tomorrow_kwh=forecast_data.forecast_tomorrow_kwh,
                 best_surplus_window=forecast_data.best_surplus_window,
                 peak_time_today=forecast_data.forecast_peak_time_today,
@@ -1486,7 +1505,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 forecast = self._cycle_forecast
                 if forecast.available:
                     surplus_factor = 0.5
-                    estimated_surplus = forecast.forecast_remaining_today_kwh * surplus_factor
+                    dampening = self._forecast_tracker.dampening_factor
+                    estimated_surplus = forecast.forecast_remaining_today_kwh * dampening * surplus_factor
                     if estimated_surplus >= remaining_need * 1.5:
                         # Plenty of solar ahead — solar_only is fine
                         return (
@@ -1520,7 +1540,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 forecast = self._cycle_forecast
                 if forecast.available:
                     surplus_factor = 0.5
-                    estimated_surplus = forecast.forecast_remaining_today_kwh * surplus_factor
+                    dampening = self._forecast_tracker.dampening_factor
+                    estimated_surplus = forecast.forecast_remaining_today_kwh * dampening * surplus_factor
                     reason += f" (forecast surplus={estimated_surplus:.1f}kWh, need={remaining_need:.1f}kWh)"
             except Exception as e:
                 _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
@@ -1564,7 +1585,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if forecast and forecast.available:
             remaining_solar = forecast.forecast_remaining_today_kwh
             try:
-                remaining_solar = self._forecast_tracker.apply_correction(remaining_solar)
+                remaining_solar = self._forecast_tracker.apply_dampening(remaining_solar)
             except (ValueError, AttributeError):
                 pass
 
@@ -1643,7 +1664,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         try:
             forecast = self._cycle_forecast
             if forecast.available:
-                forecast_remaining = forecast.forecast_remaining_today_kwh
+                forecast_remaining = self._forecast_tracker.apply_dampening(
+                    forecast.forecast_remaining_today_kwh
+                )
         except Exception:
             pass
 
@@ -2014,12 +2037,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """Check if required sensors are available."""
         return self._sensor_reader.sensors_ready()
 
-    def _estimate_best_surplus_window(self, forecast, power, energy) -> str:
+    def _estimate_best_surplus_window(self, forecast, power, energy, dampened_remaining: float = None) -> str:
         """Estimate the best time window for running large appliances.
 
         Uses peak_time_today from forecast (if available) to suggest a window
         centered on peak solar production. Falls back to a generic midday
         window if no peak time data.
+
+        Args:
+            dampened_remaining: Real-time dampened remaining forecast (kWh).
+                Falls back to raw forecast.forecast_remaining_today_kwh if not provided.
         """
         if not forecast.available:
             return ""
@@ -2038,8 +2065,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             except (ValueError, IndexError):
                 pass
 
-        # Fallback: estimate from remaining forecast
-        remaining = forecast.forecast_remaining_today_kwh
+        # Fallback: estimate from remaining forecast (dampened if available)
+        remaining = dampened_remaining if dampened_remaining is not None else forecast.forecast_remaining_today_kwh
         current_hour = now.hour
 
         if current_hour >= 17 or remaining < 1:

@@ -243,6 +243,7 @@ class ForecastSensorData:
     charging_recommendation: str = "no_forecast"
     best_surplus_window: str = ""
     forecast_surplus_kwh: float = 0.0
+    forecast_dampening_factor: float = 1.0
 
 
 @dataclass
@@ -586,6 +587,7 @@ class SEMData:
             "charging_recommendation": self.forecast.charging_recommendation,
             "best_surplus_window": self.forecast.best_surplus_window,
             "forecast_surplus_kwh": self.forecast.forecast_surplus_kwh,
+            "forecast_dampening_factor": self.forecast.forecast_dampening_factor,
 
             # Tariff (Phase 1)
             "tariff_current_import_rate": self.tariff.tariff_current_import_rate,
