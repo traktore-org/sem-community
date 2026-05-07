@@ -1289,25 +1289,9 @@ views:
                 entity: sensor.sem_ev_charger_count
                 above: 1
             card:
-              type: vertical-stack
-              cards:
-                - type: custom:mushroom-title-card
-                  card_mod:
-                    style: *lumina_title
-                  title: Charger Status
-                  subtitle: >-
-                    {{ states('sensor.sem_ev_charger_count') }} chargers configured
-                - type: markdown
-                  content: >-
-                    | Charger | Power | Session | Solar | Taper |
-                    |---------|-------|---------|-------|-------|
-                    {% for eid in states.sensor | selectattr('entity_id', 'match', 'sensor.sem_charger_.*_power') | map(attribute='entity_id') | list %}
-                    {% set base = eid | replace('_power', '') %}
-                    {% set name = state_attr(eid, 'friendly_name') | replace(' Power', '') | replace('SEM ', '') %}
-                    | {{ name }} | {{ states(eid) | float(0) | round(0) }}W | {{ states(base ~ '_session_energy') | float(0) | round(1) }}kWh | {{ states(base ~ '_session_solar_share') | float(0) | round(0) }}% | {{ states(base ~ '_taper_trend') or 'idle' }} |
-                    {% endfor %}
-                  card_mod:
-                    style: *glass_card
+              type: custom:sem-charger-status-card
+              card_mod:
+                style: *glass_card
 
           # ── Charging Controls ──
           - type: custom:mushroom-title-card
