@@ -11,21 +11,21 @@
  */
 
 const WEATHER_ICONS = {
-    'clear-night': { icon: '\u{1F319}', label: 'Clear' },
-    'cloudy': { icon: '\u2601\uFE0F', label: 'Cloudy' },
-    'fog': { icon: '\u{1F32B}\uFE0F', label: 'Fog' },
-    'hail': { icon: '\u{1F9CA}', label: 'Hail' },
-    'lightning': { icon: '\u26A1', label: 'Thunder' },
-    'lightning-rainy': { icon: '\u26C8\uFE0F', label: 'Thunderstorm' },
-    'partlycloudy': { icon: '\u26C5', label: 'Partly Cloudy' },
-    'pouring': { icon: '\u{1F327}\uFE0F', label: 'Pouring' },
-    'rainy': { icon: '\u{1F326}\uFE0F', label: 'Rain' },
-    'snowy': { icon: '\u2744\uFE0F', label: 'Snow' },
-    'snowy-rainy': { icon: '\u{1F328}\uFE0F', label: 'Sleet' },
-    'sunny': { icon: '\u2600\uFE0F', label: 'Sunny' },
-    'windy': { icon: '\u{1F4A8}', label: 'Windy' },
-    'windy-variant': { icon: '\u{1F4A8}', label: 'Windy' },
-    'exceptional': { icon: '\u26A0\uFE0F', label: 'Exceptional' },
+    'clear-night': { icon: '\u{1F319}', key: 'weather_clear' },
+    'cloudy': { icon: '\u2601\uFE0F', key: 'weather_cloudy' },
+    'fog': { icon: '\u{1F32B}\uFE0F', key: 'weather_fog' },
+    'hail': { icon: '\u{1F9CA}', key: 'weather_hail' },
+    'lightning': { icon: '\u26A1', key: 'weather_thunder' },
+    'lightning-rainy': { icon: '\u26C8\uFE0F', key: 'weather_thunderstorm' },
+    'partlycloudy': { icon: '\u26C5', key: 'weather_partly_cloudy' },
+    'pouring': { icon: '\u{1F327}\uFE0F', key: 'weather_pouring' },
+    'rainy': { icon: '\u{1F326}\uFE0F', key: 'weather_rain' },
+    'snowy': { icon: '\u2744\uFE0F', key: 'weather_snow' },
+    'snowy-rainy': { icon: '\u{1F328}\uFE0F', key: 'weather_sleet' },
+    'sunny': { icon: '\u2600\uFE0F', key: 'weather_sunny' },
+    'windy': { icon: '\u{1F4A8}', key: 'weather_windy' },
+    'windy-variant': { icon: '\u{1F4A8}', key: 'weather_windy' },
+    'exceptional': { icon: '\u26A0\uFE0F', key: 'weather_exceptional' },
 };
 
 class SEMWeatherCard extends HTMLElement {
@@ -39,6 +39,11 @@ class SEMWeatherCard extends HTMLElement {
         if (!config.entity) throw new Error('sem-weather-card requires entity');
         this.config = config;
         this._forecastRows = config.forecast_rows || 5;
+    }
+
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
     }
 
     set hass(hass) {
@@ -82,7 +87,7 @@ class SEMWeatherCard extends HTMLElement {
         setVal('.time', timeStr);
         setVal('.date', dateStr);
         setVal('.weather-icon', weatherInfo.icon);
-        setVal('.weather-label', weatherInfo.label);
+        setVal('.weather-label', this._t(weatherInfo.key));
         setVal('.temp', `${temp}${unit}`);
         setVal('.humidity', `${humidity}%`);
         setVal('.wind', `${windSpeed} ${windUnit}`);

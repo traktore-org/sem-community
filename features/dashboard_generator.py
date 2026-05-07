@@ -76,7 +76,7 @@ class DashboardGenerator:
         # Jinja-templated secondaries still pass through unchanged (the match
         # is exact, and templates never match a plain English translation key).
         translatable_fields = (
-            "title", "subtitle", "primary", "secondary", "name", "label",
+            "title", "subtitle", "primary", "secondary", "name", "label", "content",
         )
 
         def _walk(obj):

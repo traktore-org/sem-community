@@ -149,20 +149,19 @@ class SEMLoadPriorityCard extends HTMLElement {
 
                     <div class="section-label">
                         <ha-icon icon="mdi:drag-vertical" style="--mdc-icon-size:18px"></ha-icon>
-                        Drag to reorder · 1 = highest priority
+                        ${this._t('drag_to_reorder')}
                     </div>
 
                     <div id="device-list" class="device-list">
                         ${this.devices.length === 0
-                            ? '<div class="empty">No controllable devices discovered yet.</div>'
+                            ? '<div class="empty">' + this._t('no_devices_yet') + '</div>'
                             : this.devices.map((d, i) => this._renderDevice(d, i + 1)).join('')}
                     </div>
 
-                    ${this.devices.length > 0 ? '<div class="hint">Drag the ≡ handle or use ▲▼ arrows to reorder. Lower number = kept on longer.</div>' : ''}
+                    ${this.devices.length > 0 ? '<div class="hint">' + this._t('drag_hint') + '</div>' : ''}
 
                     <div class="hint" style="margin-top:12px;padding:10px;background:rgba(128,128,128,0.06);border-radius:10px">
-                        Devices are auto-discovered from the HA Energy Dashboard.<br>
-                        Settings → Dashboards → Energy → Individual devices
+                        ${this._t('devices_auto_discovered')}
                     </div>
                 </div>
             </ha-card>
@@ -189,7 +188,7 @@ class SEMLoadPriorityCard extends HTMLElement {
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
                         ${device.hasManualMapping ? '<ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px;color:#ffc107;opacity:0.6"></ha-icon>' : ''}
-                        ${!device.isControllable ? `<span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}"><ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px"></ha-icon> Configure</span>` : ''}
+                        ${!device.isControllable ? `<span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}"><ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px"></ha-icon> ${this._t('configure')}</span>` : ''}
                     </div>
                     <div class="device-power" data-field="power-${device.id}">${onOff ? device.power.toFixed(1) + ' kW' : 'OFF'}</div>
                 </div>
