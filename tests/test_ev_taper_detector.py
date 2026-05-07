@@ -431,7 +431,7 @@ class TestNightsUntilCharge:
         nights, needed, reason = det.calculate_nights_until_charge(8.0)
         assert needed is False
         assert nights > 0
-        assert "above target" in reason
+        assert "nights range" in reason
 
     def test_charge_needed_when_low(self):
         """Should recommend charge when SOC is low."""
@@ -837,7 +837,7 @@ class TestNightChargeSkip:
         nights, needed, reason = det.calculate_nights_until_charge(8.0)
         assert needed is False
         assert nights >= 3
-        assert "above target" in reason
+        assert "nights range" in reason
 
     def test_skip_enough_range_with_margin(self):
         """SOC 70%, daily 8 kWh (20%), plenty of range → skip."""
@@ -914,7 +914,7 @@ class TestNightChargeSkip:
             8.0, vehicle_soc=85.0
         )
         assert needed is False
-        assert "above target" in reason
+        assert "nights range" in reason
 
     def test_real_prod_scenario_apr25(self):
         """Reproduce actual PROD scenario: SOC 98.3%, target 80%, daily 8 kWh.
@@ -935,7 +935,7 @@ class TestNightChargeSkip:
         nights, needed, reason = det.calculate_nights_until_charge(8.0)
         assert needed is False
         assert nights >= 3
-        assert "above target" in reason
+        assert "nights range" in reason
 
 
 # ════════════════════════════════════════════
