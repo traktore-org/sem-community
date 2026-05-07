@@ -103,86 +103,53 @@ class SEMDashboardTranslator extends HTMLElement {
     _translateAll() {
         if (!this._reverseMap) return;
 
-        // Find all card elements in the dashboard
-        const root = this._findDashboardRoot();
+        // Start from document and walk ALL shadow roots
+        this._walkAndTranslate(document.body);
+    }
+
+    _walkAndTranslate(root) {
         if (!root) return;
 
-        this._walkAndTranslate(root);
-    }
+        // Collect all elements including those in shadow roots
+        const allElements = [];
+        this._collectAllElements(root, allElements);
 
-    _walkAndTranslate(el) {
-        if (!el) return;
-
-        // Translate text nodes in specific elements
-        const translatableSelectors = [
-            // Mushroom card labels
-            '.title', '.name', '.primary', '.secondary', '.subtitle',
-            '.info .name', '.info .secondary',
-            'mushroom-state-info .primary', 'mushroom-state-info .secondary',
-            // Chip labels
-            '.chip-label', '.chip .content',
-            // Card headers
-            'h1', 'h2', 'h3', '.card-header', '.header .name',
-            // Generic
-            'ha-card .title', 'ha-card .name',
-        ];
-
-        // Walk shadow roots recursively
-        this._walkShadows(el, (node) => {
-            if (node.nodeType === Node.TEXT_NODE) {
-                const text = node.textContent?.trim();
-                if (text && this._reverseMap[text]) {
-                    node.textContent = node.textContent.replace(text, this._reverseMap[text]);
+        // Translate text nodes
+        for (const el of allElements) {
+            if (el.nodeType === Node.TEXT_NODE) {
+                const text = el.textContent?.trim();
+                if (text && text.length > 1 && this._reverseMap[text]) {
+                    el.textContent = el.textContent.replace(text, this._reverseMap[text]);
                 }
-            } else if (node.nodeType === Node.ELEMENT_NODE) {
-                // Check direct text content of small elements
-                const tag = node.tagName?.toLowerCase();
-                if (['span', 'div', 'p', 'h1', 'h2', 'h3', 'label'].includes(tag)) {
-                    // Only translate leaf elements (no child elements with text)
-                    if (node.children.length === 0 || (node.children.length === 1 && node.children[0].tagName === 'HA-ICON')) {
-                        const text = node.textContent?.trim();
-                        if (text && this._reverseMap[text]) {
-                            // Preserve child elements like icons
-                            for (const child of node.childNodes) {
-                                if (child.nodeType === Node.TEXT_NODE) {
-                                    const t = child.textContent?.trim();
-                                    if (t && this._reverseMap[t]) {
-                                        child.textContent = child.textContent.replace(t, this._reverseMap[t]);
-                                    }
-                                }
-                            }
-                        }
-                    }
+                continue;
+            }
+
+            // For leaf elements (no child elements), translate direct text
+            if (el.nodeType === Node.ELEMENT_NODE && el.children?.length === 0) {
+                const text = el.textContent?.trim();
+                if (text && text.length > 1 && this._reverseMap[text]) {
+                    el.textContent = this._reverseMap[text];
                 }
             }
-        });
+        }
     }
 
-    _walkShadows(el, callback) {
-        if (!el) return;
+    _collectAllElements(node, result) {
+        if (!node) return;
 
-        // Process this element
-        callback(el);
+        result.push(node);
 
-        // Walk children
-        if (el.childNodes) {
-            for (const child of el.childNodes) {
-                this._walkShadows(child, callback);
+        // Walk regular children
+        if (node.childNodes) {
+            for (const child of node.childNodes) {
+                this._collectAllElements(child, result);
             }
         }
 
-        // Walk shadow root if present
-        if (el.shadowRoot) {
-            for (const child of el.shadowRoot.childNodes) {
-                this._walkShadows(child, callback);
-            }
-        }
-
-        // Walk slotted elements
-        if (el.tagName === 'SLOT') {
-            const assigned = el.assignedNodes?.() || [];
-            for (const node of assigned) {
-                this._walkShadows(node, callback);
+        // Walk shadow root children
+        if (node.shadowRoot) {
+            for (const child of node.shadowRoot.childNodes) {
+                this._collectAllElements(child, result);
             }
         }
     }
