@@ -772,6 +772,9 @@
       "forecast_surplus_kwh": {
         "name": "Voorspeld Overschot"
       },
+      "forecast_dampening_factor": {
+        "name": "Forecast Dampening Factor"
+      },
       "battery_scheduler_state": {
         "name": "Batterijplanner Status"
       },

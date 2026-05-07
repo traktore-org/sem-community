@@ -682,6 +682,9 @@
       "forecast_surplus_kwh": {
         "name": "Forecast Surplus"
       },
+      "forecast_dampening_factor": {
+        "name": "Forecast Dampening Factor"
+      },
       "forecast_source": {
         "name": "Forecast Source"
       },

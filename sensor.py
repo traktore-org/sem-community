@@ -946,6 +946,12 @@ SENSOR_TYPES = [
         entity_registry_enabled_default=False,
     ),
     SensorEntityDescription(
+        key="forecast_dampening_factor",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:tune-vertical-variant",
+        suggested_display_precision=3,
+    ),
+    SensorEntityDescription(
         key="forecast_source",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),

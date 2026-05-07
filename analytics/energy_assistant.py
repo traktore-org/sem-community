@@ -168,15 +168,19 @@ class EnergyAssistant:
 
         solar_pct = (solar_to_ev_kwh / daily_ev_kwh * 100) if daily_ev_kwh > 0 else 0
 
+        from ..utils.translate import get_text
+        _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
+        currency = self.hass.config.currency or "EUR"
+
         if solar_pct < 50 and daily_ev_kwh > 2:
             self._tips.append(EnergyTip(
                 category="ev",
-                title="EV charging mostly from grid",
-                description=(
-                    f"Only {solar_pct:.0f}% of EV charging is from solar. "
-                    f"Shifting charging to 10:00-15:00 could significantly reduce grid usage."
-                ),
-                estimated_savings="5-15 CHF/month",
+                title=_t("tip_ev_grid_title", "EV charging mostly from grid"),
+                description=_t("tip_ev_grid_desc",
+                    "Only {solar_pct:.0f}% of EV charging is from solar. "
+                    "Shifting charging to 10:00-15:00 could significantly reduce grid usage.",
+                    solar_pct=solar_pct),
+                estimated_savings=_t("tip_ev_grid_savings", "5-15 {currency}/month", currency=currency),
                 priority=2,
                 created=datetime.now(),
             ))
@@ -184,11 +188,11 @@ class EnergyAssistant:
         if forecast_remaining_kwh > daily_ev_kwh * 2:
             self._tips.append(EnergyTip(
                 category="ev",
-                title="Good solar day ahead",
-                description=(
-                    f"Solar forecast shows {forecast_remaining_kwh:.1f} kWh remaining today. "
-                    f"Solar charging should cover your EV needs — consider deferring grid charging."
-                ),
+                title=_t("tip_ev_good_solar_title", "Good solar day ahead"),
+                description=_t("tip_ev_good_solar_desc",
+                    "Solar forecast shows {remaining:.1f} kWh remaining today. "
+                    "Solar charging should cover your EV needs — consider deferring grid charging.",
+                    remaining=forecast_remaining_kwh),
                 priority=4,
                 created=datetime.now(),
             ))
@@ -206,15 +210,19 @@ class EnergyAssistant:
 
         export_pct = (daily_export_kwh / daily_solar_kwh * 100)
 
+        from ..utils.translate import get_text
+        _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
+        currency = self.hass.config.currency or "EUR"
+
         if export_pct > 50 and not has_hot_water:
             self._tips.append(EnergyTip(
                 category="surplus",
-                title="High solar export",
-                description=(
-                    f"{export_pct:.0f}% of solar is exported. "
-                    f"Adding a hot water diverter would capture ~{daily_export_kwh * 0.4:.1f} kWh/day."
-                ),
-                estimated_savings="10-20 CHF/month",
+                title=_t("tip_high_export_title", "High solar export"),
+                description=_t("tip_high_export_desc",
+                    "{export_pct:.0f}% of solar is exported. "
+                    "Adding a hot water diverter would capture ~{capture:.1f} kWh/day.",
+                    export_pct=export_pct, capture=daily_export_kwh * 0.4),
+                estimated_savings=_t("tip_high_export_savings", "10-20 {currency}/month", currency=currency),
                 priority=3,
                 created=datetime.now(),
             ))
@@ -222,11 +230,11 @@ class EnergyAssistant:
         if export_pct > 60 and not has_heat_pump:
             self._tips.append(EnergyTip(
                 category="surplus",
-                title="Consider heat pump solar boost",
-                description=(
-                    f"With {export_pct:.0f}% export rate, an SG-Ready heat pump "
-                    f"could use solar surplus for water/space heating."
-                ),
+                title=_t("tip_heat_pump_title", "Consider heat pump solar boost"),
+                description=_t("tip_heat_pump_desc",
+                    "With {export_pct:.0f}% export rate, an SG-Ready heat pump "
+                    "could use solar surplus for water/space heating.",
+                    export_pct=export_pct),
                 priority=5,
                 created=datetime.now(),
             ))
@@ -238,25 +246,28 @@ class EnergyAssistant:
         daily_solar_kwh: float,
     ) -> None:
         """Analyze self-consumption rate."""
+        from ..utils.translate import get_text
+        _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
+
         if self_consumption_rate > 80:
             self._tips.append(EnergyTip(
                 category="general",
-                title="Excellent self-consumption",
-                description=(
-                    f"Self-consumption at {self_consumption_rate:.0f}% — well optimized. "
-                    f"Your system is efficiently using solar production."
-                ),
+                title=_t("tip_excellent_self_title", "Excellent self-consumption"),
+                description=_t("tip_excellent_self_desc",
+                    "Self-consumption at {rate:.0f}% — well optimized. "
+                    "Your system is efficiently using solar production.",
+                    rate=self_consumption_rate),
                 priority=8,
                 created=datetime.now(),
             ))
         elif self_consumption_rate < 40 and daily_solar_kwh > 5:
             self._tips.append(EnergyTip(
                 category="general",
-                title="Low self-consumption",
-                description=(
-                    f"Self-consumption at {self_consumption_rate:.0f}%. "
-                    f"Consider shifting loads to midday or adding battery storage."
-                ),
+                title=_t("tip_low_self_title", "Low self-consumption"),
+                description=_t("tip_low_self_desc",
+                    "Self-consumption at {rate:.0f}%. "
+                    "Consider shifting loads to midday or adding battery storage.",
+                    rate=self_consumption_rate),
                 priority=2,
                 created=datetime.now(),
             ))
@@ -268,25 +279,28 @@ class EnergyAssistant:
         if not price_level:
             return
 
+        from ..utils.translate import get_text
+        _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
+
         if price_level in ("cheap", "very_cheap", "negative"):
             self._tips.append(EnergyTip(
                 category="price",
-                title="Cheap electricity now",
-                description=(
-                    f"Electricity price is currently {price_level}. "
-                    f"Good time to charge EV or run appliances from grid."
-                ),
+                title=_t("tip_cheap_price_title", "Cheap electricity now"),
+                description=_t("tip_cheap_price_desc",
+                    "Electricity price is currently {level}. "
+                    "Good time to charge EV or run appliances from grid.",
+                    level=price_level),
                 priority=3,
                 created=datetime.now(),
             ))
         elif price_level in ("expensive", "very_expensive"):
             self._tips.append(EnergyTip(
                 category="price",
-                title="Expensive electricity",
-                description=(
-                    f"Electricity price is {price_level}. "
-                    f"Minimize grid import — use battery and defer non-essential loads."
-                ),
+                title=_t("tip_expensive_price_title", "Expensive electricity"),
+                description=_t("tip_expensive_price_desc",
+                    "Electricity price is {level}. "
+                    "Minimize grid import — use battery and defer non-essential loads.",
+                    level=price_level),
                 priority=2,
                 created=datetime.now(),
             ))
@@ -301,15 +315,18 @@ class EnergyAssistant:
         if charge_kwh <= 0 and discharge_kwh <= 0:
             return
 
+        from ..utils.translate import get_text
+        _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
+
         if discharge_kwh > 0 and grid_import_kwh > discharge_kwh * 2:
             self._tips.append(EnergyTip(
                 category="general",
-                title="Battery could offset more grid import",
-                description=(
-                    f"Battery discharged {discharge_kwh:.1f} kWh but grid import was "
-                    f"{grid_import_kwh:.1f} kWh. Consider adjusting battery strategy "
-                    f"to cover peak consumption hours."
-                ),
+                title=_t("tip_battery_offset_title", "Battery could offset more grid import"),
+                description=_t("tip_battery_offset_desc",
+                    "Battery discharged {discharge:.1f} kWh but grid import was "
+                    "{import_kwh:.1f} kWh. Consider adjusting battery strategy "
+                    "to cover peak consumption hours.",
+                    discharge=discharge_kwh, import_kwh=grid_import_kwh),
                 priority=4,
                 created=datetime.now(),
             ))
@@ -327,16 +344,19 @@ class EnergyAssistant:
         now = datetime.now()
         hour = now.hour
 
+        from ..utils.translate import get_text
+        _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
+
         # Best time to run appliances
         if best_surplus_window and forecast_remaining_kwh > 3:
             self._tips.append(EnergyTip(
                 category="forecast",
-                title="Best window for large appliances",
-                description=(
-                    f"Run dishwasher, washing machine, or dryer during "
-                    f"{best_surplus_window} — expected {forecast_remaining_kwh:.1f} kWh "
-                    f"solar surplus remaining today."
-                ),
+                title=_t("tip_best_window_title", "Best window for large appliances"),
+                description=_t("tip_best_window_desc",
+                    "Run dishwasher, washing machine, or dryer during "
+                    "{window} — expected {remaining:.1f} kWh "
+                    "solar surplus remaining today.",
+                    window=best_surplus_window, remaining=forecast_remaining_kwh),
                 priority=2,
                 created=now,
             ))
@@ -345,11 +365,11 @@ class EnergyAssistant:
         if battery_soc >= 85 and forecast_remaining_kwh > 2 and hour < 15:
             self._tips.append(EnergyTip(
                 category="forecast",
-                title="Battery nearly full — use surplus now",
-                description=(
-                    f"Battery at {battery_soc:.0f}% with {forecast_remaining_kwh:.1f} kWh "
-                    f"solar still expected. Start large appliances to avoid export."
-                ),
+                title=_t("tip_battery_full_title", "Battery nearly full — use surplus now"),
+                description=_t("tip_battery_full_desc",
+                    "Battery at {soc:.0f}% with {remaining:.1f} kWh "
+                    "solar still expected. Start large appliances to avoid export.",
+                    soc=battery_soc, remaining=forecast_remaining_kwh),
                 priority=2,
                 created=now,
             ))
@@ -359,12 +379,12 @@ class EnergyAssistant:
                 and hour < 16 and daily_solar_kwh > 5):
             self._tips.append(EnergyTip(
                 category="forecast",
-                title="Low solar tomorrow — use surplus today",
-                description=(
-                    f"Tomorrow's forecast is only {forecast_tomorrow_kwh:.1f} kWh. "
-                    f"Consider running appliances today while "
-                    f"{forecast_remaining_kwh:.1f} kWh surplus is still available."
-                ),
+                title=_t("tip_low_tomorrow_title", "Low solar tomorrow — use surplus today"),
+                description=_t("tip_low_tomorrow_desc",
+                    "Tomorrow's forecast is only {tomorrow:.1f} kWh. "
+                    "Consider running appliances today while "
+                    "{remaining:.1f} kWh surplus is still available.",
+                    tomorrow=forecast_tomorrow_kwh, remaining=forecast_remaining_kwh),
                 priority=3,
                 created=now,
             ))
@@ -374,11 +394,11 @@ class EnergyAssistant:
                 and hour >= 14):
             self._tips.append(EnergyTip(
                 category="forecast",
-                title="Strong solar tomorrow — defer loads",
-                description=(
-                    f"Tomorrow's forecast is {forecast_tomorrow_kwh:.1f} kWh. "
-                    f"Consider deferring large appliances to tomorrow for free solar."
-                ),
+                title=_t("tip_strong_tomorrow_title", "Strong solar tomorrow — defer loads"),
+                description=_t("tip_strong_tomorrow_desc",
+                    "Tomorrow's forecast is {tomorrow:.1f} kWh. "
+                    "Consider deferring large appliances to tomorrow for free solar.",
+                    tomorrow=forecast_tomorrow_kwh),
                 priority=4,
                 created=now,
             ))
@@ -388,11 +408,11 @@ class EnergyAssistant:
                 and forecast_tomorrow_kwh > 0):
             self._tips.append(EnergyTip(
                 category="forecast",
-                title="Weak solar tomorrow — charge EV tonight",
-                description=(
-                    f"Tomorrow: only {forecast_tomorrow_kwh:.1f} kWh expected. "
-                    f"Night charging recommended to ensure the EV is ready."
-                ),
+                title=_t("tip_weak_tomorrow_ev_title", "Weak solar tomorrow — charge EV tonight"),
+                description=_t("tip_weak_tomorrow_ev_desc",
+                    "Tomorrow: only {tomorrow:.1f} kWh expected. "
+                    "Night charging recommended to ensure the EV is ready.",
+                    tomorrow=forecast_tomorrow_kwh),
                 priority=3,
                 created=now,
             ))

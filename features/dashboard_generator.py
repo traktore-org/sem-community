@@ -76,7 +76,7 @@ class DashboardGenerator:
         # Jinja-templated secondaries still pass through unchanged (the match
         # is exact, and templates never match a plain English translation key).
         translatable_fields = (
-            "title", "subtitle", "primary", "secondary", "name", "label",
+            "title", "subtitle", "primary", "secondary", "name", "label", "content",
         )
 
         def _walk(obj):
@@ -88,15 +88,23 @@ class DashboardGenerator:
                             # Exact match — plain text field
                             obj[field] = reverse_map[text]
                         elif "{%" in text or "{{" in text:
-                            # Jinja template — replace English fragments inline (#87)
-                            # Process longer phrases first to prevent partial matches
-                            # (e.g. "Set investment cost on Control tab" before "Control")
-                            for en_text, translated in sorted(
+                            # Jinja template — replace English fragments ONLY
+                            # outside Jinja blocks ({% ... %} and {{ ... }}).
+                            # This prevents translating Jinja variable names
+                            # (e.g. "nights" in "{% set nights = ... %}").
+                            import re
+                            sorted_pairs = sorted(
                                 reverse_map.items(), key=lambda x: len(x[0]), reverse=True
-                            ):
-                                if en_text in text:
-                                    text = text.replace(en_text, translated)
-                            obj[field] = text
+                            )
+                            # Split into Jinja blocks and literal text
+                            parts = re.split(r'(\{\{.*?\}\}|\{%.*?%\})', text, flags=re.DOTALL)
+                            for i in range(0, len(parts), 2):
+                                # Only translate literal text (even indices)
+                                for en_text, translated in sorted_pairs:
+                                    if en_text in parts[i]:
+                                        pattern = r'(?<![a-zA-Z0-9_./])' + re.escape(en_text) + r'(?![a-zA-Z0-9_])'
+                                        parts[i] = re.sub(pattern, translated, parts[i])
+                            obj[field] = ''.join(parts)
                 for v in obj.values():
                     _walk(v)
             elif isinstance(obj, list):

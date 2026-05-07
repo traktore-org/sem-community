@@ -150,6 +150,11 @@ class SEMChartCard extends HTMLElement {
         this._boundPeriodHandler = (e) => this._onPeriodChange(e.detail);
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     setConfig(config) {
         if (!config.preset && !config.series) {
             throw new Error('sem-chart-card requires either preset or series config');
@@ -170,8 +175,12 @@ class SEMChartCard extends HTMLElement {
 
     set hass(hass) {
         this._hass = hass;
+        const hasLocalize = typeof semLocalize === 'function';
         if (!this.shadowRoot.querySelector('.sem-chart-wrap')) {
             this._renderSkeleton();
+        } else if (hasLocalize && !this._localizeReady) {
+            this._localizeReady = true;
+            this._renderSkeleton();  // Re-render with translations
         }
         // If no period received yet, use a sensible default
         if (!this._period) {
@@ -221,7 +230,7 @@ class SEMChartCard extends HTMLElement {
         }
         return defs.map(d => ({
             entity: `${this._prefix}${d.suffix}`,
-            name: d.name,
+            name: this._t(d.name),
             color: d.color,
             type: d.type,
             y_axis: d.y_axis || 0,
@@ -450,7 +459,7 @@ class SEMChartCard extends HTMLElement {
     /* ── Skeleton HTML ── */
     _renderSkeleton() {
         const preset = this._preset || {};
-        const title = this.config.title || preset.title || 'SEM Chart';
+        const title = this.config.title || this._t(preset.title || 'SEM Chart');
         const T = (typeof semTheme === 'function') ? semTheme() : {};
         this._theme = T;
         const textCol    = T.text        || '#e0e0e0';

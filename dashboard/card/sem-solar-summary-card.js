@@ -22,13 +22,24 @@ class SEMSolarSummaryCard extends HTMLElement {
         this._prefix = config.entity_prefix || 'sensor.sem_';
     }
 
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
     set hass(hass) {
         this._hass = hass;
-        // Skip update if key sensors haven't changed
+        const hasLocalize = typeof semLocalize === 'function';
+        const lang = hass?.language;
         const key = ['solar_power', 'daily_solar_energy', 'self_consumption_rate', 'autarky_rate', 'daily_costs']
-            .map(s => this._hass?.states[`${this._prefix}${s}`]?.state || '').join(',');
+            .map(s => this._hass?.states[`${this._prefix}${s}`]?.state || '').join(',')
+            + '|' + hasLocalize + '|' + lang;
         if (key === this._lastKey) return;
         this._lastKey = key;
+        if (hasLocalize && !this._localizeReady) {
+            this._localizeReady = true;
+            this._rendered = false;
+        }
         this._update();
     }
 
@@ -295,21 +306,21 @@ class SEMSolarSummaryCard extends HTMLElement {
                             </div>
                         </div>
                         <div class="hero-stats">
-                            <div class="hero-title">Production</div>
+                            <div class="hero-title">${this._t('Production')}</div>
                             <div class="hero-row">
-                                <span class="hero-label">Yield today</span>
+                                <span class="hero-label">${this._t('Yield today')}</span>
                                 <span class="hero-value c-solar daily-solar">—</span>
                             </div>
                             <div class="hero-row">
-                                <span class="hero-label">Grid today</span>
+                                <span class="hero-label">${this._t('Grid today')}</span>
                                 <span class="hero-value c-grid grid-today">—</span>
                             </div>
                             <div class="hero-row">
-                                <span class="hero-label">Forecast</span>
+                                <span class="hero-label">${this._t('forecast')}</span>
                                 <span class="hero-value c-solar forecast-today">—</span>
                             </div>
                             <div class="hero-row">
-                                <span class="hero-label">Tomorrow</span>
+                                <span class="hero-label">${this._t('tomorrow')}</span>
                                 <span class="hero-value forecast-tomorrow" style="color:var(--secondary-text-color)">—</span>
                             </div>
                         </div>
@@ -317,27 +328,27 @@ class SEMSolarSummaryCard extends HTMLElement {
 
                     <div class="metrics">
                         <div class="metric">
-                            <div class="metric-label">Self-use</div>
+                            <div class="metric-label">${this._t('Self-use')}</div>
                             <div class="metric-value c-home self-use">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">Autarky</div>
+                            <div class="metric-label">${this._t('Autarky')}</div>
                             <div class="metric-value c-savings autarky">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">EV Today</div>
+                            <div class="metric-label">${this._t('EV Today')}</div>
                             <div class="metric-value c-ev daily-ev">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">Cost</div>
+                            <div class="metric-label">${this._t('Cost')}</div>
                             <div class="metric-value c-cost daily-cost">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">Saved</div>
+                            <div class="metric-label">${this._t('Saved')}</div>
                             <div class="metric-value c-savings daily-savings">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">Monthly</div>
+                            <div class="metric-label">${this._t('Monthly')}</div>
                             <div class="metric-value c-solar monthly-solar">—</div>
                         </div>
                     </div>

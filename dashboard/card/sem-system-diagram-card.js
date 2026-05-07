@@ -190,7 +190,7 @@ class SEMSystemDiagramCard extends HTMLElement {
         const statusEl = this.shadowRoot.getElementById('entity-status');
         if (statusEl) {
             if (unavailable.length > 0) {
-                statusEl.textContent = `⚠ ${unavailable.length} sensor${unavailable.length > 1 ? 's' : ''} unavailable`;
+                statusEl.textContent = `⚠ ${unavailable.length} ${this._t('sensor_unavailable')}`;
                 statusEl.style.display = 'block';
             } else {
                 statusEl.style.display = 'none';
