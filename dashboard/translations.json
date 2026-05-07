@@ -487,7 +487,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "de": {
         "charging": "Laden",
@@ -977,7 +979,9 @@
         "Refresh Cards": "Karten aktualisieren",
         "Sync Priorities": "Prioritäten synchronisieren",
         "no_devices_yet": "Noch keine steuerbaren Geräte erkannt.",
-        "devices_auto_discovered": "Geräte werden automatisch vom HA Energie-Dashboard erkannt.<br>Einstellungen → Dashboards → Energie → Einzelne Geräte"
+        "devices_auto_discovered": "Geräte werden automatisch vom HA Energie-Dashboard erkannt.<br>Einstellungen → Dashboards → Energie → Einzelne Geräte",
+        "taper": "Taper",
+        "chargers_configured": "Ladegeräte konfiguriert"
     },
     "fr": {
         "charging": "En charge",
@@ -1467,7 +1471,9 @@
         "Refresh Cards": "Rafraîchir les cartes",
         "Sync Priorities": "Synchroniser priorités",
         "no_devices_yet": "Aucun appareil contrôlable découvert.",
-        "devices_auto_discovered": "Les appareils sont auto-découverts depuis le tableau de bord énergie HA.<br>Paramètres → Tableaux de bord → Énergie → Appareils individuels"
+        "devices_auto_discovered": "Les appareils sont auto-découverts depuis le tableau de bord énergie HA.<br>Paramètres → Tableaux de bord → Énergie → Appareils individuels",
+        "taper": "Taper",
+        "chargers_configured": "chargeurs configurés"
     },
     "es": {
         "charging": "Cargando",
@@ -1957,7 +1963,9 @@
         "Refresh Cards": "Actualizar tarjetas",
         "Sync Priorities": "Sincronizar prioridades",
         "no_devices_yet": "No se han descubierto dispositivos controlables.",
-        "devices_auto_discovered": "Los dispositivos se descubren automáticamente del panel de energía HA.<br>Ajustes → Paneles → Energía → Dispositivos individuales"
+        "devices_auto_discovered": "Los dispositivos se descubren automáticamente del panel de energía HA.<br>Ajustes → Paneles → Energía → Dispositivos individuales",
+        "taper": "Taper",
+        "chargers_configured": "cargadores configurados"
     },
     "it": {
         "charging": "In carica",
@@ -2447,7 +2455,9 @@
         "Refresh Cards": "Aggiorna schede",
         "Sync Priorities": "Sincronizza priorità",
         "no_devices_yet": "Nessun dispositivo controllabile scoperto.",
-        "devices_auto_discovered": "I dispositivi vengono scoperti automaticamente dalla dashboard energia HA.<br>Impostazioni → Dashboard → Energia → Dispositivi individuali"
+        "devices_auto_discovered": "I dispositivi vengono scoperti automaticamente dalla dashboard energia HA.<br>Impostazioni → Dashboard → Energia → Dispositivi individuali",
+        "taper": "Taper",
+        "chargers_configured": "caricatori configurati"
     },
     "nl": {
         "charging": "Laden",
@@ -2937,7 +2947,9 @@
         "Refresh Cards": "Kaarten vernieuwen",
         "Sync Priorities": "Prioriteiten synchroniseren",
         "no_devices_yet": "Nog geen bestuurbare apparaten ontdekt.",
-        "devices_auto_discovered": "Apparaten worden automatisch ontdekt vanuit het HA Energie Dashboard.<br>Instellingen → Dashboards → Energie → Individuele apparaten"
+        "devices_auto_discovered": "Apparaten worden automatisch ontdekt vanuit het HA Energie Dashboard.<br>Instellingen → Dashboards → Energie → Individuele apparaten",
+        "taper": "Taper",
+        "chargers_configured": "laders geconfigureerd"
     },
     "cs": {
         "charging": "Nabíjení",
@@ -3427,7 +3439,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "da": {
         "charging": "Oplader",
@@ -3917,7 +3931,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "fi": {
         "charging": "Lataus",
@@ -4407,7 +4423,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "hu": {
         "charging": "Töltés",
@@ -4897,7 +4915,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "no": {
         "charging": "Lader",
@@ -5387,7 +5407,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "pl": {
         "charging": "Ładowanie",
@@ -5877,7 +5899,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "pt": {
         "charging": "A carregar",
@@ -6367,7 +6391,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "ro": {
         "charging": "Încărcare",
@@ -6857,7 +6883,9 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     },
     "sv": {
         "charging": "Laddar",
@@ -7347,6 +7375,8 @@
         "Refresh Cards": "Refresh Cards",
         "Sync Priorities": "Sync Priorities",
         "no_devices_yet": "No controllable devices discovered yet.",
-        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices"
+        "devices_auto_discovered": "Devices are auto-discovered from the HA Energy Dashboard.<br>Settings → Dashboards → Energy → Individual devices",
+        "taper": "Taper",
+        "chargers_configured": "chargers configured"
     }
 }
