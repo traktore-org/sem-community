@@ -1297,15 +1297,6 @@ views:
                   title: Charger Status
                   subtitle: >-
                     {{ states('sensor.sem_ev_charger_count') }} chargers configured
-                - type: horizontal-stack
-                  cards: >-
-                    {% set ns = namespace(cards=[]) %}
-                    {% for eid in states.sensor | selectattr('entity_id', 'match', 'sensor.sem_charger_.*_power') | map(attribute='entity_id') | list %}
-                    {% set base = eid | replace('_power', '') %}
-                    {% set name = state_attr(eid, 'friendly_name') | replace(' Power', '') | replace('SEM ', '') %}
-                    {% set ns.cards = ns.cards + [{'type': 'custom:mushroom-entity-card', 'entity': eid, 'name': name, 'icon': 'mdi:ev-station', 'icon_color': 'green' if states(eid)|float(0) > 100 else 'grey', 'card_mod': {'style': 'ha-card { backdrop-filter: blur(16px) saturate(160%); background: var(--card-background-color) !important; }'}}] %}
-                    {% endfor %}
-                    {{ ns.cards | to_json }}
                 - type: markdown
                   content: >-
                     | Charger | Power | Session | Solar | Taper |

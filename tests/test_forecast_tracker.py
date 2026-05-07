@@ -20,13 +20,15 @@ def tracker():
     return ForecastTracker()
 
 
-def _freeze_dt(year=2026, month=4, day=18, hour=12):
+def _freeze_dt(year=2026, month=4, day=18, hour=12, minute=0):
     """Return a mock for dt_util.now."""
-    dt = datetime(year, month, day, hour, 0, 0)
+    dt = datetime(year, month, day, hour, minute, 0)
     mock = MagicMock()
     mock.strftime = dt.strftime
     mock.month = dt.month
     mock.year = dt.year
+    mock.hour = dt.hour
+    mock.minute = dt.minute
     return mock
 
 

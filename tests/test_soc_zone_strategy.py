@@ -101,6 +101,11 @@ def _build_coordinator(config_overrides=None, current_state=ChargingState.SOLAR_
     coord._flow_calculator = MagicMock()
     coord._flow_calculator.calculate_ev_budget = MagicMock(return_value=2000)
 
+    # forecast tracker (dampening defaults to 1.0)
+    coord._forecast_tracker = MagicMock()
+    coord._forecast_tracker.dampening_factor = 1.0
+    coord._forecast_tracker.apply_dampening = MagicMock(side_effect=lambda x: x)
+
     return coord
 
 
@@ -423,8 +428,7 @@ class TestAutoMode:
         coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
         forecast = _MockForecast(available=True, remaining=25.0)
         coord._cycle_forecast = forecast
-        coord._forecast_tracker = MagicMock()
-        coord._forecast_tracker.apply_correction = MagicMock(return_value=25.0)
+        coord._forecast_tracker.apply_dampening = MagicMock(return_value=25.0)
 
         strategy, reason = coord._determine_charging_strategy(
             _make_power(solar=8000, home=500, battery_soc=50), _MockEnergy(daily_ev=2)
@@ -437,8 +441,7 @@ class TestAutoMode:
         coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
         forecast = _MockForecast(available=True, remaining=5.0)
         coord._cycle_forecast = forecast
-        coord._forecast_tracker = MagicMock()
-        coord._forecast_tracker.apply_correction = MagicMock(return_value=5.0)
+        coord._forecast_tracker.apply_dampening = MagicMock(return_value=5.0)
 
         result = coord._auto_mode_strategy(
             _make_power(solar=5000, battery_soc=50), _MockEnergy(daily_ev=0), 10
