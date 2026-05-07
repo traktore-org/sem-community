@@ -89,13 +89,17 @@ class DashboardGenerator:
                             obj[field] = reverse_map[text]
                         elif "{%" in text or "{{" in text:
                             # Jinja template — replace English fragments inline (#87)
-                            # Process longer phrases first to prevent partial matches
-                            # (e.g. "Set investment cost on Control tab" before "Control")
+                            # Use word-boundary matching to avoid breaking entity IDs
+                            # (e.g. "solar" in "sensor.sem_daily_solar_energy" must NOT be replaced)
+                            import re
                             for en_text, translated in sorted(
                                 reverse_map.items(), key=lambda x: len(x[0]), reverse=True
                             ):
                                 if en_text in text:
-                                    text = text.replace(en_text, translated)
+                                    # Only replace if surrounded by word boundaries
+                                    # (not inside entity_ids, Jinja vars, or other identifiers)
+                                    pattern = r'(?<![a-zA-Z0-9_./])' + re.escape(en_text) + r'(?![a-zA-Z0-9_])'
+                                    text = re.sub(pattern, translated, text)
                             obj[field] = text
                 for v in obj.values():
                     _walk(v)
