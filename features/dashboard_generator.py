@@ -88,19 +88,23 @@ class DashboardGenerator:
                             # Exact match — plain text field
                             obj[field] = reverse_map[text]
                         elif "{%" in text or "{{" in text:
-                            # Jinja template — replace English fragments inline (#87)
-                            # Use word-boundary matching to avoid breaking entity IDs
-                            # (e.g. "solar" in "sensor.sem_daily_solar_energy" must NOT be replaced)
+                            # Jinja template — replace English fragments ONLY
+                            # outside Jinja blocks ({% ... %} and {{ ... }}).
+                            # This prevents translating Jinja variable names
+                            # (e.g. "nights" in "{% set nights = ... %}").
                             import re
-                            for en_text, translated in sorted(
+                            sorted_pairs = sorted(
                                 reverse_map.items(), key=lambda x: len(x[0]), reverse=True
-                            ):
-                                if en_text in text:
-                                    # Only replace if surrounded by word boundaries
-                                    # (not inside entity_ids, Jinja vars, or other identifiers)
-                                    pattern = r'(?<![a-zA-Z0-9_./])' + re.escape(en_text) + r'(?![a-zA-Z0-9_])'
-                                    text = re.sub(pattern, translated, text)
-                            obj[field] = text
+                            )
+                            # Split into Jinja blocks and literal text
+                            parts = re.split(r'(\{\{.*?\}\}|\{%.*?%\})', text, flags=re.DOTALL)
+                            for i in range(0, len(parts), 2):
+                                # Only translate literal text (even indices)
+                                for en_text, translated in sorted_pairs:
+                                    if en_text in parts[i]:
+                                        pattern = r'(?<![a-zA-Z0-9_./])' + re.escape(en_text) + r'(?![a-zA-Z0-9_])'
+                                        parts[i] = re.sub(pattern, translated, parts[i])
+                            obj[field] = ''.join(parts)
                 for v in obj.values():
                     _walk(v)
             elif isinstance(obj, list):

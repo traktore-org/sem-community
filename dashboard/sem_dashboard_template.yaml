@@ -779,10 +779,10 @@ views:
                 primary: Tomorrow
                 secondary: >-
                   {{ states('sensor.sem_forecast_tomorrow_kwh') | float(0) | round(1) }} kWh
-                  {% set today = states('sensor.sem_forecast_today_kwh') | float(0) %}
-                  {% set tomorrow = states('sensor.sem_forecast_tomorrow_kwh') | float(0) %}
-                  {% if today > 0 %}
-                  · {% if tomorrow > today %}+{% endif %}{{ ((tomorrow - today) / today * 100) | round(0) }}% vs today
+                  {% set td_kwh = states('sensor.sem_forecast_today_kwh') | float(0) %}
+                  {% set tm_kwh = states('sensor.sem_forecast_tomorrow_kwh') | float(0) %}
+                  {% if td_kwh > 0 %}
+                  · {% if tm_kwh > td_kwh %}+{% endif %}{{ ((tm_kwh - td_kwh) / td_kwh * 100) | round(0) }}% vs today
                   {% endif %}
                 icon: >-
                   {% set t = states('sensor.sem_forecast_tomorrow_kwh') | float(0) %}
@@ -1175,9 +1175,9 @@ views:
               style: *lumina_title
             title: EV Intelligence
             subtitle: >-
-              {% set soc = states('sensor.sem_ev_estimated_soc') | float(0) %}
-              {% set nights = states('sensor.sem_ev_nights_until_charge') | int(0) %}
-              {% if soc > 0 %}SOC {{ soc | round(0) }}% · {{ nights }} night{{ 's' if nights != 1 }} range
+              {% set ev_soc = states('sensor.sem_ev_estimated_soc') | float(0) %}
+              {% set n = states('sensor.sem_ev_nights_until_charge') | int(0) %}
+              {% if ev_soc > 0 %}SOC {{ ev_soc | round(0) }}% · {{ n }} nights until charge
               {% else %}Waiting for first full charge detection{% endif %}
           - type: horizontal-stack
             cards:
@@ -1216,7 +1216,7 @@ views:
             cards:
               - type: custom:mushroom-entity-card
                 entity: sensor.sem_ev_nights_until_charge
-                name: Nights Range
+                name: Nights Until Charge
                 icon: mdi:calendar-range
                 icon_color: cyan
                 card_mod:

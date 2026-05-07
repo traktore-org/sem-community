@@ -13,6 +13,8 @@ class SEMPeriodSelectorCard extends HTMLElement {
         this.attachShadow({ mode: 'open' });
         this._active = 'week'; // default
         this._btnCleanup = [];
+        this._lang = null;
+        this._localizeReady = false;
     }
 
     connectedCallback() {
@@ -34,10 +36,20 @@ class SEMPeriodSelectorCard extends HTMLElement {
 
     set hass(hass) {
         this._hass = hass;
-        if (!this.shadowRoot.querySelector('.sem-period')) {
+        const lang = hass?.language;
+        const hasLocalize = typeof semLocalize === 'function';
+        const isFirstRender = !this.shadowRoot.querySelector('.sem-period');
+        const needsRender = isFirstRender
+            || lang !== this._lang
+            || (hasLocalize && !this._localizeReady);
+
+        if (needsRender) {
+            this._lang = lang;
+            this._localizeReady = hasLocalize;
             this._render();
-            // Fire initial period on first render
-            this._dispatchPeriod(this._active);
+            if (isFirstRender) {
+                this._dispatchPeriod(this._active);
+            }
         }
     }
 

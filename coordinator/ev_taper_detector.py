@@ -461,7 +461,7 @@ class EVTaperDetector:
         # Already above target
         if soc > target_soc:
             nights = max(0, int((soc - min_soc) / predicted_soc_drop)) if predicted_soc_drop > 0 else 99
-            return (nights, False, f"SOC {soc:.0f}% above target {target_soc}%")
+            return (nights, False, f"SOC {soc:.0f}%, {nights} nights range")
 
         # Enough range with safety margin
         if soc - predicted_soc_drop * safety > min_soc:
