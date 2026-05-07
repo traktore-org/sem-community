@@ -301,7 +301,9 @@
         "tip_strong_tomorrow_title": "Strong solar tomorrow — defer loads",
         "tip_strong_tomorrow_desc": "Tomorrow's forecast is {tomorrow:.1f} kWh. Consider deferring large appliances to tomorrow for free solar.",
         "tip_weak_tomorrow_ev_title": "Weak solar tomorrow — charge EV tonight",
-        "tip_weak_tomorrow_ev_desc": "Tomorrow: only {tomorrow:.1f} kWh expected. Night charging recommended to ensure the EV is ready."
+        "tip_weak_tomorrow_ev_desc": "Tomorrow: only {tomorrow:.1f} kWh expected. Night charging recommended to ensure the EV is ready.",
+        "overview": "Overview",
+        "overview_sub": "Overall overview"
     },
     "de": {
         "charging": "Laden",
@@ -605,7 +607,9 @@
         "tip_strong_tomorrow_title": "Viel Sonne morgen — Lasten verschieben",
         "tip_strong_tomorrow_desc": "Morgen {tomorrow:.1f} kWh Prognose. Großverbraucher auf morgen verschieben für kostenlosen Solar.",
         "tip_weak_tomorrow_ev_title": "Wenig Sonne morgen — EV heute Nacht laden",
-        "tip_weak_tomorrow_ev_desc": "Morgen nur {tomorrow:.1f} kWh erwartet. Nachtladung empfohlen."
+        "tip_weak_tomorrow_ev_desc": "Morgen nur {tomorrow:.1f} kWh erwartet. Nachtladung empfohlen.",
+        "overview": "Übersicht",
+        "overview_sub": "Gesamtübersicht"
     },
     "fr": {
         "charging": "En charge",
@@ -909,7 +913,9 @@
         "tip_strong_tomorrow_title": "Bon soleil demain — reportez les charges",
         "tip_strong_tomorrow_desc": "Demain {tomorrow:.1f} kWh. Reportez les gros appareils à demain.",
         "tip_weak_tomorrow_ev_title": "Peu de soleil demain — chargez le VE ce soir",
-        "tip_weak_tomorrow_ev_desc": "Demain seulement {tomorrow:.1f} kWh. Charge nocturne recommandée."
+        "tip_weak_tomorrow_ev_desc": "Demain seulement {tomorrow:.1f} kWh. Charge nocturne recommandée.",
+        "overview": "Vue d'ensemble",
+        "overview_sub": "Vue d'ensemble totale"
     },
     "es": {
         "charging": "Cargando",
@@ -1213,7 +1219,9 @@
         "tip_strong_tomorrow_title": "Buen sol mañana — aplace cargas",
         "tip_strong_tomorrow_desc": "Mañana {tomorrow:.1f} kWh. Aplace electrodomésticos grandes.",
         "tip_weak_tomorrow_ev_title": "Poco sol mañana — cargue VE esta noche",
-        "tip_weak_tomorrow_ev_desc": "Mañana solo {tomorrow:.1f} kWh. Carga nocturna recomendada."
+        "tip_weak_tomorrow_ev_desc": "Mañana solo {tomorrow:.1f} kWh. Carga nocturna recomendada.",
+        "overview": "Resumen",
+        "overview_sub": "Resumen general"
     },
     "it": {
         "charging": "In carica",
@@ -1517,7 +1525,9 @@
         "tip_strong_tomorrow_title": "Molto sole domani — rimanda i carichi",
         "tip_strong_tomorrow_desc": "Domani {tomorrow:.1f} kWh. Rimanda i grandi apparecchi a domani.",
         "tip_weak_tomorrow_ev_title": "Poco sole domani — carica VE stasera",
-        "tip_weak_tomorrow_ev_desc": "Domani solo {tomorrow:.1f} kWh. Ricarica notturna consigliata."
+        "tip_weak_tomorrow_ev_desc": "Domani solo {tomorrow:.1f} kWh. Ricarica notturna consigliata.",
+        "overview": "Panoramica",
+        "overview_sub": "Panoramica generale"
     },
     "nl": {
         "charging": "Laden",
@@ -1821,7 +1831,9 @@
         "tip_strong_tomorrow_title": "Veel zon morgen — stel belasting uit",
         "tip_strong_tomorrow_desc": "Morgen {tomorrow:.1f} kWh verwacht. Stel grote apparaten uit naar morgen.",
         "tip_weak_tomorrow_ev_title": "Weinig zon morgen — laad EV vanavond",
-        "tip_weak_tomorrow_ev_desc": "Morgen slechts {tomorrow:.1f} kWh verwacht. Nachtladen aanbevolen."
+        "tip_weak_tomorrow_ev_desc": "Morgen slechts {tomorrow:.1f} kWh verwacht. Nachtladen aanbevolen.",
+        "overview": "Overzicht",
+        "overview_sub": "Totaaloverzicht"
     },
     "cs": {
         "charging": "Nabíjení",
