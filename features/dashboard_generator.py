@@ -174,8 +174,8 @@ class DashboardGenerator:
         template = await self._load_comprehensive_dashboard_template()
 
         if template and "views" in template:
-            # Translate section titles to user's language (#60)
-            template = self._translate_dashboard(template)
+            # Translation is now runtime per-user via sem-dashboard-translator.js
+            # and sem-title-card.js — no server-side translation needed (#157)
             _LOGGER.info("Using comprehensive dashboard template with %d views", len(template["views"]))
 
             # Find and update views with dynamic content

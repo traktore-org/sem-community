@@ -43,6 +43,8 @@ views:
     cards:
       - type: vertical-stack
         cards:
+          # ── Runtime translator (invisible, translates all cards per user language) ──
+          - type: custom:sem-dashboard-translator
           # ── Lumina Tab Header ──
           - type: custom:sem-tab-header
             tab: home
