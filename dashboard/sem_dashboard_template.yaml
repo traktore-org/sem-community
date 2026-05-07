@@ -954,7 +954,7 @@ views:
               style: *glass_card
 
           # ── SOC Zone Settings ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             title: SOC Zone Configuration
             subtitle: >-
               Priority < {{ states('number.sem_battery_priority_soc') | float(0) | round(0) }}% ·
@@ -1170,7 +1170,7 @@ views:
               style: *glass_card
 
           # ── EV Intelligence (#106) ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: EV Intelligence
@@ -1294,7 +1294,7 @@ views:
                 style: *glass_card
 
           # ── Charging Controls ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Charging Settings
@@ -1337,7 +1337,7 @@ views:
                     style: *glass_card
 
           # ── Lifetime Stats ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Lifetime EV Statistics
@@ -1405,7 +1405,7 @@ views:
                   }
 
           # ── EV Charging ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: EV Charging
@@ -1478,7 +1478,7 @@ views:
                     style: *glass_card
 
           # ── Surplus Control ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Surplus Control
@@ -1512,7 +1512,7 @@ views:
               style: *glass_card
 
           # ── Battery Settings ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Battery Management
@@ -1544,7 +1544,7 @@ views:
                   style: *glass_card
 
           # ── Hot Water ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Hot Water
@@ -1576,7 +1576,7 @@ views:
               style: *glass_card
 
           # ── Solar & Power ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Solar & Power
@@ -1594,7 +1594,7 @@ views:
                   style: *glass_card
 
           # ── Tariff & Pricing ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Tariff & Pricing
@@ -1621,7 +1621,7 @@ views:
 
           # ── Load Priority (drag-and-drop device management) ──
           # ── Schedule Timeline ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Today's Schedule
@@ -1629,7 +1629,7 @@ views:
           - type: custom:sem-schedule-card
             entity_prefix: sensor.sem_
 
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Load Management
@@ -1639,7 +1639,7 @@ views:
             entity_prefix: sensor.sem_
 
           # ── Peak / Load Management ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Peak & Load Management
@@ -1676,7 +1676,7 @@ views:
                   style: *glass_card
 
           # ── System Mode ──
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: System
@@ -1706,7 +1706,7 @@ views:
           # ══════════════════════════════════════════════════════
           # 1. HEADER & KPI
           # ══════════════════════════════════════════════════════
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Cost Tracking
@@ -1717,7 +1717,7 @@ views:
             cards:
               - type: vertical-stack
                 cards:
-                  - type: custom:mushroom-title-card
+                  - type: custom:sem-title-card
                     card_mod:
                       style: *lumina_title
                     title: Today
@@ -1758,7 +1758,7 @@ views:
                       style: *glass_card
               - type: vertical-stack
                 cards:
-                  - type: custom:mushroom-title-card
+                  - type: custom:sem-title-card
                     card_mod:
                       style: *lumina_title
                     title: This Month
@@ -1801,7 +1801,7 @@ views:
           # ══════════════════════════════════════════════════════
           # 2. THIS YEAR
           # ══════════════════════════════════════════════════════
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: This Year
@@ -1888,7 +1888,7 @@ views:
           # ══════════════════════════════════════════════════════
           # 7. ROI — RETURN ON INVESTMENT
           # ══════════════════════════════════════════════════════
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Return on Investment
@@ -1982,7 +1982,7 @@ views:
 
           # 8. DEMAND CHARGE
           # ══════════════════════════════════════════════════════
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Demand Charge
@@ -2015,7 +2015,7 @@ views:
           # ══════════════════════════════════════════════════════
           # 8. TARIFF RATES
           # ══════════════════════════════════════════════════════
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: Tariff Rates
@@ -2158,7 +2158,7 @@ views:
           # ══════════════════════════════════════════════════════
           # 1. HEALTH OVERVIEW — traffic light + sensor status
           # ══════════════════════════════════════════════════════
-          - type: custom:mushroom-title-card
+          - type: custom:sem-title-card
             card_mod:
               style: *lumina_title
             title: System Health
