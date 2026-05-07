@@ -229,9 +229,10 @@ class NotificationManager:
         if not self._mobile_service_available:
             return
 
+        from ..utils.translate import get_text
         service_call: Dict[str, Any] = {
             "message": message,
-            "title": "Solar Energy Management",
+            "title": get_text(self.hass, "notif_title", "Solar Energy Management"),
         }
 
         # Add Android companion app data for mobile_app_* services
@@ -282,63 +283,69 @@ class NotificationManager:
         _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
 
         if state == ChargingState.SOLAR_CHARGING_ACTIVE:
-            messages["charger"] = f"Solar: {calculated_current}A"
+            messages["charger"] = _t("notif_charger_solar",
+                "Solar: {current}A", current=calculated_current)
             messages["mobile"] = _t("notif_solar_started",
                 "Solar charging started: {current}A ({power:.0f}W)",
                 current=calculated_current, power=available_power)
 
         elif state == ChargingState.SOLAR_SUPER_CHARGING:
-            messages["charger"] = f"Bat+Sol: {calculated_current}A"
+            messages["charger"] = _t("notif_charger_bat_solar",
+                "Bat+Sol: {current}A", current=calculated_current)
 
         elif state == ChargingState.SOLAR_PAUSE_LOW_BATTERY:
-            messages["charger"] = f"Pause: Bat {battery_soc}%"
+            messages["charger"] = _t("notif_charger_pause_bat",
+                "Pause: Bat {soc}%", soc=battery_soc)
 
         elif state == ChargingState.SOLAR_TARGET_REACHED:
-            messages["charger"] = "Target reached"
+            messages["charger"] = _t("notif_charger_target", "Target reached")
             messages["mobile"] = _t("notif_target_reached",
                 "Daily target reached: {charged:.1f}/{target}kWh",
                 charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.SOLAR_WAITING_BATTERY_PRIORITY:
-            messages["charger"] = f"Wait: Bat {battery_soc}%"
+            messages["charger"] = _t("notif_charger_wait_bat",
+                "Wait: Bat {soc}%", soc=battery_soc)
 
         elif state == ChargingState.SOLAR_MIN_PV:
-            messages["charger"] = f"Min+PV: {calculated_current}A"
+            messages["charger"] = _t("notif_charger_min_pv",
+                "Min+PV: {current}A", current=calculated_current)
 
         elif state == ChargingState.SOLAR_IDLE:
             if ev_session_energy > 0:
-                messages["charger"] = "Session done"
+                messages["charger"] = _t("notif_charger_session_done", "Session done")
                 messages["mobile"] = _t("notif_solar_stopped",
                     "Solar charging stopped: {energy:.1f}kWh charged",
                     energy=ev_session_energy)
 
         elif state == ChargingState.NIGHT_CHARGING_ACTIVE:
-            messages["charger"] = f"Night: {remaining_needed:.0f}kWh"
+            messages["charger"] = _t("notif_charger_night",
+                "Night: {remaining:.0f}kWh", remaining=remaining_needed)
             messages["mobile"] = _t("notif_night_started",
                 "Night charging started: {remaining:.1f}kWh remaining",
                 remaining=remaining_needed)
 
         elif state == ChargingState.NIGHT_TARGET_REACHED:
-            messages["charger"] = "Night: Done"
+            messages["charger"] = _t("notif_charger_night_done", "Night: Done")
             messages["mobile"] = _t("notif_night_complete",
                 "Night charging complete: {charged:.1f}/{target}kWh",
                 charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.NIGHT_DISABLED:
-            messages["charger"] = "Night: Off"
+            messages["charger"] = _t("notif_charger_night_off", "Night: Off")
 
         elif state == ChargingState.NIGHT_IDLE:
-            messages["charger"] = "Night: No EV"
+            messages["charger"] = _t("notif_charger_night_no_ev", "Night: No EV")
 
         elif state == ChargingState.TARGET_REACHED:
-            messages["charger"] = "Target done"
+            messages["charger"] = _t("notif_charger_target_done", "Target done")
             messages["mobile"] = _t("notif_target_reached",
                 "Daily target reached: {charged:.1f}/{target}kWh",
                 charged=daily_ev_energy, target=daily_ev_target)
 
         elif state == ChargingState.IDLE:
             if ev_session_energy > 0:
-                messages["charger"] = "Complete"
+                messages["charger"] = _t("notif_charger_complete", "Complete")
 
         return messages
 
@@ -366,7 +373,7 @@ class NotificationManager:
                 soc=soc),
             channel=_CHANNEL_ALERTS,
             group="sem_alerts",
-            actions=[{"action": "URI", "title": "Open Dashboard", "uri": "/sem-dashboard/overview"}],
+            actions=[{"action": "URI", "title": get_text(self.hass, "notif_open_dashboard", "Open Dashboard"), "uri": "/sem-dashboard/overview"}],
         )
 
     async def notify_high_grid_import(self, power_w: float, peak_pct: float) -> None:
@@ -394,7 +401,7 @@ class NotificationManager:
                 power_w=power_w, peak_pct=peak_pct),
             channel=_CHANNEL_ALERTS,
             group="sem_alerts",
-            actions=[{"action": "URI", "title": "Open Dashboard", "uri": "/sem-dashboard/overview"}],
+            actions=[{"action": "URI", "title": get_text(self.hass, "notif_open_dashboard", "Open Dashboard"), "uri": "/sem-dashboard/overview"}],
         )
 
     async def notify_daily_summary(self, data: Dict[str, Any]) -> None:
@@ -413,19 +420,20 @@ class NotificationManager:
         ev = data.get("daily_ev", 0)
         net_cost = data.get("daily_net_cost", 0)
         tomorrow = data.get("forecast_tomorrow", 0)
-        currency = self.hass.config.currency or "EUR"
 
         from ..utils.translate import get_text
+        currency = self.hass.config.currency or "EUR"
         msg = get_text(self.hass, "notif_daily_summary",
             "Today: {solar:.1f} kWh solar · {autarky:.0f}% autarky · "
             "Saved {savings:.2f} {currency} · Net cost {net_cost:.2f} {currency}",
-            solar=solar, autarky=autarky, savings=savings, net_cost=net_cost, currency=currency)
+            solar=solar, autarky=autarky, savings=savings,
+            net_cost=net_cost, currency=currency)
         if ev > 0:
-            msg += " · " + get_text(self.hass, "notif_daily_summary_ev",
-                "EV {ev:.1f} kWh", ev=ev)
+            msg += get_text(self.hass, "notif_daily_summary_ev",
+                " · EV {ev:.1f} kWh", ev=ev)
         if tomorrow > 0:
-            msg += "\n" + get_text(self.hass, "notif_daily_summary_forecast",
-                "Tomorrow: {tomorrow:.1f} kWh forecast", tomorrow=tomorrow)
+            msg += get_text(self.hass, "notif_daily_summary_tomorrow",
+                "\nTomorrow: {tomorrow:.1f} kWh forecast", tomorrow=tomorrow)
 
         self.hass.bus.async_fire(f"{DOMAIN}_notification", {
             "category": "summary",
