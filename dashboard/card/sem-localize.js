@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-08T22:52:59.141859
+// Generated: 2026-05-08T23:30:38.028124
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -631,7 +631,7 @@ const _semTranslations = {
     "control_sub": "Überschuss- & Laststeuerung",
     "costs_sub": "Tarife & Einsparungen",
     "system_sub": "Zustand & Diagnose",
-    "solar": "solar",
+    "solar": "Solar",
     "grid": "Netz",
     "autarky": "Autarkie",
     "today": "heute",
@@ -1847,7 +1847,7 @@ const _semTranslations = {
     "control_sub": "Control de excedente y carga",
     "costs_sub": "Tarifas y ahorros",
     "system_sub": "Estado y diagnósticos",
-    "solar": "solar",
+    "solar": "Solar",
     "grid": "Red",
     "autarky": "Autarquía",
     "today": "hoy",
@@ -2441,7 +2441,7 @@ const _semTranslations = {
     "disconnected": "Disconnesso",
     "importing": "Importazione",
     "exporting": "Esportazione",
-    "home": "Home",
+    "home": "Casa",
     "energy": "Energia",
     "battery": "Batteria",
     "ev_charging": "Ricarica VE",
