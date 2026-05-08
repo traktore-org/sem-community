@@ -21,16 +21,27 @@ class SEMTitleCard extends HTMLElement {
         this.attachShadow({ mode: 'open' });
         this._lang = null;
         this._hasLocalize = false;
+        this._renderedSubtitle = null;
+        this._templateUnsub = null;
+        this._templateSubbed = false;
     }
 
     setConfig(config) {
         this.config = config;
+        // Reset template subscription if config changes
+        this._unsubTemplate();
+        this._templateSubbed = false;
+        this._renderedSubtitle = null;
     }
 
     _t(key) {
         if (!key) return '';
         const lang = this._hass?.language;
         return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
+    _hasJinja(str) {
+        return str && (str.includes('{%') || str.includes('{{'));
     }
 
     set hass(hass) {
@@ -45,22 +56,53 @@ class SEMTitleCard extends HTMLElement {
             this._render();
         }
 
-        // Update subtitle if it contains Jinja (HA evaluates it)
-        if (this.config.subtitle && (this.config.subtitle.includes('{%') || this.config.subtitle.includes('{{'))) {
-            // Subtitle with Jinja is handled by HA's template engine — we receive
-            // the evaluated result via the card's template rendering. For now,
-            // we just display the raw subtitle since custom cards don't get
-            // automatic Jinja evaluation. The subtitle will show as-is.
+        // Subscribe to HA template rendering for Jinja subtitles
+        if (this._hasJinja(this.config.subtitle) && !this._templateSubbed) {
+            this._subscribeTemplate();
+        }
+    }
+
+    _subscribeTemplate() {
+        if (!this._hass?.connection || this._templateSubbed) return;
+        this._templateSubbed = true;
+
+        const template = this.config.subtitle;
+        this._hass.connection.subscribeMessage(
+            (msg) => {
+                const result = msg.result;
+                if (result !== this._renderedSubtitle) {
+                    this._renderedSubtitle = result;
+                    this._render();
+                }
+            },
+            { type: 'render_template', template, variables: {} }
+        ).then(unsub => {
+            this._templateUnsub = unsub;
+        }).catch(() => {
+            // Fallback: show raw subtitle
+            this._renderedSubtitle = this.config.subtitle;
+            this._render();
+        });
+    }
+
+    _unsubTemplate() {
+        if (this._templateUnsub) {
+            this._templateUnsub();
+            this._templateUnsub = null;
         }
     }
 
     _render() {
         const title = this._t(this.config.title_key || this.config.title || '');
-        const subtitle = this.config.subtitle || '';
-        // For subtitle, try to translate if it's a simple string (not Jinja)
-        const translatedSubtitle = (subtitle.includes('{%') || subtitle.includes('{{'))
-            ? subtitle  // Jinja — leave as-is (HA template card would evaluate this)
-            : this._t(subtitle);
+
+        let subtitle = '';
+        if (this._hasJinja(this.config.subtitle)) {
+            // Jinja subtitle — use rendered result from HA template engine
+            subtitle = this._renderedSubtitle || '';
+        } else {
+            // Plain text subtitle — translate via semLocalize
+            subtitle = this._t(this.config.subtitle || '');
+        }
 
         const T = (typeof semTheme === 'function') ? semTheme() : {};
         const textCol = T.text || '#e0e0e0';
@@ -96,10 +138,14 @@ class SEMTitleCard extends HTMLElement {
             </style>
             <div class="sem-title-wrap">
                 <div class="title">${title}</div>
-                ${translatedSubtitle ? `<div class="subtitle">${translatedSubtitle}</div>` : ''}
+                ${subtitle ? `<div class="subtitle">${subtitle}</div>` : ''}
                 <div class="divider"></div>
             </div>
         `;
+    }
+
+    disconnectedCallback() {
+        this._unsubTemplate();
     }
 
     getCardSize() { return 1; }

@@ -815,10 +815,10 @@
         "name": "Aantal EV-laders"
       },
       "ev_taper_trend": {
-        "name": "EV Taper Trend"
+        "name": "EV Laad Afvlakking Trend"
       },
       "ev_taper_ratio": {
-        "name": "EV Taper Ratio"
+        "name": "EV Afvlakking Ratio"
       },
       "ev_taper_minutes_to_full": {
         "name": "EV Minuten tot Vol"
