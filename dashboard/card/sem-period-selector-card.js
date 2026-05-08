@@ -7,21 +7,19 @@
  * Event detail: { start: Date, end: Date, granularity: 'hour'|'day'|'month', label: string }
  */
 
-class SEMPeriodSelectorCard extends HTMLElement {
+class SEMPeriodSelectorCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._active = 'week'; // default
         this._btnCleanup = [];
-        this._lang = null;
-        this._localizeReady = false;
     }
 
     connectedCallback() {
-        // Will be populated after render
+        super.connectedCallback();
     }
 
     disconnectedCallback() {
+        super.disconnectedCallback();
         // Clean up button listeners (#30)
         if (this._btnCleanup) {
             this._btnCleanup.forEach(fn => fn());
@@ -35,17 +33,10 @@ class SEMPeriodSelectorCard extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
-        const lang = hass?.language;
-        const hasLocalize = typeof semLocalize === 'function';
         const isFirstRender = !this.shadowRoot.querySelector('.sem-period');
-        const needsRender = isFirstRender
-            || lang !== this._lang
-            || (hasLocalize && !this._localizeReady);
+        const localeChanged = this._checkLocaleChange(hass);
 
-        if (needsRender) {
-            this._lang = lang;
-            this._localizeReady = hasLocalize;
+        if (isFirstRender || localeChanged) {
             this._render();
             if (isFirstRender) {
                 this._dispatchPeriod(this._active);
@@ -98,11 +89,6 @@ class SEMPeriodSelectorCard extends HTMLElement {
         this.shadowRoot.querySelectorAll('.btn').forEach(b => {
             b.classList.toggle('active', b.dataset.key === key);
         });
-    }
-
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
     }
 
     _render() {

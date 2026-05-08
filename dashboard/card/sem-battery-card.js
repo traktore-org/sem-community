@@ -10,10 +10,9 @@
  *   entity_prefix: sensor.sem_   # default
  */
 
-class SEMBatteryCard extends HTMLElement {
+class SEMBatteryCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._rendered = false;
     }
 
@@ -23,21 +22,17 @@ class SEMBatteryCard extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
-        // Force re-render when semLocalize becomes available (fixes English skeleton flash)
-        const hasLocalize = typeof semLocalize === 'function';
-        const lang = hass?.language;
+        const localeChanged = this._checkLocaleChange(hass);
         const key = [
             'battery_soc', 'battery_power', 'battery_status',
             'battery_health_score', 'battery_cycles_estimated',
             'daily_battery_charge_energy', 'daily_battery_discharge_energy',
             'daily_battery_savings',
         ].map(s => this._hass?.states[`${this._prefix}${s}`]?.state || '').join(',')
-            + '|' + hasLocalize + '|' + lang;
-        if (key === this._lastKey) return;
+            + '|' + this._hass?.language;
+        if (key === this._lastKey && !localeChanged) return;
         this._lastKey = key;
-        if (hasLocalize && !this._localizeReady) {
-            this._localizeReady = true;
+        if (localeChanged) {
             this._rendered = false;  // Force skeleton re-render with translations
         }
         this._update();
@@ -63,11 +58,6 @@ class SEMBatteryCard extends HTMLElement {
         if (w == null || isNaN(w)) return '— W';
         if (Math.abs(w) >= 1000) return (w / 1000).toFixed(1) + ' kW';
         return Math.round(w) + ' W';
-    }
-
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
     }
 
     _update() {

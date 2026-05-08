@@ -140,19 +140,13 @@ const PRESETS = {
     },
 };
 
-class SEMChartCard extends HTMLElement {
+class SEMChartCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._chart = null;
         this._period = null;
         this._fetchTimer = null;
         this._boundPeriodHandler = (e) => this._onPeriodChange(e.detail);
-    }
-
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
     }
 
     setConfig(config) {
@@ -165,21 +159,21 @@ class SEMChartCard extends HTMLElement {
     }
 
     connectedCallback() {
+        super.connectedCallback();
         document.addEventListener('sem-period-change', this._boundPeriodHandler);
     }
 
     disconnectedCallback() {
+        super.disconnectedCallback();
         document.removeEventListener('sem-period-change', this._boundPeriodHandler);
         if (this._chart) { this._chart.destroy(); this._chart = null; }
     }
 
     set hass(hass) {
-        this._hass = hass;
-        const hasLocalize = typeof semLocalize === 'function';
+        const localeChanged = this._checkLocaleChange(hass);
         if (!this.shadowRoot.querySelector('.sem-chart-wrap')) {
             this._renderSkeleton();
-        } else if (hasLocalize && !this._localizeReady) {
-            this._localizeReady = true;
+        } else if (localeChanged) {
             this._renderSkeleton();  // Re-render with translations
         }
         // If no period received yet, use a sensible default

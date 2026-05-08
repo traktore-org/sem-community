@@ -74,10 +74,9 @@ const SFC_ACTION_SCHEMAS = [
     { name: 'double_tap_action', label: 'Double Tap Action', selector: { select: { options: SFC_ACTION_OPTIONS } } },
 ];
 
-class SEMFlowCard extends HTMLElement {
+class SEMFlowCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._lastKey = '';
         this._animFrames = {};
         this._currentValues = {};
@@ -109,6 +108,7 @@ class SEMFlowCard extends HTMLElement {
     }
 
     connectedCallback() {
+        super.connectedCallback();
         let resizeTimeout = null;
         this._resizeObserver = new ResizeObserver(entries => {
             if (resizeTimeout) clearTimeout(resizeTimeout);
@@ -139,6 +139,7 @@ class SEMFlowCard extends HTMLElement {
     }
 
     disconnectedCallback() {
+        super.disconnectedCallback();
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
         clearTimeout(this._updateTimer);
@@ -150,7 +151,10 @@ class SEMFlowCard extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
+        const localeChanged = this._checkLocaleChange(hass);
+        if (localeChanged) {
+            this._rendered = false;
+        }
         if (!this._rendered) {
             const w = this.clientWidth || this.offsetWidth;
             const compact = w > 0 ? w < 400 : false;
@@ -233,11 +237,6 @@ class SEMFlowCard extends HTMLElement {
             case 'inverter': return SFC_DEFAULTS.inverter.color;
             default: return '#888';
         }
-    }
-
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
     }
 
     _getNodeName(node) {

@@ -28,10 +28,9 @@ const WEATHER_ICONS = {
     'exceptional': { icon: '\u26A0\uFE0F', key: 'weather_exceptional' },
 };
 
-class SEMWeatherCard extends HTMLElement {
+class SEMWeatherCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._rendered = false;
     }
 
@@ -41,13 +40,11 @@ class SEMWeatherCard extends HTMLElement {
         this._forecastRows = config.forecast_rows || 5;
     }
 
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
-    }
-
     set hass(hass) {
-        this._hass = hass;
+        const localeChanged = this._checkLocaleChange(hass);
+        if (localeChanged) {
+            this._rendered = false; // force full re-render for translation
+        }
         this._update();
     }
 
@@ -138,6 +135,7 @@ class SEMWeatherCard extends HTMLElement {
     }
 
     disconnectedCallback() {
+        super.disconnectedCallback();
         if (this._clockInterval) {
             clearInterval(this._clockInterval);
             this._clockInterval = null;

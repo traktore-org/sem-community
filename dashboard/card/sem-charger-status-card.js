@@ -10,10 +10,9 @@
  *   entity_prefix: sensor.sem_   # optional, default
  */
 
-class SEMChargerStatusCard extends HTMLElement {
+class SEMChargerStatusCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._rendered = false;
         this._lastKey = '';
         this._chargers = [];
@@ -24,13 +23,12 @@ class SEMChargerStatusCard extends HTMLElement {
         this._prefix = config.entity_prefix || 'sensor.sem_';
     }
 
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
-    }
-
     set hass(hass) {
-        this._hass = hass;
+        const localeChanged = this._checkLocaleChange(hass);
+        if (localeChanged) {
+            this._rendered = false;
+            this._lastKey = '';
+        }
 
         // Discover chargers dynamically from sensor.sem_charger_*_power
         const chargers = [];

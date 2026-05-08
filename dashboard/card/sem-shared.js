@@ -139,6 +139,83 @@ function semDotGridCSS(color, glowColor, glowAlpha) {
             radial-gradient(circle at 2px 2px, ${color} 0.7px, transparent 0.7px)`;
 }
 
+/* ── Base class for all SEM cards ── */
+/**
+ * SEMBaseCard — shared base class that handles:
+ * - Shadow DOM creation
+ * - Translation via semLocalize() with automatic re-render on language change
+ * - hass instance storage
+ *
+ * Subclasses should NOT call attachShadow() or define _t().
+ * Instead, call this._checkLocaleChange(hass) in their set hass() and
+ * re-render if it returns true.
+ */
+class SEMBaseCard extends HTMLElement {
+    constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this._hass = null;
+        this._lang = null;
+        this._localizeReady = false;
+    }
+
+    /** Translate a key using semLocalize (falls back to key if not loaded yet). */
+    _t(key) {
+        const lang = this._hass?.language;
+        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+    }
+
+    /**
+     * Call from set hass(). Stores hass and checks if locale changed.
+     * @returns {boolean} true if language changed or semLocalize just became available — caller should re-render.
+     */
+    _checkLocaleChange(hass) {
+        this._hass = hass;
+        const lang = hass?.language;
+        const hasLocalize = typeof semLocalize === 'function';
+        if (lang !== this._lang || (hasLocalize && !this._localizeReady)) {
+            this._lang = lang;
+            this._localizeReady = hasLocalize;
+            return true;
+        }
+        return false;
+    }
+
+    connectedCallback() {
+        // If semLocalize isn't ready yet, poll until it is.
+        // sem-localize.js may load before or after cards connect.
+        // Poll every 200ms for up to 5s. When found AND hass is set,
+        // re-trigger the hass setter to force re-render with translations.
+        if (!this._localizeReady) {
+            let attempts = 0;
+            this._localizeCheckTimer = setInterval(() => {
+                attempts++;
+                if (typeof semLocalize === 'function' && this._hass) {
+                    clearInterval(this._localizeCheckTimer);
+                    this._localizeCheckTimer = null;
+                    this.hass = this._hass;
+                } else if (typeof semLocalize === 'function') {
+                    // semLocalize loaded but no hass yet — mark ready so
+                    // first set hass() call will use translations
+                    this._localizeReady = true;
+                    clearInterval(this._localizeCheckTimer);
+                    this._localizeCheckTimer = null;
+                } else if (attempts >= 50) {
+                    clearInterval(this._localizeCheckTimer);
+                    this._localizeCheckTimer = null;
+                }
+            }, 200);
+        }
+    }
+
+    disconnectedCallback() {
+        if (this._localizeCheckTimer) {
+            clearInterval(this._localizeCheckTimer);
+            this._localizeCheckTimer = null;
+        }
+    }
+}
+
 /* ── Export for use in other cards ── */
 if (typeof window !== 'undefined') {
     window.SEM_COLORS = SEM_COLORS;
@@ -149,4 +226,5 @@ if (typeof window !== 'undefined') {
     window.semGetCurrency = semGetCurrency;
     window.semTheme = semTheme;
     window.semDotGridCSS = semDotGridCSS;
+    window.SEMBaseCard = SEMBaseCard;
 }

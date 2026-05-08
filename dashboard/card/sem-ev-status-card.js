@@ -9,10 +9,9 @@
  *   entity_prefix: sensor.sem_   # default
  */
 
-class SEMEVStatusCard extends HTMLElement {
+class SEMEVStatusCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._rendered = false;
     }
 
@@ -22,9 +21,7 @@ class SEMEVStatusCard extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
-        const hasLocalize = typeof semLocalize === 'function';
-        const lang = hass?.language;
+        const localeChanged = this._checkLocaleChange(hass);
         const key = [
             'ev_connected', 'ev_charging', 'ev_power', 'calculated_current',
             'session_energy', 'session_solar_share', 'session_cost',
@@ -33,11 +30,10 @@ class SEMEVStatusCard extends HTMLElement {
             const pfx = s.startsWith('ev_connected') || s.startsWith('ev_charging')
                 ? 'binary_sensor.sem_' : this._prefix;
             return this._hass?.states[`${pfx}${s}`]?.state || '';
-        }).join(',') + '|' + hasLocalize + '|' + lang;
+        }).join(',') + '|' + this._localizeReady + '|' + this._lang;
         if (key === this._lastKey) return;
         this._lastKey = key;
-        if (hasLocalize && !this._localizeReady) {
-            this._localizeReady = true;
+        if (localeChanged) {
             this._rendered = false;
         }
         this._update();
@@ -68,11 +64,6 @@ class SEMEVStatusCard extends HTMLElement {
         if (w == null || isNaN(w)) return '\u2014 W';
         if (Math.abs(w) >= 1000) return (w / 1000).toFixed(1) + ' kW';
         return Math.round(w) + ' W';
-    }
-
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
     }
 
     _update() {

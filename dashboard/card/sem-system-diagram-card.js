@@ -11,10 +11,9 @@
  * - Light-theme compatible with soft tinted fills
  */
 
-class SEMSystemDiagramCard extends HTMLElement {
+class SEMSystemDiagramCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._lastKey = '';
         this._animFrames = {};
         this._currentValues = {};
@@ -30,6 +29,7 @@ class SEMSystemDiagramCard extends HTMLElement {
     }
 
     connectedCallback() {
+        super.connectedCallback();
         this._resizeObserver = new ResizeObserver(entries => {
             for (const entry of entries) {
                 const w = entry.contentRect.width;
@@ -56,6 +56,7 @@ class SEMSystemDiagramCard extends HTMLElement {
     }
 
     disconnectedCallback() {
+        super.disconnectedCallback();
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
         clearTimeout(this._updateTimer);
@@ -66,7 +67,10 @@ class SEMSystemDiagramCard extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
+        const localeChanged = this._checkLocaleChange(hass);
+        if (localeChanged) {
+            this._rendered = false;
+        }
         // Initial render only — check layout once
         if (!this._rendered) {
             const w = this.clientWidth || this.offsetWidth;
@@ -152,11 +156,6 @@ class SEMSystemDiagramCard extends HTMLElement {
         if (!ring) return;
         const ratio = Math.min(1, Math.abs(watts) / maxWatts);
         ring.style.opacity = (0.15 + ratio * 0.85).toFixed(2);
-    }
-
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
     }
 
     _updateFlows() {
