@@ -1194,9 +1194,12 @@ views:
                   style: *glass_card
               - type: vertical-stack
                 cards:
-                  - type: custom:mushroom-entity-card
+                  - type: custom:mushroom-template-card
                     entity: sensor.sem_ev_charge_needed
-                    name: Charge Tonight
+                    primary: Charge Tonight
+                    secondary: >-
+                      {% if is_state('sensor.sem_ev_charge_needed', 'True') %}Yes
+                      {% else %}No{% endif %}
                     icon: >-
                       {% if is_state('sensor.sem_ev_charge_needed', 'True') %}mdi:battery-alert
                       {% else %}mdi:battery-check{% endif %}
