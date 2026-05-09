@@ -111,10 +111,10 @@ class SEMFlowCard extends SEMBaseCard {
 
     connectedCallback() {
         super.connectedCallback();
-        let resizeTimeout = null;
+        this._resizeTimeout = null;
         this._resizeObserver = new ResizeObserver(entries => {
-            if (resizeTimeout) clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
+            if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
+            this._resizeTimeout = setTimeout(() => {
                 for (const entry of entries) {
                     const w = entry.contentRect.width;
                     const compact = w < 400;
@@ -145,6 +145,7 @@ class SEMFlowCard extends SEMBaseCard {
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
         clearTimeout(this._updateTimer);
+        clearTimeout(this._resizeTimeout);
         // Clean up animation frames to prevent memory leaks
         for (const id of Object.keys(this._animFrames)) {
             cancelAnimationFrame(this._animFrames[id]);
@@ -310,7 +311,6 @@ class SEMFlowCard extends SEMBaseCard {
 
     _handleAction(config, entityId) {
         if (!config) config = { action: 'more-info' };
-        console.log('[SEM-FLOW] Action:', config.action, 'Entity:', config.entity || entityId);
         switch (config.action) {
             case 'more-info':
                 this._fireMoreInfo(config.entity || entityId);
@@ -385,11 +385,7 @@ class SEMFlowCard extends SEMBaseCard {
         });
     }
 
-    _formatPower(watts) {
-        const abs = Math.abs(watts);
-        if (abs >= 1000) return `${(watts / 1000).toFixed(1)} kW`;
-        return `${Math.round(watts)} W`;
-    }
+    _formatPower(watts) { return semFormatPower(watts); }
 
     _calcDuration(watts) {
         const abs = Math.abs(watts);
@@ -544,7 +540,7 @@ class SEMFlowCard extends SEMBaseCard {
         // Multi-charger subtitle (#112)
         const evCount = this._getState('ev_charger_count');
         if (evCount > 1) {
-            this._setText('val-ev-subtitle', `(${evCount} chargers)`);
+            this._setText('val-ev-subtitle', `(${evCount} ${this._t('chargers')})`);
         } else {
             this._setText('val-ev-subtitle', '');
         }

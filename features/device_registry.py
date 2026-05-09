@@ -146,7 +146,7 @@ class UnifiedDeviceRegistry:
             _LOGGER.info("Running delayed device re-discovery...")
             await self.async_refresh_devices()
 
-        asyncio.create_task(_delayed_rediscovery())
+        self.hass.async_create_task(_delayed_rediscovery())
 
     async def async_refresh_devices(self) -> None:
         """Read Energy Dashboard, discover controls, build device list, sync."""

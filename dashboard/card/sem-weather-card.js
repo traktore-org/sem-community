@@ -130,6 +130,7 @@ class SEMWeatherCard extends SEMBaseCard {
                 const n = new Date();
                 const loc = this._hass?.language || navigator.language || 'en';
                 setVal('.time', n.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' }));
+                setVal('.date', n.toLocaleDateString(loc, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
             }, 30000);
         }
     }

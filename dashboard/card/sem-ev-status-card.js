@@ -60,11 +60,7 @@ class SEMEVStatusCard extends SEMBaseCard {
         return val.toFixed(decimals);
     }
 
-    _fmtPower(w) {
-        if (w == null || isNaN(w)) return '\u2014 W';
-        if (Math.abs(w) >= 1000) return (w / 1000).toFixed(1) + ' kW';
-        return Math.round(w) + ' W';
-    }
+    _fmtPower(w) { return semFormatPower(w); }
 
     _update() {
         if (!this._hass) return;

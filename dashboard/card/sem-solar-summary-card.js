@@ -50,11 +50,7 @@ class SEMSolarSummaryCard extends SEMBaseCard {
         return val.toFixed(decimals);
     }
 
-    _fmtPower(w) {
-        if (w == null || isNaN(w)) return '— W';
-        if (Math.abs(w) >= 1000) return (w / 1000).toFixed(1) + ' kW';
-        return Math.round(w) + ' W';
-    }
+    _fmtPower(w) { return semFormatPower(w); }
 
     _update() {
         if (!this._hass) return;
@@ -293,17 +289,17 @@ class SEMSolarSummaryCard extends SEMBaseCard {
                             </svg>
                             <div class="ring-icon">
                                 <div class="power solar-power">0 W</div>
-                                <div class="label">SOLAR</div>
+                                <div class="label">${this._t('solar').toUpperCase()}</div>
                             </div>
                         </div>
                         <div class="hero-stats">
-                            <div class="hero-title">${this._t('Production')}</div>
+                            <div class="hero-title">${this._t('production')}</div>
                             <div class="hero-row">
-                                <span class="hero-label">${this._t('Yield today')}</span>
+                                <span class="hero-label">${this._t('yield_today')}</span>
                                 <span class="hero-value c-solar daily-solar">—</span>
                             </div>
                             <div class="hero-row">
-                                <span class="hero-label">${this._t('Grid today')}</span>
+                                <span class="hero-label">${this._t('grid_today')}</span>
                                 <span class="hero-value c-grid grid-today">—</span>
                             </div>
                             <div class="hero-row">
@@ -319,27 +315,27 @@ class SEMSolarSummaryCard extends SEMBaseCard {
 
                     <div class="metrics">
                         <div class="metric">
-                            <div class="metric-label">${this._t('Self-use')}</div>
+                            <div class="metric-label">${this._t('self_use')}</div>
                             <div class="metric-value c-home self-use">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">${this._t('Autarky')}</div>
+                            <div class="metric-label">${this._t('autarky')}</div>
                             <div class="metric-value c-savings autarky">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">${this._t('EV Today')}</div>
+                            <div class="metric-label">${this._t('ev_today')}</div>
                             <div class="metric-value c-ev daily-ev">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">${this._t('Cost')}</div>
+                            <div class="metric-label">${this._t('cost')}</div>
                             <div class="metric-value c-cost daily-cost">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">${this._t('Saved')}</div>
+                            <div class="metric-label">${this._t('saved')}</div>
                             <div class="metric-value c-savings daily-savings">—</div>
                         </div>
                         <div class="metric">
-                            <div class="metric-label">${this._t('Monthly')}</div>
+                            <div class="metric-label">${this._t('monthly')}</div>
                             <div class="metric-value c-solar monthly-solar">—</div>
                         </div>
                     </div>

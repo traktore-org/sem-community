@@ -158,12 +158,7 @@ class SEMTabHeader extends SEMBaseCard {
         return parseFloat(e.state) || fallback;
     }
 
-    _fmtPower(w) {
-        if (w == null || isNaN(w)) return '—';
-        const abs = Math.abs(w);
-        if (abs >= 1000) return (w / 1000).toFixed(1) + ' kW';
-        return Math.round(w) + ' W';
-    }
+    _fmtPower(w) { return semFormatPower(w); }
 
     _updateStats() {
         if (!this._hass) return;

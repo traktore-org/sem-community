@@ -1751,7 +1751,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             except Exception:
                 pass  # Silently ignore if entity is gone
 
-        asyncio.create_task(delayed_write())
+        self.hass.async_create_task(delayed_write())
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
