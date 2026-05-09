@@ -6,7 +6,7 @@
 
 Complete guide for the SEM dashboard — a 7-tab glassmorphism interface with animated system diagram, real-time energy flows, cost tracking, and environmental impact.
 
-![Dashboard Home](images/sem_dashboard_overview.png)
+![Dashboard Home](images/sem_home_tab.png)
 
 ---
 
@@ -16,7 +16,8 @@ Complete guide for the SEM dashboard — a 7-tab glassmorphism interface with an
 3. [Required HACS Cards](#required-hacs-cards)
 4. [Bundled SEM Cards](#bundled-sem-cards)
 5. [Visual Style](#visual-style)
-6. [Troubleshooting](#troubleshooting)
+6. [Multi-Language Support](#multi-language-support)
+7. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -37,7 +38,7 @@ The dashboard is generated automatically on first install. If you need to regene
 
 The main at-a-glance view with real-time power flows.
 
-![Home Tab](images/sem_dashboard_overview.png)
+![Home Tab](images/sem_home_tab.png)
 
 | Card | Description |
 |------|-------------|
@@ -55,7 +56,7 @@ The main at-a-glance view with real-time power flows.
 
 Deep dive into energy production, consumption, and environmental impact.
 
-![Energy Tab](images/sem_energy_flows.png)
+![Energy Tab](images/sem_energy_tab.png)
 
 | Card | Description |
 |------|-------------|
@@ -102,7 +103,7 @@ EV charging session tracking and statistics.
 
 All settings and device management in one place.
 
-![Control Tab](images/sem_control_panel.png)
+![Control Tab](images/sem_control_tab.png)
 
 | Card | Description |
 |------|-------------|
