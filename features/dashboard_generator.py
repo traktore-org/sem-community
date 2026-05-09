@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import re
 import yaml
 from typing import Any, Dict, List, Optional
 
@@ -79,31 +80,31 @@ class DashboardGenerator:
             "title", "subtitle", "primary", "secondary", "name", "label", "content",
         )
 
+        # Pre-compute sorted pairs and compiled patterns once (not per-node)
+        sorted_pairs = sorted(
+            reverse_map.items(), key=lambda x: len(x[0]), reverse=True
+        )
+        compiled_patterns = [
+            (en_text, translated, re.compile(
+                r'(?<![a-zA-Z0-9_./])' + re.escape(en_text) + r'(?![a-zA-Z0-9_])'
+            ))
+            for en_text, translated in sorted_pairs
+        ]
+        jinja_split_re = re.compile(r'(\{\{.*?\}\}|\{%.*?%\})', re.DOTALL)
+
         def _walk(obj):
             if isinstance(obj, dict):
                 for field in translatable_fields:
                     if field in obj and isinstance(obj[field], str):
                         text = obj[field]
                         if text in reverse_map:
-                            # Exact match — plain text field
                             obj[field] = reverse_map[text]
                         elif "{%" in text or "{{" in text:
-                            # Jinja template — replace English fragments ONLY
-                            # outside Jinja blocks ({% ... %} and {{ ... }}).
-                            # This prevents translating Jinja variable names
-                            # (e.g. "nights" in "{% set nights = ... %}").
-                            import re
-                            sorted_pairs = sorted(
-                                reverse_map.items(), key=lambda x: len(x[0]), reverse=True
-                            )
-                            # Split into Jinja blocks and literal text
-                            parts = re.split(r'(\{\{.*?\}\}|\{%.*?%\})', text, flags=re.DOTALL)
+                            parts = jinja_split_re.split(text)
                             for i in range(0, len(parts), 2):
-                                # Only translate literal text (even indices)
-                                for en_text, translated in sorted_pairs:
+                                for en_text, translated, pattern in compiled_patterns:
                                     if en_text in parts[i]:
-                                        pattern = r'(?<![a-zA-Z0-9_./])' + re.escape(en_text) + r'(?![a-zA-Z0-9_])'
-                                        parts[i] = re.sub(pattern, translated, parts[i])
+                                        parts[i] = pattern.sub(translated, parts[i])
                             obj[field] = ''.join(parts)
                 for v in obj.values():
                     _walk(v)

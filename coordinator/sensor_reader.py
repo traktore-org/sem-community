@@ -56,6 +56,7 @@ class SensorReader:
         # Split grid power sensors (Growatt, etc.) — discovered on first read
         self._split_grid_import_power: str | None = None
         self._split_grid_export_power: str | None = None
+        self._split_grid_warned: bool = False
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -498,7 +499,7 @@ class SensorReader:
             soc_entity = self._auto_detect_battery_soc(batt_power)
             if soc_entity:
                 val = self._read_sensor(soc_entity, "battery_soc")
-                if val > 0:
+                if val is not None and val >= 0:
                     soc_values.append(val)
         if soc_values:
             return sum(soc_values) / len(soc_values)

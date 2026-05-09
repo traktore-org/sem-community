@@ -117,7 +117,7 @@ class LoadManagementCoordinator:
                     await self._discover_devices()
 
             # Start discovery in background
-            asyncio.create_task(_discovery_with_retry())
+            self.hass.async_create_task(_discovery_with_retry())
 
             _LOGGER.info(
                 f"Load management initialized: {len(self._devices)} devices loaded from storage, "
@@ -597,7 +597,7 @@ class LoadManagementCoordinator:
         Sets battery discharge power = overshoot above target peak.
         Battery responds instantly (no disruption to user).
         """
-        config_entry = getattr(self, '_config_entry', None)
+        config_entry = getattr(self, 'config_entry', None)
         if not config_entry:
             return
         battery_discharge_entity = config_entry.options.get(
@@ -626,7 +626,7 @@ class LoadManagementCoordinator:
 
     async def _restore_battery_peak_shaving(self):
         """Restore battery to normal operation when peak is normal."""
-        config_entry = getattr(self, '_config_entry', None)
+        config_entry = getattr(self, 'config_entry', None)
         if not config_entry:
             return
         battery_discharge_entity = config_entry.options.get(

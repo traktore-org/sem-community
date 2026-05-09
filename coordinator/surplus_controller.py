@@ -209,10 +209,6 @@ class SurplusController:
             device.device_type.value, depends,
         )
 
-    def get_device(self, device_id: str) -> Optional[ControllableDevice]:
-        """Look up a registered device by ID (used for dependency checks)."""
-        return self._devices.get(device_id)
-
     def get_dependents(self, device_id: str) -> list:
         """Get all devices that depend on the given device (#122)."""
         return [d for d in self._devices.values()

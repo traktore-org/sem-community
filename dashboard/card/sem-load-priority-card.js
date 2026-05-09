@@ -126,24 +126,24 @@ class SEMLoadPriorityCard extends SEMBaseCard {
                         <div class="peak-dot" style="background:${peakColor};box-shadow:0 0 8px ${peakColor}"></div>
                         <span id="lm-status" class="status-text">${(this.loadManagementStatus || 'normal').toUpperCase()}</span>
                         <div class="spacer"></div>
-                        <span class="dim">Peak</span>
+                        <span class="dim">${this._t('peak')}</span>
                         <span id="peak-current" class="mono">${this.currentPeak.toFixed(2)} kW</span>
                         <span class="dim">/ ${this.targetPeakLimit.toFixed(1)}</span>
                     </div>
 
                     <div class="peak-box">
-                        <div class="peak-row"><span class="dim">Current Peak</span><span id="peak-current2" class="mono">${this.currentPeak.toFixed(2)} kW</span></div>
-                        <div class="peak-row"><span class="dim">Target Limit</span><span id="peak-target" class="mono">${this.targetPeakLimit.toFixed(2)} kW</span></div>
-                        <div class="peak-row"><span class="dim">Margin</span><span id="peak-margin" class="mono" style="color:${peakMargin > 0 ? '#4caf50' : '#f44336'}">${peakMargin.toFixed(2)} kW</span></div>
+                        <div class="peak-row"><span class="dim">${this._t('current_peak')}</span><span id="peak-current2" class="mono">${this.currentPeak.toFixed(2)} kW</span></div>
+                        <div class="peak-row"><span class="dim">${this._t('target_limit')}</span><span id="peak-target" class="mono">${this.targetPeakLimit.toFixed(2)} kW</span></div>
+                        <div class="peak-row"><span class="dim">${this._t('margin')}</span><span id="peak-margin" class="mono" style="color:${peakMargin > 0 ? '#4caf50' : '#f44336'}">${peakMargin.toFixed(2)} kW</span></div>
                         <div class="bar"><div id="peak-bar" class="bar-fill" style="width:${peakPct}%;background:${peakColor}"></div></div>
                     </div>
 
                     <div class="peak-box" style="margin-bottom:16px">
-                        <span class="dim">Adjust Target Peak Limit</span>
+                        <span class="dim">${this._t('adjust_target_peak')}</span>
                         <div class="target-row">
                             <input type="number" id="targetInput" min="1" max="20" step="0.1" value="${this.targetPeakLimit}">
                             <span class="dim">kW</span>
-                            <button id="setTargetBtn">Set</button>
+                            <button id="setTargetBtn">${this._t('set')}</button>
                         </div>
                     </div>
 
@@ -509,15 +509,47 @@ class SEMLoadPriorityCard extends SEMBaseCard {
     }
 
     _showConfigureModal(energySensor, deviceName) {
-        // Simple prompt-based config (avoids complex modal DOM management)
-        const entity = prompt(`Enter control entity for "${deviceName}":\n(e.g. switch.towelheater_men)`);
-        if (!entity || !entity.trim()) return;
-        const type = confirm('Is this a current/amperage control?\n(OK = current, Cancel = switch)') ? 'current' : 'switch';
-        this._hass.callService('solar_energy_management', 'set_device_control_mapping', {
-            energy_sensor: energySensor,
-            control_entity: entity.trim(),
-            control_type: type,
-        }).catch(err => alert('Failed: ' + err.message));
+        // In-shadow modal (works in HA mobile app and kiosk mode)
+        const existing = this.shadowRoot.getElementById('sem-config-modal');
+        if (existing) existing.remove();
+        const overlay = document.createElement('div');
+        overlay.id = 'sem-config-modal';
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:center;justify-content:center';
+        overlay.innerHTML = `
+            <div style="background:var(--card-background-color,#1e1e2e);border-radius:12px;padding:24px;min-width:300px;max-width:90vw;color:var(--primary-text-color,#e0e0e0)">
+                <div style="font-weight:700;margin-bottom:16px">${this._t('configure_device')}: ${deviceName}</div>
+                <label style="font-size:13px;opacity:0.7">${this._t('control_entity')}</label>
+                <input id="cfg-entity" type="text" placeholder="switch.example" style="width:100%;padding:8px;margin:6px 0 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);color:inherit;box-sizing:border-box">
+                <label style="font-size:13px;opacity:0.7">${this._t('control_type')}</label>
+                <select id="cfg-type" style="width:100%;padding:8px;margin:6px 0 16px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);color:inherit">
+                    <option value="switch">${this._t('mode_switch')}</option>
+                    <option value="current">${this._t('mode_current')}</option>
+                </select>
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                    <button id="cfg-cancel" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;background:rgba(255,255,255,0.1);color:inherit">${this._t('cancel')}</button>
+                    <button id="cfg-save" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;background:#4caf50;color:white">${this._t('save')}</button>
+                </div>
+            </div>`;
+        this.shadowRoot.appendChild(overlay);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+        overlay.querySelector('#cfg-cancel').addEventListener('click', () => overlay.remove());
+        overlay.querySelector('#cfg-save').addEventListener('click', () => {
+            const entity = overlay.querySelector('#cfg-entity').value.trim();
+            if (!entity) return;
+            const type = overlay.querySelector('#cfg-type').value;
+            this._hass.callService('solar_energy_management', 'set_device_control_mapping', {
+                energy_sensor: energySensor,
+                control_entity: entity,
+                control_type: type,
+            }).then(() => overlay.remove())
+              .catch(err => {
+                const errDiv = overlay.querySelector('.cfg-error') || document.createElement('div');
+                errDiv.className = 'cfg-error';
+                errDiv.style.cssText = 'color:#f44336;font-size:13px;margin-top:8px';
+                errDiv.textContent = err.message;
+                overlay.querySelector('div').appendChild(errDiv);
+            });
+        });
     }
 
     /* ── Styles ── */

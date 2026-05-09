@@ -30,18 +30,22 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
     connectedCallback() {
         super.connectedCallback();
+        this._resizeTimeout = null;
         this._resizeObserver = new ResizeObserver(entries => {
-            for (const entry of entries) {
-                const w = entry.contentRect.width;
-                const compact = w < 500;
-                if (compact !== this._compact) {
-                    this._compact = compact;
-                    this._rendered = false;
-                    this._render();
-                    this._rendered = true;
-                    if (this._hass) this._updateFlows();
+            if (this._resizeTimeout) clearTimeout(this._resizeTimeout);
+            this._resizeTimeout = setTimeout(() => {
+                for (const entry of entries) {
+                    const w = entry.contentRect.width;
+                    const compact = w < 500;
+                    if (compact !== this._compact) {
+                        this._compact = compact;
+                        this._rendered = false;
+                        this._render();
+                        this._rendered = true;
+                        if (this._hass) this._updateFlows();
+                    }
                 }
-            }
+            }, 100);
         });
         this._resizeObserver.observe(this);
 
@@ -60,6 +64,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
         clearTimeout(this._updateTimer);
+        clearTimeout(this._resizeTimeout);
         for (const id of Object.keys(this._animFrames)) {
             cancelAnimationFrame(this._animFrames[id]);
         }
@@ -100,11 +105,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         return entity ? entity.state : '';
     }
 
-    _formatPower(watts) {
-        const abs = Math.abs(watts);
-        if (abs >= 1000) return `${(watts / 1000).toFixed(1)} kW`;
-        return `${Math.round(watts)} W`;
-    }
+    _formatPower(watts) { return semFormatPower(watts); }
 
     _calcDuration(watts) {
         const abs = Math.abs(watts);

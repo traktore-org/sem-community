@@ -30,15 +30,17 @@ class SEMChargerStatusCard extends SEMBaseCard {
             this._lastKey = '';
         }
 
-        // Discover chargers dynamically from sensor.sem_charger_*_power
-        const chargers = [];
-        for (const eid of Object.keys(hass.states)) {
-            const match = eid.match(/^sensor\.sem_charger_(.+)_power$/);
-            if (match) {
-                chargers.push(match[1]);
+        // Discover chargers dynamically (re-scan only when entity count changes)
+        const stateCount = Object.keys(hass.states).length;
+        if (stateCount !== this._lastStateCount) {
+            this._lastStateCount = stateCount;
+            const chargers = [];
+            for (const eid of Object.keys(hass.states)) {
+                const match = eid.match(/^sensor\.sem_charger_(.+)_power$/);
+                if (match) chargers.push(match[1]);
             }
+            this._chargers = chargers;
         }
-        this._chargers = chargers;
 
         // Build reactivity key
         const key = chargers.map(id => [

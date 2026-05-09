@@ -100,8 +100,10 @@ class SEMDashboardTranslator extends SEMBaseCard {
     _translateAll() {
         if (!this._reverseMap) return;
 
-        // Start from document and walk ALL shadow roots
-        this._walkAndTranslate(document.body);
+        // Walk from the dashboard root, not the entire document body
+        const root = this._dashboardRoot || this._findDashboardRoot();
+        this._dashboardRoot = root;
+        this._walkAndTranslate(root);
     }
 
     _walkAndTranslate(root) {
