@@ -15,12 +15,9 @@
  *     style: ...
  */
 
-class SEMTitleCard extends HTMLElement {
+class SEMTitleCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
-        this._lang = null;
-        this._hasLocalize = false;
         this._renderedSubtitle = null;
         this._templateUnsub = null;
         this._templateSubbed = false;
@@ -36,8 +33,7 @@ class SEMTitleCard extends HTMLElement {
 
     _t(key) {
         if (!key) return '';
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
+        return super._t(key);
     }
 
     _hasJinja(str) {
@@ -45,14 +41,10 @@ class SEMTitleCard extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
-        const lang = hass?.language;
-        const hasLocalize = typeof semLocalize === 'function';
+        const localeChanged = this._checkLocaleChange(hass);
 
         // Re-render when language changes or semLocalize loads
-        if (lang !== this._lang || (hasLocalize && !this._hasLocalize)) {
-            this._lang = lang;
-            this._hasLocalize = hasLocalize;
+        if (localeChanged) {
             this._render();
         }
 
@@ -145,6 +137,7 @@ class SEMTitleCard extends HTMLElement {
     }
 
     disconnectedCallback() {
+        super.disconnectedCallback();
         this._unsubTemplate();
     }
 

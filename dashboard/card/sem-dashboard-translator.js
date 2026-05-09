@@ -12,10 +12,9 @@
  *   type: custom:sem-dashboard-translator
  */
 
-class SEMDashboardTranslator extends HTMLElement {
+class SEMDashboardTranslator extends SEMBaseCard {
     constructor() {
         super();
-        this._lang = null;
         this._observer = null;
         this._translateTimer = null;
         this._reverseMap = null;
@@ -26,16 +25,14 @@ class SEMDashboardTranslator extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
-        const lang = hass?.language;
+        const localeChanged = this._checkLocaleChange(hass);
         const hasLocalize = typeof semLocalize === 'function';
 
         if (!hasLocalize) return;
 
         // Build reverse map once per language: English → translated
-        if (lang !== this._lang) {
-            this._lang = lang;
-            this._reverseMap = this._buildReverseMap(lang);
+        if (localeChanged) {
+            this._reverseMap = this._buildReverseMap(this._lang);
             // Translate after a short delay to let cards render
             this._scheduleTranslate();
             // Set up mutation observer to catch late-loading cards
@@ -155,6 +152,7 @@ class SEMDashboardTranslator extends HTMLElement {
     }
 
     disconnectedCallback() {
+        super.disconnectedCallback();
         if (this._observer) {
             this._observer.disconnect();
             this._observer = null;

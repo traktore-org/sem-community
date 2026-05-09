@@ -10,10 +10,9 @@
  *   entity_prefix: sensor.sem_   # default
  */
 
-class SEMSolarSummaryCard extends HTMLElement {
+class SEMSolarSummaryCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._rendered = false;
     }
 
@@ -22,22 +21,14 @@ class SEMSolarSummaryCard extends HTMLElement {
         this._prefix = config.entity_prefix || 'sensor.sem_';
     }
 
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
-    }
-
     set hass(hass) {
-        this._hass = hass;
-        const hasLocalize = typeof semLocalize === 'function';
-        const lang = hass?.language;
+        const localeChanged = this._checkLocaleChange(hass);
         const key = ['solar_power', 'daily_solar_energy', 'self_consumption_rate', 'autarky_rate', 'daily_costs']
             .map(s => this._hass?.states[`${this._prefix}${s}`]?.state || '').join(',')
-            + '|' + hasLocalize + '|' + lang;
+            + '|' + this._localizeReady + '|' + this._lang;
         if (key === this._lastKey) return;
         this._lastKey = key;
-        if (hasLocalize && !this._localizeReady) {
-            this._localizeReady = true;
+        if (localeChanged) {
             this._rendered = false;
         }
         this._update();

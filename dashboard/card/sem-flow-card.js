@@ -49,16 +49,18 @@
  */
 
 const SFC_DEFAULTS = {
-    solar: { name: 'Solar', color: '#ff9800' },
-    grid: { name: 'Grid', color_import: '#488fc2', color_export: '#8353d1' },
-    battery: { name: 'Battery', color: '#4db6ac' },
-    home: { name: 'Home', color: '#5BC8D8' },
-    ev: { name: 'EV Charger', color: '#8DC892' },
-    inverter: { name: 'Inverter', color: '#96CAEE' },
+    solar: { nameKey: 'solar', color: '#ff9800' },
+    grid: { nameKey: 'grid', color_import: '#488fc2', color_export: '#8353d1' },
+    battery: { nameKey: 'battery', color: '#4db6ac' },
+    home: { nameKey: 'home', color: '#5BC8D8' },
+    ev: { nameKey: 'ev_charger', color: '#8DC892' },
+    inverter: { nameKey: 'inverter', color: '#96CAEE' },
 };
 
 const SFC_DEVICE_COLORS = (typeof SEM_DEVICE_COLORS !== 'undefined') ? SEM_DEVICE_COLORS : ['#FF8A65', '#AED581', '#CE93D8', '#64B5F6', '#ff9800', '#96CAEE'];
 
+/* Config editor action options — these are HA form schema labels,
+   only visible in the visual card editor, not on the dashboard itself. */
 const SFC_ACTION_OPTIONS = [
     { value: 'more-info', label: 'More Info' },
     { value: 'toggle', label: 'Toggle' },
@@ -74,10 +76,9 @@ const SFC_ACTION_SCHEMAS = [
     { name: 'double_tap_action', label: 'Double Tap Action', selector: { select: { options: SFC_ACTION_OPTIONS } } },
 ];
 
-class SEMFlowCard extends HTMLElement {
+class SEMFlowCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._lastKey = '';
         this._animFrames = {};
         this._currentValues = {};
@@ -109,6 +110,7 @@ class SEMFlowCard extends HTMLElement {
     }
 
     connectedCallback() {
+        super.connectedCallback();
         let resizeTimeout = null;
         this._resizeObserver = new ResizeObserver(entries => {
             if (resizeTimeout) clearTimeout(resizeTimeout);
@@ -139,6 +141,7 @@ class SEMFlowCard extends HTMLElement {
     }
 
     disconnectedCallback() {
+        super.disconnectedCallback();
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this._intersectionObserver) this._intersectionObserver.disconnect();
         clearTimeout(this._updateTimer);
@@ -150,7 +153,10 @@ class SEMFlowCard extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
+        const localeChanged = this._checkLocaleChange(hass);
+        if (localeChanged) {
+            this._rendered = false;
+        }
         if (!this._rendered) {
             const w = this.clientWidth || this.offsetWidth;
             const compact = w > 0 ? w < 400 : false;
@@ -235,16 +241,10 @@ class SEMFlowCard extends HTMLElement {
         }
     }
 
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
-    }
-
     _getNodeName(node) {
         const e = this._entities;
         // Translation keys for default names
-        const translationKeys = { solar: 'solar', battery: 'battery', grid: 'grid', home: 'home', ev: 'ev_charging' };
-        const defaultTranslated = translationKeys[node] ? this._t(translationKeys[node]) : (SFC_DEFAULTS[node]?.name || node);
+        const defaultTranslated = SFC_DEFAULTS[node]?.nameKey ? this._t(SFC_DEFAULTS[node].nameKey) : node;
         if (!e) return defaultTranslated;
         switch (node) {
             case 'solar': return e.solar?.name || defaultTranslated;

@@ -230,6 +230,44 @@ ha-card {
 
 ---
 
+## Multi-Language Support
+
+SEM supports 15 languages: Czech, Danish, German, English, Spanish, Finnish, French, Hungarian, Italian, Dutch, Norwegian, Polish, Portuguese, Romanian, and Swedish.
+
+### How Translation Works — Two Language Settings
+
+Home Assistant has two independent language settings. SEM uses both:
+
+| Setting | Where to change | What it affects in the dashboard |
+|---------|----------------|----------------------------------|
+| **System language** | Settings → General → Language | Mushroom card titles and labels, section headers, chart titles from ApexCharts/Sankey, all static YAML-based text |
+| **User profile language** | Your profile → Language | SEM custom cards: flow card, chart card, battery card, EV status, period selector, solar summary, weather card |
+
+#### What this means in practice
+
+- **Same language for everyone:** If the system language is German, all mushroom cards, chart labels, and static text appear in German for every user.
+- **Per-user SEM cards:** If one user sets their profile to English and another to French, the SEM flow card, chart card, and other SEM cards will show each user's chosen language.
+- **Mixed-language scenario:** System = German, user profile = English → mushroom cards show German, SEM cards show English. This is by design, not a bug.
+
+#### How to ensure consistent language
+
+For all text to appear in the same language:
+
+1. Set the **system language** to your desired language (Settings → General)
+2. Set every **user's profile language** to the same language
+3. Call `solar_energy_management.generate_dashboard` to regenerate the dashboard with the new system language
+4. Hard-refresh the browser (Ctrl+Shift+R)
+
+### Which parts translate when?
+
+| Action | What changes |
+|--------|-------------|
+| Change **system language** + regenerate dashboard | Mushroom cards, chart labels, section headers, tab names |
+| Change **user profile language** | SEM custom cards update immediately (no regeneration needed) |
+| Add new translations to `translations.json` | Must regenerate `sem-localize.js` + redeploy + regenerate dashboard |
+
+---
+
 ## Troubleshooting
 
 ### Dashboard not appearing
@@ -247,3 +285,9 @@ The dashboard references SEM sensors that may not exist yet. Wait for the first 
 
 ### Cards not updating after SEM update
 SEM includes `?v={version}` cache busting on all card URLs. If cards still show old behavior, hard-refresh (Ctrl+Shift+R) to force reload.
+
+### Some cards in wrong language / mixed languages
+This is expected if your system language and user profile language differ. See [Multi-Language Support](#multi-language-support) above. To fix: set both to the same language and regenerate the dashboard.
+
+### Changed system language but dashboard still in old language
+You must regenerate the dashboard after changing the system language. Go to Developer Tools > Services > `solar_energy_management.generate_dashboard` and call the service, then hard-refresh.

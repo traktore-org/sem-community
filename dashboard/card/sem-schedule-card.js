@@ -6,10 +6,9 @@
  *   entity_prefix: sensor.sem_   # default
  */
 
-class SEMScheduleCard extends HTMLElement {
+class SEMScheduleCard extends SEMBaseCard {
     constructor() {
         super();
-        this.attachShadow({ mode: 'open' });
         this._rendered = false;
     }
 
@@ -33,7 +32,11 @@ class SEMScheduleCard extends HTMLElement {
     }
 
     set hass(hass) {
-        this._hass = hass;
+        const localeChanged = this._checkLocaleChange(hass);
+        if (localeChanged) {
+            this._rendered = false;
+            this._lastKey = '';
+        }
         const key = [
             'tariff_price_level', 'night_start_time', 'night_end_time',
             'best_surplus_window', 'predicted_surplus_window',
@@ -179,11 +182,6 @@ class SEMScheduleCard extends HTMLElement {
     /** Convert day-fraction (0-1) to SVG x coordinate. */
     _toX(frac) {
         return SEMScheduleCard.MARGIN_LEFT + frac * SEMScheduleCard.BAR_WIDTH;
-    }
-
-    _t(key) {
-        const lang = this._hass?.language;
-        return (typeof semLocalize === 'function') ? semLocalize(key, lang) : key;
     }
 
     _update() {

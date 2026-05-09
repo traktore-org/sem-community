@@ -471,3 +471,109 @@ ha_energy_reader.py             — Read HA Energy Dashboard config
 load_management.py              — LoadManagementCoordinator (peak tracking)
 hardware_detection.py           — Auto-discover inverter/battery/charger
 ```
+
+---
+
+## Translation / i18n Architecture
+
+SEM uses a **hybrid two-layer translation system** because Home Assistant has two different language settings that affect different parts of the UI.
+
+### The Two Language Settings
+
+| Setting | Where configured | Scope | Affects |
+|---------|-----------------|-------|---------|
+| **System language** | Settings → General → Language | One per HA instance | Config flow, entity names, mushroom card labels, dashboard template strings |
+| **User language** | User profile → Language | Per user | SEM custom cards (sem-flow-card, sem-chart-card, etc.) |
+
+A household may have the system set to German, but one user's profile set to English. In that case, mushroom card titles appear in German (system), while SEM custom cards appear in English (user profile).
+
+### Layer 1: Server-Side Translation (System Language)
+
+**When:** Dashboard generation (`generate_dashboard` service call)
+**Source:** `hass.config.language` (system language)
+**File:** `features/dashboard_generator.py` → `_translate_dashboard()`
+**Translates:** All YAML-based card content — mushroom titles, labels, tab names, template strings
+
+**How it works:**
+1. Loads `dashboard/translations.json` (single source of truth, 606 keys × 15 languages)
+2. Builds a reverse lookup: English text → translated text
+3. Walks the entire dashboard YAML tree
+4. Replaces exact-match English strings in translatable fields: `title`, `subtitle`, `primary`, `secondary`, `name`, `label`, `content`
+5. For Jinja-templated fields (containing `{{ }}` or `{% %}`): splits on Jinja blocks using regex, translates only the literal text between them
+6. Writes the translated dashboard to Lovelace storage
+
+**What this means for users:**
+- Mushroom cards, section headers, and static labels are translated **once** at generation time
+- All users see the **same language** for these elements (the system language)
+- To change: update system language → re-run `generate_dashboard` service
+- Third-party cards (mushroom, apexcharts, sankey) cannot use runtime translation — they only read stored YAML
+
+### Layer 2: Runtime Per-User Translation (User Language)
+
+**When:** Every render cycle in the browser
+**Source:** `hass.language` (current user's profile language)
+**File:** `dashboard/card/sem-localize.js` → `semLocalize(key, lang)`
+**Translates:** All SEM custom card content (labels, status text, error messages)
+
+**How it works:**
+1. `sem-localize.js` is auto-generated from `translations.json` — contains all 606 keys × 15 languages as a JS object
+2. Loaded as a Lovelace resource, exposes `window.semLocalize(key, lang)`
+3. Fires `sem-localize-ready` CustomEvent when loaded
+4. SEM cards extend `SEMBaseCard` (in `sem-shared.js`) which provides `_t(key)` → calls `semLocalize(key, hass.language)`
+5. Cards re-render when the user's language changes (detected in `_checkLocaleChange()`)
+
+**Fallback chain:** user language → English → raw key
+
+**What this means for users:**
+- Each user sees SEM custom cards in **their own profile language**
+- Two users viewing the same dashboard can see different languages for SEM cards
+- Language changes take effect immediately (no dashboard regeneration needed)
+
+### Which Cards Use Which Layer?
+
+| Card Type | Translation Layer | Language Source | Example |
+|-----------|------------------|----------------|---------|
+| Mushroom chips/entities | Server-side | System language | "Solar Power", "Battery SOC" |
+| Mushroom template cards | Server-side | System language | "Peak Management", "Optimization Score" |
+| Section titles (sem-title-card) | Runtime per-user | User profile | Tab headers with live Jinja subtitles |
+| sem-flow-card | Runtime per-user | User profile | Node labels, status text |
+| sem-chart-card | Runtime per-user | User profile | Chart titles, axis labels, legends |
+| sem-battery-card | Runtime per-user | User profile | "Charging", "Discharging", "Idle" |
+| sem-ev-status-card | Runtime per-user | User profile | Mode labels, session stats |
+| sem-charger-status-card | Runtime per-user | User profile | Charger status, power labels |
+| sem-period-selector-card | Runtime per-user | User profile | "Today", "This Week", "This Month" |
+| sem-solar-summary-card | Runtime per-user | User profile | Production stats, forecast |
+| sem-weather-card | Runtime per-user | User profile | Weather labels |
+| Sankey chart (3rd party) | Server-side | System language | Node names in energy flow |
+| ApexCharts (3rd party) | Server-side | System language | Chart titles, series names |
+
+### Single Source of Truth
+
+Both layers read from the same file: **`dashboard/translations.json`**
+
+```
+dashboard/translations.json          ← single source (606 keys × 15 languages)
+    │
+    ├──→ dashboard_generator.py      reads at generation time (server-side)
+    │
+    └──→ sem-localize.js             auto-generated copy for browser (runtime)
+```
+
+**Important:** `sem-localize.js` must be regenerated whenever `translations.json` changes. It is a generated artifact — never edit it directly.
+
+### Supported Languages
+
+Czech (cs), Danish (da), German (de), English (en), Spanish (es), Finnish (fi), French (fr), Hungarian (hu), Italian (it), Dutch (nl), Norwegian (no), Polish (pl), Portuguese (pt), Romanian (ro), Swedish (sv)
+
+### Adding a New Language
+
+1. Add the language code and all 606 keys to `dashboard/translations.json`
+2. Create `translations/{lang}.json` with config flow and entity translations (mirror `strings.json` structure)
+3. Regenerate `sem-localize.js` from `translations.json`
+4. Deploy and call `generate_dashboard` to apply server-side translations
+
+### Adding a New Translation Key
+
+1. Add the key to **all 15 languages** in `translations.json`
+2. Regenerate `sem-localize.js`
+3. Use `_t('key_name')` in custom card JS, or use the English text directly in dashboard template YAML (server-side translation handles the lookup)
