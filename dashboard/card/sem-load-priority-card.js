@@ -216,8 +216,8 @@ class SEMLoadPriorityCard extends SEMBaseCard {
                         </select>
                     </label>
                     <div class="arrows">
-                        <button class="arrow-btn" data-action="move-up" data-device="${device.id}" title="Move up">▲</button>
-                        <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="Move down">▼</button>
+                        <button class="arrow-btn" data-action="move-up" data-device="${device.id}" title="${this._t('move_up')}">▲</button>
+                        <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">▼</button>
                     </div>
                 </div>
             </div>

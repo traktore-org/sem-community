@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-09T18:06:39.854003+00:00
+// Generated: 2026-05-09T18:11:51.912282+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -649,7 +649,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Yes",
-    "No": "No"
+    "No": "No",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "de": {
     "charging": "Laden",
@@ -1238,7 +1246,7 @@ const _semTranslations = {
     "sensors": "Sensoren",
     "Best window:": "Bestes Fenster:",
     "Forecast surplus:": "Prognostizierter Überschuss:",
-    "Score:": "Punktzahl:",
+    "Score:": "Bewertung:",
     "Peak Load ·": "Spitzenlast ·",
     "CO₂ avoided this year": "CO₂ vermieden dieses Jahr",
     "Lifetime:": "Gesamt:",
@@ -1299,7 +1307,15 @@ const _semTranslations = {
     "True": "Ja",
     "False": "Nein",
     "Yes": "Ja",
-    "No": "Nein"
+    "No": "Nein",
+    "Factor:": "Faktor:",
+    "Interval:": "Intervall:",
+    "Monthly peak:": "Monatsspitze:",
+    "Surplus:": "Überschuss:",
+    "Today:": "Heute:",
+    "Tomorrow:": "Morgen:",
+    "move_up": "Nach oben",
+    "move_down": "Nach unten"
   },
   "fr": {
     "charging": "En charge",
@@ -1853,11 +1869,11 @@ const _semTranslations = {
     "/year": "/an",
     "Remaining": "Restant",
     "Now": "Maintenant",
-    "Source:": "Source :",
+    "Source:": "Source:",
     "Total:": "Total :",
     "Free:": "Libre :",
     "Distributable": "Distribuable",
-    "Active:": "Actif :",
+    "Active:": "Actif:",
     "Grid import": "Import réseau",
     "Batt charge": "Charge batt",
     "Batt disch": "Décharge batt",
@@ -1888,7 +1904,7 @@ const _semTranslations = {
     "sensors": "capteurs",
     "Best window:": "Meilleur créneau:",
     "Forecast surplus:": "Surplus prévu:",
-    "Score:": "Score :",
+    "Score:": "Score:",
     "Peak Load ·": "Charge de pointe ·",
     "CO₂ avoided this year": "CO₂ évité cette année",
     "Lifetime:": "Durée de vie :",
@@ -1949,7 +1965,15 @@ const _semTranslations = {
     "True": "Oui",
     "False": "Non",
     "Yes": "Oui",
-    "No": "Non"
+    "No": "Non",
+    "Factor:": "Facteur:",
+    "Interval:": "Intervalle:",
+    "Monthly peak:": "Pic mensuel:",
+    "Surplus:": "Surplus:",
+    "Today:": "Aujourd'hui:",
+    "Tomorrow:": "Demain:",
+    "move_up": "Monter",
+    "move_down": "Descendre"
   },
   "es": {
     "charging": "Cargando",
@@ -2599,7 +2623,15 @@ const _semTranslations = {
     "True": "Sí",
     "False": "No",
     "Yes": "Sí",
-    "No": "No"
+    "No": "No",
+    "Factor:": "Factor:",
+    "Interval:": "Intervalo:",
+    "Monthly peak:": "Pico mensual:",
+    "Surplus:": "Excedente:",
+    "Today:": "Hoy:",
+    "Tomorrow:": "Mañana:",
+    "move_up": "Subir",
+    "move_down": "Bajar"
   },
   "it": {
     "charging": "In carica",
@@ -3249,7 +3281,15 @@ const _semTranslations = {
     "True": "Sì",
     "False": "No",
     "Yes": "Sì",
-    "No": "No"
+    "No": "No",
+    "Factor:": "Fattore:",
+    "Interval:": "Intervallo:",
+    "Monthly peak:": "Picco mensile:",
+    "Surplus:": "Surplus:",
+    "Today:": "Oggi:",
+    "Tomorrow:": "Domani:",
+    "move_up": "Su",
+    "move_down": "Giù"
   },
   "nl": {
     "charging": "Laden",
@@ -3899,7 +3939,15 @@ const _semTranslations = {
     "True": "Ja",
     "False": "Nee",
     "Yes": "Ja",
-    "No": "Nee"
+    "No": "Nee",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Maandpiek:",
+    "Surplus:": "Overschot:",
+    "Today:": "Vandaag:",
+    "Tomorrow:": "Morgen:",
+    "move_up": "Omhoog",
+    "move_down": "Omlaag"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -4549,7 +4597,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Ano",
-    "No": "Ne"
+    "No": "Ne",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "da": {
     "charging": "Oplader",
@@ -5199,7 +5255,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Ja",
-    "No": "Nej"
+    "No": "Nej",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "fi": {
     "charging": "Lataus",
@@ -5849,7 +5913,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Kyllä",
-    "No": "Ei"
+    "No": "Ei",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "hu": {
     "charging": "Töltés",
@@ -6499,7 +6571,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Igen",
-    "No": "Nem"
+    "No": "Nem",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "no": {
     "charging": "Lader",
@@ -7149,7 +7229,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Ja",
-    "No": "Nei"
+    "No": "Nei",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -7799,7 +7887,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Tak",
-    "No": "Nie"
+    "No": "Nie",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "pt": {
     "charging": "A carregar",
@@ -8449,7 +8545,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Sim",
-    "No": "Não"
+    "No": "Não",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "ro": {
     "charging": "Încărcare",
@@ -9099,7 +9203,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Da",
-    "No": "Nu"
+    "No": "Nu",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   },
   "sv": {
     "charging": "Laddar",
@@ -9749,7 +9861,15 @@ const _semTranslations = {
     "True": "Yes",
     "False": "No",
     "Yes": "Ja",
-    "No": "Nej"
+    "No": "Nej",
+    "Factor:": "Factor:",
+    "Interval:": "Interval:",
+    "Monthly peak:": "Monthly peak:",
+    "Surplus:": "Surplus:",
+    "Today:": "Today:",
+    "Tomorrow:": "Tomorrow:",
+    "move_up": "Move up",
+    "move_down": "Move down"
   }
 };
 
