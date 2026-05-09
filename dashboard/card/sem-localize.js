@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-09T07:13:12.606855+00:00
+// Generated: 2026-05-09T15:15:09.048846+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -40,10 +40,10 @@ const _semTranslations = {
     "solar_share": "Solar Share",
     "strategy": "Strategy",
     "peak": "Peak",
-    "devices": "Devices",
+    "devices": "devices",
     "active": "Active",
     "cost": "Cost",
-    "saved": "Saved",
+    "saved": "saved",
     "net": "Net",
     "score": "Score",
     "co2": "CO₂",
@@ -508,7 +508,7 @@ const _semTranslations = {
     "None": "None",
     "Surplus Mode": "Surplus Mode",
     "Peak Only": "Peak Only",
-    "sessions": "Sessions",
+    "sessions": "sessions",
     "above target": "above target",
     "of target": "of target",
     "Vehicle charging": "Vehicle charging",
@@ -526,7 +526,7 @@ const _semTranslations = {
     "very_cheap": "very cheap",
     "very_expensive": "very expensive",
     "normal": "Normal",
-    "vs today": "vs Today",
+    "vs today": "vs today",
     "vs public": "vs public",
     "allocated": "allocated",
     "nights until charge": "nights until charge",
@@ -627,7 +627,17 @@ const _semTranslations = {
     "inverter": "Inverter",
     "ev_charger": "EV Charger",
     "solar_savings": "Solar Savings",
-    "battery_savings": "Battery Savings"
+    "battery_savings": "Battery Savings",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "de": {
     "charging": "Laden",
@@ -1255,7 +1265,17 @@ const _semTranslations = {
     "inverter": "Wechselrichter",
     "ev_charger": "EV-Ladegerät",
     "solar_savings": "Solareinsparungen",
-    "battery_savings": "Batterieeinsparungen"
+    "battery_savings": "Batterieeinsparungen",
+    "Deviation:": "Abweichung:",
+    "History:": "Verlauf:",
+    "stable": "stabil",
+    "peak:": "Spitze:",
+    "Forecast Accuracy": "Prognosegenauigkeit",
+    "Monthly peak": "Monatsspitze",
+    "Factor": "Faktor",
+    "declining": "fallend",
+    "rising": "steigend",
+    "unknown": "unbekannt"
   },
   "fr": {
     "charging": "En charge",
@@ -1883,7 +1903,17 @@ const _semTranslations = {
     "inverter": "Onduleur",
     "ev_charger": "Chargeur VE",
     "solar_savings": "Économies solaires",
-    "battery_savings": "Économies batterie"
+    "battery_savings": "Économies batterie",
+    "Deviation:": "Ecart:",
+    "History:": "Historique:",
+    "stable": "stable",
+    "peak:": "pic:",
+    "Forecast Accuracy": "Précision des prévisions",
+    "Monthly peak": "Pic mensuel",
+    "Factor": "Facteur",
+    "declining": "en baisse",
+    "rising": "en hausse",
+    "unknown": "inconnu"
   },
   "es": {
     "charging": "Cargando",
@@ -2511,7 +2541,17 @@ const _semTranslations = {
     "inverter": "Inversor",
     "ev_charger": "Cargador VE",
     "solar_savings": "Ahorro solar",
-    "battery_savings": "Ahorro batería"
+    "battery_savings": "Ahorro batería",
+    "Deviation:": "Desviación:",
+    "History:": "Historial:",
+    "stable": "estable",
+    "peak:": "pico:",
+    "Forecast Accuracy": "Precisión del pronóstico",
+    "Monthly peak": "Pico mensual",
+    "Factor": "Factor",
+    "declining": "descendente",
+    "rising": "ascendente",
+    "unknown": "desconocido"
   },
   "it": {
     "charging": "In carica",
@@ -3139,7 +3179,17 @@ const _semTranslations = {
     "inverter": "Inverter",
     "ev_charger": "Caricatore VE",
     "solar_savings": "Risparmi solari",
-    "battery_savings": "Risparmi batteria"
+    "battery_savings": "Risparmi batteria",
+    "Deviation:": "Deviazione:",
+    "History:": "Storico:",
+    "stable": "stabile",
+    "peak:": "picco:",
+    "Forecast Accuracy": "Precisione previsione",
+    "Monthly peak": "Picco mensile",
+    "Factor": "Fattore",
+    "declining": "in calo",
+    "rising": "in aumento",
+    "unknown": "sconosciuto"
   },
   "nl": {
     "charging": "Laden",
@@ -3767,7 +3817,17 @@ const _semTranslations = {
     "inverter": "Omvormer",
     "ev_charger": "EV-lader",
     "solar_savings": "Zonbesparingen",
-    "battery_savings": "Batterijbesparingen"
+    "battery_savings": "Batterijbesparingen",
+    "Deviation:": "Afwijking:",
+    "History:": "Geschiedenis:",
+    "stable": "stabiel",
+    "peak:": "piek:",
+    "Forecast Accuracy": "Voorspellingsnauwkeurigheid",
+    "Monthly peak": "Maandpiek",
+    "Factor": "Factor",
+    "declining": "dalend",
+    "rising": "stijgend",
+    "unknown": "onbekend"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -4395,7 +4455,17 @@ const _semTranslations = {
     "inverter": "Střídač",
     "ev_charger": "EV nabíječka",
     "solar_savings": "Solární úspory",
-    "battery_savings": "Úspory z baterie"
+    "battery_savings": "Úspory z baterie",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "da": {
     "charging": "Oplader",
@@ -5023,7 +5093,17 @@ const _semTranslations = {
     "inverter": "Inverter",
     "ev_charger": "EV-lader",
     "solar_savings": "Solbesparelser",
-    "battery_savings": "Batteribesparelser"
+    "battery_savings": "Batteribesparelser",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "fi": {
     "charging": "Lataus",
@@ -5651,7 +5731,17 @@ const _semTranslations = {
     "inverter": "Invertteri",
     "ev_charger": "EV-laturi",
     "solar_savings": "Aurinkosäästöt",
-    "battery_savings": "Akkusäästöt"
+    "battery_savings": "Akkusäästöt",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "hu": {
     "charging": "Töltés",
@@ -6279,7 +6369,17 @@ const _semTranslations = {
     "inverter": "Inverter",
     "ev_charger": "EV töltő",
     "solar_savings": "Napelemes megtakarítás",
-    "battery_savings": "Akkumulátor megtakarítás"
+    "battery_savings": "Akkumulátor megtakarítás",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "no": {
     "charging": "Lader",
@@ -6907,7 +7007,17 @@ const _semTranslations = {
     "inverter": "Inverter",
     "ev_charger": "EV-lader",
     "solar_savings": "Solbesparelser",
-    "battery_savings": "Batteribesparelser"
+    "battery_savings": "Batteribesparelser",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -7535,7 +7645,17 @@ const _semTranslations = {
     "inverter": "Falownik",
     "ev_charger": "Ładowarka EV",
     "solar_savings": "Oszczędności solarne",
-    "battery_savings": "Oszczędności bateryjne"
+    "battery_savings": "Oszczędności bateryjne",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "pt": {
     "charging": "A carregar",
@@ -8163,7 +8283,17 @@ const _semTranslations = {
     "inverter": "Inversor",
     "ev_charger": "Carregador VE",
     "solar_savings": "Poupança solar",
-    "battery_savings": "Poupança da bateria"
+    "battery_savings": "Poupança da bateria",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "ro": {
     "charging": "Încărcare",
@@ -8791,7 +8921,17 @@ const _semTranslations = {
     "inverter": "Invertor",
     "ev_charger": "Încărcător VE",
     "solar_savings": "Economii solare",
-    "battery_savings": "Economii baterie"
+    "battery_savings": "Economii baterie",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   },
   "sv": {
     "charging": "Laddar",
@@ -9419,7 +9559,17 @@ const _semTranslations = {
     "inverter": "Växelriktare",
     "ev_charger": "EV-laddare",
     "solar_savings": "Solbesparingar",
-    "battery_savings": "Batteribesparingar"
+    "battery_savings": "Batteribesparingar",
+    "Deviation:": "Deviation:",
+    "History:": "History:",
+    "stable": "stable",
+    "peak:": "peak:",
+    "Forecast Accuracy": "Forecast Accuracy",
+    "Monthly peak": "Monthly peak",
+    "Factor": "Factor",
+    "declining": "declining",
+    "rising": "rising",
+    "unknown": "unknown"
   }
 };
 
