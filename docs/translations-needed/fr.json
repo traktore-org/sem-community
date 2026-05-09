@@ -1,0 +1,23 @@
+{
+  "Allocation": "Allocation",
+  "Charge": "Charge",
+  "Configuration": "Configuration",
+  "Docs": "Docs",
+  "Export": "Export",
+  "Import": "Import",
+  "Net": "Net",
+  "Production": "Production",
+  "Session": "Session",
+  "Total": "Total",
+  "W total": "W total",
+  "cycles": "Cycles",
+  "export": "Export",
+  "mode": "Mode",
+  "net": "Net",
+  "production": "Production",
+  "score": "Score",
+  "session": "Session",
+  "surplus": "Surplus",
+  "vs public": "vs public",
+  "watts": "Watts"
+}
