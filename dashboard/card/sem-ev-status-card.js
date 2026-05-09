@@ -137,7 +137,7 @@ class SEMEVStatusCard extends SEMBaseCard {
         // Charging mode (from select entity)
         const modeEntity = this._hass?.states['select.sem_ev_charging_mode'];
         const mode = modeEntity?.state || 'auto';
-        const modeLabels = { auto: 'Auto', minpv: 'Min+PV', now: this._t('maximum'), off: this._t('off') };
+        const modeLabels = { auto: this._t('mode_auto'), minpv: this._t('mode_minpv'), now: this._t('maximum'), off: this._t('off') };
         setVal('.mode-value', modeLabels[mode] || mode);
 
         // Bottom chips

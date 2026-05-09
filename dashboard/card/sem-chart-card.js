@@ -57,85 +57,85 @@ const C = (typeof SEM_COLORS !== 'undefined') ? SEM_COLORS : {
 /* ── Preset definitions ── */
 const PRESETS = {
     costs: {
-        title: 'Energy Costs',
+        title: 'energy_costs',
         y_label: '_currency_',  // Replaced at render time with HA currency (#119)
         stacked: false,
         daily: [
             { suffix: 'daily_costs', name: 'Import', color: C.gridImport, type: 'bar' },
-            { suffix: 'daily_export_revenue', name: 'Export', color: C.gridExport, type: 'bar' },
-            { suffix: 'daily_net_cost', name: 'Net', color: C.solar, type: 'line' },
+            { suffix: 'daily_export_revenue', name: 'export', color: C.gridExport, type: 'bar' },
+            { suffix: 'daily_net_cost', name: 'net', color: C.solar, type: 'line' },
         ],
         monthly: [
             { suffix: 'monthly_costs', name: 'Import', color: C.gridImport, type: 'bar' },
-            { suffix: 'monthly_export_revenue', name: 'Export', color: C.gridExport, type: 'bar' },
-            { suffix: 'monthly_net_cost', name: 'Net', color: C.solar, type: 'line' },
+            { suffix: 'monthly_export_revenue', name: 'export', color: C.gridExport, type: 'bar' },
+            { suffix: 'monthly_net_cost', name: 'net', color: C.solar, type: 'line' },
         ],
     },
     savings: {
-        title: 'Energy Savings',
+        title: 'energy_savings',
         y_label: '_currency_',
         stacked: true,
         daily: [
-            { suffix: 'daily_savings', name: 'Solar Savings', color: C.solar, type: 'area' },
-            { suffix: 'daily_battery_savings', name: 'Battery Savings', color: C.batteryOut, type: 'area' },
+            { suffix: 'daily_savings', name: 'solar_savings', color: C.solar, type: 'area' },
+            { suffix: 'daily_battery_savings', name: 'battery_savings', color: C.batteryOut, type: 'area' },
         ],
         monthly: [
-            { suffix: 'monthly_savings', name: 'Solar Savings', color: C.solar, type: 'area' },
-            { suffix: 'monthly_battery_savings', name: 'Battery Savings', color: C.batteryOut, type: 'area' },
+            { suffix: 'monthly_savings', name: 'solar_savings', color: C.solar, type: 'area' },
+            { suffix: 'monthly_battery_savings', name: 'battery_savings', color: C.batteryOut, type: 'area' },
         ],
     },
     energy: {
-        title: 'Energy Balance',
+        title: 'energy_balance',
         y_label: 'kWh',
         stacked: false,
         daily: [
-            { suffix: 'daily_solar_energy', name: 'Solar', color: C.solar, type: 'bar' },
-            { suffix: 'daily_home_energy', name: 'Home', color: C.home, type: 'bar' },
-            { suffix: 'daily_grid_import_energy', name: 'Grid Import', color: C.gridImport, type: 'bar' },
-            { suffix: 'daily_grid_export_energy', name: 'Grid Export', color: C.gridExport, type: 'bar' },
+            { suffix: 'daily_solar_energy', name: 'solar', color: C.solar, type: 'bar' },
+            { suffix: 'daily_home_energy', name: 'home', color: C.home, type: 'bar' },
+            { suffix: 'daily_grid_import_energy', name: 'grid_import', color: C.gridImport, type: 'bar' },
+            { suffix: 'daily_grid_export_energy', name: 'grid_export', color: C.gridExport, type: 'bar' },
         ],
         monthly: [
-            { suffix: 'monthly_solar_energy', name: 'Solar', color: C.solar, type: 'bar' },
-            { suffix: 'monthly_home_energy', name: 'Home', color: C.home, type: 'bar' },
-            { suffix: 'monthly_grid_import_energy', name: 'Grid Import', color: C.gridImport, type: 'bar' },
-            { suffix: 'monthly_grid_export_energy', name: 'Grid Export', color: C.gridExport, type: 'bar' },
+            { suffix: 'monthly_solar_energy', name: 'solar', color: C.solar, type: 'bar' },
+            { suffix: 'monthly_home_energy', name: 'home', color: C.home, type: 'bar' },
+            { suffix: 'monthly_grid_import_energy', name: 'grid_import', color: C.gridImport, type: 'bar' },
+            { suffix: 'monthly_grid_export_energy', name: 'grid_export', color: C.gridExport, type: 'bar' },
         ],
     },
     power: {
-        title: 'Power Flow',
+        title: 'power_flow',
         y_label: 'W',
         stacked: false,
         hourly: [
-            { suffix: 'solar_power', name: 'Solar', color: C.solar, type: 'line' },
-            { suffix: 'home_consumption_power', name: 'Home', color: C.home, type: 'line' },
-            { suffix: 'grid_import_power', name: 'Grid Import', color: C.gridImport, type: 'line' },
-            { suffix: 'grid_export_power', name: 'Grid Export', color: C.gridExport, type: 'line' },
-            { suffix: 'battery_power', name: 'Battery', color: C.batteryOut, type: 'line' },
+            { suffix: 'solar_power', name: 'solar', color: C.solar, type: 'line' },
+            { suffix: 'home_consumption_power', name: 'home', color: C.home, type: 'line' },
+            { suffix: 'grid_import_power', name: 'grid_import', color: C.gridImport, type: 'line' },
+            { suffix: 'grid_export_power', name: 'grid_export', color: C.gridExport, type: 'line' },
+            { suffix: 'battery_power', name: 'battery', color: C.batteryOut, type: 'line' },
         ],
     },
     battery: {
-        title: 'Battery',
+        title: 'battery',
         y_label: 'W',
         y2_label: '%',
         stacked: false,
         hourly: [
             { suffix: 'battery_charge_power', name: 'Charge', color: C.batteryIn, type: 'area' },
             { suffix: 'battery_discharge_power', name: 'Discharge', color: C.batteryOut, type: 'area' },
-            { suffix: 'battery_soc', name: 'SOC', color: C.home, type: 'line', y_axis: 1 },
+            { suffix: 'battery_soc', name: 'soc', color: C.home, type: 'line', y_axis: 1 },
         ],
     },
     ev: {
-        title: 'EV Charging',
+        title: 'ev_charging',
         y_label: 'W',
         stacked: false,
         hourly: [
-            { suffix: 'ev_power', name: 'EV Power', color: C.ev, type: 'area' },
+            { suffix: 'ev_power', name: 'ev_power', color: C.ev, type: 'area' },
         ],
         daily: [
-            { suffix: 'daily_ev_energy', name: 'EV Energy', color: C.ev, type: 'bar' },
+            { suffix: 'daily_ev_energy', name: 'ev_energy', color: C.ev, type: 'bar' },
         ],
         monthly: [
-            { suffix: 'monthly_ev_energy', name: 'EV Energy', color: C.ev, type: 'bar' },
+            { suffix: 'monthly_ev_energy', name: 'ev_energy', color: C.ev, type: 'bar' },
         ],
     },
 };
@@ -246,12 +246,12 @@ class SEMChartCard extends SEMBaseCard {
             datasets = await this._fetchStatistics(series, startISO, endISO, granularity);
         } catch (err) {
             console.warn('sem-chart-card: fetch error', err);
-            this._showEmpty('Data unavailable');
+            this._showEmpty(this._t('data_unavailable'));
             return;
         }
 
         if (!datasets || datasets.every(ds => !ds.data.length)) {
-            this._showEmpty('No data for this period');
+            this._showEmpty(this._t('no_data_for_period'));
             return;
         }
 
