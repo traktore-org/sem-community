@@ -15,7 +15,7 @@
 
 SEM monitors your solar production, battery, grid, and EV charger every 10 seconds and distributes surplus power across your devices by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
 
-![SEM Dashboard Overview](docs/images/sem_dashboard_overview.png)
+![SEM Dashboard Overview](docs/images/sem_home_tab.png)
 
 <p align="center">
   <img src="docs/images/sem_system_diagram_animated.gif" alt="System Diagram Animation" width="400">
@@ -169,7 +169,7 @@ Key settings you can adjust (all have sensible defaults):
 | Min solar power | 500W | Minimum surplus before solar EV charging starts |
 | Observer mode | Off | Read-only mode for test systems (no hardware control) |
 
-For detailed explanations of all settings, see the [User Guide](USER_GUIDE.md).
+For detailed explanations of all settings, see the [Setup Guide](docs/SETUP_GUIDE.md).
 
 ### Step 6: Load Management (Optional)
 
@@ -203,7 +203,7 @@ Everything else — solar charging, surplus distribution, battery protection, pe
 
 ### Solar Charging (default)
 
-During the day, SEM dynamically adjusts the EV charging current (6-32A) to match real-time solar surplus. If surplus drops below the minimum threshold, charging pauses until surplus returns. The battery's SOC determines how aggressively SEM uses stored energy to help the EV (see [User Guide — SOC Zones](USER_GUIDE.md#soc-zone-strategy)).
+During the day, SEM dynamically adjusts the EV charging current (6-32A) to match real-time solar surplus. If surplus drops below the minimum threshold, charging pauses until surplus returns. The battery's SOC determines how aggressively SEM uses stored energy to help the EV (see [Setup Guide — SOC Zones](docs/SETUP_GUIDE.md#soc-zone-strategy)).
 
 ### Min+PV (Minimum + Solar)
 
@@ -239,9 +239,9 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 
 | | |
 |---|---|
-| ![Energy](docs/images/sem_energy_flows.png) | ![Costs](docs/images/sem_costs_tab.png) |
+| ![Energy](docs/images/sem_energy_tab.png) | ![Costs](docs/images/sem_costs_tab.png) |
 | ![Battery](docs/images/sem_battery_tab.png) | ![EV](docs/images/sem_ev_tab.png) |
-| ![Control](docs/images/sem_control_panel.png) | ![System](docs/images/sem_system_tab.png) |
+| ![Control](docs/images/sem_control_tab.png) | ![System](docs/images/sem_system_tab.png) |
 
 ### Dashboard Features
 - **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects
@@ -402,11 +402,10 @@ automation:
 | Guide | Description |
 |-------|-------------|
 | [Quick Start](docs/QUICK_START.md) | 5-minute setup guide |
-| [User Guide](USER_GUIDE.md) | Complete feature reference |
-| [Dashboard Guide](docs/DASHBOARD_GUIDE.md) | Dashboard setup & customization |
-| [Architecture](docs/ARCHITECTURE.md) | Developer documentation |
-| [Troubleshooting](TROUBLESHOOTING.md) | Common issues & fixes |
-| [Known Limitations](KNOWN_LIMITATIONS.md) | Platform constraints |
+| [Setup Guide](docs/SETUP_GUIDE.md) | Detailed configuration and tuning |
+| [Dashboard Guide](docs/DASHBOARD_GUIDE.md) | Dashboard tabs, cards, and multi-language support |
+| [Multi-Device Guide](docs/MULTI_DEVICE_GUIDE.md) | Multi-inverter, multi-charger, and brand-specific setup |
+| [Architecture](docs/ARCHITECTURE.md) | Developer and contributor documentation |
 
 ---
 

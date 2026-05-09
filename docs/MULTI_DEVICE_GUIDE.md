@@ -56,7 +56,7 @@ This guide covers setting up SEM with different hardware combinations. SEM auto-
 
 - **Grid sensor**: Combined or split depending on model
 - **SEM handling**: Auto-detection via Energy Dashboard
-- **Troubleshooting**: See the [GoodWe troubleshooting section](../TROUBLESHOOTING.md)
+- **Troubleshooting**: Check the System tab on the SEM dashboard for sensor diagnostics
 
 ---
 
