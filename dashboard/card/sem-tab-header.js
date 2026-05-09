@@ -102,6 +102,38 @@ class SEMTabHeader extends SEMBaseCard {
     constructor() {
         super();
         this._rendered = false;
+        this._responsiveApplied = false;
+    }
+
+    connectedCallback() {
+        super.connectedCallback?.();
+        this._applyResponsiveContainer();
+    }
+
+    /** Walk up to the hui-card inside hui-panel-view and constrain its width */
+    _applyResponsiveContainer() {
+        if (this._responsiveApplied) return;
+        requestAnimationFrame(() => {
+            let el = this;
+            // Walk up through shadow DOM boundaries to find hui-card under panel-view
+            while (el) {
+                const host = el.getRootNode()?.host;
+                if (!host) break;
+                // hui-vertical-stack-card is the host of our shadow root's parent
+                if (host.tagName === 'HUI-VERTICAL-STACK-CARD') {
+                    // The parent of vertical-stack should be hui-card inside panel-view
+                    const huiCard = host.parentElement;
+                    if (huiCard && huiCard.tagName === 'HUI-CARD') {
+                        huiCard.style.maxWidth = '900px';
+                        huiCard.style.margin = '0 auto';
+                        huiCard.style.display = 'block';
+                        this._responsiveApplied = true;
+                        return;
+                    }
+                }
+                el = host;
+            }
+        });
     }
 
     setConfig(config) {
@@ -117,6 +149,7 @@ class SEMTabHeader extends SEMBaseCard {
             this._rendered = true;
         }
         this._updateStats();
+        if (!this._responsiveApplied) this._applyResponsiveContainer();
     }
 
     _getState(suffix, fallback) {

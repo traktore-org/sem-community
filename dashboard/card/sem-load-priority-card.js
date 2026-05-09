@@ -76,6 +76,8 @@ class SEMLoadPriorityCard extends SEMBaseCard {
                     power: (info.current_power || 0) / 1000,
                     priority: info.priority || 5,
                     isOn: info.is_on || false,
+                    isShed: info.is_shed || false,
+                    shedReason: info.shed_reason || null,
                     isControllable: info.is_controllable !== false,
                     isCritical: info.is_critical || false,
                     deviceType: info.device_type || 'unknown',
@@ -178,7 +180,7 @@ class SEMLoadPriorityCard extends SEMBaseCard {
         const indent = depth > 0 ? `margin-left:${depth * 24}px;border-left:2px solid rgba(255,152,0,${0.3 + depth * 0.1});` : '';
         return `
         <div class="device${isChild ? ' is-child' : ''}" data-id="${device.id}" style="${indent}">
-            <div class="drag-handle" title="${isChild ? 'Locked under parent — change Requires to release' : 'Drag to reorder'}" style="${isChild ? 'opacity:0.3;cursor:default' : ''}">${isChild ? '·' : '≡'}</div>
+            <div class="drag-handle" title="${isChild ? this._t('locked_under_parent') : this._t('drag_to_reorder')}" style="${isChild ? 'opacity:0.3;cursor:default' : ''}">${isChild ? '·' : '≡'}</div>
             <div class="device-body">
                 <div class="device-top">
                     <div class="device-name">
@@ -188,33 +190,34 @@ class SEMLoadPriorityCard extends SEMBaseCard {
                         ${device.hasManualMapping ? '<ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px;color:#ffc107;opacity:0.6"></ha-icon>' : ''}
                         ${!device.isControllable ? `<span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}"><ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px"></ha-icon> ${this._t('configure')}</span>` : ''}
                     </div>
-                    <div class="device-power" data-field="power-${device.id}">${onOff ? device.power.toFixed(1) + ' kW' : 'OFF'}</div>
+                    <div class="device-power" data-field="power-${device.id}">${onOff ? device.power.toFixed(1) + ' kW' : (device.isShed ? this._t('shed_label') : 'OFF')}</div>
                 </div>
                 ${device.blockedBy ? `<div class="dependency-blocked" style="font-size:11px;color:#ff9800;padding:2px 0 0 28px">⏳ Waiting for: ${device.blockedBy}</div>` : ''}
-                ${device.dependsOn.length ? `<div class="dependency-info" style="font-size:11px;opacity:0.55;padding:0 0 0 28px">↳ Depends on: ${device.dependsOn.join(', ')}</div>` : ''}
+                ${device.dependsOn.length ? `<div class="dependency-info" style="font-size:11px;opacity:0.55;padding:0 0 0 28px">↳ ${this._t('requires')}: ${device.dependsOn.join(', ')}</div>` : ''}
+                ${device.isShed && device.shedReason ? `<div class="shed-reason" style="font-size:11px;color:#f44336;padding:2px 0 0 28px">${device.shedReason === 'emergency' ? this._t('shed_emergency') : this._t('shed_peak')}</div>` : ''}
                 <div class="device-bottom">
-                    <div class="status-dot ${onOff ? 'on' : ''}" data-field="status-${device.id}"></div>
-                    <span class="dim" data-field="onoff-${device.id}">${onOff ? 'ON' : 'OFF'}</span>
+                    <div class="status-dot ${onOff ? 'on' : (device.isShed ? 'shed' : '')}" data-field="status-${device.id}"></div>
+                    <span class="dim" data-field="onoff-${device.id}">${onOff ? 'ON' : (device.isShed ? this._t('shed_label') : 'OFF')}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
-                    <label class="toggle-label"><span class="dim">${this._t('mode')}</span>
+                    <label class="toggle-label" title="${this._t('mode_tooltip')}"><span class="dim">${this._t('mode')}</span>
                         <select class="mode-select" data-action="control_mode" data-device="${device.id}">
                             <option value="off"${device.controlMode === 'off' ? ' selected' : ''}>${this._t('off')}</option>
                             <option value="peak_only"${device.controlMode === 'peak_only' ? ' selected' : ''}>${this._t('peak_only')}</option>
                             <option value="surplus"${device.controlMode === 'surplus' ? ' selected' : ''}>${this._t('surplus_mode')}</option>
                         </select>
                     </label>
-                    <label class="toggle-label"><span class="dim">Requires</span>
+                    <label class="toggle-label" title="${this._t('requires_tooltip')}"><span class="dim">${this._t('requires')}</span>
                         <select class="mode-select" data-action="depends_on" data-device="${device.id}">
-                            <option value=""${!device.dependsOn.length ? ' selected' : ''}>None</option>
+                            <option value=""${!device.dependsOn.length ? ' selected' : ''}>${this._t('action_none')}</option>
                             ${this.devices.filter(d => d.id !== device.id).map(d =>
                                 `<option value="${d.id}"${device.dependsOn.includes(d.id) ? ' selected' : ''}>${d.name}</option>`
                             ).join('')}
                         </select>
                     </label>
                     <div class="arrows">
-                        <button class="arrow-btn" data-action="move-up" data-device="${device.id}" title="Move up">▲</button>
-                        <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="Move down">▼</button>
+                        <button class="arrow-btn" data-action="move-up" data-device="${device.id}" title="${this._t('move_up')}">▲</button>
+                        <button class="arrow-btn" data-action="move-down" data-device="${device.id}" title="${this._t('move_down')}">▼</button>
                     </div>
                 </div>
             </div>
@@ -577,6 +580,7 @@ class SEMLoadPriorityCard extends SEMBaseCard {
             .device-bottom { display:flex; align-items:center; gap:8px; font-size:0.8em; flex-wrap:wrap; }
             .status-dot { width:7px; height:7px; border-radius:50%; background:var(--divider-color, ${divider}); flex-shrink:0; }
             .status-dot.on { background:#4caf50; box-shadow:0 0 6px #4caf50; }
+            .status-dot.shed { background:#f44336; box-shadow:0 0 6px #f44336; }
             .spacer { flex:1; }
             .badge { padding:2px 7px; border-radius:8px; font-size:0.8em; font-weight:600; }
             .badge.priority { background:#ff9800; color:#fff; min-width:14px; text-align:center; }
