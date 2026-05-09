@@ -75,7 +75,8 @@ class SEMChargerStatusCard extends SEMBaseCard {
             const power = this._state(`charger_${id}_power`);
             const session = this._state(`charger_${id}_session_energy`);
             const solar = this._state(`charger_${id}_session_solar_share`);
-            const taper = this._stateStr(`charger_${id}_taper_trend`) || 'stable';
+            const taperRaw = this._stateStr(`charger_${id}_taper_trend`) || 'stable';
+            const taper = this._t(taperRaw);
 
             // Derive name from friendly_name or charger id
             const entity = this._hass?.states[`${this._prefix}charger_${id}_power`];
