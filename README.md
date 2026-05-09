@@ -181,7 +181,7 @@ Enable peak load management if your utility bills based on peak demand:
 | Warning level | — | Early warning threshold |
 | Emergency level | — | All non-critical loads shed |
 
-![SEM Integration Page](docs/images/sem_integration.png)
+![SEM Integration Page](docs/images/sem_integration_detail.png)
 
 ---
 
