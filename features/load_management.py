@@ -918,6 +918,7 @@ class LoadManagementCoordinator:
             if success:
                 self._devices_shed.append(device_id)
                 self._devices[device_id]["last_turned_off"] = dt_util.now()
+                self._devices[device_id]["shed_reason"] = reason
                 _LOGGER.info(
                     f"Shed device {device_info.get('friendly_name', device_id)} "
                     f"({reason} load shedding)"
@@ -1054,6 +1055,7 @@ class LoadManagementCoordinator:
                 self._devices_shed.remove(device_id)
                 self._last_restore_time = dt_util.now()
                 self._devices[device_id]["last_turned_on"] = dt_util.now()
+                self._devices[device_id].pop("shed_reason", None)
                 _LOGGER.info(f"Restored device {device_info.get('friendly_name', device_id)}")
 
         except Exception as e:
@@ -1087,7 +1089,10 @@ class LoadManagementCoordinator:
             "devices_shed_list": self._devices_shed.copy(),
             "available_load_reduction": round(available_reduction, 2),
             "enabled": self._enabled,
-            "devices": self._devices.copy(),
+            "devices": {
+                did: {**dinfo, "is_shed": did in self._devices_shed}
+                for did, dinfo in self._devices.items()
+            },
             "consecutive_peak_15min": self._consecutive_peak_15min,
             "monthly_consecutive_peak": self._monthly_consecutive_peak,
         }

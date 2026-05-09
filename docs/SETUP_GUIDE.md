@@ -23,8 +23,9 @@ For multi-inverter and multi-charger setups, see
 4. [Verification](#4-verification)
 5. [Fine-tuning via the Options Flow](#5-fine-tuning-via-the-options-flow)
 6. [SOC Zone Strategy](#6-soc-zone-strategy)
-7. [Language Support](#7-language-support)
-8. [FAQ](#8-faq)
+7. [Load Management](#7-load-management)
+8. [Language Support](#8-language-support)
+9. [FAQ](#9-faq)
 
 ---
 
@@ -219,46 +220,38 @@ correctly. Problems caught early are much easier to fix.
 
 ### Check sensor values
 
-Go to **Developer Tools > States** (the wrench icon in the sidebar).
+Go to **Developer Tools > States** and search for:
 
 ![Developer Tools States view](images/sem_developer_tools_states.png)
 
-Search for these sensors and confirm they show numeric values (not
-"unavailable" or "unknown"):
-
-| Sensor | Expected value |
-|--------|---------------|
+| Sensor | Expected |
+|--------|---------|
 | `sensor.sem_solar_power` | Watts, >= 0 |
-| `sensor.sem_grid_power` | Watts, positive = export, negative = import |
+| `sensor.sem_grid_power` | Watts, positive = export |
 | `sensor.sem_home_consumption_power` | Watts, >= 0 |
-| `sensor.sem_battery_power` | Watts if battery present, else unavailable |
+| `sensor.sem_battery_power` | Watts (if battery present) |
 
-If any sensor shows "unavailable", the most common cause is that your Energy
-Dashboard does not have the corresponding sensor type assigned. Go back to
-**Settings > Dashboards > Energy** and check.
+If any shows "unavailable", check that the Energy Dashboard has the
+corresponding sensor type assigned.
 
 ### Check the dashboard
 
-Open the **SEM** dashboard from your sidebar and look at the Home tab.
+Open the **SEM** dashboard from your sidebar.
 
 ![SEM Home tab with system diagram](images/sem_home_tab.png)
 
-The animated system diagram should show flows between the components you have
-(solar, grid, battery, home, EV). If a component you have is missing, its
-sensors were not detected — check the Energy Dashboard configuration.
-
-If cards show "Custom element doesn't exist", a required HACS frontend card is
-missing. See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the full list.
+The animated system diagram should show flows between solar, grid, battery,
+home, and EV (for whichever components you have). A missing component means
+its sensors were not detected — check the Energy Dashboard. Cards showing
+"Custom element doesn't exist" mean a HACS card is missing — see
+[DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 
 ### Run the services check
 
-Go to **Developer Tools > Actions**.
-
-![Developer Tools Actions view](images/sem_developer_tools_services.png)
-
-Search for `solar_energy_management` to see all available SEM services. If
-none appear, the integration did not load correctly — check **Settings >
-System > Logs** and filter for `solar_energy_management`.
+Go to **Developer Tools > Actions** and search for `solar_energy_management`
+to see all available SEM services. If none appear, the integration did not
+load — check **Settings > System > Logs** filtered for
+`solar_energy_management`.
 
 ---
 
@@ -271,34 +264,33 @@ card, and click **Configure** to adjust any setting without reinstalling.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `update_interval` | 10 s | Coordinator polling interval. Controls how quickly SEM responds to changes. |
-| `peak_limit_w` | 0 | Grid peak limit in watts. SEM sheds loads (lowest priority first) to stay below this. 0 = disabled. |
-| `min_solar_power_w` | 500 | Minimum solar surplus (watts) before SEM starts solar-driven EV charging. Below this, the surplus is too small to be worth using. |
-| `ev_daily_target_kwh` | 10 | How much the EV should charge overnight. SEM schedules night charging to hit this target using the cheapest available hours. |
-| `battery_priority_soc` | 30% | Zone 1/2 boundary. Below this, all solar goes to the battery and the EV is blocked. |
-| `battery_buffer_soc` | 70% | Zone 2/3 boundary. Above this, the battery can discharge to help charge the EV. |
-| `battery_auto_start_soc` | 90% | Zone 3/4 boundary. Above this, the EV starts even without solar surplus. |
-| `battery_assist_floor_soc` | 60% | Hysteresis floor. Once battery assist activates, it stays active until SOC drops here. Prevents cycling. |
-| `battery_assist_max_power` | 4500 W | Maximum battery discharge power available for EV charging. |
-| `night_charging_enabled` | On | Enables overnight grid-to-EV charging toward the daily target. |
-| `smart_night_charging` | Off | When on, SEM evaluates SOC, forecast, and battery state before scheduling night charging. It may skip or reduce the charge if tomorrow's solar looks sufficient. |
-| `battery_charge_scheduler` | Off | Forecast-aware grid-to-battery charging during cheap night hours. Requires a forecast integration and a battery inverter with charging control (Huawei SUN2000, SMA, Victron). |
-| `observer_mode` | Off | Read-only mode. SEM monitors and reports but sends no commands. |
+| `update_interval` | 10 s | Polling interval. Lower = more responsive, higher CPU usage. |
+| `peak_limit_w` | 0 | Grid peak threshold (watts). SEM sheds loads to stay below this. 0 = disabled. |
+| `min_solar_power_w` | 500 | Minimum surplus before solar-driven EV charging starts. |
+| `ev_daily_target_kwh` | 10 | Overnight EV charge target. SEM uses cheapest hours to reach it. |
+| `battery_priority_soc` | 30% | Zone 1/2 boundary. Below: all solar to battery, EV blocked. |
+| `battery_buffer_soc` | 70% | Zone 2/3 boundary. Above: battery may discharge for EV. |
+| `battery_auto_start_soc` | 90% | Zone 3/4 boundary. Above: EV starts without solar surplus. |
+| `battery_assist_floor_soc` | 60% | Hysteresis floor. Assist stays on until SOC drops here. |
+| `battery_assist_max_power` | 4500 W | Max battery discharge power for EV charging. |
+| `night_charging_enabled` | On | Enable overnight grid-to-EV charging. |
+| `smart_night_charging` | Off | Skip/reduce night charge when tomorrow's solar looks sufficient. |
+| `battery_charge_scheduler` | Off | Forecast-aware grid-to-battery charging. Requires forecast integration + compatible inverter. |
+| `observer_mode` | Off | Read-only mode — no commands sent to hardware. |
 
 ### Switches you can use in automations
 
 | Switch | Purpose |
 |--------|---------|
-| `switch.sem_night_charging` | Enable or disable overnight EV charging on a schedule |
-| `switch.sem_observer_mode` | Toggle read-only mode without opening the config flow |
+| `switch.sem_night_charging` | Enable/disable overnight EV charging |
+| `switch.sem_observer_mode` | Toggle read-only mode |
 | `switch.sem_smart_night_charging` | Toggle forecast-aware night charge evaluation |
 
 ### Regenerating the dashboard
 
-If you change hardware or reinstall, run the dashboard generator via
-**Developer Tools > Actions > solar_energy_management.generate_dashboard**.
-The generator rebuilds the dashboard from scratch and detects your current
-hardware. It is safe to run at any time.
+Run `solar_energy_management.generate_dashboard` via **Developer Tools >
+Actions** any time you change hardware or want to rebuild the dashboard. It is
+safe to run at any time.
 
 ---
 
@@ -339,19 +331,108 @@ starts even without solar surplus — a nearly full battery has little to lose.
 
 ### When to adjust zone thresholds
 
-- **You want to protect the battery more**: raise `battery_priority_soc`
-  (for example from 30% to 40%). The battery will fill further before the EV
-  gets any solar.
-- **Your battery degrades quickly**: lower `battery_buffer_soc` so the battery
-  discharges less for EV.
-- **You rarely have solar surplus**: lower `battery_auto_start_soc` so Zone 4
-  activates sooner and the EV charges more from battery power.
-- **You see rapid on/off cycling**: raise `battery_assist_floor_soc` to
-  increase hysteresis.
+- Protect the battery more: raise `battery_priority_soc` (e.g. 30% to 40%)
+- Battery degrades quickly: lower `battery_buffer_soc`
+- Rarely have solar surplus: lower `battery_auto_start_soc`
+- See rapid cycling: raise `battery_assist_floor_soc`
 
 ---
 
-## 7. Language Support
+## 7. Load Management
+
+SEM has two systems that can control your devices. Understanding how they work
+prevents surprises like devices turning off unexpectedly.
+
+### Two systems, two purposes
+
+| System | Purpose | When it acts | How to disable |
+|--------|---------|-------------|----------------|
+| **Peak protection** | Prevents your 15-minute rolling grid import from exceeding your peak limit | When grid import approaches or exceeds `target_peak_limit` | Raise the peak limit or mark devices as Critical |
+| **Surplus allocation** | Turns on devices when solar surplus is available | When solar production exceeds home consumption | Set device mode to OFF or Peak Only |
+
+Peak protection sheds devices to stay under your electricity contract's peak
+demand limit. Surplus allocation proactively turns devices on when free solar
+power is available, and turns them off when surplus disappears.
+
+### The three control modes
+
+Every managed device has a **Mode** setting that controls what SEM is allowed
+to do with it:
+
+| Mode | SEM will turn it ON? | SEM will turn it OFF? | Best for |
+|------|---------------------|----------------------|----------|
+| **OFF** | Never | Never | Devices you control manually |
+| **Peak Only** | Never | Yes, during grid peaks | Devices that should run normally but can be temporarily shed |
+| **Surplus** | Yes, when solar surplus available | Yes, when surplus drops or during peaks | Discretionary loads (hot water, pool pump) |
+
+**Default mode is Peak Only** — SEM will never turn a device ON unless you
+explicitly set its mode to Surplus.
+
+### Controllable and Critical toggles
+
+Two additional toggles refine how SEM treats each device:
+
+| Toggle | When ON | When OFF |
+|--------|---------|----------|
+| **Controllable** | SEM can control this device (per its mode) | SEM ignores this device completely |
+| **Critical** | Device is never shed, even in emergencies | Device can be shed during peak events |
+
+**Quick decision guide:**
+
+- Device should never be touched by SEM: set **Controllable = OFF**
+- Device can be shed temporarily but is important: set **Critical = ON**
+- Device is discretionary (hot water, pool pump): leave both defaults
+
+### Priority
+
+Priority controls the order in which devices are activated and shed:
+
+- **Lower number = higher priority** (1 is highest, 10 is lowest)
+- During **surplus**: higher-priority devices get power first
+- During **peak shedding**: lower-priority devices are shed first (high-priority devices are preserved)
+
+Drag and drop devices on the Control tab to change their priority.
+
+### Dependencies (Requires)
+
+A device can depend on another device. When device B "requires" device A:
+
+- SEM will not activate B unless A is already running
+- If A is shed, B is automatically shed too (cascade)
+- If A is restored, B becomes eligible for activation again
+
+Use this for physical dependencies, such as a pool heater that requires the
+pool pump to be running first.
+
+### Why is my device being turned off?
+
+If a device is unexpectedly turning off, check these in order:
+
+1. **Check the device's Mode** on the Control tab. If it is "Surplus", SEM
+   will turn it off whenever solar surplus drops below the device's minimum
+   power threshold. Switch to "Peak Only" if you only want peak protection.
+
+2. **Check the load management status** — the sensor `sensor.sem_load_management_status`
+   shows NORMAL, WARNING, SHEDDING, or EMERGENCY. If it says SHEDDING, your
+   grid import exceeded the peak limit and SEM shed devices to protect it.
+
+3. **Check the peak limit** — compare `sensor.sem_consecutive_peak_15min` with
+   your target peak limit. If the peak is close to or above the limit, peak
+   shedding is active.
+
+4. **Check dependencies** — if the device depends on another device and that
+   parent was shed, the dependent device is shed too.
+
+### How to prevent unwanted shedding
+
+- **Set mode to OFF** — SEM will never touch the device
+- **Mark as Critical** — SEM will never shed it, even during emergencies
+- **Raise the target peak limit** — reduces how often peak shedding triggers
+- **Lower the device's priority** (higher number) — it will be shed last
+
+---
+
+## 8. Language Support
 
 SEM supports 15 languages: English, German, Dutch, French, Spanish, Italian,
 Portuguese, Polish, Swedish, Czech, Danish, Finnish, Hungarian, Romanian, and
@@ -359,41 +440,32 @@ Norwegian.
 
 Translation works in two layers:
 
-1. **Dashboard labels** are translated when the dashboard is generated, using
-   the language configured in **Settings > General** (server language).
-2. **Custom card text** (the SEM system diagram, title cards, charger status
-   card, and period selector) is translated at runtime based on each user's
-   own language setting, found at your user profile icon > **Language**.
+1. **Dashboard labels** are translated at generation time using the server
+   language set in **Settings > General**.
+2. **Custom card text** (system diagram, title cards, charger status, period
+   selector) is translated at runtime per-user, based on the language in each
+   user's profile (**profile icon > Language**).
 
-This means users with different language preferences on the same HA instance
-each see the SEM dashboard in their own language.
+This means users with different language preferences each see the SEM
+dashboard in their own language.
 
 ![Language setting in HA user profile](images/sem_settings_language.png)
 
-To change the dashboard server language, change the language in
-**Settings > General**, then re-run
-`solar_energy_management.generate_dashboard` to rebuild the dashboard in the
-new language. Custom cards update immediately without regeneration.
+To change the server language: update **Settings > General**, then re-run
+`solar_energy_management.generate_dashboard`. Custom cards update immediately.
 
-See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for more on the translation
-architecture and how to contribute translations.
+See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for the translation architecture
+and how to contribute new languages.
 
 ---
 
-## 8. FAQ
+## 9. FAQ
 
-**Q: Do I need a battery to use SEM?**
+**Q: Do I need a battery or EV charger to use SEM?**
 
-No. SEM works with solar and grid sensors only. A battery adds the SOC zone
-strategy and battery-assisted EV charging, but the full dashboard, cost
-tracking, and surplus control work without one.
-
-**Q: Do I need an EV charger?**
-
-No. Without an EV charger, SEM tracks energy flows, costs, savings, and
-surplus — and provides the complete dashboard. EV features are inactive, but
-nothing breaks. You can add a charger later via **Configure** without
-reinstalling.
+No to both. SEM works with solar and grid sensors alone. A battery adds SOC
+zone control and battery-assisted EV charging. An EV charger adds solar EV
+charging and night scheduling. Both are optional and can be added later.
 
 **Q: My sensors show "unavailable" after installing SEM.**
 
@@ -406,9 +478,8 @@ and review logs at **Settings > System > Logs** (filter for
 
 **Q: Can I change settings after the initial setup?**
 
-Yes. Go to **Settings > Devices & Services > Solar Energy Management**, click
-**Configure**, and change any setting. No reinstall is needed and changes take
-effect within one coordinator cycle (default 10 seconds).
+Yes. Click **Configure** on the SEM card. Changes take effect within one
+coordinator cycle (default 10 seconds).
 
 **Q: SEM sent a command to a device I did not want it to touch.**
 
@@ -425,18 +496,15 @@ read sensors simultaneously. Toggle via `switch.sem_observer_mode` or the
 
 **Q: How does SEM know which direction my grid power sensor reads?**
 
-SEM compares your grid sensor's sign against the Energy Dashboard import/export
-counters at startup and applies a correction if needed. This works for all
-brands — including those where positive means import (Fronius, SolarEdge) and
-those where positive means export (Huawei, SMA).
+SEM compares your grid sensor's sign against Energy Dashboard import/export
+counters at startup and auto-corrects if needed. Works for all brands
+(Fronius/SolarEdge: positive = import; Huawei/SMA: positive = export).
 
 **Q: Will SEM drain my battery to charge the EV?**
 
-Only when the battery SOC is in Zone 3 (above 70%) or Zone 4 (above 90%).
-Below 70%, the EV gets only pure solar surplus and the battery does not
-discharge for it. Below 30%, all solar goes to the battery and the EV gets
-nothing. See the [SOC Zone Strategy](#6-soc-zone-strategy) section above for
-the full logic.
+Only above 70% SOC (Zone 3/4). Below 70% the EV gets pure surplus only;
+below 30% the EV is blocked entirely. See
+[SOC Zone Strategy](#6-soc-zone-strategy) for the full logic.
 
 **Q: What is smart night charging and should I enable it?**
 
@@ -456,15 +524,15 @@ No configuration needed — the predictor trains itself automatically.
 
 **Q: Why do daily energy values reset at sunrise instead of midnight?**
 
-Overnight EV charging sessions (for example, 22:00 to 06:00) span midnight.
-Resetting at sunrise keeps the entire charging session in a single daily
-bucket, giving more accurate daily totals for cost and energy tracking.
+Overnight EV sessions (22:00–06:00) span midnight. Resetting at sunrise keeps
+the entire session in one daily bucket, giving more accurate cost and energy
+totals.
 
 ---
 
 ## Getting Help
 
-**Logs:** Enable debug logging by adding this to your `configuration.yaml`:
+Enable debug logging in `configuration.yaml`:
 
 ```yaml
 logger:
@@ -472,15 +540,8 @@ logger:
     custom_components.solar_energy_management: debug
 ```
 
-Then view logs at **Settings > System > Logs** and filter for
-`solar_energy_management`.
+View logs at **Settings > System > Logs** (filter for `solar_energy_management`).
 
-**Common issues:** See [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) for a
-symptom-by-symptom guide to the most frequent problems.
-
-**Dashboard problems:** See [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md) for
-card-by-card troubleshooting.
-
-**Multi-device setups:** See [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md)
-for inverter summing, multi-charger priority configuration, and split-grid
-setups.
+- Common issues: [TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- Dashboard card problems: [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md)
+- Multi-inverter / multi-charger: [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md)

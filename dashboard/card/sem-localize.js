@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-09T17:15:03.781514+00:00
+// Generated: 2026-05-09T17:35:10.417605+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -481,7 +481,7 @@ const _semTranslations = {
     "weather_sunny": "Sunny",
     "weather_windy": "Windy",
     "weather_exceptional": "Exceptional",
-    "drag_to_reorder": "Drag to reorder · 1 = highest priority",
+    "drag_to_reorder": "Drag to reorder",
     "drag_hint": "Drag the ≡ handle or use ▲▼ arrows to reorder. Lower number = kept on longer.",
     "configure": "Configure",
     "sensor_unavailable": "sensor unavailable",
@@ -637,7 +637,14 @@ const _semTranslations = {
     "Factor": "Factor",
     "declining": "declining",
     "rising": "rising",
-    "unknown": "unknown"
+    "unknown": "unknown",
+    "requires": "Requires",
+    "requires_tooltip": "Only activates when the selected device is running",
+    "mode_tooltip": "OFF = never touched. Peak Only = shed during grid peaks. Surplus = auto on/off with solar.",
+    "locked_under_parent": "Locked under parent",
+    "shed_label": "SHED",
+    "shed_peak": "Shed: peak protection",
+    "shed_emergency": "Shed: emergency peak"
   },
   "de": {
     "charging": "Laden",
@@ -1119,7 +1126,7 @@ const _semTranslations = {
     "weather_sunny": "Sonnig",
     "weather_windy": "Windig",
     "weather_exceptional": "Außergewöhnlich",
-    "drag_to_reorder": "Ziehen zum Umordnen · 1 = höchste Priorität",
+    "drag_to_reorder": "Ziehen zum Sortieren",
     "drag_hint": "Ziehen Sie den ≡ Griff oder verwenden Sie ▲▼ Pfeile. Niedrigere Nummer = bleibt länger an.",
     "configure": "Konfigurieren",
     "sensor_unavailable": "Sensor nicht verfügbar",
@@ -1275,7 +1282,14 @@ const _semTranslations = {
     "Factor": "Faktor",
     "declining": "fallend",
     "rising": "steigend",
-    "unknown": "unbekannt"
+    "unknown": "unbekannt",
+    "requires": "Benötigt",
+    "requires_tooltip": "Aktiviert sich nur, wenn das ausgewählte Gerät läuft",
+    "mode_tooltip": "AUS = nicht gesteuert. Nur Spitze = Abschaltung bei Netzspitzen. Überschuss = automatisch ein/aus mit Solar.",
+    "locked_under_parent": "Unter Elterngerät gesperrt",
+    "shed_label": "ABGESCHALTET",
+    "shed_peak": "Abgeschaltet: Spitzenschutz",
+    "shed_emergency": "Abgeschaltet: Notfall-Spitze"
   },
   "fr": {
     "charging": "En charge",
@@ -1757,7 +1771,7 @@ const _semTranslations = {
     "weather_sunny": "Ensoleillé",
     "weather_windy": "Venteux",
     "weather_exceptional": "Exceptionnel",
-    "drag_to_reorder": "Glisser pour réorganiser · 1 = priorité max",
+    "drag_to_reorder": "Glisser pour réordonner",
     "drag_hint": "Glissez la poignée ≡ ou utilisez les flèches ▲▼. Numéro plus bas = reste allumé plus longtemps.",
     "configure": "Configurer",
     "sensor_unavailable": "Capteur indisponible",
@@ -1913,7 +1927,14 @@ const _semTranslations = {
     "Factor": "Facteur",
     "declining": "en baisse",
     "rising": "en hausse",
-    "unknown": "inconnu"
+    "unknown": "inconnu",
+    "requires": "Nécessite",
+    "requires_tooltip": "S'active uniquement quand l'appareil sélectionné fonctionne",
+    "mode_tooltip": "OFF = jamais touché. Pic seul = délestage lors des pics réseau. Surplus = marche/arrêt auto avec le solaire.",
+    "locked_under_parent": "Verrouillé sous le parent",
+    "shed_label": "DÉLESTÉ",
+    "shed_peak": "Délesté: protection pic",
+    "shed_emergency": "Délesté: pic d'urgence"
   },
   "es": {
     "charging": "Cargando",
@@ -2395,7 +2416,7 @@ const _semTranslations = {
     "weather_sunny": "Soleado",
     "weather_windy": "Ventoso",
     "weather_exceptional": "Excepcional",
-    "drag_to_reorder": "Arrastrar para reordenar · 1 = máxima prioridad",
+    "drag_to_reorder": "Arrastrar para reordenar",
     "drag_hint": "Arrastra el asa ≡ o usa las flechas ▲▼. Número más bajo = permanece encendido más tiempo.",
     "configure": "Configurar",
     "sensor_unavailable": "Sensor no disponible",
@@ -2551,7 +2572,14 @@ const _semTranslations = {
     "Factor": "Factor",
     "declining": "descendente",
     "rising": "ascendente",
-    "unknown": "desconocido"
+    "unknown": "desconocido",
+    "requires": "Requiere",
+    "requires_tooltip": "Solo se activa cuando el dispositivo seleccionado está en marcha",
+    "mode_tooltip": "OFF = nunca tocado. Solo pico = desconectar en picos de red. Excedente = encendido/apagado automático con solar.",
+    "locked_under_parent": "Bloqueado bajo el dispositivo padre",
+    "shed_label": "DESCONECTADO",
+    "shed_peak": "Desconectado: protección de pico",
+    "shed_emergency": "Desconectado: pico de emergencia"
   },
   "it": {
     "charging": "In carica",
@@ -3033,7 +3061,7 @@ const _semTranslations = {
     "weather_sunny": "Soleggiato",
     "weather_windy": "Ventoso",
     "weather_exceptional": "Eccezionale",
-    "drag_to_reorder": "Trascina per riordinare · 1 = priorità massima",
+    "drag_to_reorder": "Trascina per riordinare",
     "drag_hint": "Trascina la maniglia ≡ o usa le frecce ▲▼. Numero più basso = rimane acceso più a lungo.",
     "configure": "Configura",
     "sensor_unavailable": "Sensore non disponibile",
@@ -3189,7 +3217,14 @@ const _semTranslations = {
     "Factor": "Fattore",
     "declining": "in calo",
     "rising": "in aumento",
-    "unknown": "sconosciuto"
+    "unknown": "sconosciuto",
+    "requires": "Richiede",
+    "requires_tooltip": "Si attiva solo quando il dispositivo selezionato è in funzione",
+    "mode_tooltip": "OFF = mai toccato. Solo picco = spento durante i picchi di rete. Surplus = on/off automatico con il solare.",
+    "locked_under_parent": "Bloccato sotto il dispositivo padre",
+    "shed_label": "STACCATO",
+    "shed_peak": "Staccato: protezione picco",
+    "shed_emergency": "Staccato: picco emergenza"
   },
   "nl": {
     "charging": "Laden",
@@ -3671,7 +3706,7 @@ const _semTranslations = {
     "weather_sunny": "Zonnig",
     "weather_windy": "Winderig",
     "weather_exceptional": "Uitzonderlijk",
-    "drag_to_reorder": "Slepen om te herordenen · 1 = hoogste prioriteit",
+    "drag_to_reorder": "Sleep om te herschikken",
     "drag_hint": "Sleep de ≡ hendel of gebruik ▲▼ pijlen. Lager nummer = blijft langer aan.",
     "configure": "Configureren",
     "sensor_unavailable": "Sensor niet beschikbaar",
@@ -3827,7 +3862,14 @@ const _semTranslations = {
     "Factor": "Factor",
     "declining": "dalend",
     "rising": "stijgend",
-    "unknown": "onbekend"
+    "unknown": "onbekend",
+    "requires": "Vereist",
+    "requires_tooltip": "Activeert alleen als het geselecteerde apparaat draait",
+    "mode_tooltip": "UIT = niet aangeraakt. Alleen piek = uitschakelen bij netpieken. Overschot = automatisch aan/uit met zonne-energie.",
+    "locked_under_parent": "Vergrendeld onder bovenliggend apparaat",
+    "shed_label": "AFGESCHAKELD",
+    "shed_peak": "Afgeschakeld: piekbeveiliging",
+    "shed_emergency": "Afgeschakeld: noodpiek"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -4309,7 +4351,7 @@ const _semTranslations = {
     "weather_sunny": "Slunečno",
     "weather_windy": "Větrno",
     "weather_exceptional": "Výjimečné",
-    "drag_to_reorder": "Přetáhněte pro změnu pořadí · 1 = nejvyšší priorita",
+    "drag_to_reorder": "Přetáhněte pro změnu pořadí",
     "drag_hint": "Přetáhněte ≡ úchyt nebo použijte šipky ▲▼ pro změnu pořadí. Nižší číslo = zapnuto déle.",
     "configure": "Konfigurovat",
     "sensor_unavailable": "senzor nedostupný",
@@ -4465,7 +4507,14 @@ const _semTranslations = {
     "Factor": "Faktor",
     "declining": "klesající",
     "rising": "stoupající",
-    "unknown": "neznámé"
+    "unknown": "neznámé",
+    "requires": "Vyžaduje",
+    "requires_tooltip": "Aktivuje se pouze při běhu vybraného zařízení",
+    "mode_tooltip": "VYP = nikdy neovládáno. Pouze špička = odpojení při špičkách. Přebytek = automaticky se solární energií.",
+    "locked_under_parent": "Uzamčeno pod rodičovským zařízením",
+    "shed_label": "ODPOJENO",
+    "shed_peak": "Odpojeno: ochrana špičky",
+    "shed_emergency": "Odpojeno: nouzová špička"
   },
   "da": {
     "charging": "Oplader",
@@ -4947,7 +4996,7 @@ const _semTranslations = {
     "weather_sunny": "Solskin",
     "weather_windy": "Blæsende",
     "weather_exceptional": "Usædvanligt",
-    "drag_to_reorder": "Træk for at ændre rækkefølge · 1 = højeste prioritet",
+    "drag_to_reorder": "Træk for at omordne",
     "drag_hint": "Træk i ≡-håndtaget eller brug ▲▼-pilene. Lavere nummer = tændt længere.",
     "configure": "Konfigurér",
     "sensor_unavailable": "sensor utilgængelig",
@@ -5103,7 +5152,14 @@ const _semTranslations = {
     "Factor": "Faktor",
     "declining": "faldende",
     "rising": "stigende",
-    "unknown": "ukendt"
+    "unknown": "ukendt",
+    "requires": "Kræver",
+    "requires_tooltip": "Aktiveres kun når den valgte enhed kører",
+    "mode_tooltip": "FRA = aldrig rørt. Kun spids = afbryd ved netspidser. Overskud = auto til/fra med sol.",
+    "locked_under_parent": "Låst under overordnet enhed",
+    "shed_label": "AFKOBLET",
+    "shed_peak": "Afkoblet: spidsbeskyttelse",
+    "shed_emergency": "Afkoblet: nødspids"
   },
   "fi": {
     "charging": "Lataus",
@@ -5585,7 +5641,7 @@ const _semTranslations = {
     "weather_sunny": "Aurinkoinen",
     "weather_windy": "Tuulinen",
     "weather_exceptional": "Poikkeuksellinen",
-    "drag_to_reorder": "Vedä järjestääksesi · 1 = korkein prioriteetti",
+    "drag_to_reorder": "Vedä järjestääksesi",
     "drag_hint": "Vedä ≡-kahvasta tai käytä ▲▼-nuolia. Pienempi numero = päällä pidempään.",
     "configure": "Määritä",
     "sensor_unavailable": "anturi ei saatavilla",
@@ -5741,7 +5797,14 @@ const _semTranslations = {
     "Factor": "Kerroin",
     "declining": "laskeva",
     "rising": "nouseva",
-    "unknown": "tuntematon"
+    "unknown": "tuntematon",
+    "requires": "Vaatii",
+    "requires_tooltip": "Aktivoituu vain valitun laitteen käydessä",
+    "mode_tooltip": "POIS = ei kosketa. Vain huippu = katkaistaan huipuissa. Ylijäämä = automaattinen aurinkoenergian mukaan.",
+    "locked_under_parent": "Lukittu ylälaitteen alle",
+    "shed_label": "KATKAISTU",
+    "shed_peak": "Katkaistu: huippusuojaus",
+    "shed_emergency": "Katkaistu: hätähuippu"
   },
   "hu": {
     "charging": "Töltés",
@@ -6223,7 +6286,7 @@ const _semTranslations = {
     "weather_sunny": "Napos",
     "weather_windy": "Szeles",
     "weather_exceptional": "Rendkívüli",
-    "drag_to_reorder": "Húzza az átrendezéshez · 1 = legmagasabb prioritás",
+    "drag_to_reorder": "Húzza az átrendezéshez",
     "drag_hint": "Húzza a ≡ fogantyút vagy használja a ▲▼ nyilakat. Alacsonyabb szám = tovább bekapcsolva.",
     "configure": "Beállítás",
     "sensor_unavailable": "szenzor nem elérhető",
@@ -6379,7 +6442,14 @@ const _semTranslations = {
     "Factor": "Tényező",
     "declining": "csökkenő",
     "rising": "növekvő",
-    "unknown": "ismeretlen"
+    "unknown": "ismeretlen",
+    "requires": "Szükséges",
+    "requires_tooltip": "Csak a kiválasztott eszköz futásakor aktiválódik",
+    "mode_tooltip": "KI = soha nem vezérelt. Csak csúcs = lekapcsolás csúcsidőben. Többlet = automatikus be/ki napenergiával.",
+    "locked_under_parent": "Zárolva a szülő eszköz alatt",
+    "shed_label": "LEKAPCSOLVA",
+    "shed_peak": "Lekapcsolva: csúcsvédelem",
+    "shed_emergency": "Lekapcsolva: vészhelyzeti csúcs"
   },
   "no": {
     "charging": "Lader",
@@ -6861,7 +6931,7 @@ const _semTranslations = {
     "weather_sunny": "Solrikt",
     "weather_windy": "Vindfullt",
     "weather_exceptional": "Eksepsjonelt",
-    "drag_to_reorder": "Dra for å omorganisere · 1 = høyest prioritet",
+    "drag_to_reorder": "Dra for å omordne",
     "drag_hint": "Dra ≡-håndtaket eller bruk ▲▼-pilene for å omorganisere. Lavere nummer = holdes på lenger.",
     "configure": "Konfigurer",
     "sensor_unavailable": "sensor utilgjengelig",
@@ -7017,7 +7087,14 @@ const _semTranslations = {
     "Factor": "Faktor",
     "declining": "synkende",
     "rising": "stigende",
-    "unknown": "ukjent"
+    "unknown": "ukjent",
+    "requires": "Krever",
+    "requires_tooltip": "Aktiveres kun når valgt enhet kjører",
+    "mode_tooltip": "AV = aldri berørt. Kun topp = kobles ut ved netttopper. Overskudd = auto på/av med sol.",
+    "locked_under_parent": "Låst under overordnet enhet",
+    "shed_label": "FRAKOBLET",
+    "shed_peak": "Frakoblet: toppbeskyttelse",
+    "shed_emergency": "Frakoblet: nødtopp"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -7499,7 +7576,7 @@ const _semTranslations = {
     "weather_sunny": "Słonecznie",
     "weather_windy": "Wietrznie",
     "weather_exceptional": "Wyjątkowa",
-    "drag_to_reorder": "Przeciągnij, aby zmienić kolejność · 1 = najwyższy priorytet",
+    "drag_to_reorder": "Przeciągnij aby zmienić kolejność",
     "drag_hint": "Przeciągnij uchwyt ≡ lub użyj strzałek ▲▼. Niższy numer = dłużej włączone.",
     "configure": "Konfiguruj",
     "sensor_unavailable": "czujnik niedostępny",
@@ -7655,7 +7732,14 @@ const _semTranslations = {
     "Factor": "Współczynnik",
     "declining": "spadający",
     "rising": "rosnący",
-    "unknown": "nieznany"
+    "unknown": "nieznany",
+    "requires": "Wymaga",
+    "requires_tooltip": "Aktywuje się tylko gdy wybrane urządzenie działa",
+    "mode_tooltip": "WYŁ = nigdy sterowane. Tylko szczyt = odcinanie przy szczytach. Nadwyżka = auto wł/wył z solarem.",
+    "locked_under_parent": "Zablokowane pod urządzeniem nadrzędnym",
+    "shed_label": "ODCIĘTE",
+    "shed_peak": "Odcięte: ochrona szczytowa",
+    "shed_emergency": "Odcięte: szczyt awaryjny"
   },
   "pt": {
     "charging": "A carregar",
@@ -8137,7 +8221,7 @@ const _semTranslations = {
     "weather_sunny": "Soalheiro",
     "weather_windy": "Ventoso",
     "weather_exceptional": "Excecional",
-    "drag_to_reorder": "Arraste para reordenar · 1 = prioridade máxima",
+    "drag_to_reorder": "Arrastar para reordenar",
     "drag_hint": "Arraste a pega ≡ ou use as setas ▲▼ para reordenar. Número menor = mantido ligado mais tempo.",
     "configure": "Configurar",
     "sensor_unavailable": "sensor indisponível",
@@ -8293,7 +8377,14 @@ const _semTranslations = {
     "Factor": "Fator",
     "declining": "em declínio",
     "rising": "em subida",
-    "unknown": "desconhecido"
+    "unknown": "desconhecido",
+    "requires": "Requer",
+    "requires_tooltip": "Ativa apenas quando o dispositivo selecionado está em execução",
+    "mode_tooltip": "OFF = nunca controlado. Só pico = desligar em picos de rede. Excedente = ligar/desligar automático com solar.",
+    "locked_under_parent": "Bloqueado sob o dispositivo pai",
+    "shed_label": "DESLIGADO",
+    "shed_peak": "Desligado: proteção de pico",
+    "shed_emergency": "Desligado: pico de emergência"
   },
   "ro": {
     "charging": "Încărcare",
@@ -8775,7 +8866,7 @@ const _semTranslations = {
     "weather_sunny": "Însorit",
     "weather_windy": "Vântos",
     "weather_exceptional": "Excepțional",
-    "drag_to_reorder": "Trageți pentru reordonare · 1 = prioritate maximă",
+    "drag_to_reorder": "Trageți pentru a reordona",
     "drag_hint": "Trageți mânerul ≡ sau folosiți săgețile ▲▼ pentru reordonare. Număr mai mic = menținut pornit mai mult.",
     "configure": "Configurare",
     "sensor_unavailable": "senzor indisponibil",
@@ -8931,7 +9022,14 @@ const _semTranslations = {
     "Factor": "Factor",
     "declining": "în scădere",
     "rising": "în creștere",
-    "unknown": "necunoscut"
+    "unknown": "necunoscut",
+    "requires": "Necesită",
+    "requires_tooltip": "Se activează doar când dispozitivul selectat funcționează",
+    "mode_tooltip": "OFF = niciodată controlat. Doar vârf = deconectat la vârfuri. Surplus = pornit/oprit automat cu solar.",
+    "locked_under_parent": "Blocat sub dispozitivul părinte",
+    "shed_label": "DECONECTAT",
+    "shed_peak": "Deconectat: protecție vârf",
+    "shed_emergency": "Deconectat: vârf de urgență"
   },
   "sv": {
     "charging": "Laddar",
@@ -9413,7 +9511,7 @@ const _semTranslations = {
     "weather_sunny": "Soligt",
     "weather_windy": "Blåsigt",
     "weather_exceptional": "Exceptionellt",
-    "drag_to_reorder": "Dra för att ordna om · 1 = högsta prioritet",
+    "drag_to_reorder": "Dra för att ordna om",
     "drag_hint": "Dra ≡-handtaget eller använd ▲▼-pilarna för att ordna om. Lägre nummer = hålls på längre.",
     "configure": "Konfigurera",
     "sensor_unavailable": "sensor otillgänglig",
@@ -9569,7 +9667,14 @@ const _semTranslations = {
     "Factor": "Faktor",
     "declining": "sjunkande",
     "rising": "stigande",
-    "unknown": "okänd"
+    "unknown": "okänd",
+    "requires": "Kräver",
+    "requires_tooltip": "Aktiveras bara när vald enhet körs",
+    "mode_tooltip": "AV = aldrig berörd. Bara topp = kopplas ur vid nättoppar. Överskott = auto på/av med sol.",
+    "locked_under_parent": "Låst under föräldraenhet",
+    "shed_label": "URKOPPLAD",
+    "shed_peak": "Urkopplad: toppskydd",
+    "shed_emergency": "Urkopplad: nödtopp"
   }
 };
 
