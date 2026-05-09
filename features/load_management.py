@@ -574,76 +574,13 @@ class LoadManagementCoordinator:
             )
 
     async def _execute_load_management(self, current_peak: float, consecutive_peak: float):
-        """Execute load management actions based on current state.
-
-        Priority: battery discharge first (instant, no disruption),
-        then device shedding only if battery insufficient.
-        """
-        if self._state in (LoadManagementState.SHEDDING, LoadManagementState.EMERGENCY):
-            # Try battery discharge first before shedding devices
-            await self._battery_peak_shaving(current_peak)
-
+        """Execute load management actions based on current state."""
         if self._state == LoadManagementState.EMERGENCY:
             await self._emergency_load_shedding()
         elif self._state == LoadManagementState.SHEDDING:
             await self._progressive_load_shedding(current_peak, consecutive_peak)
         elif self._state == LoadManagementState.NORMAL:
             await self._restore_loads()
-            await self._restore_battery_peak_shaving()
-
-    async def _battery_peak_shaving(self, current_peak: float):
-        """Discharge battery to reduce grid peak before shedding devices.
-
-        Sets battery discharge power = overshoot above target peak.
-        Battery responds instantly (no disruption to user).
-        """
-        config_entry = getattr(self, 'config_entry', None)
-        if not config_entry:
-            return
-        battery_discharge_entity = config_entry.options.get(
-            "battery_discharge_control_entity", ""
-        )
-        if not battery_discharge_entity:
-            return
-
-        overshoot_w = (current_peak - self._target_peak_limit) * 1000
-        if overshoot_w <= 0:
-            return
-
-        max_discharge = config_entry.options.get("battery_max_discharge_power", 5000)
-        discharge_power = min(overshoot_w, max_discharge)
-
-        try:
-            await self.hass.services.async_call(
-                "number", "set_value",
-                {"entity_id": battery_discharge_entity, "value": discharge_power},
-                blocking=True,
-            )
-            _LOGGER.info("Battery peak shaving: %.0fW discharge (overshoot %.0fW)",
-                         discharge_power, overshoot_w)
-        except Exception as e:
-            _LOGGER.debug("Battery peak shaving failed: %s", e)
-
-    async def _restore_battery_peak_shaving(self):
-        """Restore battery to normal operation when peak is normal."""
-        config_entry = getattr(self, 'config_entry', None)
-        if not config_entry:
-            return
-        battery_discharge_entity = config_entry.options.get(
-            "battery_discharge_control_entity", ""
-        )
-        if not battery_discharge_entity:
-            return
-
-        max_discharge = config_entry.options.get("battery_max_discharge_power", 5000)
-        try:
-            await self.hass.services.async_call(
-                "number", "set_value",
-                {"entity_id": battery_discharge_entity, "value": max_discharge},
-                blocking=True,
-            )
-        except Exception:
-            pass
 
     async def _emergency_load_shedding(self):
         """Emergency load shedding - turn off all non-critical loads immediately."""
