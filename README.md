@@ -11,9 +11,9 @@
 [![hacs][hacsbadge]][hacs]
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?style=for-the-badge&logo=github-sponsors)](https://github.com/sponsors/traktore-org)
 
-**Intelligent solar energy orchestration for Home Assistant** — maximize self-consumption, manage EV charging, and track energy costs automatically.
+**Smart orchestration for solar, battery, EV & home loads in Home Assistant** — maximize self-consumption, automate EV charging, optimize tariffs, and manage peak loads automatically.
 
-SEM monitors your solar production, battery, grid, and EV charger every 10 seconds and distributes surplus power across your devices by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
+SEM monitors your solar production, battery, grid, EV charger, and household devices every 10 seconds and distributes surplus power by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
 
 ![SEM Dashboard Overview](docs/images/sem_home_tab.png)
 
