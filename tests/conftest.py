@@ -92,6 +92,11 @@ def hass():
     hass_mock.loop = MagicMock()
     hass_mock.data = {}  # Required for Store initialization in Python 3.12+
 
+    # async_add_executor_job should execute the function and return its result
+    async def _mock_executor_job(func, *args):
+        return func(*args)
+    hass_mock.async_add_executor_job = _mock_executor_job
+
     # Mock states for switches
     hass_mock.states.is_state = MagicMock(return_value=False)
 
@@ -107,6 +112,7 @@ def config_entry():
     entry.entry_id = "test_entry_id"
     entry.title = "Solar Energy Management Test"
     entry.domain = "solar_energy_management"
+    entry.runtime_data = None  # Set by test or via mock_coordinator
     return entry
 
 

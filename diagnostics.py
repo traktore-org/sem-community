@@ -1,4 +1,7 @@
 """Diagnostics support for Solar Energy Management."""
+
+from __future__ import annotations
+
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -6,6 +9,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
+from .coordinator import SEMCoordinator
+
+type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 # Config keys that could contain user-specific entity IDs (not secrets, but privacy)
 REDACT_CONFIG_KEYS = {
@@ -21,10 +27,10 @@ REDACT_CONFIG_KEYS = {
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: SEMConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SEMCoordinator = entry.runtime_data
     data = coordinator.data if coordinator.data else {}
 
     # Load manager info

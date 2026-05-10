@@ -1045,7 +1045,13 @@
       "message": "Unknown device property: {property}. Expected \"controllable\" or \"critical\"."
     },
     "dashboard_generation_failed": {
-      "message": "Dashboard generation failed: {error}"
+      "message": "Dashboard generation failed. See logs for details."
+    },
+    "energy_dashboard_configuration_failed": {
+      "message": "Energy Dashboard configuration failed. Check that all required sensors are available."
+    },
+    "device_not_found": {
+      "message": "Device {device_id} not found in surplus controller."
     },
     "invalid_deadline_format": {
       "message": "Invalid deadline format: {deadline}. Use ISO format (YYYY-MM-DDTHH:MM:SS)."

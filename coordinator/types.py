@@ -8,6 +8,8 @@ Key dataclasses:
 - SessionData: Per-EV-session cost attribution and energy source tracking
 - SEMData: Complete coordinator output (flat dict via to_dict())
 """
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime

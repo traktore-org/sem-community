@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Battery Card — Lumina-styled battery hero card
  *
@@ -397,11 +398,10 @@ class SEMBatteryCard extends SEMBaseCard {
     static getStubConfig() { return {}; }
 }
 
-customElements.define('sem-battery-card', SEMBatteryCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-battery-card', SEMBatteryCard, {
     type: 'sem-battery-card',
     name: 'SEM Battery',
     description: 'Lumina-styled battery hero card with SOC arc ring and key metrics',
+});
+
 });

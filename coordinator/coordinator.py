@@ -10,6 +10,9 @@ This is a slim orchestrator that delegates to specialized modules:
 - SEMStorage: Persistence
 - NotificationManager: Mobile/KEBA notifications
 """
+
+from __future__ import annotations
+
 import logging
 from datetime import timedelta
 from typing import Any, Dict, Optional
@@ -240,7 +243,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         if self._observer_mode:
             _LOGGER.info("Observer mode: hardware control disabled")
-        _LOGGER.info(f"SEM Coordinator initialized with {update_interval}s update interval")
+        _LOGGER.info("SEM Coordinator initialized with %ss update interval", update_interval)
 
     @property
     def battery_capacity_kwh(self) -> float:
@@ -298,7 +301,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 _LOGGER.info("Energy Dashboard not configured or incomplete")
 
         except Exception as e:
-            _LOGGER.warning(f"Failed to read Energy Dashboard: {e}")
+            _LOGGER.warning("Failed to read Energy Dashboard: %s", e)
 
         # EV energy reconciliation disabled — keba_p30_charging_daily resets at
         # midnight but daily_ev resets at sunrise, causing misalignment after sunrise
@@ -320,7 +323,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """Initialize load management after coordinator is set up."""
         load_management_enabled = self.config.get("load_management_enabled", True)
 
-        _LOGGER.debug(f"async_initialize_load_management called: enabled={load_management_enabled}")
+        _LOGGER.debug("async_initialize_load_management called: enabled=%s", load_management_enabled)
 
         if load_management_enabled and not self._load_manager:
             try:
@@ -329,9 +332,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 _LOGGER.info("Creating LoadManagementCoordinator...")
                 self._load_manager = LoadManagementCoordinator(self.hass, config_entry)
                 await self._load_manager.async_initialize()
-                _LOGGER.info(f"LoadManagementCoordinator initialized with {len(self._load_manager._devices)} devices")
+                _LOGGER.info("LoadManagementCoordinator initialized with %s devices", len(self._load_manager._devices))
             except Exception as e:
-                _LOGGER.warning(f"Failed to initialize load management: {e}")
+                _LOGGER.warning("Failed to initialize load management: %s", e)
                 self._load_manager = None
 
     def _get_initial_data(self) -> Dict[str, Any]:
@@ -905,7 +908,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return result
 
         except Exception as e:
-            _LOGGER.error(f"Error updating SEM data: {e}", exc_info=True)
+            _LOGGER.error("Error updating SEM data: %s", e, exc_info=True)
             raise UpdateFailed(f"Update failed: {e}") from e
 
     async def _update_analytics_phases(
@@ -2031,7 +2034,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     async def async_update_config(self, config_update: Dict[str, Any]) -> None:
         """Update coordinator configuration."""
         self.config = {**self.config, **config_update}
-        _LOGGER.info(f"Configuration updated: {list(config_update.keys())}")
+        _LOGGER.info("Configuration updated: %s", list(config_update.keys()))
 
     def sensors_ready(self) -> bool:
         """Check if required sensors are available."""
@@ -2141,6 +2144,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 lm_data.power_charge_cost = round(lm_data.monthly_consecutive_peak * demand_rate, 2)
 
             except Exception as e:
-                _LOGGER.debug(f"Could not get load management data: {e}")
+                _LOGGER.debug("Could not get load management data: %s", e)
 
         return lm_data

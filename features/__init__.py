@@ -5,3 +5,4 @@
 - device_registry: Unified device metadata and control sync
 - dashboard_generator: Lovelace dashboard generation
 """
+from __future__ import annotations

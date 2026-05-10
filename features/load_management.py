@@ -1,4 +1,7 @@
 """Load management coordinator for SEM Solar Energy Management."""
+
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -120,11 +123,12 @@ class LoadManagementCoordinator:
             self.hass.async_create_task(_discovery_with_retry())
 
             _LOGGER.info(
-                f"Load management initialized: {len(self._devices)} devices loaded from storage, "
-                f"target peak: {self._target_peak_limit}kW (device discovery will run in 30s)"
+                "Load management initialized: %s devices loaded from storage, "
+                "target peak: %skW (device discovery will run in 30s)",
+                len(self._devices), self._target_peak_limit,
             )
         except Exception as e:
-            _LOGGER.error(f"Failed to initialize load management: {e}")
+            _LOGGER.error("Failed to initialize load management: %s", e)
 
     def is_enabled(self) -> bool:
         """Check if load management is enabled."""
@@ -137,7 +141,7 @@ class LoadManagementCoordinator:
             if data:
                 if "devices" in data:
                     self._devices = data["devices"]
-                    _LOGGER.debug(f"Loaded {len(self._devices)} devices from storage")
+                    _LOGGER.debug("Loaded %s devices from storage", len(self._devices))
 
                 # Restore monthly peak (only if same month)
                 stored_month = data.get("monthly_peak_month")
@@ -155,7 +159,7 @@ class LoadManagementCoordinator:
                         stored_month, current_month,
                     )
         except Exception as e:
-            _LOGGER.warning(f"Could not load device configuration: {e}")
+            _LOGGER.warning("Could not load device configuration: %s", e)
             self._devices = {}
 
     async def _save_device_configuration(self):
@@ -170,7 +174,7 @@ class LoadManagementCoordinator:
             await self._store.async_save(data)
             _LOGGER.debug("Saved device configuration to storage")
         except Exception as e:
-            _LOGGER.error(f"Failed to save device configuration: {e}")
+            _LOGGER.error("Failed to save device configuration: %s", e)
 
     async def _discover_devices(self):
         """Discover new controllable devices.
@@ -188,18 +192,18 @@ class LoadManagementCoordinator:
 
             # First, discover from Energy Dashboard individual devices
             energy_dashboard_devices = await self._device_discovery.discover_from_energy_dashboard()
-            _LOGGER.info(f"Energy Dashboard discovery: found {len(energy_dashboard_devices)} devices")
+            _LOGGER.info("Energy Dashboard discovery: found %s devices", len(energy_dashboard_devices))
 
             # Then, pattern-based discovery for additional devices
             pattern_discovered = self._device_discovery.discover_controllable_devices()
-            _LOGGER.info(f"Pattern-based discovery: found {len(pattern_discovered)} devices")
+            _LOGGER.info("Pattern-based discovery: found %s devices", len(pattern_discovered))
 
             # Merge discoveries - Energy Dashboard takes priority
             all_discovered = {}
             all_discovered.update(pattern_discovered)
             all_discovered.update(energy_dashboard_devices)  # Override with Energy Dashboard
 
-            _LOGGER.info(f"Total discovered: {len(all_discovered)} unique devices")
+            _LOGGER.info("Total discovered: %s unique devices", len(all_discovered))
 
             # Add new devices while preserving existing configuration
             for device_id, device_info in all_discovered.items():
@@ -208,7 +212,7 @@ class LoadManagementCoordinator:
                     switch_info = device_info.get('switch_entity', 'no switch')
                     power_info = device_info.get('power_entity', 'no power sensor')
                     source = device_info.get('source', 'pattern')
-                    _LOGGER.info(f"Added new device: {device_id} ({switch_info} + {power_info}) [source: {source}]")
+                    _LOGGER.info("Added new device: %s (%s + %s) [source: %s]", device_id, switch_info, power_info, source)
                 else:
                     # Update availability and power rating, preserve user settings
                     # NOTE: is_controllable, is_critical, and priority are user-editable —
@@ -228,18 +232,18 @@ class LoadManagementCoordinator:
                         if discovered_priority is not None:
                             update["priority"] = discovered_priority
                     existing.update(update)
-                    _LOGGER.debug(f"Updated existing device: {device_id}")
+                    _LOGGER.debug("Updated existing device: %s", device_id)
 
             # Save updated configuration
             await self._save_device_configuration()
-            _LOGGER.info(f"Device discovery complete: {len(self._devices)} total devices in system")
+            _LOGGER.info("Device discovery complete: %s total devices in system", len(self._devices))
 
             # Trigger callbacks to update coordinator and sensors
             self._trigger_callbacks()
             _LOGGER.info("Triggered coordinator update after device discovery")
 
         except Exception as e:
-            _LOGGER.error(f"Device discovery failed: {e}", exc_info=True)
+            _LOGGER.error("Device discovery failed: %s", e, exc_info=True)
 
     async def register_ev_charger(
         self,
@@ -272,12 +276,12 @@ class LoadManagementCoordinator:
 
             # Check if number entity exists (if specified)
             if current_control_entity and not self.hass.states.get(current_control_entity):
-                _LOGGER.warning(f"EV charger current control entity not found: {current_control_entity}")
+                _LOGGER.warning("EV charger current control entity not found: %s", current_control_entity)
                 current_control_entity = None  # Fall back to service
 
             # Check power entity
             if power_entity and not self.hass.states.get(power_entity):
-                _LOGGER.warning(f"EV charger power entity not found: {power_entity}")
+                _LOGGER.warning("EV charger power entity not found: %s", power_entity)
 
             # Get friendly name
             friendly_name = "EV Charger"
@@ -310,9 +314,9 @@ class LoadManagementCoordinator:
 
             control_method = current_control_entity if current_control_entity else charger_service
             _LOGGER.info(
-                f"Registered EV charger for load management: {device_id} "
-                f"(control: {control_method}, power: {power_entity}, "
-                f"priority: {priority}, max: {max_power}kW)"
+                "Registered EV charger for load management: %s "
+                "(control: %s, power: %s, priority: %s, max: %skW)",
+                device_id, control_method, power_entity, priority, max_power,
             )
 
             # Trigger callbacks to update sensors
@@ -321,7 +325,7 @@ class LoadManagementCoordinator:
             return True
 
         except Exception as e:
-            _LOGGER.error(f"Failed to register EV charger: {e}", exc_info=True)
+            _LOGGER.error("Failed to register EV charger: %s", e, exc_info=True)
             return False
 
     def add_update_callback(self, callback):
@@ -340,12 +344,12 @@ class LoadManagementCoordinator:
             try:
                 callback()
             except Exception as e:
-                _LOGGER.error(f"Error in load management callback: {e}")
+                _LOGGER.error("Error in load management callback: %s", e)
 
     async def update_target_peak_limit(self, new_limit: float):
         """Update the target peak limit."""
         self._target_peak_limit = new_limit
-        _LOGGER.info(f"Updated target peak limit to {new_limit}kW")
+        _LOGGER.info("Updated target peak limit to %skW", new_limit)
         self._trigger_callbacks()
 
     async def update_device_priority(self, device_id: str, priority: int):
@@ -354,21 +358,21 @@ class LoadManagementCoordinator:
             self._devices[device_id]["priority"] = priority
             self._devices[device_id]["user_set_priority"] = True
             await self._save_device_configuration()
-            _LOGGER.debug(f"Updated {device_id} priority to {priority} (user-set)")
+            _LOGGER.debug("Updated %s priority to %s (user-set)", device_id, priority)
 
     async def update_device_critical_status(self, device_id: str, is_critical: bool):
         """Update device critical status."""
         if device_id in self._devices:
             self._devices[device_id]["is_critical"] = is_critical
             await self._save_device_configuration()
-            _LOGGER.debug(f"Updated {device_id} critical status to {is_critical}")
+            _LOGGER.debug("Updated %s critical status to %s", device_id, is_critical)
 
     async def update_device_controllable_status(self, device_id: str, is_controllable: bool):
         """Update device controllable status."""
         if device_id in self._devices:
             self._devices[device_id]["is_controllable"] = is_controllable
             await self._save_device_configuration()
-            _LOGGER.debug(f"Updated {device_id} controllable status to {is_controllable}")
+            _LOGGER.debug("Updated %s controllable status to %s", device_id, is_controllable)
 
     def _update_peak_tracking(self, grid_import_w: float) -> bool:
         """Update 15-minute rolling average peak and monthly maximum.
@@ -465,7 +469,7 @@ class LoadManagementCoordinator:
             self._trigger_callbacks()
 
         except Exception as e:
-            _LOGGER.error(f"Error in load management processing: {e}")
+            _LOGGER.error("Error in load management processing: %s", e)
             self._state = LoadManagementState.ERROR
 
     # NOTE: update_ev_charging_current() has been removed.
@@ -563,87 +567,24 @@ class LoadManagementCoordinator:
     async def _handle_state_change(self, old_state: str, new_state: str, current_peak: float):
         """Handle load management state changes."""
         _LOGGER.info(
-            f"Load management state change: {old_state} → {new_state} "
-            f"(peak: {current_peak:.2f}kW, target: {self._target_peak_limit}kW)"
+            "Load management state change: %s → %s (peak: %skW, target: %skW)",
+            old_state, new_state, round(current_peak, 2), self._target_peak_limit,
         )
 
         if new_state == LoadManagementState.EMERGENCY:
             _LOGGER.warning(
-                f"EMERGENCY load shedding triggered! Peak {current_peak:.2f}kW "
-                f"exceeds emergency level {self._emergency_level}kW"
+                "EMERGENCY load shedding triggered! Peak %skW exceeds emergency level %skW",
+                round(current_peak, 2), self._emergency_level,
             )
 
     async def _execute_load_management(self, current_peak: float, consecutive_peak: float):
-        """Execute load management actions based on current state.
-
-        Priority: battery discharge first (instant, no disruption),
-        then device shedding only if battery insufficient.
-        """
-        if self._state in (LoadManagementState.SHEDDING, LoadManagementState.EMERGENCY):
-            # Try battery discharge first before shedding devices
-            await self._battery_peak_shaving(current_peak)
-
+        """Execute load management actions based on current state."""
         if self._state == LoadManagementState.EMERGENCY:
             await self._emergency_load_shedding()
         elif self._state == LoadManagementState.SHEDDING:
             await self._progressive_load_shedding(current_peak, consecutive_peak)
         elif self._state == LoadManagementState.NORMAL:
             await self._restore_loads()
-            await self._restore_battery_peak_shaving()
-
-    async def _battery_peak_shaving(self, current_peak: float):
-        """Discharge battery to reduce grid peak before shedding devices.
-
-        Sets battery discharge power = overshoot above target peak.
-        Battery responds instantly (no disruption to user).
-        """
-        config_entry = getattr(self, 'config_entry', None)
-        if not config_entry:
-            return
-        battery_discharge_entity = config_entry.options.get(
-            "battery_discharge_control_entity", ""
-        )
-        if not battery_discharge_entity:
-            return
-
-        overshoot_w = (current_peak - self._target_peak_limit) * 1000
-        if overshoot_w <= 0:
-            return
-
-        max_discharge = config_entry.options.get("battery_max_discharge_power", 5000)
-        discharge_power = min(overshoot_w, max_discharge)
-
-        try:
-            await self.hass.services.async_call(
-                "number", "set_value",
-                {"entity_id": battery_discharge_entity, "value": discharge_power},
-                blocking=True,
-            )
-            _LOGGER.info("Battery peak shaving: %.0fW discharge (overshoot %.0fW)",
-                         discharge_power, overshoot_w)
-        except Exception as e:
-            _LOGGER.debug("Battery peak shaving failed: %s", e)
-
-    async def _restore_battery_peak_shaving(self):
-        """Restore battery to normal operation when peak is normal."""
-        config_entry = getattr(self, 'config_entry', None)
-        if not config_entry:
-            return
-        battery_discharge_entity = config_entry.options.get(
-            "battery_discharge_control_entity", ""
-        )
-        if not battery_discharge_entity:
-            return
-
-        max_discharge = config_entry.options.get("battery_max_discharge_power", 5000)
-        try:
-            await self.hass.services.async_call(
-                "number", "set_value",
-                {"entity_id": battery_discharge_entity, "value": max_discharge},
-                blocking=True,
-            )
-        except Exception:
-            pass
 
     async def _emergency_load_shedding(self):
         """Emergency load shedding - turn off all non-critical loads immediately."""
@@ -680,8 +621,8 @@ class LoadManagementCoordinator:
                 power_reduced += device_state["current_power"] / 1000  # Convert to kW
 
         _LOGGER.debug(
-            f"Progressive shedding: needed {power_reduction_needed:.2f}kW, "
-            f"achieved {power_reduced:.2f}kW"
+            "Progressive shedding: needed %skW, achieved %skW",
+            round(power_reduction_needed, 2), round(power_reduced, 2),
         )
 
     async def _restore_loads(self):
@@ -718,8 +659,8 @@ class LoadManagementCoordinator:
             min_duration = device_info.get("min_on_duration", DEFAULT_MIN_ON_DURATION)
             if time_on < min_duration:
                 _LOGGER.debug(
-                    f"Device {device_id} cannot be shed yet "
-                    f"(on for {time_on:.0f}s, min: {min_duration}s)"
+                    "Device %s cannot be shed yet (on for %ss, min: %ss)",
+                    device_id, round(time_on), min_duration,
                 )
                 return False
 
@@ -737,8 +678,8 @@ class LoadManagementCoordinator:
             min_duration = device_info.get("min_off_duration", DEFAULT_MIN_OFF_DURATION)
             if time_off < min_duration:
                 _LOGGER.debug(
-                    f"Device {device_id} cannot be restored yet "
-                    f"(off for {time_off:.0f}s, min: {min_duration}s)"
+                    "Device %s cannot be restored yet (off for %ss, min: %ss)",
+                    device_id, round(time_off), min_duration,
                 )
                 return False
 
@@ -792,13 +733,13 @@ class LoadManagementCoordinator:
 
         # Check anti-flicker constraint
         if not self._can_shed_device(device_id, device_info):
-            _LOGGER.debug(f"Cannot shed {device_id}: anti-flicker protection active")
+            _LOGGER.debug("Cannot shed %s: anti-flicker protection active", device_id)
             return
 
         # Check if enough time has passed since last shedding
         if (self._last_shedding_time and
             dt_util.now() - self._last_shedding_time < timedelta(seconds=DEFAULT_LOAD_SHEDDING_DELAY)):
-            _LOGGER.debug(f"Cannot shed {device_id}: shedding delay active")
+            _LOGGER.debug("Cannot shed %s: shedding delay active", device_id)
             return
 
         # RACE CONDITION FIX: Update shedding time BEFORE executing action
@@ -828,7 +769,7 @@ class LoadManagementCoordinator:
                             blocking=True
                         )
                         success = True
-                        _LOGGER.debug(f"Shed device via switch {entity} (was_on={was_on})")
+                        _LOGGER.debug("Shed device via switch %s (was_on=%s)", entity, was_on)
 
                 elif control_type == "current":
                     entity = control.get("entity")
@@ -847,7 +788,7 @@ class LoadManagementCoordinator:
                             blocking=True
                         )
                         success = True
-                        _LOGGER.debug(f"Shed device via current control {entity} (set to 0A)")
+                        _LOGGER.debug("Shed device via current control %s (set to 0A)", entity)
 
                 elif control_type == "service":
                     service = control.get("service")
@@ -864,7 +805,7 @@ class LoadManagementCoordinator:
                                 blocking=True
                             )
                             success = True
-                            _LOGGER.debug(f"Shed device via service {service}")
+                            _LOGGER.debug("Shed device via service %s", service)
 
                 elif control_type == "input_boolean":
                     entity = control.get("entity")
@@ -880,7 +821,7 @@ class LoadManagementCoordinator:
                             blocking=True
                         )
                         success = True
-                        _LOGGER.debug(f"Shed device via input_boolean {entity} (was_on={was_on})")
+                        _LOGGER.debug("Shed device via input_boolean %s (was_on=%s)", entity, was_on)
 
             else:
                 # Legacy fallback: use switch_entity directly or control_type
@@ -920,12 +861,12 @@ class LoadManagementCoordinator:
                 self._devices[device_id]["last_turned_off"] = dt_util.now()
                 self._devices[device_id]["shed_reason"] = reason
                 _LOGGER.info(
-                    f"Shed device {device_info.get('friendly_name', device_id)} "
-                    f"({reason} load shedding)"
+                    "Shed device %s (%s load shedding)",
+                    device_info.get('friendly_name', device_id), reason,
                 )
 
         except Exception as e:
-            _LOGGER.error(f"Failed to shed device {device_id}: {e}")
+            _LOGGER.error("Failed to shed device %s: %s", device_id, e)
 
     async def _restore_device(self, device_id: str):
         """Restore a device that was shed.
@@ -978,7 +919,7 @@ class LoadManagementCoordinator:
                                 blocking=True
                             )
                             success = True
-                            _LOGGER.debug(f"Restored device via switch {entity}")
+                            _LOGGER.debug("Restored device via switch %s", entity)
 
                 elif control_type == "current":
                     # For current-control devices (EV chargers), we have options:
@@ -1006,7 +947,7 @@ class LoadManagementCoordinator:
                                 blocking=True
                             )
                             success = True
-                            _LOGGER.debug(f"Restored device via service {service}")
+                            _LOGGER.debug("Restored device via service %s", service)
 
                 elif control_type == "input_boolean":
                     entity = control.get("entity")
@@ -1025,7 +966,7 @@ class LoadManagementCoordinator:
                                 blocking=True
                             )
                             success = True
-                            _LOGGER.debug(f"Restored device via input_boolean {entity}")
+                            _LOGGER.debug("Restored device via input_boolean %s", entity)
 
             else:
                 # Legacy fallback
@@ -1056,10 +997,10 @@ class LoadManagementCoordinator:
                 self._last_restore_time = dt_util.now()
                 self._devices[device_id]["last_turned_on"] = dt_util.now()
                 self._devices[device_id].pop("shed_reason", None)
-                _LOGGER.info(f"Restored device {device_info.get('friendly_name', device_id)}")
+                _LOGGER.info("Restored device %s", device_info.get('friendly_name', device_id))
 
         except Exception as e:
-            _LOGGER.error(f"Failed to restore device {device_id}: {e}")
+            _LOGGER.error("Failed to restore device %s: %s", device_id, e)
 
     def get_load_management_data(self) -> Dict[str, Any]:
         """Get current load management data for sensors."""

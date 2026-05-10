@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Period Selector Card — glassmorphism date-range picker
  *
@@ -174,11 +175,10 @@ class SEMPeriodSelectorCard extends SEMBaseCard {
     static getStubConfig() { return {}; }
 }
 
-customElements.define('sem-period-selector-card', SEMPeriodSelectorCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-period-selector-card', SEMPeriodSelectorCard, {
     type: 'sem-period-selector-card',
     name: 'SEM Period Selector',
     description: 'Glassmorphism period picker for SEM chart cards',
+});
+
 });

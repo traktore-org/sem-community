@@ -1,4 +1,7 @@
 """SEM Solar Energy Management sensors."""
+
+from __future__ import annotations
+
 from datetime import datetime, timedelta
 import logging
 from typing import Any, Dict
@@ -26,6 +29,8 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN, STATUS_MESSAGES, ChargingState, SENSOR_LABEL_MAPPING
 from .coordinator import SEMCoordinator
+
+type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -184,6 +189,7 @@ SENSOR_TYPES = [
 
     SensorEntityDescription(
         key="charging_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="grid_status",
@@ -191,15 +197,19 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="solar_charging_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="night_charging_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="battery_priority_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="charging_strategy",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     # Removed: solar_optimization_status — just checks solar_power > 50, no real logic
     # Removed: grid_management_status — duplicate of grid_status
@@ -503,6 +513,7 @@ SENSOR_TYPES = [
     # ============================================================================
     SensorEntityDescription(
         key="daily_co2_avoided",
+        device_class=SensorDeviceClass.WEIGHT,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="kg",
         icon="mdi:molecule-co2",
@@ -510,6 +521,7 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="yearly_co2_avoided",
+        device_class=SensorDeviceClass.WEIGHT,
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement="kg",
         icon="mdi:molecule-co2",
@@ -1437,20 +1449,12 @@ def _cleanup_stale_entities(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: SEMConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up SEM Solar Energy Management sensors."""
     _LOGGER.info("Setting up SEM sensors for entry %s", entry.entry_id)
 
-    if DOMAIN not in hass.data:
-        _LOGGER.error("SEM domain not in hass.data")
-        return
-
-    if entry.entry_id not in hass.data[DOMAIN]:
-        _LOGGER.error("Entry ID %s not in hass.data[%s]", entry.entry_id, DOMAIN)
-        return
-
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SEMCoordinator = entry.runtime_data
     _LOGGER.info("Got coordinator, creating %d sensors", len(SENSOR_TYPES))
 
     sensors = [
@@ -1874,9 +1878,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         is_available = self._attr_available and self.coordinator.last_update_success
         # Log unavailability once per sensor, not every cycle
         if not is_available and not getattr(self, '_logged_unavailable', False):
-            _LOGGER.debug("Sensor %s is unavailable", self.entity_description.key)
+            _LOGGER.warning("Sensor %s is unavailable", self.entity_description.key)
             self._logged_unavailable = True
-        elif is_available:
+        elif is_available and getattr(self, '_logged_unavailable', False):
+            _LOGGER.info("Sensor %s is available again", self.entity_description.key)
             self._logged_unavailable = False
         return is_available
 

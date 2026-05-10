@@ -39,6 +39,7 @@ class TestPlatformEntityCounts:
     @pytest.mark.asyncio
     async def test_switch_count(self, hass, config_entry, mock_coordinator):
         """Should create exactly 3 switches."""
+        config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await switch_setup(hass, config_entry, add_entities)
@@ -50,6 +51,7 @@ class TestPlatformEntityCounts:
     @pytest.mark.asyncio
     async def test_number_count(self, hass, config_entry, mock_coordinator):
         """Should create all number entities."""
+        config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await number_setup(hass, config_entry, add_entities)
@@ -60,6 +62,7 @@ class TestPlatformEntityCounts:
     @pytest.mark.asyncio
     async def test_sensor_count(self, hass, config_entry, mock_coordinator):
         """Should create sensors from SENSOR_TYPES."""
+        config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await sensor_setup(hass, config_entry, add_entities)
@@ -69,6 +72,7 @@ class TestPlatformEntityCounts:
     @pytest.mark.asyncio
     async def test_binary_sensor_count(self, hass, config_entry, mock_coordinator):
         """Should create binary sensors."""
+        config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await binary_sensor_setup(hass, config_entry, add_entities)
@@ -88,6 +92,7 @@ class TestCurrencyConfiguration:
     async def test_sensor_uses_ha_currency(self, hass, config_entry, mock_coordinator):
         """Monetary sensors should use hass.config.currency."""
         hass.config.currency = "EUR"
+        config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await sensor_setup(hass, config_entry, add_entities)
@@ -100,6 +105,7 @@ class TestCurrencyConfiguration:
     async def test_number_uses_ha_currency(self, hass, config_entry, mock_coordinator):
         """Monetary number entities should use coordinator's hass.config.currency."""
         mock_coordinator.hass.config.currency = "USD"
+        config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await number_setup(hass, config_entry, add_entities)

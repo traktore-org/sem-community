@@ -5,6 +5,8 @@ Uses two storage strategies:
 - Energy totals: Frequently updated, uses delayed save (batched writes)
 - Daily baselines: Infrequently updated, uses immediate save
 """
+from __future__ import annotations
+
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, Callable

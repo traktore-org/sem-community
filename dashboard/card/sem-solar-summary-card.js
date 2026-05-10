@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Solar Summary Card — Lumina-styled solar overview
  *
@@ -349,11 +350,10 @@ class SEMSolarSummaryCard extends SEMBaseCard {
     static getStubConfig() { return {}; }
 }
 
-customElements.define('sem-solar-summary-card', SEMSolarSummaryCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-solar-summary-card', SEMSolarSummaryCard, {
     type: 'sem-solar-summary-card',
     name: 'SEM Solar Summary',
     description: 'Lumina-styled solar overview with glow ring and production metrics',
+});
+
 });

@@ -1,4 +1,6 @@
 """Dashboard generator for Solar Energy Management integration."""
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -31,8 +33,11 @@ class DashboardGenerator:
             self._dashboard_template_path = basic_path
             self._is_premium = False
 
-    def _load_dashboard_translations(self) -> dict:
-        """Load translations from dashboard/translations.json (single source of truth)."""
+    def _load_dashboard_translations_sync(self) -> dict:
+        """Load translations from dashboard/translations.json (single source of truth).
+
+        Must be called via hass.async_add_executor_job() from async context.
+        """
         import json as _json
         translations_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
@@ -55,7 +60,7 @@ class DashboardGenerator:
         if lang == "en":
             return config  # English template, no translation needed
 
-        all_translations = self._load_dashboard_translations()
+        all_translations = self._cached_translations
         lang_translations = all_translations.get(lang)
         if not lang_translations:
             return config
@@ -178,6 +183,11 @@ class DashboardGenerator:
 
         # Store dashboard path for use in sync button
         self._dashboard_path = dashboard_path
+
+        # Pre-load translations for use in _translate_dashboard (avoids blocking I/O)
+        self._cached_translations = await self.hass.async_add_executor_job(
+            self._load_dashboard_translations_sync
+        )
 
         # Try to load comprehensive template first
         template = await self._load_comprehensive_dashboard_template()
@@ -718,9 +728,6 @@ class DashboardGenerator:
                 storage_key,
             )
 
-            # Create .storage directory if it doesn't exist
-            os.makedirs(os.path.dirname(storage_path), exist_ok=True)
-
             # Wrap config in storage format
             storage_data = {
                 "version": 1,
@@ -729,9 +736,12 @@ class DashboardGenerator:
                 "data": {"config": config},
             }
 
-            with open(storage_path, "w", encoding="utf-8") as f:
-                json.dump(storage_data, f, indent=2, ensure_ascii=False)
+            def _write_dashboard():
+                os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+                with open(storage_path, "w", encoding="utf-8") as f:
+                    json.dump(storage_data, f, indent=2, ensure_ascii=False)
 
+            await self.hass.async_add_executor_job(_write_dashboard)
             _LOGGER.info("Dashboard saved to %s", storage_path)
 
             # Register dashboard in lovelace_dashboards
@@ -764,55 +774,55 @@ class DashboardGenerator:
                 "lovelace_dashboards",
             )
 
-            # Read current dashboard registry
-            if os.path.exists(dashboards_path):
-                with open(dashboards_path, "r", encoding="utf-8") as f:
-                    dashboards_data = json.load(f)
-            else:
-                dashboards_data = {
-                    "version": 1,
-                    "minor_version": 1,
-                    "key": "lovelace_dashboards",
-                    "data": {"items": []},
-                }
-
             # Extract URL key from storage key (e.g., "lovelace.sem-dashboard" -> "sem-dashboard")
             url_key = storage_key.replace("lovelace.", "")
 
-            # Check if dashboard already registered
-            items = dashboards_data["data"]["items"]
-            existing_item = next(
-                (item for item in items if item.get("url_path") == url_key),
-                None
-            )
+            def _read_and_update_registry():
+                # Read current dashboard registry
+                if os.path.exists(dashboards_path):
+                    with open(dashboards_path, "r", encoding="utf-8") as f:
+                        dashboards_data = json.load(f)
+                else:
+                    dashboards_data = {
+                        "version": 1,
+                        "minor_version": 1,
+                        "key": "lovelace_dashboards",
+                        "data": {"items": []},
+                    }
 
-            if existing_item:
-                # Update existing registration
-                existing_item.update({
-                    "require_admin": config.get("require_admin", False),
-                    "show_in_sidebar": config.get("show_in_sidebar", True),
-                    "icon": config.get("icon", "mdi:solar-power"),
-                    "title": config.get("title", "Solar Energy Management"),
-                })
-                _LOGGER.info("Updated existing dashboard registration: %s", url_key)
-            else:
-                # Add new registration
-                new_item = {
-                    "id": url_key,
-                    "url_path": url_key,
-                    "require_admin": config.get("require_admin", False),
-                    "show_in_sidebar": config.get("show_in_sidebar", True),
-                    "icon": config.get("icon", "mdi:solar-power"),
-                    "title": config.get("title", "Solar Energy Management"),
-                    "mode": "storage",
-                }
-                items.append(new_item)
-                _LOGGER.info("Added new dashboard registration: %s", url_key)
+                # Check if dashboard already registered
+                items = dashboards_data["data"]["items"]
+                existing_item = next(
+                    (item for item in items if item.get("url_path") == url_key),
+                    None
+                )
 
-            # Save updated registry
-            with open(dashboards_path, "w", encoding="utf-8") as f:
-                json.dump(dashboards_data, f, indent=2, ensure_ascii=False)
+                if existing_item:
+                    existing_item.update({
+                        "require_admin": config.get("require_admin", False),
+                        "show_in_sidebar": config.get("show_in_sidebar", True),
+                        "icon": config.get("icon", "mdi:solar-power"),
+                        "title": config.get("title", "Solar Energy Management"),
+                    })
+                    _LOGGER.info("Updated existing dashboard registration: %s", url_key)
+                else:
+                    new_item = {
+                        "id": url_key,
+                        "url_path": url_key,
+                        "require_admin": config.get("require_admin", False),
+                        "show_in_sidebar": config.get("show_in_sidebar", True),
+                        "icon": config.get("icon", "mdi:solar-power"),
+                        "title": config.get("title", "Solar Energy Management"),
+                        "mode": "storage",
+                    }
+                    items.append(new_item)
+                    _LOGGER.info("Added new dashboard registration: %s", url_key)
 
+                # Save updated registry
+                with open(dashboards_path, "w", encoding="utf-8") as f:
+                    json.dump(dashboards_data, f, indent=2, ensure_ascii=False)
+
+            await self.hass.async_add_executor_job(_read_and_update_registry)
             _LOGGER.info("Dashboard registered in lovelace_dashboards")
             return True
 

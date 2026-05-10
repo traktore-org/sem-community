@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Weather Card — Lumina-styled weather display
  *
@@ -329,11 +330,10 @@ class SEMWeatherCard extends SEMBaseCard {
     static getStubConfig() { return { entity: 'weather.home' }; }
 }
 
-customElements.define('sem-weather-card', SEMWeatherCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-weather-card', SEMWeatherCard, {
     type: 'sem-weather-card',
     name: 'SEM Weather',
     description: 'Lumina-styled clock + weather card with forecast',
+});
+
 });

@@ -5,6 +5,8 @@ Mixin class providing battery discharge protection during night charging:
 - Restores full discharge when night charging ends
 - Startup recovery for stale discharge limits after restart
 """
+from __future__ import annotations
+
 import logging
 from typing import Optional
 

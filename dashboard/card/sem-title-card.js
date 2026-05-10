@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Title Card — Runtime-translated section header
  *
@@ -148,11 +149,10 @@ class SEMTitleCard extends SEMBaseCard {
     }
 }
 
-customElements.define('sem-title-card', SEMTitleCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-title-card', SEMTitleCard, {
     type: 'sem-title-card',
     name: 'SEM Title Card',
     description: 'Runtime-translated section header for SEM dashboard',
+});
+
 });

@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Chart Card — Chart.js-powered, period-reactive, glassmorphism-styled
  *
@@ -537,11 +538,10 @@ class SEMChartCard extends SEMBaseCard {
     }
 }
 
-customElements.define('sem-chart-card', SEMChartCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-chart-card', SEMChartCard, {
     type: 'sem-chart-card',
     name: 'SEM Chart',
     description: 'Period-reactive chart with glassmorphism styling and built-in presets',
+});
+
 });

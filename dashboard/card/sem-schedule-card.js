@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Schedule Card — 24-hour timeline with tariff, night, surplus & EV rows
  *
@@ -376,11 +377,10 @@ class SEMScheduleCard extends SEMBaseCard {
     static getStubConfig() { return {}; }
 }
 
-customElements.define('sem-schedule-card', SEMScheduleCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-schedule-card', SEMScheduleCard, {
     type: 'sem-schedule-card',
     name: 'SEM Schedule',
     description: '24-hour timeline showing tariff, night window, surplus window, and EV charging periods',
+});
+
 });

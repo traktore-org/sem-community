@@ -227,4 +227,35 @@ if (typeof window !== 'undefined') {
     window.semTheme = semTheme;
     window.semDotGridCSS = semDotGridCSS;
     window.SEMBaseCard = SEMBaseCard;
+
+    /** Register a custom card, deferring if SEMBaseCard isn't available yet. */
+    window.semDefineCard = function(tag, cls, cardInfo) {
+        if (customElements.get(tag)) return;
+        customElements.define(tag, cls);
+        if (cardInfo) {
+            window.customCards = window.customCards || [];
+            window.customCards.push(cardInfo);
+        }
+    };
+
+    /**
+     * Queue of card init functions waiting for SEMBaseCard.
+     * Cards call semReady(fn) instead of defining classes at top level.
+     * If SEMBaseCard is already available, fn runs immediately.
+     * Otherwise it's queued and flushed when sem-shared.js loads.
+     */
+    window._semReadyQueue = [];
+    window._semFlushed = true;  // sem-shared.js is loaded — flush immediately
+    window.semReady = function(fn) {
+        if (window._semFlushed) {
+            fn();
+        } else {
+            window._semReadyQueue.push(fn);
+        }
+    };
+    // Flush any cards that loaded before sem-shared.js
+    for (const fn of window._semReadyQueue) {
+        try { fn(); } catch(e) { console.error('[SEM] Deferred card init failed:', e); }
+    }
+    window._semReadyQueue = [];
 }

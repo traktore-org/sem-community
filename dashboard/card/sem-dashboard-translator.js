@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Dashboard Translator — Runtime per-user translation
  *
@@ -170,11 +171,10 @@ class SEMDashboardTranslator extends SEMBaseCard {
     static getStubConfig() { return {}; }
 }
 
-customElements.define('sem-dashboard-translator', SEMDashboardTranslator);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-dashboard-translator', SEMDashboardTranslator, {
     type: 'sem-dashboard-translator',
     name: 'SEM Dashboard Translator',
     description: 'Invisible card that translates all dashboard text to the user language at runtime',
+});
+
 });

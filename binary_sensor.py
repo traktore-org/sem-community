@@ -1,4 +1,7 @@
 """SEM Solar Energy Management binary sensors."""
+
+from __future__ import annotations
+
 import logging
 from typing import Any, Dict
 
@@ -15,6 +18,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+
+type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,10 +72,10 @@ BINARY_SENSOR_TYPES = [
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: SEMConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up SEM Solar Energy Management binary sensors."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SEMCoordinator = entry.runtime_data
 
     entities = [
         SEMSolarBinarySensor(coordinator, description, entry)

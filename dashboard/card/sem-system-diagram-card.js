@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM System Diagram Card - Lumina-inspired power flow visualization
  *
@@ -692,11 +693,10 @@ class SEMSystemDiagramCard extends SEMBaseCard {
     }
 }
 
-customElements.define('sem-system-diagram-card', SEMSystemDiagramCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-system-diagram-card', SEMSystemDiagramCard, {
     type: 'sem-system-diagram-card',
     name: 'SEM System Diagram',
     description: 'Responsive power flow visualization with circular nodes and shimmer animations',
+});
+
 });

@@ -6,6 +6,8 @@ different inverter platforms (Huawei, SolarEdge, GoodWe, Fronius, SolAX, DEYE).
 Each platform has its own service call or entity to trigger forced charging.
 The adapter auto-detects the platform from config and dispatches accordingly.
 """
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

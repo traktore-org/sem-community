@@ -7,6 +7,8 @@ priority-based allocation because electricity naturally mixes.
 Sources: Solar, Grid Import, Battery Discharge
 Destinations: Home, EV, Battery Charge, Grid Export
 """
+from __future__ import annotations
+
 import logging
 from datetime import date
 from typing import Dict

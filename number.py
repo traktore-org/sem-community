@@ -1,4 +1,7 @@
 """SEM Solar Energy Management number entities for settings control."""
+
+from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -25,6 +28,8 @@ from homeassistant.helpers.entity import EntityCategory
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+
+type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -350,10 +355,10 @@ NUMBER_TYPES = [
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: SEMConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up EMS Solar Optimizer number entities."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SEMCoordinator = entry.runtime_data
 
     entities = [
         EMSSolarNumber(coordinator, description, entry)

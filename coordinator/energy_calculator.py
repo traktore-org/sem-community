@@ -1,4 +1,6 @@
 """Energy calculation module for SEM coordinator."""
+from __future__ import annotations
+
 import logging
 from collections import deque
 from datetime import datetime, date, timedelta

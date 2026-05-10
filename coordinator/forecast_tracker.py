@@ -10,6 +10,8 @@ The correction factor is a simple but effective approach:
 - Rolling 7-day average for smoothing
 - Applied to raw forecasts to improve accuracy over time
 """
+from __future__ import annotations
+
 import logging
 from collections import deque
 from dataclasses import dataclass, field

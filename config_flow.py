@@ -1,4 +1,7 @@
 """Config flow for Solar Energy Management integration."""
+
+from __future__ import annotations
+
 import logging
 from typing import Any, Dict
 
@@ -161,7 +164,9 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Suggests SEM setup if Energy Dashboard is configured.
         """
         await self.async_set_unique_id(DOMAIN)
-        self._abort_if_unique_id_configured()
+        # Reload on rediscovery to pick up updated version/device info
+        # (quality scale: discovery-update-info)
+        self._abort_if_unique_id_configured(reload_on_update=True)
 
         # Only proceed if Energy Dashboard is actually configured
         dashboard = await read_energy_dashboard_config(self.hass)

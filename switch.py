@@ -1,4 +1,7 @@
 """SEM Solar Energy Management switches."""
+
+from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -13,6 +16,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+
+type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,10 +40,10 @@ SWITCH_TYPES = [
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: SEMConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     """Set up SEM Solar Energy Management switches."""
-    coordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SEMCoordinator = entry.runtime_data
 
     switches = [
         SEMSolarSwitch(coordinator, description, entry.entry_id)
@@ -132,9 +137,9 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._is_on = last_state.state == "on"
-            _LOGGER.info(f"Restored {self.entity_description.key} state to: {'ON' if self._is_on else 'OFF'}")
+            _LOGGER.info("Restored %s state to: %s", self.entity_description.key, 'ON' if self._is_on else 'OFF')
         else:
-            _LOGGER.info(f"No previous state for {self.entity_description.key}, using default: {'ON' if self._is_on else 'OFF'}")
+            _LOGGER.info("No previous state for %s, using default: %s", self.entity_description.key, 'ON' if self._is_on else 'OFF')
 
     @property
     def is_on(self) -> bool:
@@ -143,20 +148,20 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        _LOGGER.info(f"Turning on {self.entity_description.key}")
+        _LOGGER.info("Turning on %s", self.entity_description.key)
         self._is_on = True
 
         try:
             await self.coordinator.async_request_refresh()
         except Exception as e:
-            _LOGGER.warning(f"Failed to refresh coordinator when turning on {self.entity_description.key}: {e}")
+            _LOGGER.warning("Failed to refresh coordinator when turning on %s: %s", self.entity_description.key, e)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
-        _LOGGER.info(f"Turning off {self.entity_description.key}")
+        _LOGGER.info("Turning off %s", self.entity_description.key)
         self._is_on = False
 
         try:
             await self.coordinator.async_request_refresh()
         except Exception as e:
-            _LOGGER.warning(f"Failed to refresh coordinator when turning off {self.entity_description.key}: {e}")
+            _LOGGER.warning("Failed to refresh coordinator when turning off %s: %s", self.entity_description.key, e)
