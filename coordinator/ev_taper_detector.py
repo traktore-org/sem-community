@@ -261,17 +261,22 @@ class EVTaperDetector:
                         extra, hw_total_energy_kwh,
                     )
             return
-            if self._hw_total_at_full is not None:
-                # Calculate energy since full from hardware delta
-                hw_energy = hw_total_energy_kwh - self._hw_total_at_full
-                if 0 <= hw_energy <= capacity:
-                    if abs(hw_energy - self._energy_since_full) > 0.5:
-                        _LOGGER.debug(
-                            "SOC reconciled from hardware: %.1f kWh (was %.1f from integration)",
-                            hw_energy, self._energy_since_full,
-                        )
-                    self._energy_since_full = hw_energy
-                    return
+
+        # Reconcile energy_since_full from hardware total energy counter
+        # This corrects drift from the daily decay prediction (#174)
+        if self._hw_total_at_full is not None and hw_total_energy_kwh is not None:
+            hw_energy = hw_total_energy_kwh - self._hw_total_at_full
+            if 0 <= hw_energy <= capacity:
+                if abs(hw_energy - self._energy_since_full) > 0.5:
+                    _LOGGER.info(
+                        "SOC reconciled from hardware: %.1f kWh (was %.1f from decay)",
+                        hw_energy, self._energy_since_full,
+                    )
+                self._energy_since_full = hw_energy
+                self._estimated_soc = max(
+                    0.0, 100.0 - (self._energy_since_full / capacity * 100.0)
+                )
+                return
 
         # Fallback: power integration
         if ev_energy_increment_kwh > 0:
