@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Charger Status Card — Multi-charger status display
  *
@@ -245,11 +246,10 @@ class SEMChargerStatusCard extends SEMBaseCard {
     }
 }
 
-customElements.define('sem-charger-status-card', SEMChargerStatusCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-charger-status-card', SEMChargerStatusCard, {
     type: 'sem-charger-status-card',
     name: 'SEM Charger Status',
     description: 'Multi-charger status display with per-charger tiles',
+});
+
 });

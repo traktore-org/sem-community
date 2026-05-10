@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM EV Status Card — Lumina-styled EV charging hero card
  *
@@ -488,11 +489,10 @@ class SEMEVStatusCard extends SEMBaseCard {
     static getStubConfig() { return {}; }
 }
 
-customElements.define('sem-ev-status-card', SEMEVStatusCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-ev-status-card', SEMEVStatusCard, {
     type: 'sem-ev-status-card',
     name: 'SEM EV Status',
     description: 'Lumina-styled EV charging hero card with animated charging visualization',
+});
+
 });

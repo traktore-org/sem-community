@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Flow Card — Animated energy flow diagram for Home Assistant
  *
@@ -1863,12 +1864,11 @@ class SEMFlowCardEditor extends HTMLElement {
 
 customElements.define('sem-flow-card-editor', SEMFlowCardEditor);
 
-customElements.define('sem-flow-card', SEMFlowCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-flow-card', SEMFlowCard, {
     type: 'sem-flow-card',
     name: 'SEM Flow Card',
     description: 'Animated energy flow diagram with solar, battery, grid, EV, and individual devices',
     preview: true,
+});
+
 });

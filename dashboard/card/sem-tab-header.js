@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Tab Header Card — Lumina-styled section header with glow icon
  *
@@ -351,11 +352,10 @@ class SEMTabHeader extends SEMBaseCard {
     static getStubConfig() { return { tab: 'home' }; }
 }
 
-customElements.define('sem-tab-header', SEMTabHeader);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-tab-header', SEMTabHeader, {
     type: 'sem-tab-header',
     name: 'SEM Tab Header',
     description: 'Lumina-styled tab header with glow icon and live stats',
+});
+
 });

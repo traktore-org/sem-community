@@ -1195,6 +1195,13 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         title_card_url = f"{title_card_base}?v={version}"
         translator_url = f"{translator_base}?v={version}"
         schedule_url = f"{schedule_base}?v={version}"
+        # Load prerequisite scripts (SEMBaseCard, semLocalize) via add_extra_js_url.
+        # These load as <script> tags in <head>, guaranteed to execute BEFORE
+        # Lovelace resources. This prevents "SEMBaseCard is not defined" race
+        # conditions on systems with many HACS cards loading in parallel.
+        add_extra_js_url(hass, localize_url)
+        add_extra_js_url(hass, shared_url)
+
         try:
             from homeassistant.components.lovelace.resources import ResourceStorageCollection
             resources: ResourceStorageCollection = hass.data["lovelace"].resources
@@ -1207,9 +1214,15 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 base = item["url"].split("?")[0]
                 existing_by_base[base] = item
 
+            # Remove localize and shared from Lovelace resources if present
+            # (they're now loaded via add_extra_js_url above)
+            for dep_base in (localize_base, shared_base):
+                dep_item = existing_by_base.get(dep_base)
+                if dep_item:
+                    await resources.async_delete_item(dep_item["id"])
+                    _LOGGER.info("Removed SEM dependency from Lovelace resources (now extra_js): %s", dep_base)
+
             for base, versioned_url in (
-                (localize_base, localize_url),
-                (shared_base, shared_url),
                 (card_base, card_url),
                 (diagram_base, diagram_url),
                 (period_base, period_url),

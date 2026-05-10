@@ -1,3 +1,4 @@
+(window.semReady || (fn => { window._semReadyQueue = window._semReadyQueue || []; window._semReadyQueue.push(fn); }))(function() {
 /**
  * SEM Load Priority Card - Drag and drop interface for load management priorities
  *
@@ -643,12 +644,11 @@ class SEMLoadPriorityCard extends SEMBaseCard {
     }
 }
 
-customElements.define('sem-load-priority-card', SEMLoadPriorityCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
+semDefineCard('sem-load-priority-card', SEMLoadPriorityCard, {
     type: 'sem-load-priority-card',
     name: 'SEM Load Priority Card',
     description: 'Drag and drop interface for managing load shedding priorities',
     preview: true,
+});
+
 });
