@@ -657,28 +657,70 @@ class SensorReader:
     def _auto_detect_battery_soc(self, battery_power_entity: str) -> Optional[str]:
         """Auto-detect battery SOC sensor from the same device as the power sensor.
 
-        Only matches entities that share the exact same device prefix as the
-        battery power sensor (e.g., battery_1_*). This prevents matching
-        mobile phone battery levels or other unrelated batteries.
+        Strategy:
+        1. Try prefix-based matching (fast, works for Huawei/generic)
+        2. If that fails, look up the device via entity registry and search
+           all sensor entities on the same device for SOC keywords (#174)
 
         Common patterns:
         - Huawei: sensor.battery_1_batterieladung (from battery_1_lade_entladeleistung)
+        - GoodWe: sensor.goodwe_battery_soc (from sensor.goodwe_pbattery1)
         - Generic: sensor.battery_1_soc, sensor.battery_1_state_of_charge
         """
         if not battery_power_entity or "." not in battery_power_entity:
             return None
 
-        # Extract device prefix: sensor.battery_1_lade_entladeleistung -> battery_1
+        soc_keywords = ["soc", "state_of_charge", "batterieladung", "battery_level", "charge_level"]
+
+        # Strategy 1: Prefix-based matching (fast path)
         entity_name = battery_power_entity.split(".", 1)[1]
         parts = entity_name.split("_")
 
-        # Use first 2 parts as device prefix (e.g., "battery_1")
-        # This is strict enough to avoid matching mobile devices
-        if len(parts) < 2:
-            return None
-        prefix = "_".join(parts[:2])
+        if len(parts) >= 2:
+            prefix = "_".join(parts[:2])
+            result = self._try_soc_candidates(prefix, soc_keywords)
+            if result:
+                return result
 
-        soc_keywords = ["soc", "state_of_charge", "batterieladung", "battery_level", "charge_level"]
+        # Strategy 2: Device registry lookup — find all entities on the same
+        # device and check for SOC keywords. This handles integrations where
+        # battery power and SOC have different name prefixes (e.g., GoodWe:
+        # sensor.goodwe_pbattery1 vs sensor.goodwe_battery_soc)
+        try:
+            registry = er.async_get(self.hass)
+            power_entry = registry.async_get(battery_power_entity)
+            if power_entry and power_entry.device_id:
+                device_entities = er.async_entries_for_device(
+                    registry, power_entry.device_id
+                )
+                for entity_entry in device_entities:
+                    if entity_entry.domain != "sensor":
+                        continue
+                    eid = entity_entry.entity_id
+                    eid_lower = eid.lower()
+                    # Check if entity name contains SOC keywords
+                    if any(kw in eid_lower for kw in soc_keywords):
+                        state = self.hass.states.get(eid)
+                        if state and state.state not in ("unknown", "unavailable", None):
+                            try:
+                                val = float(state.state)
+                                if 0 <= val <= 100:
+                                    if not getattr(self, '_battery_soc_logged', False):
+                                        _LOGGER.info(
+                                            "Auto-detected battery SOC via device registry: %s = %.0f%%",
+                                            eid, val,
+                                        )
+                                        self._battery_soc_logged = True
+                                    return eid
+                            except (ValueError, TypeError):
+                                pass
+        except Exception as e:
+            _LOGGER.debug("Device registry SOC lookup failed: %s", e)
+
+        return None
+
+    def _try_soc_candidates(self, prefix: str, soc_keywords: list) -> Optional[str]:
+        """Try prefix + keyword combinations to find SOC entity."""
         for keyword in soc_keywords:
             candidate = f"sensor.{prefix}_{keyword}"
             state = self.hass.states.get(candidate)
@@ -692,7 +734,6 @@ class SensorReader:
                         return candidate
                 except (ValueError, TypeError):
                     pass
-
         return None
 
     def auto_detect_battery_capacity_kwh(self) -> Optional[float]:
