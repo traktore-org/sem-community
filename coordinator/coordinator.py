@@ -211,7 +211,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Hourly activity tracker for schedule card (#63)
         self._today_surplus_hours: list = [False] * 24
         self._today_ev_hours: list = [False] * 24
-        self._tracker_date = None
+        # Initialize to today so restarts don't re-apply daily decay
+        self._tracker_date = dt_util.now().date()
 
         # Per-cycle caches (initialized here, populated in _async_update_data)
         self._cycle_forecast = None
