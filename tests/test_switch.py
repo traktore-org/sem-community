@@ -135,6 +135,7 @@ class TestSEMSwitches:
         """Test switch setup creates exactly 2 switches."""
         from custom_components.solar_energy_management.const import DOMAIN
 
+        config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
 

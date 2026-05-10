@@ -1,4 +1,7 @@
 """Energy Dashboard automatic configuration for SEM."""
+
+from __future__ import annotations
+
 import json
 import logging
 import os
@@ -26,9 +29,14 @@ async def configure_energy_dashboard(
         energy_file = os.path.join(hass.config.config_dir, ".storage", "energy")
 
         # Load existing energy configuration or create new one
-        if os.path.exists(energy_file):
-            with open(energy_file, "r", encoding="utf-8") as f:
-                energy_config = json.load(f)
+        def _load_energy_config():
+            if os.path.exists(energy_file):
+                with open(energy_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return None
+
+        energy_config = await hass.async_add_executor_job(_load_energy_config)
+        if energy_config is not None:
             _LOGGER.info("Loaded existing energy configuration")
         else:
             energy_config = {
@@ -116,17 +124,18 @@ async def configure_energy_dashboard(
                 ev_energy_sensor
             )
 
-        # Create backup before saving
-        if os.path.exists(energy_file):
-            backup_file = f"{energy_file}.backup_sem"
-            with open(backup_file, "w", encoding="utf-8") as f:
-                with open(energy_file, "r", encoding="utf-8") as orig:
-                    f.write(orig.read())
-            _LOGGER.info("Created backup at: %s", backup_file)
+        # Create backup and save updated configuration
+        def _save_energy_config():
+            if os.path.exists(energy_file):
+                backup_file = f"{energy_file}.backup_sem"
+                with open(backup_file, "w", encoding="utf-8") as f:
+                    with open(energy_file, "r", encoding="utf-8") as orig:
+                        f.write(orig.read())
+                _LOGGER.info("Created backup at: %s", backup_file)
+            with open(energy_file, "w", encoding="utf-8") as f:
+                json.dump(energy_config, f, indent=2)
 
-        # Save updated configuration
-        with open(energy_file, "w", encoding="utf-8") as f:
-            json.dump(energy_config, f, indent=2)
+        await hass.async_add_executor_job(_save_energy_config)
 
         _LOGGER.info("Successfully configured Energy Dashboard with SEM sensors")
         return True

@@ -10,6 +10,8 @@ Provides remaining-today and tomorrow forecasts for:
 - Device scheduling (when will surplus be available?)
 - PV performance analysis (actual vs expected)
 """
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta

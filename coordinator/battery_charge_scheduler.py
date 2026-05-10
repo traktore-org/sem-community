@@ -10,6 +10,8 @@ The scheduler runs a daily decision (default 21:00) that:
 
 Coordinates with EV night charging via shared peak limit.
 """
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta

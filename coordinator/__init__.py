@@ -11,6 +11,8 @@ This module provides a modular coordinator architecture:
 - SEMStorage: Persistence
 - NotificationManager: Mobile/KEBA notifications
 """
+from __future__ import annotations
+
 from .coordinator import SEMCoordinator
 from .types import (
     PowerReadings,

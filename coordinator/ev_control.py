@@ -9,6 +9,8 @@ Mixin class providing all EV charging control logic:
 - Solar EV budget calculation (grid export + forecast-aware battery redirect)
 - Forecast-aware night target reduction
 """
+from __future__ import annotations
+
 import logging
 from datetime import timedelta
 from typing import Any, Optional

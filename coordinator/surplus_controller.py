@@ -12,6 +12,8 @@ SEM surplus control algorithm:
 This replaces the EV-only surplus routing with a generic multi-device
 surplus distribution system.
 """
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime

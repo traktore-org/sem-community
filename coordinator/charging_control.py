@@ -11,6 +11,8 @@ Actual KEBA commands are sent through CurrentControlDevice (devices/base.py).
 ChargingContext carries all decision inputs including night-specific fields
 (nt_period_active, night_end_time, ev_max_power_w, night_target_kwh).
 """
+from __future__ import annotations
+
 import logging
 from typing import Dict, Any, Optional
 from dataclasses import dataclass

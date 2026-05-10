@@ -64,6 +64,7 @@ def coordinator():
 @pytest.mark.asyncio
 async def test_diagnostics_returns_data(hass, entry, coordinator):
     """Diagnostics should return structured data."""
+    entry.runtime_data = coordinator
     hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
     result = await async_get_config_entry_diagnostics(hass, entry)
 
@@ -79,6 +80,7 @@ async def test_diagnostics_returns_data(hass, entry, coordinator):
 @pytest.mark.asyncio
 async def test_diagnostics_redacts_sensitive_fields(hass, entry, coordinator):
     """Diagnostics should redact entity ID fields."""
+    entry.runtime_data = coordinator
     hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
     result = await async_get_config_entry_diagnostics(hass, entry)
 
@@ -93,6 +95,7 @@ async def test_diagnostics_redacts_sensitive_fields(hass, entry, coordinator):
 @pytest.mark.asyncio
 async def test_diagnostics_power_values(hass, entry, coordinator):
     """Diagnostics should include current power values."""
+    entry.runtime_data = coordinator
     hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
     result = await async_get_config_entry_diagnostics(hass, entry)
 
@@ -103,6 +106,7 @@ async def test_diagnostics_power_values(hass, entry, coordinator):
 @pytest.mark.asyncio
 async def test_diagnostics_yearly_environmental(hass, entry, coordinator):
     """Diagnostics should include yearly environmental data."""
+    entry.runtime_data = coordinator
     hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
     result = await async_get_config_entry_diagnostics(hass, entry)
 
@@ -114,6 +118,7 @@ async def test_diagnostics_yearly_environmental(hass, entry, coordinator):
 async def test_diagnostics_empty_coordinator_data(hass, entry, coordinator):
     """Diagnostics should handle empty coordinator data gracefully."""
     coordinator.data = None
+    entry.runtime_data = coordinator
     hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
     result = await async_get_config_entry_diagnostics(hass, entry)
 

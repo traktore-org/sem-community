@@ -228,7 +228,8 @@ class TestEMSSensors:
         from custom_components.solar_energy_management.const import DOMAIN
         from homeassistant.helpers import entity_registry as er
 
-        # Mock the coordinator in hass.data
+        # Mock the coordinator in runtime_data (quality scale: runtime-data)
+        config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
 
         # Mock the entity registry to prevent KeyError

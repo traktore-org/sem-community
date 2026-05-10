@@ -79,10 +79,8 @@ class TestEMSBinarySensors:
     @pytest.mark.asyncio
     async def test_async_setup_entry(self, hass, config_entry, mock_coordinator):
         """Test binary sensor setup from config entry."""
-        from custom_components.solar_energy_management.const import DOMAIN
-
-        # Mock the coordinator in hass.data
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        # Set runtime_data for the entry (quality scale: runtime-data)
+        config_entry.runtime_data = mock_coordinator
 
         # Mock the add_entities function
         add_entities = MagicMock()

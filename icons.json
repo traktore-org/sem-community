@@ -338,32 +338,14 @@
       }
     },
     "switch": {
-      "charging_control": {
-        "default": "mdi:ev-station"
-      },
-      "force_charge": {
-        "default": "mdi:flash"
-      },
       "night_charging": {
         "default": "mdi:weather-night"
       },
-      "charger_notifications": {
-        "default": "mdi:message-processing"
+      "observer_mode": {
+        "default": "mdi:eye-outline"
       },
-      "mobile_notifications": {
-        "default": "mdi:cellphone-message"
-      },
-      "surplus_control": {
-        "default": "mdi:lightning-bolt-circle"
-      },
-      "price_responsive_mode": {
-        "default": "mdi:cash-sync"
-      },
-      "heat_pump_solar_boost": {
-        "default": "mdi:heat-pump-outline"
-      },
-      "hot_water_solar_control": {
-        "default": "mdi:water-boiler"
+      "smart_night_charging": {
+        "default": "mdi:weather-night-partly-cloudy"
       }
     },
     "number": {

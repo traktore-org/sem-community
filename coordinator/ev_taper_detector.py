@@ -17,6 +17,8 @@ Battery health:
     Compares energy accepted during full-cycle charges against the
     configured capacity over months.
 """
+from __future__ import annotations
+
 import logging
 import time
 from collections import deque

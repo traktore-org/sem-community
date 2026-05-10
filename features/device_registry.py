@@ -17,6 +17,8 @@ Flow:
         ├── LoadManagement._devices[id] = dict
         └── sensor.sem_controllable_devices_count attributes (card reads this)
 """
+from __future__ import annotations
+
 import asyncio
 import logging
 from dataclasses import dataclass, field

@@ -1,4 +1,7 @@
 """SEM Solar Energy Management select entities."""
+
+from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -10,6 +13,8 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+
+type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,11 +37,11 @@ SELECT_TYPES = [
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: SEMConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up SEM select entities."""
-    coordinator: SEMCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: SEMCoordinator = entry.runtime_data
     entities = [
         SEMSelectEntity(coordinator, entry, description)
         for description in SELECT_TYPES
@@ -45,18 +50,14 @@ async def async_setup_entry(
 
 
 class SEMSelectEntity(CoordinatorEntity, SelectEntity):
-    """SEM select entity for charging mode.
-
-    Does NOT use has_entity_name to ensure the entity ID is always
-    select.sem_ev_charging_mode regardless of HA language setting.
-    """
+    """SEM select entity for charging mode."""
 
     _attr_has_entity_name = True
 
     def __init__(
         self,
         coordinator: SEMCoordinator,
-        entry: ConfigEntry,
+        entry: SEMConfigEntry,
         description: SelectEntityDescription,
     ) -> None:
         """Initialize the select entity."""
@@ -66,8 +67,6 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = coordinator.device_info
         self._attr_translation_key = description.key
-        # Force stable entity ID regardless of HA language
-        self.entity_id = f"select.sem_{description.key}"
 
     @property
     def current_option(self) -> str | None:

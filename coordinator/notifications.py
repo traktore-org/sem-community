@@ -13,6 +13,8 @@ Features (#47):
 - Actionable notifications: buttons for dashboard navigation
 - HA events: fires sem_notification for automation triggers
 """
+from __future__ import annotations
+
 import logging
 import time
 from typing import Dict, Any, Optional

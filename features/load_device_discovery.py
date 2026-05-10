@@ -1,4 +1,6 @@
 """Load management device discovery for SEM Solar Energy Management."""
+from __future__ import annotations
+
 import logging
 from typing import Dict, List, Optional, Tuple, Any
 import fnmatch

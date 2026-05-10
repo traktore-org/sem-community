@@ -15,6 +15,10 @@ Best Practices Implementation:
 - Service registry checks to prevent conflicts
 - Comprehensive logging and diagnostics
 """
+
+from __future__ import annotations
+
+import json
 import logging
 import os
 from typing import Any, Dict
@@ -351,12 +355,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ev_device.charge_mode_stop = _cfg("ev_charge_mode_stop")
             if _cfg("ev_start_service"):
                 ev_device.start_service = _cfg("ev_start_service")
-                import json as _json
-                ev_device.start_service_data = _json.loads(_cfg("ev_start_service_data", "{}"))
+                ev_device.start_service_data = json.loads(_cfg("ev_start_service_data", "{}"))
             if _cfg("ev_stop_service"):
                 ev_device.stop_service = _cfg("ev_stop_service")
-                import json as _json
-                ev_device.stop_service_data = _json.loads(_cfg("ev_stop_service_data", "{}"))
+                ev_device.stop_service_data = json.loads(_cfg("ev_stop_service_data", "{}"))
 
             coordinator._surplus_controller.register_device(ev_device)
             coordinator._ev_devices[charger_id] = ev_device
@@ -551,6 +553,20 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         hass.data[DOMAIN].pop(entry.entry_id, None)
+
+        # Remove all registered services (quality scale: config-entry-unloading)
+        for service_name in (
+            "generate_dashboard",
+            "configure_energy_dashboard",
+            "sync_priorities_from_dashboard",
+            "set_device_control_mapping",
+            "update_device_priorities",
+            "update_device_config",
+            "update_target_peak",
+            "register_surplus_device",
+            "schedule_appliance",
+        ):
+            hass.services.async_remove(DOMAIN, service_name)
 
     return unload_ok
 
@@ -794,14 +810,10 @@ async def _async_register_services(
 
         except Exception as e:
             _LOGGER.error("Dashboard generation failed: %s", e, exc_info=True)
-            await hass.services.async_call(
-                "persistent_notification", "create",
-                {
-                    "title": "SEM Dashboard Generation Failed",
-                    "message": f"Error: {e}\n\nSee logs for details.",
-                    "notification_id": "sem_dashboard_error",
-                },
-            )
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="dashboard_generation_failed",
+            ) from e
 
     try:
         hass.services.async_register(
@@ -836,8 +848,18 @@ async def _async_register_services(
                 )
             else:
                 _LOGGER.warning("Energy Dashboard configuration returned False")
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="energy_dashboard_configuration_failed",
+                )
+        except HomeAssistantError:
+            raise
         except Exception as e:
             _LOGGER.error("Energy Dashboard configuration failed: %s", e, exc_info=True)
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="energy_dashboard_configuration_failed",
+            ) from e
 
     try:
         hass.services.async_register(
@@ -853,7 +875,6 @@ async def _async_register_services(
     # Load management priority sync service
     async def async_sync_priorities_from_dashboard_service(call) -> None:
         """Sync device priorities from dashboard card order."""
-        import json
         import re
 
         dashboard_storage_key = call.data.get("dashboard_storage_key", "lovelace.dashboard_test")
@@ -868,12 +889,17 @@ async def _async_register_services(
         try:
             # Load dashboard configuration
             dashboard_file = os.path.join(hass.config.config_dir, ".storage", dashboard_storage_key)
-            if not os.path.exists(dashboard_file):
+
+            def _read_dashboard():
+                if not os.path.exists(dashboard_file):
+                    return None
+                with open(dashboard_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+
+            dashboard_data = await hass.async_add_executor_job(_read_dashboard)
+            if dashboard_data is None:
                 _LOGGER.error("Dashboard file not found: %s", dashboard_file)
                 return
-
-            with open(dashboard_file, "r", encoding="utf-8") as f:
-                dashboard_data = json.load(f)
 
             # Find the specified view
             views = dashboard_data.get("data", {}).get("config", {}).get("views", [])
@@ -1054,7 +1080,10 @@ async def _async_register_services(
             if registry:
                 await registry.update_device_control_mode(device_id, str(value))
             else:
-                raise HomeAssistantError("Device registry not initialized")
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="device_registry_not_initialized",
+                )
         elif prop == "depends_on":
             # Update device dependency (#122)
             device = coordinator._surplus_controller.get_device(device_id)
@@ -1071,7 +1100,11 @@ async def _async_register_services(
                     except Exception as e:
                         _LOGGER.debug("Could not persist dependency: %s", e)
             else:
-                raise HomeAssistantError(f"Device {device_id} not found in surplus controller")
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="device_not_found",
+                    translation_placeholders={"device_id": device_id},
+                )
         else:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -1155,13 +1188,16 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         # Without this, browsers cache the old JS indefinitely even with
         # cache_headers=False, because Lovelace resources are fetched once
         # and kept in the service worker cache.
-        import json as _json
         manifest_path = os.path.join(component_path, "manifest.json")
-        try:
-            with open(manifest_path) as f:
-                version = _json.load(f).get("version", "0")
-        except Exception:
-            version = "0"
+
+        def _read_version():
+            try:
+                with open(manifest_path) as f:
+                    return json.load(f).get("version", "0")
+            except Exception:
+                return "0"
+
+        version = await hass.async_add_executor_job(_read_version)
 
         localize_base = f"{static_path}/card/sem-localize.js"
         shared_base = f"{static_path}/card/sem-shared.js"
