@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-11T15:01:39.772387+00:00
+// Generated: 2026-05-11T15:25:41.972258+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -678,7 +678,11 @@ const _semTranslations = {
     "start_amps": "Start Amps",
     "min_amps": "Min Amps",
     "night_charging_enabled": "Night Charging",
-    "per_charger_settings": "Per-charger settings"
+    "per_charger_settings": "Per-charger settings",
+    "charge_tonight": "Charge Tonight",
+    "nights_until_charge": "Nights Until Charge",
+    "yes": "Yes",
+    "no": "No"
   },
   "de": {
     "charging": "Laden",
@@ -1357,7 +1361,11 @@ const _semTranslations = {
     "start_amps": "Startampere",
     "min_amps": "Min. Ampere",
     "night_charging_enabled": "Nachtladen",
-    "per_charger_settings": "Pro-Ladegerät-Einstellungen"
+    "per_charger_settings": "Pro-Ladegerät-Einstellungen",
+    "charge_tonight": "Heute Nacht laden",
+    "nights_until_charge": "Nächte bis Ladung",
+    "yes": "Ja",
+    "no": "Nein"
   },
   "fr": {
     "charging": "En charge",
@@ -2036,7 +2044,11 @@ const _semTranslations = {
     "start_amps": "Ampères départ",
     "min_amps": "Ampères min.",
     "night_charging_enabled": "Charge nocturne",
-    "per_charger_settings": "Paramètres par chargeur"
+    "per_charger_settings": "Paramètres par chargeur",
+    "charge_tonight": "Charger ce soir",
+    "nights_until_charge": "Nuits avant charge",
+    "yes": "Oui",
+    "no": "Non"
   },
   "es": {
     "charging": "Cargando",
@@ -2715,7 +2727,11 @@ const _semTranslations = {
     "start_amps": "Amperios inicio",
     "min_amps": "Amperios mín.",
     "night_charging_enabled": "Carga nocturna",
-    "per_charger_settings": "Configuración por cargador"
+    "per_charger_settings": "Configuración por cargador",
+    "charge_tonight": "Cargar esta noche",
+    "nights_until_charge": "Noches hasta carga",
+    "yes": "Sí",
+    "no": "No"
   },
   "it": {
     "charging": "In carica",
@@ -3394,7 +3410,11 @@ const _semTranslations = {
     "start_amps": "Ampere avvio",
     "min_amps": "Ampere min.",
     "night_charging_enabled": "Ricarica notturna",
-    "per_charger_settings": "Impostazioni per caricatore"
+    "per_charger_settings": "Impostazioni per caricatore",
+    "charge_tonight": "Caricare stanotte",
+    "nights_until_charge": "Notti fino a ricarica",
+    "yes": "Sì",
+    "no": "No"
   },
   "nl": {
     "charging": "Laden",
@@ -4073,7 +4093,11 @@ const _semTranslations = {
     "start_amps": "Startampère",
     "min_amps": "Min. ampère",
     "night_charging_enabled": "Nachtladen",
-    "per_charger_settings": "Per lader instellingen"
+    "per_charger_settings": "Per lader instellingen",
+    "charge_tonight": "Vanavond laden",
+    "nights_until_charge": "Nachten tot laden",
+    "yes": "Ja",
+    "no": "Nee"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -4752,7 +4776,11 @@ const _semTranslations = {
     "start_amps": "Počáteční ampéry",
     "min_amps": "Min. ampéry",
     "night_charging_enabled": "Noční nabíjení",
-    "per_charger_settings": "Nastavení nabíječky"
+    "per_charger_settings": "Nastavení nabíječky",
+    "charge_tonight": "Nabít dnes v noci",
+    "nights_until_charge": "Nocí do nabití",
+    "yes": "Ano",
+    "no": "Ne"
   },
   "da": {
     "charging": "Oplader",
@@ -5431,7 +5459,11 @@ const _semTranslations = {
     "start_amps": "Startampere",
     "min_amps": "Min. ampere",
     "night_charging_enabled": "Natopladning",
-    "per_charger_settings": "Indstillinger pr. lader"
+    "per_charger_settings": "Indstillinger pr. lader",
+    "charge_tonight": "Oplade i nat",
+    "nights_until_charge": "Nætter til opladning",
+    "yes": "Ja",
+    "no": "Nej"
   },
   "fi": {
     "charging": "Lataus",
@@ -6110,7 +6142,11 @@ const _semTranslations = {
     "start_amps": "Aloitusampeerit",
     "min_amps": "Min. ampeerit",
     "night_charging_enabled": "Yölataus",
-    "per_charger_settings": "Laturikohtaiset asetukset"
+    "per_charger_settings": "Laturikohtaiset asetukset",
+    "charge_tonight": "Lataa tänä yönä",
+    "nights_until_charge": "Öitä lataukseen",
+    "yes": "Kyllä",
+    "no": "Ei"
   },
   "hu": {
     "charging": "Töltés",
@@ -6789,7 +6825,11 @@ const _semTranslations = {
     "start_amps": "Kezdő amper",
     "min_amps": "Min. amper",
     "night_charging_enabled": "Éjszakai töltés",
-    "per_charger_settings": "Töltőnkénti beállítások"
+    "per_charger_settings": "Töltőnkénti beállítások",
+    "charge_tonight": "Töltés ma éjjel",
+    "nights_until_charge": "Éjszakák töltésig",
+    "yes": "Igen",
+    "no": "Nem"
   },
   "no": {
     "charging": "Lader",
@@ -7468,7 +7508,11 @@ const _semTranslations = {
     "start_amps": "Startampere",
     "min_amps": "Min. ampere",
     "night_charging_enabled": "Nattlading",
-    "per_charger_settings": "Innstillinger per lader"
+    "per_charger_settings": "Innstillinger per lader",
+    "charge_tonight": "Lade i natt",
+    "nights_until_charge": "Netter til lading",
+    "yes": "Ja",
+    "no": "Nei"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -8147,7 +8191,11 @@ const _semTranslations = {
     "start_amps": "Ampery startowe",
     "min_amps": "Min. ampery",
     "night_charging_enabled": "Ładowanie nocne",
-    "per_charger_settings": "Ustawienia ładowarki"
+    "per_charger_settings": "Ustawienia ładowarki",
+    "charge_tonight": "Ładuj dziś w nocy",
+    "nights_until_charge": "Noce do ładowania",
+    "yes": "Tak",
+    "no": "Nie"
   },
   "pt": {
     "charging": "A carregar",
@@ -8826,7 +8874,11 @@ const _semTranslations = {
     "start_amps": "Amperes iniciais",
     "min_amps": "Amperes mín.",
     "night_charging_enabled": "Carregamento noturno",
-    "per_charger_settings": "Configurações por carregador"
+    "per_charger_settings": "Configurações por carregador",
+    "charge_tonight": "Carregar esta noite",
+    "nights_until_charge": "Noites até carga",
+    "yes": "Sim",
+    "no": "Não"
   },
   "ro": {
     "charging": "Încărcare",
@@ -9505,7 +9557,11 @@ const _semTranslations = {
     "start_amps": "Amperi pornire",
     "min_amps": "Amperi min.",
     "night_charging_enabled": "Încărcare nocturnă",
-    "per_charger_settings": "Setări pe încărcător"
+    "per_charger_settings": "Setări pe încărcător",
+    "charge_tonight": "Încărcare diseară",
+    "nights_until_charge": "Nopți până la încărcare",
+    "yes": "Da",
+    "no": "Nu"
   },
   "sv": {
     "charging": "Laddar",
@@ -10184,7 +10240,11 @@ const _semTranslations = {
     "start_amps": "Startampere",
     "min_amps": "Min. ampere",
     "night_charging_enabled": "Nattladdning",
-    "per_charger_settings": "Inställningar per laddare"
+    "per_charger_settings": "Inställningar per laddare",
+    "charge_tonight": "Ladda ikväll",
+    "nights_until_charge": "Nätter till laddning",
+    "yes": "Ja",
+    "no": "Nej"
   }
 };
 
