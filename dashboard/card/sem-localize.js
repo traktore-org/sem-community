@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-11T15:25:41.972258+00:00
+// Generated: 2026-05-11T17:36:09.225301+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -682,7 +682,8 @@ const _semTranslations = {
     "charge_tonight": "Charge Tonight",
     "nights_until_charge": "Nights Until Charge",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "daily_energy": "Today"
   },
   "de": {
     "charging": "Laden",
@@ -1365,7 +1366,8 @@ const _semTranslations = {
     "charge_tonight": "Heute Nacht laden",
     "nights_until_charge": "Nächte bis Ladung",
     "yes": "Ja",
-    "no": "Nein"
+    "no": "Nein",
+    "daily_energy": "Heute"
   },
   "fr": {
     "charging": "En charge",
@@ -2048,7 +2050,8 @@ const _semTranslations = {
     "charge_tonight": "Charger ce soir",
     "nights_until_charge": "Nuits avant charge",
     "yes": "Oui",
-    "no": "Non"
+    "no": "Non",
+    "daily_energy": "Aujourd'hui"
   },
   "es": {
     "charging": "Cargando",
@@ -2731,7 +2734,8 @@ const _semTranslations = {
     "charge_tonight": "Cargar esta noche",
     "nights_until_charge": "Noches hasta carga",
     "yes": "Sí",
-    "no": "No"
+    "no": "No",
+    "daily_energy": "Hoy"
   },
   "it": {
     "charging": "In carica",
@@ -3414,7 +3418,8 @@ const _semTranslations = {
     "charge_tonight": "Caricare stanotte",
     "nights_until_charge": "Notti fino a ricarica",
     "yes": "Sì",
-    "no": "No"
+    "no": "No",
+    "daily_energy": "Oggi"
   },
   "nl": {
     "charging": "Laden",
@@ -4097,7 +4102,8 @@ const _semTranslations = {
     "charge_tonight": "Vanavond laden",
     "nights_until_charge": "Nachten tot laden",
     "yes": "Ja",
-    "no": "Nee"
+    "no": "Nee",
+    "daily_energy": "Vandaag"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -4780,7 +4786,8 @@ const _semTranslations = {
     "charge_tonight": "Nabít dnes v noci",
     "nights_until_charge": "Nocí do nabití",
     "yes": "Ano",
-    "no": "Ne"
+    "no": "Ne",
+    "daily_energy": "Dnes"
   },
   "da": {
     "charging": "Oplader",
@@ -5463,7 +5470,8 @@ const _semTranslations = {
     "charge_tonight": "Oplade i nat",
     "nights_until_charge": "Nætter til opladning",
     "yes": "Ja",
-    "no": "Nej"
+    "no": "Nej",
+    "daily_energy": "I dag"
   },
   "fi": {
     "charging": "Lataus",
@@ -6146,7 +6154,8 @@ const _semTranslations = {
     "charge_tonight": "Lataa tänä yönä",
     "nights_until_charge": "Öitä lataukseen",
     "yes": "Kyllä",
-    "no": "Ei"
+    "no": "Ei",
+    "daily_energy": "Tänään"
   },
   "hu": {
     "charging": "Töltés",
@@ -6829,7 +6838,8 @@ const _semTranslations = {
     "charge_tonight": "Töltés ma éjjel",
     "nights_until_charge": "Éjszakák töltésig",
     "yes": "Igen",
-    "no": "Nem"
+    "no": "Nem",
+    "daily_energy": "Ma"
   },
   "no": {
     "charging": "Lader",
@@ -7512,7 +7522,8 @@ const _semTranslations = {
     "charge_tonight": "Lade i natt",
     "nights_until_charge": "Netter til lading",
     "yes": "Ja",
-    "no": "Nei"
+    "no": "Nei",
+    "daily_energy": "I dag"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -8195,7 +8206,8 @@ const _semTranslations = {
     "charge_tonight": "Ładuj dziś w nocy",
     "nights_until_charge": "Noce do ładowania",
     "yes": "Tak",
-    "no": "Nie"
+    "no": "Nie",
+    "daily_energy": "Dzisiaj"
   },
   "pt": {
     "charging": "A carregar",
@@ -8878,7 +8890,8 @@ const _semTranslations = {
     "charge_tonight": "Carregar esta noite",
     "nights_until_charge": "Noites até carga",
     "yes": "Sim",
-    "no": "Não"
+    "no": "Não",
+    "daily_energy": "Hoje"
   },
   "ro": {
     "charging": "Încărcare",
@@ -9561,7 +9574,8 @@ const _semTranslations = {
     "charge_tonight": "Încărcare diseară",
     "nights_until_charge": "Nopți până la încărcare",
     "yes": "Da",
-    "no": "Nu"
+    "no": "Nu",
+    "daily_energy": "Astăzi"
   },
   "sv": {
     "charging": "Laddar",
@@ -10244,7 +10258,8 @@ const _semTranslations = {
     "charge_tonight": "Ladda ikväll",
     "nights_until_charge": "Nätter till laddning",
     "yes": "Ja",
-    "no": "Nej"
+    "no": "Nej",
+    "daily_energy": "Idag"
   }
 };
 

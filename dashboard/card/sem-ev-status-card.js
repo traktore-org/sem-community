@@ -56,8 +56,9 @@ class SEMEVStatusCard extends SEMBaseCard {
         if (this._chargers.length >= 1) {
             key += '|' + this._chargers.map(id => [
                 `charger_${id}_power`, `charger_${id}_session_energy`,
-                `charger_${id}_session_solar_share`, `charger_${id}_estimated_soc`,
-                `charger_${id}_nights_until_charge`, `charger_${id}_charge_needed`,
+                `charger_${id}_daily_energy`, `charger_${id}_session_solar_share`,
+                `charger_${id}_estimated_soc`, `charger_${id}_nights_until_charge`,
+                `charger_${id}_charge_needed`,
             ].map(s => hass.states[`${this._prefix}${s}`]?.state || '').join(':')).join('|');
 
             // Night charging switches
@@ -222,6 +223,7 @@ class SEMEVStatusCard extends SEMBaseCard {
             const color = CHARGER_COLORS[idx % CHARGER_COLORS.length];
             const power = this._state(`charger_${id}_power`, 0);
             const session = this._state(`charger_${id}_session_energy`, 0);
+            const dailyEnergy = this._state(`charger_${id}_daily_energy`, 0);
             const solar = this._state(`charger_${id}_session_solar_share`, 0);
             const soc = this._state(`charger_${id}_estimated_soc`, null);
             const nights = this._state(`charger_${id}_nights_until_charge`, null);
@@ -297,6 +299,10 @@ class SEMEVStatusCard extends SEMBaseCard {
                             <div class="cm-row">
                                 <span class="cm-label">${this._t('power')}</span>
                                 <span class="cm-value" style="color:${isCharging ? color : ''}">${this._fmtPower(power)}</span>
+                            </div>
+                            <div class="cm-row">
+                                <span class="cm-label">${this._t('today')}</span>
+                                <span class="cm-value">${this._fmt(dailyEnergy, 1)} kWh</span>
                             </div>
                             <div class="cm-row">
                                 <span class="cm-label">${this._t('session')}</span>

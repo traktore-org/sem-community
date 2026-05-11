@@ -289,6 +289,115 @@ class TestPerChargerAggregation:
         # ev_power should be sum of both chargers: 3000 + 5000 = 8000
         assert readings.ev_power == 8000.0
 
+    def test_ev_power_sums_three_chargers(self):
+        """Global ev_power should sum 3 chargers correctly."""
+        from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
+
+        three_chargers = [
+            {"id": "c1", "name": "C1", "ev_charging_power_sensor": "sensor.c1_power"},
+            {"id": "c2", "name": "C2", "ev_charging_power_sensor": "sensor.c2_power"},
+            {"id": "c3", "name": "C3", "ev_charging_power_sensor": "sensor.c3_power"},
+        ]
+        hass = MagicMock()
+        config = {
+            "solar_production_sensor": "sensor.solar",
+            "grid_power_sensor": "sensor.grid",
+            "battery_power_sensor": "sensor.battery",
+            "ev_charging_power_sensor": "sensor.c1_power",
+            "ev_connected_sensor": "binary_sensor.ev_plug",
+            "ev_charging_sensor": "binary_sensor.ev_charging",
+            "ev_chargers": three_chargers,
+        }
+        reader = SensorReader(hass, config)
+
+        def mock_get(entity_id):
+            states = {
+                "sensor.c1_power": MagicMock(state="2000", attributes={"unit_of_measurement": "W"}),
+                "sensor.c2_power": MagicMock(state="3000", attributes={"unit_of_measurement": "W"}),
+                "sensor.c3_power": MagicMock(state="4000", attributes={"unit_of_measurement": "W"}),
+                "sensor.solar": MagicMock(state="10000", attributes={"unit_of_measurement": "W"}),
+                "sensor.grid": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.battery": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "binary_sensor.ev_plug": MagicMock(state="on"),
+                "binary_sensor.ev_charging": MagicMock(state="on"),
+            }
+            return states.get(entity_id)
+        hass.states.get = mock_get
+
+        readings = reader.read_power()
+        assert readings.ev_power == 9000.0  # 2000 + 3000 + 4000
+
+    def test_ev_power_sums_four_chargers(self):
+        """Global ev_power should sum 4 chargers correctly."""
+        from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
+
+        four_chargers = [
+            {"id": f"c{i}", "name": f"C{i}", "ev_charging_power_sensor": f"sensor.c{i}_power"}
+            for i in range(1, 5)
+        ]
+        hass = MagicMock()
+        config = {
+            "solar_production_sensor": "sensor.solar",
+            "grid_power_sensor": "sensor.grid",
+            "battery_power_sensor": "sensor.battery",
+            "ev_charging_power_sensor": "sensor.c1_power",
+            "ev_connected_sensor": "binary_sensor.ev_plug",
+            "ev_charging_sensor": "binary_sensor.ev_charging",
+            "ev_chargers": four_chargers,
+        }
+        reader = SensorReader(hass, config)
+
+        def mock_get(entity_id):
+            powers = {"sensor.c1_power": "1500", "sensor.c2_power": "2500",
+                      "sensor.c3_power": "3500", "sensor.c4_power": "4500"}
+            if entity_id in powers:
+                return MagicMock(state=powers[entity_id], attributes={"unit_of_measurement": "W"})
+            defaults = {
+                "sensor.solar": MagicMock(state="15000", attributes={"unit_of_measurement": "W"}),
+                "sensor.grid": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.battery": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "binary_sensor.ev_plug": MagicMock(state="on"),
+                "binary_sensor.ev_charging": MagicMock(state="on"),
+            }
+            return defaults.get(entity_id)
+        hass.states.get = mock_get
+
+        readings = reader.read_power()
+        assert readings.ev_power == 12000.0  # 1500 + 2500 + 3500 + 4500
+
+    def test_per_charger_entities_scale_to_four(self):
+        """4 chargers should create 4x number + 4x switch entities."""
+        four_chargers = [
+            {"id": f"c{i}", "name": f"Charger {i}", "ev_charging_power_sensor": f"sensor.c{i}"}
+            for i in range(1, 5)
+        ]
+        coord = _mock_coordinator(four_chargers)
+        entry = _mock_entry(four_chargers)
+
+        numbers = []
+        for charger in four_chargers:
+            cid = charger["id"]
+            for config_key in ["daily_ev_target", "ev_night_initial_current", "ev_min_current"]:
+                desc = NumberEntityDescription(key=f"charger_{cid}_{config_key}")
+                numbers.append(SEMPerChargerNumber(
+                    coord, desc, entry, cid, config_key, 10,
+                ))
+
+        assert len(numbers) == 12  # 3 settings × 4 chargers
+
+        switches = []
+        for charger in four_chargers:
+            cid = charger["id"]
+            desc = SwitchEntityDescription(key=f"charger_{cid}_night_charging")
+            switches.append(SEMPerChargerSwitch(
+                coord, desc, "test", cid, charger["name"],
+            ))
+
+        assert len(switches) == 4
+        # All unique IDs should be different
+        unique_ids = {s._attr_unique_id for s in switches}
+        assert len(unique_ids) == 4
+
     def test_ev_power_single_charger_unchanged(self):
         """Single charger should read from primary sensor only."""
         from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader

@@ -405,6 +405,8 @@ class SEMData:
     ev_intelligence: EVIntelligenceData = field(default_factory=EVIntelligenceData)
     # Per-charger intelligence (#193)
     per_charger_intelligence: Dict[str, dict] = field(default_factory=dict)
+    # Per-charger daily energy (#193)
+    per_charger_daily_energy: Dict[str, float] = field(default_factory=dict)
 
     # Timestamps
     last_update: Optional[datetime] = None
@@ -652,6 +654,9 @@ class SEMData:
                     f"charger_{cid}_session_energy": round(session.energy_kwh, 2),
                     f"charger_{cid}_session_solar_share": round(session.solar_share_pct, 1),
                     f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
+                    f"charger_{cid}_daily_energy": round(
+                        self.per_charger_daily_energy.get(cid, 0.0), 2
+                    ),
                 })
         except Exception as e:
             _LOGGER.warning("Per-charger to_dict failed: %s", e)

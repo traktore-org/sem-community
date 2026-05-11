@@ -1504,6 +1504,15 @@ async def async_setup_entry(
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
+            # Per-charger daily energy (#193)
+            SensorEntityDescription(
+                key=f"charger_{cid}_daily_energy",
+                name=f"{cname} Daily Energy",
+                device_class=SensorDeviceClass.ENERGY,
+                state_class=SensorStateClass.TOTAL_INCREASING,
+                native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                suggested_display_precision=2,
+            ),
             # Per-charger intelligence sensors (#193)
             SensorEntityDescription(
                 key=f"charger_{cid}_estimated_soc",

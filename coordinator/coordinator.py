@@ -119,6 +119,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
         self._ev_charge_started_per_charger: Dict[str, Optional[float]] = {}
         self._ev_last_change_per_charger: Dict[str, Any] = {}
+        self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
+        self._daily_ev_per_charger_date: Optional[str] = None
         self._notification_manager = NotificationManager(hass, config)
 
         # Storage will be initialized with entry_id later
@@ -555,7 +557,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         cfg = charger_cfg_by_id.get(cid, {})
                         # Per-charger target from config, fallback to global
                         target = cfg.get("daily_ev_target", global_target)
-                        self._night_target_per_charger_map[cid] = target
+                        # Remaining = target - daily energy delivered by this charger
+                        daily = self._daily_ev_per_charger.get(cid, 0.0)
+                        self._night_target_per_charger_map[cid] = max(0, target - daily)
 
                     # Backward compat: set the old scalar for single-value reads
                     self._night_target_per_charger = None
@@ -752,6 +756,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ev_charger_ids=list(self._ev_devices.keys()),
                 ev_intelligence=ev_intelligence,
                 per_charger_intelligence=self._build_per_charger_intelligence(),
+                per_charger_daily_energy=dict(self._daily_ev_per_charger),
                 last_update=dt_util.now(),
             )
 
@@ -1829,6 +1834,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
                 charger_setpoint = getattr(ev_dev, "_current_setpoint", 0.0)
                 charger_connected = getattr(ev_dev, "_session_active", False) or power.ev_connected
+
+                # Accumulate per-charger daily energy (#193)
+                if charger_power > 0:
+                    today = now.strftime("%Y-%m-%d")
+                    if self._daily_ev_per_charger_date != today:
+                        self._daily_ev_per_charger = {}
+                        self._daily_ev_per_charger_date = today
+                    increment = charger_power * interval_hours / 1000  # W → kWh
+                    self._daily_ev_per_charger[cid] = (
+                        self._daily_ev_per_charger.get(cid, 0.0) + increment
+                    )
 
                 if charger_power > 0 or charger_connected:
                     self._ev_taper_detectors[cid].update(
