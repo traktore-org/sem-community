@@ -1503,6 +1503,31 @@ async def async_setup_entry(
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
+            # Per-charger intelligence sensors (#193)
+            SensorEntityDescription(
+                key=f"charger_{cid}_estimated_soc",
+                name=f"{cname} Estimated SOC",
+                device_class=SensorDeviceClass.BATTERY,
+                state_class=SensorStateClass.MEASUREMENT,
+                native_unit_of_measurement=PERCENTAGE,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_nights_until_charge",
+                name=f"{cname} Nights Until Charge",
+                state_class=SensorStateClass.MEASUREMENT,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_charge_needed",
+                name=f"{cname} Charge Needed",
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_taper_minutes_to_full",
+                name=f"{cname} Minutes to Full",
+                native_unit_of_measurement=UnitOfTime.MINUTES,
+                suggested_display_precision=0,
+            ),
         ])
 
     for desc in per_charger_descriptions:

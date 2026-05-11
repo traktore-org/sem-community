@@ -751,6 +751,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ev_charger_count=len(self._ev_devices),
                 ev_charger_ids=list(self._ev_devices.keys()),
                 ev_intelligence=ev_intelligence,
+                per_charger_intelligence=self._build_per_charger_intelligence(),
                 last_update=dt_util.now(),
             )
 
@@ -1955,6 +1956,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_battery_health_pct=self._ev_taper_detector.battery_health_pct,
             charge_skip_reason=skip_reason,
         )
+
+    def _build_per_charger_intelligence(self) -> dict:
+        """Build per-charger intelligence data from per-charger taper detectors (#193)."""
+        if not self._ev_taper_detectors or len(self._ev_taper_detectors) <= 1:
+            return {}
+
+        result = {}
+        for cid, detector in self._ev_taper_detectors.items():
+            soc = detector.get_virtual_soc()
+            predicted = getattr(self, '_predictor', None)
+            predicted_daily = predicted.predict_ev_consumption_tomorrow(dt_util.now()) if predicted else 0
+            nights, charge_needed, skip_reason = detector.calculate_nights_until_charge(
+                predicted_daily, None,
+            )
+            taper_data = detector.get_taper_data() if hasattr(detector, 'get_taper_data') else None
+
+            result[cid] = {
+                "estimated_soc": round(soc, 1),
+                "nights_until_charge": nights,
+                "charge_needed": charge_needed,
+                "charge_skip_reason": skip_reason,
+                "minutes_to_full": taper_data.minutes_to_full if taper_data else None,
+                "battery_health": detector.battery_health_pct,
+            }
+
+        return result
 
     def _read_outdoor_temperature(self) -> float:
         """Read outdoor temperature from weather entity or configured sensor.
