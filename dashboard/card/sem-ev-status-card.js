@@ -255,10 +255,10 @@ class SEMEVStatusCard extends SEMBaseCard {
             const chargeColor = needsCharge ? '#f06292' : '#8DC892';
             const chargeText = needsCharge ? this._t('yes') : this._t('no');
 
-            // SOC gauge arc (0-100%)
+            // SOC battery gauge (0-100%)
             const socVal = soc != null ? Math.max(0, Math.min(100, soc)) : 0;
-            const socAngle = (socVal / 100) * 270;
             const socColor = socVal > 60 ? '#8DC892' : socVal > 30 ? '#ff9800' : '#f06292';
+            const socFill = Math.max(2, (socVal / 100) * 52); // fill height in SVG units
 
             return `
                 <div class="charger-section">
@@ -269,21 +269,23 @@ class SEMEVStatusCard extends SEMBaseCard {
                     </div>
 
                     <div class="charger-body">
-                        <!-- Left: SOC gauge -->
+                        <!-- Left: Battery SOC gauge -->
                         <div class="charger-soc">
-                            <svg viewBox="0 0 60 60">
-                                <circle cx="30" cy="30" r="25" fill="none"
-                                    stroke="rgba(255,255,255,0.08)" stroke-width="4"
-                                    stroke-dasharray="212" stroke-dashoffset="0"
-                                    transform="rotate(135 30 30)" stroke-linecap="round"/>
-                                <circle cx="30" cy="30" r="25" fill="none"
-                                    stroke="${socColor}" stroke-width="4"
-                                    stroke-dasharray="${(socAngle/360)*157} 157"
-                                    transform="rotate(135 30 30)" stroke-linecap="round"
-                                    opacity="0.8"/>
-                                <text x="30" y="33" text-anchor="middle"
-                                    fill="${socColor}" font-size="13" font-weight="700"
-                                    font-family="'Segoe UI','Roboto',sans-serif">
+                            <svg viewBox="0 0 44 76">
+                                <!-- Battery terminal -->
+                                <rect x="14" y="0" width="16" height="5" rx="2"
+                                    fill="rgba(255,255,255,0.15)"/>
+                                <!-- Battery body outline -->
+                                <rect x="6" y="4" width="32" height="60" rx="4"
+                                    fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
+                                <!-- Fill level -->
+                                <rect x="9" y="${7 + (52 - socFill)}" width="26" height="${socFill}" rx="2"
+                                    fill="${socColor}" opacity="0.7"/>
+                                <!-- Percentage text -->
+                                <text x="22" y="40" text-anchor="middle"
+                                    fill="white" font-size="14" font-weight="700"
+                                    font-family="'Segoe UI','Roboto',sans-serif"
+                                    opacity="0.95">
                                     ${soc != null ? Math.round(soc) + '%' : '\u2014'}
                                 </text>
                             </svg>
@@ -429,15 +431,15 @@ class SEMEVStatusCard extends SEMBaseCard {
                 }
                 .charger-soc {
                     flex-shrink: 0;
-                    width: 60px;
+                    width: 44px;
                     text-align: center;
                 }
-                .charger-soc svg { width: 60px; height: 60px; }
+                .charger-soc svg { width: 44px; height: 76px; }
                 .soc-label {
                     display: block;
                     font-size: 9px;
                     color: ${textSecCol};
-                    margin-top: -2px;
+                    margin-top: 2px;
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                 }
