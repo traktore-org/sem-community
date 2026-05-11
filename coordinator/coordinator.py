@@ -490,11 +490,45 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Step 4.5: Update session tracking (before charging decisions)
             # Multi-charger (#112): track sessions for each charger
             if self._ev_devices:
+                # Collect per-charger power to proportionally attribute flows (#15)
+                charger_powers: Dict[str, float] = {}
+                for cid, ev_dev in self._ev_devices.items():
+                    cp = 0.0
+                    if ev_dev.power_entity_id:
+                        pstate = self.hass.states.get(ev_dev.power_entity_id)
+                        if pstate and pstate.state not in ("unknown", "unavailable"):
+                            try:
+                                cp = float(pstate.state)
+                                unit = pstate.attributes.get("unit_of_measurement", "W")
+                                if unit == "kW":
+                                    cp *= 1000
+                            except (ValueError, TypeError):
+                                pass
+                    charger_powers[cid] = cp
+                total_charger_power = sum(charger_powers.values())
+
                 for cid, ev_dev in self._ev_devices.items():
                     if cid not in self._session_data_per_charger:
                         self._session_data_per_charger[cid] = SessionData()
                     if cid not in self._last_ev_connected_per_charger:
                         self._last_ev_connected_per_charger[cid] = False
+                    # Scale power flows proportionally to each charger's share (#15)
+                    if total_charger_power > 0:
+                        frac = charger_powers[cid] / total_charger_power
+                        from .types import PowerFlows as _PF
+                        charger_flows = _PF(
+                            solar_to_ev=power_flows.solar_to_ev * frac,
+                            grid_to_ev=power_flows.grid_to_ev * frac,
+                            battery_to_ev=power_flows.battery_to_ev * frac,
+                            solar_to_home=power_flows.solar_to_home,
+                            solar_to_battery=power_flows.solar_to_battery,
+                            solar_to_grid=power_flows.solar_to_grid,
+                            grid_to_home=power_flows.grid_to_home,
+                            grid_to_battery=power_flows.grid_to_battery,
+                            battery_to_home=power_flows.battery_to_home,
+                        )
+                    else:
+                        charger_flows = power_flows
                     # Swap context for per-charger session tracking
                     saved_dev, saved_sess, saved_conn = (
                         self._ev_device, self._session_data, self._last_ev_connected
@@ -502,7 +536,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_device = ev_dev
                     self._session_data = self._session_data_per_charger[cid]
                     self._last_ev_connected = self._last_ev_connected_per_charger[cid]
-                    self._update_session_tracking(power, power_flows)
+                    self._update_session_tracking(power, charger_flows)
                     # Save back per-charger state
                     self._session_data_per_charger[cid] = self._session_data
                     self._last_ev_connected_per_charger[cid] = self._last_ev_connected
@@ -1833,14 +1867,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             pass
 
                 charger_setpoint = getattr(ev_dev, "_current_setpoint", 0.0)
-                charger_connected = getattr(ev_dev, "_session_active", False) or power.ev_connected
+                # Use per-charger session state; fall back to power threshold
+                # as proxy — do NOT OR with global ev_connected which belongs
+                # to the primary charger only.
+                charger_connected = getattr(ev_dev, "_session_active", False)
+                if not charger_connected and ev_dev.power_entity_id:
+                    charger_connected = charger_power > 50
 
                 # Accumulate per-charger daily energy (#193)
+                # Use sunrise-based day (offset by 7h) so midnight doesn't
+                # split a night-charging session across two "days".
                 if charger_power > 0:
-                    today = now.strftime("%Y-%m-%d")
-                    if self._daily_ev_per_charger_date != today:
+                    ev_day = self.time_manager.get_current_meter_day_sunrise_based().isoformat()
+                    if self._daily_ev_per_charger_date != ev_day:
                         self._daily_ev_per_charger = {}
-                        self._daily_ev_per_charger_date = today
+                        self._daily_ev_per_charger_date = ev_day
                     increment = charger_power * interval_hours / 1000  # W → kWh
                     self._daily_ev_per_charger[cid] = (
                         self._daily_ev_per_charger.get(cid, 0.0) + increment

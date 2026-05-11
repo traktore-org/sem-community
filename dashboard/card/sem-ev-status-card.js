@@ -21,6 +21,12 @@ class SEMEVStatusCard extends SEMBaseCard {
         this._lastStateCount = 0;
     }
 
+    _escapeHTML(str) {
+        const div = document.createElement('div');
+        div.textContent = String(str);
+        return div.innerHTML;
+    }
+
     setConfig(config) {
         this.config = config;
         this._prefix = config.entity_prefix || 'sensor.sem_';
@@ -238,6 +244,7 @@ class SEMEVStatusCard extends SEMBaseCard {
                     .replace(/^SEM\s+/i, '')
                     .replace(/\s+Power$/i, '');
             }
+            const safeName = this._escapeHTML(name);
 
             const isCharging = power > 50;
             const statusText = isCharging ? this._t('charging') : this._t('idle');
@@ -266,7 +273,7 @@ class SEMEVStatusCard extends SEMBaseCard {
                 <div class="charger-section">
                     <div class="charger-header">
                         <div class="charger-dot" style="background:${color}"></div>
-                        <span class="charger-name">${name}</span>
+                        <span class="charger-name">${safeName}</span>
                         <span class="charger-status" style="color:${isCharging ? color : ''}">${statusText}</span>
                     </div>
 

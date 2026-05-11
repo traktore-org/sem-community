@@ -54,7 +54,7 @@ async def async_setup_entry(
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
     per_charger_keys = set()
-    if len(ev_chargers) > 1:
+    if len(ev_chargers) >= 1:
         for charger_cfg in ev_chargers:
             cid = charger_cfg.get("id", "ev_charger")
             cname = charger_cfg.get("name", "EV Charger")

@@ -369,7 +369,7 @@ async def async_setup_entry(
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
     per_charger_descriptions = []
-    if len(ev_chargers) > 1:
+    if len(ev_chargers) >= 1:
         for charger_cfg in ev_chargers:
             cid = charger_cfg.get("id", "ev_charger")
             cname = charger_cfg.get("name", "EV Charger")
@@ -685,6 +685,11 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
             self._entry,
             options=new_options,
         )
+
+        # Keep coordinator's in-memory config in sync so the current cycle
+        # sees the new value without waiting for a full reload.
+        if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):
+            self.coordinator.config.update({**self._entry.data, **new_options})
 
         await self.coordinator.async_request_refresh()
         _LOGGER.info(
