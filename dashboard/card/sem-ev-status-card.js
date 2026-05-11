@@ -53,7 +53,7 @@ class SEMEVStatusCard extends SEMBaseCard {
         }).join(',');
 
         // Per-charger reactivity
-        if (this._chargers.length > 1) {
+        if (this._chargers.length >= 1) {
             key += '|' + this._chargers.map(id => [
                 `charger_${id}_power`, `charger_${id}_session_energy`,
                 `charger_${id}_session_solar_share`, `charger_${id}_estimated_soc`,
@@ -209,7 +209,7 @@ class SEMEVStatusCard extends SEMBaseCard {
         if (bolt) bolt.style.opacity = charging ? '1' : '0';
 
         // Multi-charger sections (#193)
-        if (this._chargers.length > 1) {
+        if (this._chargers.length >= 1) {
             this._updateChargerSections();
         }
     }
@@ -384,7 +384,7 @@ class SEMEVStatusCard extends SEMBaseCard {
         const dotCol     = T.dotColor    || 'rgba(128,128,128,0.05)';
         const disabledCol = T.textDisabled || '#666';
 
-        const multiChargerCSS = this._chargers.length > 1 ? `
+        const multiChargerCSS = this._chargers.length >= 1 ? `
                 /* Per-charger sections (#193) */
                 .charger-sections {
                     margin-top: 16px;
@@ -820,13 +820,13 @@ class SEMEVStatusCard extends SEMBaseCard {
                         </div>
                     </div>
 
-                    ${this._chargers.length > 1 ? '<div class="charger-sections"></div>' : ''}
+                    ${this._chargers.length >= 1 ? '<div class="charger-sections"></div>' : ''}
                 </div>
             </ha-card>
         `;
     }
 
-    getCardSize() { return this._chargers.length > 1 ? 3 + this._chargers.length * 2 : 3; }
+    getCardSize() { return this._chargers.length >= 1 ? 3 + this._chargers.length * 2 : 3; }
 
     static getStubConfig() { return {}; }
 }
