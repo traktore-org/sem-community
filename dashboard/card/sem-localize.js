@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-09T19:38:41.537298+00:00
+// Generated: 2026-05-11T13:56:50.091775+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -3383,12 +3383,12 @@ const _semTranslations = {
     "control_sub": "Overschot- & lastregeling",
     "costs_sub": "Tarieven & besparingen",
     "system_sub": "Status & diagnostiek",
-    "solar": "zon",
+    "solar": "Zon",
     "grid": "Net",
     "autarky": "Zelfvoorziening",
-    "today": "vandaag",
+    "today": "Vandaag",
     "yesterday": "Gisteren",
-    "tomorrow": "morgen",
+    "tomorrow": "Morgen",
     "soc": "SOC",
     "power": "Vermogen",
     "health": "Gezondheid",
@@ -3420,7 +3420,7 @@ const _semTranslations = {
     "no_vehicle": "Geen voertuig",
     "ev_solar_share": "EV-zonneaandeel",
     "tariff": "Tarief",
-    "night": "nacht",
+    "night": "Nacht",
     "surplus": "Overschot",
     "ev": "EV",
     "ht": "HT",
@@ -3600,7 +3600,7 @@ const _semTranslations = {
     "set_investment_cost": "Stel kosten hieronder in",
     "all_sensors_reporting": "Alle sensoren actief",
     "sensor_offline": "offline",
-    "disabled": "uitgeschakeld",
+    "disabled": "Uitgeschakeld",
     "peak_load": "Pieklast",
     "legionella_info_title": "Legionellapreventie — Wettelijke vereisten",
     "legionella_info_body": "Duitsland (DVGW W 551): Opslag ≥ 60°C, circulatie ≥ 55°C. Zwitserland (SIA 385/1): Opslag ≥ 60°C in gehele tank. Oostenrijk (ÖNORM B 5019): 60°C opslag, thermische desinfectie bij 70°C / 3 min. SEM forceert een desinfectiecyclus als de tank de doeltemperatuur niet binnen het geconfigureerde interval heeft bereikt.",
