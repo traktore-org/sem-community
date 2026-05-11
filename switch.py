@@ -50,6 +50,27 @@ async def async_setup_entry(
         for description in SWITCH_TYPES
     ]
 
+    # Per-charger night charging switches (#193)
+    full_config = {**entry.data, **entry.options}
+    ev_chargers = full_config.get("ev_chargers", [])
+    per_charger_keys = set()
+    if len(ev_chargers) >= 1:
+        for charger_cfg in ev_chargers:
+            cid = charger_cfg.get("id", "ev_charger")
+            cname = charger_cfg.get("name", "EV Charger")
+            desc = SwitchEntityDescription(
+                key=f"charger_{cid}_night_charging",
+                entity_category=EntityCategory.CONFIG,
+            )
+            per_charger_keys.add(desc.key)
+            switches.append(SEMPerChargerSwitch(
+                coordinator, desc, entry.entry_id, cid, cname,
+            ))
+        _LOGGER.info(
+            "Created %d per-charger night charging switches",
+            len(ev_chargers),
+        )
+
     async_add_entities(switches)
 
     # Fix entity_ids from pre-translation installs
@@ -70,7 +91,7 @@ async def async_setup_entry(
     # Clean up stale switch entities from previous versions
     try:
         registry = er.async_get(hass)
-        valid_keys = {d.key for d in SWITCH_TYPES}
+        valid_keys = {d.key for d in SWITCH_TYPES} | per_charger_keys
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != "switch":
                 continue
@@ -165,3 +186,55 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
             await self.coordinator.async_request_refresh()
         except Exception as e:
             _LOGGER.warning("Failed to refresh coordinator when turning off %s: %s", self.entity_description.key, e)
+
+
+class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
+    """Per-charger night charging switch (#193)."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: SEMCoordinator,
+        description: SwitchEntityDescription,
+        entry_id: str,
+        charger_id: str,
+        charger_name: str,
+    ) -> None:
+        """Initialize per-charger switch."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"sem_{description.key}"
+        self._attr_translation_key = description.key
+        self._attr_suggested_object_id = f"sem_{description.key}"
+        self._attr_device_info = coordinator.device_info
+        self.entity_id = f"switch.sem_{description.key}"
+        self._charger_id = charger_id
+        self._is_on = True  # Default: night charging enabled
+
+    async def async_added_to_hass(self) -> None:
+        """Restore previous state."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None:
+            self._is_on = last_state.state == "on"
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.last_update_success and self.coordinator.data is not None
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if switch is on."""
+        return self._is_on
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on night charging for this charger."""
+        self._is_on = True
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off night charging for this charger."""
+        self._is_on = False
+        await self.coordinator.async_request_refresh()

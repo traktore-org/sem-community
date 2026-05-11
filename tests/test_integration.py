@@ -19,7 +19,7 @@ from custom_components.solar_energy_management.sensor import (
     async_setup_entry as sensor_setup,
 )
 from custom_components.solar_energy_management.number import (
-    EMSSolarNumber,
+    SEMNumberEntity,
     NUMBER_TYPES,
     async_setup_entry as number_setup,
 )

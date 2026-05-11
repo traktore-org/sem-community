@@ -370,8 +370,16 @@ class SensorReader:
             readings.battery_soc = self._last_valid_soc
             readings.battery_soc_unavailable = True
 
-        # EV power — Energy Dashboard first, then config fallback
-        if ed.ev_power:
+        # EV power — sum all chargers if multi-charger (#193), else single sensor
+        ev_chargers = self._raw_config.get("ev_chargers", [])
+        if len(ev_chargers) > 1:
+            total_ev = 0.0
+            for charger_cfg in ev_chargers:
+                cps = charger_cfg.get("ev_charging_power_sensor")
+                if cps:
+                    total_ev += self._read_sensor(cps, "ev")
+            readings.ev_power = total_ev
+        elif ed.ev_power:
             readings.ev_power = self._read_sensor(ed.ev_power, "ev")
         elif self.config.ev_power_sensor:
             readings.ev_power = self._read_sensor(self.config.ev_power_sensor, "ev")
@@ -547,8 +555,16 @@ class SensorReader:
                 self.config.battery_temperature_sensor, "battery_temp"
             )
 
-        # EV power
-        if self.config.ev_power_sensor:
+        # EV power — sum all chargers if multi-charger (#193)
+        ev_chargers = self._raw_config.get("ev_chargers", [])
+        if len(ev_chargers) > 1:
+            total_ev = 0.0
+            for charger_cfg in ev_chargers:
+                cps = charger_cfg.get("ev_charging_power_sensor")
+                if cps:
+                    total_ev += self._read_sensor(cps, "ev")
+            readings.ev_power = total_ev
+        elif self.config.ev_power_sensor:
             readings.ev_power = self._read_sensor(
                 self.config.ev_power_sensor, "ev"
             )

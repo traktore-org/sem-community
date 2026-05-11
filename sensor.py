@@ -20,6 +20,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfElectricCurrent,
     UnitOfTemperature,
+    UnitOfTime,
     PERCENTAGE,
 )
 from homeassistant.core import HomeAssistant, callback
@@ -1501,6 +1502,40 @@ async def async_setup_entry(
                 key=f"charger_{cid}_taper_ratio",
                 name=f"{cname} Taper Ratio",
                 native_unit_of_measurement=PERCENTAGE,
+                suggested_display_precision=0,
+            ),
+            # Per-charger daily energy (#193)
+            SensorEntityDescription(
+                key=f"charger_{cid}_daily_energy",
+                name=f"{cname} Daily Energy",
+                device_class=SensorDeviceClass.ENERGY,
+                state_class=SensorStateClass.TOTAL_INCREASING,
+                native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                suggested_display_precision=2,
+            ),
+            # Per-charger intelligence sensors (#193)
+            SensorEntityDescription(
+                key=f"charger_{cid}_estimated_soc",
+                name=f"{cname} Estimated SOC",
+                device_class=SensorDeviceClass.BATTERY,
+                state_class=SensorStateClass.MEASUREMENT,
+                native_unit_of_measurement=PERCENTAGE,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_nights_until_charge",
+                name=f"{cname} Nights Until Charge",
+                state_class=SensorStateClass.MEASUREMENT,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_charge_needed",
+                name=f"{cname} Charge Needed",
+            ),
+            SensorEntityDescription(
+                key=f"charger_{cid}_taper_minutes_to_full",
+                name=f"{cname} Minutes to Full",
+                native_unit_of_measurement=UnitOfTime.MINUTES,
                 suggested_display_precision=0,
             ),
         ])

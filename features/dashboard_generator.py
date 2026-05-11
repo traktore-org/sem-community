@@ -212,6 +212,9 @@ class DashboardGenerator:
             # Inject individual devices into picture-elements system diagram
             await self._update_system_diagram_devices(template)
 
+            # Inject per-charger series into EV power chart (#193)
+            self._update_ev_power_chart(template)
+
             # Substitute weather entity (template uses weather.home as placeholder)
             self._substitute_weather_entity(template)
 
@@ -679,6 +682,59 @@ class DashboardGenerator:
                     _LOGGER.info(
                         "Updated power-flow-card-plus with %d individual devices",
                         len(entities["individual"]),
+                    )
+                    return
+
+    def _update_ev_power_chart(self, template: Dict[str, Any]) -> None:
+        """Replace EV power chart with per-charger breakdown when >1 charger (#193).
+
+        Single charger: keeps the source breakdown (solar/battery/grid → EV).
+        Multi charger: shows each charger's power as a separate series with
+        distinct colors so you can see which charger is consuming how much.
+        """
+        from ..const import DOMAIN
+
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        if not entries:
+            return
+        full_config = {**entries[0].data, **entries[0].options}
+        ev_chargers = full_config.get("ev_chargers", [])
+
+        if len(ev_chargers) <= 1:
+            return  # Single charger keeps source breakdown
+
+        # Colors for per-charger series
+        charger_colors = ["#8DC892", "#64B5F6", "#CE93D8", "#FF8A65", "#4DD0E1", "#FFD54F"]
+
+        # Build per-charger series
+        series = []
+        for i, charger_cfg in enumerate(ev_chargers):
+            cid = charger_cfg.get("id", "ev_charger")
+            cname = charger_cfg.get("name", f"Charger {i + 1}")
+            color = charger_colors[i % len(charger_colors)]
+            series.append({
+                "entity": f"sensor.sem_charger_{cid}_power",
+                "name": cname,
+                "color": color,
+                "type": "area",
+                "opacity": 0.5,
+                "stroke_width": 2,
+                "group_by": {"func": "avg", "duration": "5m"},
+            })
+
+        # Find and replace the EV power chart in the EV view
+        for view in template.get("views", []):
+            if view.get("path") != "ev":
+                continue
+            for card in self._iter_cards(view):
+                if (isinstance(card, dict)
+                        and card.get("type") == "custom:apexcharts-card"
+                        and card.get("header", {}).get("title") == "EV Charging Power"):
+                    card["series"] = series
+                    card["stacked"] = True
+                    _LOGGER.info(
+                        "EV power chart: replaced with %d per-charger series",
+                        len(series),
                     )
                     return
 

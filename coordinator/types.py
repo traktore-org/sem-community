@@ -403,6 +403,10 @@ class SEMData:
 
     # EV intelligence
     ev_intelligence: EVIntelligenceData = field(default_factory=EVIntelligenceData)
+    # Per-charger intelligence (#193)
+    per_charger_intelligence: Dict[str, dict] = field(default_factory=dict)
+    # Per-charger daily energy (#193)
+    per_charger_daily_energy: Dict[str, float] = field(default_factory=dict)
 
     # Timestamps
     last_update: Optional[datetime] = None
@@ -650,9 +654,25 @@ class SEMData:
                     f"charger_{cid}_session_energy": round(session.energy_kwh, 2),
                     f"charger_{cid}_session_solar_share": round(session.solar_share_pct, 1),
                     f"charger_{cid}_session_duration": round(session.duration_minutes, 1),
+                    f"charger_{cid}_daily_energy": round(
+                        self.per_charger_daily_energy.get(cid, 0.0), 2
+                    ),
                 })
         except Exception as e:
             _LOGGER.warning("Per-charger to_dict failed: %s", e)
+
+        # Per-charger intelligence from taper detectors (#193)
+        try:
+            per_charger_intel = self.per_charger_intelligence
+            for cid, intel in per_charger_intel.items():
+                data.update({
+                    f"charger_{cid}_estimated_soc": intel.get("estimated_soc", 0),
+                    f"charger_{cid}_nights_until_charge": intel.get("nights_until_charge", 0),
+                    f"charger_{cid}_charge_needed": intel.get("charge_needed", False),
+                    f"charger_{cid}_taper_minutes_to_full": intel.get("minutes_to_full"),
+                })
+        except Exception as e:
+            _LOGGER.warning("Per-charger intelligence to_dict failed: %s", e)
 
         # EV intelligence — access safely in case taper data is incomplete
         try:

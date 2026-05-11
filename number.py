@@ -361,15 +361,59 @@ async def async_setup_entry(
     coordinator: SEMCoordinator = entry.runtime_data
 
     entities = [
-        EMSSolarNumber(coordinator, description, entry)
+        SEMNumberEntity(coordinator, description, entry)
         for description in NUMBER_TYPES
     ]
+
+    # Per-charger number entities (#193)
+    full_config = {**entry.data, **entry.options}
+    ev_chargers = full_config.get("ev_chargers", [])
+    per_charger_descriptions = []
+    if len(ev_chargers) >= 1:
+        for charger_cfg in ev_chargers:
+            cid = charger_cfg.get("id", "ev_charger")
+            cname = charger_cfg.get("name", "EV Charger")
+            for base_desc, config_key, default_val in [
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_daily_ev_target",
+                    name=f"{cname} Night Target",
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    native_min_value=0, native_max_value=100, native_step=0.5,
+                    mode=NumberMode.SLIDER,
+                ), "daily_ev_target", full_config.get("daily_ev_target", 10)),
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_night_initial_current",
+                    name=f"{cname} Start Amps",
+                    native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+                    native_min_value=6, native_max_value=32, native_step=1,
+                    mode=NumberMode.SLIDER,
+                ), "ev_night_initial_current", full_config.get("ev_night_initial_current", 10)),
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_minimum_current",
+                    name=f"{cname} Min Amps",
+                    native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+                    native_min_value=6, native_max_value=16, native_step=1,
+                    mode=NumberMode.SLIDER,
+                ), "ev_min_current", full_config.get("ev_min_current", 6)),
+            ]:
+                per_charger_descriptions.append(base_desc)
+                entities.append(SEMPerChargerNumber(
+                    coordinator, base_desc, entry, cid, config_key,
+                    charger_cfg.get(config_key, default_val),
+                ))
+
+    if per_charger_descriptions:
+        _LOGGER.info(
+            "Created %d per-charger number entities for %d charger(s)",
+            len(per_charger_descriptions), len(ev_chargers),
+        )
 
     async_add_entities(entities)
 
     # Fix entity_ids from pre-translation installs and clean up stale entities
-    _fix_entity_ids(hass, entry, NUMBER_TYPES, "number")
-    _cleanup_stale_entities(hass, entry, NUMBER_TYPES, "number")
+    all_descriptions = list(NUMBER_TYPES) + per_charger_descriptions
+    _fix_entity_ids(hass, entry, all_descriptions, "number")
+    _cleanup_stale_entities(hass, entry, all_descriptions, "number")
 
 
 def _fix_entity_ids(hass, entry, descriptions, platform):
@@ -422,7 +466,7 @@ def _cleanup_stale_entities(hass, entry, descriptions, platform):
         _LOGGER.debug("Stale entity cleanup skipped: %s", e)
 
 
-class EMSSolarNumber(CoordinatorEntity, NumberEntity):
+class SEMNumberEntity(CoordinatorEntity, NumberEntity):
     """EMS Solar Optimizer number entity."""
 
     _attr_has_entity_name = True
@@ -585,3 +629,70 @@ class EMSSolarNumber(CoordinatorEntity, NumberEntity):
         await self.coordinator.async_request_refresh()
 
         _LOGGER.info(f"Updated {self.entity_description.key} to {value}")
+
+
+class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
+    """Per-charger number entity that stores its value in the charger's config dict (#193)."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: SEMCoordinator,
+        description: NumberEntityDescription,
+        entry: ConfigEntry,
+        charger_id: str,
+        config_key: str,
+        initial_value: float,
+    ) -> None:
+        """Initialize per-charger number entity."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_translation_key = description.key
+        self._attr_suggested_object_id = f"sem_{description.key}"
+        self.entity_id = f"number.sem_{description.key}"
+        self._entry = entry
+        self._charger_id = charger_id
+        self._config_key = config_key
+        self._attr_native_value = initial_value
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return self.coordinator.last_update_success
+
+    @property
+    def device_info(self):
+        """Return device information."""
+        return self.coordinator.device_info
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Update the per-charger setting value."""
+        self._attr_native_value = value
+
+        # Update the charger's config dict within ev_chargers
+        new_options = {**self._entry.options}
+        ev_chargers = list(new_options.get("ev_chargers", []))
+        for charger in ev_chargers:
+            if charger.get("id") == self._charger_id:
+                charger[self._config_key] = value
+                break
+        new_options["ev_chargers"] = ev_chargers
+
+        self.hass.config_entries.async_update_entry(
+            self._entry,
+            options=new_options,
+        )
+
+        # Keep coordinator's in-memory config in sync so the current cycle
+        # sees the new value without waiting for a full reload.
+        if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):
+            self.coordinator.config.update({**self._entry.data, **new_options})
+
+        await self.coordinator.async_request_refresh()
+        _LOGGER.info(
+            "Updated per-charger %s.%s to %s",
+            self._charger_id, self._config_key, value,
+        )

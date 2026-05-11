@@ -119,6 +119,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
         self._ev_charge_started_per_charger: Dict[str, Optional[float]] = {}
         self._ev_last_change_per_charger: Dict[str, Any] = {}
+        self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
+        self._daily_ev_per_charger_date: Optional[str] = None
         self._notification_manager = NotificationManager(hass, config)
 
         # Storage will be initialized with entry_id later
@@ -488,11 +490,45 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Step 4.5: Update session tracking (before charging decisions)
             # Multi-charger (#112): track sessions for each charger
             if self._ev_devices:
+                # Collect per-charger power to proportionally attribute flows (#15)
+                charger_powers: Dict[str, float] = {}
+                for cid, ev_dev in self._ev_devices.items():
+                    cp = 0.0
+                    if ev_dev.power_entity_id:
+                        pstate = self.hass.states.get(ev_dev.power_entity_id)
+                        if pstate and pstate.state not in ("unknown", "unavailable"):
+                            try:
+                                cp = float(pstate.state)
+                                unit = pstate.attributes.get("unit_of_measurement", "W")
+                                if unit == "kW":
+                                    cp *= 1000
+                            except (ValueError, TypeError):
+                                pass
+                    charger_powers[cid] = cp
+                total_charger_power = sum(charger_powers.values())
+
                 for cid, ev_dev in self._ev_devices.items():
                     if cid not in self._session_data_per_charger:
                         self._session_data_per_charger[cid] = SessionData()
                     if cid not in self._last_ev_connected_per_charger:
                         self._last_ev_connected_per_charger[cid] = False
+                    # Scale power flows proportionally to each charger's share (#15)
+                    if total_charger_power > 0:
+                        frac = charger_powers[cid] / total_charger_power
+                        from .types import PowerFlows as _PF
+                        charger_flows = _PF(
+                            solar_to_ev=power_flows.solar_to_ev * frac,
+                            grid_to_ev=power_flows.grid_to_ev * frac,
+                            battery_to_ev=power_flows.battery_to_ev * frac,
+                            solar_to_home=power_flows.solar_to_home,
+                            solar_to_battery=power_flows.solar_to_battery,
+                            solar_to_grid=power_flows.solar_to_grid,
+                            grid_to_home=power_flows.grid_to_home,
+                            grid_to_battery=power_flows.grid_to_battery,
+                            battery_to_home=power_flows.battery_to_home,
+                        )
+                    else:
+                        charger_flows = power_flows
                     # Swap context for per-charger session tracking
                     saved_dev, saved_sess, saved_conn = (
                         self._ev_device, self._session_data, self._last_ev_connected
@@ -500,7 +536,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_device = ev_dev
                     self._session_data = self._session_data_per_charger[cid]
                     self._last_ev_connected = self._last_ev_connected_per_charger[cid]
-                    self._update_session_tracking(power, power_flows)
+                    self._update_session_tracking(power, charger_flows)
                     # Save back per-charger state
                     self._session_data_per_charger[cid] = self._session_data
                     self._last_ev_connected_per_charger[cid] = self._last_ev_connected
@@ -544,22 +580,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ev_budget_per_charger = {}
                 num_chargers = len(self._ev_devices)
 
-                # Night target: split equally across connected chargers
-                if num_chargers > 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
-                    connected_count = sum(
-                        1 for d in self._ev_devices.values()
-                        if getattr(d, '_session_active', False) or power.ev_connected
-                    )
-                    if connected_count > 1:
-                        per_charger_night_kwh = charging_context.night_target_kwh / connected_count
-                        self._night_target_per_charger = per_charger_night_kwh
-                    else:
-                        self._night_target_per_charger = None
-                else:
+                # Night target: use per-charger targets if configured (#193)
+                self._night_target_per_charger_map = {}
+                if num_chargers >= 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                    ev_chargers_cfg = self.config.get("ev_chargers", [])
+                    charger_cfg_by_id = {c.get("id"): c for c in ev_chargers_cfg}
+                    global_target = charging_context.night_target_kwh
+
+                    for cid in self._ev_devices:
+                        cfg = charger_cfg_by_id.get(cid, {})
+                        # Per-charger target from config, fallback to global
+                        target = cfg.get("daily_ev_target", global_target)
+                        # Remaining = target - daily energy delivered by this charger
+                        daily = self._daily_ev_per_charger.get(cid, 0.0)
+                        self._night_target_per_charger_map[cid] = max(0, target - daily)
+
+                    # Backward compat: set the old scalar for single-value reads
                     self._night_target_per_charger = None
 
                 # Solar budget: distribute by priority
-                if num_chargers > 1 and charging_state in (
+                if num_chargers >= 1 and charging_state in (
                     ChargingState.SOLAR_CHARGING_ACTIVE,
                     ChargingState.SOLAR_SUPER_CHARGING,
                     ChargingState.SOLAR_CHARGING_ALLOWED,
@@ -577,6 +617,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     key=lambda x: x[1].priority,
                 )
                 for cid, ev_dev in sorted_chargers:
+                    # Check per-charger night charging switch (#193)
+                    if charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                        night_switch = self.hass.states.get(
+                            f"switch.sem_charger_{cid}_night_charging"
+                        )
+                        if night_switch and night_switch.state == "off":
+                            continue  # Skip this charger for night charging
+
                     # Save coordinator-level state, swap in per-charger state
                     saved = {
                         "dev": self._ev_device,
@@ -591,6 +639,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_charge_started_at = self._ev_charge_started_per_charger.get(cid)
                     self._ev_last_change_time = self._ev_last_change_per_charger.get(cid)
                     self._current_charger_budget = ev_budget_per_charger.get(cid)
+                    # Set per-charger night target (#193)
+                    per_charger_target = getattr(self, '_night_target_per_charger_map', {}).get(cid)
+                    if per_charger_target is not None:
+                        self._night_target_per_charger = per_charger_target
                     try:
                         await self._execute_ev_control(
                             charging_state, power, energy, charging_context
@@ -737,6 +789,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ev_charger_count=len(self._ev_devices),
                 ev_charger_ids=list(self._ev_devices.keys()),
                 ev_intelligence=ev_intelligence,
+                per_charger_intelligence=self._build_per_charger_intelligence(),
+                per_charger_daily_energy=dict(self._daily_ev_per_charger),
                 last_update=dt_util.now(),
             )
 
@@ -1787,7 +1841,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         interval_hours = self.update_interval.total_seconds() / 3600
 
         # Multi-charger (#112): run per-charger taper detection
-        if self._ev_devices and len(self._ev_devices) > 1:
+        if self._ev_devices and len(self._ev_devices) >= 1:
             for cid, ev_dev in self._ev_devices.items():
                 if cid not in self._ev_taper_detectors:
                     self._ev_taper_detectors[cid] = EVTaperDetector(self.config)
@@ -1813,7 +1867,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             pass
 
                 charger_setpoint = getattr(ev_dev, "_current_setpoint", 0.0)
-                charger_connected = getattr(ev_dev, "_session_active", False) or power.ev_connected
+                # Use per-charger session state; fall back to power threshold
+                # as proxy — do NOT OR with global ev_connected which belongs
+                # to the primary charger only.
+                charger_connected = getattr(ev_dev, "_session_active", False)
+                if not charger_connected and ev_dev.power_entity_id:
+                    charger_connected = charger_power > 50
+
+                # Accumulate per-charger daily energy (#193)
+                # Use sunrise-based day (offset by 7h) so midnight doesn't
+                # split a night-charging session across two "days".
+                if charger_power > 0:
+                    ev_day = self.time_manager.get_current_meter_day_sunrise_based().isoformat()
+                    if self._daily_ev_per_charger_date != ev_day:
+                        self._daily_ev_per_charger = {}
+                        self._daily_ev_per_charger_date = ev_day
+                    increment = charger_power * interval_hours / 1000  # W → kWh
+                    self._daily_ev_per_charger[cid] = (
+                        self._daily_ev_per_charger.get(cid, 0.0) + increment
+                    )
 
                 if charger_power > 0 or charger_connected:
                     self._ev_taper_detectors[cid].update(
@@ -1900,7 +1972,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Self-healing: if SOC is at 0% but car just charged, something is wrong
         # Reset to a reasonable estimate based on recent session energy
         if estimated_soc <= 0 and self._session_data.energy_kwh > 1.0 and power.ev_connected:
-            capacity = self._config.get("ev_battery_capacity_kwh", 40)
+            capacity = self.config.get("ev_battery_capacity_kwh", 40)
             session_soc = min(95.0, self._session_data.energy_kwh / capacity * 100 * 0.92)
             self._ev_taper_detector._energy_since_full = (100 - session_soc) / 100 * capacity
             self._ev_taper_detector._estimated_soc = session_soc
@@ -1941,6 +2013,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_battery_health_pct=self._ev_taper_detector.battery_health_pct,
             charge_skip_reason=skip_reason,
         )
+
+    def _build_per_charger_intelligence(self) -> dict:
+        """Build per-charger intelligence data from per-charger taper detectors (#193)."""
+        if not self._ev_taper_detectors:
+            return {}
+
+        result = {}
+        for cid, detector in self._ev_taper_detectors.items():
+            soc = detector.get_virtual_soc()
+            predicted = getattr(self, '_predictor', None)
+            predicted_daily = predicted.predict_ev_consumption_tomorrow(dt_util.now()) if predicted else 0
+            nights, charge_needed, skip_reason = detector.calculate_nights_until_charge(
+                predicted_daily, None,
+            )
+            taper_data = detector.get_taper_data() if hasattr(detector, 'get_taper_data') else None
+
+            result[cid] = {
+                "estimated_soc": round(soc, 1),
+                "nights_until_charge": nights,
+                "charge_needed": charge_needed,
+                "charge_skip_reason": skip_reason,
+                "minutes_to_full": taper_data.minutes_to_full if taper_data else None,
+                "battery_health": detector.battery_health_pct,
+            }
+
+        return result
 
     def _read_outdoor_temperature(self) -> float:
         """Read outdoor temperature from weather entity or configured sensor.
