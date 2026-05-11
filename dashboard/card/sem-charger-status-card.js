@@ -44,7 +44,7 @@ class SEMChargerStatusCard extends SEMBaseCard {
         }
 
         // Build reactivity key
-        const key = chargers.map(id => [
+        const key = this._chargers.map(id => [
             `charger_${id}_power`, `charger_${id}_session_energy`,
             `charger_${id}_session_solar_share`, `charger_${id}_taper_trend`,
         ].map(s => hass.states[`${this._prefix}${s}`]?.state || '').join(':')).join('|');
