@@ -582,7 +582,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
                 # Night target: use per-charger targets if configured (#193)
                 self._night_target_per_charger_map = {}
-                if num_chargers > 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                if num_chargers >= 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
                     ev_chargers_cfg = self.config.get("ev_chargers", [])
                     charger_cfg_by_id = {c.get("id"): c for c in ev_chargers_cfg}
                     global_target = charging_context.night_target_kwh
@@ -599,7 +599,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._night_target_per_charger = None
 
                 # Solar budget: distribute by priority
-                if num_chargers > 1 and charging_state in (
+                if num_chargers >= 1 and charging_state in (
                     ChargingState.SOLAR_CHARGING_ACTIVE,
                     ChargingState.SOLAR_SUPER_CHARGING,
                     ChargingState.SOLAR_CHARGING_ALLOWED,
@@ -1841,7 +1841,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         interval_hours = self.update_interval.total_seconds() / 3600
 
         # Multi-charger (#112): run per-charger taper detection
-        if self._ev_devices and len(self._ev_devices) > 1:
+        if self._ev_devices and len(self._ev_devices) >= 1:
             for cid, ev_dev in self._ev_devices.items():
                 if cid not in self._ev_taper_detectors:
                     self._ev_taper_detectors[cid] = EVTaperDetector(self.config)
@@ -1972,7 +1972,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Self-healing: if SOC is at 0% but car just charged, something is wrong
         # Reset to a reasonable estimate based on recent session energy
         if estimated_soc <= 0 and self._session_data.energy_kwh > 1.0 and power.ev_connected:
-            capacity = self._config.get("ev_battery_capacity_kwh", 40)
+            capacity = self.config.get("ev_battery_capacity_kwh", 40)
             session_soc = min(95.0, self._session_data.energy_kwh / capacity * 100 * 0.92)
             self._ev_taper_detector._energy_since_full = (100 - session_soc) / 100 * capacity
             self._ev_taper_detector._estimated_soc = session_soc
@@ -2016,7 +2016,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
     def _build_per_charger_intelligence(self) -> dict:
         """Build per-charger intelligence data from per-charger taper detectors (#193)."""
-        if not self._ev_taper_detectors or len(self._ev_taper_detectors) <= 1:
+        if not self._ev_taper_detectors:
             return {}
 
         result = {}
