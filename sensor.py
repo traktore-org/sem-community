@@ -20,6 +20,7 @@ from homeassistant.const import (
     UnitOfEnergy,
     UnitOfElectricCurrent,
     UnitOfTemperature,
+    UnitOfTime,
     PERCENTAGE,
 )
 from homeassistant.core import HomeAssistant, callback
