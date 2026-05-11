@@ -437,3 +437,9 @@ class TestDashboardCleanupLogic:
                 added.append(url)
         assert added == []
         assert len(resources["items"]) == 1
+
+
+
+# Per-charger EV display is now handled by sem-ev-status-card.js (#193)
+# which auto-discovers chargers from sensor.sem_charger_*_power entities.
+# No Python-side dashboard injection tests needed — card handles rendering.

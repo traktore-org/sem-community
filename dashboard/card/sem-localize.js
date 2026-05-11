@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-11T13:56:50.091775+00:00
+// Generated: 2026-05-11T15:25:41.972258+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -671,7 +671,18 @@ const _semTranslations = {
     "mode_current": "Current/Amperage",
     "cancel": "Cancel",
     "save": "Save",
-    "monthly": "Monthly"
+    "monthly": "Monthly",
+    "charger_monitoring": "Per-charger monitoring",
+    "charge_tapering": "Charge Tapering",
+    "night_target": "Night Target",
+    "start_amps": "Start Amps",
+    "min_amps": "Min Amps",
+    "night_charging_enabled": "Night Charging",
+    "per_charger_settings": "Per-charger settings",
+    "charge_tonight": "Charge Tonight",
+    "nights_until_charge": "Nights Until Charge",
+    "yes": "Yes",
+    "no": "No"
   },
   "de": {
     "charging": "Laden",
@@ -1343,7 +1354,18 @@ const _semTranslations = {
     "mode_current": "Strom/Ampere",
     "cancel": "Abbrechen",
     "save": "Speichern",
-    "monthly": "Monatlich"
+    "monthly": "Monatlich",
+    "charger_monitoring": "Pro-Ladegerät-Überwachung",
+    "charge_tapering": "Ladeverjüngung",
+    "night_target": "Nachtziel",
+    "start_amps": "Startampere",
+    "min_amps": "Min. Ampere",
+    "night_charging_enabled": "Nachtladen",
+    "per_charger_settings": "Pro-Ladegerät-Einstellungen",
+    "charge_tonight": "Heute Nacht laden",
+    "nights_until_charge": "Nächte bis Ladung",
+    "yes": "Ja",
+    "no": "Nein"
   },
   "fr": {
     "charging": "En charge",
@@ -2015,7 +2037,18 @@ const _semTranslations = {
     "mode_current": "Courant/Ampérage",
     "cancel": "Annuler",
     "save": "Enregistrer",
-    "monthly": "Mensuel"
+    "monthly": "Mensuel",
+    "charger_monitoring": "Surveillance par chargeur",
+    "charge_tapering": "Réduction de charge",
+    "night_target": "Objectif nuit",
+    "start_amps": "Ampères départ",
+    "min_amps": "Ampères min.",
+    "night_charging_enabled": "Charge nocturne",
+    "per_charger_settings": "Paramètres par chargeur",
+    "charge_tonight": "Charger ce soir",
+    "nights_until_charge": "Nuits avant charge",
+    "yes": "Oui",
+    "no": "Non"
   },
   "es": {
     "charging": "Cargando",
@@ -2687,7 +2720,18 @@ const _semTranslations = {
     "mode_current": "Corriente/Amperaje",
     "cancel": "Cancelar",
     "save": "Guardar",
-    "monthly": "Mensual"
+    "monthly": "Mensual",
+    "charger_monitoring": "Monitoreo por cargador",
+    "charge_tapering": "Reducción de carga",
+    "night_target": "Objetivo nocturno",
+    "start_amps": "Amperios inicio",
+    "min_amps": "Amperios mín.",
+    "night_charging_enabled": "Carga nocturna",
+    "per_charger_settings": "Configuración por cargador",
+    "charge_tonight": "Cargar esta noche",
+    "nights_until_charge": "Noches hasta carga",
+    "yes": "Sí",
+    "no": "No"
   },
   "it": {
     "charging": "In carica",
@@ -3359,7 +3403,18 @@ const _semTranslations = {
     "mode_current": "Corrente/Amperaggio",
     "cancel": "Annulla",
     "save": "Salva",
-    "monthly": "Mensile"
+    "monthly": "Mensile",
+    "charger_monitoring": "Monitoraggio per caricatore",
+    "charge_tapering": "Riduzione carica",
+    "night_target": "Obiettivo notturno",
+    "start_amps": "Ampere avvio",
+    "min_amps": "Ampere min.",
+    "night_charging_enabled": "Ricarica notturna",
+    "per_charger_settings": "Impostazioni per caricatore",
+    "charge_tonight": "Caricare stanotte",
+    "nights_until_charge": "Notti fino a ricarica",
+    "yes": "Sì",
+    "no": "No"
   },
   "nl": {
     "charging": "Laden",
@@ -4031,7 +4086,18 @@ const _semTranslations = {
     "mode_current": "Stroom/Ampère",
     "cancel": "Annuleren",
     "save": "Opslaan",
-    "monthly": "Maandelijks"
+    "monthly": "Maandelijks",
+    "charger_monitoring": "Per lader monitoring",
+    "charge_tapering": "Laadvermindering",
+    "night_target": "Nachtdoel",
+    "start_amps": "Startampère",
+    "min_amps": "Min. ampère",
+    "night_charging_enabled": "Nachtladen",
+    "per_charger_settings": "Per lader instellingen",
+    "charge_tonight": "Vanavond laden",
+    "nights_until_charge": "Nachten tot laden",
+    "yes": "Ja",
+    "no": "Nee"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -4703,7 +4769,18 @@ const _semTranslations = {
     "mode_current": "Proud/Ampéry",
     "cancel": "Zrušit",
     "save": "Uložit",
-    "monthly": "Měsíční"
+    "monthly": "Měsíční",
+    "charger_monitoring": "Monitorování nabíječek",
+    "charge_tapering": "Postupné nabíjení",
+    "night_target": "Noční cíl",
+    "start_amps": "Počáteční ampéry",
+    "min_amps": "Min. ampéry",
+    "night_charging_enabled": "Noční nabíjení",
+    "per_charger_settings": "Nastavení nabíječky",
+    "charge_tonight": "Nabít dnes v noci",
+    "nights_until_charge": "Nocí do nabití",
+    "yes": "Ano",
+    "no": "Ne"
   },
   "da": {
     "charging": "Oplader",
@@ -5375,7 +5452,18 @@ const _semTranslations = {
     "mode_current": "Strøm/Ampere",
     "cancel": "Annuller",
     "save": "Gem",
-    "monthly": "Månedlig"
+    "monthly": "Månedlig",
+    "charger_monitoring": "Overvågning pr. lader",
+    "charge_tapering": "Ladeaftrapning",
+    "night_target": "Natmål",
+    "start_amps": "Startampere",
+    "min_amps": "Min. ampere",
+    "night_charging_enabled": "Natopladning",
+    "per_charger_settings": "Indstillinger pr. lader",
+    "charge_tonight": "Oplade i nat",
+    "nights_until_charge": "Nætter til opladning",
+    "yes": "Ja",
+    "no": "Nej"
   },
   "fi": {
     "charging": "Lataus",
@@ -6047,7 +6135,18 @@ const _semTranslations = {
     "mode_current": "Virta/Ampeeri",
     "cancel": "Peruuta",
     "save": "Tallenna",
-    "monthly": "Kuukausittain"
+    "monthly": "Kuukausittain",
+    "charger_monitoring": "Laturikohtainen seuranta",
+    "charge_tapering": "Latauksen hiipuminen",
+    "night_target": "Yötavoite",
+    "start_amps": "Aloitusampeerit",
+    "min_amps": "Min. ampeerit",
+    "night_charging_enabled": "Yölataus",
+    "per_charger_settings": "Laturikohtaiset asetukset",
+    "charge_tonight": "Lataa tänä yönä",
+    "nights_until_charge": "Öitä lataukseen",
+    "yes": "Kyllä",
+    "no": "Ei"
   },
   "hu": {
     "charging": "Töltés",
@@ -6719,7 +6818,18 @@ const _semTranslations = {
     "mode_current": "Áram/Amper",
     "cancel": "Mégse",
     "save": "Mentés",
-    "monthly": "Havi"
+    "monthly": "Havi",
+    "charger_monitoring": "Töltőnkénti figyelés",
+    "charge_tapering": "Töltés csökkenés",
+    "night_target": "Éjszakai cél",
+    "start_amps": "Kezdő amper",
+    "min_amps": "Min. amper",
+    "night_charging_enabled": "Éjszakai töltés",
+    "per_charger_settings": "Töltőnkénti beállítások",
+    "charge_tonight": "Töltés ma éjjel",
+    "nights_until_charge": "Éjszakák töltésig",
+    "yes": "Igen",
+    "no": "Nem"
   },
   "no": {
     "charging": "Lader",
@@ -7391,7 +7501,18 @@ const _semTranslations = {
     "mode_current": "Strøm/Ampere",
     "cancel": "Avbryt",
     "save": "Lagre",
-    "monthly": "Månedlig"
+    "monthly": "Månedlig",
+    "charger_monitoring": "Overvåking per lader",
+    "charge_tapering": "Ladeavsmalning",
+    "night_target": "Nattmål",
+    "start_amps": "Startampere",
+    "min_amps": "Min. ampere",
+    "night_charging_enabled": "Nattlading",
+    "per_charger_settings": "Innstillinger per lader",
+    "charge_tonight": "Lade i natt",
+    "nights_until_charge": "Netter til lading",
+    "yes": "Ja",
+    "no": "Nei"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -8063,7 +8184,18 @@ const _semTranslations = {
     "mode_current": "Prąd/Amperaż",
     "cancel": "Anuluj",
     "save": "Zapisz",
-    "monthly": "Miesięczny"
+    "monthly": "Miesięczny",
+    "charger_monitoring": "Monitorowanie ładowarek",
+    "charge_tapering": "Zmniejszanie ładowania",
+    "night_target": "Cel nocny",
+    "start_amps": "Ampery startowe",
+    "min_amps": "Min. ampery",
+    "night_charging_enabled": "Ładowanie nocne",
+    "per_charger_settings": "Ustawienia ładowarki",
+    "charge_tonight": "Ładuj dziś w nocy",
+    "nights_until_charge": "Noce do ładowania",
+    "yes": "Tak",
+    "no": "Nie"
   },
   "pt": {
     "charging": "A carregar",
@@ -8735,7 +8867,18 @@ const _semTranslations = {
     "mode_current": "Corrente/Amperagem",
     "cancel": "Cancelar",
     "save": "Salvar",
-    "monthly": "Mensal"
+    "monthly": "Mensal",
+    "charger_monitoring": "Monitoramento por carregador",
+    "charge_tapering": "Redução de carga",
+    "night_target": "Meta noturna",
+    "start_amps": "Amperes iniciais",
+    "min_amps": "Amperes mín.",
+    "night_charging_enabled": "Carregamento noturno",
+    "per_charger_settings": "Configurações por carregador",
+    "charge_tonight": "Carregar esta noite",
+    "nights_until_charge": "Noites até carga",
+    "yes": "Sim",
+    "no": "Não"
   },
   "ro": {
     "charging": "Încărcare",
@@ -9407,7 +9550,18 @@ const _semTranslations = {
     "mode_current": "Curent/Amperaj",
     "cancel": "Anulare",
     "save": "Salvare",
-    "monthly": "Lunar"
+    "monthly": "Lunar",
+    "charger_monitoring": "Monitorizare pe încărcător",
+    "charge_tapering": "Reducerea încărcării",
+    "night_target": "Obiectiv noapte",
+    "start_amps": "Amperi pornire",
+    "min_amps": "Amperi min.",
+    "night_charging_enabled": "Încărcare nocturnă",
+    "per_charger_settings": "Setări pe încărcător",
+    "charge_tonight": "Încărcare diseară",
+    "nights_until_charge": "Nopți până la încărcare",
+    "yes": "Da",
+    "no": "Nu"
   },
   "sv": {
     "charging": "Laddar",
@@ -10079,7 +10233,18 @@ const _semTranslations = {
     "mode_current": "Ström/Ampere",
     "cancel": "Avbryt",
     "save": "Spara",
-    "monthly": "Månadsvis"
+    "monthly": "Månadsvis",
+    "charger_monitoring": "Övervakning per laddare",
+    "charge_tapering": "Laddningsavtrappning",
+    "night_target": "Nattmål",
+    "start_amps": "Startampere",
+    "min_amps": "Min. ampere",
+    "night_charging_enabled": "Nattladdning",
+    "per_charger_settings": "Inställningar per laddare",
+    "charge_tonight": "Ladda ikväll",
+    "nights_until_charge": "Nätter till laddning",
+    "yes": "Ja",
+    "no": "Nej"
   }
 };
 
