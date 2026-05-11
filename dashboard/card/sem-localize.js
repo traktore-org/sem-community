@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-11T13:56:50.091775+00:00
+// Generated: 2026-05-11T14:21:23.195851+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -671,7 +671,9 @@ const _semTranslations = {
     "mode_current": "Current/Amperage",
     "cancel": "Cancel",
     "save": "Save",
-    "monthly": "Monthly"
+    "monthly": "Monthly",
+    "charger_monitoring": "Per-charger monitoring",
+    "charge_tapering": "Charge Tapering"
   },
   "de": {
     "charging": "Laden",
@@ -1343,7 +1345,9 @@ const _semTranslations = {
     "mode_current": "Strom/Ampere",
     "cancel": "Abbrechen",
     "save": "Speichern",
-    "monthly": "Monatlich"
+    "monthly": "Monatlich",
+    "charger_monitoring": "Pro-Ladegerät-Überwachung",
+    "charge_tapering": "Ladeverjüngung"
   },
   "fr": {
     "charging": "En charge",
@@ -2015,7 +2019,9 @@ const _semTranslations = {
     "mode_current": "Courant/Ampérage",
     "cancel": "Annuler",
     "save": "Enregistrer",
-    "monthly": "Mensuel"
+    "monthly": "Mensuel",
+    "charger_monitoring": "Surveillance par chargeur",
+    "charge_tapering": "Réduction de charge"
   },
   "es": {
     "charging": "Cargando",
@@ -2687,7 +2693,9 @@ const _semTranslations = {
     "mode_current": "Corriente/Amperaje",
     "cancel": "Cancelar",
     "save": "Guardar",
-    "monthly": "Mensual"
+    "monthly": "Mensual",
+    "charger_monitoring": "Monitoreo por cargador",
+    "charge_tapering": "Reducción de carga"
   },
   "it": {
     "charging": "In carica",
@@ -3359,7 +3367,9 @@ const _semTranslations = {
     "mode_current": "Corrente/Amperaggio",
     "cancel": "Annulla",
     "save": "Salva",
-    "monthly": "Mensile"
+    "monthly": "Mensile",
+    "charger_monitoring": "Monitoraggio per caricatore",
+    "charge_tapering": "Riduzione carica"
   },
   "nl": {
     "charging": "Laden",
@@ -4031,7 +4041,9 @@ const _semTranslations = {
     "mode_current": "Stroom/Ampère",
     "cancel": "Annuleren",
     "save": "Opslaan",
-    "monthly": "Maandelijks"
+    "monthly": "Maandelijks",
+    "charger_monitoring": "Per lader monitoring",
+    "charge_tapering": "Laadvermindering"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -4703,7 +4715,9 @@ const _semTranslations = {
     "mode_current": "Proud/Ampéry",
     "cancel": "Zrušit",
     "save": "Uložit",
-    "monthly": "Měsíční"
+    "monthly": "Měsíční",
+    "charger_monitoring": "Monitorování nabíječek",
+    "charge_tapering": "Postupné nabíjení"
   },
   "da": {
     "charging": "Oplader",
@@ -5375,7 +5389,9 @@ const _semTranslations = {
     "mode_current": "Strøm/Ampere",
     "cancel": "Annuller",
     "save": "Gem",
-    "monthly": "Månedlig"
+    "monthly": "Månedlig",
+    "charger_monitoring": "Overvågning pr. lader",
+    "charge_tapering": "Ladeaftrapning"
   },
   "fi": {
     "charging": "Lataus",
@@ -6047,7 +6063,9 @@ const _semTranslations = {
     "mode_current": "Virta/Ampeeri",
     "cancel": "Peruuta",
     "save": "Tallenna",
-    "monthly": "Kuukausittain"
+    "monthly": "Kuukausittain",
+    "charger_monitoring": "Laturikohtainen seuranta",
+    "charge_tapering": "Latauksen hiipuminen"
   },
   "hu": {
     "charging": "Töltés",
@@ -6719,7 +6737,9 @@ const _semTranslations = {
     "mode_current": "Áram/Amper",
     "cancel": "Mégse",
     "save": "Mentés",
-    "monthly": "Havi"
+    "monthly": "Havi",
+    "charger_monitoring": "Töltőnkénti figyelés",
+    "charge_tapering": "Töltés csökkenés"
   },
   "no": {
     "charging": "Lader",
@@ -7391,7 +7411,9 @@ const _semTranslations = {
     "mode_current": "Strøm/Ampere",
     "cancel": "Avbryt",
     "save": "Lagre",
-    "monthly": "Månedlig"
+    "monthly": "Månedlig",
+    "charger_monitoring": "Overvåking per lader",
+    "charge_tapering": "Ladeavsmalning"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -8063,7 +8085,9 @@ const _semTranslations = {
     "mode_current": "Prąd/Amperaż",
     "cancel": "Anuluj",
     "save": "Zapisz",
-    "monthly": "Miesięczny"
+    "monthly": "Miesięczny",
+    "charger_monitoring": "Monitorowanie ładowarek",
+    "charge_tapering": "Zmniejszanie ładowania"
   },
   "pt": {
     "charging": "A carregar",
@@ -8735,7 +8759,9 @@ const _semTranslations = {
     "mode_current": "Corrente/Amperagem",
     "cancel": "Cancelar",
     "save": "Salvar",
-    "monthly": "Mensal"
+    "monthly": "Mensal",
+    "charger_monitoring": "Monitoramento por carregador",
+    "charge_tapering": "Redução de carga"
   },
   "ro": {
     "charging": "Încărcare",
@@ -9407,7 +9433,9 @@ const _semTranslations = {
     "mode_current": "Curent/Amperaj",
     "cancel": "Anulare",
     "save": "Salvare",
-    "monthly": "Lunar"
+    "monthly": "Lunar",
+    "charger_monitoring": "Monitorizare pe încărcător",
+    "charge_tapering": "Reducerea încărcării"
   },
   "sv": {
     "charging": "Laddar",
@@ -10079,7 +10107,9 @@ const _semTranslations = {
     "mode_current": "Ström/Ampere",
     "cancel": "Avbryt",
     "save": "Spara",
-    "monthly": "Månadsvis"
+    "monthly": "Månadsvis",
+    "charger_monitoring": "Övervakning per laddare",
+    "charge_tapering": "Laddningsavtrappning"
   }
 };
 
