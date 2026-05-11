@@ -77,7 +77,20 @@ This guide covers setting up SEM with different hardware combinations. SEM auto-
 
 > **Important**: Use EITHER the number entity OR the service. Leave the other blank.
 
-### Per-Charger Entities
+### Per-Charger Settings (v1.5.2+)
+
+Each charger gets its own night charging configuration:
+
+| Entity | Description |
+|--------|-------------|
+| `number.sem_charger_{id}_daily_ev_target` | Night charging target (kWh) per charger |
+| `number.sem_charger_{id}_night_initial_current` | Start amps for night charging |
+| `number.sem_charger_{id}_minimum_current` | Minimum charging current (A) |
+| `switch.sem_charger_{id}_night_charging` | Enable/disable night charging per charger |
+
+You can set different targets per car — e.g., 15 kWh for a large EV, 8 kWh for a plug-in hybrid. These settings are also editable in the config flow (Settings → Integrations → SEM → Configure → Edit charger).
+
+### Per-Charger Sensors
 
 Each configured charger creates its own sensor entities:
 
@@ -88,18 +101,35 @@ Each configured charger creates its own sensor entities:
 | `sensor.sem_charger_{id}_session_solar_share` | Solar percentage of session (%) |
 | `sensor.sem_charger_{id}_taper_trend` | BMS taper detection (stable/declining) |
 | `sensor.sem_charger_{id}_taper_ratio` | Taper ratio (%) |
+| `sensor.sem_charger_{id}_estimated_soc` | EV battery SOC estimate (%) |
+| `sensor.sem_charger_{id}_nights_until_charge` | Estimated nights before charge needed |
+| `sensor.sem_charger_{id}_charge_needed` | Whether tonight's charge is needed |
+| `sensor.sem_charger_{id}_taper_minutes_to_full` | Estimated minutes to full charge |
 
 ### Surplus Priority
 
 Set a priority per charger (1 = highest). The highest-priority charger gets surplus power first. When it's full or at minimum power, remaining surplus flows to the next charger.
 
+### Night Charging
+
+Each charger charges independently at night:
+- Each charger uses its own `daily_ev_target` — no equal splitting
+- Night charging can be toggled on/off per charger
+- Start amps and minimum current are configurable per charger
+- If both chargers are connected and have capacity, both charge simultaneously
+
 ### Dashboard
 
-When more than 1 charger is configured, the EV tab shows:
-- Per-charger power cards
-- A status table with power, session energy, solar share, and taper status per charger
+The `sem-ev-status-card` on the EV tab automatically shows per-charger sections when chargers are configured:
+- **Battery SOC gauge** — battery-shaped, color-coded (green >60%, orange >30%, red)
+- **Per-charger metrics** — power, session energy, solar share
+- **Charge Tonight** — per-charger indicator (Yes/No)
+- **Nights Until Charge** — per-charger estimate
+- **Inline settings** — night charging toggle, target kWh, start/min amps (tap to edit)
 
 Regenerate the dashboard after adding a charger: **Developer Tools → Services → solar_energy_management.generate_dashboard**
+
+![EV Tab Multi-Charger](screenshots/ev-tab-multi-charger.png)
 
 ---
 
