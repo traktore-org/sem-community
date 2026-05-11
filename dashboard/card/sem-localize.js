@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-11T14:21:23.195851+00:00
+// Generated: 2026-05-11T15:01:39.772387+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -673,7 +673,12 @@ const _semTranslations = {
     "save": "Save",
     "monthly": "Monthly",
     "charger_monitoring": "Per-charger monitoring",
-    "charge_tapering": "Charge Tapering"
+    "charge_tapering": "Charge Tapering",
+    "night_target": "Night Target",
+    "start_amps": "Start Amps",
+    "min_amps": "Min Amps",
+    "night_charging_enabled": "Night Charging",
+    "per_charger_settings": "Per-charger settings"
   },
   "de": {
     "charging": "Laden",
@@ -1347,7 +1352,12 @@ const _semTranslations = {
     "save": "Speichern",
     "monthly": "Monatlich",
     "charger_monitoring": "Pro-Ladegerät-Überwachung",
-    "charge_tapering": "Ladeverjüngung"
+    "charge_tapering": "Ladeverjüngung",
+    "night_target": "Nachtziel",
+    "start_amps": "Startampere",
+    "min_amps": "Min. Ampere",
+    "night_charging_enabled": "Nachtladen",
+    "per_charger_settings": "Pro-Ladegerät-Einstellungen"
   },
   "fr": {
     "charging": "En charge",
@@ -2021,7 +2031,12 @@ const _semTranslations = {
     "save": "Enregistrer",
     "monthly": "Mensuel",
     "charger_monitoring": "Surveillance par chargeur",
-    "charge_tapering": "Réduction de charge"
+    "charge_tapering": "Réduction de charge",
+    "night_target": "Objectif nuit",
+    "start_amps": "Ampères départ",
+    "min_amps": "Ampères min.",
+    "night_charging_enabled": "Charge nocturne",
+    "per_charger_settings": "Paramètres par chargeur"
   },
   "es": {
     "charging": "Cargando",
@@ -2695,7 +2710,12 @@ const _semTranslations = {
     "save": "Guardar",
     "monthly": "Mensual",
     "charger_monitoring": "Monitoreo por cargador",
-    "charge_tapering": "Reducción de carga"
+    "charge_tapering": "Reducción de carga",
+    "night_target": "Objetivo nocturno",
+    "start_amps": "Amperios inicio",
+    "min_amps": "Amperios mín.",
+    "night_charging_enabled": "Carga nocturna",
+    "per_charger_settings": "Configuración por cargador"
   },
   "it": {
     "charging": "In carica",
@@ -3369,7 +3389,12 @@ const _semTranslations = {
     "save": "Salva",
     "monthly": "Mensile",
     "charger_monitoring": "Monitoraggio per caricatore",
-    "charge_tapering": "Riduzione carica"
+    "charge_tapering": "Riduzione carica",
+    "night_target": "Obiettivo notturno",
+    "start_amps": "Ampere avvio",
+    "min_amps": "Ampere min.",
+    "night_charging_enabled": "Ricarica notturna",
+    "per_charger_settings": "Impostazioni per caricatore"
   },
   "nl": {
     "charging": "Laden",
@@ -4043,7 +4068,12 @@ const _semTranslations = {
     "save": "Opslaan",
     "monthly": "Maandelijks",
     "charger_monitoring": "Per lader monitoring",
-    "charge_tapering": "Laadvermindering"
+    "charge_tapering": "Laadvermindering",
+    "night_target": "Nachtdoel",
+    "start_amps": "Startampère",
+    "min_amps": "Min. ampère",
+    "night_charging_enabled": "Nachtladen",
+    "per_charger_settings": "Per lader instellingen"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -4717,7 +4747,12 @@ const _semTranslations = {
     "save": "Uložit",
     "monthly": "Měsíční",
     "charger_monitoring": "Monitorování nabíječek",
-    "charge_tapering": "Postupné nabíjení"
+    "charge_tapering": "Postupné nabíjení",
+    "night_target": "Noční cíl",
+    "start_amps": "Počáteční ampéry",
+    "min_amps": "Min. ampéry",
+    "night_charging_enabled": "Noční nabíjení",
+    "per_charger_settings": "Nastavení nabíječky"
   },
   "da": {
     "charging": "Oplader",
@@ -5391,7 +5426,12 @@ const _semTranslations = {
     "save": "Gem",
     "monthly": "Månedlig",
     "charger_monitoring": "Overvågning pr. lader",
-    "charge_tapering": "Ladeaftrapning"
+    "charge_tapering": "Ladeaftrapning",
+    "night_target": "Natmål",
+    "start_amps": "Startampere",
+    "min_amps": "Min. ampere",
+    "night_charging_enabled": "Natopladning",
+    "per_charger_settings": "Indstillinger pr. lader"
   },
   "fi": {
     "charging": "Lataus",
@@ -6065,7 +6105,12 @@ const _semTranslations = {
     "save": "Tallenna",
     "monthly": "Kuukausittain",
     "charger_monitoring": "Laturikohtainen seuranta",
-    "charge_tapering": "Latauksen hiipuminen"
+    "charge_tapering": "Latauksen hiipuminen",
+    "night_target": "Yötavoite",
+    "start_amps": "Aloitusampeerit",
+    "min_amps": "Min. ampeerit",
+    "night_charging_enabled": "Yölataus",
+    "per_charger_settings": "Laturikohtaiset asetukset"
   },
   "hu": {
     "charging": "Töltés",
@@ -6739,7 +6784,12 @@ const _semTranslations = {
     "save": "Mentés",
     "monthly": "Havi",
     "charger_monitoring": "Töltőnkénti figyelés",
-    "charge_tapering": "Töltés csökkenés"
+    "charge_tapering": "Töltés csökkenés",
+    "night_target": "Éjszakai cél",
+    "start_amps": "Kezdő amper",
+    "min_amps": "Min. amper",
+    "night_charging_enabled": "Éjszakai töltés",
+    "per_charger_settings": "Töltőnkénti beállítások"
   },
   "no": {
     "charging": "Lader",
@@ -7413,7 +7463,12 @@ const _semTranslations = {
     "save": "Lagre",
     "monthly": "Månedlig",
     "charger_monitoring": "Overvåking per lader",
-    "charge_tapering": "Ladeavsmalning"
+    "charge_tapering": "Ladeavsmalning",
+    "night_target": "Nattmål",
+    "start_amps": "Startampere",
+    "min_amps": "Min. ampere",
+    "night_charging_enabled": "Nattlading",
+    "per_charger_settings": "Innstillinger per lader"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -8087,7 +8142,12 @@ const _semTranslations = {
     "save": "Zapisz",
     "monthly": "Miesięczny",
     "charger_monitoring": "Monitorowanie ładowarek",
-    "charge_tapering": "Zmniejszanie ładowania"
+    "charge_tapering": "Zmniejszanie ładowania",
+    "night_target": "Cel nocny",
+    "start_amps": "Ampery startowe",
+    "min_amps": "Min. ampery",
+    "night_charging_enabled": "Ładowanie nocne",
+    "per_charger_settings": "Ustawienia ładowarki"
   },
   "pt": {
     "charging": "A carregar",
@@ -8761,7 +8821,12 @@ const _semTranslations = {
     "save": "Salvar",
     "monthly": "Mensal",
     "charger_monitoring": "Monitoramento por carregador",
-    "charge_tapering": "Redução de carga"
+    "charge_tapering": "Redução de carga",
+    "night_target": "Meta noturna",
+    "start_amps": "Amperes iniciais",
+    "min_amps": "Amperes mín.",
+    "night_charging_enabled": "Carregamento noturno",
+    "per_charger_settings": "Configurações por carregador"
   },
   "ro": {
     "charging": "Încărcare",
@@ -9435,7 +9500,12 @@ const _semTranslations = {
     "save": "Salvare",
     "monthly": "Lunar",
     "charger_monitoring": "Monitorizare pe încărcător",
-    "charge_tapering": "Reducerea încărcării"
+    "charge_tapering": "Reducerea încărcării",
+    "night_target": "Obiectiv noapte",
+    "start_amps": "Amperi pornire",
+    "min_amps": "Amperi min.",
+    "night_charging_enabled": "Încărcare nocturnă",
+    "per_charger_settings": "Setări pe încărcător"
   },
   "sv": {
     "charging": "Laddar",
@@ -10109,7 +10179,12 @@ const _semTranslations = {
     "save": "Spara",
     "monthly": "Månadsvis",
     "charger_monitoring": "Övervakning per laddare",
-    "charge_tapering": "Laddningsavtrappning"
+    "charge_tapering": "Laddningsavtrappning",
+    "night_target": "Nattmål",
+    "start_amps": "Startampere",
+    "min_amps": "Min. ampere",
+    "night_charging_enabled": "Nattladdning",
+    "per_charger_settings": "Inställningar per laddare"
   }
 };
 

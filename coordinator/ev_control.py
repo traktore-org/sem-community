@@ -39,6 +39,24 @@ class EVControlMixin:
     - config, hass
     """
 
+    def _get_active_charger_config(self) -> dict:
+        """Get config dict for the currently active charger (#193).
+
+        Returns the per-charger config from ev_chargers[] if available,
+        otherwise an empty dict (caller falls back to global config).
+        """
+        ev_device = getattr(self, '_ev_device', None)
+        if ev_device is None:
+            return {}
+        device_id = getattr(ev_device, 'device_id', None)
+        if device_id is None:
+            return {}
+        ev_chargers = self.config.get("ev_chargers", [])
+        for cfg in ev_chargers:
+            if cfg.get("id") == device_id:
+                return cfg
+        return {}
+
     SOLAR_CHARGING_STATES = {
         ChargingState.SOLAR_CHARGING_ACTIVE,
         ChargingState.SOLAR_SUPER_CHARGING,
@@ -97,9 +115,16 @@ class EVControlMixin:
                 ev._session_active = True
                 _LOGGER.info("Night: KEBA already active (%.0fW), resuming", power.ev_power)
 
-            # Read configurable EV parameters
-            initial_amps = int(self.config.get("ev_night_initial_current", 10))
-            min_amps = int(self.config.get("ev_min_current", 6))
+            # Read configurable EV parameters — per-charger overrides (#193)
+            charger_cfg = self._get_active_charger_config()
+            initial_amps = int(charger_cfg.get(
+                "ev_night_initial_current",
+                self.config.get("ev_night_initial_current", 10),
+            ))
+            min_amps = int(charger_cfg.get(
+                "ev_min_current",
+                self.config.get("ev_min_current", 6),
+            ))
             stall_cooldown = int(self.config.get("ev_stall_cooldown", 120))
 
             if not ev._session_active:

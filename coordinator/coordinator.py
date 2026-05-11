@@ -544,18 +544,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ev_budget_per_charger = {}
                 num_chargers = len(self._ev_devices)
 
-                # Night target: split equally across connected chargers
+                # Night target: use per-charger targets if configured (#193)
+                self._night_target_per_charger_map = {}
                 if num_chargers > 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
-                    connected_count = sum(
-                        1 for d in self._ev_devices.values()
-                        if getattr(d, '_session_active', False) or power.ev_connected
-                    )
-                    if connected_count > 1:
-                        per_charger_night_kwh = charging_context.night_target_kwh / connected_count
-                        self._night_target_per_charger = per_charger_night_kwh
-                    else:
-                        self._night_target_per_charger = None
-                else:
+                    ev_chargers_cfg = self.config.get("ev_chargers", [])
+                    charger_cfg_by_id = {c.get("id"): c for c in ev_chargers_cfg}
+                    global_target = charging_context.night_target_kwh
+
+                    for cid in self._ev_devices:
+                        cfg = charger_cfg_by_id.get(cid, {})
+                        # Per-charger target from config, fallback to global
+                        target = cfg.get("daily_ev_target", global_target)
+                        self._night_target_per_charger_map[cid] = target
+
+                    # Backward compat: set the old scalar for single-value reads
                     self._night_target_per_charger = None
 
                 # Solar budget: distribute by priority
@@ -577,6 +579,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     key=lambda x: x[1].priority,
                 )
                 for cid, ev_dev in sorted_chargers:
+                    # Check per-charger night charging switch (#193)
+                    if charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                        night_switch = self.hass.states.get(
+                            f"switch.sem_charger_{cid}_night_charging"
+                        )
+                        if night_switch and night_switch.state == "off":
+                            continue  # Skip this charger for night charging
+
                     # Save coordinator-level state, swap in per-charger state
                     saved = {
                         "dev": self._ev_device,
@@ -591,6 +601,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_charge_started_at = self._ev_charge_started_per_charger.get(cid)
                     self._ev_last_change_time = self._ev_last_change_per_charger.get(cid)
                     self._current_charger_budget = ev_budget_per_charger.get(cid)
+                    # Set per-charger night target (#193)
+                    per_charger_target = getattr(self, '_night_target_per_charger_map', {}).get(cid)
+                    if per_charger_target is not None:
+                        self._night_target_per_charger = per_charger_target
                     try:
                         await self._execute_ev_control(
                             charging_state, power, energy, charging_context
