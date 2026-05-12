@@ -1174,6 +1174,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_card_base = f"{static_path}/card/sem-solar-card.js"
         costs_card_base = f"{static_path}/card/sem-costs-card.js"
         grid_card_base = f"{static_path}/card/sem-grid-card.js"
+        control_card_base = f"{static_path}/card/sem-control-card.js"
         localize_url = f"{localize_base}?v={version}"
         shared_url = f"{shared_base}?v={version}"
         card_url = f"{card_base}?v={version}"
@@ -1193,6 +1194,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         solar_card_url = f"{solar_card_base}?v={version}"
         costs_card_url = f"{costs_card_base}?v={version}"
         grid_card_url = f"{grid_card_base}?v={version}"
+        control_card_url = f"{control_card_base}?v={version}"
         # Load prerequisite scripts (SEMBaseCard, semLocalize) via add_extra_js_url.
         # These load as <script> tags in <head>, guaranteed to execute BEFORE
         # Lovelace resources. This prevents "SEMBaseCard is not defined" race
@@ -1238,6 +1240,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 (solar_card_base, solar_card_url),
                 (costs_card_base, costs_card_url),
                 (grid_card_base, grid_card_url),
+                (control_card_base, control_card_url),
             ):
                 item = existing_by_base.get(base)
                 if item is None:

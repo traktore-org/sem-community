@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-12T16:54:38.348285+00:00
+// Generated: 2026-05-12T18:18:06.264979+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -726,7 +726,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Smart Night",
+    "of_limit": "of limit",
+    "legionella_prevention": "Legionella Prevention — Legal Requirements"
   },
   "de": {
     "charging": "Laden",
@@ -1453,7 +1456,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Smart Nacht",
+    "of_limit": "vom Limit",
+    "legionella_prevention": "Legionellenprävention — Gesetzliche Anforderungen"
   },
   "fr": {
     "charging": "En charge",
@@ -2180,7 +2186,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Nuit intelligente",
+    "of_limit": "de la limite",
+    "legionella_prevention": "Prévention Légionelle — Exigences légales"
   },
   "es": {
     "charging": "Cargando",
@@ -2907,7 +2916,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Noche inteligente",
+    "of_limit": "del límite",
+    "legionella_prevention": "Prevención Legionella — Requisitos legales"
   },
   "it": {
     "charging": "In carica",
@@ -3634,7 +3646,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Notte intelligente",
+    "of_limit": "del limite",
+    "legionella_prevention": "Prevenzione Legionella — Requisiti legali"
   },
   "nl": {
     "charging": "Laden",
@@ -4361,7 +4376,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Slim nacht",
+    "of_limit": "van limiet",
+    "legionella_prevention": "Legionellapreventie — Wettelijke vereisten"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5088,7 +5106,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Chytrá noc",
+    "of_limit": "z limitu",
+    "legionella_prevention": "Prevence legionely — Zákonné požadavky"
   },
   "da": {
     "charging": "Oplader",
@@ -5815,7 +5836,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Smart nat",
+    "of_limit": "af grænse",
+    "legionella_prevention": "Legionellaforebyggelse — Lovkrav"
   },
   "fi": {
     "charging": "Lataus",
@@ -6542,7 +6566,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Älykäs yö",
+    "of_limit": "rajasta",
+    "legionella_prevention": "Legionellan ehkäisy — Lakisääteiset vaatimukset"
   },
   "hu": {
     "charging": "Töltés",
@@ -7269,7 +7296,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Okos éjszaka",
+    "of_limit": "a limitből",
+    "legionella_prevention": "Legionella megelőzés — Jogi követelmények"
   },
   "no": {
     "charging": "Lader",
@@ -7996,7 +8026,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Smart natt",
+    "of_limit": "av grense",
+    "legionella_prevention": "Legionellaforebygging — Lovkrav"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -8723,7 +8756,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Inteligentna noc",
+    "of_limit": "z limitu",
+    "legionella_prevention": "Zapobieganie legionelli — Wymagania prawne"
   },
   "pt": {
     "charging": "A carregar",
@@ -9450,7 +9486,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Noite inteligente",
+    "of_limit": "do limite",
+    "legionella_prevention": "Prevenção Legionella — Requisitos legais"
   },
   "ro": {
     "charging": "Încărcare",
@@ -10177,7 +10216,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Noapte inteligentă",
+    "of_limit": "din limită",
+    "legionella_prevention": "Prevenirea Legionella — Cerințe legale"
   },
   "sv": {
     "charging": "Laddar",
@@ -10904,7 +10946,10 @@ const _semTranslations = {
     "trend": "Trend",
     "unallocated": "Unallocated",
     "vs_forecast": "vs forecast",
-    "yearly": "Yearly"
+    "yearly": "Yearly",
+    "smart_night": "Smart natt",
+    "of_limit": "av gränsen",
+    "legionella_prevention": "Legionellaförebyggande — Lagkrav"
   }
 };
 
