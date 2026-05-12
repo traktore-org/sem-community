@@ -209,6 +209,22 @@ class SEMCostsCard extends SEMBaseCard {
                     letter-spacing: 0.6px; color: #8DC892; margin-bottom: 6px;
                 }
 
+                /* ── Multi-column layouts ── */
+                .three-col {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 0 10px;
+                }
+                .two-col {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 0 10px;
+                }
+                @media (max-width: 400px) {
+                    .three-col { grid-template-columns: 1fr; }
+                    .two-col { grid-template-columns: 1fr; }
+                }
+
                 /* ── Metric rows ── */
                 .metric-row {
                     display: flex; justify-content: space-between; align-items: baseline;
@@ -254,116 +270,114 @@ class SEMCostsCard extends SEMBaseCard {
                         <div class="hero-label">${this._t('net_saving_today')}</div>
                     </div>
 
-                    <!-- Today -->
-                    <div class="section">
-                        <div class="section-title lbl-today">${this._t('today')}</div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-d-import">${this._t('import_cost')}</span>
-                            <span class="metric-val c-import d-import">—</span>
+                    <!-- Today / Monthly / Yearly (3 columns) -->
+                    <div class="three-col">
+                        <div class="section">
+                            <div class="section-title lbl-today">${this._t('today')}</div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-d-import">${this._t('import_cost')}</span>
+                                <span class="metric-val c-import d-import">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-d-solar">${this._t('solar_savings')}</span>
+                                <span class="metric-val c-solar d-solar">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-d-batt">${this._t('battery_savings')}</span>
+                                <span class="metric-val c-battery d-batt">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-d-export">${this._t('export_revenue')}</span>
+                                <span class="metric-val c-export d-export">—</span>
+                            </div>
+                            <div class="metric-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--divider-color,${surfBorder})">
+                                <span class="metric-label lbl-d-net"><strong>${this._t('net')}</strong></span>
+                                <span class="metric-val d-net">—</span>
+                            </div>
                         </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-d-solar">${this._t('solar_savings')}</span>
-                            <span class="metric-val c-solar d-solar">—</span>
+                        <div class="section">
+                            <div class="section-title lbl-monthly">${this._t('monthly')}</div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-m-import">${this._t('import_cost')}</span>
+                                <span class="metric-val c-import m-import">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-m-solar">${this._t('solar_savings')}</span>
+                                <span class="metric-val c-solar m-solar">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-m-export">${this._t('export_revenue')}</span>
+                                <span class="metric-val c-export m-export">—</span>
+                            </div>
+                            <div class="metric-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--divider-color,${surfBorder})">
+                                <span class="metric-label lbl-m-net"><strong>${this._t('net')}</strong></span>
+                                <span class="metric-val m-net">—</span>
+                            </div>
                         </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-d-batt">${this._t('battery_savings')}</span>
-                            <span class="metric-val c-battery d-batt">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-d-export">${this._t('export_revenue')}</span>
-                            <span class="metric-val c-export d-export">—</span>
-                        </div>
-                        <div class="metric-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--divider-color,${surfBorder})">
-                            <span class="metric-label lbl-d-net"><strong>${this._t('net')}</strong></span>
-                            <span class="metric-val d-net">—</span>
-                        </div>
-                    </div>
-
-                    <!-- Monthly -->
-                    <div class="section">
-                        <div class="section-title lbl-monthly">${this._t('monthly')}</div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-m-import">${this._t('import_cost')}</span>
-                            <span class="metric-val c-import m-import">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-m-solar">${this._t('solar_savings')}</span>
-                            <span class="metric-val c-solar m-solar">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-m-export">${this._t('export_revenue')}</span>
-                            <span class="metric-val c-export m-export">—</span>
-                        </div>
-                        <div class="metric-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--divider-color,${surfBorder})">
-                            <span class="metric-label lbl-m-net"><strong>${this._t('net')}</strong></span>
-                            <span class="metric-val m-net">—</span>
-                        </div>
-                    </div>
-
-                    <!-- Yearly -->
-                    <div class="section">
-                        <div class="section-title lbl-yearly">${this._t('yearly')}</div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-y-import">${this._t('import_cost')}</span>
-                            <span class="metric-val c-import y-import">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-y-solar">${this._t('solar_savings')}</span>
-                            <span class="metric-val c-solar y-solar">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-y-export">${this._t('export_revenue')}</span>
-                            <span class="metric-val c-export y-export">—</span>
-                        </div>
-                        <div class="metric-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--divider-color,${surfBorder})">
-                            <span class="metric-label lbl-y-net"><strong>${this._t('net')}</strong></span>
-                            <span class="metric-val y-net">—</span>
+                        <div class="section">
+                            <div class="section-title lbl-yearly">${this._t('yearly')}</div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-y-import">${this._t('import_cost')}</span>
+                                <span class="metric-val c-import y-import">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-y-solar">${this._t('solar_savings')}</span>
+                                <span class="metric-val c-solar y-solar">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-y-export">${this._t('export_revenue')}</span>
+                                <span class="metric-val c-export y-export">—</span>
+                            </div>
+                            <div class="metric-row" style="margin-top:4px;padding-top:4px;border-top:1px solid var(--divider-color,${surfBorder})">
+                                <span class="metric-label lbl-y-net"><strong>${this._t('net')}</strong></span>
+                                <span class="metric-val y-net">—</span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- ROI -->
-                    <div class="section">
-                        <div class="section-title lbl-roi">${this._t('roi')}</div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-roi-lifetime">${this._t('lifetime_savings')}</span>
-                            <span class="metric-val c-green roi-lifetime">—</span>
+                    <!-- ROI + Environmental (2 columns) -->
+                    <div class="two-col">
+                        <div class="section">
+                            <div class="section-title lbl-roi">${this._t('roi')}</div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-roi-lifetime">${this._t('lifetime_savings')}</span>
+                                <span class="metric-val c-green roi-lifetime">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-roi-annual">${this._t('annual_savings')}</span>
+                                <span class="metric-val c-green roi-annual">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-roi-payback">${this._t('payback_years')}</span>
+                                <span class="metric-val roi-payback">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-roi-pct">${this._t('roi_percentage')}</span>
+                                <span class="metric-val roi-pct">—</span>
+                            </div>
                         </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-roi-annual">${this._t('annual_savings')}</span>
-                            <span class="metric-val c-green roi-annual">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-roi-payback">${this._t('payback_years')}</span>
-                            <span class="metric-val roi-payback">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-roi-pct">${this._t('roi_percentage')}</span>
-                            <span class="metric-val roi-pct">—</span>
-                        </div>
-                    </div>
-
-                    <!-- Environmental -->
-                    <div class="section">
-                        <div class="section-title lbl-environment">${this._t('environment')}</div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-env-daily">${this._t('co2_today')}</span>
-                            <span class="metric-val c-leaf env-daily-co2">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-env-yearly">${this._t('co2_yearly')}</span>
-                            <span class="metric-val c-leaf env-yearly-co2">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-env-lifetime">${this._t('co2_lifetime')}</span>
-                            <span class="metric-val c-leaf env-lifetime-co2">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-env-ytrees">${this._t('trees_yearly')}</span>
-                            <span class="metric-val c-leaf env-yearly-trees">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-env-ltrees">${this._t('trees_lifetime')}</span>
-                            <span class="metric-val c-leaf env-lifetime-trees">—</span>
+                        <div class="section">
+                            <div class="section-title lbl-environment">${this._t('environment')}</div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-env-daily">${this._t('co2_today')}</span>
+                                <span class="metric-val c-leaf env-daily-co2">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-env-yearly">${this._t('co2_yearly')}</span>
+                                <span class="metric-val c-leaf env-yearly-co2">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-env-lifetime">${this._t('co2_lifetime')}</span>
+                                <span class="metric-val c-leaf env-lifetime-co2">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-env-ytrees">${this._t('trees_yearly')}</span>
+                                <span class="metric-val c-leaf env-yearly-trees">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-env-ltrees">${this._t('trees_lifetime')}</span>
+                                <span class="metric-val c-leaf env-lifetime-trees">—</span>
+                            </div>
                         </div>
                     </div>
                 </div>
