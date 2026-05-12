@@ -136,7 +136,6 @@
         "title": "SEM Optimalisatie instellingen",
         "description": "Pas je SEM optimalisatie instelling aan",
         "data": {
-
           "update_interval": "Update-interval (seconden)",
           "power_delta": "Vermogen delta-drempel (W)",
           "current_delta": "Stroom delta-drempel (A)",
@@ -285,13 +284,13 @@
         "title": "EV-lader bewerken",
         "description": "Werk de sensorkoppelingen en prioriteit voor deze lader bij.",
         "data": {
-        "charger_name": "Ladernaam",
-        "ev_connected_sensor": "EV verbonden status",
-        "ev_charging_sensor": "EV laadstatus",
-        "ev_charging_power_sensor": "EV laadvermogen",
-        "ev_charger_service": "Lader stroom-instel service (optioneel)",
-        "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
-        "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)"
+          "charger_name": "Ladernaam",
+          "ev_connected_sensor": "EV verbonden status",
+          "ev_charging_sensor": "EV laadstatus",
+          "ev_charging_power_sensor": "EV laadvermogen",
+          "ev_charger_service": "Lader stroom-instel service (optioneel)",
+          "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
+          "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)"
         }
       }
     }
@@ -846,6 +845,27 @@
       },
       "diag_sensors_unavailable": {
         "name": "Sensoren niet beschikbaar"
+      },
+      "battery_session_type": {
+        "name": "Battery Session Type"
+      },
+      "battery_session_energy": {
+        "name": "Battery Session Energy"
+      },
+      "battery_session_solar_share": {
+        "name": "Battery Session Solar Share"
+      },
+      "battery_session_cost": {
+        "name": "Battery Session Cost"
+      },
+      "battery_session_savings": {
+        "name": "Battery Session Savings"
+      },
+      "battery_session_duration": {
+        "name": "Battery Session Duration"
+      },
+      "battery_session_avg_power": {
+        "name": "Battery Session Avg Power"
       }
     },
     "binary_sensor": {

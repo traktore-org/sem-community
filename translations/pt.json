@@ -845,6 +845,27 @@
       },
       "diag_sensors_unavailable": {
         "name": "Sensores indisponíveis"
+      },
+      "battery_session_type": {
+        "name": "Battery Session Type"
+      },
+      "battery_session_energy": {
+        "name": "Battery Session Energy"
+      },
+      "battery_session_solar_share": {
+        "name": "Battery Session Solar Share"
+      },
+      "battery_session_cost": {
+        "name": "Battery Session Cost"
+      },
+      "battery_session_savings": {
+        "name": "Battery Session Savings"
+      },
+      "battery_session_duration": {
+        "name": "Battery Session Duration"
+      },
+      "battery_session_avg_power": {
+        "name": "Battery Session Avg Power"
       }
     },
     "binary_sensor": {

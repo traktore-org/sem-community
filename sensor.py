@@ -1192,6 +1192,50 @@ SENSOR_TYPES = [
     ),
 
     # ============================================================================
+    # BATTERY SESSION TRACKING
+    # ============================================================================
+
+    SensorEntityDescription(
+        key="battery_session_type",
+    ),
+    SensorEntityDescription(
+        key="battery_session_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="battery_session_solar_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="battery_session_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SensorEntityDescription(
+        key="battery_session_savings",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SensorEntityDescription(
+        key="battery_session_duration",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="min",
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="battery_session_avg_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
+
+    # ============================================================================
     # LIFETIME EV STATISTICS
     # ============================================================================
 

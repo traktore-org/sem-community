@@ -363,6 +363,29 @@ class SessionData:
 
 
 @dataclass
+class BatterySessionData:
+    """Per-session battery charge/discharge tracking.
+
+    Tracks energy source attribution during charge sessions (how much
+    came from solar vs grid) and savings during discharge sessions
+    (avoided grid cost). Session starts when charge/discharge power
+    exceeds 50W, ends when power stays below 50W for 3 consecutive
+    cycles (~30s) or the battery switches direction.
+    """
+    active: bool = False
+    session_type: str = "idle"  # "charge", "discharge", or "idle"
+    start_time: Optional[str] = None
+    duration_minutes: float = 0
+    energy_kwh: float = 0
+    solar_energy_kwh: float = 0   # charge only: from solar_to_battery flow
+    grid_energy_kwh: float = 0    # charge only: from grid_to_battery flow
+    solar_share_pct: float = 0    # charge only: solar / total * 100
+    cost: float = 0               # charge: grid portion × import_rate
+    savings: float = 0            # discharge: energy × import_rate (avoided grid)
+    avg_power_w: float = 0
+
+
+@dataclass
 class SEMData:
     """Complete SEM data structure combining all components."""
     power: PowerReadings = field(default_factory=PowerReadings)
@@ -394,6 +417,8 @@ class SEMData:
     session: SessionData = field(default_factory=SessionData)
     # Per-charger sessions (keyed by charger_id)
     sessions: Dict[str, SessionData] = field(default_factory=dict)
+    # Battery session tracking
+    battery_session: BatterySessionData = field(default_factory=BatterySessionData)
 
     # System metadata
     currency: str = "EUR"
@@ -638,6 +663,16 @@ class SEMData:
             "session_grid_energy": self.session.grid_energy_kwh,
             "session_battery_energy": self.session.battery_energy_kwh,
             "session_avg_power": self.session.avg_power_w,
+
+            # Battery session tracking
+            "battery_session_active": self.battery_session.active,
+            "battery_session_type": self.battery_session.session_type,
+            "battery_session_energy": self.battery_session.energy_kwh,
+            "battery_session_solar_share": self.battery_session.solar_share_pct,
+            "battery_session_cost": self.battery_session.cost,
+            "battery_session_savings": self.battery_session.savings,
+            "battery_session_duration": self.battery_session.duration_minutes,
+            "battery_session_avg_power": self.battery_session.avg_power_w,
 
             # System metadata
             "currency": self.currency,

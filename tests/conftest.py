@@ -42,6 +42,15 @@ TEST_HARDWARE_VALUES = {
     "solar_production_total": 1500,  # Correct key for sensor mapping
     "ev_charging_power": 0,  # No EV charging
     "home_consumption_total": 900,  # 900W consumption
+    # Battery session tracking
+    "battery_session_active": False,
+    "battery_session_type": "idle",
+    "battery_session_energy": 0,
+    "battery_session_solar_share": 0,
+    "battery_session_cost": 0,
+    "battery_session_savings": 0,
+    "battery_session_duration": 0,
+    "battery_session_avg_power": 0,
     # Recreation sensors (match coordinator defaults)
     "recreation_progress": 0,
     "recreation_status": "idle",
@@ -489,6 +498,31 @@ def sample_hardware_scenarios():
             "battery_soc": 50,
             "ev_charging_power": 0,
             "home_consumption_total": 4400,
+        },
+        "battery_charging_from_solar": {
+            "solar_power": 5000,
+            "grid_power": 0,
+            "battery_power": 3000,  # 3kW charging
+            "battery_soc": 60,
+            "ev_charging_power": 0,
+            "home_consumption_total": 2000,
+            "battery_session_active": True,
+            "battery_session_type": "charge",
+            "battery_session_energy": 2.5,
+            "battery_session_solar_share": 95.0,
+            "battery_session_cost": 0.02,
+        },
+        "battery_discharging_to_home": {
+            "solar_power": 0,
+            "grid_power": -200,
+            "battery_power": -2500,  # 2.5kW discharging
+            "battery_soc": 75,
+            "ev_charging_power": 0,
+            "home_consumption_total": 2700,
+            "battery_session_active": True,
+            "battery_session_type": "discharge",
+            "battery_session_energy": 4.2,
+            "battery_session_savings": 1.26,
         },
     }
 
