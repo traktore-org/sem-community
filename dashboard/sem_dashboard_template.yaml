@@ -2082,12 +2082,54 @@ views:
               style: *glass_card
 
           # ══════════════════════════════════════════════════════
-          # 1b. CONSOLIDATED GRID CARD
+          # 1b. GRID CARD + CONFIG TOGGLES (side by side)
           # ══════════════════════════════════════════════════════
-          - type: custom:sem-grid-card
+          - type: horizontal-stack
+            cards:
+              - type: custom:sem-grid-card
+              - type: vertical-stack
+                cards:
+                  - type: horizontal-stack
+                    cards:
+                      - type: custom:mushroom-entity-card
+                        entity: switch.sem_observer_mode
+                        name: Observer
+                        icon: mdi:eye-outline
+                        icon_color: red
+                        tap_action:
+                          action: toggle
+                        card_mod:
+                          style: *glass_card
+                      - type: custom:mushroom-entity-card
+                        entity: switch.sem_night_charging
+                        name: Night
+                        icon: mdi:weather-night
+                        icon_color: blue
+                        tap_action:
+                          action: toggle
+                        card_mod:
+                          style: *glass_card
+                      - type: custom:mushroom-entity-card
+                        entity: switch.sem_smart_night_charging
+                        name: Smart
+                        icon: mdi:crystal-ball
+                        icon_color: amber
+                        tap_action:
+                          action: toggle
+                        card_mod:
+                          style: *glass_card
+                  - type: custom:mushroom-template-card
+                    primary: Configuration
+                    secondary: >-
+                      Night {{ states('number.sem_ev_night_initial_current') }}A · Min {{ states('number.sem_ev_minimum_current') }}A · Cooldown {{ states('number.sem_ev_stall_cooldown') }}s · Target {{ states('number.sem_daily_ev_target') }}kWh · Peak {{ states('sensor.sem_target_peak_limit') }}kW
+                    icon: mdi:cog
+                    icon_color: grey
+                    multiline_secondary: true
+                    card_mod:
+                      style: *glass_card
 
           # ══════════════════════════════════════════════════════
-          # 2. SOURCE SENSORS
+          # 2. DIAGNOSTICS (two rows, side by side)
           # ══════════════════════════════════════════════════════
           - type: horizontal-stack
             cards:
@@ -2103,26 +2145,20 @@ views:
               - type: custom:mushroom-template-card
                 primary: Derived Values
                 secondary: >-
-                  Home {{ states('sensor.sem_home_consumption_power') | float(0) | round(0) }}W · Grid import {{ states('sensor.sem_grid_import_power') | float(0) | round(0) }}W · Grid export {{ states('sensor.sem_grid_export_power') | float(0) | round(0) }}W · Batt charge {{ states('sensor.sem_battery_charge_power') | float(0) | round(0) }}W · Batt disch {{ states('sensor.sem_battery_discharge_power') | float(0) | round(0) }}W · Autarky {{ states('sensor.sem_autarky_rate') | float(0) | round(1) }}% · Self cons {{ states('sensor.sem_self_consumption_rate') | float(0) | round(1) }}%
+                  Home {{ states('sensor.sem_home_consumption_power') | float(0) | round(0) }}W · Import {{ states('sensor.sem_grid_import_power') | float(0) | round(0) }}W · Export {{ states('sensor.sem_grid_export_power') | float(0) | round(0) }}W · Autarky {{ states('sensor.sem_autarky_rate') | float(0) | round(1) }}% · Self {{ states('sensor.sem_self_consumption_rate') | float(0) | round(1) }}%
                 icon: mdi:calculator-variant
                 icon_color: cyan
                 multiline_secondary: true
                 card_mod:
                   style: *glass_card
-
-          # ══════════════════════════════════════════════════════
-          # 3. CHARGING STATE & MODE STATUS
-          # ══════════════════════════════════════════════════════
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-template-card
                 primary: EV Charging
                 secondary: >-
                   {{ states('sensor.sem_charging_state') }} · {{ states('sensor.sem_charging_strategy') }}
-
-                  {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_calculated_current') | float(0) | round(0) }}A · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }}kWh
-
-                  Plug: {{ states('binary_sensor.sem_ev_connected') }} · Charging: {{ states('binary_sensor.sem_ev_charging') }}
+                  · {{ states('sensor.sem_ev_power') | float(0) | round(0) }}W · {{ states('sensor.sem_calculated_current') | float(0) | round(0) }}A · {{ states('sensor.sem_daily_ev_energy') | float(0) | round(1) }}/{{ states('number.sem_daily_ev_target') | float(10) | round(0) }}kWh
+                  · Plug: {{ states('binary_sensor.sem_ev_connected') }} · Charging: {{ states('binary_sensor.sem_ev_charging') }}
                 icon: mdi:car-electric
                 icon_color: green
                 multiline_secondary: true
@@ -2131,13 +2167,9 @@ views:
               - type: custom:mushroom-template-card
                 primary: Mode Status
                 secondary: >-
-                  Night: {{ states('sensor.sem_night_charging_status') }}
-
-                  Solar: {{ states('sensor.sem_solar_charging_status') }}
-
-                  Battery: {{ states('sensor.sem_battery_priority_status') }} · {{ states('sensor.sem_battery_status') }}
-
-                  Grid: {{ states('sensor.sem_grid_status') }}
+                  Night: {{ states('sensor.sem_night_charging_status') }} · Solar: {{ states('sensor.sem_solar_charging_status') }}
+                  · Battery: {{ states('sensor.sem_battery_priority_status') }} · {{ states('sensor.sem_battery_status') }}
+                  · Grid: {{ states('sensor.sem_grid_status') }}
                 icon: mdi:state-machine
                 icon_color: blue
                 multiline_secondary: true
@@ -2145,40 +2177,7 @@ views:
                   style: *glass_card
 
           # ══════════════════════════════════════════════════════
-          # 4. CONFIGURATION — interactive toggles
-          # ══════════════════════════════════════════════════════
-          - type: horizontal-stack
-            cards:
-              - type: custom:mushroom-entity-card
-                entity: switch.sem_observer_mode
-                name: Observer
-                icon: mdi:eye-outline
-                icon_color: red
-                tap_action:
-                  action: toggle
-                card_mod:
-                  style: *glass_card
-              - type: custom:mushroom-entity-card
-                entity: switch.sem_night_charging
-                name: Night Charge
-                icon: mdi:weather-night
-                icon_color: blue
-                tap_action:
-                  action: toggle
-                card_mod:
-                  style: *glass_card
-              - type: custom:mushroom-entity-card
-                entity: switch.sem_smart_night_charging
-                name: Smart Night
-                icon: mdi:crystal-ball
-                icon_color: amber
-                tap_action:
-                  action: toggle
-                card_mod:
-                  style: *glass_card
-
-          # ══════════════════════════════════════════════════════
-          # 5. FORECAST SPARKLINE
+          # 3. FORECAST SPARKLINE
           # ══════════════════════════════════════════════════════
           - type: custom:mini-graph-card
             name: Forecast Power
