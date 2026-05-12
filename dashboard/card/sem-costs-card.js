@@ -101,9 +101,12 @@ class SEMCostsCard extends SEMBaseCard {
         const mNetEl = $('.m-net');
         if (mNetEl) { mNetEl.textContent = this._fmtCurr(mNet, curr); mNetEl.style.color = mNet <= 0 ? '#8DC892' : '#f06292'; }
 
+        setVal('.m-batt', this._fmtCurr(this._state('monthly_battery_savings'), curr));
+
         // Yearly
         setVal('.y-import', this._fmtCurr(this._state('yearly_costs'), curr));
         setVal('.y-solar', this._fmtCurr(this._state('yearly_savings'), curr));
+        setVal('.y-batt', this._fmtCurr(this._state('yearly_battery_savings'), curr));
         setVal('.y-export', this._fmtCurr(this._state('yearly_export_revenue'), curr));
         const yNet = this._state('yearly_net_cost');
         const yNetEl = $('.y-net');
@@ -138,10 +141,12 @@ class SEMCostsCard extends SEMBaseCard {
         setVal('.lbl-d-net', this._t('net'));
         setVal('.lbl-m-import', this._t('import_cost'));
         setVal('.lbl-m-solar', this._t('solar_savings'));
+        setVal('.lbl-m-batt', this._t('battery_savings'));
         setVal('.lbl-m-export', this._t('export_revenue'));
         setVal('.lbl-m-net', this._t('net'));
         setVal('.lbl-y-import', this._t('import_cost'));
         setVal('.lbl-y-solar', this._t('solar_savings'));
+        setVal('.lbl-y-batt', this._t('battery_savings'));
         setVal('.lbl-y-export', this._t('export_revenue'));
         setVal('.lbl-y-net', this._t('net'));
         setVal('.lbl-roi-lifetime', this._t('lifetime_savings'));
@@ -306,6 +311,10 @@ class SEMCostsCard extends SEMBaseCard {
                                 <span class="metric-val c-solar m-solar">—</span>
                             </div>
                             <div class="metric-row">
+                                <span class="metric-label lbl-m-batt">${this._t('battery_savings')}</span>
+                                <span class="metric-val c-battery m-batt">—</span>
+                            </div>
+                            <div class="metric-row">
                                 <span class="metric-label lbl-m-export">${this._t('export_revenue')}</span>
                                 <span class="metric-val c-export m-export">—</span>
                             </div>
@@ -323,6 +332,10 @@ class SEMCostsCard extends SEMBaseCard {
                             <div class="metric-row">
                                 <span class="metric-label lbl-y-solar">${this._t('solar_savings')}</span>
                                 <span class="metric-val c-solar y-solar">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-y-batt">${this._t('battery_savings')}</span>
+                                <span class="metric-val c-battery y-batt">—</span>
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label lbl-y-export">${this._t('export_revenue')}</span>
