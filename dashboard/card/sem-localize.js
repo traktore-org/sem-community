@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-12T15:22:57.091763+00:00
+// Generated: 2026-05-12T16:54:38.348285+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
