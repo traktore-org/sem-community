@@ -221,7 +221,7 @@ class SEMSolarCard extends SEMBaseCard {
                 .flows-grid {
                     display: grid;
                     grid-template-columns: 1fr 1fr;
-                    gap: 6px 12px;
+                    gap: 8px 24px;
                 }
                 .flow-row { display: flex; align-items: center; gap: 6px; }
                 .flow-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
@@ -235,6 +235,16 @@ class SEMSolarCard extends SEMBaseCard {
                 .flow-energy {
                     font-size: 9px; color: var(--secondary-text-color,${textSecCol});
                     font-variant-numeric: tabular-nums;
+                }
+
+                /* ── Two-column section layout ── */
+                .two-col {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 0 20px;
+                }
+                @media (max-width: 400px) {
+                    .two-col { grid-template-columns: 1fr; }
                 }
 
                 /* ── Metric rows (forecast / performance) ── */
@@ -360,52 +370,52 @@ class SEMSolarCard extends SEMBaseCard {
                         </div>
                     </div>
 
-                    <!-- Forecast -->
-                    <div class="section">
-                        <div class="section-title lbl-forecast">${this._t('forecast')}</div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-fc-today">${this._t('today')}</span>
-                            <span class="metric-val fc-today">—</span>
+                    <!-- Forecast + Performance (side by side) -->
+                    <div class="section two-col">
+                        <div>
+                            <div class="section-title lbl-forecast">${this._t('forecast')}</div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-fc-today">${this._t('today')}</span>
+                                <span class="metric-val fc-today">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-fc-tomorrow">${this._t('tomorrow')}</span>
+                                <span class="metric-val fc-tomorrow">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-fc-remaining">${this._t('remaining')}</span>
+                                <span class="metric-val fc-remaining">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-fc-peak">${this._t('peak_power')}</span>
+                                <span class="metric-val">
+                                    <span class="fc-peak">—</span>
+                                    <span class="fc-peak-time" style="font-size:10px;opacity:0.7;margin-left:4px">—</span>
+                                </span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-fc-window">${this._t('best_surplus_window')}</span>
+                                <span class="metric-val fc-window" style="color:#ff9800;font-size:11px">—</span>
+                            </div>
                         </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-fc-tomorrow">${this._t('tomorrow')}</span>
-                            <span class="metric-val fc-tomorrow">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-fc-remaining">${this._t('remaining')}</span>
-                            <span class="metric-val fc-remaining">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-fc-peak">${this._t('peak_power')}</span>
-                            <span class="metric-val">
-                                <span class="fc-peak">—</span>
-                                <span class="fc-peak-time" style="font-size:10px;opacity:0.7;margin-left:4px">—</span>
-                            </span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-fc-window">${this._t('best_surplus_window')}</span>
-                            <span class="metric-val fc-window" style="color:#ff9800;font-size:11px">—</span>
-                        </div>
-                    </div>
-
-                    <!-- Performance -->
-                    <div class="section">
-                        <div class="section-title lbl-performance">${this._t('performance')}</div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-spec-yield">${this._t('specific_yield')}</span>
-                            <span class="metric-val perf-yield">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-vs-fc">${this._t('vs_forecast')}</span>
-                            <span class="metric-val perf-vs-fc">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-degradation">${this._t('degradation')}</span>
-                            <span class="metric-val perf-degradation">—</span>
-                        </div>
-                        <div class="metric-row">
-                            <span class="metric-label lbl-trend">${this._t('trend')}</span>
-                            <span class="metric-val perf-trend">—</span>
+                        <div>
+                            <div class="section-title lbl-performance">${this._t('performance')}</div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-spec-yield">${this._t('specific_yield')}</span>
+                                <span class="metric-val perf-yield">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-vs-fc">${this._t('vs_forecast')}</span>
+                                <span class="metric-val perf-vs-fc">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-degradation">${this._t('degradation')}</span>
+                                <span class="metric-val perf-degradation">—</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label lbl-trend">${this._t('trend')}</span>
+                                <span class="metric-val perf-trend">—</span>
+                            </div>
                         </div>
                     </div>
                 </div>
