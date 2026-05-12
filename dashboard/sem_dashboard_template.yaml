@@ -263,14 +263,6 @@ views:
                   entity: sensor.sem_consecutive_peak_15min
                 card_mod:
                   style: *glass_card
-              - type: custom:mushroom-template-card
-                primary: Energy Tip
-                secondary: >-
-                  {{ states('sensor.sem_energy_tip') }}
-                icon: mdi:lightbulb-on
-                icon_color: amber
-                card_mod:
-                  style: *glass_card
 
           # ── Quick Controls ──
           - type: horizontal-stack
@@ -1453,138 +1445,7 @@ views:
           - type: custom:sem-costs-card
 
           # ══════════════════════════════════════════════════════
-          # 1. HEADER & KPI
-          # ══════════════════════════════════════════════════════
-          - type: custom:sem-title-card
-            card_mod:
-              style: *lumina_title
-            title: Cost Tracking
-            subtitle: >-
-              {{ states('sensor.sem_tariff_provider') }} · {{ states('sensor.sem_tariff_price_level') }} · {{ states('sensor.sem_tariff_current_import_rate') | float(0) | round(2) }}/kWh
-
-          - type: horizontal-stack
-            cards:
-              - type: vertical-stack
-                cards:
-                  - type: custom:sem-title-card
-                    card_mod:
-                      style: *lumina_title
-                    title: Today
-                  - type: custom:mushroom-chips-card
-                    alignment: center
-                    chips:
-                      - type: template
-                        icon: mdi:cash-minus
-                        icon_color: red
-                        content: >-
-                          {{ states('sensor.sem_daily_costs') | float(0) | round(2) }}
-                        tap_action:
-                          action: more-info
-                          entity: sensor.sem_daily_costs
-                      - type: template
-                        icon: mdi:cash-plus
-                        icon_color: green
-                        content: >-
-                          +{{ states('sensor.sem_daily_export_revenue') | float(0) | round(2) }}
-                        tap_action:
-                          action: more-info
-                          entity: sensor.sem_daily_export_revenue
-                      - type: template
-                        icon: mdi:sigma
-                        icon_color: >-
-                          {% if states('sensor.sem_daily_net_cost') | float(0) <= 0 %}green{% else %}amber{% endif %}
-                        content: >-
-                          Net {{ states('sensor.sem_daily_net_cost') | float(0) | round(2) }}
-                        tap_action:
-                          action: more-info
-                          entity: sensor.sem_daily_net_cost
-                      - type: template
-                        icon: mdi:piggy-bank
-                        icon_color: amber
-                        content: >-
-                          Saved {{ (states('sensor.sem_daily_savings') | float(0) + states('sensor.sem_daily_battery_savings') | float(0)) | round(2) }}
-                    card_mod:
-                      style: *glass_card
-              - type: vertical-stack
-                cards:
-                  - type: custom:sem-title-card
-                    card_mod:
-                      style: *lumina_title
-                    title: This Month
-                  - type: custom:mushroom-chips-card
-                    alignment: center
-                    chips:
-                      - type: template
-                        icon: mdi:cash-minus
-                        icon_color: red
-                        content: >-
-                          {{ states('sensor.sem_monthly_costs') | float(0) | round(2) }}
-                        tap_action:
-                          action: more-info
-                          entity: sensor.sem_monthly_costs
-                      - type: template
-                        icon: mdi:cash-plus
-                        icon_color: green
-                        content: >-
-                          +{{ states('sensor.sem_monthly_export_revenue') | float(0) | round(2) }}
-                        tap_action:
-                          action: more-info
-                          entity: sensor.sem_monthly_export_revenue
-                      - type: template
-                        icon: mdi:sigma
-                        icon_color: >-
-                          {% if states('sensor.sem_monthly_net_cost') | float(0) <= 0 %}green{% else %}amber{% endif %}
-                        content: >-
-                          Net {{ states('sensor.sem_monthly_net_cost') | float(0) | round(2) }}
-                        tap_action:
-                          action: more-info
-                          entity: sensor.sem_monthly_net_cost
-                      - type: template
-                        icon: mdi:piggy-bank
-                        icon_color: amber
-                        content: >-
-                          Saved {{ (states('sensor.sem_monthly_savings') | float(0) + states('sensor.sem_monthly_battery_savings') | float(0)) | round(2) }}
-                    card_mod:
-                      style: *glass_card
-
-          # ══════════════════════════════════════════════════════
-          # 2. THIS YEAR
-          # ══════════════════════════════════════════════════════
-          - type: custom:sem-title-card
-            card_mod:
-              style: *lumina_title
-            title: This Year
-            subtitle: >-
-              Net {{ states('sensor.sem_yearly_net_cost') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
-          - type: horizontal-stack
-            cards:
-              - type: custom:mushroom-template-card
-                primary: Costs
-                secondary: >-
-                  {{ states('sensor.sem_yearly_costs') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
-                icon: mdi:cash-minus
-                icon_color: red
-                card_mod:
-                  style: *glass_card
-              - type: custom:mushroom-template-card
-                primary: Revenue
-                secondary: >-
-                  {{ states('sensor.sem_yearly_export_revenue') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
-                icon: mdi:cash-plus
-                icon_color: green
-                card_mod:
-                  style: *glass_card
-              - type: custom:mushroom-template-card
-                primary: Savings
-                secondary: >-
-                  {{ states('sensor.sem_yearly_savings') | float(0) | round(2) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
-                icon: mdi:piggy-bank
-                icon_color: amber
-                card_mod:
-                  style: *glass_card
-
-          # ══════════════════════════════════════════════════════
-          # 3. PERIOD SELECTOR
+          # 1. PERIOD SELECTOR
           # ══════════════════════════════════════════════════════
           - type: custom:sem-period-selector-card
             default_period: week
@@ -1635,101 +1496,16 @@ views:
               style: *glass_card
 
           # ══════════════════════════════════════════════════════
-          # 7. ROI — RETURN ON INVESTMENT
+          # 5. INVESTMENT COST (editable — feeds ROI in sem-costs-card)
           # ══════════════════════════════════════════════════════
-          - type: custom:sem-title-card
+          - type: custom:mushroom-number-card
+            entity: number.sem_system_investment_cost
+            name: System Investment Cost
+            icon: mdi:cash
             card_mod:
-              style: *lumina_title
-            title: Return on Investment
-            subtitle: >-
-              {% set roi = states('sensor.sem_roi_percentage') | float(0) %}
-              {% set cost = states('number.sem_system_investment_cost') | float(0) %}
-              {% if cost > 0 %}{{ roi | round(1) }}% of {{ cost | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} recovered{% else %}Set investment cost below{% endif %}
-          - type: horizontal-stack
-            cards:
-              - type: custom:mushroom-number-card
-                entity: number.sem_system_investment_cost
-                name: Investment Cost
-                icon: mdi:cash
-                card_mod:
-                  style: *glass_card
-          - type: conditional
-            conditions:
-              - condition: numeric_state
-                entity: number.sem_system_investment_cost
-                above: 0
-            card:
-              type: vertical-stack
-              cards:
-                # ── ROI KPI Row ──
-                - type: horizontal-stack
-                  cards:
-                    - type: custom:mushroom-template-card
-                      primary: >-
-                        {{ states('sensor.sem_lifetime_total_savings') | float(0) | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}
-                      secondary: Lifetime Savings
-                      icon: mdi:cash-check
-                      icon_color: green
-                      card_mod:
-                        style: *glass_card
-                    - type: custom:mushroom-template-card
-                      primary: >-
-                        {{ states('sensor.sem_roi_annual_savings') | float(0) | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/yr
-                      secondary: Annual Savings
-                      icon: mdi:cash-fast
-                      icon_color: amber
-                      card_mod:
-                        style: *glass_card
-                    - type: custom:mushroom-template-card
-                      primary: >-
-                        {% set yrs = states('sensor.sem_roi_payback_years') | float(0) %}
-                        {% if yrs > 0 %}{{ yrs | round(1) }} years{% else %}—{% endif %}
-                      secondary: Payback
-                      icon: mdi:calendar-clock
-                      icon_color: cyan
-                      card_mod:
-                        style: *glass_card
-                    - type: custom:mushroom-template-card
-                      primary: >-
-                        {{ states('sensor.sem_roi_percentage') | float(0) | round(1) }}%
-                      secondary: ROI
-                      icon: >-
-                        {% set roi = states('sensor.sem_roi_percentage') | float(0) %}
-                        {% if roi >= 100 %}mdi:check-decagram
-                        {% elif roi >= 50 %}mdi:progress-check
-                        {% else %}mdi:progress-clock{% endif %}
-                      icon_color: >-
-                        {% set roi = states('sensor.sem_roi_percentage') | float(0) %}
-                        {% if roi >= 100 %}green{% elif roi >= 50 %}amber{% else %}cyan{% endif %}
-                      card_mod:
-                        style: *glass_card
-                # ── Savings Breakdown ──
-                - type: custom:mushroom-template-card
-                  primary: >-
-                    {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
-                    How Savings Are Calculated · {{ savings | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} total
-                  secondary: >-
-                    {% set import_rate = states('number.sem_electricity_import_rate') | float(0.36) %}
-                    {% set export_rate = states('number.sem_electricity_export_rate') | float(0.075) %}
-                    {% set savings = states('sensor.sem_lifetime_total_savings') | float(0) %}
-                    {% set annual = states('sensor.sem_roi_annual_savings') | float(0) %}
-                    {% set invest = states('number.sem_system_investment_cost') | float(0) %}
-                    {% set payback = states('sensor.sem_roi_payback_years') | float(0) %}
-                    {% set co2 = states('sensor.sem_lifetime_co2_avoided') | float(0) %}
-                    {% set trees = states('sensor.sem_lifetime_trees_equivalent') | float(0) %}
-                    Solar self-consumed × {{ import_rate }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/kWh
-                    · Grid export × {{ export_rate }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/kWh
-                    = {{ savings | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} total savings
-                    ÷ system age = {{ annual | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/year
-                    {{ invest | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }} ÷ {{ annual | round(0) }} {{ state_attr('sensor.sem_daily_costs', 'unit_of_measurement') or 'EUR' }}/yr = {{ payback | round(1) }} yr payback
-                    {{ co2 | round(0) }} kg CO₂ avoided = {{ trees | round(0) }} trees
-                  icon: mdi:calculator
-                  icon_color: purple
-                  multiline_secondary: true
-                  card_mod:
-                    style: *glass_card
+              style: *glass_card
 
-          # 8. DEMAND CHARGE
+          # 6. DEMAND CHARGE
           # ══════════════════════════════════════════════════════
           - type: custom:sem-title-card
             card_mod:
@@ -2068,24 +1844,33 @@ views:
           # ══════════════════════════════════════════════════════
           # 3. FORECAST SPARKLINE
           # ══════════════════════════════════════════════════════
-          - type: custom:mini-graph-card
-            name: Forecast Power
-            entities:
+          - type: custom:apexcharts-card
+            header:
+              title: Forecast vs Actual
+              show: true
+            graph_span: 24h
+            series:
               - entity: sensor.sem_forecast_power_now_w
                 name: Forecast
                 color: "#ff9800"
+                type: area
+                opacity: 0.3
+                stroke_width: 2
+                group_by:
+                  func: avg
+                  duration: 15min
               - entity: sensor.sem_solar_power
                 name: Actual
                 color: "#4db6ac"
-            hours_to_show: 24
-            line_width: 2
-            hour24: true
-            points_per_hour: 4
-            show:
-              name: true
-              icon: false
-              state: false
-              legend: true
-              fill: fade
+                type: line
+                stroke_width: 2
+                group_by:
+                  func: avg
+                  duration: 15min
+            apex_config:
+              chart:
+                height: 160
+              legend:
+                show: true
             card_mod:
               style: *glass_card
