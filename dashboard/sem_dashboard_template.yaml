@@ -132,7 +132,7 @@ views:
               style: *glass_card
 
           # ── Solar Summary ──
-          - type: custom:sem-solar-summary-card
+          - type: custom:sem-solar-card
             entity_prefix: sensor.sem_
             card_mod:
               style: *glass_card
@@ -1625,6 +1625,11 @@ views:
             tab: costs
 
           # ══════════════════════════════════════════════════════
+          # 0. CONSOLIDATED COSTS CARD
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-costs-card
+
+          # ══════════════════════════════════════════════════════
           # 1. HEADER & KPI
           # ══════════════════════════════════════════════════════
           - type: custom:sem-title-card
@@ -2154,6 +2159,11 @@ views:
                 entity: sensor.sem_tariff_current_import_rate
             card_mod:
               style: *glass_card
+
+          # ══════════════════════════════════════════════════════
+          # 1b. CONSOLIDATED GRID CARD
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-grid-card
 
           # ══════════════════════════════════════════════════════
           # 2. SOURCE SENSORS
