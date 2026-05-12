@@ -179,7 +179,6 @@ views:
 
         expected_services = [
             "generate_dashboard",
-            "configure_energy_dashboard",
             "sync_priorities_from_dashboard",
             "update_device_priorities",
             "update_device_config",

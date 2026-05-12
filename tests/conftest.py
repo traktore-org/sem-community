@@ -466,6 +466,30 @@ def sample_hardware_scenarios():
             "ev_charging_power": 3000,  # High EV charging
             "home_consumption_total": 2000,
         },
+        "multi_inverter": {
+            "solar_power": 6300,  # 3500 + 2800 from 2 inverters
+            "grid_power": -1500,  # Single meter
+            "battery_power": 750,  # 400 + 350 from 2 batteries
+            "battery_soc": 70,  # avg(72, 68)
+            "ev_charging_power": 4000,  # Single charger
+            "home_consumption_total": 1050,
+        },
+        "multi_grid_meter": {
+            "solar_power": 7000,  # 4000 + 3000 from 2 inverters
+            "grid_power": -1200,  # -800 + -400 from 2 meters
+            "battery_power": 300,  # 500 + (-200) from 2 batteries
+            "battery_soc": 70,  # avg(80, 60)
+            "ev_charging_power": 10500,  # 7000 + 3500 from 2 chargers
+            "home_consumption_total": 0,  # derived
+        },
+        "multi_grid_mixed_direction": {
+            "solar_power": 5000,
+            "grid_power": -600,  # -1000 + 400 from 2 meters (net import)
+            "battery_power": 0,
+            "battery_soc": 50,
+            "ev_charging_power": 0,
+            "home_consumption_total": 4400,
+        },
     }
 
 

@@ -318,6 +318,9 @@ class SensorReader:
             export_w = self._read_sensor(manual_export, "grid_export") if manual_export else 0.0
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
+        elif len(ed.grid_power_list) > 1:
+            # Multiple grid power sensors — sum all (e.g. multi-meter setups)
+            readings.grid_power = self._read_sensors_sum(ed.grid_power_list, "grid")
         elif ed.grid_import_power:
             readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
         elif not ed.grid_import_power and ed.grid_import_energy:

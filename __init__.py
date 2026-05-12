@@ -557,7 +557,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool
         # Remove all registered services (quality scale: config-entry-unloading)
         for service_name in (
             "generate_dashboard",
-            "configure_energy_dashboard",
             "sync_priorities_from_dashboard",
             "set_device_control_mapping",
             "update_device_priorities",
@@ -828,49 +827,6 @@ async def _async_register_services(
         _LOGGER.debug("Registered service: %s.generate_dashboard", DOMAIN)
     except Exception as err:
         _LOGGER.error("Failed to register generate_dashboard service: %s", err)
-
-    # Energy dashboard configuration service
-    async def async_configure_energy_dashboard_service(call) -> None:
-        """Automatically configure HA Energy Dashboard with SEM sensors."""
-        try:
-            from .energy_dashboard import configure_energy_dashboard
-            full_config = {**coordinator.config}
-            result = await configure_energy_dashboard(hass, full_config)
-            if result:
-                _LOGGER.info("Energy Dashboard configured successfully")
-                await hass.services.async_call(
-                    "persistent_notification", "create",
-                    {
-                        "title": "Energy Dashboard Configured",
-                        "message": "HA Energy Dashboard has been configured with SEM sensors.",
-                        "notification_id": "sem_energy_dashboard_success",
-                    },
-                )
-            else:
-                _LOGGER.warning("Energy Dashboard configuration returned False")
-                raise HomeAssistantError(
-                    translation_domain=DOMAIN,
-                    translation_key="energy_dashboard_configuration_failed",
-                )
-        except HomeAssistantError:
-            raise
-        except Exception as e:
-            _LOGGER.error("Energy Dashboard configuration failed: %s", e, exc_info=True)
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="energy_dashboard_configuration_failed",
-            ) from e
-
-    try:
-        hass.services.async_register(
-            DOMAIN,
-            "configure_energy_dashboard",
-            async_configure_energy_dashboard_service,
-            schema=vol.Schema({}),
-        )
-        _LOGGER.debug("Registered service: %s.configure_energy_dashboard", DOMAIN)
-    except Exception as err:
-        _LOGGER.error("Failed to register configure_energy_dashboard service: %s", err)
 
     # Load management priority sync service
     async def async_sync_priorities_from_dashboard_service(call) -> None:

@@ -356,3 +356,215 @@ class TestFullMultiDeviceSetup:
         assert readings.grid_power == -1500.0
         # EV: single sensor, unchanged
         assert readings.ev_power == 4000.0
+
+    def test_full_multi_device_with_multi_grid(self, hass):
+        """Full setup: 2 inverters + 2 batteries + 2 grid meters + 2 chargers."""
+        def mock_get(entity_id):
+            states = {
+                # 2 inverters
+                "sensor.inv1_power": _make_state(4000),
+                "sensor.inv2_power": _make_state(3000),
+                # 2 batteries
+                "sensor.batt_1_power": _make_state(500),
+                "sensor.batt_2_power": _make_state(-200),
+                "sensor.batt_1_soc": _make_state(80, "%"),
+                "sensor.batt_2_soc": _make_state(60, "%"),
+                # 2 grid meters
+                "sensor.grid_meter1_power": _make_state(-800),
+                "sensor.grid_meter2_power": _make_state(-400),
+                # 2 EV chargers
+                "sensor.charger1_power": _make_state(7000),
+                "sensor.charger2_power": _make_state(3500),
+            }
+            return states.get(entity_id)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(hass, {
+            "ev_chargers": [
+                {"id": "c1", "ev_charging_power_sensor": "sensor.charger1_power"},
+                {"id": "c2", "ev_charging_power_sensor": "sensor.charger2_power"},
+            ],
+        })
+
+        ed = EnergyDashboardConfig(
+            solar_power="sensor.inv1_power",
+            solar_power_list=["sensor.inv1_power", "sensor.inv2_power"],
+            battery_power="sensor.batt_1_power",
+            battery_power_list=["sensor.batt_1_power", "sensor.batt_2_power"],
+            grid_import_power="sensor.grid_meter1_power",
+            grid_power_list=["sensor.grid_meter1_power", "sensor.grid_meter2_power"],
+            grid_import_energy="sensor.grid_meter1_import",
+            has_solar=True,
+            has_grid=True,
+            has_battery=True,
+        )
+        reader.set_energy_dashboard_config(ed)
+        readings = reader._read_from_energy_dashboard()
+
+        # Solar: 4000 + 3000 = 7000
+        assert readings.solar_power == 7000.0
+        # Battery: 500 + (-200) = 300 net charge
+        assert readings.battery_power == 300.0
+        # SOC: avg(80, 60) = 70
+        assert readings.battery_soc == 70.0
+        # Grid: -800 + -400 = -1200 importing
+        assert readings.grid_power == -1200.0
+        # EV: 7000 + 3500 = 10500
+        assert readings.ev_power == 10500.0
+
+
+class TestMultiGridAggregation:
+    """Test grid power aggregation with multiple grid power sensors."""
+
+    def test_two_grid_sensors_summed(self, hass):
+        """Two grid power sensors → power is summed."""
+        def mock_get(entity_id):
+            return {
+                "sensor.grid_meter1_power": _make_state(-500),
+                "sensor.grid_meter2_power": _make_state(-300),
+            }.get(entity_id)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(hass)
+
+        ed = EnergyDashboardConfig(
+            grid_import_power="sensor.grid_meter1_power",
+            grid_power_list=[
+                "sensor.grid_meter1_power",
+                "sensor.grid_meter2_power",
+            ],
+            grid_import_energy="sensor.grid_meter1_import",
+            grid_import_energy_list=["sensor.grid_meter1_import", "sensor.grid_meter2_import"],
+            has_grid=True,
+            has_solar=False,
+        )
+        reader.set_energy_dashboard_config(ed)
+        readings = reader._read_from_energy_dashboard()
+        # Sum: -500 + -300 = -800W importing
+        assert readings.grid_power == -800.0
+
+    def test_two_grid_sensors_mixed_import_export(self, hass):
+        """One meter importing, one exporting → net is summed."""
+        def mock_get(entity_id):
+            return {
+                "sensor.grid_meter1_power": _make_state(-1000),
+                "sensor.grid_meter2_power": _make_state(400),
+            }.get(entity_id)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(hass)
+
+        ed = EnergyDashboardConfig(
+            grid_import_power="sensor.grid_meter1_power",
+            grid_power_list=[
+                "sensor.grid_meter1_power",
+                "sensor.grid_meter2_power",
+            ],
+            grid_import_energy="sensor.grid_meter1_import",
+            has_grid=True,
+            has_solar=False,
+        )
+        reader.set_energy_dashboard_config(ed)
+        readings = reader._read_from_energy_dashboard()
+        # Net: -1000 + 400 = -600W importing
+        assert readings.grid_power == -600.0
+
+    def test_single_grid_sensor_unchanged(self, hass):
+        """Single grid sensor → same behavior as before."""
+        hass.states.get = MagicMock(return_value=_make_state(-750))
+        reader = _make_reader(hass)
+
+        ed = EnergyDashboardConfig(
+            grid_import_power="sensor.grid_power",
+            grid_power_list=["sensor.grid_power"],
+            has_grid=True,
+            has_solar=False,
+        )
+        reader.set_energy_dashboard_config(ed)
+        readings = reader._read_from_energy_dashboard()
+        assert readings.grid_power == -750.0
+
+    def test_three_grid_sensors_summed(self, hass):
+        """Three grid sensors (multi-meter commercial site)."""
+        def mock_get(entity_id):
+            return {
+                "sensor.meter_l1_power": _make_state(-2000),
+                "sensor.meter_l2_power": _make_state(-1500),
+                "sensor.meter_l3_power": _make_state(-1000),
+            }.get(entity_id)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(hass)
+
+        ed = EnergyDashboardConfig(
+            grid_import_power="sensor.meter_l1_power",
+            grid_power_list=[
+                "sensor.meter_l1_power",
+                "sensor.meter_l2_power",
+                "sensor.meter_l3_power",
+            ],
+            has_grid=True,
+            has_solar=False,
+        )
+        reader.set_energy_dashboard_config(ed)
+        readings = reader._read_from_energy_dashboard()
+        assert readings.grid_power == -4500.0
+
+    def test_grid_manual_override_takes_precedence(self, hass):
+        """Manual grid_import/export_power_entity overrides list aggregation."""
+        def mock_get(entity_id):
+            return {
+                "sensor.manual_import": _make_state(800),
+                "sensor.manual_export": _make_state(0),
+                "sensor.grid_meter1_power": _make_state(-500),
+                "sensor.grid_meter2_power": _make_state(-300),
+            }.get(entity_id)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(hass, {
+            "grid_import_power_entity": "sensor.manual_import",
+            "grid_export_power_entity": "sensor.manual_export",
+        })
+
+        ed = EnergyDashboardConfig(
+            grid_import_power="sensor.grid_meter1_power",
+            grid_power_list=[
+                "sensor.grid_meter1_power",
+                "sensor.grid_meter2_power",
+            ],
+            has_grid=True,
+            has_solar=False,
+        )
+        reader.set_energy_dashboard_config(ed)
+        readings = reader._read_from_energy_dashboard()
+        # Manual override: export(0) - import(800) = -800
+        assert readings.grid_power == -800.0
+
+    def test_grid_with_unavailable_sensor(self, hass):
+        """One grid sensor unavailable → only valid ones counted."""
+        def mock_get(entity_id):
+            if entity_id == "sensor.grid_meter2_power":
+                state = MagicMock()
+                state.state = "unavailable"
+                state.attributes = {}
+                return state
+            return {
+                "sensor.grid_meter1_power": _make_state(-1200),
+            }.get(entity_id)
+
+        hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(hass)
+
+        ed = EnergyDashboardConfig(
+            grid_import_power="sensor.grid_meter1_power",
+            grid_power_list=[
+                "sensor.grid_meter1_power",
+                "sensor.grid_meter2_power",
+            ],
+            has_grid=True,
+            has_solar=False,
+        )
+        reader.set_energy_dashboard_config(ed)
+        readings = reader._read_from_energy_dashboard()
+        # Only meter1 counted, meter2 unavailable = 0
+        assert readings.grid_power == -1200.0

@@ -1748,8 +1748,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         value = None
 
             # Set values and mark as available (but unavailable if value is None)
+            # Exception: timestamp sensors (e.g. ev_last_full_charge) are available
+            # even when None — "no event yet" is a valid state, not unavailable.
             self._attr_native_value = value
-            self._attr_available = value is not None
+            if self.entity_description.device_class == SensorDeviceClass.TIMESTAMP:
+                self._attr_available = True
+            else:
+                self._attr_available = value is not None
         else:
             # Data key not found - mark as unavailable
             self._attr_available = False
