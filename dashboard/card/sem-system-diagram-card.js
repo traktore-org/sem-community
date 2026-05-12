@@ -120,7 +120,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         if (el) el.textContent = text;
     }
 
-    _animateValue(id, newWatts, duration = 800) {
+    _animateValue(id, newWatts, duration = 800, prefix = '') {
         const el = this.shadowRoot.getElementById(id);
         if (!el) return;
 
@@ -132,7 +132,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         this._currentValues[id] = newWatts;
 
         if (Math.abs(oldWatts - newWatts) < 1) {
-            el.textContent = this._formatPower(newWatts);
+            el.textContent = prefix + this._formatPower(newWatts);
             return;
         }
 
@@ -143,7 +143,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                 ? 2 * progress * progress
                 : 1 - Math.pow(-2 * progress + 2, 2) / 2;
             const current = oldWatts + (newWatts - oldWatts) * eased;
-            el.textContent = this._formatPower(current);
+            el.textContent = prefix + this._formatPower(current);
             if (progress < 1) {
                 this._animFrames[id] = requestAnimationFrame(animate);
             } else {
@@ -200,17 +200,54 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
         // Animated power values
         this._animateValue('val-solar', solar);
-        this._animateValue('val-battery-power', battery);
-        this._animateValue('val-grid', gridImport > 0 ? gridImport : gridExport);
+        this._animateValue('val-battery-power', Math.abs(battery));
         this._animateValue('val-home', home);
         this._animateValue('val-ev', ev);
+
+        // Grid: show import and export separately
+        this._animateValue('val-grid-import', gridImport, 800, '↓ ');
+        this._animateValue('val-grid-export', gridExport, 800, '↑ ');
+        const gridImportEl = this.shadowRoot.getElementById('val-grid-import');
+        const gridExportEl = this.shadowRoot.getElementById('val-grid-export');
+        if (gridImportEl) gridImportEl.style.display = gridImport > 10 ? 'block' : 'none';
+        if (gridExportEl) gridExportEl.style.display = gridExport > 10 ? 'block' : 'none';
+        // Show single value when both are near zero
+        const gridSingleEl = this.shadowRoot.getElementById('val-grid-single');
+        if (gridSingleEl) gridSingleEl.style.display = (gridImport <= 10 && gridExport <= 10) ? 'block' : 'none';
 
         // Non-animated text
         this._setText('val-battery-soc', `${soc.toFixed(0)}%`);
         this._setText('val-inverter-status', this._getStateStr('charging_state'));
+
+        // Daily energy totals on all nodes
         this._setText('val-today-solar', `${this._t('today')} ${this._getStateStr('daily_solar_energy')} kWh`);
         this._setText('val-today-ev', `${this._t('today')} ${this._getStateStr('daily_ev_energy')} kWh`);
-        this._setText('val-autarky', `${this._t('autarky')} ${this._getStateStr('autarky_rate')}%`);
+        const dailyCharge = this._getState('daily_battery_charge_energy');
+        const dailyDischarge = this._getState('daily_battery_discharge_energy');
+        this._setText('val-today-battery', `+${dailyCharge.toFixed(1)} / -${dailyDischarge.toFixed(1)} kWh`);
+        const dailyImport = this._getState('daily_grid_import_energy');
+        const dailyExport = this._getState('daily_grid_export_energy');
+        this._setText('val-today-grid', `↓${dailyImport.toFixed(1)} / ↑${dailyExport.toFixed(1)} kWh`);
+        this._setText('val-today-home', `${this._t('today')} ${this._getState('daily_home_energy').toFixed(1)} kWh`);
+
+        // Autarky + self-consumption
+        const autarky = this._getState('autarky_rate');
+        const selfCons = this._getState('self_consumption_rate');
+        this._setText('val-autarky', `${this._t('autarky')} ${autarky.toFixed(0)}%`);
+
+        // Self-consumption arc on Home node
+        const scArc = this.shadowRoot.getElementById('sc-arc');
+        if (scArc) {
+            const L = this._getLayout();
+            const scR = L.home.r - 8;
+            const circumference = 2 * Math.PI * scR;
+            scArc.style.strokeDashoffset = (circumference * (1 - selfCons / 100)).toFixed(1);
+        }
+        this._setText('val-self-consumption', `${selfCons.toFixed(0)}%`);
+
+        // Forecast remaining near solar node
+        const forecastRemaining = this._getState('forecast_remaining_today_kwh');
+        this._setText('val-forecast', forecastRemaining > 0 ? `☀ ${forecastRemaining.toFixed(1)} kWh left` : '');
 
         // Battery SOC arc
         const socArc = this.shadowRoot.getElementById('soc-arc');
@@ -226,16 +263,29 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             gridLabel.textContent = gridImport > gridExport ? this._t('importing') : (gridExport > 10 ? this._t('exporting') : this._t('grid'));
         }
 
-        // Battery label
+        // Battery label — use charge/discharge colors
         const battLabel = this.shadowRoot.getElementById('label-battery-state');
         if (battLabel) {
-            battLabel.textContent = battCharge > 10 ? this._t('charging') : (battDischarge > 10 ? this._t('discharging') : '');
+            if (battCharge > 10) {
+                battLabel.textContent = this._t('charging');
+                battLabel.setAttribute('fill', '#f06292');
+            } else if (battDischarge > 10) {
+                battLabel.textContent = this._t('discharging');
+                battLabel.setAttribute('fill', '#4db6ac');
+            } else {
+                battLabel.textContent = '';
+            }
         }
 
-        // Flow animations
+        // Flow animations — battery uses direction-specific colors
         this._updateFlow('flow-solar', solar > 10, false, this._calcDuration(solar));
         const battActive = Math.abs(battery) > 10;
         const battReverse = battery < 0;
+        // Update battery flow color based on direction
+        const battFlowGroup = this.shadowRoot.getElementById('flow-battery');
+        if (battFlowGroup) {
+            battFlowGroup.dataset.color = battCharge > 10 ? '#f06292' : '#4db6ac';
+        }
         this._updateFlow('flow-battery', battActive, battReverse, this._calcDuration(battery));
         const gridActive = gridImport > 10 || gridExport > 10;
         const gridReverse = gridImport > gridExport;
@@ -506,7 +556,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                 svg { width: 100%; display: block; }
                 .flow-group { transition: opacity 0.8s cubic-bezier(0.4,0,0.2,1); }
                 .glow-ring { transition: opacity 1s ease; }
-                #soc-arc { transition: stroke-dashoffset 1.5s cubic-bezier(0.4,0,0.2,1); }
+                #soc-arc, #sc-arc { transition: stroke-dashoffset 1.5s cubic-bezier(0.4,0,0.2,1); }
                 text { font-variant-numeric: tabular-nums; }
                 @keyframes socPulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
             </style>
@@ -576,6 +626,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <text id="label-solar" x="${S.cx}" y="${S.cy + S.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#ff9800">${this._t('solar')}</text>
                     <text id="val-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#ff9800">0 W</text>
                     <text id="val-today-solar" x="${S.cx}" y="${S.cy + S.r + 18 + fv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#ff9800" opacity="0.55"></text>
+                    <text id="val-forecast" x="${S.cx + S.r + 10}" y="${S.cy - S.r + 5}" text-anchor="start" font-family="${F}" font-size="${fs}" fill="#ff9800" opacity="0.5"></text>
 
                     <!-- INVERTER -->
                     <g id="node-inverter" filter="url(#glowInverter)">
@@ -601,6 +652,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <text id="val-battery-soc" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#4db6ac">0%</text>
                     <text id="val-battery-power" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="500" fill="#4db6ac" opacity="0.7">0 W</text>
                     <text id="label-battery-state" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.5"></text>
+                    <text id="val-today-battery" x="${B.cx}" y="${B.cy + B.r + 18 + fv * 0.9 + fl * 2 + fs + 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#4db6ac" opacity="0.4"></text>
 
                     <!-- GRID -->
                     <g id="node-grid" filter="url(#glowGrid)">
@@ -615,22 +667,34 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                         </g>
                     </g>
                     <text id="label-grid-name" x="${G.cx}" y="${G.cy + G.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#488fc2">${this._t('grid')}</text>
-                    <text id="val-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#488fc2">0 W</text>
+                    <text id="val-grid-single" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv}" font-weight="700" fill="#488fc2">0 W</text>
+                    <text id="val-grid-import" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fv * 0.8}" font-weight="700" fill="#488fc2" style="display:none">↓ 0 W</text>
+                    <text id="val-grid-export" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fv * 0.7}" text-anchor="middle" font-family="${F}" font-size="${fv * 0.8}" font-weight="700" fill="#8353d1" style="display:none">↑ 0 W</text>
                     <text id="label-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fl}" text-anchor="middle" font-family="${F}" font-size="${fs}" font-weight="500" fill="#488fc2" opacity="0.5">GRID</text>
+                    <text id="val-today-grid" x="${G.cx}" y="${G.cy + G.r + 18 + fv * 0.9 + fl + fs + 2}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#488fc2" opacity="0.45"></text>
 
                     <!-- HOME (central hub) -->
                     <g id="node-home" filter="url(#glowHome)">
                         ${this._glowRing(H, '#5BC8D8', 1.4)}
                         <circle cx="${H.cx}" cy="${H.cy}" r="${H.r}" fill="rgba(91,200,216,0.06)" stroke="#5BC8D8" stroke-width="2"/>
+                        <!-- Self-consumption arc -->
+                        ${(() => { const scR = H.r - 8; const scCirc = (2 * Math.PI * scR).toFixed(1); return `
+                        <circle cx="${H.cx}" cy="${H.cy}" r="${scR}" fill="none" stroke="rgba(91,200,216,0.1)" stroke-width="4"/>
+                        <circle id="sc-arc" cx="${H.cx}" cy="${H.cy}" r="${scR}" fill="none" stroke="#5BC8D8" stroke-width="4"
+                                stroke-dasharray="${scCirc}" stroke-dashoffset="${scCirc}"
+                                transform="rotate(-90 ${H.cx} ${H.cy})" stroke-linecap="round" opacity="0.6"/>
+                        `; })()}
                         <g transform="translate(${H.cx},${H.cy - 5})" stroke="#5BC8D8" fill="none" opacity="0.6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M-20,2 L0,-14 L20,2"/>
                             <rect x="-14" y="2" width="28" height="20" rx="2"/>
                             <rect x="-4" y="10" width="8" height="12"/>
                         </g>
+                        <text id="val-self-consumption" x="${H.cx}" y="${H.cy + H.r - 20}" text-anchor="middle" font-family="${F}" font-size="${fs - 1}" font-weight="600" fill="#5BC8D8" opacity="0.5"></text>
                     </g>
                     <text id="label-home" x="${H.cx}" y="${H.cy + H.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl + 1}" font-weight="600" fill="#5BC8D8">${this._t('home')}</text>
                     <text id="val-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9}" text-anchor="middle" font-family="${F}" font-size="${fhv}" font-weight="700" fill="#5BC8D8">0 W</text>
                     <text id="val-autarky" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs + 4}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#5BC8D8" opacity="0.5"></text>
+                    <text id="val-today-home" x="${H.cx}" y="${H.cy + H.r + 18 + fhv * 0.9 + fs * 2 + 6}" text-anchor="middle" font-family="${F}" font-size="${fs}" fill="#5BC8D8" opacity="0.4"></text>
 
                     <!-- EV -->
                     <g id="node-ev" filter="url(#glowEV)">
