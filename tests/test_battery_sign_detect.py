@@ -144,6 +144,7 @@ class TestBatterySignAutoDetect:
 
         Scenario: battery_power=+500W but discharge counter is increasing
         (meaning the battery is actually discharging, so +500 means discharge).
+        Requires 3 consistent votes after baseline to lock in.
         """
         from custom_components.solar_energy_management.coordinator.types import PowerReadings
         ed = _make_energy_dashboard_config()
@@ -154,17 +155,15 @@ class TestBatterySignAutoDetect:
             "sensor.battery_charge_total": _make_sensor_state(100.0, "kWh"),
             "sensor.battery_discharge_total": _make_sensor_state(50.0, "kWh"),
         }.get(eid)
-        readings = PowerReadings(battery_power=500.0)
-        sensor_reader._detect_battery_sign(readings)
+        sensor_reader._detect_battery_sign(PowerReadings(battery_power=500.0))
 
-        # Call 2: discharge counter grew (50→50.5), but power is positive
-        # → opposite convention (positive means discharge) → must negate
-        mock_hass.states.get = lambda eid: {
-            "sensor.battery_charge_total": _make_sensor_state(100.0, "kWh"),
-            "sensor.battery_discharge_total": _make_sensor_state(50.5, "kWh"),
-        }.get(eid)
-        readings = PowerReadings(battery_power=500.0)
-        result = sensor_reader._detect_battery_sign(readings)
+        # Calls 2-4: 3 consistent detections — discharge growing, power positive → negate
+        for i in range(3):
+            mock_hass.states.get = lambda eid, _i=i: {
+                "sensor.battery_charge_total": _make_sensor_state(100.0, "kWh"),
+                "sensor.battery_discharge_total": _make_sensor_state(50.0 + 0.5 * (_i + 1), "kWh"),
+            }.get(eid)
+            result = sensor_reader._detect_battery_sign(PowerReadings(battery_power=500.0))
         assert result is True, "Enphase (opposite convention) should negate"
 
     def test_goodwe_negative_charge_negate(self, sensor_reader, mock_hass):
@@ -172,6 +171,7 @@ class TestBatterySignAutoDetect:
 
         Scenario: battery_power=-500W but charge counter is increasing
         (meaning negative = charging, opposite of SEM where positive = charge).
+        Requires 3 consistent votes after baseline to lock in.
         """
         from custom_components.solar_energy_management.coordinator.types import PowerReadings
         ed = _make_energy_dashboard_config()
@@ -182,16 +182,15 @@ class TestBatterySignAutoDetect:
             "sensor.battery_charge_total": _make_sensor_state(100.0, "kWh"),
             "sensor.battery_discharge_total": _make_sensor_state(50.0, "kWh"),
         }.get(eid)
-        readings = PowerReadings(battery_power=-500.0)
-        sensor_reader._detect_battery_sign(readings)
+        sensor_reader._detect_battery_sign(PowerReadings(battery_power=-500.0))
 
-        # Call 2: charge counter grew, power negative → opposite convention → negate
-        mock_hass.states.get = lambda eid: {
-            "sensor.battery_charge_total": _make_sensor_state(100.5, "kWh"),
-            "sensor.battery_discharge_total": _make_sensor_state(50.0, "kWh"),
-        }.get(eid)
-        readings = PowerReadings(battery_power=-500.0)
-        result = sensor_reader._detect_battery_sign(readings)
+        # Calls 2-4: 3 consistent detections — charge growing, power negative → negate
+        for i in range(3):
+            mock_hass.states.get = lambda eid, _i=i: {
+                "sensor.battery_charge_total": _make_sensor_state(100.0 + 0.5 * (_i + 1), "kWh"),
+                "sensor.battery_discharge_total": _make_sensor_state(50.0, "kWh"),
+            }.get(eid)
+            result = sensor_reader._detect_battery_sign(PowerReadings(battery_power=-500.0))
         assert result is True, "GoodWe (negative=charge) should negate"
 
     def test_huawei_discharge_no_negate(self, sensor_reader, mock_hass):
@@ -274,15 +273,16 @@ class TestBatterySignAutoDetect:
         }.get(eid)
         sensor_reader._detect_battery_sign(PowerReadings(battery_power=500.0))
 
-        # Call 2: detect opposite convention
-        mock_hass.states.get = lambda eid: {
-            "sensor.battery_charge_total": _make_sensor_state(100.0, "kWh"),
-            "sensor.battery_discharge_total": _make_sensor_state(50.5, "kWh"),
-        }.get(eid)
-        result = sensor_reader._detect_battery_sign(PowerReadings(battery_power=500.0))
+        # Calls 2-4: 3 consistent detections to lock in opposite convention
+        for i in range(3):
+            mock_hass.states.get = lambda eid, _i=i: {
+                "sensor.battery_charge_total": _make_sensor_state(100.0, "kWh"),
+                "sensor.battery_discharge_total": _make_sensor_state(50.0 + 0.5 * (_i + 1), "kWh"),
+            }.get(eid)
+            result = sensor_reader._detect_battery_sign(PowerReadings(battery_power=500.0))
         assert result is True
 
-        # Call 3: low power period — should keep the detected state
+        # Call 5: low power period — should keep the detected state
         result = sensor_reader._detect_battery_sign(PowerReadings(battery_power=30.0))
         assert result is True, "Low power should preserve detected inversion state"
 
