@@ -2082,55 +2082,42 @@ views:
               style: *glass_card
 
           # ══════════════════════════════════════════════════════
-          # 1b. GRID CARD + CONFIG TOGGLES (side by side)
+          # 1b. GRID CARD
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-grid-card
+
+          # ══════════════════════════════════════════════════════
+          # 2. CONTROLS + DIAGNOSTICS (compact two-column rows)
           # ══════════════════════════════════════════════════════
           - type: horizontal-stack
             cards:
-              - type: custom:sem-grid-card
-              - type: vertical-stack
-                cards:
-                  - type: horizontal-stack
-                    cards:
-                      - type: custom:mushroom-entity-card
-                        entity: switch.sem_observer_mode
-                        name: Observer
-                        icon: mdi:eye-outline
-                        icon_color: red
-                        tap_action:
-                          action: toggle
-                        card_mod:
-                          style: *glass_card
-                      - type: custom:mushroom-entity-card
-                        entity: switch.sem_night_charging
-                        name: Night
-                        icon: mdi:weather-night
-                        icon_color: blue
-                        tap_action:
-                          action: toggle
-                        card_mod:
-                          style: *glass_card
-                      - type: custom:mushroom-entity-card
-                        entity: switch.sem_smart_night_charging
-                        name: Smart
-                        icon: mdi:crystal-ball
-                        icon_color: amber
-                        tap_action:
-                          action: toggle
-                        card_mod:
-                          style: *glass_card
-                  - type: custom:mushroom-template-card
-                    primary: Configuration
-                    secondary: >-
-                      Night {{ states('number.sem_ev_night_initial_current') }}A · Min {{ states('number.sem_ev_minimum_current') }}A · Cooldown {{ states('number.sem_ev_stall_cooldown') }}s · Target {{ states('number.sem_daily_ev_target') }}kWh · Peak {{ states('sensor.sem_target_peak_limit') }}kW
-                    icon: mdi:cog
-                    icon_color: grey
-                    multiline_secondary: true
-                    card_mod:
-                      style: *glass_card
-
-          # ══════════════════════════════════════════════════════
-          # 2. DIAGNOSTICS (two rows, side by side)
-          # ══════════════════════════════════════════════════════
+              - type: custom:mushroom-entity-card
+                entity: switch.sem_observer_mode
+                name: Observer
+                icon: mdi:eye-outline
+                icon_color: red
+                tap_action:
+                  action: toggle
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-entity-card
+                entity: switch.sem_night_charging
+                name: Night
+                icon: mdi:weather-night
+                icon_color: blue
+                tap_action:
+                  action: toggle
+                card_mod:
+                  style: *glass_card
+              - type: custom:mushroom-entity-card
+                entity: switch.sem_smart_night_charging
+                name: Smart
+                icon: mdi:crystal-ball
+                icon_color: amber
+                tap_action:
+                  action: toggle
+                card_mod:
+                  style: *glass_card
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-template-card
