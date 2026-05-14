@@ -9,10 +9,10 @@
  * - Hold-to-repeat for stepper buttons
  */
 
-import { LitElement, html, css, nothing } from 'lit';
+import { LitElement, html, css, svg, nothing } from 'lit';
 import { semTheme } from './sem-shared.js';
 
-export { html, css, nothing };
+export { html, css, svg, nothing };
 
 export class SEMLitBase extends LitElement {
     constructor() {

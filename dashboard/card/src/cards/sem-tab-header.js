@@ -5,27 +5,30 @@
  * with glow ring, tab title, subtitle, and live stats.
  */
 
-import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 
 const _t = (key, hass) => (typeof semLocalize === 'function') ? semLocalize(key, hass?.language) : key;
 
+// Icon templates use Lit's `svg` tag so child elements are created in the SVG
+// namespace. With plain `html` they get the HTML namespace, render as
+// HTMLUnknownElement, and show up blank inside the icon ring.
 const SEM_TAB_CONFIG = {
     home: {
         titleKey: 'home', subtitleKey: 'home_sub', color: '#5BC8D8',
-        icon: () => html`
+        icon: () => svg`
             <path d="M-20,2 L0,-16 L20,2" stroke-width="2.2"/>
             <rect x="-15" y="2" width="30" height="22" rx="2" stroke-width="2"/>
             <rect x="-5" y="12" width="10" height="12" stroke-width="1.5"/>`,
     },
     energy: {
         titleKey: 'energy', subtitleKey: 'energy_sub', color: '#ff9800',
-        icon: () => html`
+        icon: () => svg`
             <path d="M-4,-18 L-10,2 L-2,2 L-6,18 L12,-4 L2,-4 L8,-18 Z" stroke-width="1.8"/>`,
     },
     battery: {
         titleKey: 'battery', subtitleKey: 'battery_sub', color: '#4db6ac',
-        icon: () => html`
+        icon: () => svg`
             <rect x="-10" y="-16" width="20" height="32" rx="4" stroke-width="2"/>
             <rect x="-4" y="-20" width="8" height="5" rx="2" fill="currentColor" opacity="0.4" stroke="none"/>
             <line x1="-5" y1="-4" x2="5" y2="-4" stroke-width="1.5" opacity="0.5"/>
@@ -33,7 +36,7 @@ const SEM_TAB_CONFIG = {
     },
     ev: {
         titleKey: 'ev_charging', subtitleKey: 'ev_sub', color: '#8DC892',
-        icon: () => html`
+        icon: () => svg`
             <rect x="-12" y="-14" width="24" height="24" rx="5" stroke-width="2"/>
             <path d="M-3,-6 L-1,0 L-5,0 L3,8" stroke-width="2.2" fill="none"/>
             <line x1="0" y1="10" x2="0" y2="16" stroke-width="2"/>
@@ -41,7 +44,7 @@ const SEM_TAB_CONFIG = {
     },
     control: {
         titleKey: 'control', subtitleKey: 'control_sub', color: '#96CAEE',
-        icon: () => html`
+        icon: () => svg`
             <line x1="-12" y1="-12" x2="-12" y2="12" stroke-width="2"/>
             <line x1="0" y1="-12" x2="0" y2="12" stroke-width="2"/>
             <line x1="12" y1="-12" x2="12" y2="12" stroke-width="2"/>
@@ -51,7 +54,7 @@ const SEM_TAB_CONFIG = {
     },
     costs: {
         titleKey: 'costs', subtitleKey: 'costs_sub', color: '#f06292',
-        icon: () => html`
+        icon: () => svg`
             <circle cx="0" cy="0" r="16" stroke-width="2"/>
             <text x="0" y="6" text-anchor="middle" font-size="18" font-weight="700"
                   fill="currentColor" opacity="0.7" stroke="none"
@@ -59,7 +62,7 @@ const SEM_TAB_CONFIG = {
     },
     system: {
         titleKey: 'system', subtitleKey: 'system_sub', color: '#96CAEE',
-        icon: () => html`
+        icon: () => svg`
             <path d="M-16,4 L-8,-8 L0,0 L6,-12 L10,-4 L16,4" stroke-width="2.2" fill="none"/>
             <line x1="-16" y1="8" x2="16" y2="8" stroke-width="1" opacity="0.3"/>`,
     },
