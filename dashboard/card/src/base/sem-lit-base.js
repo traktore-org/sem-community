@@ -50,6 +50,15 @@ export class SEMLitBase extends LitElement {
         // Value comparison — SEM coordinator recreates ALL state objects on every cycle,
         // so reference comparison (===) always triggers. Compare actual .state values instead.
         const watched = this.constructor.watchedEntities || [];
+
+        // Skip transient unavailable states caused by coordinator refresh —
+        // async_request_refresh() briefly marks all entities unavailable before
+        // new data arrives (~600ms). Rendering during this window causes visual flashes.
+        if (watched.length > 0 && !localeChanged) {
+            const firstState = hass.states[watched[0]]?.state;
+            if (firstState === 'unavailable' || firstState === 'unknown') return;
+        }
+
         let changed = false;
         for (const id of watched) {
             const newState = hass.states[id]?.state;
@@ -118,6 +127,9 @@ export class SEMLitBase extends LitElement {
     }
 
     // ── Freeze/thaw for optimistic updates ──
+    // Shows the new value instantly while the service call round-trips.
+    // With async_write_ha_state() on the backend, HA confirms within ~50ms
+    // so the freeze is just a visual bridge — no extend logic needed.
     _freezeEntity(entityId, value) {
         const existing = this._frozenEntities[entityId];
         if (existing?.timer) clearTimeout(existing.timer);
@@ -126,7 +138,7 @@ export class SEMLitBase extends LitElement {
             timer: setTimeout(() => {
                 delete this._frozenEntities[entityId];
                 this.requestUpdate();
-            }, 1000),
+            }, 1500),
         };
     }
 

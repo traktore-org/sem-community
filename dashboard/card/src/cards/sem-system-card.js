@@ -258,7 +258,6 @@ class SEMSystemCard extends SEMLitBase {
     _renderModesSection(T) {
         return html`
             <div class="toggle-group">
-                ${this._renderToggle('switch.sem_observer_mode', 'observer_mode', T)}
                 ${this._renderToggle('switch.sem_night_charging', 'night_charging', T)}
                 ${this._renderToggle('switch.sem_smart_night_charging', 'smart_night', T)}
             </div>

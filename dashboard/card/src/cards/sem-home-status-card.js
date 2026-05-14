@@ -165,29 +165,9 @@ class SEMHomeStatusCard extends SEMLitBase {
 
                 <div class="divider"></div>
 
-                <!-- 4. Quick Controls -->
+                <!-- 4. Forecast Info -->
                 <div class="section-label">${this._t('quick_controls')}</div>
                 <div class="controls-row">
-                    <div class="observer-toggle">
-                        <ha-icon icon="mdi:eye-outline"
-                                 style="--mdc-icon-size:18px;color:#96CAEE"></ha-icon>
-                        <span class="observer-toggle-label">${this._t('observer')}</span>
-                        <div
-                            class="toggle-track ${observerOn ? 'on' : ''}"
-                            role="switch"
-                            aria-checked="${observerOn}"
-                            tabindex="0"
-                            @click=${() => this._toggleSwitch('switch.sem_observer_mode')}
-                            @keydown=${(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    this._toggleSwitch('switch.sem_observer_mode');
-                                }
-                            }}
-                        >
-                            <div class="toggle-thumb"></div>
-                        </div>
-                    </div>
                     <div class="forecast-chip">
                         <ha-icon icon="mdi:weather-partly-cloudy"
                                  style="--mdc-icon-size:16px;color:#96CAEE"></ha-icon>

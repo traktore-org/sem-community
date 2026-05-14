@@ -9,10 +9,10 @@ import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard } from '../base/sem-shared.js';
 
 const ZONES = [
-    { id: 'priority',  entity: 'number.sem_battery_priority_soc',  icon: 'mdi:shield-alert',       labelKey: 'priority_soc',  color: '#f44336' },
-    { id: 'buffer',    entity: 'number.sem_battery_buffer_soc',    icon: 'mdi:shield-half-full',    labelKey: 'buffer_soc',    color: '#ff9800' },
     { id: 'autostart', entity: 'number.sem_battery_auto_start_soc', icon: 'mdi:play-circle',        labelKey: 'auto_start_soc', color: '#4db6ac' },
+    { id: 'buffer',    entity: 'number.sem_battery_buffer_soc',    icon: 'mdi:shield-half-full',    labelKey: 'buffer_soc',    color: '#ff9800' },
     { id: 'floor',     entity: 'number.sem_battery_assist_floor_soc', icon: 'mdi:arrow-collapse-down', labelKey: 'assist_floor', color: '#488fc2' },
+    { id: 'priority',  entity: 'number.sem_battery_priority_soc',  icon: 'mdi:shield-alert',       labelKey: 'priority_soc',  color: '#f44336' },
 ];
 
 class SEMBatteryZonesCard extends SEMLitBase {
@@ -78,10 +78,10 @@ class SEMBatteryZonesCard extends SEMLitBase {
         if (!this._config) return nothing;
 
         const T = this._theme();
-        const priority  = this._state(ZONES[0].entity);
+        const autostart = this._state(ZONES[0].entity);
         const buffer    = this._state(ZONES[1].entity);
-        const autostart = this._state(ZONES[2].entity);
-        const subtitle  = `${this._t('priority_soc')} < ${priority.toFixed(0)}% · Buffer ${buffer.toFixed(0)}% · Auto-start ${autostart.toFixed(0)}%`;
+        const priority  = this._state(ZONES[3].entity);
+        const subtitle  = `${this._t('auto_start_soc')} ${autostart.toFixed(0)}% · Buffer ${buffer.toFixed(0)}% · ${this._t('priority_soc')} ${priority.toFixed(0)}%`;
 
         return html`
             <style>

@@ -47,12 +47,16 @@ views:
           - type: custom:sem-tab-header
             tab: home
 
+          # ── System Diagram (animated power flow) ──
+          - type: custom:sem-system-diagram-card
+            entity_prefix: sensor.sem_
+
           # ── Home Status Card ──
           - type: custom:sem-home-status-card
             entity_prefix: sensor.sem_
 
-          # ── Flow Card (full width) — &glass_card anchor defined here ──
-          - type: custom:sem-flow-card
+          # ── Solar Summary ── (&glass_card anchor defined here)
+          - type: custom:sem-solar-card
             entity_prefix: sensor.sem_
             card_mod:
               style: &glass_card |
@@ -71,12 +75,6 @@ views:
                 ha-card:hover {
                   box-shadow: var(--ha-card-box-shadow, 0 4px 16px rgba(0,0,0,0.12)) !important;
                 }
-
-          # ── Solar Summary ──
-          - type: custom:sem-solar-card
-            entity_prefix: sensor.sem_
-            card_mod:
-              style: *glass_card
 
           # ── Weather & Clock ──
           - type: custom:sem-weather-card
@@ -197,31 +195,17 @@ views:
             card_mod:
               style: *glass_card
 
-          # ── Self-Consumption & Autarky Gauges (moved from Overview) ──
+          # ── Self-Consumption & Autarky Gauges ──
           - type: horizontal-stack
             cards:
-              - type: gauge
+              - type: custom:sem-gauge-card
                 entity: sensor.sem_self_consumption_rate
                 name: Self-consumption
-                min: 0
-                max: 100
-                severity:
-                  green: 75
-                  yellow: 50
-                  red: 0
-                card_mod:
-                  style: *glass_card
-              - type: gauge
+                color: '#4db6ac'
+              - type: custom:sem-gauge-card
                 entity: sensor.sem_autarky_rate
                 name: Autarky
-                min: 0
-                max: 100
-                severity:
-                  green: 80
-                  yellow: 60
-                  red: 0
-                card_mod:
-                  style: *glass_card
+                color: '#8DC892'
 
           # ── 24h Power Curves (sem-chart-card replaces apexcharts) ──
           - type: custom:sem-chart-card

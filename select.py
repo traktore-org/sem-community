@@ -86,16 +86,18 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
 
         config_key = self.entity_description.key
 
-        # Update config entry options
+        # Update coordinator config immediately
+        await self.coordinator.async_update_config({config_key: option})
+
+        # Persist without triggering integration reload
+        self.coordinator._skip_options_reload = True
         new_options = {**self._entry.options}
         new_options[config_key] = option
         self.hass.config_entries.async_update_entry(
             self._entry, options=new_options
         )
 
-        # Update coordinator config immediately
-        await self.coordinator.async_update_config({config_key: option})
-        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
 
         _LOGGER.info("Changed %s to %s", config_key, option)
 

@@ -45,6 +45,13 @@ class SEMChargerStatusCard extends SEMLitBase {
         // Skip while frozen (optimistic update in progress)
         if (this._isFrozen() && !localeChanged) return;
 
+        // Skip transient unavailable states caused by coordinator refresh
+        if (this._chargers?.length > 0 && !localeChanged) {
+            const prefix = this._config?.entity_prefix || DEFAULT_PREFIX;
+            const canary = hass.states[`${prefix}charger_${this._chargers[0]}_power`]?.state;
+            if (canary === 'unavailable' || canary === 'unknown') return;
+        }
+
         // Re-discover chargers when entity count changes
         const stateCount = Object.keys(hass.states).length;
         if (stateCount !== this._lastStateCount) {

@@ -52,6 +52,14 @@ class SEMBatteryCard extends SEMLitBase {
         // Skip while frozen (optimistic update in progress)
         if (this._isFrozen() && !localeChanged) return;
 
+        // Skip transient unavailable states caused by coordinator refresh —
+        // async_request_refresh() briefly marks all entities unavailable before
+        // new data arrives (~600ms). Rendering during this window shows "Idle".
+        const statusState = hass?.states[`${this._prefix}battery_status`]?.state;
+        if (statusState === 'unavailable' || statusState === 'unknown') {
+            if (!localeChanged) return;
+        }
+
         const key = WATCHED_SUFFIXES
             .map(s => hass?.states[`${this._prefix}${s}`]?.state || '')
             .join(',') + '|' + lang;

@@ -490,15 +490,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
         async def _run_once_install_dashboard(_now=None) -> None:
             try:
+                await hass.services.async_call(
+                    DOMAIN, "generate_dashboard", {}, blocking=True
+                )
                 hass.config_entries.async_update_entry(
                     entry,
                     options={
                         **entry.options,
                         "_install_dashboard_generated": True,
                     },
-                )
-                await hass.services.async_call(
-                    DOMAIN, "generate_dashboard", {}, blocking=False
                 )
             except Exception as gen_err:
                 _LOGGER.error(
@@ -535,7 +535,19 @@ def _schedule_post_startup_tasks(
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update."""
+    """Handle options update.
+
+    Skips reload when the change came from a number entity stepper (runtime
+    config tweak).  Those updates set _skip_options_reload on the coordinator
+    so the in-memory config is already current and a full integration reload
+    (which destroys all 255 entities for ~1 s) is unnecessary.
+    """
+    coordinator = entry.runtime_data if hasattr(entry, "runtime_data") else None
+    if coordinator and getattr(coordinator, "_skip_options_reload", False):
+        coordinator._skip_options_reload = False
+        _LOGGER.debug("Options update from number entity — skipping reload")
+        return
+
     _LOGGER.info("Config options updated, reloading integration")
     await hass.config_entries.async_reload(entry.entry_id)
 

@@ -613,20 +613,25 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         }
         config_key = _CONFIG_KEY_MAP.get(self.entity_description.key, self.entity_description.key)
 
-        # Update the config entry options
+        # Update coordinator config (immediate, in-memory)
+        await self.coordinator.async_update_config({config_key: value})
+
+        # Persist to config entry options WITHOUT triggering integration reload.
+        # async_update_entry fires the update listener which normally calls
+        # async_reload — destroying all 255 entities for ~1s and causing card
+        # flashes. The _skip_options_reload flag tells the listener to skip.
+        self.coordinator._skip_options_reload = True
         new_options = {**self._entry.options}
         new_options[config_key] = value
-
         self.hass.config_entries.async_update_entry(
             self._entry,
             options=new_options
         )
 
-        # Update coordinator config
-        await self.coordinator.async_update_config({config_key: value})
-
-        # Force coordinator refresh
-        await self.coordinator.async_request_refresh()
+        # Publish state immediately — no full coordinator refresh needed.
+        # The entity already has the correct value via _attr_native_value.
+        # Derived recalculations (charging strategy) happen on the next 10s cycle.
+        self.async_write_ha_state()
 
         _LOGGER.info(f"Updated {self.entity_description.key} to {value}")
 
@@ -672,7 +677,7 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         """Update the per-charger setting value."""
         self._attr_native_value = value
 
-        # Update the charger's config dict within ev_chargers
+        # Keep coordinator's in-memory config in sync immediately
         new_options = {**self._entry.options}
         ev_chargers = list(new_options.get("ev_chargers", []))
         for charger in ev_chargers:
@@ -681,17 +686,17 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
                 break
         new_options["ev_chargers"] = ev_chargers
 
+        if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):
+            self.coordinator.config.update({**self._entry.data, **new_options})
+
+        # Persist without triggering integration reload
+        self.coordinator._skip_options_reload = True
         self.hass.config_entries.async_update_entry(
             self._entry,
             options=new_options,
         )
 
-        # Keep coordinator's in-memory config in sync so the current cycle
-        # sees the new value without waiting for a full reload.
-        if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-
-        await self.coordinator.async_request_refresh()
+        self.async_write_ha_state()
         _LOGGER.info(
             "Updated per-charger %s.%s to %s",
             self._charger_id, self._config_key, value,

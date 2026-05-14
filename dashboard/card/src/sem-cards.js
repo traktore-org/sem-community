@@ -12,6 +12,7 @@ import './cards/sem-weather-card.js';
 import './cards/sem-period-selector-card.js';
 import './cards/sem-energy-impact-card.js';
 import './cards/sem-ev-progress-card.js';
+import './cards/sem-gauge-card.js';
 
 // Hero / SVG cards
 import './cards/sem-solar-card.js';

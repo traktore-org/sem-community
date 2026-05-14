@@ -87,23 +87,20 @@ const PRESETS = {
     power: {
         title: 'power_flow', y_label: 'W', stacked: false,
         hourly: [
-            { suffix: 'solar_power',             name: 'solar',       color: C.solar,      type: 'line' },
-            { suffix: 'home_consumption_power',  name: 'home',        color: C.home,       type: 'line' },
-            { suffix: 'grid_import_power',       name: 'grid_import', color: C.gridImport, type: 'line' },
-            { suffix: 'grid_export_power',       name: 'grid_export', color: C.gridExport, type: 'line' },
-            { suffix: 'battery_power',           name: 'battery',     color: C.batteryOut, type: 'line' },
+            { suffix: 'solar_power',             name: 'solar',       color: C.solar,      type: 'area' },
+            { suffix: 'home_consumption_power',  name: 'home',        color: C.home,       type: 'area' },
+            { suffix: 'grid_power',              name: 'grid',        color: C.gridImport, type: 'area' },
         ],
     },
     battery: {
         title: 'battery', y_label: 'W', y2_label: '%', stacked: false,
         hourly: [
-            { suffix: 'battery_charge_power',    name: 'Charge',    color: C.batteryIn,  type: 'area' },
-            { suffix: 'battery_discharge_power', name: 'Discharge', color: C.batteryOut, type: 'area' },
-            { suffix: 'battery_soc',             name: 'soc',       color: C.home,       type: 'line', y_axis: 1 },
+            { suffix: 'battery_power',  name: 'power', color: C.batteryOut, type: 'area' },
+            { suffix: 'battery_soc',    name: 'soc',   color: '#ff9800',    type: 'line', y_axis: 1 },
         ],
     },
     ev: {
-        title: 'ev_charging', y_label: 'W', stacked: false,
+        title: 'ev_charging', y_label: 'W', stacked: false, defaultPeriod: '24h',
         hourly:  [{ suffix: 'ev_power',         name: 'ev_power',  color: C.ev, type: 'area' }],
         daily:   [{ suffix: 'daily_ev_energy',   name: 'ev_energy', color: C.ev, type: 'bar'  }],
         monthly: [{ suffix: 'monthly_ev_energy', name: 'ev_energy', color: C.ev, type: 'bar'  }],
@@ -116,7 +113,7 @@ class SEMChartCard extends SEMLitBase {
         this._chart = null;
         this._period = null;
         this._fetchTimer = null;
-        this._theme = null;
+        this._cachedChartTheme = null;
         this._boundPeriodHandler = (e) => this._onPeriodChange(e.detail);
         this._prefix = 'sensor.sem_';
         this._preset = null;
@@ -231,10 +228,18 @@ class SEMChartCard extends SEMLitBase {
     // ── Period handling ──
     _setDefaultPeriod() {
         const now = new Date();
-        const dow = now.getDay() || 7;
-        const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        mon.setDate(mon.getDate() - (dow - 1));
-        this._onPeriodChange({ start: mon, end: now, granularity: 'day', label: 'This Week', key: 'week' });
+        const p = this._preset;
+        // Presets with defaultPeriod: '24h' or hourly-only presets default to 24h
+        const isHourly = p && (p.defaultPeriod === '24h' || (p.hourly && !p.daily));
+        if (isHourly) {
+            const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            this._onPeriodChange({ start, end: now, granularity: 'hour', label: 'Last 24h', key: '24h' });
+        } else {
+            const dow = now.getDay() || 7;
+            const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            mon.setDate(mon.getDate() - (dow - 1));
+            this._onPeriodChange({ start: mon, end: now, granularity: 'day', label: 'This Week', key: 'week' });
+        }
     }
 
     _onPeriodChange(detail) {
@@ -408,7 +413,9 @@ class SEMChartCard extends SEMLitBase {
                             },
                         },
                         title: { display: !!yLabel, text: yLabel, color: T.textSec || '#757575', font: { size: 11 } },
-                        stacked, beginAtZero: true,
+                        stacked,
+                        // Energy/cost charts start at zero; power charts allow negative values
+                        beginAtZero: yLabel !== 'W',
                     },
                 },
             },

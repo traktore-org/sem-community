@@ -746,7 +746,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Version"
+    "version": "Version",
+    "smart_tip": "Smart Tip",
+    "quick_controls": "Quick Controls",
+    "environmental_impact": "Environmental Impact"
   },
   "de": {
     "charging": "Laden",
@@ -1495,7 +1498,10 @@
     "battery_capacity": "Batteriekapazität",
     "update_interval": "Aktualisierungsintervall",
     "unavailable_sensors": "Nicht verfügbare Sensoren",
-    "version": "Version"
+    "version": "Version",
+    "smart_tip": "Tipp",
+    "quick_controls": "Schnellzugriff",
+    "environmental_impact": "Umweltbilanz"
   },
   "fr": {
     "charging": "En charge",
@@ -2244,7 +2250,10 @@
     "battery_capacity": "Capacité batterie",
     "update_interval": "Intervalle de mise à jour",
     "unavailable_sensors": "Capteurs indisponibles",
-    "version": "Version"
+    "version": "Version",
+    "smart_tip": "Conseil",
+    "quick_controls": "Contrôles rapides",
+    "environmental_impact": "Impact environnemental"
   },
   "es": {
     "charging": "Cargando",
@@ -2993,7 +3002,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Versión"
+    "version": "Versión",
+    "smart_tip": "Consejo",
+    "quick_controls": "Controles rápidos",
+    "environmental_impact": "Impacto ambiental"
   },
   "it": {
     "charging": "In carica",
@@ -3742,7 +3754,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Versione"
+    "version": "Versione",
+    "smart_tip": "Suggerimento",
+    "quick_controls": "Controlli rapidi",
+    "environmental_impact": "Impatto ambientale"
   },
   "nl": {
     "charging": "Laden",
@@ -4491,7 +4506,10 @@
     "battery_capacity": "Batterijcapaciteit",
     "update_interval": "Bijwerkinterval",
     "unavailable_sensors": "Niet-beschikbare sensoren",
-    "version": "Versie"
+    "version": "Versie",
+    "smart_tip": "Slimme Tip",
+    "quick_controls": "Snelle bediening",
+    "environmental_impact": "Milieu-impact"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5240,7 +5258,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Verze"
+    "version": "Verze",
+    "smart_tip": "Tip",
+    "quick_controls": "Rychlé ovládání",
+    "environmental_impact": "Dopad na životní prostředí"
   },
   "da": {
     "charging": "Oplader",
@@ -5989,7 +6010,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Version"
+    "version": "Version",
+    "smart_tip": "Smart Tip",
+    "quick_controls": "Hurtig kontrol",
+    "environmental_impact": "Miljøpåvirkning"
   },
   "fi": {
     "charging": "Lataus",
@@ -6738,7 +6762,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Versio"
+    "version": "Versio",
+    "smart_tip": "Vinkki",
+    "quick_controls": "Pikaohjaukset",
+    "environmental_impact": "Ympäristövaikutus"
   },
   "hu": {
     "charging": "Töltés",
@@ -7487,7 +7514,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Verzió"
+    "version": "Verzió",
+    "smart_tip": "Tipp",
+    "quick_controls": "Gyors vezérlés",
+    "environmental_impact": "Környezeti hatás"
   },
   "no": {
     "charging": "Lader",
@@ -8236,7 +8266,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Versjon"
+    "version": "Versjon",
+    "smart_tip": "Tips",
+    "quick_controls": "Hurtigkontroller",
+    "environmental_impact": "Miljøpåvirkning"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -8985,7 +9018,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Wersja"
+    "version": "Wersja",
+    "smart_tip": "Wskazówka",
+    "quick_controls": "Szybkie sterowanie",
+    "environmental_impact": "Wpływ na środowisko"
   },
   "pt": {
     "charging": "A carregar",
@@ -9734,7 +9770,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Versão"
+    "version": "Versão",
+    "smart_tip": "Dica",
+    "quick_controls": "Controles rápidos",
+    "environmental_impact": "Impacto ambiental"
   },
   "ro": {
     "charging": "Încărcare",
@@ -10483,7 +10522,10 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Versiune"
+    "version": "Versiune",
+    "smart_tip": "Sfat",
+    "quick_controls": "Control rapid",
+    "environmental_impact": "Impact de mediu"
   },
   "sv": {
     "charging": "Laddar",
@@ -11232,6 +11274,9 @@
     "battery_capacity": "Battery Capacity",
     "update_interval": "Update Interval",
     "unavailable_sensors": "Unavailable Sensors",
-    "version": "Version"
+    "version": "Version",
+    "smart_tip": "Tips",
+    "quick_controls": "Snabbkontroller",
+    "environmental_impact": "Miljöpåverkan"
   }
 }
