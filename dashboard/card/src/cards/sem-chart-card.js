@@ -335,30 +335,77 @@ class SEMChartCard extends SEMLitBase {
         const y2Label = preset.y2_label || '';
         const hasY2   = series.some(s => s.y_axis === 1);
         const gran    = this._period?.granularity || 'day';
+        const ctx2d   = canvas.getContext('2d');
 
         const chartDatasets = series.map((s, i) => {
             const isArea = s.type === 'area';
             const isBar  = s.type === 'bar';
             return {
                 label: s.name, data: datasets[i].data,
-                backgroundColor: isBar ? s.color + 'CC' : isArea ? s.color + '40' : 'transparent',
+                backgroundColor: isBar ? s.color + 'CC' : isArea ? s.color + '30' : 'transparent',
                 borderColor: s.color, borderWidth: isBar ? 0 : 2,
                 fill: isArea ? 'origin' : false,
                 type: isBar ? 'bar' : 'line',
-                tension: 0.3, pointRadius: 0, pointHitRadius: 8,
+                tension: 0.4, pointRadius: 0, pointHitRadius: 10,
+                pointHoverRadius: 4, pointHoverBorderWidth: 2,
+                pointHoverBackgroundColor: s.color,
+                pointHoverBorderColor: '#fff',
                 yAxisID: s.y_axis === 1 ? 'y1' : 'y',
                 order: isBar ? 2 : 1,
+                borderRadius: isBar ? 4 : 0,
+                barPercentage: 0.7,
             };
         });
 
         const timeUnit = gran === 'hour' ? 'hour' : gran === 'month' ? 'month' : 'day';
 
+        // Plugin: vertical crosshair line on hover
+        const crosshairPlugin = {
+            id: 'crosshair',
+            afterDraw(chart) {
+                if (chart.tooltip?._active?.length) {
+                    const x = chart.tooltip._active[0].element.x;
+                    const yAxis = chart.scales.y;
+                    const ctx = chart.ctx;
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(x, yAxis.top);
+                    ctx.lineTo(x, yAxis.bottom);
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            },
+        };
+
+        // Plugin: gradient fills for area series (runs after layout)
+        const gradientPlugin = {
+            id: 'gradientFill',
+            beforeDatasetsDraw(chart) {
+                const ctx = chart.ctx;
+                chart.data.datasets.forEach((ds, idx) => {
+                    if (series[idx]?.type !== 'area') return;
+                    const meta = chart.getDatasetMeta(idx);
+                    if (meta.hidden) return;
+                    const yScale = chart.scales[ds.yAxisID || 'y'];
+                    if (!yScale) return;
+                    const grad = ctx.createLinearGradient(0, yScale.top, 0, yScale.bottom);
+                    grad.addColorStop(0, ds.borderColor + '60');
+                    grad.addColorStop(0.6, ds.borderColor + '18');
+                    grad.addColorStop(1, ds.borderColor + '02');
+                    ds.backgroundColor = grad;
+                });
+            },
+        };
+
         const config = {
             type: 'bar',
             data: { datasets: chartDatasets },
+            plugins: [crosshairPlugin, gradientPlugin],
             options: {
                 responsive: true, maintainAspectRatio: false,
-                animation: { duration: 400, easing: 'easeOutQuart' },
+                animation: { duration: 300, easing: 'easeOutQuart' },
                 interaction: { mode: 'index', intersect: false },
                 plugins: {
                     legend: {
@@ -366,22 +413,38 @@ class SEMChartCard extends SEMLitBase {
                         labels: {
                             color: T.textSec || '#9e9e9e',
                             font: { size: 11, weight: '500', family: "'Segoe UI','Roboto',sans-serif" },
-                            boxWidth: 12, boxHeight: 12, borderRadius: 3, useBorderRadius: true, padding: 12,
+                            boxWidth: 12, boxHeight: 12, borderRadius: 3, useBorderRadius: true, padding: 14,
+                            generateLabels: (chart) => {
+                                const orig = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                return orig.map((label, i) => {
+                                    const ds = chart.data.datasets[i];
+                                    const last = ds.data[ds.data.length - 1];
+                                    const val = last?.y ?? 0;
+                                    const unit = ds.yAxisID === 'y1' ? '%' : (yLabel || '');
+                                    const abs = Math.abs(val);
+                                    const fmt = abs >= 1000 ? (val / 1000).toFixed(1) + 'k' : abs < 10 ? val.toFixed(1) : val.toFixed(0);
+                                    label.text = `${label.text}: ${fmt} ${unit}`;
+                                    return label;
+                                });
+                            },
                         },
                     },
                     tooltip: {
-                        backgroundColor: T.tooltipBg || 'rgba(20,20,30,0.95)',
+                        backgroundColor: T.tooltipBg || 'rgba(15,18,25,0.94)',
                         titleColor: T.tooltipText || '#e0e0e0',
-                        titleFont: { family: "'Segoe UI','Roboto',sans-serif", weight: '600' },
+                        titleFont: { family: "'Segoe UI','Roboto',sans-serif", weight: '600', size: 12 },
                         bodyColor: T.textSec || '#b0b0b0',
-                        bodyFont: { family: "'Segoe UI','Roboto',sans-serif" },
-                        borderColor: T.tooltipBorder || 'rgba(255,255,255,0.06)',
-                        borderWidth: 1, cornerRadius: 12, padding: 12, bodySpacing: 5,
+                        bodyFont: { family: "'Segoe UI','Roboto',sans-serif", size: 11 },
+                        borderColor: T.tooltipBorder || 'rgba(255,255,255,0.08)',
+                        borderWidth: 1, cornerRadius: 10, padding: { top: 10, bottom: 10, left: 14, right: 14 },
+                        bodySpacing: 6, displayColors: true, boxPadding: 4,
                         callbacks: {
-                            label: (ctx) => {
-                                const val = ctx.parsed.y;
-                                const dec = Math.abs(val) < 10 ? 2 : 1;
-                                return ` ${ctx.dataset.label}: ${val.toFixed(dec)} ${yLabel}`;
+                            label: (item) => {
+                                const val = item.parsed.y;
+                                const unit = item.dataset.yAxisID === 'y1' ? '%' : yLabel;
+                                const abs = Math.abs(val);
+                                const fmt = abs >= 1000 ? (val / 1000).toFixed(1) + 'k' : abs < 10 ? val.toFixed(2) : val.toFixed(1);
+                                return ` ${item.dataset.label}: ${fmt} ${unit}`;
                             },
                         },
                     },
@@ -396,25 +459,30 @@ class SEMChartCard extends SEMLitBase {
                             tooltipFormat: gran === 'hour' ? 'HH:mm' : gran === 'month' ? 'MMM yyyy' : 'dd MMM',
                             displayFormats: { hour: 'HH:mm', day: 'dd MMM', month: 'MMM' },
                         },
-                        grid: { color: T.surface || 'rgba(255,255,255,0.03)', drawBorder: false },
-                        ticks: { color: T.textSec || '#757575', font: { size: 10, family: "'Segoe UI','Roboto',sans-serif" }, maxRotation: 0 },
+                        grid: { color: 'rgba(255,255,255,0.02)', drawBorder: false, drawTicks: false },
+                        ticks: {
+                            color: T.textSec || '#757575',
+                            font: { size: 10, family: "'Segoe UI','Roboto',sans-serif" },
+                            maxRotation: 0, padding: 6,
+                        },
                         stacked,
                     },
                     y: {
                         position: 'left',
-                        grid: { color: T.surface || 'rgba(255,255,255,0.04)', drawBorder: false },
+                        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false, drawTicks: false },
                         ticks: {
                             color: T.textSec || '#757575',
                             font: { size: 10, family: "'Segoe UI','Roboto',sans-serif" },
+                            padding: 8,
                             callback: (v) => {
                                 const abs = Math.abs(v);
                                 if (abs >= 1000) return (v / 1000).toFixed(1) + 'k';
+                                if (abs < 0.01 && abs > 0) return '';
                                 return v % 1 === 0 ? v : v.toFixed(1);
                             },
                         },
-                        title: { display: !!yLabel, text: yLabel, color: T.textSec || '#757575', font: { size: 11 } },
+                        title: { display: !!yLabel, text: yLabel, color: T.textSec || '#757575', font: { size: 11, family: "'Segoe UI','Roboto',sans-serif" } },
                         stacked,
-                        // Energy/cost charts start at zero; power charts allow negative values
                         beginAtZero: yLabel !== 'W',
                     },
                 },
@@ -423,15 +491,19 @@ class SEMChartCard extends SEMLitBase {
 
         if (hasY2) {
             config.options.scales.y1 = {
-                position: 'right', grid: { drawOnChartArea: false },
-                ticks: { color: '#42A5F5', font: { size: 10 }, callback: (v) => v + '%' },
-                title: { display: !!y2Label, text: y2Label, color: '#42A5F5', font: { size: 11 } },
+                position: 'right',
+                grid: { drawOnChartArea: false, drawTicks: false },
+                ticks: {
+                    color: '#ff9800', font: { size: 10 }, padding: 8,
+                    callback: (v) => v + '%',
+                },
+                title: { display: !!y2Label, text: y2Label, color: '#ff9800', font: { size: 11 } },
                 min: 0, max: 100,
             };
         }
 
         if (this._chart) { this._chart.destroy(); this._chart = null; }
-        this._chart = new Chart(canvas.getContext('2d'), config);
+        this._chart = new Chart(ctx2d, config);
     }
 
     _showEmpty(msg) {
