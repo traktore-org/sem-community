@@ -17,14 +17,14 @@ const SEM_TAB_CONFIG = {
     home: {
         titleKey: 'home', subtitleKey: 'home_sub', color: '#5BC8D8',
         icon: () => svg`
-            <path d="M-20,2 L0,-16 L20,2" stroke-width="2.2"/>
+            <path d="M-20,2 L0,-16 L20,2" stroke-width="2"/>
             <rect x="-15" y="2" width="30" height="22" rx="2" stroke-width="2"/>
             <rect x="-5" y="12" width="10" height="12" stroke-width="1.5"/>`,
     },
     energy: {
         titleKey: 'energy', subtitleKey: 'energy_sub', color: '#ff9800',
         icon: () => svg`
-            <path d="M-4,-18 L-10,2 L-2,2 L-6,18 L12,-4 L2,-4 L8,-18 Z" stroke-width="1.8"/>`,
+            <path d="M-4,-18 L-10,2 L-2,2 L-6,18 L12,-4 L2,-4 L8,-18 Z" stroke-width="2"/>`,
     },
     battery: {
         titleKey: 'battery', subtitleKey: 'battery_sub', color: '#4db6ac',
@@ -38,7 +38,7 @@ const SEM_TAB_CONFIG = {
         titleKey: 'ev_charging', subtitleKey: 'ev_sub', color: '#8DC892',
         icon: () => svg`
             <rect x="-12" y="-14" width="24" height="24" rx="5" stroke-width="2"/>
-            <path d="M-3,-6 L-1,0 L-5,0 L3,8" stroke-width="2.2" fill="none"/>
+            <path d="M-3,-6 L-1,0 L-5,0 L3,8" stroke-width="2" fill="none"/>
             <line x1="0" y1="10" x2="0" y2="16" stroke-width="2"/>
             <circle cx="0" cy="18" r="2" fill="currentColor" opacity="0.4" stroke="none"/>`,
     },
@@ -63,7 +63,7 @@ const SEM_TAB_CONFIG = {
     system: {
         titleKey: 'system', subtitleKey: 'system_sub', color: '#96CAEE',
         icon: () => svg`
-            <path d="M-16,4 L-8,-8 L0,0 L6,-12 L10,-4 L16,4" stroke-width="2.2" fill="none"/>
+            <path d="M-16,4 L-8,-8 L0,0 L6,-12 L10,-4 L16,4" stroke-width="2" fill="none"/>
             <line x1="-16" y1="8" x2="16" y2="8" stroke-width="1" opacity="0.3"/>`,
     },
 };
@@ -228,6 +228,17 @@ class SEMTabHeader extends SEMLitBase {
         const values = this._getStatValues();
         const T = this._theme();
 
+        // Accent colours (cyan/lime/etc.) wash out on light HA themes. Darken
+        // the title via color-mix in light mode and drop the colored
+        // text-shadow that adds noise without contrast.
+        const titleColor = T.isDark
+            ? color
+            : `color-mix(in srgb, ${color} 65%, black)`;
+        const titleShadow = T.isDark ? `0 0 12px ${color}40` : 'none';
+        // Glow ring is barely visible on dark and overpowering on light.
+        // Halve the flood opacity for light themes.
+        const glowOpacity = T.isDark ? 0.30 : 0.18;
+
         return html`
             <style>
                 :host { display: block; }
@@ -244,8 +255,8 @@ class SEMTabHeader extends SEMLitBase {
                 .icon-ring svg { width: 100%; height: 100%; }
                 .title-area { flex: 1; min-width: 0; }
                 .tab-title {
-                    font-size: 20px; font-weight: 700; color: ${color};
-                    letter-spacing: 0.5px; text-shadow: 0 0 12px ${color}40;
+                    font-size: 20px; font-weight: 700; color: ${titleColor};
+                    letter-spacing: 0.5px; text-shadow: ${titleShadow};
                 }
                 .tab-subtitle {
                     font-size: 12px; color: var(--secondary-text-color, ${T.textSec});
@@ -276,7 +287,7 @@ class SEMTabHeader extends SEMLitBase {
                             <defs>
                                 <filter id="glow-${this._tab}" x="-40%" y="-40%" width="180%" height="180%">
                                     <feGaussianBlur stdDeviation="4" result="blur"/>
-                                    <feFlood flood-color="${color}" flood-opacity="0.3"/>
+                                    <feFlood flood-color="${color}" flood-opacity="${glowOpacity}"/>
                                     <feComposite in2="blur" operator="in"/>
                                     <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
                                 </filter>
