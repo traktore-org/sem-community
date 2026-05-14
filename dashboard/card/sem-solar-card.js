@@ -57,13 +57,15 @@ class SEMSolarCard extends SEMBaseCard {
 
     _update() {
         if (!this._hass) return;
-        if (!this._rendered) {
+        const isFirstRender = !this._rendered;
+        if (isFirstRender) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
 
         const $ = (sel) => this.shadowRoot.querySelector(sel);
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
 
         const power = this._state('solar_power');
         const dailyEnergy = this._state('daily_solar_energy');
@@ -76,11 +78,13 @@ class SEMSolarCard extends SEMBaseCard {
         const circumference = 2 * Math.PI * 42;
         const arc = $('.solar-arc');
         if (arc) {
-            arc.style.strokeDashoffset = (circumference * (1 - pct)).toFixed(1);
-            arc.style.animation = power > 50 ? 'solarPulse 3s ease-in-out infinite' : 'none';
+            const arcOffset = (circumference * (1 - pct)).toFixed(1);
+            const arcAnim = power > 50 ? 'solarPulse 3s ease-in-out infinite' : 'none';
+            if (arc.style.strokeDashoffset !== arcOffset) arc.style.strokeDashoffset = arcOffset;
+            if (arc.style.animation !== arcAnim) arc.style.animation = arcAnim;
         }
         const glowFlood = $('.solar-glow-flood');
-        if (glowFlood) glowFlood.setAttribute('flood-color', '#ff9800');
+        if (glowFlood && glowFlood.getAttribute('flood-color') !== '#ff9800') glowFlood.setAttribute('flood-color', '#ff9800');
 
         setVal('.solar-power-value', semFormatPower(power));
         setVal('.solar-daily-value', this._fmt(dailyEnergy, 2) + ' kWh');
@@ -113,8 +117,10 @@ class SEMSolarCard extends SEMBaseCard {
         setVal('.perf-yield', specYield > 0 ? this._fmt(specYield, 2) + ' kWh/kWp' : '—');
         const vsFCEl = $('.perf-vs-fc');
         if (vsFCEl) {
-            vsFCEl.textContent = vsFC !== 0 ? this._fmt(vsFC, 0) + '%' : '—';
-            vsFCEl.style.color = vsFC >= 0 ? '#8DC892' : '#f06292';
+            const vsFCText = vsFC !== 0 ? this._fmt(vsFC, 0) + '%' : '—';
+            const vsFCColor = vsFC >= 0 ? '#8DC892' : '#f06292';
+            if (vsFCEl.textContent !== vsFCText) vsFCEl.textContent = vsFCText;
+            if (vsFCEl.style.color !== vsFCColor) vsFCEl.style.color = vsFCColor;
         }
         setVal('.perf-degradation', degradation !== 0 ? this._fmt(degradation, 2) + '%/yr' : '—');
         setVal('.perf-trend', trend !== '—' ? trend : '—');
@@ -142,6 +148,7 @@ class SEMSolarCard extends SEMBaseCard {
         setVal('.lbl-vs-fc', this._t('vs_forecast'));
         setVal('.lbl-degradation', this._t('degradation'));
         setVal('.lbl-trend', this._t('trend'));
+        if (isFirstRender) requestAnimationFrame(() => { this.style.visibility = ''; });
     }
 
     _renderSkeleton() {

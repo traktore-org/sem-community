@@ -129,13 +129,15 @@ class SEMEVStatusCard extends SEMBaseCard {
         const dailyEnergy = this._state('daily_ev_energy', 0);
         const strategy = this._stateStr('charging_state');
 
-        if (!this._rendered) {
+        const isFirstRender = !this._rendered;
+        if (isFirstRender) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
 
         const $ = (sel) => this.shadowRoot.querySelector(sel);
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
 
         // Determine visual state
         const wrap = $('.wrap');
@@ -194,7 +196,7 @@ class SEMEVStatusCard extends SEMBaseCard {
         setVal('.cost-chip-value', this._fmt(sessionCost, 2) + ' ' + (window.semGetCurrency?.(this._hass) || 'EUR'));
 
         // Translate labels
-        const setLabel = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setLabel = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
         setLabel('.lbl-status', this._t('status'));
         setLabel('.lbl-power', this._t('power'));
         setLabel('.lbl-current', this._t('current'));
@@ -219,11 +221,22 @@ class SEMEVStatusCard extends SEMBaseCard {
         if (this._chargers.length >= 1) {
             this._updateChargerSections();
         }
+        if (isFirstRender) requestAnimationFrame(() => { this.style.visibility = ''; });
     }
 
     _updateChargerSections() {
         const container = this.shadowRoot.querySelector('.charger-sections');
         if (!container) return;
+
+        const sig = this._chargers.map(id => {
+            const power = this._state(`charger_${id}_power`, 0);
+            const session = this._state(`charger_${id}_session_energy`, 0);
+            const solar = this._state(`charger_${id}_session_solar_share`, 0);
+            const taperRaw = this._stateStr(`charger_${id}_taper_trend`) || 'stable';
+            return [power, session, solar, taperRaw].join(':');
+        }).join('|');
+        if (sig === this._lastChargerSig) return;
+        this._lastChargerSig = sig;
 
         container.innerHTML = this._chargers.map((id, idx) => {
             const color = CHARGER_COLORS[idx % CHARGER_COLORS.length];

@@ -79,11 +79,15 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         }
         // Initial render only — check layout once
         if (!this._rendered) {
+            this.style.visibility = 'hidden';
             const w = this.clientWidth || this.offsetWidth;
             const compact = w > 0 ? w < 500 : false;
             if (compact !== this._compact) this._compact = compact;
             this._render();
             this._rendered = true;
+            this._updateFlows();
+            requestAnimationFrame(() => { this.style.visibility = ''; });
+            return;
         }
         // Skip update if card is not visible (off-screen tab)
         if (!this._visible) return;
@@ -157,7 +161,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         const ring = this.shadowRoot.querySelector(`#${nodeId} .glow-ring`);
         if (!ring) return;
         const ratio = Math.min(1, Math.abs(watts) / maxWatts);
-        ring.style.opacity = (0.15 + ratio * 0.85).toFixed(2);
+        const newOpacity = (0.15 + ratio * 0.85).toFixed(2);
+        if (ring.style.opacity !== newOpacity) ring.style.opacity = newOpacity;
     }
 
     _updateFlows() {
@@ -191,10 +196,11 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         const statusEl = this.shadowRoot.getElementById('entity-status');
         if (statusEl) {
             if (unavailable.length > 0) {
-                statusEl.textContent = `⚠ ${unavailable.length} ${this._t('sensor_unavailable')}`;
-                statusEl.style.display = 'block';
+                const statusText = `⚠ ${unavailable.length} ${this._t('sensor_unavailable')}`;
+                if (statusEl.textContent !== statusText) statusEl.textContent = statusText;
+                if (statusEl.style.display !== 'block') statusEl.style.display = 'block';
             } else {
-                statusEl.style.display = 'none';
+                if (statusEl.style.display !== 'none') statusEl.style.display = 'none';
             }
         }
 
@@ -209,11 +215,14 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         this._animateValue('val-grid-export', gridExport, 800, '↑ ');
         const gridImportEl = this.shadowRoot.getElementById('val-grid-import');
         const gridExportEl = this.shadowRoot.getElementById('val-grid-export');
-        if (gridImportEl) gridImportEl.style.display = gridImport > 10 ? 'block' : 'none';
-        if (gridExportEl) gridExportEl.style.display = gridExport > 10 ? 'block' : 'none';
+        const gridImportDisplay = gridImport > 10 ? 'block' : 'none';
+        const gridExportDisplay = gridExport > 10 ? 'block' : 'none';
+        if (gridImportEl && gridImportEl.style.display !== gridImportDisplay) gridImportEl.style.display = gridImportDisplay;
+        if (gridExportEl && gridExportEl.style.display !== gridExportDisplay) gridExportEl.style.display = gridExportDisplay;
         // Show single value when both are near zero
         const gridSingleEl = this.shadowRoot.getElementById('val-grid-single');
-        if (gridSingleEl) gridSingleEl.style.display = (gridImport <= 10 && gridExport <= 10) ? 'block' : 'none';
+        const gridSingleDisplay = (gridImport <= 10 && gridExport <= 10) ? 'block' : 'none';
+        if (gridSingleEl && gridSingleEl.style.display !== gridSingleDisplay) gridSingleEl.style.display = gridSingleDisplay;
 
         // Non-animated text
         this._setText('val-battery-soc', `${soc.toFixed(0)}%`);
@@ -241,7 +250,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
             const L = this._getLayout();
             const scR = L.home.r - 8;
             const circumference = 2 * Math.PI * scR;
-            scArc.style.strokeDashoffset = (circumference * (1 - selfCons / 100)).toFixed(1);
+            const scOffset = (circumference * (1 - selfCons / 100)).toFixed(1);
+            if (scArc.style.strokeDashoffset !== scOffset) scArc.style.strokeDashoffset = scOffset;
         }
         this._setText('val-self-consumption', `${selfCons.toFixed(0)}%`);
 
@@ -253,8 +263,10 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         const socArc = this.shadowRoot.getElementById('soc-arc');
         if (socArc) {
             const circumference = this._compact ? 207.3 : 282.7;
-            socArc.style.strokeDashoffset = (circumference * (1 - soc / 100)).toFixed(1);
-            socArc.style.animation = battCharge > 10 ? 'socPulse 2s ease-in-out infinite' : 'none';
+            const socOffset = (circumference * (1 - soc / 100)).toFixed(1);
+            const socAnim = battCharge > 10 ? 'socPulse 2s ease-in-out infinite' : 'none';
+            if (socArc.style.strokeDashoffset !== socOffset) socArc.style.strokeDashoffset = socOffset;
+            if (socArc.style.animation !== socAnim) socArc.style.animation = socAnim;
         }
 
         // Grid label
@@ -267,13 +279,15 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         const battLabel = this.shadowRoot.getElementById('label-battery-state');
         if (battLabel) {
             if (battCharge > 10) {
-                battLabel.textContent = this._t('charging');
-                battLabel.setAttribute('fill', '#f06292');
+                const chargingText = this._t('charging');
+                if (battLabel.textContent !== chargingText) battLabel.textContent = chargingText;
+                if (battLabel.getAttribute('fill') !== '#f06292') battLabel.setAttribute('fill', '#f06292');
             } else if (battDischarge > 10) {
-                battLabel.textContent = this._t('discharging');
-                battLabel.setAttribute('fill', '#4db6ac');
+                const dischargingText = this._t('discharging');
+                if (battLabel.textContent !== dischargingText) battLabel.textContent = dischargingText;
+                if (battLabel.getAttribute('fill') !== '#4db6ac') battLabel.setAttribute('fill', '#4db6ac');
             } else {
-                battLabel.textContent = '';
+                if (battLabel.textContent !== '') battLabel.textContent = '';
             }
         }
 
@@ -307,7 +321,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         const group = this.shadowRoot.getElementById(groupId);
         if (!group) return;
 
-        group.style.opacity = active ? '1' : '0';
+        const targetOpacity = active ? '1' : '0';
+        if (group.style.opacity !== targetOpacity) group.style.opacity = targetOpacity;
         if (!active) {
             group.dataset.sig = '';
             return;

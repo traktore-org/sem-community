@@ -67,13 +67,15 @@ class SEMGridCard extends SEMBaseCard {
 
     _update() {
         if (!this._hass) return;
-        if (!this._rendered) {
+        const isFirstRender = !this._rendered;
+        if (isFirstRender) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
 
         const $ = (sel) => this.shadowRoot.querySelector(sel);
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
 
         const importPower = this._state('grid_import_power');
         const exportPower = this._state('grid_export_power');
@@ -100,7 +102,10 @@ class SEMGridCard extends SEMBaseCard {
         const statusStr = this._stateStr('grid_status');
         setVal('.hero-status', statusStr !== '—' ? statusStr : (isExporting ? this._t('exporting') : isImporting ? this._t('importing') : this._t('idle')));
         const statusEl = $('.hero-status');
-        if (statusEl) statusEl.style.color = isExporting ? '#8353d1' : isImporting ? '#488fc2' : '#888';
+        if (statusEl) {
+            const statusColor = isExporting ? '#8353d1' : isImporting ? '#488fc2' : '#888';
+            if (statusEl.style.color !== statusColor) statusEl.style.color = statusColor;
+        }
 
         // Today totals
         const curr = (typeof semGetCurrency === 'function') ? semGetCurrency(this._hass) : 'EUR';
@@ -109,8 +114,10 @@ class SEMGridCard extends SEMBaseCard {
         const netToday = this._state('daily_grid_import_energy') - this._state('daily_grid_export_energy');
         const netTodayEl = $('.today-net');
         if (netTodayEl) {
-            netTodayEl.textContent = this._fmt(Math.abs(netToday), 2) + ' kWh';
-            netTodayEl.style.color = netToday <= 0 ? '#8353d1' : '#488fc2';
+            const netTodayText = this._fmt(Math.abs(netToday), 2) + ' kWh';
+            const netTodayColor = netToday <= 0 ? '#8353d1' : '#488fc2';
+            if (netTodayEl.textContent !== netTodayText) netTodayEl.textContent = netTodayText;
+            if (netTodayEl.style.color !== netTodayColor) netTodayEl.style.color = netTodayColor;
         }
 
         // Peak management
@@ -132,14 +139,17 @@ class SEMGridCard extends SEMBaseCard {
         }
         setVal('.peak-pct-label', this._fmt(peakPct, 0) + '%');
         const peakPctEl = $('.peak-pct-label');
-        if (peakPctEl) peakPctEl.style.color = peakColor;
+        if (peakPctEl && peakPctEl.style.color !== peakColor) peakPctEl.style.color = peakColor;
 
         setVal('.peak-15min', semFormatPower(peak15));
         setVal('.peak-monthly', semFormatPower(monthlyPeak));
         setVal('.peak-limit', semFormatPower(peakLimit));
         setVal('.peak-margin', semFormatPower(peakMargin));
         const peakMarginEl = $('.peak-margin');
-        if (peakMarginEl) peakMarginEl.style.color = peakMargin > 0 ? '#8DC892' : '#f06292';
+        if (peakMarginEl) {
+            const peakMarginColor = peakMargin > 0 ? '#8DC892' : '#f06292';
+            if (peakMarginEl.style.color !== peakMarginColor) peakMarginEl.style.color = peakMarginColor;
+        }
         setVal('.peak-trend', peakTrend !== '—' ? peakTrend : '—');
 
         // Load control
@@ -159,9 +169,11 @@ class SEMGridCard extends SEMBaseCard {
         setVal('.tariff-export', exportRate !== 0 ? this._fmt(exportRate, 4) + ' ' + curr + '/kWh' : '—');
         const levelEl = $('.tariff-level');
         if (levelEl) {
-            levelEl.textContent = priceLevel !== '—' ? priceLevel : '—';
+            const levelText = priceLevel !== '—' ? priceLevel : '—';
             const levelColor = priceLevel === 'high' ? '#f06292' : priceLevel === 'low' ? '#8DC892' : '#ff9800';
-            levelEl.style.color = priceLevel !== '—' ? levelColor : '#888';
+            const levelFinalColor = priceLevel !== '—' ? levelColor : '#888';
+            if (levelEl.textContent !== levelText) levelEl.textContent = levelText;
+            if (levelEl.style.color !== levelFinalColor) levelEl.style.color = levelFinalColor;
         }
         setVal('.tariff-min', minPrice !== 0 ? this._fmt(minPrice, 4) : '—');
         setVal('.tariff-max', maxPrice !== 0 ? this._fmt(maxPrice, 4) : '—');
@@ -194,6 +206,7 @@ class SEMGridCard extends SEMBaseCard {
             '.lbl-surplus-free': 'unallocated', '.lbl-surplus-devices': 'active_devices',
         };
         for (const [sel, key] of Object.entries(lblMap)) setVal(sel, this._t(key));
+        if (isFirstRender) requestAnimationFrame(() => { this.style.visibility = ''; });
     }
 
     _renderSkeleton() {
@@ -211,7 +224,7 @@ class SEMGridCard extends SEMBaseCard {
                     padding: 16px 20px;
                     position: relative;
                     background:
-                        radial-gradient(ellipse 70% 60% at 50% 20%, rgba(72,143,194,0.07) 0%, transparent 100%),
+                        radial-gradient(ellipse 70% 60% at 50% 20%, rgba(150,202,238,0.06) 0%, transparent 100%),
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;

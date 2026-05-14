@@ -173,9 +173,13 @@ class SEMChartCard extends SEMBaseCard {
     set hass(hass) {
         const localeChanged = this._checkLocaleChange(hass);
         if (!this.shadowRoot.querySelector('.sem-chart-wrap')) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
+            requestAnimationFrame(() => { this.style.visibility = ''; });
         } else if (localeChanged) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();  // Re-render with translations
+            requestAnimationFrame(() => { this.style.visibility = ''; });
         }
         // If no period received yet, use a sensible default
         if (!this._period) {
@@ -246,7 +250,7 @@ class SEMChartCard extends SEMBaseCard {
         try {
             datasets = await this._fetchStatistics(series, startISO, endISO, granularity);
         } catch (err) {
-            console.warn('sem-chart-card: fetch error', err);
+            console.debug('sem-chart-card: fetch error', err);
             this._showEmpty(this._t('data_unavailable'));
             return;
         }

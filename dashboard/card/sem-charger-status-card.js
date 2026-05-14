@@ -53,8 +53,12 @@ class SEMChargerStatusCard extends SEMBaseCard {
         this._lastKey = key;
 
         if (!this._rendered) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
+            this._update();
+            requestAnimationFrame(() => { this.style.visibility = ''; });
+            return;
         }
         this._update();
     }
@@ -73,6 +77,16 @@ class SEMChargerStatusCard extends SEMBaseCard {
     _update() {
         const grid = this.shadowRoot.querySelector('.charger-grid');
         if (!grid) return;
+
+        const sig = this._chargers.map(id => {
+            const power = this._state(`charger_${id}_power`);
+            const session = this._state(`charger_${id}_session_energy`);
+            const solar = this._state(`charger_${id}_session_solar_share`);
+            const taperRaw = this._stateStr(`charger_${id}_taper_trend`) || 'stable';
+            return [power, session, solar, taperRaw].join(':');
+        }).join('|');
+        if (sig === this._lastGridSig) return;
+        this._lastGridSig = sig;
 
         grid.innerHTML = this._chargers.map(id => {
             const power = this._state(`charger_${id}_power`);

@@ -40,7 +40,11 @@ class SEMBatteryCard extends SEMBaseCard {
         if (localeChanged) {
             this._rendered = false;  // Force skeleton re-render with translations
         }
+        const wasUnrendered = !this._rendered;
         this._update();
+        if (wasUnrendered) {
+            requestAnimationFrame(() => { this.style.visibility = ''; });
+        }
     }
 
     _state(suffix, fallback) {
@@ -86,40 +90,46 @@ class SEMBatteryCard extends SEMBaseCard {
             ? parseFloat(tempEntity.state) : null;
 
         if (!this._rendered) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
 
         const $ = (sel) => this.shadowRoot.querySelector(sel);
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
 
         // SOC arc
         const circumference = 2 * Math.PI * 42;
         const arc = $('.soc-arc');
         if (arc) {
             const pct = Math.min(Math.max(soc / 100, 0), 1);
-            arc.style.strokeDashoffset = (circumference * (1 - pct)).toFixed(1);
-            arc.style.stroke = isCharging ? '#f06292' : '#4db6ac';
-            arc.style.animation = (isCharging || isDischarging)
-                ? 'socPulse 2s ease-in-out infinite' : 'none';
+            const offset = (circumference * (1 - pct)).toFixed(1);
+            if (arc.style.strokeDashoffset !== offset) arc.style.strokeDashoffset = offset;
+            const arcColor = isCharging ? '#f06292' : '#4db6ac';
+            if (arc.style.stroke !== arcColor) arc.style.stroke = arcColor;
+            const arcAnim = (isCharging || isDischarging) ? 'socPulse 2s ease-in-out infinite' : 'none';
+            if (arc.style.animation !== arcAnim) arc.style.animation = arcAnim;
         }
 
         // Glow ring color
         const glowRing = $('.glow-ring');
         if (glowRing) {
-            const intensity = (isCharging || isDischarging) ? 0.5 : 0.2;
-            glowRing.style.opacity = intensity;
-            glowRing.style.stroke = isCharging ? '#f06292' : '#4db6ac';
+            const intensity = String((isCharging || isDischarging) ? 0.5 : 0.2);
+            if (glowRing.style.opacity !== intensity) glowRing.style.opacity = intensity;
+            const ringColor = isCharging ? '#f06292' : '#4db6ac';
+            if (glowRing.style.stroke !== ringColor) glowRing.style.stroke = ringColor;
         }
 
         // Glow filter flood color
         const flood = $('.glow-flood');
-        if (flood) flood.setAttribute('flood-color', isCharging ? '#f06292' : '#4db6ac');
+        const floodColor = isCharging ? '#f06292' : '#4db6ac';
+        if (flood && flood.getAttribute('flood-color') !== floodColor) flood.setAttribute('flood-color', floodColor);
 
         // Center SOC text
         setVal('.soc-value', `${soc.toFixed(0)}%`);
         const socEl = $('.soc-value');
-        if (socEl) socEl.style.color = isCharging ? '#f06292' : '#4db6ac';
+        const socColor = isCharging ? '#f06292' : '#4db6ac';
+        if (socEl && socEl.style.color !== socColor) socEl.style.color = socColor;
 
         // Metrics
         setVal('.m-soc', `${soc.toFixed(1)}%`);
@@ -133,7 +143,8 @@ class SEMBatteryCard extends SEMBaseCard {
         const statusEl = $('.m-status');
         if (statusEl) {
             const idleColor = (typeof semTheme === 'function') ? semTheme().textSec : '#888';
-            statusEl.style.color = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : idleColor;
+            const statusColor = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : idleColor;
+            if (statusEl.style.color !== statusColor) statusEl.style.color = statusColor;
         }
 
         // Translate labels
@@ -164,7 +175,8 @@ class SEMBatteryCard extends SEMBaseCard {
         const sessionActive = sessionType === 'charge' || sessionType === 'discharge';
         const sessionEl = $('.session-section');
         if (sessionEl) {
-            sessionEl.style.display = sessionActive ? 'block' : 'none';
+            const sessDisplay = sessionActive ? 'block' : 'none';
+            if (sessionEl.style.display !== sessDisplay) sessionEl.style.display = sessDisplay;
             if (sessionActive) {
                 const sEnergy = this._state('battery_session_energy', 0);
                 const sDuration = this._state('battery_session_duration', 0);
@@ -176,7 +188,8 @@ class SEMBatteryCard extends SEMBaseCard {
 
                 setVal('.sess-title', isChargeSess ? this._t('charging') : this._t('discharging'));
                 const sessTitleEl = $('.sess-title');
-                if (sessTitleEl) sessTitleEl.style.color = isChargeSess ? '#f06292' : '#4db6ac';
+                const sessColor = isChargeSess ? '#f06292' : '#4db6ac';
+                if (sessTitleEl && sessTitleEl.style.color !== sessColor) sessTitleEl.style.color = sessColor;
                 setVal('.sess-energy', this._fmt(sEnergy, 2) + ' kWh');
                 setVal('.sess-duration', Math.round(sDuration) + ' min');
                 setVal('.sess-power', this._fmtPower(sAvgPower));
@@ -210,7 +223,7 @@ class SEMBatteryCard extends SEMBaseCard {
 
         this.shadowRoot.innerHTML = `
             <style>
-                :host { display: block; }
+                :host { display: block; contain: layout style paint; }
                 .wrap {
                     padding: 16px 20px;
                     position: relative;
@@ -267,6 +280,12 @@ class SEMBatteryCard extends SEMBaseCard {
                     stroke-width: 8;
                     opacity: 0.2;
                     filter: url(#batt-glow-soft);
+                    animation: glowPulse 3s ease-in-out infinite;
+                    will-change: opacity, r;
+                }
+                @keyframes glowPulse {
+                    0%, 100% { opacity: 0.2; }
+                    50% { opacity: 0.08; }
                 }
                 @keyframes socPulse {
                     0%, 100% { opacity: 1; }
@@ -430,10 +449,7 @@ class SEMBatteryCard extends SEMBaseCard {
                     <div class="hero">
                         <div class="battery-ring">
                             <svg viewBox="0 0 100 100">
-                                <circle class="glow-ring" cx="50" cy="50" r="42">
-                                    <animate attributeName="r" values="42;45;42" dur="3s" repeatCount="indefinite"/>
-                                    <animate attributeName="opacity" values="0.2;0.08;0.2" dur="3s" repeatCount="indefinite"/>
-                                </circle>
+                                <circle class="glow-ring" cx="50" cy="50" r="42"/>
                                 <circle class="ring-bg" cx="50" cy="50" r="42"/>
                                 <circle class="soc-arc" cx="50" cy="50" r="42"
                                     stroke-dasharray="${circumference}"

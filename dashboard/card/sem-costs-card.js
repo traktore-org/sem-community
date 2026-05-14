@@ -56,13 +56,15 @@ class SEMCostsCard extends SEMBaseCard {
 
     _update() {
         if (!this._hass) return;
-        if (!this._rendered) {
+        const isFirstRender = !this._rendered;
+        if (isFirstRender) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
 
         const $ = (sel) => this.shadowRoot.querySelector(sel);
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
         const curr = (typeof semGetCurrency === 'function') ? semGetCurrency(this._hass) : 'EUR';
 
         // Hero — daily net
@@ -70,18 +72,22 @@ class SEMCostsCard extends SEMBaseCard {
         const netEl = $('.hero-net');
         if (netEl) {
             const saving = dailyNet !== null && dailyNet <= 0;
-            netEl.textContent = dailyNet !== null
+            const netText = dailyNet !== null
                 ? (saving ? '+' : '') + this._fmt(Math.abs(dailyNet), 2) + ' ' + curr
                 : '—';
-            netEl.style.color = saving ? '#8DC892' : '#f06292';
+            const netColor = saving ? '#8DC892' : '#f06292';
+            if (netEl.textContent !== netText) netEl.textContent = netText;
+            if (netEl.style.color !== netColor) netEl.style.color = netColor;
         }
         const heroLblEl = $('.hero-label');
         if (heroLblEl) {
             const dailyNetVal = this._state('daily_net_cost', null);
-            heroLblEl.textContent = (dailyNetVal !== null && dailyNetVal <= 0)
+            const heroText = (dailyNetVal !== null && dailyNetVal <= 0)
                 ? this._t('net_saving_today')
                 : this._t('net_cost_today');
-            heroLblEl.style.color = (dailyNetVal !== null && dailyNetVal <= 0) ? '#8DC892' : '#f06292';
+            const heroColor = (dailyNetVal !== null && dailyNetVal <= 0) ? '#8DC892' : '#f06292';
+            if (heroLblEl.textContent !== heroText) heroLblEl.textContent = heroText;
+            if (heroLblEl.style.color !== heroColor) heroLblEl.style.color = heroColor;
         }
 
         // Today breakdown
@@ -91,7 +97,12 @@ class SEMCostsCard extends SEMBaseCard {
         setVal('.d-export', this._fmtCurr(this._state('daily_export_revenue'), curr));
         const dNet = this._state('daily_net_cost');
         const dNetEl = $('.d-net');
-        if (dNetEl) { dNetEl.textContent = this._fmtCurr(dNet, curr); dNetEl.style.color = dNet <= 0 ? '#8DC892' : '#f06292'; }
+        if (dNetEl) {
+            const dNetText = this._fmtCurr(dNet, curr);
+            const dNetColor = dNet <= 0 ? '#8DC892' : '#f06292';
+            if (dNetEl.textContent !== dNetText) dNetEl.textContent = dNetText;
+            if (dNetEl.style.color !== dNetColor) dNetEl.style.color = dNetColor;
+        }
 
         // Monthly
         setVal('.m-import', this._fmtCurr(this._state('monthly_costs'), curr));
@@ -99,7 +110,12 @@ class SEMCostsCard extends SEMBaseCard {
         setVal('.m-export', this._fmtCurr(this._state('monthly_export_revenue'), curr));
         const mNet = this._state('monthly_net_cost');
         const mNetEl = $('.m-net');
-        if (mNetEl) { mNetEl.textContent = this._fmtCurr(mNet, curr); mNetEl.style.color = mNet <= 0 ? '#8DC892' : '#f06292'; }
+        if (mNetEl) {
+            const mNetText = this._fmtCurr(mNet, curr);
+            const mNetColor = mNet <= 0 ? '#8DC892' : '#f06292';
+            if (mNetEl.textContent !== mNetText) mNetEl.textContent = mNetText;
+            if (mNetEl.style.color !== mNetColor) mNetEl.style.color = mNetColor;
+        }
 
         setVal('.m-batt', this._fmtCurr(this._state('monthly_battery_savings'), curr));
 
@@ -110,7 +126,12 @@ class SEMCostsCard extends SEMBaseCard {
         setVal('.y-export', this._fmtCurr(this._state('yearly_export_revenue'), curr));
         const yNet = this._state('yearly_net_cost');
         const yNetEl = $('.y-net');
-        if (yNetEl) { yNetEl.textContent = this._fmtCurr(yNet, curr); yNetEl.style.color = yNet <= 0 ? '#8DC892' : '#f06292'; }
+        if (yNetEl) {
+            const yNetText = this._fmtCurr(yNet, curr);
+            const yNetColor = yNet <= 0 ? '#8DC892' : '#f06292';
+            if (yNetEl.textContent !== yNetText) yNetEl.textContent = yNetText;
+            if (yNetEl.style.color !== yNetColor) yNetEl.style.color = yNetColor;
+        }
 
         // ROI
         setVal('.roi-lifetime', this._fmtCurr(this._state('lifetime_total_savings'), curr, 0));
@@ -119,7 +140,12 @@ class SEMCostsCard extends SEMBaseCard {
         setVal('.roi-payback', payback > 0 ? this._fmt(payback, 1) + ' ' + this._t('years') : '—');
         const roiPct = this._state('roi_percentage');
         const roiEl = $('.roi-pct');
-        if (roiEl) { roiEl.textContent = roiPct !== 0 ? this._fmt(roiPct, 1) + '%' : '—'; roiEl.style.color = roiPct >= 0 ? '#8DC892' : '#f06292'; }
+        if (roiEl) {
+            const roiText = roiPct !== 0 ? this._fmt(roiPct, 1) + '%' : '—';
+            const roiColor = roiPct >= 0 ? '#8DC892' : '#f06292';
+            if (roiEl.textContent !== roiText) roiEl.textContent = roiText;
+            if (roiEl.style.color !== roiColor) roiEl.style.color = roiColor;
+        }
 
         // Environmental
         setVal('.env-daily-co2', this._fmt(this._state('daily_co2_avoided'), 1) + ' kg');
@@ -158,6 +184,7 @@ class SEMCostsCard extends SEMBaseCard {
         setVal('.lbl-env-lifetime', this._t('co2_lifetime'));
         setVal('.lbl-env-ytrees', this._t('trees_yearly'));
         setVal('.lbl-env-ltrees', this._t('trees_lifetime'));
+        if (isFirstRender) requestAnimationFrame(() => { this.style.visibility = ''; });
     }
 
     _renderSkeleton() {
@@ -176,7 +203,7 @@ class SEMCostsCard extends SEMBaseCard {
                     padding: 16px 20px;
                     position: relative;
                     background:
-                        radial-gradient(ellipse 70% 60% at 50% 20%, rgba(141,200,146,0.07) 0%, transparent 100%),
+                        radial-gradient(ellipse 70% 60% at 50% 20%, rgba(240,98,146,0.06) 0%, transparent 100%),
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;

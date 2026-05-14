@@ -743,13 +743,13 @@ async def _async_register_services(
             if not dashboard_config:
                 raise ValueError("Dashboard generator returned empty configuration")
 
-            # Save dashboard to storage
-            storage_key = f"lovelace.{dashboard_path}"
-            dashboard_store = Store(hass, 1, storage_key)
-
             views = dashboard_config.get("views", [])
             if not views:
                 raise ValueError("Dashboard config has no views")
+
+            # Save dashboard to storage
+            storage_key = f"lovelace.{dashboard_path}"
+            dashboard_store = Store(hass, 1, storage_key)
 
             storage_data = {"config": {"views": views}}
             await dashboard_store.async_save(storage_data)
@@ -1157,6 +1157,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
 
         localize_base = f"{static_path}/card/sem-localize.js"
         shared_base = f"{static_path}/card/sem-shared.js"
+        reactive_base = f"{static_path}/card/sem-reactive-base.js"
         card_base = f"{static_path}/card/sem-load-priority-card.js"
         diagram_base = f"{static_path}/card/sem-system-diagram-card.js"
         period_base = f"{static_path}/card/sem-period-selector-card.js"
@@ -1175,6 +1176,12 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         costs_card_base = f"{static_path}/card/sem-costs-card.js"
         grid_card_base = f"{static_path}/card/sem-grid-card.js"
         control_card_base = f"{static_path}/card/sem-control-card.js"
+        energy_impact_base = f"{static_path}/card/sem-energy-impact-card.js"
+        battery_zones_base = f"{static_path}/card/sem-battery-zones-card.js"
+        ev_progress_base = f"{static_path}/card/sem-ev-progress-card.js"
+        costs_detail_base = f"{static_path}/card/sem-costs-detail-card.js"
+        system_card_base = f"{static_path}/card/sem-system-card.js"
+        home_status_base = f"{static_path}/card/sem-home-status-card.js"
         localize_url = f"{localize_base}?v={version}"
         shared_url = f"{shared_base}?v={version}"
         card_url = f"{card_base}?v={version}"
@@ -1195,12 +1202,20 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         costs_card_url = f"{costs_card_base}?v={version}"
         grid_card_url = f"{grid_card_base}?v={version}"
         control_card_url = f"{control_card_base}?v={version}"
+        energy_impact_url = f"{energy_impact_base}?v={version}"
+        battery_zones_url = f"{battery_zones_base}?v={version}"
+        ev_progress_url = f"{ev_progress_base}?v={version}"
+        costs_detail_url = f"{costs_detail_base}?v={version}"
+        system_card_url = f"{system_card_base}?v={version}"
+        home_status_url = f"{home_status_base}?v={version}"
         # Load prerequisite scripts (SEMBaseCard, semLocalize) via add_extra_js_url.
         # These load as <script> tags in <head>, guaranteed to execute BEFORE
         # Lovelace resources. This prevents "SEMBaseCard is not defined" race
         # conditions on systems with many HACS cards loading in parallel.
+        reactive_url = f"{reactive_base}?v={version}"
         add_extra_js_url(hass, localize_url)
         add_extra_js_url(hass, shared_url)
+        add_extra_js_url(hass, reactive_url)
 
         try:
             from homeassistant.components.lovelace.resources import ResourceStorageCollection
@@ -1241,6 +1256,12 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 (costs_card_base, costs_card_url),
                 (grid_card_base, grid_card_url),
                 (control_card_base, control_card_url),
+                (energy_impact_base, energy_impact_url),
+                (battery_zones_base, battery_zones_url),
+                (ev_progress_base, ev_progress_url),
+                (costs_detail_base, costs_detail_url),
+                (system_card_base, system_card_url),
+                (home_status_base, home_status_url),
             ):
                 item = existing_by_base.get(base)
                 if item is None:

@@ -160,11 +160,15 @@ class SEMFlowCard extends SEMBaseCard {
             this._rendered = false;
         }
         if (!this._rendered) {
+            this.style.visibility = 'hidden';
             const w = this.clientWidth || this.offsetWidth;
             const compact = w > 0 ? w < 400 : false;
             if (compact !== this._compact) this._compact = compact;
             this._render();
             this._rendered = true;
+            this._updateFlows();
+            requestAnimationFrame(() => { this.style.visibility = ''; });
+            return;
         }
         if (!this._visible) return;
         // Debounce flow updates (#30)

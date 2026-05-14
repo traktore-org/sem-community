@@ -13,7 +13,7 @@
 
 const SECTIONS = [
     {
-        id: 'ev', icon: 'mdi:ev-station', titleKey: 'ev_charging_title',
+        id: 'ev', icon: 'mdi:ev-station', color: '#8DC892', titleKey: 'ev_charging_title',
         subtitleFn: (c) => {
             const state = c._stateStr('charging_state') || '—';
             const daily = c._state('daily_ev_energy').toFixed(1);
@@ -22,7 +22,7 @@ const SECTIONS = [
         },
     },
     {
-        id: 'surplus', icon: 'mdi:solar-power', titleKey: 'surplus_control',
+        id: 'surplus', icon: 'mdi:solar-power', color: '#ff9800', titleKey: 'surplus_control',
         subtitleFn: (c) => {
             const active = c._state('surplus_active_devices').toFixed(0);
             const total = c._state('surplus_total_devices').toFixed(0);
@@ -31,7 +31,7 @@ const SECTIONS = [
         },
     },
     {
-        id: 'battery', icon: 'mdi:battery-medium', titleKey: 'battery_management',
+        id: 'battery', icon: 'mdi:battery-medium', color: '#4db6ac', titleKey: 'battery_management',
         subtitleFn: (c) => {
             const soc = c._state('battery_soc').toFixed(0);
             const status = c._stateStr('battery_status') || '—';
@@ -39,15 +39,15 @@ const SECTIONS = [
         },
     },
     {
-        id: 'hotwater', icon: 'mdi:water-thermometer', titleKey: 'hot_water_title',
+        id: 'hotwater', icon: 'mdi:water-thermometer', color: '#f06292', titleKey: 'hot_water_title',
         subtitleFn: () => '',
     },
     {
-        id: 'solar', icon: 'mdi:solar-panel-large', titleKey: 'solar_power_section',
+        id: 'solar', icon: 'mdi:solar-panel-large', color: '#ff9800', titleKey: 'solar_power_section',
         subtitleFn: () => '',
     },
     {
-        id: 'tariff', icon: 'mdi:cash-multiple', titleKey: 'tariff_pricing',
+        id: 'tariff', icon: 'mdi:cash-multiple', color: '#96CAEE', titleKey: 'tariff_pricing',
         subtitleFn: (c) => {
             const provider = c._stateStr('tariff_provider') || '—';
             const level = c._stateStr('tariff_price_level') || '';
@@ -55,7 +55,7 @@ const SECTIONS = [
         },
     },
     {
-        id: 'peak', icon: 'mdi:flash-alert', titleKey: 'peak_load_management',
+        id: 'peak', icon: 'mdi:flash-alert', color: '#ff9800', titleKey: 'peak_load_management',
         subtitleFn: (c) => {
             const peak = c._state('consecutive_peak_15min').toFixed(1);
             const monthly = c._state('monthly_consecutive_peak').toFixed(1);
@@ -63,7 +63,7 @@ const SECTIONS = [
         },
     },
     {
-        id: 'system', icon: 'mdi:cog-outline', titleKey: 'system',
+        id: 'system', icon: 'mdi:cog-outline', color: '#96CAEE', titleKey: 'system',
         subtitleFn: () => '',
     },
 ];
@@ -76,11 +76,24 @@ class SEMControlCard extends SEMBaseCard {
         this._collapsed = {};
         this._holdTimers = {};
         this._holdIntervals = {};
+        this._frozenEntities = {};
+        this._debugLog = [];
+        this._instanceId = ++SEMControlCard._instanceCount;
+        this._dbg('CONSTRUCTOR #' + this._instanceId);
+    }
+
+    _dbg(msg) {
+        const t = new Date().toLocaleTimeString('en', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        this._debugLog.push(`${t} ${msg}`);
+        if (this._debugLog.length > 12) this._debugLog.shift();
+        const el = this.shadowRoot?.querySelector('.dbg-panel');
+        if (el) el.textContent = this._debugLog.join('\n');
     }
 
     setConfig(config) {
         this.config = config;
         this._prefix = config.entity_prefix || 'sensor.sem_';
+        this._dbg('setConfig');
     }
 
     // Read a sensor state as number
@@ -127,8 +140,32 @@ class SEMControlCard extends SEMBaseCard {
         return { value: e.state, options: e.attributes.options || [] };
     }
 
+    // ── Freeze/thaw pattern: suppress hass updates for 1s after service call ──
+    _freezeEntity(entityId, optimisticValue) {
+        const existing = this._frozenEntities[entityId];
+        if (existing?.timer) clearTimeout(existing.timer);
+        this._frozenEntities[entityId] = {
+            value: optimisticValue,
+            timer: setTimeout(() => {
+                delete this._frozenEntities[entityId];
+                // Accept confirmed value from HA
+                if (this._hass) this._update();
+            }, 1000),
+        };
+    }
+
+    _isFrozen() {
+        return Object.keys(this._frozenEntities).length > 0;
+    }
+
     set hass(hass) {
         const localeChanged = this._checkLocaleChange(hass);
+
+        // While entities are frozen (user just clicked), skip full update
+        if (this._isFrozen() && !localeChanged) {
+            this._dbg('hass SKIP (frozen)');
+            return;
+        }
 
         // Build reactivity key from all relevant entities
         const watchKeys = [
@@ -158,13 +195,22 @@ class SEMControlCard extends SEMBaseCard {
         ];
         const key = watchKeys.map(k => hass.states[k]?.state || '').join(',');
 
-        if (key === this._lastKey && !localeChanged) return;
+        if (key === this._lastKey && !localeChanged) {
+            this._dbg('hass SKIP (key same)');
+            return;
+        }
         this._lastKey = key;
 
         if (!this._rendered || localeChanged) {
+            this._dbg('RENDER SKELETON (rendered=' + this._rendered + ' locale=' + localeChanged + ')');
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
+            this._update();
+            requestAnimationFrame(() => { this.style.visibility = ''; });
+            return;
         }
+        this._dbg('_update (key changed)');
         this._update();
     }
 
@@ -199,6 +245,8 @@ class SEMControlCard extends SEMBaseCard {
     _toggleSwitch(entityId) {
         const state = this._hass?.states[entityId];
         if (!state) return;
+        const newState = state.state === 'on' ? 'off' : 'on';
+        this._freezeEntity(entityId, newState);
         const svc = state.state === 'on' ? 'turn_off' : 'turn_on';
         this._callService('switch', svc, { entity_id: entityId });
     }
@@ -209,18 +257,22 @@ class SEMControlCard extends SEMBaseCard {
         const min = parseFloat(entity.attributes.min) || 0;
         const max = parseFloat(entity.attributes.max) || 100;
         const clamped = Math.max(min, Math.min(max, value));
+        this._freezeEntity(entityId, clamped);
         this._callService('number', 'set_value', { entity_id: entityId, value: clamped });
     }
 
     _stepNumber(entityId, delta) {
         const entity = this._hass?.states[entityId];
         if (!entity) return;
-        const current = parseFloat(entity.state) || 0;
+        const frozen = this._frozenEntities[entityId];
+        const current = frozen ? frozen.value : (parseFloat(entity.state) || 0);
         const step = parseFloat(entity.attributes.step) || 1;
         this._setNumber(entityId, current + delta * step);
+        this._update(); // show optimistic value immediately
     }
 
     _selectOption(entityId, option) {
+        this._freezeEntity(entityId, option);
         this._callService('select', 'select_option', { entity_id: entityId, option });
     }
 
@@ -244,12 +296,19 @@ class SEMControlCard extends SEMBaseCard {
     _update() {
         if (!this._hass) return;
         const $ = (sel) => this.shadowRoot.querySelector(sel);
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
 
-        // Observer mode warning
-        const obsWarn = $('.observer-warning');
-        if (obsWarn) {
-            obsWarn.style.display = this._switchState('observer_mode') ? 'flex' : 'none';
+        // Observer mode warning — use height/opacity instead of display to avoid layout shift
+        const obsOn = this._switchState('observer_mode');
+        if (obsOn !== this._lastObsState) {
+            this._lastObsState = obsOn;
+            const obsWarn = $('.observer-warning');
+            if (obsWarn) {
+                obsWarn.style.maxHeight = obsOn ? '60px' : '0';
+                obsWarn.style.opacity = obsOn ? '1' : '0';
+                obsWarn.style.marginBottom = obsOn ? '12px' : '0';
+                obsWarn.style.padding = obsOn ? '12px 16px' : '0 16px';
+            }
         }
 
         // Section subtitles
@@ -271,7 +330,8 @@ class SEMControlCard extends SEMBaseCard {
         const minCurRow = $('.ev-mincur-row');
         if (minCurRow) {
             const show = minCurEnt && parseFloat(minCurEnt.state) > 0;
-            minCurRow.style.display = show ? '' : 'none';
+            const mcDisplay = show ? '' : 'none';
+            if (minCurRow.style.display !== mcDisplay) minCurRow.style.display = mcDisplay;
             if (show) this._updateStepper('.ev-mincur', 'number.sem_ev_minimum_current');
         }
 
@@ -280,7 +340,8 @@ class SEMControlCard extends SEMBaseCard {
         const phasesRow = $('.ev-phases-row');
         if (phasesRow) {
             const show = phasesEnt && parseFloat(phasesEnt.state) > 0;
-            phasesRow.style.display = show ? '' : 'none';
+            const phDisplay = show ? '' : 'none';
+            if (phasesRow.style.display !== phDisplay) phasesRow.style.display = phDisplay;
             if (show) this._updateStepper('.ev-phases', 'number.sem_ev_phases');
         }
 
@@ -322,8 +383,10 @@ class SEMControlCard extends SEMBaseCard {
         const peakPct = this._state('current_vs_peak_percentage');
         const peakPctEl = $('.peak-pct');
         if (peakPctEl) {
-            peakPctEl.textContent = `${peakPct.toFixed(0)}%`;
-            peakPctEl.style.color = peakPct > 90 ? '#f44336' : peakPct > 70 ? '#ff9800' : '#8DC892';
+            const peakText = `${peakPct.toFixed(0)}%`;
+            if (peakPctEl.textContent !== peakText) peakPctEl.textContent = peakText;
+            const peakColor = peakPct > 90 ? '#f44336' : peakPct > 70 ? '#ff9800' : '#8DC892';
+            if (peakPctEl.style.color !== peakColor) peakPctEl.style.color = peakColor;
         }
         setVal('.peak-status', this._stateStr('load_management_status') || '—');
         setVal('.peak-rec', this._stateStr('load_management_recommendation') || '');
@@ -348,9 +411,14 @@ class SEMControlCard extends SEMBaseCard {
         const label = el.querySelector('.toggle-label');
         if (track) {
             track.classList.toggle('on', isOn);
-            track.onclick = () => this._toggleSwitch(entityId);
+            // Bind handler only once
+            if (!track._semBound) {
+                track._semBound = true;
+                track.addEventListener('click', () => this._toggleSwitch(entityId));
+            }
         }
-        if (label) label.textContent = this._t(labelKey);
+        const translated = this._t(labelKey);
+        if (label && label.textContent !== translated) label.textContent = translated;
     }
 
     _updateSelect(selector, entityId) {
@@ -377,34 +445,42 @@ class SEMControlCard extends SEMBaseCard {
         if (!el) return;
         const entity = this._hass?.states[entityId];
         if (!entity) return;
-        const val = parseFloat(entity.state) || 0;
+        // Use frozen optimistic value if available
+        const frozen = this._frozenEntities[entityId];
+        const val = frozen ? frozen.value : (parseFloat(entity.state) || 0);
         const step = parseFloat(entity.attributes.step) || 1;
         const unit = entity.attributes.unit_of_measurement || '';
         const valEl = el.querySelector('.stepper-value');
         if (valEl) {
             const decimals = step < 1 ? 1 : 0;
-            valEl.textContent = val.toFixed(decimals) + (unit ? ' ' + unit : '');
+            const text = val.toFixed(decimals) + (unit ? ' ' + unit : '');
+            if (valEl.textContent !== text) valEl.textContent = text;
         }
-        const minBtn = el.querySelector('.stepper-minus');
-        const plusBtn = el.querySelector('.stepper-plus');
-        if (minBtn) {
-            minBtn.onclick = () => this._stepNumber(entityId, -1);
-            minBtn.onpointerdown = () => this._startHold(entityId, -1);
-            minBtn.onpointerup = () => this._stopHold(entityId);
-            minBtn.onpointerleave = () => this._stopHold(entityId);
-        }
-        if (plusBtn) {
-            plusBtn.onclick = () => this._stepNumber(entityId, 1);
-            plusBtn.onpointerdown = () => this._startHold(entityId, 1);
-            plusBtn.onpointerup = () => this._stopHold(entityId);
-            plusBtn.onpointerleave = () => this._stopHold(entityId);
+        // Bind handlers only once
+        if (!el._semBound) {
+            el._semBound = true;
+            const minBtn = el.querySelector('.stepper-minus');
+            const plusBtn = el.querySelector('.stepper-plus');
+            if (minBtn) {
+                minBtn.addEventListener('click', () => this._stepNumber(entityId, -1));
+                minBtn.addEventListener('pointerdown', () => this._startHold(entityId, -1));
+                minBtn.addEventListener('pointerup', () => this._stopHold(entityId));
+                minBtn.addEventListener('pointerleave', () => this._stopHold(entityId));
+            }
+            if (plusBtn) {
+                plusBtn.addEventListener('click', () => this._stepNumber(entityId, 1));
+                plusBtn.addEventListener('pointerdown', () => this._startHold(entityId, 1));
+                plusBtn.addEventListener('pointerup', () => this._stopHold(entityId));
+                plusBtn.addEventListener('pointerleave', () => this._stopHold(entityId));
+            }
         }
     }
 
     _updateLabels() {
         const setLabel = (sel, key) => {
             const el = this.shadowRoot.querySelector(sel);
-            if (el) el.textContent = this._t(key);
+            const text = this._t(key);
+            if (el && el.textContent !== text) el.textContent = text;
         };
         // EV
         setLabel('.ev-mode .ctrl-label', 'ev_charging_mode');
@@ -463,7 +539,7 @@ class SEMControlCard extends SEMBaseCard {
         return `
             <div class="section" data-section="${section.id}">
                 <div class="section-header" tabindex="0" role="button" aria-expanded="${!collapsed}">
-                    <ha-icon icon="${section.icon}" style="--mdc-icon-size:20px"></ha-icon>
+                    <ha-icon icon="${section.icon}" style="--mdc-icon-size:20px;color:${section.color}"></ha-icon>
                     <span class="section-title-text">${this._t(section.titleKey)}</span>
                     <span class="section-subtitle"></span>
                     <ha-icon class="chevron" icon="mdi:chevron-down"
@@ -621,7 +697,7 @@ class SEMControlCard extends SEMBaseCard {
                     padding: 16px;
                     position: relative;
                     background:
-                        radial-gradient(ellipse 70% 60% at 50% 20%, rgba(66,165,245,0.05) 0%, transparent 100%),
+                        radial-gradient(ellipse 70% 60% at 50% 20%, rgba(150,202,238,0.06) 0%, transparent 100%),
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
@@ -630,9 +706,12 @@ class SEMControlCard extends SEMBaseCard {
 
                 /* ── Observer Warning ── */
                 .observer-warning {
-                    display: none;
+                    display: flex;
                     align-items: center; gap: 10px;
-                    padding: 12px 16px; margin-bottom: 12px;
+                    padding: 0 16px; margin-bottom: 0;
+                    max-height: 0; opacity: 0;
+                    overflow: hidden;
+                    transition: max-height 0.3s ease, opacity 0.2s ease, margin-bottom 0.3s ease, padding 0.3s ease;
                     border-radius: 12px;
                     background: radial-gradient(ellipse 60% 50% at 50% 40%, rgba(244,67,54,0.12) 0%, transparent 100%),
                                 radial-gradient(circle at 2px 2px, rgba(244,67,54,0.05) 0.7px, transparent 0.7px);
@@ -904,6 +983,7 @@ class SEMControlCard extends SEMBaseCard {
                 }
             </style>
             <div class="wrap">
+                <pre class="dbg-panel" style="font-size:9px;color:#888;background:rgba(0,0,0,0.3);padding:6px 8px;border-radius:6px;margin-bottom:8px;white-space:pre;overflow:hidden;max-height:120px;font-family:monospace;line-height:1.3">${this._debugLog.join('\n')}</pre>
                 <div class="observer-warning">
                     <ha-icon icon="mdi:eye-outline" style="--mdc-icon-size:20px;color:#f44336"></ha-icon>
                     <span>${this._t('observer_mode_active')} — ${this._t('observer_mode_readonly')}</span>
@@ -930,6 +1010,7 @@ class SEMControlCard extends SEMBaseCard {
     }
 }
 
+SEMControlCard._instanceCount = 0;
 semDefineCard('sem-control-card', SEMControlCard, {
     type: 'custom:sem-control-card',
     name: 'SEM Control Card',

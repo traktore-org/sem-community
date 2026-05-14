@@ -44,13 +44,15 @@ class SEMLoadPriorityCard extends SEMBaseCard {
         // Skip update if key data hasn't changed
         const devState = this._hass?.states[`${this.entityPrefix}controllable_devices_count`];
         const peakState = this._hass?.states[`${this.entityPrefix}consecutive_peak_15min`];
-        const key = (devState?.last_changed || '') + (peakState?.state || '');
+        const key = (devState?.state || '') + (peakState?.state || '') + (this._hass?.states[`${this.entityPrefix}load_management_status`]?.state || '');
         if (this._rendered && key === this._lastKey) return;
         this._lastKey = key;
 
         this._updateDeviceData();
         if (!this._rendered) {
+            this.style.visibility = 'hidden';
             this._fullRender();
+            requestAnimationFrame(() => { this.style.visibility = ''; });
         } else if (!this._interacting) {
             this._incrementalUpdate();
         }
@@ -249,9 +251,18 @@ class SEMLoadPriorityCard extends SEMBaseCard {
         this._text('peak-current2', `${this.currentPeak.toFixed(2)} kW`);
         this._text('peak-target', `${this.targetPeakLimit.toFixed(2)} kW`);
         const marginEl = root.getElementById('peak-margin');
-        if (marginEl) { marginEl.textContent = `${peakMargin.toFixed(2)} kW`; marginEl.style.color = peakMargin > 0 ? '#4caf50' : '#f44336'; }
+        if (marginEl) {
+            const marginText = `${peakMargin.toFixed(2)} kW`;
+            const marginColor = peakMargin > 0 ? '#4caf50' : '#f44336';
+            if (marginEl.textContent !== marginText) marginEl.textContent = marginText;
+            if (marginEl.style.color !== marginColor) marginEl.style.color = marginColor;
+        }
         const barEl = root.getElementById('peak-bar');
-        if (barEl) { barEl.style.width = `${peakPct}%`; barEl.style.background = peakColor; }
+        if (barEl) {
+            const barWidth = `${peakPct}%`;
+            if (barEl.style.width !== barWidth) barEl.style.width = barWidth;
+            if (barEl.style.background !== peakColor) barEl.style.background = peakColor;
+        }
         this._text('lm-status', (this.loadManagementStatus || 'normal').toUpperCase());
 
         // Update per-device values
@@ -270,7 +281,7 @@ class SEMLoadPriorityCard extends SEMBaseCard {
 
     _text(id, val) {
         const el = this.shadowRoot.getElementById(id);
-        if (el) el.textContent = val;
+        if (el && el.textContent !== val) el.textContent = val;
     }
 
     /* ── SortableJS initialization ── */
@@ -570,7 +581,7 @@ class SEMLoadPriorityCard extends SEMBaseCard {
             ha-card {
                 overflow: visible;
                 background:
-                    radial-gradient(ellipse 70% 60% at 50% 40%, rgba(200,220,240,0.07) 0%, transparent 100%),
+                    radial-gradient(ellipse 70% 60% at 50% 40%, rgba(150,202,238,0.06) 0%, transparent 100%),
                     radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px) !important;
                 background-size: 100% 100%, 50px 50px !important;
                 backdrop-filter: blur(18px) saturate(160%) !important;
