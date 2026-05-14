@@ -117,6 +117,20 @@ export function semDotGridCSS(color, glowColor, glowAlpha) {
             radial-gradient(circle at 2px 2px, ${color} 0.7px, transparent 0.7px)`;
 }
 
+/* ── Canonical hero-card surface (tinted glow + dot grid) ──
+ *
+ * Hero cards (solar, battery, grid, ev, home, system, costs) all want the
+ * same background: a soft tinted glow at the top centre over the theme's
+ * dot grid. Call this in the card's :host or wrap style instead of
+ * hand-coding the gradient so every card stays in sync.
+ */
+export function semCardSurfaceCSS(theme, tintHex, glowAlpha) {
+    const ga = glowAlpha != null ? glowAlpha : 0.06;
+    const hex = Math.round(ga * 255).toString(16).padStart(2, '0');
+    return `radial-gradient(ellipse 70% 60% at 50% 25%, ${tintHex}${hex} 0%, transparent 100%),
+            radial-gradient(circle at 2px 2px, ${theme.dotColor} 0.7px, transparent 0.7px)`;
+}
+
 /* ── Card registration helper ── */
 export function semDefineCard(tag, cls, cardInfo) {
     if (customElements.get(tag)) return;

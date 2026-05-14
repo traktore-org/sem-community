@@ -311,7 +311,7 @@ class SEMScheduleCard extends SEMLitBase {
                     padding: 12px 14px 8px;
                     position: relative;
                     background:
-                        radial-gradient(ellipse 70% 60% at 50% 30%, rgba(150,202,238,0.06) 0%, transparent 100%),
+                        radial-gradient(ellipse 70% 60% at 50% 25%, rgba(150,202,238,0.06) 0%, transparent 100%),
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;

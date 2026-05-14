@@ -130,7 +130,7 @@ class SEMEnergyImpactCard extends SEMLitBase {
                 .wrap {
                     padding: 16px;
                     background:
-                        radial-gradient(ellipse 70% 60% at 50% 20%, rgba(255,152,0,0.06) 0%, transparent 100%),
+                        radial-gradient(ellipse 70% 60% at 50% 25%, rgba(255,152,0,0.06) 0%, transparent 100%),
                         radial-gradient(circle at 2px 2px, ${T.dotColor} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI', 'Roboto', sans-serif;
