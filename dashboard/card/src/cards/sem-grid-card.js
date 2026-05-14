@@ -11,7 +11,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { semTheme, semFormatPower, semGetCurrency, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
+import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -186,7 +186,9 @@ class SEMGridCard extends SEMLitBase {
                 .wrap {
                     padding: 16px 20px;
                     position: relative;
-                    background: ${semCardSurfaceCSS(T, SEM_COLORS.inverter)};
+                    background:
+                        radial-gradient(ellipse 70% 60% at 50% 20%, rgba(150,202,238,0.06) 0%, transparent 100%),
+                        radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});

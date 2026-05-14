@@ -233,7 +233,7 @@ class SEMHomeStatusCard extends SEMLitBase {
                 font-family: 'Segoe UI','Roboto',sans-serif;
                 color: var(--primary-text-color, #e0e0e0);
                 background:
-                    radial-gradient(ellipse 70% 60% at 50% 25%, rgba(91,200,216,0.06) 0%, transparent 100%),
+                    radial-gradient(ellipse 70% 60% at 50% 20%, rgba(91,200,216,0.06) 0%, transparent 100%),
                     radial-gradient(circle at 2px 2px, rgba(128,128,128,0.05) 0.7px, transparent 0.7px);
                 background-size: 100% 100%, 50px 50px;
             }
