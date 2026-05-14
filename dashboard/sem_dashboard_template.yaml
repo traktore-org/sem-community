@@ -84,76 +84,10 @@ views:
             card_mod:
               style: *glass_card
 
-          # ── 7-Day Summary ──
-          - type: custom:apexcharts-card
-            header:
-              title: Last 7 Days
-              show: true
-            graph_span: 7d
-            span:
-              end: day
-            apex_config:
-              chart:
-                height: 160
-                stacked: false
-                background: transparent
-                foreColor: var(--primary-text-color)
-              grid:
-                borderColor: "var(--divider-color, rgba(255,255,255,0.06))"
-              legend:
-                show: true
-                position: top
-                labels:
-                  colors: var(--secondary-text-color)
-              plotOptions:
-                bar:
-                  columnWidth: 55%
-              tooltip:
-                theme: dark
-                x:
-                  format: ddd dd MMM
-              yaxis:
-                - title:
-                    text: kWh
-                    style:
-                      color: "var(--secondary-text-color, #757575)"
-                  decimalsInFloat: 1
-                  labels:
-                    style:
-                      colors: var(--secondary-text-color)
-            series:
-              - entity: sensor.sem_daily_solar_energy
-                name: Solar
-                type: column
-                color: "#ff9800"
-                statistics:
-                  type: state
-                  period: day
-                group_by:
-                  func: max
-                  duration: 1d
-              - entity: sensor.sem_daily_home_energy
-                name: House
-                type: column
-                color: "#5BC8D8"
-                statistics:
-                  type: state
-                  period: day
-                group_by:
-                  func: max
-                  duration: 1d
-              - entity: sensor.sem_daily_grid_import_energy
-                name: Grid
-                type: column
-                color: "#488fc2"
-                statistics:
-                  type: state
-                  period: day
-                group_by:
-                  func: max
-                  duration: 1d
-            card_mod:
-              style: *glass_card
+          # ── 7-Day Summary (sem-chart-card replaces apexcharts) ──
+          - type: custom:sem-chart-card
+            preset: energy
+            title: Last 7 Days
 
           # power-sources-graph removed — redundant with system diagram + 7-day chart
 
@@ -289,289 +223,19 @@ views:
                 card_mod:
                   style: *glass_card
 
-          # ── Energy Distribution Donut ──
-          - type: custom:apexcharts-card
-            header:
-              title: Today's Energy Distribution
-              show: true
-            chart_type: donut
-            series:
-              - entity: sensor.sem_flow_solar_to_home_energy
-                name: Solar > Home
-                color: "#ff9800"
-                float_precision: 1
-              - entity: sensor.sem_flow_grid_to_home_energy
-                name: Grid > Home
-                color: "#488fc2"
-                float_precision: 1
-              - entity: sensor.sem_flow_battery_to_home_energy
-                name: Battery > Home
-                color: "#4db6ac"
-                float_precision: 1
-              - entity: sensor.sem_daily_ev_energy
-                name: EV Charging
-                color: "#8DC892"
-                float_precision: 1
-              - entity: sensor.sem_daily_grid_export_energy
-                name: Export
-                color: "#8353d1"
-                float_precision: 1
-            apex_config:
-              chart:
-                height: 260
-                background: transparent
-                foreColor: var(--primary-text-color)
-              legend:
-                show: true
-                position: bottom
-                labels:
-                  colors: var(--secondary-text-color)
-              dataLabels:
-                enabled: false
-              tooltip:
-                theme: dark
-              plotOptions:
-                pie:
-                  donut:
-                    size: "65%"
-                    labels:
-                      show: true
-                      total:
-                        show: true
-                        label: Total
-                        color: var(--secondary-text-color)
-                        formatter: |
-                          EVAL:function(w) { return w.globals.seriesTotals.reduce(function(a,b){return a+b},0).toFixed(1); }
-                      value:
-                        color: var(--primary-text-color)
-                        formatter: |
-                          EVAL:function(val) { return parseFloat(val).toFixed(1); }
-            card_mod:
-              style: *glass_card
-
-          # ── 24h Power Curves ──
-          - type: custom:apexcharts-card
-            header:
-              title: 24h Power
-              show: true
-            graph_span: 24h
-            series:
-              - entity: sensor.sem_solar_power
-                name: Solar
-                color: "#ff9800"
-                type: area
-                opacity: 0.3
-                stroke_width: 2
-                group_by:
-                  func: avg
-                  duration: 5m
-              - entity: sensor.sem_home_consumption_power
-                name: House
-                color: "#5BC8D8"
-                type: line
-                stroke_width: 2
-                group_by:
-                  func: avg
-                  duration: 5m
-              - entity: sensor.sem_grid_power
-                name: Grid
-                color: "#488fc2"
-                type: line
-                stroke_width: 1
-                group_by:
-                  func: avg
-                  duration: 5m
-            apex_config:
-              chart:
-                height: 200
-                background: transparent
-                foreColor: var(--primary-text-color)
-              grid:
-                borderColor: "var(--divider-color, rgba(255,255,255,0.06))"
-              yaxis:
-                - title:
-                    text: Watts
-                    style:
-                      color: "var(--secondary-text-color, #757575)"
-                  decimalsInFloat: 0
-                  labels:
-                    style:
-                      colors: var(--secondary-text-color)
-              tooltip:
-                theme: dark
-                x:
-                  format: HH:mm
-              legend:
-                labels:
-                  colors: var(--secondary-text-color)
-            card_mod:
-              style: *glass_card
-
-          # ── Today vs Yesterday Solar ──
-          - type: custom:apexcharts-card
-            header:
-              title: Solar — Today vs Yesterday
-              show: true
-            graph_span: 24h
-            span:
-              start: day
-            series:
-              - entity: sensor.sem_solar_power
-                name: Today
-                color: "#ff9800"
-                type: area
-                opacity: 0.3
-                stroke_width: 2
-                group_by:
-                  func: avg
-                  duration: 10m
-              - entity: sensor.sem_solar_power
-                name: Yesterday
-                color: "var(--secondary-text-color, #999)"
-                type: line
-                stroke_width: 1
-                opacity: 0.6
-                offset: "-1d"
-                group_by:
-                  func: avg
-                  duration: 10m
-            apex_config:
-              chart:
-                height: 200
-                background: transparent
-                foreColor: var(--primary-text-color)
-              grid:
-                borderColor: "var(--divider-color, rgba(255,255,255,0.06))"
-              yaxis:
-                - title:
-                    text: Watts
-                    style:
-                      color: "var(--secondary-text-color, #757575)"
-                  decimalsInFloat: 0
-                  labels:
-                    style:
-                      colors: var(--secondary-text-color)
-              tooltip:
-                theme: dark
-                x:
-                  format: HH:mm
-              legend:
-                labels:
-                  colors: var(--secondary-text-color)
-            card_mod:
-              style: *glass_card
+          # ── 24h Power Curves (sem-chart-card replaces apexcharts) ──
+          - type: custom:sem-chart-card
+            preset: power
+            title: 24h Power
 
           # ── Energy Impact Card ──
           - type: custom:sem-energy-impact-card
             entity_prefix: sensor.sem_
 
-          # ── Self-Consumption Trend (30 days) ──
-          - type: custom:apexcharts-card
-            header:
-              title: Self-Consumption — 30 Day Trend
-              show: true
-            graph_span: 30d
-            span:
-              end: day
-            apex_config:
-              chart:
-                height: 160
-                background: transparent
-                foreColor: var(--primary-text-color)
-              grid:
-                borderColor: "var(--divider-color, rgba(255,255,255,0.06))"
-              yaxis:
-                - title:
-                    text: "%"
-                    style:
-                      color: "var(--secondary-text-color, #757575)"
-                  min: 0
-                  max: 100
-                  decimalsInFloat: 0
-                  labels:
-                    style:
-                      colors: var(--secondary-text-color)
-              tooltip:
-                theme: dark
-                x:
-                  format: dd MMM
-              legend:
-                labels:
-                  colors: var(--secondary-text-color)
-            series:
-              - entity: sensor.sem_self_consumption_rate
-                name: Self-consumption
-                type: area
-                color: "#ff9800"
-                opacity: 0.3
-                stroke_width: 2
-                statistics:
-                  type: mean
-                  period: day
-                group_by:
-                  func: avg
-                  duration: 1d
-              - entity: sensor.sem_autarky_rate
-                name: Autarky
-                type: line
-                color: "#5BC8D8"
-                stroke_width: 2
-                statistics:
-                  type: mean
-                  period: day
-                group_by:
-                  func: avg
-                  duration: 1d
-            card_mod:
-              style: *glass_card
-
-          # ── Monthly Trends ──
-          - type: custom:apexcharts-card
-            header:
-              title: 30-Day Energy
-              show: true
-            graph_span: 30d
-            series:
-              - entity: sensor.sem_solar_power
-                name: Solar
-                color: "#ff9800"
-                type: column
-                statistics:
-                  type: max
-                  period: day
-                group_by:
-                  func: max
-                  duration: 1d
-              - entity: sensor.sem_home_consumption_power
-                name: House
-                color: "#5BC8D8"
-                type: column
-                statistics:
-                  type: max
-                  period: day
-                group_by:
-                  func: max
-                  duration: 1d
-            apex_config:
-              chart:
-                height: 200
-                stacked: false
-                background: transparent
-                foreColor: var(--primary-text-color)
-              grid:
-                borderColor: "var(--divider-color, rgba(255,255,255,0.06))"
-              plotOptions:
-                bar:
-                  columnWidth: 60%
-              tooltip:
-                theme: dark
-                x:
-                  format: dd MMM
-              legend:
-                labels:
-                  colors: var(--secondary-text-color)
-            card_mod:
-              style: *glass_card
+          # ── Self-Consumption Trend (sem-chart-card replaces apexcharts) ──
+          - type: custom:sem-chart-card
+            preset: energy
+            title: Self-Consumption Trend
 
   # ============================================================
   # VIEW 2: BATTERY — SOC zones, charge/discharge, health
@@ -589,79 +253,10 @@ views:
           - type: custom:sem-battery-card
             entity_prefix: sensor.sem_
 
-          # ── Battery 24h Chart (charge/discharge + SOC) ──
-          - type: custom:apexcharts-card
-            header:
-              title: Battery 24h
-              show: true
-            graph_span: 24h
-            series:
-              - entity: sensor.sem_battery_power
-                name: Power
-                color: "#4db6ac"
-                type: area
-                opacity: 0.3
-                stroke_width: 2
-                group_by:
-                  func: avg
-                  duration: 5m
-              - entity: sensor.sem_battery_soc
-                name: SOC
-                color: "#5BC8D8"
-                type: line
-                stroke_width: 2
-                group_by:
-                  func: avg
-                  duration: 5m
-                yaxis_id: soc
-            apex_config:
-              chart:
-                height: 200
-                background: transparent
-                foreColor: var(--primary-text-color)
-              grid:
-                borderColor: "var(--divider-color, rgba(255,255,255,0.06))"
-              yaxis:
-                - title:
-                    text: Watts
-                    style:
-                      color: var(--secondary-text-color)
-                  seriesName: Power
-                  decimalsInFloat: 0
-                  labels:
-                    style:
-                      colors: var(--secondary-text-color)
-                - id: soc
-                  opposite: true
-                  title:
-                    text: SOC %
-                    style:
-                      color: "#5BC8D8"
-                  seriesName: SOC
-                  min: 0
-                  max: 100
-                  decimalsInFloat: 0
-                  labels:
-                    style:
-                      colors: "#5BC8D8"
-              xaxis:
-                labels:
-                  style:
-                    colors: var(--secondary-text-color)
-              tooltip:
-                theme: dark
-                x:
-                  format: HH:mm
-              legend:
-                labels:
-                  colors: var(--secondary-text-color)
-              annotations:
-                yaxis:
-                  - y: 0
-                    borderColor: "var(--divider-color, rgba(255,255,255,0.1))"
-                    strokeDashArray: 4
-            card_mod:
-              style: *glass_card
+          # ── Battery 24h Chart (sem-chart-card replaces apexcharts) ──
+          - type: custom:sem-chart-card
+            preset: battery
+            title: Battery 24h
 
           # ── SOC Zone Settings ──
           - type: custom:sem-battery-zones-card
@@ -705,58 +300,10 @@ views:
               card_mod:
                 style: *glass_card
 
-          # ── EV Power Chart (source breakdown) ──
-          - type: custom:apexcharts-card
-            header:
-              title: EV Charging Power
-              show: true
-            graph_span: 24h
-            stacked: true
-            series:
-              - entity: sensor.sem_flow_solar_to_ev_power
-                name: Solar
-                color: "#ff9800"
-                type: area
-                opacity: 0.5
-                stroke_width: 1
-                group_by:
-                  func: avg
-                  duration: 5m
-              - entity: sensor.sem_flow_battery_to_ev_power
-                name: Battery
-                color: "#4db6ac"
-                type: area
-                opacity: 0.4
-                stroke_width: 1
-                group_by:
-                  func: avg
-                  duration: 5m
-              - entity: sensor.sem_flow_grid_to_ev_power
-                name: Grid
-                color: "#488fc2"
-                type: area
-                opacity: 0.4
-                stroke_width: 1
-                group_by:
-                  func: avg
-                  duration: 5m
-            apex_config:
-              chart:
-                height: 200
-                background: transparent
-                foreColor: var(--primary-text-color)
-                stacked: true
-              grid:
-                borderColor: "var(--divider-color, rgba(255,255,255,0.06))"
-              tooltip:
-                theme: dark
-                x:
-                  format: HH:mm
-              legend:
-                labels:
-                  colors: var(--secondary-text-color)
-            card_mod:
-              style: *glass_card
+          # ── EV Power Chart (sem-chart-card replaces apexcharts) ──
+          - type: custom:sem-chart-card
+            preset: ev
+            title: EV Charging Power
 
           # ── EV Intelligence + Charging Settings ──
           # Handled by sem-ev-status-card per-charger sections (#193)
@@ -872,35 +419,8 @@ views:
           - type: custom:sem-grid-card
 
           # ══════════════════════════════════════════════════════
-          # 3. FORECAST SPARKLINE
+          # 3. FORECAST SPARKLINE (sem-chart-card replaces apexcharts)
           # ══════════════════════════════════════════════════════
-          - type: custom:apexcharts-card
-            header:
-              title: Forecast vs Actual
-              show: true
-            graph_span: 24h
-            series:
-              - entity: sensor.sem_forecast_power_now_w
-                name: Forecast
-                color: "#ff9800"
-                type: area
-                opacity: 0.3
-                stroke_width: 2
-                group_by:
-                  func: avg
-                  duration: 15min
-              - entity: sensor.sem_solar_power
-                name: Actual
-                color: "#4db6ac"
-                type: line
-                stroke_width: 2
-                group_by:
-                  func: avg
-                  duration: 15min
-            apex_config:
-              chart:
-                height: 160
-              legend:
-                show: true
-            card_mod:
-              style: *glass_card
+          - type: custom:sem-chart-card
+            preset: power
+            title: Forecast vs Actual

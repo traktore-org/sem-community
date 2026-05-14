@@ -1,0 +1,18 @@
+{
+  "name": "sem-cards",
+  "version": "1.5.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c rollup.config.mjs",
+    "watch": "rollup -c rollup.config.mjs -w"
+  },
+  "dependencies": {
+    "lit": "^3.3.2"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^4.30.0"
+  }
+}

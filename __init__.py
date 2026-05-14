@@ -1156,66 +1156,43 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         version = await hass.async_add_executor_job(_read_version)
 
         localize_base = f"{static_path}/card/sem-localize.js"
-        shared_base = f"{static_path}/card/sem-shared.js"
-        reactive_base = f"{static_path}/card/sem-reactive-base.js"
-        card_base = f"{static_path}/card/sem-load-priority-card.js"
-        diagram_base = f"{static_path}/card/sem-system-diagram-card.js"
-        period_base = f"{static_path}/card/sem-period-selector-card.js"
-        chart_base = f"{static_path}/card/sem-chart-card.js"
-        solar_summary_base = f"{static_path}/card/sem-solar-summary-card.js"
-        weather_base = f"{static_path}/card/sem-weather-card.js"
-        flow_base = f"{static_path}/card/sem-flow-card.js"
-        tab_header_base = f"{static_path}/card/sem-tab-header.js"
-        battery_card_base = f"{static_path}/card/sem-battery-card.js"
-        ev_status_base = f"{static_path}/card/sem-ev-status-card.js"
-        charger_status_base = f"{static_path}/card/sem-charger-status-card.js"
-        title_card_base = f"{static_path}/card/sem-title-card.js"
-        translator_base = f"{static_path}/card/sem-dashboard-translator.js"
-        schedule_base = f"{static_path}/card/sem-schedule-card.js"
-        solar_card_base = f"{static_path}/card/sem-solar-card.js"
-        costs_card_base = f"{static_path}/card/sem-costs-card.js"
-        grid_card_base = f"{static_path}/card/sem-grid-card.js"
-        control_card_base = f"{static_path}/card/sem-control-card.js"
-        energy_impact_base = f"{static_path}/card/sem-energy-impact-card.js"
-        battery_zones_base = f"{static_path}/card/sem-battery-zones-card.js"
-        ev_progress_base = f"{static_path}/card/sem-ev-progress-card.js"
-        costs_detail_base = f"{static_path}/card/sem-costs-detail-card.js"
-        system_card_base = f"{static_path}/card/sem-system-card.js"
-        home_status_base = f"{static_path}/card/sem-home-status-card.js"
+        # Single Lit bundle replaces all individual card JS files
+        cards_bundle_base = f"{static_path}/card/dist/sem-cards.js"
         localize_url = f"{localize_base}?v={version}"
-        shared_url = f"{shared_base}?v={version}"
-        card_url = f"{card_base}?v={version}"
-        diagram_url = f"{diagram_base}?v={version}"
-        period_url = f"{period_base}?v={version}"
-        chart_url = f"{chart_base}?v={version}"
-        solar_summary_url = f"{solar_summary_base}?v={version}"
-        weather_url = f"{weather_base}?v={version}"
-        flow_url = f"{flow_base}?v={version}"
-        tab_header_url = f"{tab_header_base}?v={version}"
-        battery_card_url = f"{battery_card_base}?v={version}"
-        ev_status_url = f"{ev_status_base}?v={version}"
-        charger_status_url = f"{charger_status_base}?v={version}"
-        title_card_url = f"{title_card_base}?v={version}"
-        translator_url = f"{translator_base}?v={version}"
-        schedule_url = f"{schedule_base}?v={version}"
-        solar_card_url = f"{solar_card_base}?v={version}"
-        costs_card_url = f"{costs_card_base}?v={version}"
-        grid_card_url = f"{grid_card_base}?v={version}"
-        control_card_url = f"{control_card_base}?v={version}"
-        energy_impact_url = f"{energy_impact_base}?v={version}"
-        battery_zones_url = f"{battery_zones_base}?v={version}"
-        ev_progress_url = f"{ev_progress_base}?v={version}"
-        costs_detail_url = f"{costs_detail_base}?v={version}"
-        system_card_url = f"{system_card_base}?v={version}"
-        home_status_url = f"{home_status_base}?v={version}"
-        # Load prerequisite scripts (SEMBaseCard, semLocalize) via add_extra_js_url.
-        # These load as <script> tags in <head>, guaranteed to execute BEFORE
-        # Lovelace resources. This prevents "SEMBaseCard is not defined" race
-        # conditions on systems with many HACS cards loading in parallel.
-        reactive_url = f"{reactive_base}?v={version}"
+        cards_bundle_url = f"{cards_bundle_base}?v={version}"
+
+        # Load semLocalize via add_extra_js_url — must be available before cards
         add_extra_js_url(hass, localize_url)
-        add_extra_js_url(hass, shared_url)
-        add_extra_js_url(hass, reactive_url)
+
+        # Legacy base URLs to clean up (migrated to single Lit bundle)
+        _legacy_bases = [
+            f"{static_path}/card/sem-shared.js",
+            f"{static_path}/card/sem-reactive-base.js",
+            f"{static_path}/card/sem-load-priority-card.js",
+            f"{static_path}/card/sem-system-diagram-card.js",
+            f"{static_path}/card/sem-period-selector-card.js",
+            f"{static_path}/card/sem-chart-card.js",
+            f"{static_path}/card/sem-solar-summary-card.js",
+            f"{static_path}/card/sem-weather-card.js",
+            f"{static_path}/card/sem-flow-card.js",
+            f"{static_path}/card/sem-tab-header.js",
+            f"{static_path}/card/sem-battery-card.js",
+            f"{static_path}/card/sem-ev-status-card.js",
+            f"{static_path}/card/sem-charger-status-card.js",
+            f"{static_path}/card/sem-title-card.js",
+            f"{static_path}/card/sem-dashboard-translator.js",
+            f"{static_path}/card/sem-schedule-card.js",
+            f"{static_path}/card/sem-solar-card.js",
+            f"{static_path}/card/sem-costs-card.js",
+            f"{static_path}/card/sem-grid-card.js",
+            f"{static_path}/card/sem-control-card.js",
+            f"{static_path}/card/sem-energy-impact-card.js",
+            f"{static_path}/card/sem-battery-zones-card.js",
+            f"{static_path}/card/sem-ev-progress-card.js",
+            f"{static_path}/card/sem-costs-detail-card.js",
+            f"{static_path}/card/sem-system-card.js",
+            f"{static_path}/card/sem-home-status-card.js",
+        ]
 
         try:
             from homeassistant.components.lovelace.resources import ResourceStorageCollection
@@ -1229,51 +1206,23 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 base = item["url"].split("?")[0]
                 existing_by_base[base] = item
 
-            # Remove localize and shared from Lovelace resources if present
-            # (they're now loaded via add_extra_js_url above)
-            for dep_base in (localize_base, shared_base):
-                dep_item = existing_by_base.get(dep_base)
-                if dep_item:
-                    await resources.async_delete_item(dep_item["id"])
-                    _LOGGER.info("Removed SEM dependency from Lovelace resources (now extra_js): %s", dep_base)
+            # Remove legacy individual card resources (now bundled)
+            for legacy_base in _legacy_bases:
+                legacy_item = existing_by_base.get(legacy_base)
+                if legacy_item:
+                    await resources.async_delete_item(legacy_item["id"])
+                    _LOGGER.info("Removed legacy SEM resource (now in Lit bundle): %s", legacy_base)
 
-            for base, versioned_url in (
-                (card_base, card_url),
-                (diagram_base, diagram_url),
-                (period_base, period_url),
-                (chart_base, chart_url),
-                (solar_summary_base, solar_summary_url),
-                (weather_base, weather_url),
-                (flow_base, flow_url),
-                (tab_header_base, tab_header_url),
-                (battery_card_base, battery_card_url),
-                (ev_status_base, ev_status_url),
-                (charger_status_base, charger_status_url),
-                (title_card_base, title_card_url),
-                (translator_base, translator_url),
-                (schedule_base, schedule_url),
-                (solar_card_base, solar_card_url),
-                (costs_card_base, costs_card_url),
-                (grid_card_base, grid_card_url),
-                (control_card_base, control_card_url),
-                (energy_impact_base, energy_impact_url),
-                (battery_zones_base, battery_zones_url),
-                (ev_progress_base, ev_progress_url),
-                (costs_detail_base, costs_detail_url),
-                (system_card_base, system_card_url),
-                (home_status_base, home_status_url),
-            ):
-                item = existing_by_base.get(base)
-                if item is None:
-                    # Not registered yet — create
-                    await resources.async_create_item({"res_type": "module", "url": versioned_url})
-                    _LOGGER.info("Registered SEM Lovelace resource: %s", versioned_url)
-                elif item["url"] != versioned_url:
-                    # Registered but with old version — update to bust cache
-                    await resources.async_update_item(
-                        item["id"], {"res_type": "module", "url": versioned_url}
-                    )
-                    _LOGGER.info("Updated SEM Lovelace resource: %s → %s", item["url"], versioned_url)
+            # Register single Lit bundle
+            bundle_item = existing_by_base.get(cards_bundle_base)
+            if bundle_item is None:
+                await resources.async_create_item({"res_type": "module", "url": cards_bundle_url})
+                _LOGGER.info("Registered SEM Lit bundle: %s", cards_bundle_url)
+            elif bundle_item["url"] != cards_bundle_url:
+                await resources.async_update_item(
+                    bundle_item["id"], {"res_type": "module", "url": cards_bundle_url}
+                )
+                _LOGGER.info("Updated SEM Lit bundle: %s → %s", bundle_item["url"], cards_bundle_url)
         except Exception as e:
             _LOGGER.warning("Could not register SEM Lovelace resources: %s", e)
 
@@ -1327,6 +1276,7 @@ async def _async_install_card_assets(
     def _copy_cards() -> list:
         os.makedirs(card_www_dir, exist_ok=True)
         cards = []
+        # Copy root-level JS files (sem-localize.js, etc.)
         if os.path.isdir(card_src_dir):
             for fname in os.listdir(card_src_dir):
                 if fname.endswith(".js"):
@@ -1335,6 +1285,18 @@ async def _async_install_card_assets(
                     if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
                         shutil.copy2(src, dst)
                         cards.append(fname)
+        # Copy Lit bundle from dist/ subdirectory
+        dist_src_dir = os.path.join(card_src_dir, "dist")
+        dist_www_dir = os.path.join(card_www_dir, "dist")
+        if os.path.isdir(dist_src_dir):
+            os.makedirs(dist_www_dir, exist_ok=True)
+            for fname in os.listdir(dist_src_dir):
+                if fname.endswith(".js"):
+                    src = os.path.join(dist_src_dir, fname)
+                    dst = os.path.join(dist_www_dir, fname)
+                    if not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst):
+                        shutil.copy2(src, dst)
+                        cards.append(f"dist/{fname}")
         # Also copy translations.json for sem-localize.js (#60)
         dashboard_dir = os.path.dirname(card_src_dir)
         translations_src = os.path.join(dashboard_dir, "translations.json")
