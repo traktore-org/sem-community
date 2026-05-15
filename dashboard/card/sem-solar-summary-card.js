@@ -73,14 +73,16 @@ class SEMSolarSummaryCard extends SEMBaseCard {
         const powerRatio = Math.min(solarPower / maxExpected, 1);
         const glowOpacity = 0.15 + powerRatio * 0.6;
 
-        if (!this._rendered) {
+        const isFirstRender = !this._rendered;
+        if (isFirstRender) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
 
         // Update dynamic values
         const $ = (sel) => this.shadowRoot.querySelector(sel);
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
 
         setVal('.solar-power', this._fmtPower(solarPower));
         setVal('.daily-solar', this._fmt(dailySolar, 2) + ' kWh');
@@ -97,16 +99,22 @@ class SEMSolarSummaryCard extends SEMBaseCard {
 
         // Update glow ring opacity
         const ring = $('.glow-ring');
-        if (ring) ring.style.opacity = glowOpacity;
+        if (ring) {
+            const glowOpacityStr = String(glowOpacity);
+            if (ring.style.opacity !== glowOpacityStr) ring.style.opacity = glowOpacityStr;
+        }
 
         // Update progress arc (daily solar vs forecast)
         const arc = $('.progress-arc');
         if (arc && forecastToday > 0) {
             const pct = Math.min(dailySolar / forecastToday, 1);
             const circumference = 2 * Math.PI * 42;
-            arc.style.strokeDasharray = `${circumference}`;
-            arc.style.strokeDashoffset = `${circumference * (1 - pct)}`;
+            const arcArray = `${circumference}`;
+            const arcOffset = `${circumference * (1 - pct)}`;
+            if (arc.style.strokeDasharray !== arcArray) arc.style.strokeDasharray = arcArray;
+            if (arc.style.strokeDashoffset !== arcOffset) arc.style.strokeDashoffset = arcOffset;
         }
+        if (isFirstRender) requestAnimationFrame(() => { this.style.visibility = ''; });
     }
 
     _renderSkeleton() {

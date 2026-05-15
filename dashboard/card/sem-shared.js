@@ -178,6 +178,18 @@ class SEMBaseCard extends HTMLElement {
             this._localizeReady = hasLocalize;
             return true;
         }
+        // Poll for semLocalize availability during first 30s after card creation
+        // (covers race condition where semLocalize loads after initial render)
+        if (!this._localizeReady && !this._localizePollDone) {
+            if (!this._localizePollStart) this._localizePollStart = Date.now();
+            if (Date.now() - this._localizePollStart > 30000) {
+                this._localizePollDone = true;  // Stop polling after 30s
+            }
+            if (hasLocalize) {
+                this._localizeReady = true;
+                return true;
+            }
+        }
         return false;
     }
 

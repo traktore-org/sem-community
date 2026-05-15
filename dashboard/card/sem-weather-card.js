@@ -43,6 +43,10 @@ class SEMWeatherCard extends SEMBaseCard {
 
     set hass(hass) {
         const localeChanged = this._checkLocaleChange(hass);
+        const weatherEntity = hass.states[this.config?.entity];
+        const key = (weatherEntity?.state || '') + JSON.stringify(weatherEntity?.attributes?.forecast?.[0] || '') + '|' + (hass.language || '');
+        if (key === this._lastKey && !localeChanged) return;
+        this._lastKey = key;
         if (localeChanged) {
             this._rendered = false; // force full re-render for translation
         }
@@ -57,7 +61,9 @@ class SEMWeatherCard extends SEMBaseCard {
             return;
         }
 
-        if (!this._rendered) {
+        const isFirstRender = !this._rendered;
+        if (isFirstRender) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
@@ -79,7 +85,7 @@ class SEMWeatherCard extends SEMBaseCard {
 
         const $ = (sel) => this.shadowRoot.querySelector(sel);
 
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
         const setHtml = (sel, html) => { const el = $(sel); if (el) el.innerHTML = html; };
 
         setVal('.time', timeStr);
@@ -134,6 +140,7 @@ class SEMWeatherCard extends SEMBaseCard {
                 setVal('.date', n.toLocaleDateString(loc, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
             }, 30000);
         }
+        if (isFirstRender) requestAnimationFrame(() => { this.style.visibility = ''; });
     }
 
     disconnectedCallback() {

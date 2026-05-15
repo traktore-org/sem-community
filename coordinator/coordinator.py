@@ -42,7 +42,7 @@ from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
     SurplusControlData, ForecastSensorData, TariffSensorData,
     HeatPumpSensorData, PVAnalyticsData, EnergyAssistantSensorData,
-    UtilitySignalSensorData, SessionData,
+    UtilitySignalSensorData, SessionData, BatterySessionData,
 )
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
@@ -228,6 +228,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._session_data_per_charger: Dict[str, SessionData] = {}
         self._last_ev_connected = False
         self._last_ev_connected_per_charger: Dict[str, bool] = {}
+
+        # Battery session tracking
+        self._battery_session = BatterySessionData()
+        self._battery_session_idle_count = 0
+
+        # Zone-transition debounce: holds the last stable SOC zone and the
+        # candidate zone being observed. A new zone is only applied after it
+        # is seen for N consecutive cycles (zone_debounce_cycles, default 2).
+        # Prevents Charging→Idle→Charging flapping when a user nudges a zone
+        # threshold (e.g., Priority SOC 50→51%) or SOC oscillates near a
+        # boundary. Tracks last-seen thresholds so a deliberate config change
+        # also resets the candidate counter rather than amplifying the blip.
+        self._stable_zone: Optional[int] = None
+        self._pending_zone: Optional[int] = None
+        self._pending_zone_count: int = 0
+        self._last_zone_thresholds: Optional[tuple] = None
 
         # Initialize data with defaults
         self.data = self._get_initial_data()
@@ -555,6 +571,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             else:
                 self._update_session_tracking(power, power_flows)
 
+            # Step 4.5: Battery session tracking
+            self._update_battery_session_tracking(power, power_flows)
+
             # Step 4.6: EV taper detection and intelligence (#106)
             ev_intelligence = self._update_ev_intelligence(power, energy)
             self._last_ev_intelligence = ev_intelligence  # For notifications (#106)
@@ -785,6 +804,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 utility_signal=utility_data,
                 session=self._session_data,
                 sessions=self._session_data_per_charger,
+                battery_session=self._battery_session,
                 currency=self.hass.config.currency or "EUR",
                 ev_charger_count=len(self._ev_devices),
                 ev_charger_ids=list(self._ev_devices.keys()),
@@ -1546,9 +1566,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         already_assisting = (self._state_machine.current_state == ChargingState.SOLAR_SUPER_CHARGING)
 
-        # Zone 4: SOC >= auto_start_soc → always battery_assist
-        # Battery is full enough to start EV even without surplus
-        if power.battery_soc >= auto_start_soc:
+        # Debounce zone selection so single-cycle blips (config tweak, SOC
+        # jitter near a boundary) don't bounce strategy idle ↔ solar/assist.
+        raw_zone = self._raw_zone(power.battery_soc, auto_start_soc, buffer_soc, priority_soc)
+        zone = self._debounce_zone(raw_zone, (auto_start_soc, buffer_soc, priority_soc))
+
+        # Zone 4: full battery assist (battery full enough to start EV even
+        # without surplus).
+        if zone == 4:
             usable_battery = max(0, (power.battery_soc - battery_floor) / 100 * battery_capacity)
             return (
                 "battery_assist",
@@ -1556,9 +1581,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 f"full battery assist (usable={usable_battery:.1f}kWh)"
             )
 
-        # Zone 3: SOC >= buffer_soc → battery can discharge to bridge gaps
-        if power.battery_soc >= buffer_soc:
-            # Use forecast if available to check if surplus alone is enough
+        # Zone 3: battery can discharge to bridge gaps.
+        if zone == 3:
             try:
                 forecast = self._cycle_forecast
                 if forecast.available:
@@ -1575,7 +1599,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             except Exception as e:
                 _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
 
-            # Battery assist: bridge gaps when surplus alone won't reach KEBA minimum
             usable_battery = max(0, (power.battery_soc - battery_floor) / 100 * battery_capacity)
             return (
                 "battery_assist",
@@ -1583,9 +1606,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 f"discharge assist (usable={usable_battery:.1f}kWh, need={remaining_need:.1f}kWh)"
             )
 
-        # Zone 2: priority_soc <= SOC < buffer_soc → surplus only
-        # Battery still needs charge, only use pure surplus (+ forecast-aware redirect in flow_calculator)
-        if power.battery_soc >= priority_soc:
+        # Zone 2: surplus only (battery still needs charge; forecast-aware
+        # redirect lives in flow_calculator).
+        if zone == 2:
             # Hysteresis: if already assisting, stay active down to floor_soc
             if already_assisting and power.battery_soc >= battery_floor:
                 return (
@@ -1605,8 +1628,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
             return ("solar_only", reason)
 
-        # Zone 1: SOC < priority_soc → battery priority
-        # State machine will route to SOLAR_PAUSE_LOW_BATTERY via battery_too_low flag
+        # Zone 1: battery priority. State machine routes to
+        # SOLAR_PAUSE_LOW_BATTERY via battery_too_low flag.
         return ("idle", f"Zone 1: SOC={power.battery_soc:.0f}% < priority={priority_soc}% — battery priority")
 
     def _self_consumption_strategy(self, power, energy) -> tuple:
@@ -1667,15 +1690,72 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # (return None so caller continues to zone logic)
         return None  # Signal: continue to zone logic
 
-    def _get_zone(self, soc: float) -> int:
-        """Get SOC zone number for logging."""
-        auto_start = self.config.get("battery_auto_start_soc", 90)
-        buffer = self.config.get("battery_buffer_soc", 70)
-        priority = self.config.get("battery_priority_soc", 30)
+    def _raw_zone(self, soc: float, auto_start: float, buffer: float, priority: float) -> int:
+        """Map SOC to a zone number using raw (un-debounced) thresholds."""
         if soc >= auto_start: return 4
         if soc >= buffer: return 3
         if soc >= priority: return 2
         return 1
+
+    def _get_zone(self, soc: float) -> int:
+        """Get SOC zone number for logging (raw, no debounce)."""
+        auto_start = self.config.get("battery_auto_start_soc", 90)
+        buffer = self.config.get("battery_buffer_soc", 70)
+        priority = self.config.get("battery_priority_soc", 30)
+        return self._raw_zone(soc, auto_start, buffer, priority)
+
+    def _debounce_zone(self, raw_zone: int, thresholds: tuple) -> int:
+        """Hold the stable SOC zone until raw_zone is seen for N cycles.
+
+        Returning a stable zone smooths over single-cycle blips that would
+        otherwise flip charging strategy from solar_only → idle → solar_only
+        (and bounce the battery Charging→Idle→Charging). The most common blip
+        is a user adjusting a threshold via a number entity; the second is
+        SOC noise around a zone boundary.
+
+        A change in `thresholds` resets the pending-candidate counter so the
+        new boundaries are evaluated from a clean slate without compounding
+        the blip caused by the change itself.
+        """
+        cycles = max(1, int(self.config.get("zone_debounce_cycles", 2)))
+
+        last_thresholds = getattr(self, "_last_zone_thresholds", None)
+        if last_thresholds is not None and last_thresholds != thresholds:
+            self._pending_zone = None
+            self._pending_zone_count = 0
+        self._last_zone_thresholds = thresholds
+
+        stable = getattr(self, "_stable_zone", None)
+        if stable is None:
+            self._stable_zone = raw_zone
+            return raw_zone
+
+        if raw_zone == stable:
+            self._pending_zone = None
+            self._pending_zone_count = 0
+            return stable
+
+        if raw_zone == getattr(self, "_pending_zone", None):
+            self._pending_zone_count = getattr(self, "_pending_zone_count", 0) + 1
+        else:
+            self._pending_zone = raw_zone
+            self._pending_zone_count = 1
+
+        if self._pending_zone_count >= cycles:
+            _LOGGER.info(
+                "SOC zone transition %d → %d applied after %d stable cycles",
+                stable, raw_zone, self._pending_zone_count,
+            )
+            self._stable_zone = raw_zone
+            self._pending_zone = None
+            self._pending_zone_count = 0
+            return raw_zone
+
+        _LOGGER.debug(
+            "SOC zone candidate %d (count=%d/%d), holding stable=%d",
+            raw_zone, self._pending_zone_count, cycles, stable,
+        )
+        return stable
 
     def _build_charging_context(
         self,
@@ -1769,6 +1849,98 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charging_strategy_reason=reason,
             night_target_kwh=night_target,
         )
+
+    def _update_battery_session_tracking(
+        self, power: PowerReadings, power_flows: PowerFlows
+    ) -> None:
+        """Track battery charge/discharge sessions with source attribution.
+
+        Similar to EV session tracking but adapted for battery:
+        - Charge session: starts when charge_power > 50W
+        - Discharge session: starts when discharge_power > 50W
+        - Session ends when power drops below 50W for 3 consecutive cycles
+        - Direction change ends current session and starts new one
+        """
+        POWER_THRESHOLD = 50.0
+        IDLE_CYCLES_TO_END = 3
+
+        charging = power.battery_charge_power > POWER_THRESHOLD
+        discharging = power.battery_discharge_power > POWER_THRESHOLD
+        session = self._battery_session
+
+        # Determine current activity
+        if charging:
+            current_type = "charge"
+        elif discharging:
+            current_type = "discharge"
+        else:
+            current_type = "idle"
+
+        # Handle direction change — end current session, start new one
+        if session.active and current_type != "idle" and current_type != session.session_type:
+            session.active = False
+            _LOGGER.debug(
+                "Battery session ended (direction change): %s, %.2f kWh, %d min",
+                session.session_type, session.energy_kwh, session.duration_minutes,
+            )
+
+        # Handle idle — count consecutive idle cycles
+        if current_type == "idle":
+            if session.active:
+                self._battery_session_idle_count += 1
+                if self._battery_session_idle_count >= IDLE_CYCLES_TO_END:
+                    session.active = False
+                    _LOGGER.debug(
+                        "Battery session ended (idle): %s, %.2f kWh, %d min",
+                        session.session_type, session.energy_kwh, session.duration_minutes,
+                    )
+            return
+
+        # Reset idle counter when power is active
+        self._battery_session_idle_count = 0
+
+        # Start new session
+        if not session.active:
+            self._battery_session = BatterySessionData(
+                active=True,
+                session_type=current_type,
+                start_time=dt_util.now().isoformat(),
+            )
+            session = self._battery_session
+            _LOGGER.debug("Battery session started: %s", current_type)
+
+        # Accumulate energy
+        interval_s = self.config.get("update_interval", 10)
+        hours = interval_s / 3600.0
+
+        if session.session_type == "charge":
+            total_increment = (power.battery_charge_power * hours) / 1000.0
+            solar_increment = (power_flows.solar_to_battery * hours) / 1000.0
+            grid_increment = (power_flows.grid_to_battery * hours) / 1000.0
+            session.energy_kwh += total_increment
+            session.solar_energy_kwh += solar_increment
+            session.grid_energy_kwh += grid_increment
+            if session.energy_kwh > 0:
+                session.solar_share_pct = (session.solar_energy_kwh / session.energy_kwh) * 100
+            import_rate = self.config.get("electricity_import_rate", 0.30)
+            session.cost += grid_increment * import_rate
+        else:  # discharge
+            discharge_increment = (power.battery_discharge_power * hours) / 1000.0
+            session.energy_kwh += discharge_increment
+            import_rate = self.config.get("electricity_import_rate", 0.30)
+            session.savings += discharge_increment * import_rate
+
+        # Update duration and average power
+        if session.start_time:
+            try:
+                start = dt_util.parse_datetime(session.start_time)
+                if start:
+                    elapsed = (dt_util.now() - start).total_seconds() / 60.0
+                    session.duration_minutes = max(0, elapsed)
+                    if session.duration_minutes > 0:
+                        session.avg_power_w = (session.energy_kwh * 60000) / session.duration_minutes
+            except (ValueError, TypeError):
+                pass
 
     def _restore_ev_session_state(self) -> None:
         """Restore EV session state from storage on startup."""

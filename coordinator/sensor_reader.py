@@ -45,10 +45,12 @@ class SensorReader:
         self._energy_dashboard_config = None
         self._grid_sign_inverted = False
         self._grid_sign_detected = False  # True once sign is reliably determined
+        self._grid_sign_votes: int = 0  # Consecutive same-sign detections needed
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
         self._battery_sign_inverted = False
         self._battery_sign_detected = False
+        self._battery_sign_votes: int = 0  # Consecutive same-sign detections needed
         self._battery_charge_baseline: Optional[float] = None
         self._battery_discharge_baseline: Optional[float] = None
         # Track sensor availability transitions (#5: robustness)
@@ -181,22 +183,27 @@ class SensorReader:
             # Export counter increasing
             detected = power < 0  # If power negative during export → negate
 
-        if detected is not None and detected != self._grid_sign_inverted:
-            if not self._grid_sign_detected:
+        if detected is None:
+            return self._grid_sign_inverted
+
+        # Require 3 consecutive consistent detections before locking in.
+        # Prevents false sign flips from transient energy counter jitter
+        # after reboots.
+        if not self._grid_sign_detected:
+            if detected == (self._grid_sign_votes > 0):
+                self._grid_sign_votes += 1 if detected else -1
+            else:
+                self._grid_sign_votes = 1 if detected else -1
+
+            if abs(self._grid_sign_votes) >= 3:
+                self._grid_sign_inverted = detected
+                self._grid_sign_detected = True
                 _LOGGER.info(
                     "Grid sign detected from Energy Dashboard counters: %s "
                     "(power=%.0fW, import_delta=%.3f, export_delta=%.3f)",
                     "negating (HA convention)" if detected else "no correction (SEM convention)",
                     power, import_delta, export_delta,
                 )
-            self._grid_sign_inverted = detected
-            self._grid_sign_detected = True
-        elif detected is not None and not self._grid_sign_detected:
-            self._grid_sign_detected = True
-            _LOGGER.info(
-                "Grid sign confirmed from Energy Dashboard counters: %s",
-                "negating (HA convention)" if detected else "no correction (SEM convention)",
-            )
 
         return self._grid_sign_inverted
 
@@ -268,22 +275,30 @@ class SensorReader:
             # Discharge counter increasing
             detected = power > 0  # If power positive during discharge → negate
 
-        if detected is not None and detected != self._battery_sign_inverted:
-            if not self._battery_sign_detected:
+        if detected is None:
+            return self._battery_sign_inverted
+
+        # Require 3 consecutive consistent detections before locking in.
+        # This prevents false sign flips from transient energy counter
+        # jitter after reboots (e.g. both counters ticking simultaneously
+        # during HA recorder settling).
+        if not self._battery_sign_detected:
+            if detected == (self._battery_sign_votes > 0):
+                # Same direction as previous votes (True=negate votes positive)
+                self._battery_sign_votes += 1 if detected else -1
+            else:
+                # Direction changed — reset
+                self._battery_sign_votes = 1 if detected else -1
+
+            if abs(self._battery_sign_votes) >= 3:
+                self._battery_sign_inverted = detected
+                self._battery_sign_detected = True
                 _LOGGER.info(
                     "Battery sign detected from Energy Dashboard counters: %s "
                     "(power=%.0fW, charge_delta=%.3f, discharge_delta=%.3f)",
                     "negating (opposite convention)" if detected else "no correction (SEM convention)",
                     power, charge_delta, discharge_delta,
                 )
-            self._battery_sign_inverted = detected
-            self._battery_sign_detected = True
-        elif detected is not None and not self._battery_sign_detected:
-            self._battery_sign_detected = True
-            _LOGGER.info(
-                "Battery sign confirmed from Energy Dashboard counters: %s",
-                "negating (opposite convention)" if detected else "no correction (SEM convention)",
-            )
 
         return self._battery_sign_inverted
 
@@ -318,6 +333,9 @@ class SensorReader:
             export_w = self._read_sensor(manual_export, "grid_export") if manual_export else 0.0
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
+        elif len(ed.grid_power_list) > 1:
+            # Multiple grid power sensors — sum all (e.g. multi-meter setups)
+            readings.grid_power = self._read_sensors_sum(ed.grid_power_list, "grid")
         elif ed.grid_import_power:
             readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
         elif not ed.grid_import_power and ed.grid_import_energy:

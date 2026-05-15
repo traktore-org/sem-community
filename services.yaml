@@ -96,10 +96,6 @@ update_target_peak:
           step: 0.1
           unit_of_measurement: kW
 
-configure_energy_dashboard:
-  name: Configure Energy Dashboard
-  description: Automatically configure Home Assistant Energy Dashboard with SEM sensors (Grid, Solar, Battery, EV Charger)
-
 set_device_control_mapping:
   name: Set Device Control Mapping
   description: Manually map a control entity to an Energy Dashboard device when auto-discovery fails. The mapping is persisted and survives restarts.

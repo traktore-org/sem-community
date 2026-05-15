@@ -66,6 +66,7 @@ class EnergyCalculator:
         self._ev_daily_energy_sensor: Optional[str] = None
         self._lifetime_seeded: bool = False
         self._yearly_seeded: bool = False
+        self._yearly_seed_attempts: int = 0
         # Auto-detected from recorder statistics (first solar energy entry)
         self._install_year_decimal: Optional[float] = None
 
@@ -400,6 +401,18 @@ class EnergyCalculator:
         if self._yearly_seeded:
             return
         if not ed_config:
+            return
+
+        # Stop retrying after 3 attempts — recorder may not be compatible
+        # (e.g. Python 3.14 blocking call detection in HA core)
+        self._yearly_seed_attempts += 1
+        if self._yearly_seed_attempts > 3:
+            self._yearly_seeded = True
+            _LOGGER.info(
+                "Yearly seeding skipped after %d failed attempts — "
+                "yearly accumulators will build up from daily tracking",
+                self._yearly_seed_attempts - 1,
+            )
             return
 
         year_key = str(dt_util.now().year)

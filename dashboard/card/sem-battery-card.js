@@ -28,7 +28,11 @@ class SEMBatteryCard extends SEMBaseCard {
             'battery_soc', 'battery_power', 'battery_status',
             'battery_health_score', 'battery_cycles_estimated',
             'daily_battery_charge_energy', 'daily_battery_discharge_energy',
-            'daily_battery_savings',
+            'daily_battery_savings', 'battery_session_type', 'battery_session_energy',
+            'battery_session_solar_share', 'battery_session_duration',
+            'battery_session_cost', 'battery_session_savings',
+            'flow_solar_to_battery_energy', 'flow_grid_to_battery_energy',
+            'monthly_battery_charge_energy', 'monthly_battery_discharge_energy',
         ].map(s => this._hass?.states[`${this._prefix}${s}`]?.state || '').join(',')
             + '|' + this._hass?.language;
         if (key === this._lastKey && !localeChanged) return;
@@ -36,7 +40,11 @@ class SEMBatteryCard extends SEMBaseCard {
         if (localeChanged) {
             this._rendered = false;  // Force skeleton re-render with translations
         }
+        const wasUnrendered = !this._rendered;
         this._update();
+        if (wasUnrendered) {
+            requestAnimationFrame(() => { this.style.visibility = ''; });
+        }
     }
 
     _state(suffix, fallback) {
@@ -82,40 +90,46 @@ class SEMBatteryCard extends SEMBaseCard {
             ? parseFloat(tempEntity.state) : null;
 
         if (!this._rendered) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
 
         const $ = (sel) => this.shadowRoot.querySelector(sel);
-        const setVal = (sel, text) => { const el = $(sel); if (el) el.textContent = text; };
+        const setVal = (sel, text) => { const el = $(sel); if (el && el.textContent !== text) el.textContent = text; };
 
         // SOC arc
         const circumference = 2 * Math.PI * 42;
         const arc = $('.soc-arc');
         if (arc) {
             const pct = Math.min(Math.max(soc / 100, 0), 1);
-            arc.style.strokeDashoffset = (circumference * (1 - pct)).toFixed(1);
-            arc.style.stroke = isCharging ? '#f06292' : '#4db6ac';
-            arc.style.animation = (isCharging || isDischarging)
-                ? 'socPulse 2s ease-in-out infinite' : 'none';
+            const offset = (circumference * (1 - pct)).toFixed(1);
+            if (arc.style.strokeDashoffset !== offset) arc.style.strokeDashoffset = offset;
+            const arcColor = isCharging ? '#f06292' : '#4db6ac';
+            if (arc.style.stroke !== arcColor) arc.style.stroke = arcColor;
+            const arcAnim = (isCharging || isDischarging) ? 'socPulse 2s ease-in-out infinite' : 'none';
+            if (arc.style.animation !== arcAnim) arc.style.animation = arcAnim;
         }
 
         // Glow ring color
         const glowRing = $('.glow-ring');
         if (glowRing) {
-            const intensity = (isCharging || isDischarging) ? 0.5 : 0.2;
-            glowRing.style.opacity = intensity;
-            glowRing.style.stroke = isCharging ? '#f06292' : '#4db6ac';
+            const intensity = String((isCharging || isDischarging) ? 0.5 : 0.2);
+            if (glowRing.style.opacity !== intensity) glowRing.style.opacity = intensity;
+            const ringColor = isCharging ? '#f06292' : '#4db6ac';
+            if (glowRing.style.stroke !== ringColor) glowRing.style.stroke = ringColor;
         }
 
         // Glow filter flood color
         const flood = $('.glow-flood');
-        if (flood) flood.setAttribute('flood-color', isCharging ? '#f06292' : '#4db6ac');
+        const floodColor = isCharging ? '#f06292' : '#4db6ac';
+        if (flood && flood.getAttribute('flood-color') !== floodColor) flood.setAttribute('flood-color', floodColor);
 
         // Center SOC text
         setVal('.soc-value', `${soc.toFixed(0)}%`);
         const socEl = $('.soc-value');
-        if (socEl) socEl.style.color = isCharging ? '#f06292' : '#4db6ac';
+        const socColor = isCharging ? '#f06292' : '#4db6ac';
+        if (socEl && socEl.style.color !== socColor) socEl.style.color = socColor;
 
         // Metrics
         setVal('.m-soc', `${soc.toFixed(1)}%`);
@@ -129,7 +143,8 @@ class SEMBatteryCard extends SEMBaseCard {
         const statusEl = $('.m-status');
         if (statusEl) {
             const idleColor = (typeof semTheme === 'function') ? semTheme().textSec : '#888';
-            statusEl.style.color = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : idleColor;
+            const statusColor = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : idleColor;
+            if (statusEl.style.color !== statusColor) statusEl.style.color = statusColor;
         }
 
         // Translate labels
@@ -143,10 +158,56 @@ class SEMBatteryCard extends SEMBaseCard {
         setVal('.lbl-discharge-today', this._t('discharge_today'));
         setVal('.lbl-savings-today', this._t('savings_today'));
 
-        // Bottom chips
+        // Daily source attribution
+        const solarToBatt = this._state('flow_solar_to_battery_energy', 0);
+        const gridToBatt = this._state('flow_grid_to_battery_energy', 0);
+        const solarPct = dailyCharge > 0 ? Math.round(solarToBatt / dailyCharge * 100) : 0;
+
+        // Bottom chips — daily
+        const currency = window.semGetCurrency?.(this._hass) || 'EUR';
         setVal('.chip-charge', this._fmt(dailyCharge, 2) + ' kWh');
+        setVal('.chip-charge-src', solarPct > 0 ? `${solarPct}% ${this._t('solar')}` : '');
         setVal('.chip-discharge', this._fmt(dailyDischarge, 2) + ' kWh');
-        setVal('.chip-savings', this._fmt(dailySavings, 2) + ' ' + (window.semGetCurrency?.(this._hass) || 'EUR'));
+        setVal('.chip-savings', this._fmt(dailySavings, 2) + ' ' + currency);
+
+        // Battery session section
+        const sessionType = this._stateStr('battery_session_type');
+        const sessionActive = sessionType === 'charge' || sessionType === 'discharge';
+        const sessionEl = $('.session-section');
+        if (sessionEl) {
+            const sessDisplay = sessionActive ? 'block' : 'none';
+            if (sessionEl.style.display !== sessDisplay) sessionEl.style.display = sessDisplay;
+            if (sessionActive) {
+                const sEnergy = this._state('battery_session_energy', 0);
+                const sDuration = this._state('battery_session_duration', 0);
+                const sAvgPower = this._state('battery_session_avg_power', 0);
+                const sSolarShare = this._state('battery_session_solar_share', 0);
+                const sCost = this._state('battery_session_cost', 0);
+                const sSavings = this._state('battery_session_savings', 0);
+                const isChargeSess = sessionType === 'charge';
+
+                setVal('.sess-title', isChargeSess ? this._t('charging') : this._t('discharging'));
+                const sessTitleEl = $('.sess-title');
+                const sessColor = isChargeSess ? '#f06292' : '#4db6ac';
+                if (sessTitleEl && sessTitleEl.style.color !== sessColor) sessTitleEl.style.color = sessColor;
+                setVal('.sess-energy', this._fmt(sEnergy, 2) + ' kWh');
+                setVal('.sess-duration', Math.round(sDuration) + ' min');
+                setVal('.sess-power', this._fmtPower(sAvgPower));
+                if (isChargeSess) {
+                    setVal('.sess-source', `${this._t('solar')}: ${this._fmt(sSolarShare, 0)}%`);
+                    setVal('.sess-cost', this._fmt(sCost, 2) + ' ' + currency);
+                } else {
+                    setVal('.sess-source', '');
+                    setVal('.sess-cost', this._t('saved') + ' ' + this._fmt(sSavings, 2) + ' ' + currency);
+                }
+            }
+        }
+
+        // Monthly stats
+        const monthCharge = this._state('monthly_battery_charge_energy', 0);
+        const monthDischarge = this._state('monthly_battery_discharge_energy', 0);
+        setVal('.month-charge', this._fmt(monthCharge, 1) + ' kWh');
+        setVal('.month-discharge', this._fmt(monthDischarge, 1) + ' kWh');
     }
 
     _renderSkeleton() {
@@ -162,7 +223,7 @@ class SEMBatteryCard extends SEMBaseCard {
 
         this.shadowRoot.innerHTML = `
             <style>
-                :host { display: block; }
+                :host { display: block; contain: layout style paint; }
                 .wrap {
                     padding: 16px 20px;
                     position: relative;
@@ -219,6 +280,12 @@ class SEMBatteryCard extends SEMBaseCard {
                     stroke-width: 8;
                     opacity: 0.2;
                     filter: url(#batt-glow-soft);
+                    animation: glowPulse 3s ease-in-out infinite;
+                    will-change: opacity, r;
+                }
+                @keyframes glowPulse {
+                    0%, 100% { opacity: 0.2; }
+                    50% { opacity: 0.08; }
                 }
                 @keyframes socPulse {
                     0%, 100% { opacity: 1; }
@@ -307,6 +374,59 @@ class SEMBatteryCard extends SEMBaseCard {
                 .c-charge { color: #f06292; }
                 .c-discharge { color: #4db6ac; }
                 .c-savings { color: #8DC892; }
+                .chip-src { font-size: 9px; color: var(--secondary-text-color, ${chipLblCol}); margin-top: 1px; }
+
+                /* Session section */
+                .session-section {
+                    display: none;
+                    margin-top: 14px;
+                    padding: 10px 12px;
+                    background: var(--secondary-background-color, ${surfaceCol});
+                    border: 1px solid var(--divider-color, ${surfBorder});
+                    border-radius: 10px;
+                }
+                .sess-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    margin-bottom: 6px;
+                }
+                .sess-title {
+                    font-size: 12px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                }
+                .sess-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 4px;
+                }
+                .sess-item-label {
+                    font-size: 10px;
+                    color: var(--secondary-text-color, ${chipLblCol});
+                }
+                .sess-item-value {
+                    font-size: 12px;
+                    font-weight: 600;
+                    font-variant-numeric: tabular-nums;
+                    color: var(--primary-text-color, ${textCol});
+                }
+
+                /* Monthly section */
+                .monthly-section {
+                    display: flex;
+                    gap: 8px;
+                    margin-top: 10px;
+                }
+                .month-chip {
+                    flex: 1;
+                    text-align: center;
+                    padding: 6px 8px;
+                    background: var(--secondary-background-color, ${surfaceCol});
+                    border: 1px solid var(--divider-color, ${surfBorder});
+                    border-radius: 8px;
+                }
             </style>
 
             <svg class="glow-svg">
@@ -329,10 +449,7 @@ class SEMBatteryCard extends SEMBaseCard {
                     <div class="hero">
                         <div class="battery-ring">
                             <svg viewBox="0 0 100 100">
-                                <circle class="glow-ring" cx="50" cy="50" r="42">
-                                    <animate attributeName="r" values="42;45;42" dur="3s" repeatCount="indefinite"/>
-                                    <animate attributeName="opacity" values="0.2;0.08;0.2" dur="3s" repeatCount="indefinite"/>
-                                </circle>
+                                <circle class="glow-ring" cx="50" cy="50" r="42"/>
                                 <circle class="ring-bg" cx="50" cy="50" r="42"/>
                                 <circle class="soc-arc" cx="50" cy="50" r="42"
                                     stroke-dasharray="${circumference}"
@@ -374,10 +491,42 @@ class SEMBatteryCard extends SEMBaseCard {
                         </div>
                     </div>
 
+                    <!-- Active Session -->
+                    <div class="session-section">
+                        <div class="sess-header">
+                            <ha-icon icon="mdi:battery-sync" style="--mdc-icon-size:14px;color:#4db6ac"></ha-icon>
+                            <span class="sess-title">${this._t('charging')}</span>
+                        </div>
+                        <div class="sess-grid">
+                            <div>
+                                <div class="sess-item-label">${this._t('energy')}</div>
+                                <div class="sess-item-value sess-energy">—</div>
+                            </div>
+                            <div>
+                                <div class="sess-item-label">${this._t('duration')}</div>
+                                <div class="sess-item-value sess-duration">—</div>
+                            </div>
+                            <div>
+                                <div class="sess-item-label">${this._t('avg_power')}</div>
+                                <div class="sess-item-value sess-power">—</div>
+                            </div>
+                            <div>
+                                <div class="sess-item-label">${this._t('source')}</div>
+                                <div class="sess-item-value sess-source">—</div>
+                            </div>
+                            <div>
+                                <div class="sess-item-label">${this._t('cost')}</div>
+                                <div class="sess-item-value sess-cost">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Daily -->
                     <div class="chips">
                         <div class="chip">
                             <div class="chip-label lbl-charge-today">${this._t('charge_today')}</div>
                             <div class="chip-value c-charge chip-charge">—</div>
+                            <div class="chip-src chip-charge-src"></div>
                         </div>
                         <div class="chip">
                             <div class="chip-label lbl-discharge-today">${this._t('discharge_today')}</div>
@@ -386,6 +535,18 @@ class SEMBatteryCard extends SEMBaseCard {
                         <div class="chip">
                             <div class="chip-label lbl-savings-today">${this._t('savings_today')}</div>
                             <div class="chip-value c-savings chip-savings">—</div>
+                        </div>
+                    </div>
+
+                    <!-- Monthly -->
+                    <div class="monthly-section">
+                        <div class="month-chip">
+                            <div class="chip-label">${this._t('monthly')} ${this._t('charge')}</div>
+                            <div class="chip-value c-charge month-charge">—</div>
+                        </div>
+                        <div class="month-chip">
+                            <div class="chip-label">${this._t('monthly')} ${this._t('discharge')}</div>
+                            <div class="chip-value c-discharge month-discharge">—</div>
                         </div>
                     </div>
                 </div>

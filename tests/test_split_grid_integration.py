@@ -37,24 +37,27 @@ def _make_energy_dashboard_config(
     battery_power="sensor.battery_power",
     battery_charge_energy="sensor.battery_charge_total",
     battery_discharge_energy="sensor.battery_discharge_total",
+    solar_power_list=None,
+    grid_power_list=None,
+    battery_power_list=None,
 ):
     """Create a mock Energy Dashboard config."""
     ed = MagicMock()
     ed.solar_power = solar_power
-    ed.solar_power_list = [solar_power] if solar_power else []
+    ed.solar_power_list = solar_power_list or ([solar_power] if solar_power else [])
     ed.grid_import_power = grid_import_power
-    ed.grid_power_list = [grid_import_power] if grid_import_power else []
+    ed.grid_power_list = grid_power_list or ([grid_import_power] if grid_import_power else [])
     ed.grid_import_energy = grid_import_energy
     ed.grid_export_energy = grid_export_energy
     ed.grid_import_energy_list = [grid_import_energy] if grid_import_energy else []
     ed.grid_export_energy_list = [grid_export_energy] if grid_export_energy else []
     ed.battery_power = battery_power
-    ed.battery_power_list = [battery_power] if battery_power else []
+    ed.battery_power_list = battery_power_list or ([battery_power] if battery_power else [])
     ed.battery_charge_energy = battery_charge_energy
     ed.battery_discharge_energy = battery_discharge_energy
     ed.ev_power = None
     ed.has_solar = bool(solar_power)
-    ed.has_grid = bool(grid_import_energy or grid_import_power)
+    ed.has_grid = bool(grid_import_energy or grid_import_power or grid_power_list)
     ed.has_battery = bool(battery_power)
     ed.has_ev = False
     return ed
@@ -1261,3 +1264,184 @@ class TestChargerControlPipeline:
             assert call[0][0] == "number", f"{brand} wrong domain: {call[0][0]}"
             assert call[0][1] == "set_value", f"{brand} wrong service: {call[0][1]}"
             assert call[0][2]["value"] == 12, f"{brand} wrong value: {call[0][2]}"
+
+
+# ════════════════════════════════════════════
+# Multi-grid power sensor aggregation
+# ════════════════════════════════════════════
+
+class TestMultiGridPipeline:
+    """Test full pipeline with multiple grid power sensors.
+
+    Some setups have multiple grid meters (e.g. commercial sites with
+    per-phase meters, or dual feed-in points). The Energy Dashboard
+    can configure multiple power entries — SEM must sum them.
+    """
+
+    def test_two_grid_meters_importing(self):
+        """Two grid meters both importing — power is summed."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.grid_meter1",
+            grid_import_energy="sensor.grid_import_total",
+            grid_export_energy="sensor.grid_export_total",
+            battery_power=None,
+            grid_power_list=[
+                "sensor.grid_meter1",
+                "sensor.grid_meter2",
+            ],
+        )
+
+        states = {
+            "sensor.solar_power": _state(3000),
+            "sensor.grid_meter1": _state(-800),
+            "sensor.grid_meter2": _state(-400),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # Sum: -800 + -400 = -1200W importing
+        assert power.grid_power == -1200
+        assert power.grid_import_power == 1200
+        assert power.grid_export_power == 0
+        assert power.home_consumption_power == 4200  # 3000 + 1200
+
+    def test_two_grid_meters_mixed_direction(self):
+        """Two grid meters: one importing, one exporting — net summed."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.grid_meter1",
+            grid_import_energy="sensor.grid_import_total",
+            grid_export_energy="sensor.grid_export_total",
+            battery_power=None,
+            grid_power_list=[
+                "sensor.grid_meter1",
+                "sensor.grid_meter2",
+            ],
+        )
+
+        states = {
+            "sensor.solar_power": _state(5000),
+            "sensor.grid_meter1": _state(-1000),  # importing
+            "sensor.grid_meter2": _state(400),     # exporting
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # Net: -1000 + 400 = -600W importing
+        assert power.grid_power == -600
+        assert power.grid_import_power == 600
+        assert power.grid_export_power == 0
+
+    def test_three_phase_meters_exporting(self):
+        """Three per-phase grid meters all exporting."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.grid_l1",
+            grid_import_energy="sensor.grid_import_total",
+            grid_export_energy="sensor.grid_export_total",
+            battery_power="sensor.battery_power",
+            grid_power_list=[
+                "sensor.grid_l1",
+                "sensor.grid_l2",
+                "sensor.grid_l3",
+            ],
+        )
+
+        states = {
+            "sensor.solar_power": _state(9000),
+            "sensor.battery_power": _state(0),
+            "sensor.grid_l1": _state(1000),   # export
+            "sensor.grid_l2": _state(1500),   # export
+            "sensor.grid_l3": _state(500),    # export
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # Sum: 1000 + 1500 + 500 = 3000W exporting
+        assert power.grid_power == 3000
+        assert power.grid_export_power == 3000
+        assert power.grid_import_power == 0
+        assert power.home_consumption_power == 6000  # 9000 - 3000
+
+    def test_multi_grid_energy_balance(self):
+        """Full energy balance with multi-grid + multi-solar + multi-battery."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.inv1_power",
+            grid_import_power="sensor.grid_meter1",
+            grid_import_energy="sensor.grid_import_total",
+            grid_export_energy="sensor.grid_export_total",
+            battery_power="sensor.batt1_power",
+            solar_power_list=[
+                "sensor.inv1_power",
+                "sensor.inv2_power",
+            ],
+            grid_power_list=[
+                "sensor.grid_meter1",
+                "sensor.grid_meter2",
+            ],
+            battery_power_list=[
+                "sensor.batt1_power",
+                "sensor.batt2_power",
+            ],
+        )
+
+        states = {
+            "sensor.inv1_power": _state(4000),
+            "sensor.inv2_power": _state(3000),
+            "sensor.grid_meter1": _state(500),     # export
+            "sensor.grid_meter2": _state(300),     # export
+            "sensor.batt1_power": _state(1000),    # charging
+            "sensor.batt2_power": _state(500),     # charging
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+        power.calculate_derived()
+
+        # Solar: 4000 + 3000 = 7000
+        assert power.solar_power == 7000
+        # Grid: 500 + 300 = 800 export
+        assert power.grid_power == 800
+        assert power.grid_export_power == 800
+        # Battery: 1000 + 500 = 1500 charging
+        assert power.battery_power == 1500
+        assert power.battery_charge_power == 1500
+        # Home: 7000 - 800 - 1500 = 4700
+        assert power.home_consumption_power == 4700
+
+        # Energy balance must hold
+        energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+        energy_out = power.home_consumption_power + power.grid_export_power + power.battery_charge_power + power.ev_power
+        assert abs(energy_in - energy_out) < 1, f"Balance off: in={energy_in}, out={energy_out}"
+
+    def test_single_grid_sensor_backward_compat(self):
+        """Single grid sensor in list — same behavior as before."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar_power",
+            grid_import_power="sensor.grid_power",
+            battery_power=None,
+            grid_power_list=["sensor.grid_power"],
+        )
+
+        states = {
+            "sensor.solar_power": _state(5000),
+            "sensor.grid_power": _state(-750),
+        }
+
+        reader = _make_reader_with_states(hass, states, ed)
+        power = reader.read_power()
+
+        # Single sensor in list (len==1) falls through to scalar ed.grid_import_power path
+        assert power.grid_power == -750

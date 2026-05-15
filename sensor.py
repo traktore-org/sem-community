@@ -1192,6 +1192,50 @@ SENSOR_TYPES = [
     ),
 
     # ============================================================================
+    # BATTERY SESSION TRACKING
+    # ============================================================================
+
+    SensorEntityDescription(
+        key="battery_session_type",
+    ),
+    SensorEntityDescription(
+        key="battery_session_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=2,
+    ),
+    SensorEntityDescription(
+        key="battery_session_solar_share",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+    ),
+    SensorEntityDescription(
+        key="battery_session_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SensorEntityDescription(
+        key="battery_session_savings",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+    ),
+    SensorEntityDescription(
+        key="battery_session_duration",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="min",
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="battery_session_avg_power",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        suggested_display_precision=0,
+    ),
+
+    # ============================================================================
     # LIFETIME EV STATISTICS
     # ============================================================================
 
@@ -1748,8 +1792,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         value = None
 
             # Set values and mark as available (but unavailable if value is None)
+            # Exception: timestamp sensors (e.g. ev_last_full_charge) are available
+            # even when None — "no event yet" is a valid state, not unavailable.
             self._attr_native_value = value
-            self._attr_available = value is not None
+            if self.entity_description.device_class == SensorDeviceClass.TIMESTAMP:
+                self._attr_available = True
+            else:
+                self._attr_available = value is not None
         else:
             # Data key not found - mark as unavailable
             self._attr_available = False
@@ -1759,38 +1808,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         self._update_from_coordinator()
-
-        # Aggressive database lock prevention
-        import asyncio
-        import random
-
-        # Define sensor priority levels
-        critical_sensors = ["available_power", "calculated_current", "charging_state", "battery_soc"]
-        important_sensors = ["solar_power", "grid_power", "battery_power", "ev_power", "home_consumption"]
-
-        # Determine update category
-        if any(sensor in self.entity_description.key for sensor in critical_sensors):
-            # Critical: 1-5 second delay
-            delay = 1 + (hash(self.entity_id) % 40) / 10
-        elif any(sensor in self.entity_description.key for sensor in important_sensors):
-            # Important: 5-15 second delay
-            delay = 5 + (hash(self.entity_id) % 100) / 10
-        else:
-            # Non-essential: 15-60 second delay
-            delay = 15 + (hash(self.entity_id) % 450) / 10
-
-        # Add random jitter to prevent synchronized updates
-        delay += random.uniform(0, 2)
-
-        async def delayed_write() -> None:
-            await asyncio.sleep(delay)
-            # Double-check if entity still exists before writing
-            try:
-                self.async_write_ha_state()
-            except Exception:
-                pass  # Silently ignore if entity is gone
-
-        self.hass.async_create_task(delayed_write())
+        self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:

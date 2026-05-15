@@ -19,6 +19,7 @@
 class SEMTitleCard extends SEMBaseCard {
     constructor() {
         super();
+        this._rendered = false;
         this._renderedSubtitle = null;
         this._templateUnsub = null;
         this._templateSubbed = false;
@@ -44,9 +45,12 @@ class SEMTitleCard extends SEMBaseCard {
     set hass(hass) {
         const localeChanged = this._checkLocaleChange(hass);
 
-        // Re-render when language changes or semLocalize loads
-        if (localeChanged) {
+        // Re-render on first render or when language changes
+        if (!this._rendered || localeChanged) {
+            this.style.visibility = 'hidden';
             this._render();
+            this._rendered = true;
+            requestAnimationFrame(() => { this.style.visibility = ''; });
         }
 
         // Subscribe to HA template rendering for Jinja subtitles

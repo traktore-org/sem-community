@@ -146,11 +146,35 @@ class SEMTabHeader extends SEMBaseCard {
     set hass(hass) {
         const localeChanged = this._checkLocaleChange(hass);
         if (!this._rendered || localeChanged) {
+            this.style.visibility = 'hidden';
             this._render();
             this._rendered = true;
+            this._updateStats();
+            requestAnimationFrame(() => { this.style.visibility = ''; });
+            if (!this._responsiveApplied) this._applyResponsiveContainer();
+            return;
         }
-        this._updateStats();
+        // Only update stats when relevant values change
+        const statsKey = this._buildStatsKey();
+        if (statsKey !== this._lastStatsKey) {
+            this._lastStatsKey = statsKey;
+            this._updateStats();
+        }
         if (!this._responsiveApplied) this._applyResponsiveContainer();
+    }
+
+    _buildStatsKey() {
+        if (!this._hass) return '';
+        const tab = this._tab;
+        const g = (s) => this._hass.states[`${this._prefix}${s}`]?.state || '';
+        if (tab === 'home') return [g('solar_power'), g('autarky_rate'), g('daily_solar_energy')].join(',');
+        if (tab === 'energy') return [g('daily_solar_energy'), g('daily_home_energy'), g('self_consumption_rate')].join(',');
+        if (tab === 'battery') return [g('battery_soc'), g('battery_power'), g('battery_health')].join(',');
+        if (tab === 'ev') return [g('ev_power'), g('daily_ev_energy'), g('charging_state')].join(',');
+        if (tab === 'control') return [g('target_peak_limit'), g('controllable_devices_count'), g('surplus_active_devices')].join(',');
+        if (tab === 'costs') return [g('daily_costs'), g('daily_savings'), g('daily_net_cost')].join(',');
+        if (tab === 'system') return [g('energy_optimization_score'), g('lifetime_total_savings'), g('lifetime_co2_avoided')].join(',');
+        return '';
     }
 
     _getState(suffix, fallback) {

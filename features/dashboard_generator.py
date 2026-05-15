@@ -727,13 +727,28 @@ class DashboardGenerator:
             if view.get("path") != "ev":
                 continue
             for card in self._iter_cards(view):
-                if (isinstance(card, dict)
-                        and card.get("type") == "custom:apexcharts-card"
+                if not isinstance(card, dict):
+                    continue
+                # sem-chart-card with ev preset
+                if (card.get("type") == "custom:sem-chart-card"
+                        and card.get("preset") == "ev"):
+                    # Replace preset with explicit per-charger series
+                    del card["preset"]
+                    card["series"] = series
+                    card["stacked"] = True
+                    card["y_label"] = "W"
+                    _LOGGER.info(
+                        "EV power chart: replaced with %d per-charger series",
+                        len(series),
+                    )
+                    return
+                # Legacy: apexcharts-card
+                if (card.get("type") == "custom:apexcharts-card"
                         and card.get("header", {}).get("title") == "EV Charging Power"):
                     card["series"] = series
                     card["stacked"] = True
                     _LOGGER.info(
-                        "EV power chart: replaced with %d per-charger series",
+                        "EV power chart (apexcharts): replaced with %d per-charger series",
                         len(series),
                     )
                     return

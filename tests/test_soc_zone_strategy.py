@@ -280,6 +280,127 @@ class TestDetermineChargingStrategy:
         assert "Zone 1" in reason
 
 
+class TestZoneDebounce:
+    """Zone-transition debounce: prevents single-cycle blips from flipping
+    strategy (and bouncing the battery Charging→Idle→Charging) when a user
+    nudges a zone threshold or SOC oscillates near a boundary.
+    """
+
+    def test_first_call_adopts_zone_immediately(self):
+        """No prior state → debouncer adopts the first observed zone."""
+        coord = _build_coordinator()
+        strategy, _ = coord._determine_charging_strategy(
+            _make_power(battery_soc=80), _MockEnergy()
+        )
+        assert strategy == "battery_assist"
+        assert coord._stable_zone == 3
+
+    def test_single_cycle_blip_is_held(self):
+        """Zone 2 → Zone 1 for one cycle → still reported as Zone 2."""
+        coord = _build_coordinator()
+        # Settle in Zone 2
+        coord._determine_charging_strategy(_make_power(battery_soc=50), _MockEnergy())
+        assert coord._stable_zone == 2
+
+        # Threshold change blips SOC into Zone 1 for a single cycle
+        strategy, reason = coord._determine_charging_strategy(
+            _make_power(battery_soc=29), _MockEnergy()
+        )
+        # Held at Zone 2 (solar_only) because the blip lasted only 1 cycle
+        assert strategy == "solar_only"
+        assert "Zone 2" in reason
+        assert coord._stable_zone == 2
+        assert coord._pending_zone == 1
+        assert coord._pending_zone_count == 1
+
+    def test_sustained_change_transitions_after_dwell(self):
+        """Zone 2 → Zone 1 sustained for 2 cycles → transitions to Zone 1."""
+        coord = _build_coordinator()
+        coord._determine_charging_strategy(_make_power(battery_soc=50), _MockEnergy())
+
+        # Cycle 1 at new zone: held
+        coord._determine_charging_strategy(_make_power(battery_soc=20), _MockEnergy())
+        assert coord._stable_zone == 2
+
+        # Cycle 2 at new zone: applied
+        strategy, reason = coord._determine_charging_strategy(
+            _make_power(battery_soc=20), _MockEnergy()
+        )
+        assert strategy == "idle"
+        assert "Zone 1" in reason
+        assert coord._stable_zone == 1
+        assert coord._pending_zone_count == 0
+
+    def test_blip_reverts_resets_pending(self):
+        """Zone 2 → 1 → 2 → pending cleared without applying transition."""
+        coord = _build_coordinator()
+        coord._determine_charging_strategy(_make_power(battery_soc=50), _MockEnergy())
+
+        coord._determine_charging_strategy(_make_power(battery_soc=20), _MockEnergy())
+        assert coord._pending_zone == 1
+
+        strategy, _ = coord._determine_charging_strategy(
+            _make_power(battery_soc=50), _MockEnergy()
+        )
+        assert strategy == "solar_only"
+        assert coord._stable_zone == 2
+        assert coord._pending_zone is None
+        assert coord._pending_zone_count == 0
+
+    def test_threshold_change_resets_pending(self):
+        """Adjusting a threshold mid-flight clears any in-progress candidate
+        so the post-change zone is evaluated from scratch."""
+        coord = _build_coordinator()
+        coord._determine_charging_strategy(_make_power(battery_soc=50), _MockEnergy())
+
+        # Start a pending Zone 1 candidate
+        coord._determine_charging_strategy(_make_power(battery_soc=20), _MockEnergy())
+        assert coord._pending_zone == 1
+        assert coord._pending_zone_count == 1
+
+        # User raises priority_soc from 30 → 35; recompute with new thresholds
+        coord.config["battery_priority_soc"] = 35
+        coord._determine_charging_strategy(_make_power(battery_soc=50), _MockEnergy())
+
+        # Pending cleared because thresholds changed
+        assert coord._pending_zone is None
+        assert coord._pending_zone_count == 0
+
+    def test_debounce_cycles_configurable(self):
+        """zone_debounce_cycles=1 disables hold (immediate transition)."""
+        coord = _build_coordinator(config_overrides={"zone_debounce_cycles": 1})
+        coord._determine_charging_strategy(_make_power(battery_soc=50), _MockEnergy())
+
+        strategy, reason = coord._determine_charging_strategy(
+            _make_power(battery_soc=20), _MockEnergy()
+        )
+        assert strategy == "idle"
+        assert coord._stable_zone == 1
+
+    def test_priority_threshold_bump_no_battery_flap(self):
+        """Real-world: user raises Priority SOC from 50 → 51 with SOC=50.
+
+        Without debounce the strategy flips solar_only → idle for one cycle
+        then back. With debounce, the brief Zone 2 → 1 blip is held so the
+        battery stays in its current state.
+        """
+        coord = _build_coordinator(config_overrides={"battery_priority_soc": 50})
+        # Settle in Zone 2 at SOC=50 (>= priority 50)
+        strategy, _ = coord._determine_charging_strategy(
+            _make_power(battery_soc=50), _MockEnergy()
+        )
+        assert strategy == "solar_only"
+
+        # User bumps Priority SOC to 51. SOC=50 is now < priority → raw Zone 1.
+        coord.config["battery_priority_soc"] = 51
+        strategy, reason = coord._determine_charging_strategy(
+            _make_power(battery_soc=50), _MockEnergy()
+        )
+        # Held at Zone 2 — no Charging→Idle blip
+        assert strategy == "solar_only"
+        assert "Zone 2" in reason
+
+
 # ===========================================================================
 # Tests for _calculate_solar_ev_budget
 # ===========================================================================

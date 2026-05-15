@@ -277,9 +277,14 @@ class TestUpdateMethods:
 
     @pytest.mark.asyncio
     async def test_update_target_peak_limit(self, lm):
-        """Updates the target peak limit."""
+        """Updates the target peak limit and persists to config entry."""
         await lm.update_target_peak_limit(7.5)
         assert lm._target_peak_limit == 7.5
+        # Verify persistence to config_entry.options (#199)
+        lm.hass.config_entries.async_update_entry.assert_called_once()
+        call_kwargs = lm.hass.config_entries.async_update_entry.call_args
+        new_options = call_kwargs[1]["options"] if "options" in (call_kwargs[1] or {}) else call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {}
+        assert new_options.get("target_peak_limit") == 7.5
 
     @pytest.mark.asyncio
     async def test_update_device_priority(self, lm):
@@ -431,6 +436,67 @@ class TestEmergencyShedding:
         await lm._emergency_load_shedding()
         # Should still only appear once
         assert lm._devices_shed.count("dev_a") == 1
+
+    @pytest.mark.asyncio
+    async def test_emergency_shedding_respects_control_mode_off(self, lm):
+        """Devices with control_mode='off' must not be shed in emergency (#198)."""
+        lm._devices["dev_active"] = {
+            "switch_entity": "switch.dev_active",
+            "friendly_name": "Active Device",
+            "power_rating": 2.0,
+            "is_available": True,
+            "priority": 8,
+            "is_critical": False,
+            "is_controllable": True,
+        }
+        lm._devices["dev_disabled"] = {
+            "switch_entity": "switch.dev_disabled",
+            "friendly_name": "Disabled Device",
+            "power_rating": 3.0,
+            "is_available": True,
+            "priority": 8,
+            "is_critical": False,
+            "is_controllable": True,
+            "control_mode": "off",
+        }
+
+        lm._device_discovery.get_device_current_state = MagicMock(
+            return_value={"is_on": True, "current_power": 2000}
+        )
+
+        await lm._emergency_load_shedding()
+        assert "dev_active" in lm._devices_shed
+        assert "dev_disabled" not in lm._devices_shed
+
+    @pytest.mark.asyncio
+    async def test_emergency_shedding_skips_unavailable(self, lm):
+        """Unavailable devices must not be shed in emergency."""
+        lm._devices["dev_avail"] = {
+            "switch_entity": "switch.dev_avail",
+            "friendly_name": "Available",
+            "power_rating": 2.0,
+            "is_available": True,
+            "priority": 8,
+            "is_critical": False,
+            "is_controllable": True,
+        }
+        lm._devices["dev_unavail"] = {
+            "switch_entity": "switch.dev_unavail",
+            "friendly_name": "Unavailable",
+            "power_rating": 3.0,
+            "is_available": False,
+            "priority": 8,
+            "is_critical": False,
+            "is_controllable": True,
+        }
+
+        lm._device_discovery.get_device_current_state = MagicMock(
+            return_value={"is_on": True, "current_power": 2000}
+        )
+
+        await lm._emergency_load_shedding()
+        assert "dev_avail" in lm._devices_shed
+        assert "dev_unavail" not in lm._devices_shed
 
 
 class TestProgressiveShedding:

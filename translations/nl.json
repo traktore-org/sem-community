@@ -136,7 +136,6 @@
         "title": "SEM Optimalisatie instellingen",
         "description": "Pas je SEM optimalisatie instelling aan",
         "data": {
-
           "update_interval": "Update-interval (seconden)",
           "power_delta": "Vermogen delta-drempel (W)",
           "current_delta": "Stroom delta-drempel (A)",
@@ -190,7 +189,7 @@
           "demand_charge_rate": "Maandelijkse capaciteitstarief per kW piekvermogen (CHF/kW/maand). Zet op 0 als dit niet van toepassing is.",
           "observer_mode": "Indien AAN, monitort en berekent SEM alles, maar stuurt geen commando's naar hardware. Te gebruiken in een test-/acceptatieomgeving.",
           "smart_night_charging": "Indien AAN, slaat SEM nachtelijk laden slim over of vermindert dit op basis van geschatte EV SOC, zonneverwachting, temperatuurgecorrigeerde verbruiksvoorspelling en geleerde rijpatronen.",
-          "battery_discharge_control_entity": "Number-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig."
+          "battery_discharge_control_entity": "Nummer-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig."
         }
       },
       "settings_ev": {
@@ -277,7 +276,7 @@
           "battery_precharge_trigger_hour": "Dagelijks evaluatie-uur",
           "battery_max_target_soc": "Maximale doel SOC",
           "battery_min_deficit_kwh": "Minimale tekortdrempel",
-          "battery_pessimism_weight": "Forecast pessimisme",
+          "battery_pessimism_weight": "Voorspelling pessimisme",
           "battery_force_charge_negative_price": "Geforceerd laden bij negatieve prijs"
         }
       },
@@ -285,13 +284,13 @@
         "title": "EV-lader bewerken",
         "description": "Werk de sensorkoppelingen en prioriteit voor deze lader bij.",
         "data": {
-        "charger_name": "Ladernaam",
-        "ev_connected_sensor": "EV verbonden status",
-        "ev_charging_sensor": "EV laadstatus",
-        "ev_charging_power_sensor": "EV laadvermogen",
-        "ev_charger_service": "Lader stroom-instel service (optioneel)",
-        "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
-        "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)"
+          "charger_name": "Ladernaam",
+          "ev_connected_sensor": "EV verbonden status",
+          "ev_charging_sensor": "EV laadstatus",
+          "ev_charging_power_sensor": "EV laadvermogen",
+          "ev_charger_service": "Lader stroom-instel service (optioneel)",
+          "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
+          "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)"
         }
       }
     }
@@ -830,7 +829,7 @@
         "name": "Netsensor modus"
       },
       "diag_grid_sign": {
-        "name": "Grid Sign Convention"
+        "name": "Net Verbruik of Productie"
       },
       "diag_charger_control": {
         "name": "Lader Besturings Methode"
@@ -846,6 +845,27 @@
       },
       "diag_sensors_unavailable": {
         "name": "Sensoren niet beschikbaar"
+      },
+      "battery_session_type": {
+        "name": "Batterij Sessie Type"
+      },
+      "battery_session_energy": {
+        "name": "Batterij Sessie Energie"
+      },
+      "battery_session_solar_share": {
+        "name": "Batterij Sessie Zon Aandeel"
+      },
+      "battery_session_cost": {
+        "name": "Batterij Sessie Kosten"
+      },
+      "battery_session_savings": {
+        "name": "Batterij Sessie Besparing"
+      },
+      "battery_session_duration": {
+        "name": "Batterij Sessie Duur"
+      },
+      "battery_session_avg_power": {
+        "name": "Batterij Sessie Gemiddeld Vermogen"
       }
     },
     "binary_sensor": {

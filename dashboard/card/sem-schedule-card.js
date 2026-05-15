@@ -188,7 +188,9 @@ class SEMScheduleCard extends SEMBaseCard {
     _update() {
         if (!this._hass) return;
 
-        if (!this._rendered) {
+        const isFirstRender = !this._rendered;
+        if (isFirstRender) {
+            this.style.visibility = 'hidden';
             this._renderSkeleton();
             this._rendered = true;
         }
@@ -330,6 +332,7 @@ class SEMScheduleCard extends SEMBaseCard {
             fill="#ef5350" opacity="0.9"/>`;
 
         svg.innerHTML = svgContent;
+        if (isFirstRender) requestAnimationFrame(() => { this.style.visibility = ''; });
     }
 
     _renderSkeleton() {
@@ -351,7 +354,7 @@ class SEMScheduleCard extends SEMBaseCard {
                     padding: 12px 14px 8px;
                     position: relative;
                     background:
-                        radial-gradient(ellipse 70% 60% at 50% 30%, rgba(72,143,194,0.04) 0%, transparent 100%),
+                        radial-gradient(ellipse 70% 60% at 50% 30%, rgba(150,202,238,0.06) 0%, transparent 100%),
                         radial-gradient(circle at 2px 2px, ${dotCol} 0.7px, transparent 0.7px);
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;

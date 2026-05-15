@@ -336,32 +336,45 @@ class TestInverterSignConventions:
         return reader
 
     def _detect_grid(self, reader, hass, power, import_v1, export_v1, import_v2, export_v2):
-        """Run 2-call grid sign detection (baseline + detect)."""
+        """Run grid sign detection (baseline + 3 consistent votes to lock in)."""
         # Call 1: set baseline
         hass.states.get = lambda eid: {
             "sensor.grid_import_energy": _state(import_v1, unit="kWh"),
             "sensor.grid_export_energy": _state(export_v1, unit="kWh"),
         }.get(eid)
         reader._detect_grid_sign(MagicMock(grid_power=power))
-        # Call 2: detect from delta
-        hass.states.get = lambda eid: {
-            "sensor.grid_import_energy": _state(import_v2, unit="kWh"),
-            "sensor.grid_export_energy": _state(export_v2, unit="kWh"),
-        }.get(eid)
-        return reader._detect_grid_sign(MagicMock(grid_power=power))
+        # Calls 2-4: 3 consistent detections to lock in
+        import_step = import_v2 - import_v1
+        export_step = export_v2 - export_v1
+        for i in range(3):
+            iv = import_v1 + import_step * (i + 1)
+            ev = export_v1 + export_step * (i + 1)
+            hass.states.get = lambda eid, _iv=iv, _ev=ev: {
+                "sensor.grid_import_energy": _state(_iv, unit="kWh"),
+                "sensor.grid_export_energy": _state(_ev, unit="kWh"),
+            }.get(eid)
+            result = reader._detect_grid_sign(MagicMock(grid_power=power))
+        return result
 
     def _detect_battery(self, reader, hass, power, charge_v1, discharge_v1, charge_v2, discharge_v2):
-        """Run 2-call battery sign detection (baseline + detect)."""
+        """Run battery sign detection (baseline + 3 consistent votes to lock in)."""
         hass.states.get = lambda eid: {
             "sensor.battery_charge_energy": _state(charge_v1, unit="kWh"),
             "sensor.battery_discharge_energy": _state(discharge_v1, unit="kWh"),
         }.get(eid)
         reader._detect_battery_sign(MagicMock(battery_power=power))
-        hass.states.get = lambda eid: {
-            "sensor.battery_charge_energy": _state(charge_v2, unit="kWh"),
-            "sensor.battery_discharge_energy": _state(discharge_v2, unit="kWh"),
-        }.get(eid)
-        return reader._detect_battery_sign(MagicMock(battery_power=power))
+        # Calls 2-4: 3 consistent detections to lock in
+        charge_step = charge_v2 - charge_v1
+        discharge_step = discharge_v2 - discharge_v1
+        for i in range(3):
+            cv = charge_v1 + charge_step * (i + 1)
+            dv = discharge_v1 + discharge_step * (i + 1)
+            hass.states.get = lambda eid, _cv=cv, _dv=dv: {
+                "sensor.battery_charge_energy": _state(_cv, unit="kWh"),
+                "sensor.battery_discharge_energy": _state(_dv, unit="kWh"),
+            }.get(eid)
+            result = reader._detect_battery_sign(MagicMock(battery_power=power))
+        return result
 
     def test_huawei_sign_convention(self):
         """Huawei Solar: grid +export, battery +charge — matches SEM → no negate."""

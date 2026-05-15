@@ -38,7 +38,9 @@ class SEMPeriodSelectorCard extends SEMBaseCard {
         const localeChanged = this._checkLocaleChange(hass);
 
         if (isFirstRender || localeChanged) {
+            this.style.visibility = 'hidden';
             this._render();
+            requestAnimationFrame(() => { this.style.visibility = ''; });
             if (isFirstRender) {
                 this._dispatchPeriod(this._active);
             }
