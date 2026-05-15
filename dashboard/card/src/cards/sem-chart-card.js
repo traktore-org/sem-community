@@ -348,7 +348,7 @@ class SEMChartCard extends SEMLitBase {
                 label: s.name, data: datasets[i].data,
                 backgroundColor: isBar ? s.color + 'CC' : isArea ? s.color + '30' : 'transparent',
                 borderColor: s.color, borderWidth: isBar ? 0 : 2,
-                fill: isArea ? 'origin' : false,
+                fill: isArea ? (stacked && i > 0 ? '-1' : 'origin') : false,
                 type: isBar ? 'bar' : 'line',
                 tension: 0.4, pointRadius: 0, pointHitRadius: 10,
                 pointHoverRadius: 4, pointHoverBorderWidth: 2,
@@ -422,6 +422,7 @@ class SEMChartCard extends SEMLitBase {
                                 const orig = Chart.defaults.plugins.legend.labels.generateLabels(chart);
                                 return orig.map((label, i) => {
                                     const ds = chart.data.datasets[i];
+                                    if (!ds) return label;
                                     const last = ds.data[ds.data.length - 1];
                                     const val = last?.y ?? 0;
                                     const unit = ds.yAxisID === 'y1' ? '%' : (yLabel || '');

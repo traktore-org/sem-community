@@ -118,6 +118,7 @@ class TestPerChargerNumbers:
             coord, desc, entry, "ev_charger_1", "daily_ev_target", 15,
         )
         num.hass = coord.hass
+        num.async_write_ha_state = MagicMock()
 
         await num.async_set_native_value(20.0)
 

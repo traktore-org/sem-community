@@ -1808,38 +1808,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
         self._update_from_coordinator()
-
-        # Aggressive database lock prevention
-        import asyncio
-        import random
-
-        # Define sensor priority levels
-        critical_sensors = ["available_power", "calculated_current", "charging_state", "battery_soc"]
-        important_sensors = ["solar_power", "grid_power", "battery_power", "ev_power", "home_consumption"]
-
-        # Determine update category
-        if any(sensor in self.entity_description.key for sensor in critical_sensors):
-            # Critical: 1-5 second delay
-            delay = 1 + (hash(self.entity_id) % 40) / 10
-        elif any(sensor in self.entity_description.key for sensor in important_sensors):
-            # Important: 5-15 second delay
-            delay = 5 + (hash(self.entity_id) % 100) / 10
-        else:
-            # Non-essential: 15-60 second delay
-            delay = 15 + (hash(self.entity_id) % 450) / 10
-
-        # Add random jitter to prevent synchronized updates
-        delay += random.uniform(0, 2)
-
-        async def delayed_write() -> None:
-            await asyncio.sleep(delay)
-            # Double-check if entity still exists before writing
-            try:
-                self.async_write_ha_state()
-            except Exception:
-                pass  # Silently ignore if entity is gone
-
-        self.hass.async_create_task(delayed_write())
+        self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:

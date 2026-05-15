@@ -347,8 +347,14 @@ class LoadManagementCoordinator:
                 _LOGGER.error("Error in load management callback: %s", e)
 
     async def update_target_peak_limit(self, new_limit: float):
-        """Update the target peak limit."""
+        """Update the target peak limit and persist to config entry."""
         self._target_peak_limit = new_limit
+        # Persist to config_entry.options so value survives restart (#199)
+        coordinator = getattr(self.config_entry, "runtime_data", None)
+        if coordinator:
+            coordinator._skip_options_reload = True
+        new_options = {**self.config_entry.options, "target_peak_limit": new_limit}
+        self.hass.config_entries.async_update_entry(self.config_entry, options=new_options)
         _LOGGER.info("Updated target peak limit to %skW", new_limit)
         self._trigger_callbacks()
 
@@ -590,7 +596,9 @@ class LoadManagementCoordinator:
         """Emergency load shedding - turn off all non-critical loads immediately."""
         devices_to_shed = [
             device_id for device_id, device_info in self._devices.items()
-            if (device_info.get("is_controllable", True) and
+            if (device_info.get("control_mode") != "off" and
+                device_info.get("is_controllable", True) and
+                device_info.get("is_available", False) and
                 not device_info.get("is_critical", False) and
                 device_id not in self._devices_shed and
                 self._is_device_currently_on(device_info))
