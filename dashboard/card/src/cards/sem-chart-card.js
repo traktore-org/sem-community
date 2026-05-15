@@ -100,8 +100,12 @@ const PRESETS = {
         ],
     },
     ev: {
-        title: 'ev_charging', y_label: 'W', stacked: false, defaultPeriod: '24h',
-        hourly:  [{ suffix: 'ev_power',         name: 'ev_power',  color: C.ev, type: 'area' }],
+        title: 'ev_charging', y_label: 'W', stacked: true, defaultPeriod: '24h',
+        hourly:  [
+            { suffix: 'flow_solar_to_ev_power',   name: 'solar',   color: C.solar,      type: 'area' },
+            { suffix: 'flow_battery_to_ev_power',  name: 'battery', color: C.batteryOut, type: 'area' },
+            { suffix: 'flow_grid_to_ev_power',     name: 'grid',    color: C.gridImport, type: 'area' },
+        ],
         daily:   [{ suffix: 'daily_ev_energy',   name: 'ev_energy', color: C.ev, type: 'bar'  }],
         monthly: [{ suffix: 'monthly_ev_energy', name: 'ev_energy', color: C.ev, type: 'bar'  }],
     },
