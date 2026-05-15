@@ -478,68 +478,82 @@ class NotificationManager:
             group="sem_alerts",
         )
 
-    async def notify_ev_nearly_full(self, minutes_remaining: float) -> None:
-        """Notify user that EV is nearly full based on taper detection (#106)."""
+    async def notify_ev_nearly_full(
+        self, minutes_remaining: float, *, charger_name: str | None = None,
+    ) -> None:
+        """Notify user that EV is nearly full based on taper detection (#106, #193)."""
+        flag = f"ev_nearly_full_{charger_name}" if charger_name else "ev_nearly_full"
         if minutes_remaining > 10:
-            self._notified_flags.discard("ev_nearly_full")
+            self._notified_flags.discard(flag)
             return
-        if "ev_nearly_full" in self._notified_flags:
+        if flag in self._notified_flags:
             return
-        self._notified_flags.add("ev_nearly_full")
+        self._notified_flags.add(flag)
 
+        label = charger_name or "EV"
         self.hass.bus.async_fire(f"{DOMAIN}_notification", {
             "category": "charging",
             "event": "ev_nearly_full",
+            "charger_name": label,
             "minutes_remaining": round(minutes_remaining, 0),
         })
         from ..utils.translate import get_text
         await self._send_mobile_notification(
             get_text(self.hass, "notif_ev_nearly_full",
-                "EV nearly full — ~{minutes:.0f} min remaining",
-                minutes=minutes_remaining),
+                "{name} nearly full — ~{minutes:.0f} min remaining",
+                name=label, minutes=minutes_remaining),
             channel=_CHANNEL_CHARGING,
             group="sem_charging",
         )
 
     async def notify_ev_charge_skip(
         self, estimated_soc: float, nights: int,
+        *, charger_name: str | None = None,
     ) -> None:
-        """Notify user that night charge was skipped (#106)."""
-        if "ev_charge_skip" in self._notified_flags:
+        """Notify user that night charge was skipped (#106, #193)."""
+        flag = f"ev_charge_skip_{charger_name}" if charger_name else "ev_charge_skip"
+        if flag in self._notified_flags:
             return
-        self._notified_flags.add("ev_charge_skip")
+        self._notified_flags.add(flag)
 
+        label = charger_name or "EV"
         self.hass.bus.async_fire(f"{DOMAIN}_notification", {
             "category": "charging",
             "event": "ev_charge_skip",
+            "charger_name": label,
             "estimated_soc": round(estimated_soc, 0),
             "nights_remaining": nights,
         })
         from ..utils.translate import get_text
         await self._send_mobile_notification(
             get_text(self.hass, "notif_ev_charge_skip",
-                "Night charge skipped — EV SOC {soc:.0f}%, {nights} night(s) range remaining",
-                soc=estimated_soc, nights=nights),
+                "Night charge skipped for {name} — SOC {soc:.0f}%, {nights} night(s) range remaining",
+                name=label, soc=estimated_soc, nights=nights),
             channel=_CHANNEL_CHARGING,
             group="sem_charging",
         )
 
-    async def notify_ev_charge_recommended(self, estimated_soc: float) -> None:
-        """Notify user that EV charging is recommended (#106)."""
-        if "ev_charge_recommended" in self._notified_flags:
+    async def notify_ev_charge_recommended(
+        self, estimated_soc: float, *, charger_name: str | None = None,
+    ) -> None:
+        """Notify user that EV charging is recommended (#106, #193)."""
+        flag = f"ev_charge_recommended_{charger_name}" if charger_name else "ev_charge_recommended"
+        if flag in self._notified_flags:
             return
-        self._notified_flags.add("ev_charge_recommended")
+        self._notified_flags.add(flag)
 
+        label = charger_name or "EV"
         self.hass.bus.async_fire(f"{DOMAIN}_notification", {
             "category": "charging",
             "event": "ev_charge_recommended",
+            "charger_name": label,
             "estimated_soc": round(estimated_soc, 0),
         })
         from ..utils.translate import get_text
         await self._send_mobile_notification(
             get_text(self.hass, "notif_ev_charge_recommended",
-                "EV charge recommended tonight — estimated SOC {soc:.0f}%",
-                soc=estimated_soc),
+                "{name} charge recommended tonight — estimated SOC {soc:.0f}%",
+                name=label, soc=estimated_soc),
             channel=_CHANNEL_CHARGING,
             group="sem_charging",
         )

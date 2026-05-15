@@ -399,6 +399,110 @@ class TestPerChargerAggregation:
         unique_ids = {s._attr_unique_id for s in switches}
         assert len(unique_ids) == 4
 
+    def test_ev_connected_or_multi_charger(self):
+        """Global ev_connected should be True if ANY charger is connected (#193)."""
+        from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
+
+        chargers = [
+            {"id": "c1", "name": "C1", "ev_charging_power_sensor": "sensor.c1_power",
+             "ev_connected_sensor": "binary_sensor.c1_plug", "ev_charging_sensor": "binary_sensor.c1_charging"},
+            {"id": "c2", "name": "C2", "ev_charging_power_sensor": "sensor.c2_power",
+             "ev_connected_sensor": "binary_sensor.c2_plug", "ev_charging_sensor": "binary_sensor.c2_charging"},
+        ]
+        hass = MagicMock()
+        config = {
+            "solar_production_sensor": "sensor.solar",
+            "grid_power_sensor": "sensor.grid",
+            "battery_power_sensor": "sensor.battery",
+            "ev_charging_power_sensor": "sensor.c1_power",
+            "ev_connected_sensor": "binary_sensor.c1_plug",
+            "ev_charging_sensor": "binary_sensor.c1_charging",
+            "ev_chargers": chargers,
+        }
+        reader = SensorReader(hass, config)
+
+        # Only charger 2 connected, charger 1 disconnected
+        def mock_get(entity_id):
+            states = {
+                "sensor.c1_power": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.c2_power": MagicMock(state="3000", attributes={"unit_of_measurement": "W"}),
+                "sensor.solar": MagicMock(state="5000", attributes={"unit_of_measurement": "W"}),
+                "sensor.grid": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.battery": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "binary_sensor.c1_plug": MagicMock(state="off"),
+                "binary_sensor.c2_plug": MagicMock(state="on"),
+                "binary_sensor.c1_charging": MagicMock(state="off"),
+                "binary_sensor.c2_charging": MagicMock(state="on"),
+            }
+            return states.get(entity_id)
+        hass.states.get = mock_get
+
+        readings = reader.read_power()
+        assert readings.ev_connected is True  # OR'd: c2 is connected
+        assert readings.ev_charging is True  # OR'd: c2 is charging
+
+    def test_ev_connected_none_multi_charger(self):
+        """Global ev_connected should be False if NO charger is connected."""
+        from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
+
+        chargers = [
+            {"id": "c1", "name": "C1", "ev_charging_power_sensor": "sensor.c1_power",
+             "ev_connected_sensor": "binary_sensor.c1_plug", "ev_charging_sensor": "binary_sensor.c1_charging"},
+            {"id": "c2", "name": "C2", "ev_charging_power_sensor": "sensor.c2_power",
+             "ev_connected_sensor": "binary_sensor.c2_plug", "ev_charging_sensor": "binary_sensor.c2_charging"},
+        ]
+        hass = MagicMock()
+        config = {
+            "solar_production_sensor": "sensor.solar",
+            "grid_power_sensor": "sensor.grid",
+            "battery_power_sensor": "sensor.battery",
+            "ev_charging_power_sensor": "sensor.c1_power",
+            "ev_connected_sensor": "binary_sensor.c1_plug",
+            "ev_charging_sensor": "binary_sensor.c1_charging",
+            "ev_chargers": chargers,
+        }
+        reader = SensorReader(hass, config)
+
+        def mock_get(entity_id):
+            states = {
+                "sensor.c1_power": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.c2_power": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.solar": MagicMock(state="5000", attributes={"unit_of_measurement": "W"}),
+                "sensor.grid": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "sensor.battery": MagicMock(state="0", attributes={"unit_of_measurement": "W"}),
+                "binary_sensor.c1_plug": MagicMock(state="off"),
+                "binary_sensor.c2_plug": MagicMock(state="off"),
+                "binary_sensor.c1_charging": MagicMock(state="off"),
+                "binary_sensor.c2_charging": MagicMock(state="off"),
+            }
+            return states.get(entity_id)
+        hass.states.get = mock_get
+
+        readings = reader.read_power()
+        assert readings.ev_connected is False
+        assert readings.ev_charging is False
+
+    @pytest.mark.asyncio
+    async def test_per_charger_connected_binary_sensor(self):
+        """Per-charger connected binary sensor should be created for each charger."""
+        from custom_components.solar_energy_management.binary_sensor import (
+            async_setup_entry, BinarySensorEntityDescription,
+        )
+        coord = _mock_coordinator(TWO_CHARGERS)
+        entry = _mock_entry(TWO_CHARGERS)
+        entry.runtime_data = coord
+
+        entities = []
+        def mock_add(ents):
+            entities.extend(ents)
+
+        await async_setup_entry(coord.hass, entry, mock_add)
+
+        # Should have per-charger connected binary sensors
+        keys = [e.entity_description.key for e in entities]
+        assert "charger_ev_charger_connected" in keys
+        assert "charger_ev_charger_1_connected" in keys
+
     def test_ev_power_single_charger_unchanged(self):
         """Single charger should read from primary sensor only."""
         from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
