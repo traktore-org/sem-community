@@ -549,6 +549,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     saved_dev, saved_sess, saved_conn = (
                         self._ev_device, self._session_data, self._last_ev_connected
                     )
+                    # Per-charger vehicle SOC override (#193)
+                    saved_vehicle_soc = self._cycle_vehicle_soc
+                    ev_chargers_cfg = self.config.get("ev_chargers", [])
+                    charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
+                    per_charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
+                    if per_charger_soc_entity:
+                        soc_state = self.hass.states.get(per_charger_soc_entity)
+                        if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                            try:
+                                self._cycle_vehicle_soc = float(soc_state.state)
+                            except (ValueError, TypeError):
+                                pass
                     self._ev_device = ev_dev
                     self._session_data = self._session_data_per_charger[cid]
                     self._last_ev_connected = self._last_ev_connected_per_charger[cid]
@@ -560,6 +572,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_device, self._session_data, self._last_ev_connected = (
                         saved_dev, saved_sess, saved_conn
                     )
+                    self._cycle_vehicle_soc = saved_vehicle_soc
                 # Primary charger session = first charger's session
                 primary_id = next(iter(self._ev_devices))
                 self._session_data = self._session_data_per_charger.get(
@@ -856,6 +869,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             pass
                 result[f"charger_{cid}_power"] = round(charger_power, 0)
                 result[f"charger_{cid}_name"] = ev_dev.name
+                result[f"charger_{cid}_connected"] = self._last_ev_connected_per_charger.get(cid, False)
                 # Per-charger session data
                 session = self._session_data_per_charger.get(cid)
                 if session:
@@ -871,6 +885,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     result[f"charger_{cid}_taper_ratio"] = round(
                         (charger_power / taper_det._session_peak_w * 100) if taper_det._session_peak_w > 0 else 0, 1
                     )
+                # Per-charger vehicle SOC (#193)
+                ev_chargers_cfg = self.config.get("ev_chargers", [])
+                charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
+                charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
+                if charger_soc_entity:
+                    soc_state = self.hass.states.get(charger_soc_entity)
+                    if soc_state and soc_state.state not in ("unknown", "unavailable"):
+                        try:
+                            result[f"charger_{cid}_vehicle_soc"] = float(soc_state.state)
+                        except (ValueError, TypeError):
+                            pass
 
             # Add forecast tracker data (accuracy, correction factor)
             if tracker_data:
@@ -1329,35 +1354,35 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 await self._notification_manager.notify_forecast_alert(
                     forecast_data.forecast_tomorrow_kwh
                 )
-            # EV Intelligence notifications (#106)
-            ev_intel = getattr(self, '_last_ev_intelligence', None)
-            if ev_intel:
+            # EV Intelligence notifications — per-charger (#106, #193)
+            per_charger_intel = self._build_per_charger_intelligence()
+            is_night = self.time_manager.is_night_mode()
+            for cid, intel in per_charger_intel.items():
+                charger_name = self._ev_devices[cid].name if cid in self._ev_devices else cid
+                charger_connected = self._last_ev_connected_per_charger.get(cid, False)
+                mins_to_full = intel.get("minutes_to_full", 0)
+                est_soc = intel.get("estimated_soc", 0)
+                charge_needed = intel.get("charge_needed", False)
+                nights = intel.get("nights_until_charge", 0)
+
                 # 1. Nearly full: taper detector shows < 5 minutes remaining
-                if (ev_intel.taper.minutes_to_full > 0
-                        and ev_intel.taper.minutes_to_full < 5
-                        and power.ev_charging):
+                if mins_to_full > 0 and mins_to_full < 5 and power.ev_charging:
                     await self._notification_manager.notify_ev_nearly_full(
-                        ev_intel.taper.minutes_to_full
+                        mins_to_full, charger_name=charger_name
                     )
 
                 # 2. Night charge skipped: night mode, EV connected, skip decided
-                if (self.time_manager.is_night_mode()
-                        and power.ev_connected
-                        and not ev_intel.charge_needed
-                        and ev_intel.estimated_soc_pct > 0):
+                if (is_night and charger_connected
+                        and not charge_needed and est_soc > 0):
                     await self._notification_manager.notify_ev_charge_skip(
-                        ev_intel.estimated_soc_pct,
-                        ev_intel.nights_until_charge,
+                        est_soc, nights, charger_name=charger_name
                     )
 
                 # 3. Charge recommended: night mode, SOC low, charge needed
-                if (self.time_manager.is_night_mode()
-                        and power.ev_connected
-                        and ev_intel.charge_needed
-                        and ev_intel.estimated_soc_pct < 30
-                        and ev_intel.estimated_soc_pct > 0):
+                if (is_night and charger_connected
+                        and charge_needed and 0 < est_soc < 30):
                     await self._notification_manager.notify_ev_charge_recommended(
-                        ev_intel.estimated_soc_pct
+                        est_soc, charger_name=charger_name
                     )
 
         except (ValueError, TypeError) as e:

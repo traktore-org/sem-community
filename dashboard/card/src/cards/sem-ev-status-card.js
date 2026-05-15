@@ -170,13 +170,19 @@ class SEMEVStatusCard extends SEMLitBase {
         const session = this._val(`charger_${id}_session_energy`, 0);
         const dailyEnergy = this._val(`charger_${id}_daily_energy`, 0);
         const solar = this._val(`charger_${id}_session_solar_share`, 0);
-        const soc = this._val(`charger_${id}_estimated_soc`, null);
+        // Prefer real vehicle SOC over estimated (#193)
+        const vehicleSoc = this._val(`charger_${id}_vehicle_soc`, null);
+        const estimatedSoc = this._val(`charger_${id}_estimated_soc`, null);
+        const soc = vehicleSoc != null ? vehicleSoc : estimatedSoc;
         const nights = this._entityVal(`number.sem_charger_${id}_nights_until_charge`, null);
         const chargeNeeded = this._valStr(`charger_${id}_charge_needed`);
         const name = this._chargerName(id);
 
+        // Per-charger connected status (#193)
+        const perChargerConnected = this._hass?.states[`binary_sensor.sem_charger_${id}_connected`];
+        const isConnected = perChargerConnected?.state === 'on';
         const isCharging = power > 50;
-        const statusText = isCharging ? this._t('charging') : this._t('idle');
+        const statusText = isCharging ? this._t('charging') : isConnected ? this._t('connected') : this._t('idle');
 
         const nightSwitch = this._hass?.states[`switch.sem_charger_${id}_night_charging`];
         const nightOn = nightSwitch?.state === 'on';

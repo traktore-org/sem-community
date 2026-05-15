@@ -977,6 +977,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
+                # Per-charger vehicle SOC entity (#193)
+                vol.Optional(
+                    "vehicle_soc_entity",
+                    description={"suggested_value": suggestions.get("vehicle_soc_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
             }),
             errors=errors,
         )
@@ -1076,6 +1083,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=6, max=16, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
+                ),
+                # Per-charger vehicle SOC entity (#193)
+                vol.Optional(
+                    "vehicle_soc_entity",
+                    description={"suggested_value": charger.get("vehicle_soc_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
                 ),
             }),
             errors=errors,

@@ -2501,24 +2501,24 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     ${null!=t?Math.round(t)+"%":"—"}
                 </text>
             </svg>
-        `}_renderChargerSection(t,e){const i=Qt[e%Qt.length],s=this._val(`charger_${t}_power`,0),r=this._val(`charger_${t}_session_energy`,0),a=this._val(`charger_${t}_daily_energy`,0),o=this._val(`charger_${t}_session_solar_share`,0),n=this._val(`charger_${t}_estimated_soc`,null),l=this._entityVal(`number.sem_charger_${t}_nights_until_charge`,null),c=this._valStr(`charger_${t}_charge_needed`),d=this._chargerName(t),h=s>50,p=h?this._t("charging"):this._t("idle"),g=this._hass?.states[`switch.sem_charger_${t}_night_charging`],_="on"===g?.state,u=this._entityVal(`number.sem_charger_${t}_daily_ev_target`,10),f=this._entityVal(`number.sem_charger_${t}_night_initial_current`,10),m=this._entityVal(`number.sem_charger_${t}_minimum_current`,6),v="True"===c||"true"===c,y=v?"mdi:battery-alert":"mdi:battery-check",x=v?"#f06292":"#8DC892",b=v?this._t("yes"):this._t("no"),$=`switch.sem_charger_${t}_night_charging`;return H`
+        `}_renderChargerSection(t,e){const i=Qt[e%Qt.length],s=this._val(`charger_${t}_power`,0),r=this._val(`charger_${t}_session_energy`,0),a=this._val(`charger_${t}_daily_energy`,0),o=this._val(`charger_${t}_session_solar_share`,0),n=this._val(`charger_${t}_vehicle_soc`,null),l=this._val(`charger_${t}_estimated_soc`,null),c=null!=n?n:l,d=this._entityVal(`number.sem_charger_${t}_nights_until_charge`,null),h=this._valStr(`charger_${t}_charge_needed`),p=this._chargerName(t),g=this._hass?.states[`binary_sensor.sem_charger_${t}_connected`],_="on"===g?.state,u=s>50,f=u?this._t("charging"):_?this._t("connected"):this._t("idle"),m=this._hass?.states[`switch.sem_charger_${t}_night_charging`],v="on"===m?.state,y=this._entityVal(`number.sem_charger_${t}_daily_ev_target`,10),x=this._entityVal(`number.sem_charger_${t}_night_initial_current`,10),b=this._entityVal(`number.sem_charger_${t}_minimum_current`,6),$="True"===h||"true"===h,w=$?"mdi:battery-alert":"mdi:battery-check",k=$?"#f06292":"#8DC892",S=$?this._t("yes"):this._t("no"),C=`switch.sem_charger_${t}_night_charging`;return H`
             <div class="charger-section">
                 <div class="charger-header">
                     <div class="charger-dot" style="background:${i}"></div>
-                    <span class="charger-name">${d}</span>
-                    <span class="charger-status" style="color:${h?i:""}">${p}</span>
+                    <span class="charger-name">${p}</span>
+                    <span class="charger-status" style="color:${u?i:""}">${f}</span>
                 </div>
 
                 <div class="charger-body">
                     <div class="charger-soc">
-                        ${this._renderSocGauge(n)}
+                        ${this._renderSocGauge(c)}
                         <span class="soc-label">SOC</span>
                     </div>
 
                     <div class="charger-metrics">
                         <div class="cm-row">
                             <span class="cm-label">${this._t("power")}</span>
-                            <span class="cm-value" style="color:${h?i:""}">${pt(s)}</span>
+                            <span class="cm-value" style="color:${u?i:""}">${pt(s)}</span>
                         </div>
                         <div class="cm-row">
                             <span class="cm-label">${this._t("today")}</span>
@@ -2534,15 +2534,15 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         </div>
                         <div class="cm-row">
                             <span class="cm-label">${this._t("charge_tonight")}</span>
-                            <span class="cm-value" style="color:${x}">
-                                <ha-icon icon="${y}" style="--mdc-icon-size:14px;vertical-align:middle;color:${x}"></ha-icon>
-                                ${b}
+                            <span class="cm-value" style="color:${k}">
+                                <ha-icon icon="${w}" style="--mdc-icon-size:14px;vertical-align:middle;color:${k}"></ha-icon>
+                                ${S}
                             </span>
                         </div>
-                        ${null!=l?H`
+                        ${null!=d?H`
                             <div class="cm-row">
                                 <span class="cm-label">${this._t("nights_until_charge")}</span>
-                                <span class="cm-value">${Math.round(l)}</span>
+                                <span class="cm-value">${Math.round(d)}</span>
                             </div>
                         `:K}
                     </div>
@@ -2550,12 +2550,12 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
 
                 <div class="charger-settings">
                     <div class="setting-item">
-                        <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:${_?"#7986CB":"#666"}"></ha-icon>
+                        <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:${v?"#7986CB":"#666"}"></ha-icon>
                         <span class="setting-label">${this._t("night")}</span>
                         <span
-                            class="setting-toggle ${_?"on":"off"}"
-                            @click=${t=>{t.stopPropagation(),this._toggleSwitch($)}}
-                        >${_?"ON":"OFF"}</span>
+                            class="setting-toggle ${v?"on":"off"}"
+                            @click=${t=>{t.stopPropagation(),this._toggleSwitch(C)}}
+                        >${v?"ON":"OFF"}</span>
                     </div>
                     <div
                         class="setting-item clickable"
@@ -2563,21 +2563,21 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     >
                         <ha-icon icon="mdi:bullseye-arrow" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
                         <span class="setting-label">${this._t("night_target")}</span>
-                        <span class="setting-value">${this._fmt(u,1)} kWh</span>
+                        <span class="setting-value">${this._fmt(y,1)} kWh</span>
                     </div>
                     <div
                         class="setting-item clickable"
                         @click=${()=>{const e=new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:`number.sem_charger_${t}_night_initial_current`}});this.dispatchEvent(e)}}
                     >
                         <ha-icon icon="mdi:current-ac" style="--mdc-icon-size:16px;color:#64B5F6"></ha-icon>
-                        <span class="setting-value">${this._fmt(f,0)}A</span>
+                        <span class="setting-value">${this._fmt(x,0)}A</span>
                     </div>
                     <div
                         class="setting-item clickable"
                         @click=${()=>{const e=new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:`number.sem_charger_${t}_minimum_current`}});this.dispatchEvent(e)}}
                     >
                         <ha-icon icon="mdi:speedometer-slow" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
-                        <span class="setting-value">${this._fmt(m,0)}A</span>
+                        <span class="setting-value">${this._fmt(b,0)}A</span>
                     </div>
                 </div>
             </div>

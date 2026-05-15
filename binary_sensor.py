@@ -82,6 +82,16 @@ async def async_setup_entry(
         for description in BINARY_SENSOR_TYPES
     ]
 
+    # Per-charger binary sensors (#193)
+    full_config = {**entry.data, **entry.options}
+    ev_chargers = full_config.get("ev_chargers", [])
+    for charger_cfg in ev_chargers:
+        cid = charger_cfg.get("id", "ev_charger")
+        entities.append(SEMSolarBinarySensor(coordinator, BinarySensorEntityDescription(
+            key=f"charger_{cid}_connected",
+            device_class=BinarySensorDeviceClass.PLUG,
+        ), entry))
+
     async_add_entities(entities)
 
 
