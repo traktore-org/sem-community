@@ -1375,8 +1375,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             for cid, intel in per_charger_intel.items():
                 charger_name = self._ev_devices[cid].name if cid in self._ev_devices else cid
                 charger_connected = self._last_ev_connected_per_charger.get(cid, False)
-                mins_to_full = intel.get("minutes_to_full", 0)
-                est_soc = intel.get("estimated_soc", 0)
+                mins_to_full = intel.get("minutes_to_full") or 0
+                est_soc = intel.get("estimated_soc") or 0
                 charge_needed = intel.get("charge_needed", False)
                 nights = intel.get("nights_until_charge", 0)
 
@@ -2259,7 +2259,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             predicted = getattr(self, '_predictor', None)
             predicted_daily = predicted.predict_ev_consumption_tomorrow(dt_util.now()) if predicted else 0
             nights, charge_needed, skip_reason = detector.calculate_nights_until_charge(
-                predicted_daily, None,
+                predicted_daily, per_charger_vehicle_soc,
             )
             taper_data = detector.get_taper_data() if hasattr(detector, 'get_taper_data') else None
 
@@ -2408,7 +2408,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if current_hour >= 17 or remaining < 1:
             # Evening or very little solar left
             if forecast.forecast_tomorrow_kwh > 5:
-                return "tomorrow 10:00–14:00"
+                return "{tomorrow} 10:00–14:00"
             return ""
 
         # Generic midday window if we have decent forecast

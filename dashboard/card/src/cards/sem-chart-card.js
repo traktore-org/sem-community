@@ -237,12 +237,12 @@ class SEMChartCard extends SEMLitBase {
         const isHourly = p && (p.defaultPeriod === '24h' || (p.hourly && !p.daily));
         if (isHourly) {
             const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            this._onPeriodChange({ start, end: now, granularity: 'hour', label: 'Last 24h', key: '24h' });
+            this._onPeriodChange({ start, end: now, granularity: 'hour', label: this._t('last_24h'), key: '24h' });
         } else {
             const dow = now.getDay() || 7;
             const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             mon.setDate(mon.getDate() - (dow - 1));
-            this._onPeriodChange({ start: mon, end: now, granularity: 'day', label: 'This Week', key: 'week' });
+            this._onPeriodChange({ start: mon, end: now, granularity: 'day', label: this._t('period_this_week'), key: 'week' });
         }
     }
 

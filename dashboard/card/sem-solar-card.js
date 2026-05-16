@@ -107,7 +107,8 @@ class SEMSolarCard extends SEMBaseCard {
         setVal('.fc-peak', peakW > 0 ? semFormatPower(peakW) : '—');
         const peakTime = this._stateStr('forecast_peak_time_today');
         setVal('.fc-peak-time', peakTime !== '—' ? peakTime : '—');
-        setVal('.fc-window', this._stateStr('best_surplus_window'));
+        const windowStr = this._stateStr('best_surplus_window').replace('{tomorrow}', this._t('tomorrow'));
+        setVal('.fc-window', windowStr);
 
         // Performance
         const specYield = this._state('pv_daily_specific_yield');

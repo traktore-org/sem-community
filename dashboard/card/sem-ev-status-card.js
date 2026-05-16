@@ -67,6 +67,11 @@ class SEMEVStatusCard extends SEMBaseCard {
                 `charger_${id}_charge_needed`,
             ].map(s => hass.states[`${this._prefix}${s}`]?.state || '').join(':')).join('|');
 
+            // Per-charger connected status
+            key += '|' + this._chargers.map(id =>
+                hass.states[`binary_sensor.sem_charger_${id}_connected`]?.state || ''
+            ).join(':');
+
             // Night charging switches
             key += '|' + this._chargers.map(id =>
                 hass.states[`switch.sem_charger_${id}_night_charging`]?.state || ''
@@ -217,6 +222,14 @@ class SEMEVStatusCard extends SEMBaseCard {
         const bolt = $('.lightning-bolt');
         if (bolt) bolt.style.opacity = charging ? '1' : '0';
 
+        // Multi-charger: hide redundant global rows (#193)
+        if (this._chargers.length > 1) {
+            const lblStatus = this.shadowRoot.querySelector('.lbl-status');
+            const lblCurrent = this.shadowRoot.querySelector('.lbl-current');
+            if (lblStatus?.parentElement) lblStatus.parentElement.style.display = 'none';
+            if (lblCurrent?.parentElement) lblCurrent.parentElement.style.display = 'none';
+        }
+
         // Multi-charger sections (#193)
         if (this._chargers.length >= 1) {
             this._updateChargerSections();
@@ -260,7 +273,12 @@ class SEMEVStatusCard extends SEMBaseCard {
             const safeName = this._escapeHTML(name);
 
             const isCharging = power > 50;
-            const statusText = isCharging ? this._t('charging') : this._t('idle');
+            const connectedEntity = this._hass?.states[`binary_sensor.sem_charger_${id}_connected`];
+            const isConnected = connectedEntity?.state === 'on';
+            const statusText = isCharging ? this._t('charging')
+                : isConnected ? this._t('connected')
+                : this._t('disconnected');
+            const statusColor = isCharging ? color : isConnected ? '#8DC892' : '#666';
 
             // Night charging switch state
             const nightSwitch = this._hass?.states[`switch.sem_charger_${id}_night_charging`];
@@ -287,7 +305,7 @@ class SEMEVStatusCard extends SEMBaseCard {
                     <div class="charger-header">
                         <div class="charger-dot" style="background:${color}"></div>
                         <span class="charger-name">${safeName}</span>
-                        <span class="charger-status" style="color:${isCharging ? color : ''}">${statusText}</span>
+                        <span class="charger-status" style="color:${statusColor};text-transform:uppercase;font-size:11px;font-weight:600;letter-spacing:0.5px">${statusText}</span>
                     </div>
 
                     <div class="charger-body">
@@ -705,9 +723,9 @@ class SEMEVStatusCard extends SEMBaseCard {
 
                 /* Strategy text */
                 .strategy-value {
-                    font-size: 10px;
+                    font-size: 12px;
                     color: #8DC892;
-                    opacity: 0.7;
+                    opacity: 0.8;
                     font-weight: 500;
                     white-space: nowrap;
                     overflow: hidden;

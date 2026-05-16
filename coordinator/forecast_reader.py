@@ -203,10 +203,9 @@ class ForecastReader:
             if state and state.state not in ("unknown", "unavailable"):
                 raw = state.state
                 try:
-                    from homeassistant.util import dt as _dt_util
-                    parsed = _dt_util.parse_datetime(raw)
+                    parsed = dt_util.parse_datetime(raw)
                     if parsed is not None:
-                        data.peak_time_today = _dt_util.as_local(parsed).strftime("%H:%M")
+                        data.peak_time_today = dt_util.as_local(parsed).strftime("%H:%M")
                     else:
                         data.peak_time_today = raw
                 except (ValueError, TypeError):

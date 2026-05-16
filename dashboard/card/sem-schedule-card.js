@@ -114,8 +114,8 @@ class SEMScheduleCard extends SEMBaseCard {
         for (const key of ['predicted_surplus_window', 'best_surplus_window']) {
             const raw = this._stateObj(key)?.state;
             if (!raw || raw === 'unknown' || raw === 'unavailable') continue;
-            // Skip "tomorrow..." — we only show today
-            if (raw.toLowerCase().startsWith('tomorrow')) continue;
+            // Skip "{tomorrow}..." — we only show today
+            if (raw.includes('{tomorrow}') || raw.toLowerCase().startsWith('tomorrow')) continue;
             // Parse "HH:MM–HH:MM" or "HH:MM-HH:MM" (both dash types)
             const parts = raw.split(/[-–]/);
             if (parts.length !== 2) continue;
