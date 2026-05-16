@@ -1341,6 +1341,11 @@ SENSOR_TYPES = [
         key="ev_charger_count",
         suggested_display_precision=0,
     ),
+    SensorEntityDescription(
+        key="diag_charger_count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
 
     # Diagnostics (System tab)
     SensorEntityDescription(
