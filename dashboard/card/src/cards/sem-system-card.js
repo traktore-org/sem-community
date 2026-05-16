@@ -21,7 +21,9 @@ const SECTIONS = [
         subtitleFn: (c) => {
             const ver = c._val('diag_version') || '—';
             const mode = c._val('diag_grid_mode') || '—';
-            return `v${ver} · ${mode}`;
+            const modeT = mode === 'combined' ? c._t('grid_combined')
+                : mode === 'split' ? c._t('grid_split') : mode;
+            return `v${ver} · ${modeT}`;
         },
     },
     {
@@ -198,7 +200,7 @@ class SEMSystemCard extends SEMLitBase {
             </div>
             <div class="info-row">
                 <span class="info-row-label">${this._t('grid_mode')}</span>
-                <span class="info-row-value">${this._val('diag_grid_mode') || '—'}</span>
+                <span class="info-row-value">${(() => { const m = this._val('diag_grid_mode') || '—'; return m === 'combined' ? this._t('grid_combined') : m === 'split' ? this._t('grid_split') : m; })()}</span>
             </div>
             <div class="info-row">
                 <span class="info-row-label">${this._t('battery_capacity')}</span>
