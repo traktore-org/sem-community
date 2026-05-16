@@ -141,9 +141,8 @@ class NotificationManager:
         if not self._charger_notify_checked:
             self._charger_notify_checked = True
             # Try configured service, then auto-detect from available notify services
-            service = (self.config.get("charger_notification_service")
-                       or self.config.get("keba_notification_service")
-                       or self._auto_detect_charger_notify_service())
+            # charger_notification_service and keba_notification_service were never set via UI
+            service = self._auto_detect_charger_notify_service()
             self._charger_notify_service = service
             self._charger_notify_available = bool(service) and self.hass.services.has_service("notify", service)
             if not self._charger_notify_available:

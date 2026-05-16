@@ -104,34 +104,6 @@
           "ev_target_soc": "EV-doel-SOC (%)"
         }
       },
-      "hardware": {
-        "title": "Hardware Entiteit Configuratie",
-        "description": "Werk uw hardware entiteit koppelingen bij",
-        "data": {
-          "solar_production_sensor": "Zonnepanelen Productie Vermogen",
-          "grid_power_sensor": "Netvermogen (uitwisseling)",
-          "battery_soc_sensor": "Laadstatus batterij (SOC)",
-          "battery_power_sensor": "Laad-/ontlaadvermogen batterij",
-          "battery_temperature_sensor": "Batterijtemperatuur [optioneel]",
-          "ev_connected_sensor": "EV verbonden status",
-          "ev_charging_sensor": "EV laadstatus",
-          "ev_charging_power_sensor": "EV laadvermogen",
-          "ev_total_energy_sensor": "Totaal energieverbruik EV [optioneel]",
-          "solar_total_energy_sensor": "Totale zonne-energie [optioneel]",
-          "grid_import_total_energy_sensor": "Totale netafname [optioneel]",
-          "grid_export_total_energy_sensor": "Totale teruglevering aan net [optioneel]",
-          "battery_charge_total_energy_sensor": "Totale batterij laadenergie [optioneel]",
-          "battery_discharge_total_energy_sensor": "Totale batterij ontlaadenergie [optioneel]",
-          "vehicle_soc_entity": "Voertuig batterij SOC",
-          "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
-          "ev_target_soc": "EV gewenste SOC (%)"
-        },
-        "data_description": {
-          "vehicle_soc_entity": "Optioneel. Een sensor die de huidige laadstatus (State of Charge, 0–100%) van het voertuig weergeeft. Slechts enkele auto's bieden dit (Tesla, sommige VW ID-modellen, MG ZS EV met custom integraties, OBD-II adapters). Indien leeg, gebruikt SEM in plaats daarvan de kWh-gebaseerde dagdoelstelling en worden de twee onderstaande velden genegeerd.",
-          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-batterij. Wordt ALLEEN gebruikt wanneer de bovenstaande Vehicle SOC-sensor is geconfigureerd — SEM combineert dit met de SOC-waarde om de nog benodigde energie te berekenen om het doel te bereiken. Zonder SOC-sensor wordt deze waarde volledig genegeerd.",
-          "ev_target_soc": "SOC-percentage dat SEM probeert te bereiken tijdens nachtelijk laden. Wordt ALLEEN gebruikt wanneer de Vehicle SOC-sensor is geconfigureerd. Zonder deze sensor wordt in plaats daarvan het kWh-gebaseerde veld 'Dagelijks EV-doel' uit de optimalisatie-instellingen gebruikt."
-        }
-      },
       "settings": {
         "title": "SEM Optimalisatie instellingen",
         "description": "Pas je SEM optimalisatie instelling aan",
