@@ -393,7 +393,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
         const compact = this._compact;
         const L = this._getLayout();
         const H = L.home;
-        const nodeR = compact ? 26 : 24;
+        const nodeR = compact ? 30 : 24;
         const cols = compact ? 2 : Math.min(devices.length, 3);
         const vbW = compact ? 500 : 1000;
         const margin = compact ? 30 : 60;
@@ -439,11 +439,14 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
             // Device circle node
             const fillOpacity = isOn ? 0.08 : 0.03;
-            const strokeOpacity = isOn ? 1 : 0.4;
-            html += `<circle cx="${cx}" cy="${cy}" r="${nodeR}" fill="rgba(128,128,128,${fillOpacity})" stroke="${color}" stroke-width="1.2" opacity="${strokeOpacity}"/>`;
+            const strokeOpacity = isOn ? 1 : (compact ? 0.6 : 0.4);
+            html += `<circle cx="${cx}" cy="${cy}" r="${nodeR}" fill="rgba(128,128,128,${fillOpacity})" stroke="${color}" stroke-width="${compact ? 1.5 : 1.2}" opacity="${strokeOpacity}"/>`;
 
-            // Device icon
-            html += `<g transform="translate(${cx},${cy})" stroke="${color}" fill="none" opacity="${isOn ? 0.7 : 0.35}" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">`;
+            // Device icon — larger stroke and higher opacity on mobile for visibility
+            const iconSW = compact ? 1.8 : 1.4;
+            const iconScale = compact ? 1.2 : 1;
+            const iconOpacity = isOn ? 0.85 : 0.5;
+            html += `<g transform="translate(${cx},${cy})${iconScale !== 1 ? ` scale(${iconScale})` : ''}" stroke="${color}" fill="none" opacity="${iconOpacity}" stroke-width="${iconSW}" stroke-linecap="round" stroke-linejoin="round">`;
             html += icon;
             html += `</g>`;
 
@@ -629,13 +632,13 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <g id="node-solar" filter="url(#glowSolar)">
                         ${this._glowRing(S, '#ff9800')}
                         <circle cx="${S.cx}" cy="${S.cy}" r="${S.r}" fill="rgba(255,152,0,0.07)" stroke="#ff9800" stroke-width="1.8"/>
-                        <g transform="translate(${S.cx},${S.cy - 8})" stroke="#ff9800" fill="none" opacity="0.75">
-                            <rect x="-16" y="-12" width="32" height="24" rx="3" stroke-width="1.8"/>
-                            <line x1="-16" y1="0" x2="16" y2="0" stroke-width="1.2"/>
-                            <line x1="-5" y1="-12" x2="-5" y2="12" stroke-width="1.2"/>
-                            <line x1="5" y1="-12" x2="5" y2="12" stroke-width="1.2"/>
-                            <line x1="0" y1="12" x2="0" y2="17" stroke-width="1.5"/>
-                            <line x1="-7" y1="17" x2="7" y2="17" stroke-width="1.5"/>
+                        <g transform="translate(${S.cx},${S.cy - 8})" stroke="#ff9800" fill="none" opacity="${this._compact ? 0.9 : 0.75}">
+                            <rect x="-16" y="-12" width="32" height="24" rx="3" stroke-width="${this._compact ? 2.2 : 1.8}"/>
+                            <line x1="-16" y1="0" x2="16" y2="0" stroke-width="${this._compact ? 1.5 : 1.2}"/>
+                            <line x1="-5" y1="-12" x2="-5" y2="12" stroke-width="${this._compact ? 1.5 : 1.2}"/>
+                            <line x1="5" y1="-12" x2="5" y2="12" stroke-width="${this._compact ? 1.5 : 1.2}"/>
+                            <line x1="0" y1="12" x2="0" y2="17" stroke-width="${this._compact ? 1.8 : 1.5}"/>
+                            <line x1="-7" y1="17" x2="7" y2="17" stroke-width="${this._compact ? 1.8 : 1.5}"/>
                         </g>
                     </g>
                     <text id="label-solar" x="${S.cx}" y="${S.cy + S.r + 18}" text-anchor="middle" font-family="${F}" font-size="${fl}" font-weight="600" fill="#ff9800">${this._t('solar')}</text>
@@ -658,8 +661,8 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                         <circle id="soc-arc" cx="${B.cx}" cy="${B.cy}" r="${L.socR}" fill="none" stroke="#4db6ac" stroke-width="5"
                                 stroke-dasharray="${socCirc}" stroke-dashoffset="${socCirc}"
                                 transform="rotate(-90 ${B.cx} ${B.cy})" stroke-linecap="round" opacity="0.75"/>
-                        <g transform="translate(${B.cx},${B.cy})" stroke="#4db6ac" fill="none" opacity="0.7">
-                            <rect x="-8" y="-13" width="16" height="26" rx="3" stroke-width="1.8"/>
+                        <g transform="translate(${B.cx},${B.cy})" stroke="#4db6ac" fill="none" opacity="${this._compact ? 0.85 : 0.7}">
+                            <rect x="-8" y="-13" width="16" height="26" rx="3" stroke-width="${this._compact ? 2.2 : 1.8}"/>
                             <rect x="-3" y="-16" width="6" height="4" rx="1.5" fill="#4db6ac" opacity="0.5" stroke="none"/>
                         </g>
                     </g>
@@ -673,7 +676,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <g id="node-grid" filter="url(#glowGrid)">
                         ${this._glowRing(G, '#488fc2')}
                         <circle cx="${G.cx}" cy="${G.cy}" r="${G.r}" fill="rgba(72,143,194,0.07)" stroke="#488fc2" stroke-width="1.8"/>
-                        <g transform="translate(${G.cx},${G.cy})" stroke="#488fc2" fill="none" opacity="0.7" stroke-width="1.8" stroke-linecap="round">
+                        <g transform="translate(${G.cx},${G.cy})" stroke="#488fc2" fill="none" opacity="${this._compact ? 0.85 : 0.7}" stroke-width="${this._compact ? 2.2 : 1.8}" stroke-linecap="round">
                             <line x1="0" y1="-16" x2="0" y2="14"/>
                             <line x1="-10" y1="-8" x2="10" y2="-8"/>
                             <line x1="-7" y1="-1" x2="7" y2="-1"/>
@@ -699,7 +702,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                                 stroke-dasharray="${scCirc}" stroke-dashoffset="${scCirc}"
                                 transform="rotate(-90 ${H.cx} ${H.cy})" stroke-linecap="round" opacity="0.6"/>
                         `; })()}
-                        <g transform="translate(${H.cx},${H.cy - 5})" stroke="#5BC8D8" fill="none" opacity="0.6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <g transform="translate(${H.cx},${H.cy - 5})" stroke="#5BC8D8" fill="none" opacity="${this._compact ? 0.8 : 0.6}" stroke-width="${this._compact ? 2.2 : 1.8}" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M-20,2 L0,-14 L20,2"/>
                             <rect x="-14" y="2" width="28" height="20" rx="2"/>
                             <rect x="-4" y="10" width="8" height="12"/>
@@ -715,7 +718,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
                     <g id="node-ev" filter="url(#glowEV)">
                         ${this._glowRing(E, '#8DC892')}
                         <circle cx="${E.cx}" cy="${E.cy}" r="${E.r}" fill="rgba(141,200,146,0.07)" stroke="#8DC892" stroke-width="1.8"/>
-                        <g transform="translate(${E.cx},${E.cy})" stroke="#8DC892" fill="none" opacity="0.7" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <g transform="translate(${E.cx},${E.cy})" stroke="#8DC892" fill="none" opacity="${this._compact ? 0.85 : 0.7}" stroke-width="${this._compact ? 2.2 : 1.8}" stroke-linecap="round" stroke-linejoin="round">
                             <rect x="-8" y="-13" width="16" height="22" rx="3"/>
                             <rect x="-5" y="-9" width="10" height="8" rx="1.5"/>
                             <path d="M-1,-1 L0,3 L1,-1"/>
@@ -743,8 +746,10 @@ class SEMSystemDiagramCard extends SEMBaseCard {
     }
 
     _glowFilter(id, color, blur) {
-        return `<filter id="${id}" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="${blur}" result="blur"/>
+        // Mobile: reduce blur to prevent filter-region clipping on WebView
+        const b = this._compact ? Math.max(3, blur - 2) : blur;
+        return `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="${b}" result="blur"/>
             <feFlood flood-color="${color}" flood-opacity="0.25"/>
             <feComposite in2="blur" operator="in"/>
             <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
