@@ -1013,9 +1013,14 @@ class LoadManagementCoordinator:
     def get_load_management_data(self) -> Dict[str, Any]:
         """Get current load management data for sensors."""
         total_devices = len(self._devices)
+        # "Switchable" = controllable AND currently on (i.e. could be shed now).
+        # Previously counted all available+controllable devices, which kept the
+        # number at "10" even when the user had turned them all off (#193).
         controllable_devices = sum(
             1 for d in self._devices.values()
-            if d.get("is_controllable", True) and d.get("is_available", False)
+            if d.get("is_controllable", True)
+            and d.get("is_available", False)
+            and self._is_device_currently_on(d)
         )
 
         available_reduction = sum(
