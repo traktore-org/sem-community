@@ -121,11 +121,14 @@ Each charger charges independently at night:
 ### Dashboard
 
 The `sem-ev-status-card` on the EV tab automatically shows per-charger sections when chargers are configured:
-- **Battery SOC gauge** — battery-shaped, color-coded (green >60%, orange >30%, red)
+- **Connected status** — per-charger CONNECTED/DISCONNECTED indicator (reads each charger's plug sensor independently)
+- **Battery SOC gauge** — shows real vehicle SOC when `vehicle_soc_entity` is configured per charger, otherwise estimated SOC from taper detection
 - **Per-charger metrics** — power, session energy, solar share
 - **Charge Tonight** — per-charger indicator (Yes/No)
-- **Nights Until Charge** — per-charger estimate
+- **Nights Until Charge** — per-charger estimate using the charger's own vehicle SOC
 - **Inline settings** — night charging toggle, target kWh, start/min amps (tap to edit)
+
+When multiple chargers are configured, the global status row is hidden to avoid redundancy with per-charger sections.
 
 Regenerate the dashboard after adding a charger: **Developer Tools → Services → solar_energy_management.generate_dashboard**
 
