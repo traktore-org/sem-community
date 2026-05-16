@@ -161,7 +161,7 @@ class SEMHomeStatusCard extends SEMBaseCard {
         }
         if (tip) {
             setText('.tip-primary', tip);
-            const window_ = (this._stateStr('best_surplus_window') || '—').replace('{tomorrow}', this._t('tomorrow'));
+            const window_ = this._stateStr('best_surplus_window') || '—';
             const remaining = this._state('forecast_remaining_today_kwh').toFixed(1);
             setText('.tip-secondary', `${this._t('best_window')}: ${window_} · ${this._t('surplus')}: ${remaining} kWh`);
         }

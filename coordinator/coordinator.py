@@ -2408,7 +2408,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if current_hour >= 17 or remaining < 1:
             # Evening or very little solar left
             if forecast.forecast_tomorrow_kwh > 5:
-                return "{tomorrow} 10:00–14:00"
+                from ..utils.translate import get_text
+                tomorrow_word = get_text(self.hass, "tomorrow", "tomorrow")
+                return f"{tomorrow_word} 10:00–14:00"
             return ""
 
         # Generic midday window if we have decent forecast
@@ -2453,16 +2455,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 lm_data.controlled_tariff_status = lm_info.get("controlled_tariff_status", "unknown")
                 lm_data.tariff_type = lm_info.get("tariff_type", "unknown")
 
-                # Recommendation based on state
+                # Recommendation based on state — translated via get_text()
+                from ..utils.translate import get_text as _gt
                 state = lm_info.get("state", "normal")
                 if state == "emergency":
-                    lm_data.load_management_recommendation = "Reduce load immediately!"
+                    lm_data.load_management_recommendation = _gt(self.hass, "Reduce load immediately!", "Reduce load immediately!")
                 elif state == "shedding":
-                    lm_data.load_management_recommendation = "Reducing non-critical loads"
+                    lm_data.load_management_recommendation = _gt(self.hass, "Reducing non-critical loads", "Reducing non-critical loads")
                 elif state == "warning":
-                    lm_data.load_management_recommendation = "Monitor - approaching peak limit"
+                    lm_data.load_management_recommendation = _gt(self.hass, "Monitor - approaching peak limit", "Monitor - approaching peak limit")
                 else:
-                    lm_data.load_management_recommendation = "Normal operation"
+                    lm_data.load_management_recommendation = _gt(self.hass, "Normal operation", "Normal operation")
 
                 # Peak trend based on recent changes
                 if current_import_kw > lm_data.target_peak_limit * 0.9:
