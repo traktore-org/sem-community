@@ -231,25 +231,17 @@ export class SEMLitBase extends LitElement {
         if (window._semDebug) {
             console.log(`[SEM DEBUG] ${this.tagName} connectedCallback`);
         }
-        // Poll for semLocalize availability
-        if (!this._localizeReady) {
-            let attempts = 0;
-            this._localizeCheckTimer = setInterval(() => {
-                attempts++;
-                if (typeof semLocalize === 'function' && this._hass) {
-                    clearInterval(this._localizeCheckTimer);
-                    this._localizeCheckTimer = null;
-                    this._localizeReady = true;
-                    this.requestUpdate();
-                } else if (typeof semLocalize === 'function') {
-                    this._localizeReady = true;
-                    clearInterval(this._localizeCheckTimer);
-                    this._localizeCheckTimer = null;
-                } else if (attempts >= 50) {
-                    clearInterval(this._localizeCheckTimer);
-                    this._localizeCheckTimer = null;
-                }
-            }, 200);
+        // Wait for semLocalize via event (instant) instead of polling
+        if (!this._localizeReady && typeof semLocalize !== 'function') {
+            this._onLocalizeReady = () => {
+                document.removeEventListener('sem-localize-ready', this._onLocalizeReady);
+                this._onLocalizeReady = null;
+                this._localizeReady = true;
+                if (this._hass) this.requestUpdate();
+            };
+            document.addEventListener('sem-localize-ready', this._onLocalizeReady);
+        } else if (typeof semLocalize === 'function') {
+            this._localizeReady = true;
         }
     }
 
@@ -258,9 +250,9 @@ export class SEMLitBase extends LitElement {
         if (window._semDebug) {
             console.log(`[SEM DEBUG] ${this.tagName} disconnectedCallback !!!`);
         }
-        if (this._localizeCheckTimer) {
-            clearInterval(this._localizeCheckTimer);
-            this._localizeCheckTimer = null;
+        if (this._onLocalizeReady) {
+            document.removeEventListener('sem-localize-ready', this._onLocalizeReady);
+            this._onLocalizeReady = null;
         }
         // Clean up debounce timer
         if (this._updateTimer) {
