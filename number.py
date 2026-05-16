@@ -227,7 +227,7 @@ NUMBER_TYPES = [
     NumberEntityDescription(
         key="electricity_import_rate",
         native_unit_of_measurement="CHF/kWh",  # CHF replaced dynamically with HA currency
-        native_min_value=0.01,
+        native_min_value=0.0,
         native_max_value=1.0,
         native_step=0.01,
         mode=NumberMode.BOX,
@@ -235,7 +235,7 @@ NUMBER_TYPES = [
     NumberEntityDescription(
         key="electricity_export_rate",
         native_unit_of_measurement="CHF/kWh",  # CHF replaced dynamically with HA currency
-        native_min_value=0.01,
+        native_min_value=0.0,
         native_max_value=0.50,
         native_step=0.005,
         mode=NumberMode.BOX,

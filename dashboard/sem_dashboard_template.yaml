@@ -219,7 +219,7 @@ views:
           # ── Self-Consumption Trend (sem-chart-card replaces apexcharts) ──
           - type: custom:sem-chart-card
             preset: energy
-            title: Self-Consumption Trend
+            title: Self-Consumption — 30 Day Trend
 
   # ============================================================
   # VIEW 2: BATTERY — SOC zones, charge/discharge, health

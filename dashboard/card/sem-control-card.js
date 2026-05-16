@@ -388,8 +388,10 @@ class SEMControlCard extends SEMBaseCard {
             const peakColor = peakPct > 90 ? '#f44336' : peakPct > 70 ? '#ff9800' : '#8DC892';
             if (peakPctEl.style.color !== peakColor) peakPctEl.style.color = peakColor;
         }
-        setVal('.peak-status', this._stateStr('load_management_status') || '—');
-        setVal('.peak-rec', this._stateStr('load_management_recommendation') || '');
+        const lmStatus = this._stateStr('load_management_status') || '—';
+        setVal('.peak-status', this._t(lmStatus) || lmStatus);
+        const lmRec = this._stateStr('load_management_recommendation') || '';
+        setVal('.peak-rec', this._t(lmRec) || lmRec);
         setVal('.peak-margin-val', this._state('peak_margin').toFixed(1) + ' kW');
         const shed = this._state('available_load_reduction');
         const shedDevices = this._state('controllable_devices_count').toFixed(0);

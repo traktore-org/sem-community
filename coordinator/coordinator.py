@@ -564,6 +564,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_device = ev_dev
                     self._session_data = self._session_data_per_charger[cid]
                     self._last_ev_connected = self._last_ev_connected_per_charger[cid]
+                    # Per-charger plug/charging state (#193): power.ev_connected is
+                    # the OR of all chargers' plug sensors, so without this override
+                    # every charger would report connected as soon as ANY car plugs in.
+                    saved_ev_connected, saved_ev_charging = power.ev_connected, power.ev_charging
+                    pc_conn_sensor = charger_cfg.get("ev_connected_sensor")
+                    pc_chrg_sensor = charger_cfg.get("ev_charging_sensor")
+                    if pc_conn_sensor:
+                        pc_state = self.hass.states.get(pc_conn_sensor)
+                        if pc_state and pc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                            power.ev_connected = pc_state.state == "on"
+                    if pc_chrg_sensor:
+                        pc_state = self.hass.states.get(pc_chrg_sensor)
+                        if pc_state and pc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                            power.ev_charging = pc_state.state == "on"
                     self._update_session_tracking(power, charger_flows)
                     # Save back per-charger state
                     self._session_data_per_charger[cid] = self._session_data
@@ -573,6 +587,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         saved_dev, saved_sess, saved_conn
                     )
                     self._cycle_vehicle_soc = saved_vehicle_soc
+                    power.ev_connected, power.ev_charging = saved_ev_connected, saved_ev_charging
                 # Primary charger session = first charger's session
                 primary_id = next(iter(self._ev_devices))
                 self._session_data = self._session_data_per_charger.get(
@@ -1360,8 +1375,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             for cid, intel in per_charger_intel.items():
                 charger_name = self._ev_devices[cid].name if cid in self._ev_devices else cid
                 charger_connected = self._last_ev_connected_per_charger.get(cid, False)
-                mins_to_full = intel.get("minutes_to_full", 0)
-                est_soc = intel.get("estimated_soc", 0)
+                mins_to_full = intel.get("minutes_to_full") or 0
+                est_soc = intel.get("estimated_soc") or 0
                 charge_needed = intel.get("charge_needed", False)
                 nights = intel.get("nights_until_charge", 0)
 
@@ -2216,18 +2231,40 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if not self._ev_taper_detectors:
             return {}
 
+        ev_chargers_cfg = self.config.get("ev_chargers", [])
         result = {}
         for cid, detector in self._ev_taper_detectors.items():
-            soc = detector.get_virtual_soc()
+            # Per-charger vehicle SOC pass-through (#193): without this, every
+            # detector starts at _energy_since_full=0 and reports 100% forever
+            # — even when the user configured a real vehicle_soc_entity.
+            charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
+            per_charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
+            per_charger_vehicle_soc: Optional[float] = None
+            if per_charger_soc_entity:
+                soc_state = self.hass.states.get(per_charger_soc_entity)
+                if soc_state and soc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    try:
+                        per_charger_vehicle_soc = float(soc_state.state)
+                    except (ValueError, TypeError):
+                        pass
+
+            # If we have no real SOC and the detector has no calibration data,
+            # the virtual 100% default is misleading — return None so the sensor
+            # displays as unavailable until first real reading.
+            if per_charger_vehicle_soc is None and not detector._soc_anchored and detector._energy_since_full == 0.0:
+                soc: Optional[float] = None
+            else:
+                soc = detector.get_virtual_soc(per_charger_vehicle_soc)
+
             predicted = getattr(self, '_predictor', None)
             predicted_daily = predicted.predict_ev_consumption_tomorrow(dt_util.now()) if predicted else 0
             nights, charge_needed, skip_reason = detector.calculate_nights_until_charge(
-                predicted_daily, None,
+                predicted_daily, per_charger_vehicle_soc,
             )
             taper_data = detector.get_taper_data() if hasattr(detector, 'get_taper_data') else None
 
             result[cid] = {
-                "estimated_soc": round(soc, 1),
+                "estimated_soc": round(soc, 1) if soc is not None else None,
                 "nights_until_charge": nights,
                 "charge_needed": charge_needed,
                 "charge_skip_reason": skip_reason,
@@ -2371,7 +2408,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if current_hour >= 17 or remaining < 1:
             # Evening or very little solar left
             if forecast.forecast_tomorrow_kwh > 5:
-                return "tomorrow 10:00–14:00"
+                from ..utils.translate import get_text
+                tomorrow_word = get_text(self.hass, "tomorrow", "tomorrow")
+                return f"{tomorrow_word} 10:00–14:00"
             return ""
 
         # Generic midday window if we have decent forecast
@@ -2416,16 +2455,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 lm_data.controlled_tariff_status = lm_info.get("controlled_tariff_status", "unknown")
                 lm_data.tariff_type = lm_info.get("tariff_type", "unknown")
 
-                # Recommendation based on state
+                # Recommendation based on state — translated via get_text()
+                from ..utils.translate import get_text as _gt
                 state = lm_info.get("state", "normal")
                 if state == "emergency":
-                    lm_data.load_management_recommendation = "Reduce load immediately!"
+                    lm_data.load_management_recommendation = _gt(self.hass, "Reduce load immediately!", "Reduce load immediately!")
                 elif state == "shedding":
-                    lm_data.load_management_recommendation = "Reducing non-critical loads"
+                    lm_data.load_management_recommendation = _gt(self.hass, "Reducing non-critical loads", "Reducing non-critical loads")
                 elif state == "warning":
-                    lm_data.load_management_recommendation = "Monitor - approaching peak limit"
+                    lm_data.load_management_recommendation = _gt(self.hass, "Monitor - approaching peak limit", "Monitor - approaching peak limit")
                 else:
-                    lm_data.load_management_recommendation = "Normal operation"
+                    lm_data.load_management_recommendation = _gt(self.hass, "Normal operation", "Normal operation")
 
                 # Peak trend based on recent changes
                 if current_import_kw > lm_data.target_peak_limit * 0.9:

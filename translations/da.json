@@ -866,6 +866,9 @@
       },
       "battery_session_avg_power": {
         "name": "Battery Session Avg Power"
+      },
+      "diag_charger_count": {
+        "name": "Konfigurerede ladere"
       }
     },
     "binary_sensor": {

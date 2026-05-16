@@ -866,6 +866,9 @@
       },
       "battery_session_avg_power": {
         "name": "Batterij Sessie Gemiddeld Vermogen"
+      },
+      "diag_charger_count": {
+        "name": "Geconfigureerde laders"
       }
     },
     "binary_sensor": {

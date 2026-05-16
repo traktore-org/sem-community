@@ -877,6 +877,9 @@
       "diag_grid_sign": {
         "name": "Grid Sign Convention"
       },
+      "diag_charger_count": {
+        "name": "Configured Chargers"
+      },
       "diag_charger_control": {
         "name": "Charger Control Method"
       },

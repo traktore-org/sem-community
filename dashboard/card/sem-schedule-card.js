@@ -114,8 +114,10 @@ class SEMScheduleCard extends SEMBaseCard {
         for (const key of ['predicted_surplus_window', 'best_surplus_window']) {
             const raw = this._stateObj(key)?.state;
             if (!raw || raw === 'unknown' || raw === 'unavailable') continue;
-            // Skip "tomorrow..." — we only show today
-            if (raw.toLowerCase().startsWith('tomorrow')) continue;
+            // Skip entries for tomorrow — only show today's schedule.
+            // The sensor value now contains the translated word (e.g. "Morgen", "Tomorrow").
+            // Match by checking if the value doesn't start with a digit (time windows start with HH:MM).
+            if (!/^\d/.test(raw.trim())) continue;
             // Parse "HH:MM–HH:MM" or "HH:MM-HH:MM" (both dash types)
             const parts = raw.split(/[-–]/);
             if (parts.length !== 2) continue;

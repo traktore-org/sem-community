@@ -192,7 +192,7 @@ class SEMChartCard extends SEMBaseCard {
         const dow = now.getDay() || 7;
         const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         mon.setDate(mon.getDate() - (dow - 1));
-        this._onPeriodChange({ start: mon, end: now, granularity: 'day', label: 'This Week', key: 'week' });
+        this._onPeriodChange({ start: mon, end: now, granularity: 'day', label: this._t('period_this_week'), key: 'week' });
     }
 
     _onPeriodChange(detail) {

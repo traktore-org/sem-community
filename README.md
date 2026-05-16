@@ -421,7 +421,34 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ---
 
-## Recent Improvements (v1.4.0)
+## Recent Improvements (v1.5.x)
+
+### Per-Charger EV Enhancements (#193)
+- **Per-charger connected status** — each charger reads its own plug sensor independently (no more all-connected when one car is plugged in)
+- **Per-charger vehicle SOC** — configure `vehicle_soc_entity` per charger for real car battery percentage
+- **Per-charger night charging** — independent targets, switches, start/min amps per charger
+- **Per-charger notifications** — nearly full, skip, charge recommended fire per-charger with charger name
+- **Per-charger dashboard** — EV status card shows connected status, SOC gauge, metrics per charger
+- **Surplus distribution** — priority-based power allocation across chargers
+
+### Translation System Expansion
+- **759 translation keys** across 15 languages (was 606)
+- **Cross-layer translation** — Python sensor values with `{tomorrow}` placeholders translated at card level
+- **Peak management translated** — status, recommendation, and zone names
+- **Chart period labels translated** — "Last 24h", "This Week" etc.
+- **Grid mode translated** — "combined"/"split" in system info card
+
+### Bug Fixes
+- **Tariff rates accept zero** — import/export rates can be set to 0.00 for free electricity or net metering
+- **Switchable device count** — only counts devices that are currently ON (was counting all configured)
+- **Peak time formatting** — Solcast ISO timestamp converted to HH:MM local time
+- **Binary sensor prefix fix** — 4 sensors (solar_active, battery_charging, etc.) were permanently False
+- **Strategy text readability** — increased font size in EV card
+- **Contract tests** — entity-key contract tests prevent future key mismatches
+
+---
+
+## Previous Improvements (v1.4.0)
 
 ### Multi-EV Charger Control (#112)
 - **N charger support** — configure and control multiple EV chargers with priority-based surplus distribution

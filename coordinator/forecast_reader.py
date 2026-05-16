@@ -195,12 +195,21 @@ class ForecastReader:
         if self._source == "solcast" and data.peak_power_today_w < 100:
             data.peak_power_today_w *= 1000
 
-        # Peak time
+        # Peak time — Solcast exposes a full ISO datetime; coordinator
+        # and dashboard consumers expect "HH:MM" local time.
         peak_time_entity = self._entities.get("peak_time_today")
         if peak_time_entity:
             state = self.hass.states.get(peak_time_entity)
             if state and state.state not in ("unknown", "unavailable"):
-                data.peak_time_today = state.state
+                raw = state.state
+                try:
+                    parsed = dt_util.parse_datetime(raw)
+                    if parsed is not None:
+                        data.peak_time_today = dt_util.as_local(parsed).strftime("%H:%M")
+                    else:
+                        data.peak_time_today = raw
+                except (ValueError, TypeError):
+                    data.peak_time_today = raw
 
         self._last_data = data
         return data

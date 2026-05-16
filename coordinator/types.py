@@ -548,12 +548,10 @@ class SEMData:
             # Status
             "grid_status": self.status.grid_status,
             "battery_status": self.status.battery_status,
-            "sem_solar_active": self.status.solar_active,
-            "sem_ev_connected": self.status.ev_connected,
-            "sem_ev_charging": self.status.ev_charging,
-            "sem_battery_charging": self.status.battery_charging,
-            "sem_battery_discharging": self.status.battery_discharging,
-            "sem_grid_export_active": self.status.grid_export_active,
+            "solar_active": self.status.solar_active,
+            "battery_charging": self.status.battery_charging,
+            "battery_discharging": self.status.battery_discharging,
+            "grid_export_active": self.status.grid_export_active,
 
             # Charging control
             "charging_state": self.charging_state,

@@ -17,7 +17,9 @@ const SECTIONS = [
         subtitleFn: (c) => {
             const ver = c._stateStr('diag_version') || '—';
             const mode = c._stateStr('diag_grid_mode') || '—';
-            return `v${ver} · ${mode}`;
+            const modeTranslated = mode === 'combined' ? c._t('grid_combined')
+                : mode === 'split' ? c._t('grid_split') : mode;
+            return `v${ver} · ${modeTranslated}`;
         },
     },
     {
@@ -170,7 +172,10 @@ class SEMSystemCard extends SEMBaseCard {
 
         // ── System Info ──
         setVal('.info-version-val', this._stateStr('diag_version') || '—');
-        setVal('.info-grid-mode-val', this._stateStr('diag_grid_mode') || '—');
+        const gridMode = this._stateStr('diag_grid_mode') || '—';
+        const gridModeTranslated = gridMode === 'combined' ? this._t('grid_combined')
+            : gridMode === 'split' ? this._t('grid_split') : gridMode;
+        setVal('.info-grid-mode-val', gridModeTranslated);
         const cap = this._state('diag_battery_capacity');
         setVal('.info-capacity-val', cap > 0 ? cap.toFixed(1) + ' kWh' : '—');
         const interval = this._state('diag_update_interval');

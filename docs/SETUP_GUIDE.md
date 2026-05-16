@@ -289,8 +289,8 @@ Changes take effect within one coordinator cycle (default 10 seconds).
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|
 | Tariff mode | Static | How SEM gets electricity prices. Static uses fixed import/export rates you enter. Dynamic reads prices from a HA sensor (e.g. Tibber, Octopus, Amber). Calendar uses HA's calendar to define cheap periods. |
-| Import rate | 0.30 per kWh | What you pay to import from the grid. Used for cost calculations and the break-even check in the battery charge scheduler. Set it to your actual electricity rate. |
-| Export rate | 0.08 per kWh | What you receive for feeding into the grid. Used in savings calculations. Set it to your actual feed-in tariff. |
+| Import rate | 0.30 per kWh | What you pay to import from the grid (minimum: 0.00). Used for cost calculations and the break-even check in the battery charge scheduler. Set it to your actual electricity rate. Set to 0 if you have free electricity or net metering. |
+| Export rate | 0.08 per kWh | What you receive for feeding into the grid (minimum: 0.00). Used in savings calculations. Set it to your actual feed-in tariff. Set to 0 if you have no feed-in compensation. |
 | Dynamic price sensor | None | When tariff mode is Dynamic, point this at a sensor that reports the current price per kWh. SEM uses it to find the cheapest hours for overnight charging. |
 | Demand charge (per kW) | 0 | Some utility contracts charge monthly for peak demand (your highest 15-minute average). If yours does, enter the rate here. SEM factors it into the peak management calculation. |
 
@@ -779,7 +779,7 @@ To change the server language (affects static labels for all users):
    with the new language
 
 The source of truth for all translations is `dashboard/translations.json`
-(606 keys across 15 languages). If you want to contribute a translation
+(759 keys across 15 languages). If you want to contribute a translation
 correction or add a new language, see
 [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 

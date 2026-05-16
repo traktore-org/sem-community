@@ -147,7 +147,8 @@ Diagnostics and health monitoring.
 | **Mode Status** | Night/solar/battery priority status |
 | **Configuration** | All current settings at a glance |
 | **Peak Management** | Current peak, monthly peak, trend |
-| **Load Management** | Active devices, shedding status |
+| **Load Management** | Active devices, switchable device count (only counts currently ON devices), shedding status |
+| **System Info** | Version, grid mode (translated), battery capacity, update interval, configured charger count, unavailable sensors |
 
 ---
 
