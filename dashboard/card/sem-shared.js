@@ -178,52 +178,29 @@ class SEMBaseCard extends HTMLElement {
             this._localizeReady = hasLocalize;
             return true;
         }
-        // Poll for semLocalize availability during first 30s after card creation
-        // (covers race condition where semLocalize loads after initial render)
-        if (!this._localizeReady && !this._localizePollDone) {
-            if (!this._localizePollStart) this._localizePollStart = Date.now();
-            if (Date.now() - this._localizePollStart > 30000) {
-                this._localizePollDone = true;  // Stop polling after 30s
-            }
-            if (hasLocalize) {
-                this._localizeReady = true;
-                return true;
-            }
-        }
         return false;
     }
 
     connectedCallback() {
-        // If semLocalize isn't ready yet, poll until it is.
-        // sem-localize.js may load before or after cards connect.
-        // Poll every 200ms for up to 5s. When found AND hass is set,
-        // re-trigger the hass setter to force re-render with translations.
-        if (!this._localizeReady) {
-            let attempts = 0;
-            this._localizeCheckTimer = setInterval(() => {
-                attempts++;
-                if (typeof semLocalize === 'function' && this._hass) {
-                    clearInterval(this._localizeCheckTimer);
-                    this._localizeCheckTimer = null;
-                    this.hass = this._hass;
-                } else if (typeof semLocalize === 'function') {
-                    // semLocalize loaded but no hass yet — mark ready so
-                    // first set hass() call will use translations
-                    this._localizeReady = true;
-                    clearInterval(this._localizeCheckTimer);
-                    this._localizeCheckTimer = null;
-                } else if (attempts >= 50) {
-                    clearInterval(this._localizeCheckTimer);
-                    this._localizeCheckTimer = null;
-                }
-            }, 200);
+        // If semLocalize isn't ready yet, listen for the event.
+        // This is faster than polling — responds immediately when sem-localize.js loads.
+        if (!this._localizeReady && typeof semLocalize !== 'function') {
+            this._onLocalizeReady = () => {
+                document.removeEventListener('sem-localize-ready', this._onLocalizeReady);
+                this._onLocalizeReady = null;
+                this._localizeReady = true;
+                if (this._hass) this.hass = this._hass;
+            };
+            document.addEventListener('sem-localize-ready', this._onLocalizeReady);
+        } else if (typeof semLocalize === 'function') {
+            this._localizeReady = true;
         }
     }
 
     disconnectedCallback() {
-        if (this._localizeCheckTimer) {
-            clearInterval(this._localizeCheckTimer);
-            this._localizeCheckTimer = null;
+        if (this._onLocalizeReady) {
+            document.removeEventListener('sem-localize-ready', this._onLocalizeReady);
+            this._onLocalizeReady = null;
         }
     }
 }
@@ -251,13 +228,27 @@ if (typeof window !== 'undefined') {
     };
 
     /**
-     * Queue of card init functions waiting for SEMBaseCard.
+     * Queue of card init functions waiting for SEMBaseCard + semLocalize.
      * Cards call semReady(fn) instead of defining classes at top level.
-     * If SEMBaseCard is already available, fn runs immediately.
-     * Otherwise it's queued and flushed when sem-shared.js loads.
+     * If both dependencies are ready, fn runs immediately.
+     * Otherwise it's queued and flushed when both are available.
+     *
+     * Waits up to 2s for semLocalize to load before flushing.
+     * This eliminates the flash of untranslated text on first render.
      */
-    window._semReadyQueue = [];
-    window._semFlushed = true;  // sem-shared.js is loaded — flush immediately
+    function _flushQueue() {
+        if (window._semFlushed) return;
+        window._semFlushed = true;
+        const queue = window._semReadyQueue || [];
+        window._semReadyQueue = [];
+        for (const fn of queue) {
+            try { fn(); } catch(e) { console.error('[SEM] Deferred card init failed:', e); }
+        }
+    }
+
+    window._semReadyQueue = window._semReadyQueue || [];
+    window._semFlushed = false;
+
     window.semReady = function(fn) {
         if (window._semFlushed) {
             fn();
@@ -265,9 +256,26 @@ if (typeof window !== 'undefined') {
             window._semReadyQueue.push(fn);
         }
     };
-    // Flush any cards that loaded before sem-shared.js
-    for (const fn of window._semReadyQueue) {
-        try { fn(); } catch(e) { console.error('[SEM] Deferred card init failed:', e); }
+
+    // Re-queue any cards that arrived before sem-shared.js
+    const pending = window._semReadyQueue.slice();
+    window._semReadyQueue = pending;
+
+    // If semLocalize is already loaded, flush immediately
+    if (typeof semLocalize === 'function') {
+        _flushQueue();
+    } else {
+        // Wait for sem-localize-ready event (fired by sem-localize.js)
+        const onReady = () => {
+            document.removeEventListener('sem-localize-ready', onReady);
+            clearTimeout(fallbackTimer);
+            _flushQueue();
+        };
+        document.addEventListener('sem-localize-ready', onReady);
+        // Fallback: flush after 2s even without semLocalize (graceful degradation)
+        const fallbackTimer = setTimeout(() => {
+            document.removeEventListener('sem-localize-ready', onReady);
+            _flushQueue();
+        }, 2000);
     }
-    window._semReadyQueue = [];
 }
