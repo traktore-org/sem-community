@@ -142,6 +142,44 @@ class TestSEMDataStructure:
         assert "available_power" in result
         assert "calculated_current" in result
 
+    def test_every_binary_sensor_key_in_to_dict(self):
+        # Guards against the sem_-prefix class of bug where to_dict() writes
+        # a renamed key and the entity reads False forever.
+        from custom_components.solar_energy_management.binary_sensor import (
+            BINARY_SENSOR_TYPES,
+        )
+
+        produced = set(SEMData().to_dict().keys())
+        missing = sorted(d.key for d in BINARY_SENSOR_TYPES if d.key not in produced)
+        assert not missing, (
+            f"Binary sensor keys declared but not produced by SEMData.to_dict(): "
+            f"{missing}. Either add the key to to_dict() or remove the description."
+        )
+
+    def test_every_sensor_key_produced_somewhere(self):
+        # Same contract for sensors, but the coordinator merges keys from many
+        # sources at runtime (forecast tracker, storage, conditional blocks), so
+        # a strict to_dict() check has false positives. Fall back to source-grep:
+        # every SENSOR_TYPES key must appear as a string literal in coordinator/
+        # or features/. Catches typos and dropped producers.
+        import re
+        from pathlib import Path
+        import custom_components.solar_energy_management as pkg_module
+        from custom_components.solar_energy_management.sensor import SENSOR_TYPES
+
+        pkg = Path(pkg_module.__file__).resolve().parent
+        producer_text = ""
+        for sub in ("coordinator", "features"):
+            for f in (pkg / sub).glob("*.py"):
+                producer_text += f.read_text()
+        produced_literals = set(re.findall(r'["\']([a-z_][a-z_0-9]*)["\']', producer_text))
+
+        missing = sorted(d.key for d in SENSOR_TYPES if d.key not in produced_literals)
+        assert not missing, (
+            f"Sensor keys declared but no producer found in coordinator/ or "
+            f"features/: {missing}. Either populate the key or remove the description."
+        )
+
     def test_sem_data_status_helpers(self):
         """Test status helper methods in SEMData."""
         data = SEMData()
