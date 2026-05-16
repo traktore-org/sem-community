@@ -1757,7 +1757,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         new boundaries are evaluated from a clean slate without compounding
         the blip caused by the change itself.
         """
-        cycles = 2  # Was config.get("zone_debounce_cycles", 2) — never set via UI
+        cycles = max(1, int(self.config.get("zone_debounce_cycles", 2)))
 
         last_thresholds = getattr(self, "_last_zone_thresholds", None)
         if last_thresholds is not None and last_thresholds != thresholds:

@@ -96,7 +96,7 @@ class HuaweiChargeAdapter(BatteryChargeAdapter):
 
     async def start_forced_charge(self, command: ChargeCommand) -> ChargeStatus:
         """Start forced charge via huawei_solar.forcible_charge_soc."""
-        device_id = ""  # Never set via UI — battery forced charge not yet configurable
+        device_id = self.config.get("inverter_device_id", "")
         if not device_id:
             return ChargeStatus(
                 status=ChargeCommandStatus.FAILED,
@@ -137,7 +137,7 @@ class HuaweiChargeAdapter(BatteryChargeAdapter):
 
     async def stop_forced_charge(self) -> ChargeStatus:
         """Stop forced charge via huawei_solar.stop_forcible_charge."""
-        device_id = ""  # Never set via UI — battery forced charge not yet configurable
+        device_id = self.config.get("inverter_device_id", "")
         if not device_id:
             return ChargeStatus(
                 status=ChargeCommandStatus.FAILED,
@@ -205,7 +205,7 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
 
     async def start_forced_charge(self, command: ChargeCommand) -> ChargeStatus:
         """Start forced charge by setting work mode and SOC target."""
-        work_mode_entity = ""  # Never set via UI — battery forced charge not yet configurable
+        work_mode_entity = self.config.get("inverter_work_mode_entity", "")
         soc_target_entity = self.config.get("battery_target_soc_entity", "")
 
         if not work_mode_entity:
@@ -245,8 +245,8 @@ class GoodWeChargeAdapter(BatteryChargeAdapter):
 
     async def stop_forced_charge(self) -> ChargeStatus:
         """Restore normal work mode."""
-        work_mode_entity = ""  # Never set via UI — battery forced charge not yet configurable
-        normal_mode = "General"  # Never set via UI
+        work_mode_entity = self.config.get("inverter_work_mode_entity", "")
+        normal_mode = self.config.get("inverter_normal_work_mode", "General")
 
         try:
             await self.hass.services.async_call(
