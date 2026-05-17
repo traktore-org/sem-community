@@ -40,7 +40,7 @@ class SEMReactiveCard extends HTMLElement {
         if (frozen) return frozen.value;
         const e = this._hass?.states[entityId];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) || fallback;
+        return parseFloat(e.state) ?? fallback;
     }
 
     _stateStr(entityId) {

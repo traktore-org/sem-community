@@ -26,7 +26,7 @@ class SEMEnergyImpactCard extends SEMBaseCard {
     _state(suffix, fallback = 0) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) || fallback;
+        return parseFloat(e.state) ?? fallback;
     }
 
     set hass(hass) {
