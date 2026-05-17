@@ -128,14 +128,14 @@ class SEMControlCard extends SEMLitBase {
     _valNum(suffix, fallback = 0) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) || fallback;
+        return parseFloat(e.state) ?? fallback;
     }
 
     /** Numeric state for a number.sem_ suffixed entity. */
     _numVal(suffix, fallback = 0) {
         const e = this._hass?.states[`number.sem_${suffix}`];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) || fallback;
+        return parseFloat(e.state) ?? fallback;
     }
 
     /** Boolean: is switch.sem_<suffix> on? */

@@ -114,7 +114,7 @@ class SEMSystemCard extends SEMLitBase {
     _valNum(suffix, fallback = 0) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) || fallback;
+        return parseFloat(e.state) ?? fallback;
     }
 
     /** Boolean: is switch.sem_<suffix> on? */

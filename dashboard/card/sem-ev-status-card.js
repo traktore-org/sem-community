@@ -100,7 +100,7 @@ class SEMEVStatusCard extends SEMBaseCard {
     _state(suffix, fallback) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) || fallback;
+        return parseFloat(e.state) ?? fallback;
     }
 
     _stateStr(suffix) {
@@ -224,10 +224,10 @@ class SEMEVStatusCard extends SEMBaseCard {
 
         // Multi-charger: hide redundant global rows (#193)
         if (this._chargers.length > 1) {
-            const lblStatus = this.shadowRoot.querySelector('.lbl-status');
-            const lblCurrent = this.shadowRoot.querySelector('.lbl-current');
-            if (lblStatus?.parentElement) lblStatus.parentElement.style.display = 'none';
-            if (lblCurrent?.parentElement) lblCurrent.parentElement.style.display = 'none';
+            for (const cls of ['.lbl-status', '.lbl-current', '.lbl-session', '.lbl-today', '.lbl-solar-share', '.lbl-strategy']) {
+                const el = this.shadowRoot.querySelector(cls);
+                if (el?.parentElement) el.parentElement.style.display = 'none';
+            }
         }
 
         // Multi-charger sections (#193)

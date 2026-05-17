@@ -90,9 +90,12 @@ export class SEMLitBase extends LitElement {
         }, 16); // ~1 frame at 60fps
     }
 
-    // ── Theme (cached — only recomputed once, then reused across renders) ──
+    // ── Theme (cached per dark/light mode — recomputed on mode switch) ──
     _theme() {
-        if (!this._cachedTheme) {
+        const isDark = getComputedStyle(document.documentElement)
+            .getPropertyValue('--primary-background-color').trim();
+        if (!this._cachedTheme || this._cachedThemeKey !== isDark) {
+            this._cachedThemeKey = isDark;
             this._cachedTheme = semTheme();
         }
         return this._cachedTheme;
@@ -112,7 +115,7 @@ export class SEMLitBase extends LitElement {
         if (frozen) return frozen.value;
         const e = this._hass?.states[entityId];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
-        return parseFloat(e.state) || fallback;
+        return parseFloat(e.state) ?? fallback;
     }
 
     _stateStr(entityId) {

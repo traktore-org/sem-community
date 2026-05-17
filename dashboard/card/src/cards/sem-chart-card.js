@@ -135,7 +135,6 @@ class SEMChartCard extends SEMLitBase {
 
     // ── hass: only trigger update on locale change; period events handle data refresh ──
     set hass(hass) {
-        const oldLang = this._hass?.language;
         this._hass = hass;
         const lang = hass?.language;
         if (lang !== this._lang) {
@@ -475,6 +474,16 @@ class SEMChartCard extends SEMLitBase {
                             color: T.textSec || '#757575',
                             font: { size: 10, family: "'Segoe UI','Roboto',sans-serif" },
                             maxRotation: 0, padding: 6,
+                            callback: (val, idx, ticks) => {
+                                const tick = ticks[idx];
+                                if (!tick) return val;
+                                const d = new Date(tick.value);
+                                if (isNaN(d)) return val;
+                                const lang = this._hass?.language || 'en';
+                                if (timeUnit === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+                                if (timeUnit === 'month') return d.toLocaleDateString(lang, { month: 'short' });
+                                return d.toLocaleDateString(lang, { day: 'numeric', month: 'short' });
+                            },
                         },
                         stacked,
                     },
