@@ -207,7 +207,7 @@ class SEMCostsDetailCard extends SEMLitBase {
                 <div class="info-tiles tariff-info-tiles">
                     ${this._renderInfoTile('mdi:transmission-tower-import', '#488fc2', 'current_import_rate', `${impRate} ${impUnit}`)}
                     ${this._renderInfoTile('mdi:transmission-tower-export', '#8353d1', 'current_export_rate', `${expRate} ${expUnit}`)}
-                    ${this._renderInfoTile('mdi:signal-cellular-outline', '#96CAEE', 'price_level', priceLevel)}
+                    ${this._renderInfoTile('mdi:signal-cellular-outline', '#96CAEE', 'price_level', priceLevel ? this._t(priceLevel) : '—')}
                 </div>
                 ${hasStaticImport ? this._renderStepper('number.sem_electricity_import_rate', 'current_import_rate') : nothing}
                 ${hasStaticExport ? this._renderStepper('number.sem_electricity_export_rate', 'current_export_rate') : nothing}

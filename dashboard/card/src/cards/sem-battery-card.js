@@ -193,7 +193,7 @@ class SEMBatteryCard extends SEMLitBase {
                 }
                 .metrics-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
                 .metric-row {
-                    display: flex; justify-content: space-between; align-items: baseline; padding: 2px 0;
+                    display: flex; justify-content: space-between; align-items: baseline; padding: 2px 0; gap: 8px;
                 }
                 .metric-label { font-size: 12px; color: var(--secondary-text-color, ${textSecCol}); font-weight: 500; }
                 .metric-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #4db6ac; }
@@ -305,7 +305,7 @@ class SEMBatteryCard extends SEMLitBase {
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('temperature')}</span>
                                 <span class="metric-val">
-                                    ${temp != null ? `${this._fmt(temp, 1)}°C` : '—'}
+                                    ${temp != null ? `${this._fmt(temp, 1)} °C` : '—'}
                                 </span>
                             </div>
                         </div>
