@@ -211,18 +211,19 @@ class SEMChartCard extends SEMLitBase {
     // ── Render: static skeleton; chart canvas is populated imperatively ──
     render() {
         const preset = this._preset || {};
-        const title = this._config?.title || this._t(preset.title || 'SEM Chart');
+        const title = this._config?.title ? this._t(this._config.title) : this._t(preset.title || 'SEM Chart');
+        const subtitle = this._period?.labelKey ? this._t(this._period.labelKey) : '';
 
         return html`
             <ha-card>
                 <div class="sem-chart-wrap">
                     <div class="chart-header">
                         <div class="chart-title">${title}</div>
-                        <div class="chart-subtitle"></div>
+                        <div class="chart-subtitle">${subtitle}</div>
                     </div>
                     <div class="chart-container">
                         <canvas></canvas>
-                        <div class="empty-msg">Loading\u2026</div>
+                        <div class="empty-msg">${this._t('loading')}</div>
                     </div>
                 </div>
             </ha-card>
@@ -237,19 +238,24 @@ class SEMChartCard extends SEMLitBase {
         const isHourly = p && (p.defaultPeriod === '24h' || (p.hourly && !p.daily));
         if (isHourly) {
             const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            this._onPeriodChange({ start, end: now, granularity: 'hour', label: this._t('last_24h'), key: '24h' });
+            this._onPeriodChange({ start, end: now, granularity: 'hour', labelKey: 'last_24h', key: '24h' });
         } else {
             const dow = now.getDay() || 7;
             const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             mon.setDate(mon.getDate() - (dow - 1));
-            this._onPeriodChange({ start: mon, end: now, granularity: 'day', label: this._t('period_this_week'), key: 'week' });
+            this._onPeriodChange({ start: mon, end: now, granularity: 'day', labelKey: 'period_this_week', key: 'week' });
         }
     }
 
     _onPeriodChange(detail) {
-        this._period = detail;
-        const sub = this.renderRoot?.querySelector('.chart-subtitle');
-        if (sub) sub.textContent = detail.label || '';
+        // Derive labelKey from key when not provided (period selector dispatches {key} only)
+        const KEY_TO_LABEL = {
+            today: 'period_today', yesterday: 'period_yesterday',
+            week: 'period_this_week', month: 'period_this_month',
+            year: 'period_this_year', '24h': 'last_24h',
+        };
+        this._period = { ...detail, labelKey: detail.labelKey || KEY_TO_LABEL[detail.key] };
+        this.requestUpdate();
         clearTimeout(this._fetchTimer);
         this._fetchTimer = setTimeout(() => this._fetchAndRender(), 150);
     }

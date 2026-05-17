@@ -45,7 +45,7 @@ const SECTIONS = [
         subtitleFn: (c) => {
             const obs = c._switchOn('observer_mode');
             const night = c._switchOn('night_charging');
-            return [obs && 'Observer', night && 'Night'].filter(Boolean).join(' · ') || '—';
+            return [obs && c._t('observer'), night && c._t('night')].filter(Boolean).join(' · ') || '—';
         },
     },
     {

@@ -16,6 +16,7 @@ const SECTIONS = [
     {
         id: 'ev', icon: 'mdi:ev-station', color: '#8DC892', titleKey: 'ev_charging_title',
         subtitleFn: (c) => {
+            // charging_state is already translated server-side via get_status_message()
             const state = c._val('charging_state') || '—';
             const daily = c._valNum('daily_ev_energy').toFixed(1);
             const target = c._numVal('daily_ev_target').toFixed(0);
@@ -35,7 +36,8 @@ const SECTIONS = [
         id: 'battery', icon: 'mdi:battery-medium', color: '#4db6ac', titleKey: 'battery_management',
         subtitleFn: (c) => {
             const soc = c._valNum('battery_soc').toFixed(0);
-            const status = c._val('battery_status') || '—';
+            const statusRaw = c._val('battery_status') || '';
+            const status = statusRaw ? c._t(statusRaw.toLowerCase()) : '—';
             return `SOC ${soc}% · ${status}`;
         },
     },
@@ -52,7 +54,7 @@ const SECTIONS = [
         subtitleFn: (c) => {
             const provider = c._val('tariff_provider') || '—';
             const level = c._val('tariff_price_level') || '';
-            return level ? `${provider} · ${level}` : provider;
+            return level ? `${provider} · ${c._t(level.toLowerCase())}` : provider;
         },
     },
     {
@@ -354,9 +356,9 @@ class SEMControlCard extends SEMLitBase {
                 <span class="peak-of-limit">${this._t('of_limit')}</span>
             </div>
             <div class="peak-detail">
-                <span class="peak-status">${this._val('load_management_status') || '—'}</span>
+                <span class="peak-status">${(() => { const s = this._val('load_management_status'); return s ? this._t(s) : '—'; })()}</span>
                 <span class="peak-sep">·</span>
-                <span class="peak-rec">${this._val('load_management_recommendation') || ''}</span>
+                <span class="peak-rec">${(() => { const r = this._val('load_management_recommendation'); return r ? this._t(r) : ''; })()}</span>
             </div>
             <div class="info-tiles">
                 <div class="info-tile">

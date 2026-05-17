@@ -131,7 +131,7 @@ class SEMGridCard extends SEMLitBase {
 
         const statusRaw = this._valStr('grid_status');
         const statusText = statusRaw !== '' && statusRaw !== '—'
-            ? statusRaw
+            ? this._t(statusRaw.toLowerCase())
             : isExporting ? this._t('exporting')
             : isImporting ? this._t('importing')
             : this._t('idle');
@@ -366,7 +366,7 @@ class SEMGridCard extends SEMLitBase {
                         </div>
                         <div class="metric-row">
                             <span class="metric-label">${this._t('trend')}</span>
-                            <span class="metric-val">${peakTrend || '—'}</span>
+                            <span class="metric-val">${peakTrend ? this._t(peakTrend) : '—'}</span>
                         </div>
                     </div>
 
@@ -375,7 +375,7 @@ class SEMGridCard extends SEMLitBase {
                         <div class="section-title" style="color:#488fc2">${this._t('load_control')}</div>
                         <div class="metric-row">
                             <span class="metric-label">${this._t('status')}</span>
-                            <span class="metric-val">${loadStatus || '—'}</span>
+                            <span class="metric-val">${loadStatus ? this._t(loadStatus) : '—'}</span>
                         </div>
                         <div class="metric-row">
                             <span class="metric-label">${this._t('loads_shed')}</span>
@@ -409,7 +409,7 @@ class SEMGridCard extends SEMLitBase {
                         <div class="metric-row">
                             <span class="metric-label">${this._t('price_level')}</span>
                             <span class="metric-val" style="color:${levelColor}">
-                                ${priceLevel || '—'}
+                                ${priceLevel ? this._t(priceLevel) : '—'}
                             </span>
                         </div>
                         <div class="metric-row">

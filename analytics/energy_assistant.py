@@ -282,6 +282,8 @@ class EnergyAssistant:
         from ..utils.translate import get_text
         _t = lambda key, default, **kw: get_text(self.hass, key, default, **kw)
 
+        translated_level = _t(price_level, price_level)
+
         if price_level in ("cheap", "very_cheap", "negative"):
             self._tips.append(EnergyTip(
                 category="price",
@@ -289,7 +291,7 @@ class EnergyAssistant:
                 description=_t("tip_cheap_price_desc",
                     "Electricity price is currently {level}. "
                     "Good time to charge EV or run appliances from grid.",
-                    level=price_level),
+                    level=translated_level),
                 priority=3,
                 created=datetime.now(),
             ))
@@ -300,7 +302,7 @@ class EnergyAssistant:
                 description=_t("tip_expensive_price_desc",
                     "Electricity price is {level}. "
                     "Minimize grid import — use battery and defer non-essential loads.",
-                    level=price_level),
+                    level=translated_level),
                 priority=2,
                 created=datetime.now(),
             ))

@@ -104,34 +104,6 @@
           "ev_target_soc": "EV target SOC (%)"
         }
       },
-      "hardware": {
-        "title": "Hardware Entity Configuration",
-        "description": "Update your hardware entity mappings",
-        "data": {
-          "solar_production_sensor": "Solar Production Power",
-          "grid_power_sensor": "Grid Power Exchange",
-          "battery_soc_sensor": "Battery State of Charge",
-          "battery_power_sensor": "Battery Charge/Discharge Power",
-          "battery_temperature_sensor": "Battery Temperature [Optional]",
-          "ev_connected_sensor": "Estado de conexão VE",
-          "ev_charging_sensor": "Estado de carregamento VE",
-          "ev_charging_power_sensor": "Potência de carregamento VE",
-          "ev_total_energy_sensor": "EV Total Energy Counter [Optional]",
-          "solar_total_energy_sensor": "Solar Total Energy Counter [Optional]",
-          "grid_import_total_energy_sensor": "Grid Import Total Energy [Optional]",
-          "grid_export_total_energy_sensor": "Grid Export Total Energy [Optional]",
-          "battery_charge_total_energy_sensor": "Battery Charge Total Energy [Optional]",
-          "battery_discharge_total_energy_sensor": "Battery Discharge Total Energy [Optional]",
-          "vehicle_soc_entity": "Vehicle Battery SOC",
-          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
-        },
-        "data_description": {
-          "vehicle_soc_entity": "Optional. A sensor that exposes the vehicle's current State of Charge (0–100 %). Only a few cars provide this (Tesla, some VW IDs, MG ZS EV with custom integrations, OBD-II adapters). If empty, SEM uses the kWh-based daily target instead and the two fields below are ignored.",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery. ONLY used when the Vehicle SOC sensor above is configured — SEM combines it with the SOC reading to compute the remaining energy needed to reach the target. Without a SOC sensor this value is ignored entirely.",
-          "ev_target_soc": "SOC % SEM aims to reach when night charging. ONLY used when the Vehicle SOC sensor is configured. Without one, the kWh-based 'Daily EV target' field on the Optimization Settings step is used instead."
-        }
-      },
       "settings": {
         "title": "SEM Optimization Settings",
         "description": "Update your SEM optimization parameters",

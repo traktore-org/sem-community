@@ -206,7 +206,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 <div class="card-content">
                     <div class="status-bar">
                         <div class="peak-dot" style="background:${peakColor};box-shadow:0 0 8px ${peakColor}"></div>
-                        <span id="lm-status" class="status-text">${(this.loadManagementStatus || 'normal').toUpperCase()}</span>
+                        <span id="lm-status" class="status-text">${this._t(this.loadManagementStatus || 'normal').toUpperCase()}</span>
                         <div class="spacer"></div>
                         <span class="dim">${this._t('peak')}</span>
                         <span id="peak-current" class="mono">${this.currentPeak.toFixed(2)} kW</span>

@@ -135,7 +135,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._surplus_controller.max_export_w = config.get("max_export_power", 0)  # 0 = no limit
         self._forecast_reader = ForecastReader(
             hass,
-            custom_entities=config.get("forecast_entities"),
+            custom_entities=None,  # Was config.get("forecast_entities") — never set via UI
         )
         self._forecast_tracker = ForecastTracker()
 
@@ -156,7 +156,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 currency=currency,
             )
         elif tariff_mode == "calendar":
-            schedule = config.get("tariff_schedule", {})
+            schedule = {}  # Was config.get("tariff_schedule", {}) — never set via UI
             self._tariff_provider = CalendarTariffProvider(
                 hass,
                 peak_rate=config.get("electricity_import_rate", 0.35),
@@ -180,8 +180,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._pv_analyzer = PVPerformanceAnalyzer(
             hass,
             system_size_kwp=config.get("system_size_kwp", 10.0),
-            inverter_max_power_w=config.get("inverter_max_power_w", 10000.0),
-            system_install_date=config.get("system_install_date"),
+            inverter_max_power_w=10000.0,  # Was config.get — never set via UI
+            system_install_date=None,  # Was config.get — never set via UI
         )
 
         # Phase 6: Energy assistant
