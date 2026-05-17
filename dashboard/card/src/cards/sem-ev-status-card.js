@@ -368,50 +368,54 @@ class SEMEVStatusCard extends SEMLitBase {
                             </svg>
                         </div>
 
-                        <div class="metrics-col">
-                            <div class="metric-row">
-                                <span class="metric-label">${this._t('status')}</span>
-                                <span class="${statusClass}">${statusText}</span>
-                            </div>
-                            ${charging ? html`
-                                <div class="metric-row power-row">
-                                    <span class="metric-label">${this._t('power')}</span>
-                                    <span class="metric-value power-value">${semFormatPower(power)}</span>
+                        ${this._chargers.length > 1 ? nothing : html`
+                            <div class="metrics-col">
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('status')}</span>
+                                    <span class="${statusClass}">${statusText}</span>
                                 </div>
-                            ` : nothing}
-                            <div class="metric-row">
-                                <span class="metric-label">${this._t('current')}</span>
-                                <span class="metric-value">${this._fmt(current, 0)} A</span>
+                                ${charging ? html`
+                                    <div class="metric-row power-row">
+                                        <span class="metric-label">${this._t('power')}</span>
+                                        <span class="metric-value power-value">${semFormatPower(power)}</span>
+                                    </div>
+                                ` : nothing}
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('current')}</span>
+                                    <span class="metric-value">${this._fmt(current, 0)} A</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('session')}</span>
+                                    <span class="metric-value">${this._fmt(sessionEnergy, 1)} kWh</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('today')}</span>
+                                    <span class="metric-value">${this._fmt(dailyEnergy, 1)} kWh</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('solar_share')}</span>
+                                    <span class="metric-value solar-share-value">${this._fmt(solarShare, 0)}%</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('strategy')}</span>
+                                    <span class="strategy-value">${strategy ? this._t(strategy) : '\u2014'}</span>
+                                </div>
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('mode')}</span>
+                                    <span class="metric-value">${modeLabels[mode] || mode}</span>
+                                </div>
                             </div>
-                            <div class="metric-row">
-                                <span class="metric-label">${this._t('session')}</span>
-                                <span class="metric-value">${this._fmt(sessionEnergy, 1)} kWh</span>
-                            </div>
-                            <div class="metric-row">
-                                <span class="metric-label">${this._t('today')}</span>
-                                <span class="metric-value">${this._fmt(dailyEnergy, 1)} kWh</span>
-                            </div>
-                            <div class="metric-row">
-                                <span class="metric-label">${this._t('solar_share')}</span>
-                                <span class="metric-value solar-share-value">${this._fmt(solarShare, 0)}%</span>
-                            </div>
-                            <div class="metric-row">
-                                <span class="metric-label">${this._t('strategy')}</span>
-                                <span class="strategy-value">${strategy || '\u2014'}</span>
-                            </div>
-                            <div class="metric-row">
-                                <span class="metric-label">${this._t('mode')}</span>
-                                <span class="metric-value">${modeLabels[mode] || mode}</span>
-                            </div>
-                        </div>
+                        `}
                     </div>
 
-                    <div class="bottom-bar">
-                        <div class="chip">
-                            <span class="chip-label">${this._t('session_cost')}</span>
-                            <span class="cost-chip-value">${this._fmt(sessionCost, 2)} ${curr}</span>
+                    ${this._chargers.length > 1 ? nothing : html`
+                        <div class="bottom-bar">
+                            <div class="chip">
+                                <span class="chip-label">${this._t('session_cost')}</span>
+                                <span class="cost-chip-value">${this._fmt(sessionCost, 2)} ${curr}</span>
+                            </div>
                         </div>
-                    </div>
+                    `}
 
                     ${this._chargers.length >= 1 ? html`
                         <div class="charger-sections">

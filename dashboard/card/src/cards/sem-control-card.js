@@ -52,7 +52,7 @@ const SECTIONS = [
         subtitleFn: (c) => {
             const provider = c._val('tariff_provider') || '—';
             const level = c._val('tariff_price_level') || '';
-            return level ? `${provider} · ${level}` : provider;
+            return level ? `${provider} · ${c._t(level)}` : provider;
         },
     },
     {
@@ -354,9 +354,9 @@ class SEMControlCard extends SEMLitBase {
                 <span class="peak-of-limit">${this._t('of_limit')}</span>
             </div>
             <div class="peak-detail">
-                <span class="peak-status">${this._val('load_management_status') || '—'}</span>
+                <span class="peak-status">${(() => { const s = this._val('load_management_status'); return s ? this._t(s) : '—'; })()}</span>
                 <span class="peak-sep">·</span>
-                <span class="peak-rec">${this._val('load_management_recommendation') || ''}</span>
+                <span class="peak-rec">${(() => { const r = this._val('load_management_recommendation'); return r ? this._t(r) : ''; })()}</span>
             </div>
             <div class="info-tiles">
                 <div class="info-tile">

@@ -409,7 +409,7 @@ class SEMSolarCard extends SEMLitBase {
                             </div>
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('trend')}</span>
-                                <span class="metric-val">${trend || '—'}</span>
+                                <span class="metric-val">${trend ? this._t(trend) : '—'}</span>
                             </div>
                         </div>
                     </div>
