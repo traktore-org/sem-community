@@ -105,7 +105,7 @@ class SEMCostsDetailCard extends SEMLitBase {
         if (id === 'tariff') {
             const imp = this._val('tariff_current_import_rate');
             const level = this._valStr('tariff_price_level');
-            return level ? `${imp.toFixed(4)} ${curr} · ${level}` : `${imp.toFixed(4)} ${curr}`;
+            return level ? `${imp.toFixed(4)} ${curr} · ${this._t(level.toLowerCase())}` : `${imp.toFixed(4)} ${curr}`;
         }
         return '';
     }

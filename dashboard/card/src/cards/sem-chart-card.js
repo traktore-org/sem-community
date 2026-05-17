@@ -223,7 +223,7 @@ class SEMChartCard extends SEMLitBase {
                     </div>
                     <div class="chart-container">
                         <canvas></canvas>
-                        <div class="empty-msg">Loading\u2026</div>
+                        <div class="empty-msg">${this._t('loading')}</div>
                     </div>
                 </div>
             </ha-card>

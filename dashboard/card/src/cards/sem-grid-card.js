@@ -131,7 +131,7 @@ class SEMGridCard extends SEMLitBase {
 
         const statusRaw = this._valStr('grid_status');
         const statusText = statusRaw !== '' && statusRaw !== '—'
-            ? statusRaw
+            ? this._t(statusRaw.toLowerCase())
             : isExporting ? this._t('exporting')
             : isImporting ? this._t('importing')
             : this._t('idle');
