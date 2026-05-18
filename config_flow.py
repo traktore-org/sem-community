@@ -351,7 +351,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # hard default.
         def _opt_entity_default(key: str):
             v = suggestions.get(key)
-            return v if v else None
+            return v if v is not None else None
 
         return self.async_show_form(
             step_id="ev_charger",
@@ -759,7 +759,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         def _opt(key: str):
             v = current_config.get(key)
-            return v if v else None
+            return v if v is not None else None
 
         return self.async_show_form(
             step_id="ev_charger",
@@ -1298,19 +1298,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "electricity_import_rate",
                     default=_c("electricity_import_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_off_peak_rate",
                     default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.01, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_export_rate",
                     default=_c("electricity_export_rate", 0.075),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.01, max=0.50, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=0.50, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "demand_charge_rate",
@@ -1432,7 +1432,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         def _opt(key):
             v = current_config.get(key)
-            return v if v else None
+            return v if v is not None else None
 
         return self.async_show_form(
             step_id="heat_pump",
