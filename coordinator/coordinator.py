@@ -271,9 +271,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if val is not None and val > 0:
             return float(val)
         if self._detected_battery_capacity_kwh is None:
-            self._detected_battery_capacity_kwh = (
-                self._sensor_reader.auto_detect_battery_capacity_kwh() or 0.0
-            )
+            detected = self._sensor_reader.auto_detect_battery_capacity_kwh()
+            self._detected_battery_capacity_kwh = detected if detected is not None else 0.0
         if self._detected_battery_capacity_kwh > 0:
             return self._detected_battery_capacity_kwh
         return float(DEFAULT_BATTERY_CAPACITY_KWH)
@@ -1405,8 +1404,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             for cid, intel in per_charger_intel.items():
                 charger_name = self._ev_devices[cid].name if cid in self._ev_devices else cid
                 charger_connected = self._last_ev_connected_per_charger.get(cid, False)
-                mins_to_full = intel.get("minutes_to_full") or 0
-                est_soc = intel.get("estimated_soc") or 0
+                mins_to_full = intel.get("minutes_to_full", 0)
+                est_soc = intel.get("estimated_soc", 0)
                 charge_needed = intel.get("charge_needed", False)
                 nights = intel.get("nights_until_charge", 0)
 

@@ -476,8 +476,8 @@ class EnergyCalculator:
             if len(entity_stats) < 2:
                 seeded[category] = 0.0
                 continue
-            first_sum = entity_stats[0].get("sum", 0.0) or 0.0
-            last_sum = entity_stats[-1].get("sum", 0.0) or 0.0
+            first_sum = entity_stats[0].get("sum") if entity_stats[0].get("sum") is not None else 0.0
+            last_sum = entity_stats[-1].get("sum") if entity_stats[-1].get("sum") is not None else 0.0
             yearly_energy = max(0, last_sum - first_sum)
             seeded[category] = yearly_energy
             self._yearly_accumulators[f"{category}_{year_key}"] = yearly_energy
@@ -509,7 +509,9 @@ class EnergyCalculator:
                         except Exception:
                             pass
                     if len(ev_stats) >= 2:
-                        ev_total = max(0, (ev_stats[-1].get("sum", 0) or 0) - (ev_stats[0].get("sum", 0) or 0))
+                        last_ev = ev_stats[-1].get("sum") if ev_stats[-1].get("sum") is not None else 0
+                        first_ev = ev_stats[0].get("sum") if ev_stats[0].get("sum") is not None else 0
+                        ev_total = max(0, last_ev - first_ev)
                     break
         if ev_total > 0:
             self._yearly_accumulators[f"ev_{year_key}"] = ev_total

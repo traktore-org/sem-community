@@ -76,8 +76,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             new_data = {**entry.data}
             new_options = {**entry.options}
             legacy_priority = max(
-                new_options.get("battery_priority_soc") or 0,
-                new_data.get("battery_priority_soc") or 0,
+                new_options.get("battery_priority_soc") if new_options.get("battery_priority_soc") is not None else 0,
+                new_data.get("battery_priority_soc") if new_data.get("battery_priority_soc") is not None else 0,
             )
             # Anything ≥ 50 is the legacy 3-zone meaning — remap.
             if legacy_priority >= 50:
@@ -95,7 +95,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 ("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
                 ("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
             ):
-                if new_data.get(key) in (None, 0):
+                if new_data.get(key) is None:
                     new_data[key] = default
 
             hass.config_entries.async_update_entry(
@@ -310,7 +310,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
             # Resolve config: charger-specific keys, fall back to global config
             def _cfg(key, default=None):
-                return charger_cfg.get(key) or full_config.get(key) or default
+                v = charger_cfg.get(key)
+                if v is not None:
+                    return v
+                v = full_config.get(key)
+                return v if v is not None else default
 
             ev_power_entity = _cfg("ev_charging_power_sensor")
             ev_charger_service = _cfg("ev_charger_service")

@@ -1328,7 +1328,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "power_delta",
                     default=_c("power_delta", DEFAULT_POWER_DELTA),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=10, max=3000, step=10, unit_of_measurement="W", mode="slider")
+                    selector.NumberSelectorConfig(min=50, max=3000, step=10, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "current_delta",
@@ -1466,7 +1466,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("heat_pump_boost_offset", 2.0),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=0.5, max=10.0, step=0.5, unit_of_measurement="°C", mode="slider"
+                        min=0, max=10.0, step=0.5, unit_of_measurement="°C", mode="slider"
                     )
                 ),
                 vol.Optional(
