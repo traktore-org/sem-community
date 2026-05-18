@@ -290,6 +290,48 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             configuration_url="https://github.com/traktore-org/sem-community",
         )
 
+    def _check_sign_flip(self, power) -> bool:
+        """Check energy balance and auto-correct grid sign if persistently negative.
+
+        Returns True if the sign was flipped (caller should re-read power).
+        Low-confidence split-grid picks suppress the flip for up to 3 cycles
+        (~9 min) to give late-loading integrations time to register (issue #166).
+        """
+        energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+        energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
+        raw_balance = energy_in - energy_out
+        if raw_balance < -500:
+            self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
+            if self._negative_balance_count >= 18:  # ~3 min sustained negative
+                disc = getattr(self._sensor_reader, "_split_grid_discovery", None)
+                self._sign_flip_suppression_count = getattr(self, '_sign_flip_suppression_count', 0)
+                if disc and disc.get("confidence") == "any-device" and self._sign_flip_suppression_count < 3:
+                    self._sign_flip_suppression_count += 1
+                    _LOGGER.debug(
+                        "Negative balance %.0fW with low-confidence split-grid "
+                        "discovery — suppressing sign flip pending re-discovery "
+                        "(attempt %d/3)",
+                        raw_balance, self._sign_flip_suppression_count,
+                    )
+                    self._negative_balance_count = 0
+                    return False
+                # Auto-correct: flip the grid sign
+                self._sensor_reader._grid_sign_inverted = not self._sensor_reader._grid_sign_inverted
+                self._sensor_reader._grid_sign_detected = True
+                _LOGGER.warning(
+                    "Energy balance negative (%.0fW) for 3+ min — auto-correcting grid sign "
+                    "(now %s). Solar=%.0fW Grid=%.0fW Battery=%.0fW",
+                    raw_balance,
+                    "negated" if self._sensor_reader._grid_sign_inverted else "normal",
+                    power.solar_power, power.grid_power, power.battery_power,
+                )
+                self._negative_balance_count = 0
+                self._sign_flip_suppression_count = 0
+                return True
+        else:
+            self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
+        return False
+
     @staticmethod
     def _get_version() -> str:
         """Read version from manifest.json (single source of truth with HACS)."""
@@ -471,40 +513,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Self-healing sign inversion: if balance goes negative with real
             # grid activity, the grid sign is wrong — auto-correct by flipping
             if power.grid_power != 0 and power.solar_power > 0:
-                energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
-                energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
-                raw_balance = energy_in - energy_out
-                if raw_balance < -500:
-                    self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
-                    if self._negative_balance_count >= 18:  # ~3 min sustained negative
-                        # Suppress the flip if split-grid discovery is on a low-confidence
-                        # any-device pick — the imbalance is more likely a wrong sensor
-                        # than a wrong sign, and the state-added watcher in __init__.py
-                        # will replace the pick once the real meter shows up (issue #166).
-                        disc = getattr(self._sensor_reader, "_split_grid_discovery", None)
-                        if disc and disc.get("confidence") == "any-device":
-                            _LOGGER.debug(
-                                "Negative balance %.0fW with low-confidence split-grid "
-                                "discovery — suppressing sign flip pending re-discovery",
-                                raw_balance,
-                            )
-                            self._negative_balance_count = 0
-                        else:
-                            # Auto-correct: flip the grid sign
-                            self._sensor_reader._grid_sign_inverted = not self._sensor_reader._grid_sign_inverted
-                            self._sensor_reader._grid_sign_detected = True
-                            _LOGGER.warning(
-                                "Energy balance negative (%.0fW) for 3+ min — auto-correcting grid sign "
-                                "(now %s). Solar=%.0fW Grid=%.0fW Battery=%.0fW",
-                                raw_balance,
-                                "negated" if self._sensor_reader._grid_sign_inverted else "normal",
-                                power.solar_power, power.grid_power, power.battery_power,
-                            )
-                            self._negative_balance_count = 0
-                            # Re-read with corrected sign
-                            power = self._sensor_reader.read_power()
-                else:
-                    self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
+                flipped = self._check_sign_flip(power)
+                if flipped:
+                    power = self._sensor_reader.read_power()
 
             # Step 2: Calculate energy from power integration
             energy = self._energy_calculator.calculate_energy(power)

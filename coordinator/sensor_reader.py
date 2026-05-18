@@ -12,6 +12,25 @@ from .types import PowerReadings
 
 _LOGGER = logging.getLogger(__name__)
 
+# Known patterns for split grid power sensors — single source of truth.
+# GRID_TRIGGER_HINTS is derived from these and used in __init__.py to
+# pre-filter new sensor events. Adding a new brand here automatically
+# updates the trigger filter — no second file to keep in sync.
+IMPORT_PATTERNS: tuple[str, ...] = (
+    "import_from_grid", "pac_to_user", "grid_import", "from_grid_power",
+    "power_consumption",      # DSMR/P1 (NL/BE)
+    "consumption_from_grid",  # E3DC
+    "import_power",           # GivEnergy
+    "grid_imported_power",    # Senec
+)
+EXPORT_PATTERNS: tuple[str, ...] = (
+    "export_to_grid", "pac_to_grid", "grid_export", "to_grid_power",
+    "power_production",       # DSMR/P1 (NL/BE)
+    "export_power",           # GivEnergy
+    "grid_exported_power",    # Senec
+)
+GRID_TRIGGER_HINTS: tuple[str, ...] = tuple(set(IMPORT_PATTERNS + EXPORT_PATTERNS))
+
 
 @dataclass
 class SensorConfig:
@@ -61,12 +80,13 @@ class SensorReader:
         # confidence: "same-device" picks are permanently cached; "any-device" picks
         # are re-evaluated each cycle so a late-loading DSMR meter wins once it shows
         # up. See issue #166 startup race.
-        self._split_grid_discovery: dict = {
+        self._split_grid_discovery: dict[str, Any] = {
             "import": None,
             "export": None,
             "confidence": None,  # "same-device" | "any-device" | None
             "warned": False,
         }
+        self._uses_split_grid: bool = False
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -350,6 +370,7 @@ class SensorReader:
             # Re-run discovery unless we've already locked in a same-device match;
             # any-device matches stay re-evaluated so a late-loading DSMR meter
             # (issue #166) takes over within one update interval.
+            self._uses_split_grid = True
             disc = self._split_grid_discovery
             if disc["confidence"] != "same-device":
                 imp, exp, conf = self._discover_split_grid_power(ed)
@@ -443,7 +464,7 @@ class SensorReader:
 
         return readings
 
-    def _discover_split_grid_power(self, ed) -> tuple:
+    def _discover_split_grid_power(self, ed) -> tuple[Optional[str], Optional[str], Optional[str]]:
         """Discover separate import/export power sensors for setups without combined grid power.
 
         Supported naming patterns:
@@ -462,20 +483,8 @@ class SensorReader:
         "same-device" if either side came from a device matching the grid energy
         sensor, "any-device" if matched by pattern only, or None if nothing matched.
         """
-        # Known patterns for split grid power sensors
-        import_patterns = [
-            "import_from_grid", "pac_to_user", "grid_import", "from_grid_power",
-            "power_consumption",      # DSMR/P1 (NL/BE)
-            "consumption_from_grid",  # E3DC
-            "import_power",           # GivEnergy
-            "grid_imported_power",    # Senec
-        ]
-        export_patterns = [
-            "export_to_grid", "pac_to_grid", "grid_export", "to_grid_power",
-            "power_production",       # DSMR/P1 (NL/BE)
-            "export_power",           # GivEnergy
-            "grid_exported_power",    # Senec
-        ]
+        import_patterns = IMPORT_PATTERNS
+        export_patterns = EXPORT_PATTERNS
 
         try:
             # Get device_id of grid energy sensor for same-device preference
@@ -518,9 +527,13 @@ class SensorReader:
             import_power = same_device["import"] or any_device["import"]
             export_power = same_device["export"] or any_device["export"]
 
-            has_same_device = bool(same_device["import"] or same_device["export"])
+            # "same-device" only if every resolved side came from the grid device.
+            # A mix (one same-device, one any-device) stays "any-device" so
+            # re-discovery can upgrade the any-device side later.
+            import_is_same = (import_power is None or import_power == same_device["import"])
+            export_is_same = (export_power is None or export_power == same_device["export"])
             if import_power or export_power:
-                confidence = "same-device" if has_same_device else "any-device"
+                confidence = "same-device" if (import_is_same and export_is_same) else "any-device"
                 _LOGGER.info(
                     "Discovered split grid power sensors (%s): import=%s, export=%s",
                     confidence, import_power, export_power,

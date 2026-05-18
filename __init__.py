@@ -32,7 +32,8 @@ from homeassistant.helpers import device_registry as dr, issue_registry as ir
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, GRID_TRIGGER_HINTS
+from .const import DOMAIN
+from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -550,6 +551,10 @@ def _schedule_post_startup_tasks(
         """
         reader = getattr(coordinator, "_sensor_reader", None)
         if reader is None:
+            return
+        # Only relevant for split-grid setups. Combined-grid users (with
+        # ed.grid_import_power set) never enter discovery, so skip them.
+        if not getattr(reader, "_uses_split_grid", False):
             return
         disc = getattr(reader, "_split_grid_discovery", None)
         if disc is None or disc.get("confidence") == "same-device":

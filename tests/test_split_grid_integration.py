@@ -1622,51 +1622,193 @@ class TestSplitGridStartupRace:
             assert reader._split_grid_discovery["confidence"] == "same-device"
             assert reader._split_grid_discovery["import"] == "sensor.electricity_meter_power_consumption"
 
-    def test_self_healing_flip_skipped_for_lowconf_split(self):
-        """Sign flip must NOT fire when split-grid confidence is any-device."""
+    def _make_coordinator_for_sign_flip(self, confidence="any-device"):
+        """Create a minimal coordinator with mocked sensor reader for sign-flip tests."""
         from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
 
-        hass = MagicMock()
-        # Minimal coordinator init — we only need _sensor_reader and the flip
-        # branch logic, so we mock around the constructor surface.
         coord = SEMCoordinator.__new__(SEMCoordinator)
         coord._sensor_reader = MagicMock()
         coord._sensor_reader._split_grid_discovery = {
             "import": "sensor.wrong_power_consumption",
             "export": None,
-            "confidence": "any-device",
+            "confidence": confidence,
             "warned": False,
         }
         coord._sensor_reader._grid_sign_inverted = False
         coord._sensor_reader._grid_sign_detected = False
-        coord._negative_balance_count = 17  # one shy of trigger
+        coord._negative_balance_count = 0
+        coord._sign_flip_suppression_count = 0
+        return coord
 
-        # Inline the gated branch (matches coordinator.py self-healing path)
-        raw_balance = -1000.0
-        coord._negative_balance_count += 1
-        flipped = False
-        if coord._negative_balance_count >= 18:
-            disc = getattr(coord._sensor_reader, "_split_grid_discovery", None)
-            if disc and disc.get("confidence") == "any-device":
-                coord._negative_balance_count = 0
-            else:
-                coord._sensor_reader._grid_sign_inverted = not coord._sensor_reader._grid_sign_inverted
-                flipped = True
+    def _make_negative_power(self):
+        """PowerReadings with a deeply negative balance to trigger sign flip.
 
-        assert flipped is False
+        Balance = energy_in - energy_out
+               = (solar + grid_import + batt_discharge) - (ev + grid_export + batt_charge)
+               = (5000 + 0 + 0) - (0 + 8000 + 0) = -3000  (< -500 → triggers flip)
+        """
+        power = PowerReadings()
+        power.solar_power = 5000.0
+        power.grid_power = 3000.0  # non-zero so the outer guard passes
+        power.grid_import_power = 0.0
+        power.grid_export_power = 8000.0
+        power.battery_power = 0.0
+        power.battery_charge_power = 0.0
+        power.battery_discharge_power = 0.0
+        power.ev_power = 0.0
+        return power
+
+    def test_self_healing_flip_skipped_for_lowconf_split(self):
+        """Sign flip must NOT fire when split-grid confidence is any-device."""
+        coord = self._make_coordinator_for_sign_flip(confidence="any-device")
+        power = self._make_negative_power()
+
+        # Simulate 18 negative balance cycles (3 minutes)
+        for _ in range(18):
+            coord._check_sign_flip(power)
+
+        # Should be suppressed — no flip
+        assert coord._sensor_reader._grid_sign_inverted is False
+        assert coord._sign_flip_suppression_count == 1
+
+    def test_self_healing_flip_fires_for_same_device(self):
+        """Sign flip fires normally when confidence is same-device."""
+        coord = self._make_coordinator_for_sign_flip(confidence="same-device")
+        power = self._make_negative_power()
+
+        for _ in range(18):
+            coord._check_sign_flip(power)
+
+        assert coord._sensor_reader._grid_sign_inverted is True
+
+    def test_suppression_escape_hatch_after_3_cycles(self):
+        """After 3 suppression cycles (~9 min), flip fires anyway."""
+        coord = self._make_coordinator_for_sign_flip(confidence="any-device")
+        power = self._make_negative_power()
+
+        # 3 suppression cycles × 18 ticks each = 54 ticks
+        for _ in range(54):
+            coord._check_sign_flip(power)
+
+        # 3 suppressions exhausted, but flip hasn't fired yet (counter reset each time)
+        assert coord._sign_flip_suppression_count == 3
         assert coord._sensor_reader._grid_sign_inverted is False
 
-        # Upgrade to same-device and re-run: flip should now fire
-        coord._sensor_reader._split_grid_discovery["confidence"] = "same-device"
-        coord._negative_balance_count = 17
-        coord._negative_balance_count += 1
-        if coord._negative_balance_count >= 18:
-            disc = getattr(coord._sensor_reader, "_split_grid_discovery", None)
-            if disc and disc.get("confidence") == "any-device":
-                coord._negative_balance_count = 0
-            else:
-                coord._sensor_reader._grid_sign_inverted = not coord._sensor_reader._grid_sign_inverted
-                flipped = True
+        # Next 18 ticks should trigger the actual flip (suppression limit reached)
+        for _ in range(18):
+            coord._check_sign_flip(power)
 
-        assert flipped is True
         assert coord._sensor_reader._grid_sign_inverted is True
+        assert coord._sign_flip_suppression_count == 0
+
+    def test_confidence_upgrade_resets_suppression_counter(self):
+        """Upgrading to same-device after suppression cycles allows immediate flip."""
+        coord = self._make_coordinator_for_sign_flip(confidence="any-device")
+        power = self._make_negative_power()
+
+        # One suppression cycle
+        for _ in range(18):
+            coord._check_sign_flip(power)
+        assert coord._sign_flip_suppression_count == 1
+        assert coord._sensor_reader._grid_sign_inverted is False
+
+        # Upgrade confidence
+        coord._sensor_reader._split_grid_discovery["confidence"] = "same-device"
+
+        # Next 18 ticks should flip (same-device skips suppression)
+        for _ in range(18):
+            coord._check_sign_flip(power)
+        assert coord._sensor_reader._grid_sign_inverted is True
+
+
+class TestSplitGridCombinedGuard:
+    """Combined-grid users should not get spurious _on_new_sensor refreshes."""
+
+    def test_combined_grid_user_not_in_split_grid_mode(self):
+        """Reader with combined grid_import_power never sets _uses_split_grid."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.inverter_power",
+            grid_import_power="sensor.grid_power",
+            battery_power="sensor.battery_power",
+        )
+        states = {
+            "sensor.inverter_power": _state(5000),
+            "sensor.grid_power": _state(-2000),
+            "sensor.battery_power": _state(0),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        reader.read_power()
+
+        assert reader._uses_split_grid is False
+
+    def test_split_grid_user_sets_flag(self):
+        """Reader entering split-grid discovery sets _uses_split_grid."""
+        from unittest.mock import patch
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power=None,
+        )
+        states = {
+            "sensor.growatt_solar_power": _state(5000),
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(3000, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+
+        registry = MagicMock()
+        registry.async_get = lambda eid: None
+
+        with patch(
+            "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get",
+            return_value=registry,
+        ):
+            reader.read_power()
+
+        assert reader._uses_split_grid is True
+
+
+class TestSplitGridDiagnostics:
+    """Diagnostics output includes split-grid discovery state."""
+
+    def test_diagnostics_includes_split_grid_discovery(self):
+        """The split_grid_discovery dict is surfaced in diagnostics."""
+        from unittest.mock import patch
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power=None,
+        )
+        states = {
+            "sensor.growatt_solar_power": _state(5000),
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(3000, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+
+        registry = MagicMock()
+        registry.async_get = lambda eid: None
+
+        with patch(
+            "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get",
+            return_value=registry,
+        ):
+            reader.read_power()
+
+        disc = reader._split_grid_discovery
+        assert "import" in disc
+        assert "export" in disc
+        assert "confidence" in disc
+        assert disc["confidence"] in ("same-device", "any-device")
+        assert disc["import"] is not None

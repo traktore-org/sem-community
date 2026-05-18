@@ -422,7 +422,7 @@ class TestSplitGridPowerDiscovery:
             self._make_power_state("sensor.mix_import_from_grid", 500),
             self._make_power_state("sensor.mix_export_to_grid", 2000),
         ]
-        imp, exp = reader._discover_split_grid_power(ed)
+        imp, exp, _conf = reader._discover_split_grid_power(ed)
         assert imp == "sensor.mix_import_from_grid"
         assert exp == "sensor.mix_export_to_grid"
 
@@ -436,7 +436,7 @@ class TestSplitGridPowerDiscovery:
             self._make_power_state("sensor.tlx_pac_to_user_total", 800),
             self._make_power_state("sensor.tlx_pac_to_grid_total", 3000),
         ]
-        imp, exp = reader._discover_split_grid_power(ed)
+        imp, exp, _conf = reader._discover_split_grid_power(ed)
         assert imp == "sensor.tlx_pac_to_user_total"
         assert exp == "sensor.tlx_pac_to_grid_total"
 
@@ -449,7 +449,7 @@ class TestSplitGridPowerDiscovery:
         hass.states.async_all.return_value = [
             self._make_power_state("sensor.solar_power", 5000),
         ]
-        imp, exp = reader._discover_split_grid_power(ed)
+        imp, exp, _conf = reader._discover_split_grid_power(ed)
         assert imp is None
         assert exp is None
 
@@ -486,6 +486,6 @@ class TestSplitGridPowerDiscovery:
         hass.states.async_all.return_value = [
             self._make_power_state("sensor.growatt_import_from_grid", 500),
         ]
-        imp, exp = reader._discover_split_grid_power(ed)
+        imp, exp, _conf = reader._discover_split_grid_power(ed)
         assert imp == "sensor.growatt_import_from_grid"
         assert exp is None
