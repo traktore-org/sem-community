@@ -279,6 +279,9 @@
       "grid_power": {
         "name": "Puissance réseau"
       },
+      "grid_active_power": {
+        "name": "Grid Active Power"
+      },
       "grid_import_power": {
         "name": "Import réseau"
       },

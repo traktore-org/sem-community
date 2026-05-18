@@ -278,6 +278,9 @@
       "grid_power": {
         "name": "Potencia Red"
       },
+      "grid_active_power": {
+        "name": "Grid Active Power"
+      },
       "grid_import_power": {
         "name": "Importación Red"
       },

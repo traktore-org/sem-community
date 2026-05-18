@@ -278,6 +278,9 @@
       "grid_power": {
         "name": "Netvermogen"
       },
+      "grid_active_power": {
+        "name": "Grid Active Power"
+      },
       "grid_import_power": {
         "name": "Netimport"
       },

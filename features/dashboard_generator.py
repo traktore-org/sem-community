@@ -215,6 +215,9 @@ class DashboardGenerator:
             # Inject per-charger series into EV power chart (#193)
             self._update_ev_power_chart(template)
 
+            # Replace sem-system-diagram-card with K-Flow when installed (#206)
+            await self._inject_kflow_card(template)
+
             # Substitute weather entity (template uses weather.home as placeholder)
             self._substitute_weather_entity(template)
 
@@ -665,6 +668,125 @@ class DashboardGenerator:
                         len(new_elements),
                     )
                     return
+
+    async def _inject_kflow_card(self, template: Dict[str, Any]) -> None:
+        """Replace sem-system-diagram-card with K-Flow when installed (#206).
+
+        Checks if K-Flow HACS card is installed, then builds a fully configured
+        K-Flow card with SEM entity mappings and auto-detected PV strings.
+        Falls back to keeping sem-system-diagram-card when K-Flow is absent.
+        """
+        # Check if K-Flow is installed (look for the resource in www/)
+        kflow_path = os.path.join(
+            self._config_dir, "www", "community", "k-flow-card",
+        )
+
+        def _check_kflow():
+            return os.path.isdir(kflow_path)
+
+        is_installed = await self.hass.async_add_executor_job(_check_kflow)
+        if not is_installed:
+            _LOGGER.debug("K-Flow card not installed, keeping sem-system-diagram-card")
+            return
+
+        from ..const import DOMAIN
+        from ..hardware_detection import (
+            discover_pv_strings_from_registry,
+            discover_battery_details_from_registry,
+        )
+
+        # Get coordinator for energy dashboard config
+        coordinator = None
+        if DOMAIN in self.hass.data:
+            for entry_id, coord in self.hass.data[DOMAIN].items():
+                if hasattr(coord, "_energy_dashboard_config"):
+                    coordinator = coord
+                    break
+
+        # Auto-detect hardware detail sensors from entity registry
+        ed_config = getattr(coordinator, "_energy_dashboard_config", None) if coordinator else None
+        pv_strings = discover_pv_strings_from_registry(self.hass, ed_config) if ed_config else {}
+        battery_details = discover_battery_details_from_registry(self.hass, ed_config) if ed_config else {}
+
+        # Determine has_battery / has_ev from config entry
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        has_battery = False
+        has_ev = False
+        if entries:
+            full_config = {**entries[0].data, **entries[0].options}
+            has_battery = bool(full_config.get("battery_soc_sensor")) or (
+                ed_config and getattr(ed_config, "has_battery", False)
+            )
+            has_ev = bool(full_config.get("ev_chargers") or full_config.get("ev_charging_power_sensor"))
+
+        # Build K-Flow card config — SEM universal entities
+        kflow_config: Dict[str, Any] = {
+            "type": "custom:k-flow-card",
+            # Solar
+            "pv_total_power": "sensor.sem_solar_power",
+            "today_pv": "sensor.sem_daily_solar_energy",
+            # Grid
+            "grid_active_power": "sensor.sem_grid_active_power",
+            "grid_import_energy": "sensor.sem_daily_grid_import_energy",
+            "grid_export_energy": "sensor.sem_daily_grid_export_energy",
+            # Home consumption
+            "consumpt": "sensor.sem_home_consumption_power",
+            "today_load": "sensor.sem_daily_home_energy",
+            # Section toggles
+            "show_solar": True,
+            "show_grid": True,
+            "show_battery": has_battery,
+            "show_ev": has_ev,
+        }
+
+        # Battery entities (SEM + autodetected hardware details)
+        if has_battery:
+            kflow_config["battery_power"] = "sensor.sem_battery_power"
+            kflow_config["battery_soc"] = "sensor.sem_battery_soc"
+            kflow_config["today_batt_chg"] = "sensor.sem_daily_battery_charge_energy"
+            kflow_config["batt_dis"] = "sensor.sem_daily_battery_discharge_energy"
+            # Autodetected: temperature, voltage, current, cell voltages
+            for field in (
+                "battery_temp1", "battery_temp2", "battery_mos",
+                "battery_voltage", "battery_current",
+                "battery_min_cell", "battery_max_cell",
+            ):
+                if field in battery_details:
+                    kflow_config[field] = battery_details[field]
+
+        # Inverter temperature (autodetected, independent of battery)
+        if "inv_temp" in battery_details:
+            kflow_config["inv_temp"] = battery_details["inv_temp"]
+
+        # PV string slots (auto-detected or multi-inverter fallback)
+        pv_extra = False
+        for slot in ("pv1_power", "pv2_power", "pv3_power", "pv4_power"):
+            if slot in pv_strings:
+                kflow_config[slot] = pv_strings[slot]
+                if slot in ("pv3_power", "pv4_power"):
+                    pv_extra = True
+        if pv_extra:
+            kflow_config["_show_pv_extra"] = True
+
+        # EV charger (total power — multi-charger detail on EV tab)
+        if has_ev:
+            kflow_config["charger_power"] = "sensor.sem_ev_power"
+
+        # Find and replace sem-system-diagram-card
+        for view in template.get("views", []):
+            for card in self._iter_cards(view):
+                if isinstance(card, dict) and card.get("type") == "custom:sem-system-diagram-card":
+                    card.clear()
+                    card.update(kflow_config)
+                    pv_info = f", PV strings: {list(pv_strings.keys())}" if pv_strings else ""
+                    _LOGGER.info(
+                        "Replaced sem-system-diagram-card with K-Flow card"
+                        " (battery=%s, ev=%s%s)",
+                        has_battery, has_ev, pv_info,
+                    )
+                    return
+
+        _LOGGER.debug("sem-system-diagram-card not found in template for K-Flow replacement")
 
     def _inject_individual_devices(self, views: List, new_individuals: List[Dict]) -> None:
         """Recursively find power-flow-card-plus and append individual devices."""

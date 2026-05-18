@@ -1361,3 +1361,254 @@ def discover_inverter_from_registry(
             return chosen
 
     return None
+
+
+# ============================================================
+# PV string / MPPT discovery
+# ============================================================
+# Detects individual PV string power sensors from the same integration
+# as the solar_power seed entity. Falls back to using individual
+# inverter totals from solar_power_list for multi-inverter setups.
+
+_PV_STRING_PATTERNS: List[re.Pattern] = [
+    # Huawei, GoodWe, Growatt, Kostal: sensor.*_pv1_power, sensor.*_pv2_power
+    re.compile(r"pv[_\s]*(\d+)[_\s]*(?:power|watt)", re.IGNORECASE),
+    # Sungrow: sensor.*_mppt1_power, sensor.*_mppt2_power
+    re.compile(r"mppt[_\s]*(\d+)[_\s]*(?:power|watt)", re.IGNORECASE),
+    # Fronius, SolarEdge: sensor.*_dc_power_1, sensor.*_dc_power_2
+    re.compile(r"dc[_\s]*power[_\s]*(\d+)", re.IGNORECASE),
+    # Kostal Plenticore: sensor.*_dc1_power, sensor.*_dc2_power
+    re.compile(r"dc[_\s]*(\d+)[_\s]*(?:power|watt)", re.IGNORECASE),
+    # Victron: sensor.*_tracker_1_power, sensor.*_tracker_2_power
+    re.compile(r"tracker[_\s]*(\d+)[_\s]*(?:power|watt)", re.IGNORECASE),
+    # Generic: sensor.*_string_1_power, sensor.*_string_2_power
+    re.compile(r"string[_\s]*(\d+)[_\s]*(?:power|watt)", re.IGNORECASE),
+]
+
+
+def discover_pv_strings_from_registry(
+    hass: HomeAssistant,
+    energy_dashboard_config,
+) -> Dict[str, str]:
+    """Auto-discover PV string power entities from the entity registry.
+
+    Uses the solar_power sensor from the HA Energy Dashboard config as seed
+    to find sibling sensor entities matching PV string naming patterns.
+
+    Falls back to individual inverter totals from ``solar_power_list`` when
+    no per-string entities are found but multiple inverters are configured.
+
+    Args:
+        hass: Home Assistant instance.
+        energy_dashboard_config: ``EnergyDashboardConfig`` from
+            ``ha_energy_reader.read_energy_dashboard_config``.
+
+    Returns:
+        Dict mapping K-Flow slot names to entity IDs, e.g.
+        ``{"pv1_power": "sensor.inverter_pv1_power", ...}``.
+        Empty dict if nothing found. Max 4 entries.
+    """
+    if energy_dashboard_config is None:
+        return {}
+
+    # --- Phase 1: try PV string detection from entity registry ---
+    seed_candidates = [
+        getattr(energy_dashboard_config, "solar_power", None),
+        getattr(energy_dashboard_config, "solar_energy", None),
+    ]
+    seed_candidates = [s for s in seed_candidates if s]
+
+    entity_reg = entity_registry.async_get(hass)
+
+    seed_entry = None
+    for seed in seed_candidates:
+        entry = entity_reg.async_get(seed)
+        if entry is not None:
+            seed_entry = entry
+            break
+
+    if seed_entry is not None and seed_entry.platform:
+        platform = seed_entry.platform
+        config_entry_id = seed_entry.config_entry_id
+
+        # Collect sibling sensor entities from the same integration
+        sibling_sensors: List[str] = []
+        for entry in entity_reg.entities.values():
+            if entry.platform != platform:
+                continue
+            if entry.disabled_by:
+                continue
+            if not entry.entity_id.startswith("sensor."):
+                continue
+            if config_entry_id and entry.config_entry_id != config_entry_id:
+                continue
+            sibling_sensors.append(entry.entity_id)
+
+        # Match against PV string patterns
+        # Collect (string_number, entity_id) pairs
+        found: Dict[int, str] = {}
+        for eid in sibling_sensors:
+            for pattern in _PV_STRING_PATTERNS:
+                m = pattern.search(eid)
+                if m:
+                    string_num = int(m.group(1))
+                    if 1 <= string_num <= 4 and string_num not in found:
+                        found[string_num] = eid
+                        _LOGGER.info(
+                            "PV string %d detected: %s (pattern=%s, platform=%s)",
+                            string_num, eid, pattern.pattern, platform,
+                        )
+                    break  # first matching pattern wins for this entity
+
+        if found:
+            return {
+                f"pv{n}_power": eid
+                for n, eid in sorted(found.items())
+            }
+
+    # --- Phase 2: fallback to multi-inverter totals ---
+    solar_power_list = getattr(energy_dashboard_config, "solar_power_list", [])
+    if len(solar_power_list) > 1:
+        result = {}
+        for i, inverter_entity in enumerate(solar_power_list[:4], start=1):
+            result[f"pv{i}_power"] = inverter_entity
+            _LOGGER.info(
+                "PV slot %d (multi-inverter fallback): %s", i, inverter_entity,
+            )
+        return result
+
+    return {}
+
+
+# ============================================================
+# Battery / inverter detail sensor discovery (for K-Flow)
+# ============================================================
+# Detects optional detail sensors (temperature, voltage, current, cell
+# voltages) from the same integration as the battery/solar seed entity.
+# Each key maps to a K-Flow config field.
+
+_BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
+    # Inverter temperature
+    "inv_temp": [
+        re.compile(r"inverter[_\s]*temp", re.IGNORECASE),
+        re.compile(r"internal[_\s]*temp", re.IGNORECASE),
+        re.compile(r"device[_\s]*temp", re.IGNORECASE),
+    ],
+    # Battery temperature (primary)
+    "battery_temp1": [
+        re.compile(r"battery[_\s]*1[_\s]*temp", re.IGNORECASE),  # battery_1_temperature (Huawei)
+        re.compile(r"batter.*temp.*1", re.IGNORECASE),  # battery_temperature_1 (JK BMS)
+        re.compile(r"batter(?!.*2).*temp(?!.*2)", re.IGNORECASE),  # battery_temperature (single, not "2")
+        re.compile(r"cell[_\s]*temp.*1", re.IGNORECASE),
+    ],
+    # Battery temperature (secondary)
+    "battery_temp2": [
+        re.compile(r"battery[_\s]*2[_\s]*temp", re.IGNORECASE),  # battery_2_temperature (Huawei)
+        re.compile(r"batter.*temp.*2", re.IGNORECASE),  # battery_temperature_2 (JK BMS)
+        re.compile(r"cell[_\s]*temp.*2", re.IGNORECASE),
+    ],
+    # BMS / MOS temperature
+    "battery_mos": [
+        re.compile(r"mos[_\s]*temp", re.IGNORECASE),
+        re.compile(r"bms[_\s]*temp", re.IGNORECASE),
+    ],
+    # Battery voltage (pack voltage, exclude cell voltages)
+    "battery_voltage": [
+        re.compile(r"batter(?!.*cell).*voltage", re.IGNORECASE),  # battery_voltage but NOT battery_min_cell_voltage
+        re.compile(r"batter.*bus[_\s]*voltage", re.IGNORECASE),
+    ],
+    # Battery current
+    "battery_current": [
+        re.compile(r"batter.*current", re.IGNORECASE),
+    ],
+    # Min cell voltage
+    "battery_min_cell": [
+        re.compile(r"min.*cell.*volt", re.IGNORECASE),
+        re.compile(r"cell.*min.*volt", re.IGNORECASE),
+        re.compile(r"lowest.*cell.*volt", re.IGNORECASE),
+    ],
+    # Max cell voltage
+    "battery_max_cell": [
+        re.compile(r"max.*cell.*volt", re.IGNORECASE),
+        re.compile(r"cell.*max.*volt", re.IGNORECASE),
+        re.compile(r"highest.*cell.*volt", re.IGNORECASE),
+    ],
+}
+
+
+def discover_battery_details_from_registry(
+    hass: HomeAssistant,
+    energy_dashboard_config,
+) -> Dict[str, str]:
+    """Auto-discover battery and inverter detail sensors for K-Flow.
+
+    Finds temperature, voltage, current, and cell voltage sensors from the
+    same integration as the battery/solar seed entity.
+
+    Args:
+        hass: Home Assistant instance.
+        energy_dashboard_config: ``EnergyDashboardConfig`` from
+            ``ha_energy_reader.read_energy_dashboard_config``.
+
+    Returns:
+        Dict mapping K-Flow field names to entity IDs, e.g.
+        ``{"inv_temp": "sensor.inverter_temperature", ...}``.
+        Empty dict if nothing found.
+    """
+    if energy_dashboard_config is None:
+        return {}
+
+    # Use battery sensors as seed (most likely to share integration with
+    # detail sensors), fall back to solar.
+    seed_candidates = [
+        getattr(energy_dashboard_config, "battery_power", None),
+        getattr(energy_dashboard_config, "battery_charge_energy", None),
+        getattr(energy_dashboard_config, "solar_power", None),
+    ]
+    seed_candidates = [s for s in seed_candidates if s]
+    if not seed_candidates:
+        return {}
+
+    entity_reg = entity_registry.async_get(hass)
+
+    seed_entry = None
+    for seed in seed_candidates:
+        entry = entity_reg.async_get(seed)
+        if entry is not None:
+            seed_entry = entry
+            break
+
+    if seed_entry is None or not seed_entry.platform:
+        return {}
+
+    platform = seed_entry.platform
+    config_entry_id = seed_entry.config_entry_id
+
+    # Collect sibling sensor entities from the same integration
+    sibling_sensors: List[str] = []
+    for entry in entity_reg.entities.values():
+        if entry.platform != platform:
+            continue
+        if entry.disabled_by:
+            continue
+        if not entry.entity_id.startswith("sensor."):
+            continue
+        if config_entry_id and entry.config_entry_id != config_entry_id:
+            continue
+        sibling_sensors.append(entry.entity_id)
+
+    # Match each K-Flow field against its patterns — first match wins
+    result: Dict[str, str] = {}
+    for kflow_field, patterns in _BATTERY_DETAIL_PATTERNS.items():
+        for pattern in patterns:
+            matches = [eid for eid in sibling_sensors if pattern.search(eid)]
+            if matches:
+                chosen = matches[0]
+                result[kflow_field] = chosen
+                _LOGGER.info(
+                    "Battery detail %s detected: %s (pattern=%s, platform=%s)",
+                    kflow_field, chosen, pattern.pattern, platform,
+                )
+                break
+
+    return result
