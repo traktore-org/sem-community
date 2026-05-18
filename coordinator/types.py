@@ -442,6 +442,7 @@ class SEMData:
             # Power readings
             "solar_power": self.power.solar_power,
             "grid_power": self.power.grid_power,
+            "grid_active_power": -self.power.grid_power,  # positive=import, negative=export (K-Flow convention)
             "battery_power": self.power.battery_power,
             "ev_power": self.power.ev_power,
             "home_consumption_power": self.power.home_consumption_power,

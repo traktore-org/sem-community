@@ -13,6 +13,11 @@
 #   sankey-chart     — Energy flow diagram on Energy tab
 #   fold-entity-row  — collapsible Welcome intro on Home tab
 #
+# Optional HACS cards:
+#   k-flow-card      — animated energy flow visualization (#206)
+#                      Auto-configured by dashboard generator when installed.
+#                      Falls back to sem-system-diagram-card when absent.
+#
 # Bundled SEM cards (auto-registered, no HACS needed):
 #   sem-flow-card            — animated power flow with daily energy, autarky, config editor
 #   sem-system-diagram-card  — animated power flow diagram (legacy, kept for compat)
