@@ -3,6 +3,20 @@ from typing import Final
 
 DOMAIN: Final = "solar_energy_management"
 
+# Substrings used to pre-filter newly added sensors when deciding whether to
+# re-run split-grid discovery. Derived from the import/export pattern lists in
+# coordinator/sensor_reader.py:_discover_split_grid_power. Keep these in sync
+# when new grid integrations are added.
+GRID_TRIGGER_HINTS: Final = (
+    "power_consumption", "power_production",
+    "import_power", "export_power",
+    "grid_import", "grid_export",
+    "from_grid", "to_grid",
+    "pac_to_user", "pac_to_grid",
+    "grid_imported", "grid_exported",
+    "consumption_from_grid",
+)
+
 # ============================================
 # UPDATE & DELTA THRESHOLDS
 # ============================================

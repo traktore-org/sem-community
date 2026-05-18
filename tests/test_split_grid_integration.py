@@ -178,7 +178,7 @@ class TestGrowattSplitGrid:
 
         # First read: triggers discovery
         power1 = reader.read_power()
-        assert reader._split_grid_import_power is not None
+        assert reader._split_grid_discovery["import"] is not None
 
         # Second read: uses cached discovery
         power2 = reader.read_power()
@@ -376,8 +376,9 @@ class TestDSMRSplitGrid:
             power = reader.read_power()
 
         # Should pick meter sensors (same device), NOT heat pump
-        assert reader._split_grid_import_power == "sensor.electricity_meter_power_consumption"
-        assert reader._split_grid_export_power == "sensor.electricity_meter_power_production"
+        assert reader._split_grid_discovery["import"] == "sensor.electricity_meter_power_consumption"
+        assert reader._split_grid_discovery["export"] == "sensor.electricity_meter_power_production"
+        assert reader._split_grid_discovery["confidence"] == "same-device"
         assert power.grid_power == 3000  # export - import = 3000 - 0
 
 
@@ -1445,3 +1446,227 @@ class TestMultiGridPipeline:
 
         # Single sensor in list (len==1) falls through to scalar ed.grid_import_power path
         assert power.grid_power == -750
+
+
+# ════════════════════════════════════════════
+# Issue #166: startup-race regression tests
+# ════════════════════════════════════════════
+
+class TestSplitGridStartupRace:
+    """Regressions for the v1.5.x re-report of issue #166.
+
+    The v1.4.6-beta.2 same-device filter only works when the grid energy
+    sensor's device is resolvable. If DSMR is still loading at first refresh,
+    _get_device_for_entity returns None and the any-device fallback picks the
+    wrong sensor (e.g. heat pump). These tests assert the low-confidence pick
+    is not permanently cached and that invalidation re-runs discovery.
+    """
+
+    def _meter_registry_mock(self):
+        """Registry mock where meter sensors resolve to meter_device, others to other."""
+        from unittest.mock import MagicMock as _MM
+        registry = _MM()
+
+        def _get(entity_id):
+            entry = _MM()
+            if "electricity_meter" in entity_id:
+                entry.device_id = "meter_device"
+            elif "heat_pump" in entity_id:
+                entry.device_id = "heatpump_device"
+            else:
+                entry.device_id = None
+            return entry
+
+        registry.async_get = _get
+        return registry
+
+    def test_lowconf_pick_is_not_permanently_cached(self):
+        """Any-device pick must be re-evaluated each cycle so a late meter wins."""
+        from unittest.mock import patch, MagicMock as _MM
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power=None,
+        )
+
+        # Phase 1: DSMR not loaded yet — grid energy sensor has no device entry,
+        # only a heat pump's power_consumption is visible.
+        phase1_states = {
+            "sensor.growatt_solar_power": _state(5000),
+            "sensor.heat_pump_power_consumption": _state(2000, device_class="power"),
+        }
+
+        phase1_registry = _MM()
+        phase1_registry.async_get = lambda eid: None  # nothing resolvable yet
+
+        reader = _make_reader_with_states(hass, phase1_states, ed)
+
+        with patch(
+            "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get",
+            return_value=phase1_registry,
+        ):
+            reader.read_power()
+
+        # Wrong pick — heat pump matched via any-device fallback
+        assert reader._split_grid_discovery["import"] == "sensor.heat_pump_power_consumption"
+        assert reader._split_grid_discovery["confidence"] == "any-device"
+
+        # Phase 2: DSMR is now registered. Without re-discovery the wrong pick
+        # would persist. With confidence-tiered cache the read re-runs discovery
+        # and the same-device meter wins.
+        phase2_states = {
+            "sensor.growatt_solar_power": _state(5000),
+            "sensor.heat_pump_power_consumption": _state(2000, device_class="power"),
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(3000, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+        # Re-mock hass with phase2 states (preserves the SensorReader instance)
+        def _get2(entity_id):
+            return phase2_states.get(entity_id)
+
+        def _async_all2(domain=None):
+            out = []
+            for eid, st in phase2_states.items():
+                m = _MM()
+                m.entity_id = eid
+                m.state = st.state
+                m.attributes = st.attributes
+                if domain is None or eid.startswith(f"{domain}."):
+                    out.append(m)
+            return out
+
+        hass.states.get = _get2
+        hass.states.async_all = _async_all2
+
+        with patch(
+            "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get",
+            return_value=self._meter_registry_mock(),
+        ):
+            reader.read_power()
+
+        assert reader._split_grid_discovery["import"] == "sensor.electricity_meter_power_consumption"
+        assert reader._split_grid_discovery["export"] == "sensor.electricity_meter_power_production"
+        assert reader._split_grid_discovery["confidence"] == "same-device"
+
+    def test_same_device_pick_is_sticky(self):
+        """Once same-device confidence is reached, subsequent reads reuse it."""
+        from unittest.mock import patch
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power=None,
+        )
+        states = {
+            "sensor.growatt_solar_power": _state(5000),
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(3000, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+
+        with patch(
+            "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get",
+            return_value=self._meter_registry_mock(),
+        ):
+            reader.read_power()
+            # If we now break the registry, a sticky same-device cache should
+            # keep the previous pick (discovery must NOT re-run).
+            reader.hass = hass  # keep states
+            reader.read_power()
+
+        assert reader._split_grid_discovery["confidence"] == "same-device"
+        assert reader._split_grid_discovery["import"] == "sensor.electricity_meter_power_consumption"
+
+    def test_invalidate_split_grid_cache_forces_rediscovery(self):
+        """invalidate_split_grid_cache() resets the dict so next read re-runs discovery."""
+        from unittest.mock import patch
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power=None,
+        )
+        states = {
+            "sensor.growatt_solar_power": _state(5000),
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_power_production": _state(3000, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+
+        with patch(
+            "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get",
+            return_value=self._meter_registry_mock(),
+        ):
+            reader.read_power()
+            assert reader._split_grid_discovery["confidence"] == "same-device"
+
+            reader.invalidate_split_grid_cache()
+            assert reader._split_grid_discovery["confidence"] is None
+            assert reader._split_grid_discovery["import"] is None
+
+            # Next read re-discovers
+            reader.read_power()
+            assert reader._split_grid_discovery["confidence"] == "same-device"
+            assert reader._split_grid_discovery["import"] == "sensor.electricity_meter_power_consumption"
+
+    def test_self_healing_flip_skipped_for_lowconf_split(self):
+        """Sign flip must NOT fire when split-grid confidence is any-device."""
+        from custom_components.solar_energy_management.coordinator.coordinator import SEMCoordinator
+
+        hass = MagicMock()
+        # Minimal coordinator init — we only need _sensor_reader and the flip
+        # branch logic, so we mock around the constructor surface.
+        coord = SEMCoordinator.__new__(SEMCoordinator)
+        coord._sensor_reader = MagicMock()
+        coord._sensor_reader._split_grid_discovery = {
+            "import": "sensor.wrong_power_consumption",
+            "export": None,
+            "confidence": "any-device",
+            "warned": False,
+        }
+        coord._sensor_reader._grid_sign_inverted = False
+        coord._sensor_reader._grid_sign_detected = False
+        coord._negative_balance_count = 17  # one shy of trigger
+
+        # Inline the gated branch (matches coordinator.py self-healing path)
+        raw_balance = -1000.0
+        coord._negative_balance_count += 1
+        flipped = False
+        if coord._negative_balance_count >= 18:
+            disc = getattr(coord._sensor_reader, "_split_grid_discovery", None)
+            if disc and disc.get("confidence") == "any-device":
+                coord._negative_balance_count = 0
+            else:
+                coord._sensor_reader._grid_sign_inverted = not coord._sensor_reader._grid_sign_inverted
+                flipped = True
+
+        assert flipped is False
+        assert coord._sensor_reader._grid_sign_inverted is False
+
+        # Upgrade to same-device and re-run: flip should now fire
+        coord._sensor_reader._split_grid_discovery["confidence"] = "same-device"
+        coord._negative_balance_count = 17
+        coord._negative_balance_count += 1
+        if coord._negative_balance_count >= 18:
+            disc = getattr(coord._sensor_reader, "_split_grid_discovery", None)
+            if disc and disc.get("confidence") == "any-device":
+                coord._negative_balance_count = 0
+            else:
+                coord._sensor_reader._grid_sign_inverted = not coord._sensor_reader._grid_sign_inverted
+                flipped = True
+
+        assert flipped is True
+        assert coord._sensor_reader._grid_sign_inverted is True

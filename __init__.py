@@ -32,7 +32,7 @@ from homeassistant.helpers import device_registry as dr, issue_registry as ir
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN
+from .const import DOMAIN, GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -523,15 +523,56 @@ def _schedule_post_startup_tasks(
     This prevents blocking the startup process while still ensuring
     these tasks run when the system is ready.
     """
+    from homeassistant.helpers.event import async_track_state_added_domain
 
     @callback
     def _async_post_startup_init(event) -> None:
-        """Execute post-startup initialization tasks."""
+        """Force a fresh split-grid discovery once HA has finished starting.
+
+        Catches the case where another integration's energy sensor was not yet
+        in the registry during async_config_entry_first_refresh(), leaving the
+        cache pinned on an any-device pick (issue #166).
+        """
         _LOGGER.debug("Running post-startup initialization tasks")
-        # Additional post-startup tasks can be added here if needed
+        reader = getattr(coordinator, "_sensor_reader", None)
+        if reader is not None:
+            reader.invalidate_split_grid_cache()
+            hass.async_create_task(coordinator.async_request_refresh())
+
+    @callback
+    def _on_new_sensor(event) -> None:
+        """Re-run split-grid discovery when a grid-shaped sensor appears.
+
+        Triggered for entity additions (old_state is None). Pre-filters by
+        substring so the typical firehose of new temperature/humidity/etc.
+        sensors does not schedule a coordinator refresh. The authoritative
+        pattern check still happens inside _discover_split_grid_power.
+        """
+        reader = getattr(coordinator, "_sensor_reader", None)
+        if reader is None:
+            return
+        disc = getattr(reader, "_split_grid_discovery", None)
+        if disc is None or disc.get("confidence") == "same-device":
+            return  # already locked in, nothing to upgrade
+        eid = event.data.get("entity_id", "")
+        if not any(hint in eid for hint in GRID_TRIGGER_HINTS):
+            return
+        _LOGGER.info(
+            "New grid-shaped sensor %s appeared — re-running split-grid discovery",
+            eid,
+        )
+        reader.invalidate_split_grid_cache()
+        hass.async_create_task(coordinator.async_request_refresh())
 
     # Schedule tasks to run when Home Assistant is fully started
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_post_startup_init)
+
+    # React live to new sensor entities from other integrations (e.g. DSMR loading
+    # after SEM's first refresh). Cheap: only fires on entity creation, not state
+    # changes. See plan for issue #166.
+    entry.async_on_unload(
+        async_track_state_added_domain(hass, "sensor", _on_new_sensor)
+    )
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
