@@ -713,6 +713,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     per_charger_target = getattr(self, '_night_target_per_charger_map', {}).get(cid)
                     if per_charger_target is not None:
                         self._night_target_per_charger = per_charger_target
+
+                    # Per-charger SOC target and surplus limit (#215)
+                    saved_vehicle_soc_ctrl = self._cycle_vehicle_soc
+                    ev_chargers_cfg = self.config.get("ev_chargers", [])
+                    charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
+                    per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
+                    if per_soc_entity:
+                        soc_st = self.hass.states.get(per_soc_entity)
+                        if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                            try:
+                                self._cycle_vehicle_soc = float(soc_st.state)
+                            except (ValueError, TypeError):
+                                pass
+                    per_remaining = self._calculate_remaining_need(
+                        energy, self._cycle_vehicle_soc, charger_cfg
+                    )
+                    per_target_reached = per_remaining <= 0.1
+                    per_limit_surplus = charger_cfg.get("ev_limit_surplus", self.config.get("ev_limit_surplus", False))
+                    charging_context.soc_limit_active = per_limit_surplus and per_target_reached
+                    charging_context.daily_target_reached = per_target_reached
+                    charging_context.remaining_ev_energy = per_remaining
+                    charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining
+
                     try:
                         await self._execute_ev_control(
                             charging_state, power, energy, charging_context
@@ -733,6 +756,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         self._ev_charge_started_at = saved["started"]
                         self._ev_last_change_time = saved["change"]
                         self._current_charger_budget = None
+                        self._cycle_vehicle_soc = saved_vehicle_soc_ctrl
                 self._save_ev_session_state()
             elif self._ev_device and not self._observer_mode:
                 try:
@@ -1553,21 +1577,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         Returns: (strategy, reason) where strategy is one of:
             "solar_only", "battery_assist", "night_grid", "idle"
         """
-        daily_target = self.config.get("daily_ev_target", 10)
-
-        # Vehicle SOC-based remaining calculation (if configured)
-        vehicle_soc_entity = self.config.get("vehicle_soc_entity", "")
-        ev_battery_capacity = self.config.get("ev_battery_capacity_kwh", 40)
-        ev_target_soc = self.config.get("ev_target_soc", 80)
-
         vehicle_soc = self._cycle_vehicle_soc
-
-        if vehicle_soc is not None:
-            # SOC-based: remaining = (target_soc - current_soc) / 100 * capacity
-            remaining_need = max(0, (ev_target_soc - vehicle_soc) / 100 * ev_battery_capacity)
-        else:
-            # Fallback: fixed kWh target
-            remaining_need = max(0, daily_target - energy.daily_ev)
+        remaining_need = self._calculate_remaining_need(energy, vehicle_soc)
 
         # EV not connected → idle
         if not power.ev_connected:
@@ -1579,7 +1590,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 soc_info = f", SOC={vehicle_soc:.0f}%" if vehicle_soc is not None else ""
                 return ("idle", f"night target reached ({energy.daily_ev:.1f}kWh{soc_info})")
 
-            soc_info = f", SOC={vehicle_soc:.0f}%→{ev_target_soc}%" if vehicle_soc is not None else ""
+            _target_soc = self.config.get("ev_target_soc", 80)
+            soc_info = f", SOC={vehicle_soc:.0f}%→{_target_soc}%" if vehicle_soc is not None else ""
 
             # Price-optimized: check if current hour is cheap enough for charging
             tariff = getattr(self, '_tariff_provider', None)
@@ -1826,6 +1838,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         )
         return stable
 
+    def _calculate_remaining_need(
+        self, energy, vehicle_soc: float | None = None, charger_cfg: dict | None = None,
+    ) -> float:
+        """Calculate remaining EV charging need in kWh from the best available source.
+
+        Priority: real vehicle SOC → kWh daily target fallback.
+        Used by both _build_charging_context() and _determine_charging_strategy().
+        """
+        cfg = charger_cfg or {}
+        ev_target_soc = cfg.get("ev_target_soc") if cfg.get("ev_target_soc") is not None else self.config.get("ev_target_soc", 80)
+        ev_capacity = cfg.get("ev_battery_capacity_kwh") if cfg.get("ev_battery_capacity_kwh") is not None else self.config.get("ev_battery_capacity_kwh", 40)
+        daily_target = cfg.get("daily_ev_target") if cfg.get("daily_ev_target") is not None else self.config.get("daily_ev_target", 10)
+
+        if vehicle_soc is not None:
+            return max(0, (ev_target_soc - vehicle_soc) / 100 * ev_capacity)
+        return max(0, daily_target - energy.daily_ev)
+
     def _build_charging_context(
         self,
         power: PowerReadings,
@@ -1857,11 +1886,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # correctly with the 30 default too (it just unblocks earlier).
         battery_min_soc = self.config.get("battery_minimum_soc", 20)
         battery_priority_soc = self.config.get("battery_priority_soc", 30)
-        daily_ev_target = self.config.get("daily_ev_target", 10)
 
         battery_too_low = power.battery_soc < battery_min_soc
         battery_needs_priority = power.battery_soc < battery_priority_soc
-        daily_target_reached = energy.daily_ev >= daily_ev_target
+        remaining = self._calculate_remaining_need(energy, self._cycle_vehicle_soc)
+        daily_target_reached = remaining <= 0.1
+
+        # Surplus limit: when toggle is on, stop ALL charging (including surplus)
+        ev_limit_surplus = self.config.get("ev_limit_surplus", False)
+        soc_limit_active = ev_limit_surplus and daily_target_reached
 
         # Calculate excess solar
         excess_solar = power.solar_power - power.home_consumption_power - power.battery_charge_power
@@ -1891,8 +1924,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             strategy, reason,
         )
 
-        remaining = max(0, daily_ev_target - energy.daily_ev)
-
         # Night charging target: optionally reduced by forecast
         night_target = remaining
         forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_SMART_NIGHT_CHARGING}", "on")
@@ -1917,6 +1948,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charging_strategy=strategy,
             charging_strategy_reason=reason,
             night_target_kwh=night_target,
+            soc_limit_active=soc_limit_active,
         )
 
     def _update_battery_session_tracking(

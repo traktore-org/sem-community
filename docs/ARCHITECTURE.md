@@ -143,6 +143,25 @@ SOC  0%  ───────────────────────�
 
 ---
 
+## EV Charging Target (#215)
+
+SEM calculates remaining EV charging need from a single unified helper (`_calculate_remaining_need()`), called from both `_build_charging_context()` and `_determine_charging_strategy()`:
+
+```
+if vehicle_soc is available:
+    remaining = max(0, (ev_target_soc - vehicle_soc) / 100 × ev_battery_capacity_kwh)
+else:
+    remaining = max(0, daily_ev_target - daily_ev_energy)
+```
+
+This value drives both night and surplus charging decisions. The per-charger `ev_limit_surplus` toggle controls whether surplus (solar) charging also stops at the target:
+- **Off (default):** Surplus charging is unlimited. Night charging stops at the target.
+- **On:** ALL charging stops at the target.
+
+All settings (`ev_target_soc`, `ev_battery_capacity_kwh`, `ev_limit_surplus`) are per-charger. The multi-charger loop patches `ChargingContext.soc_limit_active` per charger before calling `_execute_ev_control()`.
+
+---
+
 ## Battery Charge Scheduler (#6)
 
 Forecast-aware grid-to-battery charging during cheap night hours. **Disabled by default** — enable via config flow.

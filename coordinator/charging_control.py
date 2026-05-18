@@ -46,14 +46,18 @@ class ChargingContext:
         calculated_current: EV budget expressed as current (A), from FlowCalculator.
         excess_solar: Solar minus home minus battery charge (W), can be negative.
         available_power: EV power budget (W), from FlowCalculator.calculate_ev_budget().
-        daily_target_reached: Daily EV energy >= configured target.
+        daily_target_reached: Remaining EV need <= 0.1 kWh (SOC-based or kWh-based).
         daily_ev_energy: Today's accumulated EV energy (kWh).
         daily_ev_energy_offset: EV energy from offset utility meter (kWh), 0 if unused.
-        remaining_ev_energy: Raw remaining EV need: daily_target - daily_ev (kWh).
+        remaining_ev_energy: Remaining EV need (kWh), from vehicle SOC or daily target.
         charging_strategy: Strategy from SOC zone logic — one of:
             "solar_only", "battery_assist", "night_grid", "min_pv", "idle".
         charging_strategy_reason: Human-readable explanation of strategy choice.
         night_target_kwh: Night charging target (kWh), may be forecast-adjusted if enabled.
+            For night mode, remaining is derived from this field directly.
+        soc_limit_active: When True, stop ALL charging including surplus (#215).
+            Set when ev_limit_surplus toggle is on AND target is reached.
+            Only gates the solar state machine — night mode uses night_target_kwh directly.
     """
     # EV status
     ev_connected: bool = False
@@ -81,6 +85,9 @@ class ChargingContext:
 
     # Night charging context
     night_target_kwh: float = 0
+
+    # Surplus limit: when True, stop ALL charging (including surplus) at target
+    soc_limit_active: bool = False
 
 
 class ChargingStateMachine:
@@ -160,6 +167,12 @@ class ChargingStateMachine:
         if ctx.battery_too_low:
             _LOGGER.info(f"Solar: Paused - battery too low ({ctx.battery_soc:.0f}%)")
             return ChargingState.SOLAR_PAUSE_LOW_BATTERY
+
+        # Target limit — stop surplus when user opts in via ev_limit_surplus (#215).
+        # Night mode does NOT need this gate — it stops via night_target_kwh <= 0.1,
+        # which is already SOC-aware through _calculate_remaining_need().
+        if ctx.soc_limit_active:
+            return ChargingState.SOLAR_TARGET_REACHED
 
         # Now mode: charge at max immediately
         if ctx.charging_strategy == "now":

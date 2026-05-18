@@ -60,7 +60,8 @@
           "mobile_notification_service": "Mobile Notification Service",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "EV Target SOC (%)",
+          "ev_limit_surplus": "Limit surplus charging at target"
         }
       }
     },
@@ -99,7 +100,8 @@
           "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
-          "ev_target_soc": "EV target SOC (%)"
+          "ev_target_soc": "EV target SOC (%)",
+          "ev_limit_surplus": "Limit surplus charging at target"
         }
       },
       "heat_pump": {
@@ -254,7 +256,8 @@
           "critical_device_protection": "Protect Critical Devices",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "EV Target SOC (%)",
+          "ev_limit_surplus": "Limit surplus charging at target"
         }
       },
       "notifications": {
@@ -266,7 +269,8 @@
           "mobile_notification_service": "Mobile Notification Service",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "EV Target SOC (%)",
+          "ev_limit_surplus": "Limit surplus charging at target"
         }
       },
       "dashboard_options": {
@@ -280,7 +284,8 @@
           "include_flows": "Include Power Flow Visualization",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
-          "ev_target_soc": "EV Target SOC (%)"
+          "ev_target_soc": "EV Target SOC (%)",
+          "ev_limit_surplus": "Limit surplus charging at target"
         },
         "data_description": {
           "generate_dashboard": "Create a new Lovelace dashboard for SEM. If a dashboard with the same path already exists, it will be replaced.",
@@ -302,6 +307,9 @@
       },
       "grid_power": {
         "name": "Grid Power"
+      },
+      "grid_active_power": {
+        "name": "Grid Active Power"
       },
       "grid_import_power": {
         "name": "Grid Import"

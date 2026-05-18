@@ -825,6 +825,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
                     )
                 ),
+                vol.Optional(
+                    "ev_limit_surplus",
+                    default=_c("ev_limit_surplus", False),
+                ): selector.BooleanSelector(),
             }),
             errors=errors
         )
@@ -984,6 +988,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                # Per-charger SOC target (#215)
+                vol.Optional(
+                    "ev_target_soc",
+                    default=self._data.get("ev_target_soc", 80),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=50, max=100, step=5,
+                        unit_of_measurement="%", mode="slider",
+                    )
+                ),
+                vol.Optional(
+                    "ev_battery_capacity_kwh",
+                    default=self._data.get("ev_battery_capacity_kwh", 40),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=10, max=120, step=5,
+                        unit_of_measurement="kWh", mode="box",
+                    )
+                ),
+                vol.Optional(
+                    "ev_limit_surplus",
+                    default=False,
+                ): selector.BooleanSelector(),
             }),
             errors=errors,
         )
@@ -1091,6 +1118,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                # Per-charger SOC target (#215)
+                vol.Optional(
+                    "ev_target_soc",
+                    default=charger.get("ev_target_soc", self._data.get("ev_target_soc", 80)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=50, max=100, step=5,
+                        unit_of_measurement="%", mode="slider",
+                    )
+                ),
+                vol.Optional(
+                    "ev_battery_capacity_kwh",
+                    default=charger.get("ev_battery_capacity_kwh", self._data.get("ev_battery_capacity_kwh", 40)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=10, max=120, step=5,
+                        unit_of_measurement="kWh", mode="box",
+                    )
+                ),
+                vol.Optional(
+                    "ev_limit_surplus",
+                    default=charger.get("ev_limit_surplus", False),
+                ): selector.BooleanSelector(),
             }),
             errors=errors,
         )
