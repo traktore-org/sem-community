@@ -33,6 +33,7 @@ import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN
+from .coordinator.sensor_reader import GRID_TRIGGER_HINTS
 from .coordinator import SEMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -75,8 +76,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             new_data = {**entry.data}
             new_options = {**entry.options}
             legacy_priority = max(
-                new_options.get("battery_priority_soc") or 0,
-                new_data.get("battery_priority_soc") or 0,
+                new_options.get("battery_priority_soc") if new_options.get("battery_priority_soc") is not None else 0,
+                new_data.get("battery_priority_soc") if new_data.get("battery_priority_soc") is not None else 0,
             )
             # Anything ≥ 50 is the legacy 3-zone meaning — remap.
             if legacy_priority >= 50:
@@ -94,7 +95,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 ("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
                 ("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
             ):
-                if new_data.get(key) in (None, 0):
+                if new_data.get(key) is None:
                     new_data[key] = default
 
             hass.config_entries.async_update_entry(
@@ -309,7 +310,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
             # Resolve config: charger-specific keys, fall back to global config
             def _cfg(key, default=None):
-                return charger_cfg.get(key) or full_config.get(key) or default
+                v = charger_cfg.get(key)
+                if v is not None:
+                    return v
+                v = full_config.get(key)
+                return v if v is not None else default
 
             ev_power_entity = _cfg("ev_charging_power_sensor")
             ev_charger_service = _cfg("ev_charger_service")
@@ -523,15 +528,60 @@ def _schedule_post_startup_tasks(
     This prevents blocking the startup process while still ensuring
     these tasks run when the system is ready.
     """
+    from homeassistant.helpers.event import async_track_state_added_domain
 
     @callback
     def _async_post_startup_init(event) -> None:
-        """Execute post-startup initialization tasks."""
+        """Force a fresh split-grid discovery once HA has finished starting.
+
+        Catches the case where another integration's energy sensor was not yet
+        in the registry during async_config_entry_first_refresh(), leaving the
+        cache pinned on an any-device pick (issue #166).
+        """
         _LOGGER.debug("Running post-startup initialization tasks")
-        # Additional post-startup tasks can be added here if needed
+        reader = getattr(coordinator, "_sensor_reader", None)
+        if reader is not None:
+            reader.invalidate_split_grid_cache()
+            hass.async_create_task(coordinator.async_request_refresh())
+
+    @callback
+    def _on_new_sensor(event) -> None:
+        """Re-run split-grid discovery when a grid-shaped sensor appears.
+
+        Triggered for entity additions (old_state is None). Pre-filters by
+        substring so the typical firehose of new temperature/humidity/etc.
+        sensors does not schedule a coordinator refresh. The authoritative
+        pattern check still happens inside _discover_split_grid_power.
+        """
+        reader = getattr(coordinator, "_sensor_reader", None)
+        if reader is None:
+            return
+        # Only relevant for split-grid setups. Combined-grid users (with
+        # ed.grid_import_power set) never enter discovery, so skip them.
+        if not getattr(reader, "_uses_split_grid", False):
+            return
+        disc = getattr(reader, "_split_grid_discovery", None)
+        if disc is None or disc.get("confidence") == "same-device":
+            return  # already locked in, nothing to upgrade
+        eid = event.data.get("entity_id", "")
+        if not any(hint in eid for hint in GRID_TRIGGER_HINTS):
+            return
+        _LOGGER.info(
+            "New grid-shaped sensor %s appeared — re-running split-grid discovery",
+            eid,
+        )
+        reader.invalidate_split_grid_cache()
+        hass.async_create_task(coordinator.async_request_refresh())
 
     # Schedule tasks to run when Home Assistant is fully started
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _async_post_startup_init)
+
+    # React live to new sensor entities from other integrations (e.g. DSMR loading
+    # after SEM's first refresh). Cheap: only fires on entity creation, not state
+    # changes. See plan for issue #166.
+    entry.async_on_unload(
+        async_track_state_added_domain(hass, "sensor", _on_new_sensor)
+    )
 
 
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:

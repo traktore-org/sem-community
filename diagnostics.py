@@ -67,6 +67,28 @@ async def async_get_config_entry_diagnostics(
             "device_count": len(ed_config.device_consumption),
         }
 
+    # Split-grid discovery state (issue #166): surface which import/export
+    # sensors auto-discovery picked and how confident it is. A "split-lowconf"
+    # value means same-device filtering failed and re-discovery is still active.
+    reader = getattr(coordinator, "_sensor_reader", None)
+    disc = getattr(reader, "_split_grid_discovery", None) if reader else None
+    split_grid_info = {}
+    if disc:
+        grid_device_resolved = None
+        if reader and ed_config and getattr(ed_config, "grid_import_energy", None):
+            try:
+                grid_device_resolved = bool(
+                    reader._get_device_for_entity(ed_config.grid_import_energy)
+                )
+            except Exception:
+                grid_device_resolved = None
+        split_grid_info = {
+            "import_sensor": disc.get("import"),
+            "export_sensor": disc.get("export"),
+            "confidence": disc.get("confidence"),
+            "grid_energy_device_resolved": grid_device_resolved,
+        }
+
     return {
         "config_entry": {
             "entry_id": entry.entry_id,
@@ -134,6 +156,7 @@ async def async_get_config_entry_diagnostics(
         },
         "load_management": load_info,
         "energy_dashboard": ed_info,
+        "split_grid_discovery": split_grid_info,
         "forecast": {
             "today_kwh": data.get("forecast_today_kwh"),
             "tomorrow_kwh": data.get("forecast_tomorrow_kwh"),

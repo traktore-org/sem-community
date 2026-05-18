@@ -168,7 +168,7 @@ class EVTaperDetector:
                 _LOGGER.info(
                     "EV full charge detected at %s (peak was %.0fW, hw_total=%.1f) — SOC anchored at 100%%",
                     self._last_full_timestamp, self._session_peak_w,
-                    self._hw_total_at_full or 0,
+                    self._hw_total_at_full if self._hw_total_at_full is not None else 0,
                 )
 
         return self._analyze(ev_power)

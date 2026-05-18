@@ -12,6 +12,25 @@ from .types import PowerReadings
 
 _LOGGER = logging.getLogger(__name__)
 
+# Known patterns for split grid power sensors — single source of truth.
+# GRID_TRIGGER_HINTS is derived from these and used in __init__.py to
+# pre-filter new sensor events. Adding a new brand here automatically
+# updates the trigger filter — no second file to keep in sync.
+IMPORT_PATTERNS: tuple[str, ...] = (
+    "import_from_grid", "pac_to_user", "grid_import", "from_grid_power",
+    "power_consumption",      # DSMR/P1 (NL/BE)
+    "consumption_from_grid",  # E3DC
+    "import_power",           # GivEnergy
+    "grid_imported_power",    # Senec
+)
+EXPORT_PATTERNS: tuple[str, ...] = (
+    "export_to_grid", "pac_to_grid", "grid_export", "to_grid_power",
+    "power_production",       # DSMR/P1 (NL/BE)
+    "export_power",           # GivEnergy
+    "grid_exported_power",    # Senec
+)
+GRID_TRIGGER_HINTS: tuple[str, ...] = tuple(set(IMPORT_PATTERNS + EXPORT_PATTERNS))
+
 
 @dataclass
 class SensorConfig:
@@ -57,10 +76,17 @@ class SensorReader:
         self._sensor_unavailable: set[str] = set()
         # Cache last valid SOC to avoid 0% during sensor gaps
         self._last_valid_soc: float = 0.0
-        # Split grid power sensors (Growatt, etc.) — discovered on first read
-        self._split_grid_import_power: str | None = None
-        self._split_grid_export_power: str | None = None
-        self._split_grid_warned: bool = False
+        # Split grid power sensors (Growatt, DSMR, etc.) — discovered on first read.
+        # confidence: "same-device" picks are permanently cached; "any-device" picks
+        # are re-evaluated each cycle so a late-loading DSMR meter wins once it shows
+        # up. See issue #166 startup race.
+        self._split_grid_discovery: dict[str, Any] = {
+            "import": None,
+            "export": None,
+            "confidence": None,  # "same-device" | "any-device" | None
+            "warned": False,
+        }
+        self._uses_split_grid: bool = False
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -340,19 +366,25 @@ class SensorReader:
             readings.grid_power = self._read_sensor(ed.grid_import_power, "grid")
         elif not ed.grid_import_power and ed.grid_import_energy:
             # No combined power sensor — try to find split import/export power sensors
-            # from the same device as the energy sensors
-            if not hasattr(self, '_split_grid_import_power') or self._split_grid_import_power is None:
-                self._split_grid_import_power, self._split_grid_export_power = (
-                    self._discover_split_grid_power(ed)
-                )
-            if self._split_grid_import_power:
-                import_w = self._read_sensor(self._split_grid_import_power, "grid_import")
-                export_w = self._read_sensor(self._split_grid_export_power, "grid_export") if self._split_grid_export_power else 0.0
+            # from the same device as the energy sensors.
+            # Re-run discovery unless we've already locked in a same-device match;
+            # any-device matches stay re-evaluated so a late-loading DSMR meter
+            # (issue #166) takes over within one update interval.
+            self._uses_split_grid = True
+            disc = self._split_grid_discovery
+            if disc["confidence"] != "same-device":
+                imp, exp, conf = self._discover_split_grid_power(ed)
+                disc["import"] = imp
+                disc["export"] = exp
+                disc["confidence"] = conf
+            if disc["import"]:
+                import_w = self._read_sensor(disc["import"], "grid_import")
+                export_w = self._read_sensor(disc["export"], "grid_export") if disc["export"] else 0.0
                 # SEM convention: negative = import, positive = export
                 readings.grid_power = export_w - import_w
                 self._grid_sign_detected = True  # No sign correction needed
-            elif not hasattr(self, '_split_grid_warned'):
-                self._split_grid_warned = True
+            elif not disc["warned"]:
+                disc["warned"] = True
                 _LOGGER.warning(
                     "No grid power sensor found (no combined and no split import/export). "
                     "Grid power will be 0. Check Energy Dashboard grid configuration."
@@ -432,7 +464,7 @@ class SensorReader:
 
         return readings
 
-    def _discover_split_grid_power(self, ed) -> tuple:
+    def _discover_split_grid_power(self, ed) -> tuple[Optional[str], Optional[str], Optional[str]]:
         """Discover separate import/export power sensors for setups without combined grid power.
 
         Supported naming patterns:
@@ -446,21 +478,13 @@ class SensorReader:
 
         Prefers sensors on the same device as the grid energy sensors to avoid
         false positives (e.g. heat pump power_consumption vs meter power_consumption).
+
+        Returns (import_entity, export_entity, confidence) where confidence is
+        "same-device" if either side came from a device matching the grid energy
+        sensor, "any-device" if matched by pattern only, or None if nothing matched.
         """
-        # Known patterns for split grid power sensors
-        import_patterns = [
-            "import_from_grid", "pac_to_user", "grid_import", "from_grid_power",
-            "power_consumption",      # DSMR/P1 (NL/BE)
-            "consumption_from_grid",  # E3DC
-            "import_power",           # GivEnergy
-            "grid_imported_power",    # Senec
-        ]
-        export_patterns = [
-            "export_to_grid", "pac_to_grid", "grid_export", "to_grid_power",
-            "power_production",       # DSMR/P1 (NL/BE)
-            "export_power",           # GivEnergy
-            "grid_exported_power",    # Senec
-        ]
+        import_patterns = IMPORT_PATTERNS
+        export_patterns = EXPORT_PATTERNS
 
         try:
             # Get device_id of grid energy sensor for same-device preference
@@ -503,21 +527,41 @@ class SensorReader:
             import_power = same_device["import"] or any_device["import"]
             export_power = same_device["export"] or any_device["export"]
 
+            # "same-device" only if every resolved side came from the grid device.
+            # A mix (one same-device, one any-device) stays "any-device" so
+            # re-discovery can upgrade the any-device side later.
+            import_is_same = (import_power is None or import_power == same_device["import"])
+            export_is_same = (export_power is None or export_power == same_device["export"])
             if import_power or export_power:
-                source = "same-device" if same_device["import"] or same_device["export"] else "pattern-match"
+                confidence = "same-device" if (import_is_same and export_is_same) else "any-device"
                 _LOGGER.info(
                     "Discovered split grid power sensors (%s): import=%s, export=%s",
-                    source, import_power, export_power,
+                    confidence, import_power, export_power,
                 )
             else:
+                confidence = None
                 _LOGGER.debug("No split grid power sensors found")
 
         except Exception as e:
             _LOGGER.debug("Split grid power discovery failed: %s", e)
             import_power = None
             export_power = None
+            confidence = None
 
-        return import_power, export_power
+        return import_power, export_power, confidence
+
+    def invalidate_split_grid_cache(self) -> None:
+        """Reset split-grid discovery so the next read_power() rediscovers.
+
+        Called from __init__.py when a new sensor appears or after HA has fully
+        started. Same-device locks are wiped along with any-device picks.
+        """
+        self._split_grid_discovery = {
+            "import": None,
+            "export": None,
+            "confidence": None,
+            "warned": self._split_grid_discovery.get("warned", False),
+        }
 
     def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
         """Get device_id for an entity from the entity registry."""

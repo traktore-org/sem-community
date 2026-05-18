@@ -271,9 +271,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if val is not None and val > 0:
             return float(val)
         if self._detected_battery_capacity_kwh is None:
-            self._detected_battery_capacity_kwh = (
-                self._sensor_reader.auto_detect_battery_capacity_kwh() or 0.0
-            )
+            detected = self._sensor_reader.auto_detect_battery_capacity_kwh()
+            self._detected_battery_capacity_kwh = detected if detected is not None else 0.0
         if self._detected_battery_capacity_kwh > 0:
             return self._detected_battery_capacity_kwh
         return float(DEFAULT_BATTERY_CAPACITY_KWH)
@@ -289,6 +288,48 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             sw_version=self._get_version(),
             configuration_url="https://github.com/traktore-org/sem-community",
         )
+
+    def _check_sign_flip(self, power) -> bool:
+        """Check energy balance and auto-correct grid sign if persistently negative.
+
+        Returns True if the sign was flipped (caller should re-read power).
+        Low-confidence split-grid picks suppress the flip for up to 3 cycles
+        (~9 min) to give late-loading integrations time to register (issue #166).
+        """
+        energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+        energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
+        raw_balance = energy_in - energy_out
+        if raw_balance < -500:
+            self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
+            if self._negative_balance_count >= 18:  # ~3 min sustained negative
+                disc = getattr(self._sensor_reader, "_split_grid_discovery", None)
+                self._sign_flip_suppression_count = getattr(self, '_sign_flip_suppression_count', 0)
+                if disc and disc.get("confidence") == "any-device" and self._sign_flip_suppression_count < 3:
+                    self._sign_flip_suppression_count += 1
+                    _LOGGER.debug(
+                        "Negative balance %.0fW with low-confidence split-grid "
+                        "discovery — suppressing sign flip pending re-discovery "
+                        "(attempt %d/3)",
+                        raw_balance, self._sign_flip_suppression_count,
+                    )
+                    self._negative_balance_count = 0
+                    return False
+                # Auto-correct: flip the grid sign
+                self._sensor_reader._grid_sign_inverted = not self._sensor_reader._grid_sign_inverted
+                self._sensor_reader._grid_sign_detected = True
+                _LOGGER.warning(
+                    "Energy balance negative (%.0fW) for 3+ min — auto-correcting grid sign "
+                    "(now %s). Solar=%.0fW Grid=%.0fW Battery=%.0fW",
+                    raw_balance,
+                    "negated" if self._sensor_reader._grid_sign_inverted else "normal",
+                    power.solar_power, power.grid_power, power.battery_power,
+                )
+                self._negative_balance_count = 0
+                self._sign_flip_suppression_count = 0
+                return True
+        else:
+            self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
+        return False
 
     @staticmethod
     def _get_version() -> str:
@@ -471,27 +512,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Self-healing sign inversion: if balance goes negative with real
             # grid activity, the grid sign is wrong — auto-correct by flipping
             if power.grid_power != 0 and power.solar_power > 0:
-                energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
-                energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
-                raw_balance = energy_in - energy_out
-                if raw_balance < -500:
-                    self._negative_balance_count = getattr(self, '_negative_balance_count', 0) + 1
-                    if self._negative_balance_count >= 18:  # ~3 min sustained negative
-                        # Auto-correct: flip the grid sign
-                        self._sensor_reader._grid_sign_inverted = not self._sensor_reader._grid_sign_inverted
-                        self._sensor_reader._grid_sign_detected = True
-                        _LOGGER.warning(
-                            "Energy balance negative (%.0fW) for 3+ min — auto-correcting grid sign "
-                            "(now %s). Solar=%.0fW Grid=%.0fW Battery=%.0fW",
-                            raw_balance,
-                            "negated" if self._sensor_reader._grid_sign_inverted else "normal",
-                            power.solar_power, power.grid_power, power.battery_power,
-                        )
-                        self._negative_balance_count = 0
-                        # Re-read with corrected sign
-                        power = self._sensor_reader.read_power()
-                else:
-                    self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
+                flipped = self._check_sign_flip(power)
+                if flipped:
+                    power = self._sensor_reader.read_power()
 
             # Step 2: Calculate energy from power integration
             energy = self._energy_calculator.calculate_energy(power)
@@ -951,7 +974,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Diagnostics summary for dashboard System tab
             result["diag_version"] = self._get_version()
-            result["diag_grid_mode"] = "split" if hasattr(self._sensor_reader, '_split_grid_import_power') and self._sensor_reader._split_grid_import_power else "combined"
+            _disc = getattr(self._sensor_reader, "_split_grid_discovery", None) or {}
+            if self.config.get("grid_import_power_entity") or self.config.get("grid_export_power_entity"):
+                result["diag_grid_mode"] = "manual"
+            elif _disc.get("import"):
+                result["diag_grid_mode"] = "split" if _disc.get("confidence") == "same-device" else "split-lowconf"
+            else:
+                result["diag_grid_mode"] = "combined"
             result["diag_grid_sign"] = "negated" if self._sensor_reader._grid_sign_inverted else "normal"
             result["diag_charger_count"] = len(self._ev_devices)
             result["diag_charger_control"] = "number" if any(
@@ -1375,8 +1404,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             for cid, intel in per_charger_intel.items():
                 charger_name = self._ev_devices[cid].name if cid in self._ev_devices else cid
                 charger_connected = self._last_ev_connected_per_charger.get(cid, False)
-                mins_to_full = intel.get("minutes_to_full") or 0
-                est_soc = intel.get("estimated_soc") or 0
+                mins_to_full = intel.get("minutes_to_full", 0)
+                est_soc = intel.get("estimated_soc", 0)
                 charge_needed = intel.get("charge_needed", False)
                 nights = intel.get("nights_until_charge", 0)
 
