@@ -1190,3 +1190,29 @@ class TestDiscoverBatteryDetailsFromRegistry:
         assert result["battery_voltage"] == "sensor.jk_bms_battery_voltage"
         assert result["battery_min_cell"] == "sensor.jk_bms_min_cell_voltage"
         assert result["battery_max_cell"] == "sensor.jk_bms_max_cell_voltage"
+
+    def test_huawei_german_locale(self):
+        """Huawei DE locale: busspannung, busstrom, interne_temperatur."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.batteries_lade_entladeleistung", "huawei_solar"),
+            _make_registry_entry("sensor.batteries_busspannung", "huawei_solar"),
+            _make_registry_entry("sensor.batteries_busstrom", "huawei_solar"),
+            _make_registry_entry("sensor.inverter_interne_temperatur", "huawei_solar"),
+            _make_registry_entry("sensor.battery_1_temperatur", "huawei_solar"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.batteries_lade_entladeleistung"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result["battery_voltage"] == "sensor.batteries_busspannung"
+        assert result["battery_current"] == "sensor.batteries_busstrom"
+        assert result["inv_temp"] == "sensor.inverter_interne_temperatur"
+        assert result["battery_temp1"] == "sensor.battery_1_temperatur"

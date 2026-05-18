@@ -1491,12 +1491,14 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
     # Inverter temperature
     "inv_temp": [
         re.compile(r"inverter[_\s]*temp", re.IGNORECASE),
+        re.compile(r"inverter.*internal.*temp", re.IGNORECASE),
+        re.compile(r"inverter.*interne.*temp", re.IGNORECASE),  # Huawei DE: inverter_interne_temperatur
         re.compile(r"internal[_\s]*temp", re.IGNORECASE),
         re.compile(r"device[_\s]*temp", re.IGNORECASE),
     ],
     # Battery temperature (primary)
     "battery_temp1": [
-        re.compile(r"battery[_\s]*1[_\s]*temp", re.IGNORECASE),  # battery_1_temperature (Huawei)
+        re.compile(r"battery[_\s]*1[_\s]*temp", re.IGNORECASE),  # battery_1_temperature (Huawei EN/DE)
         re.compile(r"batter.*temp.*1", re.IGNORECASE),  # battery_temperature_1 (JK BMS)
         re.compile(r"batter(?!.*2).*temp(?!.*2)", re.IGNORECASE),  # battery_temperature (single, not "2")
         re.compile(r"cell[_\s]*temp.*1", re.IGNORECASE),
@@ -1516,10 +1518,14 @@ _BATTERY_DETAIL_PATTERNS: Dict[str, List[re.Pattern]] = {
     "battery_voltage": [
         re.compile(r"batter(?!.*cell).*voltage", re.IGNORECASE),  # battery_voltage but NOT battery_min_cell_voltage
         re.compile(r"batter.*bus[_\s]*voltage", re.IGNORECASE),
+        re.compile(r"batter.*busspannung", re.IGNORECASE),  # Huawei DE: batteries_busspannung
+        re.compile(r"batter.*spannung(?!.*pv)(?!.*netz)", re.IGNORECASE),  # DE: generic battery voltage
     ],
     # Battery current
     "battery_current": [
         re.compile(r"batter.*current", re.IGNORECASE),
+        re.compile(r"batter.*busstrom", re.IGNORECASE),  # Huawei DE: batteries_busstrom
+        re.compile(r"batter.*strom(?!.*netz)", re.IGNORECASE),  # DE: generic battery current (not grid)
     ],
     # Min cell voltage
     "battery_min_cell": [

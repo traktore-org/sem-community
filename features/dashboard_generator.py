@@ -732,11 +732,9 @@ class DashboardGenerator:
             # Home consumption
             "consumpt": "sensor.sem_home_consumption_power",
             "today_load": "sensor.sem_daily_home_energy",
-            # Section toggles
-            "show_solar": True,
-            "show_grid": True,
-            "show_battery": has_battery,
-            "show_ev": has_ev,
+            # Section toggles (K-Flow uses underscore-prefixed names internally)
+            "_show_battery": has_battery,
+            "_show_ev": has_ev,
         }
 
         # Battery entities (SEM + autodetected hardware details)
@@ -771,6 +769,24 @@ class DashboardGenerator:
         # EV charger (total power — multi-charger detail on EV tab)
         if has_ev:
             kflow_config["charger_power"] = "sensor.sem_ev_power"
+
+        # Explicitly blank unused fields to prevent K-Flow's internal GoodWe
+        # defaults from appearing for sensors that don't exist on this system.
+        _ALL_KFLOW_ENTITY_FIELDS = [
+            "pv1_power", "pv2_power", "pv3_power", "pv4_power",
+            "battery_voltage", "battery_current",
+            "battery_temp1", "battery_temp2", "battery_mos",
+            "battery_min_cell", "battery_max_cell",
+            "inv_temp", "charger_power", "charger_state",
+            "charger_current", "charger_soc", "charger_eta",
+            "goodwe_battery_soc", "goodwe_battery_curr",
+            "grid_power_alt", "total_pv_gen_entity",
+            "battery2_soc", "battery2_power", "battery2_current",
+            "battery2_voltage", "battery2_mos",
+        ]
+        for field in _ALL_KFLOW_ENTITY_FIELDS:
+            if field not in kflow_config:
+                kflow_config[field] = ""
 
         # Find and replace sem-system-diagram-card
         for view in template.get("views", []):
