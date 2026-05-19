@@ -382,12 +382,18 @@ class TestAccumulatedSavings:
             f"grid_import_{yesterday}": 4.0,
             f"grid_export_{yesterday}": 6.0,
         }
+        # Seed cost accumulators (incremental at rate 0.30/0.08)
+        calc._daily_cost_accumulators = {
+            f"cost_import_{yesterday}": 4.0 * 0.30,
+            f"cost_export_{yesterday}": 6.0 * 0.08,
+            f"cost_savings_{yesterday}": 6.0 * 0.30,
+        }
 
         calc._snapshot_daily_costs(yesterday)
 
-        # savings = (10 - 4) × 0.30 = 1.80
+        # savings = 1.80 (from cost accumulator)
         assert abs(calc._accumulated_savings - 1.80) < 0.01
-        # export revenue = 6 × 0.08 = 0.48
+        # export revenue = 0.48 (from cost accumulator)
         assert abs(calc._accumulated_export_revenue - 0.48) < 0.01
 
     def test_accumulated_kwh_tracked(self):

@@ -516,6 +516,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 if flipped:
                     power = self._sensor_reader.read_power()
 
+            # Update tariff rates before energy/cost calculation so cost accumulators
+            # use the current rate for this cycle (fixes dynamic tariff mid-day bug)
+            try:
+                _tariff = self._tariff_provider.get_tariff_data()
+                self._energy_calculator._import_rate = _tariff.current_import_rate
+                self._energy_calculator._export_rate = _tariff.current_export_rate
+            except (ValueError, TypeError, AttributeError):
+                pass  # Use previous rates
+
             # Step 2: Calculate energy from power integration
             energy = self._energy_calculator.calculate_energy(power)
 
@@ -1154,8 +1163,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             tariff_data.tariff_today_avg_price = tariff.today_avg_price
             if tariff.next_cheap_window_start:
                 tariff_data.tariff_next_cheap_start = tariff.next_cheap_window_start.isoformat()
-            self._energy_calculator._import_rate = tariff.current_import_rate
-            self._energy_calculator._export_rate = tariff.current_export_rate
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Tariff read failed: %s", e)
 

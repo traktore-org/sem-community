@@ -43,6 +43,11 @@ class EnergyCalculator:
         self._yearly_accumulators: Dict[str, float] = {}
         self._lifetime_accumulators: Dict[str, float] = {}
 
+        # Cost accumulators (incremental, rate-weighted) — fixes dynamic tariff mid-day recalculation
+        self._daily_cost_accumulators: Dict[str, float] = {}
+        self._monthly_cost_accumulators: Dict[str, float] = {}
+        self._yearly_cost_accumulators: Dict[str, float] = {}
+
         # Last update time for integration
         self._last_update: Optional[datetime] = None
 
@@ -135,6 +140,7 @@ class EnergyCalculator:
         if power.grid_import_power >= MIN_POWER_THRESHOLD:
             import_increment = (power.grid_import_power * interval_hours) / 1000
             self._accumulate("grid_import", today, month_key, year_key, import_increment)
+            self._accumulate_cost("cost_import", today, month_key, year_key, import_increment * self._import_rate)
         energy.daily_grid_import = self._get_daily("grid_import", today)
         energy.monthly_grid_import = self._get_monthly("grid_import", month_key)
         energy.yearly_grid_import = self._get_yearly("grid_import", year_key)
@@ -143,6 +149,7 @@ class EnergyCalculator:
         if power.grid_export_power >= MIN_POWER_THRESHOLD:
             export_increment = (power.grid_export_power * interval_hours) / 1000
             self._accumulate("grid_export", today, month_key, year_key, export_increment)
+            self._accumulate_cost("cost_export", today, month_key, year_key, export_increment * self._export_rate)
         energy.daily_grid_export = self._get_daily("grid_export", today)
         energy.monthly_grid_export = self._get_monthly("grid_export", month_key)
         energy.yearly_grid_export = self._get_yearly("grid_export", year_key)
@@ -159,9 +166,18 @@ class EnergyCalculator:
         if power.battery_discharge_power >= MIN_POWER_THRESHOLD:
             discharge_increment = (power.battery_discharge_power * interval_hours) / 1000
             self._accumulate("battery_discharge", today, month_key, year_key, discharge_increment)
+            self._accumulate_cost("cost_batt_savings", today, month_key, year_key, discharge_increment * self._import_rate)
         energy.daily_battery_discharge = self._get_daily("battery_discharge", today)
         energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
+
+        # Self-consumption savings (incremental, rate-weighted for dynamic tariff accuracy)
+        home_incr = (power.home_consumption_power * interval_hours) / 1000 if power.home_consumption_power >= MIN_POWER_THRESHOLD else 0.0
+        ev_incr = (power.ev_power * interval_hours) / 1000 if power.ev_power >= MIN_POWER_THRESHOLD else 0.0
+        import_incr = (power.grid_import_power * interval_hours) / 1000 if power.grid_import_power >= MIN_POWER_THRESHOLD else 0.0
+        savings_incr = max(0.0, (home_incr + ev_incr) - import_incr)
+        if savings_incr > 0.0:
+            self._accumulate_cost("cost_savings", today, month_key, year_key, savings_incr * self._import_rate)
 
         # Sanity checks — warn and cap if values exceed physical limits
         battery_capacity = self.config.get("battery_capacity_kwh", 15)
@@ -563,48 +579,37 @@ class EnergyCalculator:
             )
 
     def calculate_costs(self, energy: EnergyTotals) -> CostData:
-        """Calculate costs and savings from energy totals."""
+        """Calculate costs and savings from energy totals.
+
+        Uses incremental cost accumulators so dynamic tariff rate changes mid-day
+        do not retroactively recalculate the entire day's cost at the new rate.
+        """
         costs = CostData()
 
-        # Daily calculations
-        costs.daily_costs = round(energy.daily_grid_import * self._import_rate, 2)
-        costs.daily_export_revenue = round(energy.daily_grid_export * self._export_rate, 2)
+        now = dt_util.now()
+        today = now.date()
+        month_key = f"{today.year}_{today.month}"
+        year_key = str(today.year)
+
+        # Daily calculations — from incremental cost accumulators
+        costs.daily_costs = self._get_daily_cost("cost_import", today)
+        costs.daily_export_revenue = self._get_daily_cost("cost_export", today)
         costs.daily_net_cost = round(costs.daily_costs - costs.daily_export_revenue, 2)
-
-        # Savings = what we would have paid if all consumption came from grid
-        total_consumption = energy.daily_home + energy.daily_ev
-        costs.daily_savings = round(
-            (total_consumption - energy.daily_grid_import) * self._import_rate, 2
-        )
-        costs.daily_savings = max(0, costs.daily_savings)
-
-        # Battery savings = value of battery discharge at import rate
-        costs.daily_battery_savings = round(
-            energy.daily_battery_discharge * self._import_rate, 2
-        )
+        costs.daily_savings = max(0, self._get_daily_cost("cost_savings", today))
+        costs.daily_battery_savings = self._get_daily_cost("cost_batt_savings", today)
 
         # Monthly calculations
-        costs.monthly_costs = round(energy.monthly_grid_import * self._import_rate, 2)
-        costs.monthly_export_revenue = round(energy.monthly_grid_export * self._export_rate, 2)
+        costs.monthly_costs = self._get_monthly_cost("cost_import", month_key)
+        costs.monthly_export_revenue = self._get_monthly_cost("cost_export", month_key)
         costs.monthly_net_cost = round(costs.monthly_costs - costs.monthly_export_revenue, 2)
-
-        monthly_consumption = energy.monthly_home
-        costs.monthly_savings = round(
-            (monthly_consumption - energy.monthly_grid_import) * self._import_rate, 2
-        )
-        costs.monthly_savings = max(0, costs.monthly_savings)
+        costs.monthly_savings = max(0, self._get_monthly_cost("cost_savings", month_key))
 
         # Yearly calculations
-        costs.yearly_costs = round(energy.yearly_grid_import * self._import_rate, 2)
-        costs.yearly_export_revenue = round(energy.yearly_grid_export * self._export_rate, 2)
+        costs.yearly_costs = self._get_yearly_cost("cost_import", year_key)
+        costs.yearly_export_revenue = self._get_yearly_cost("cost_export", year_key)
         costs.yearly_net_cost = round(costs.yearly_costs - costs.yearly_export_revenue, 2)
-        yearly_consumption = energy.yearly_home + energy.yearly_ev
-        costs.yearly_savings = round(
-            max(0, (yearly_consumption - energy.yearly_grid_import) * self._import_rate), 2
-        )
-        costs.yearly_battery_savings = round(
-            energy.yearly_battery_discharge * self._import_rate, 2
-        )
+        costs.yearly_savings = max(0, self._get_yearly_cost("cost_savings", year_key))
+        costs.yearly_battery_savings = self._get_yearly_cost("cost_batt_savings", year_key)
 
         # Environmental impact (CO2 avoided by self-consuming solar)
         daily_self_consumed = max(0, energy.daily_solar - energy.daily_grid_export)
@@ -742,6 +747,35 @@ class EnergyCalculator:
         key = f"lifetime_{category}"
         return round(self._lifetime_accumulators.get(key, 0.0), 2)
 
+    def _accumulate_cost(
+        self, category: str, today: date, month_key: str, year_key: str, increment: float
+    ) -> None:
+        """Accumulate a cost increment for a category (no lifetime — ROI uses separate accumulators)."""
+        daily_key = f"{category}_{today}"
+        monthly_key = f"{category}_{month_key}"
+        yearly_key = f"{category}_{year_key}"
+        if daily_key not in self._daily_cost_accumulators:
+            self._daily_cost_accumulators[daily_key] = 0.0
+        if monthly_key not in self._monthly_cost_accumulators:
+            self._monthly_cost_accumulators[monthly_key] = 0.0
+        if yearly_key not in self._yearly_cost_accumulators:
+            self._yearly_cost_accumulators[yearly_key] = 0.0
+        self._daily_cost_accumulators[daily_key] += increment
+        self._monthly_cost_accumulators[monthly_key] += increment
+        self._yearly_cost_accumulators[yearly_key] += increment
+
+    def _get_daily_cost(self, category: str, today: date) -> float:
+        """Get daily accumulated cost."""
+        return round(self._daily_cost_accumulators.get(f"{category}_{today}", 0.0), 2)
+
+    def _get_monthly_cost(self, category: str, month_key: str) -> float:
+        """Get monthly accumulated cost."""
+        return round(self._monthly_cost_accumulators.get(f"{category}_{month_key}", 0.0), 2)
+
+    def _get_yearly_cost(self, category: str, year_key: str) -> float:
+        """Get yearly accumulated cost."""
+        return round(self._yearly_cost_accumulators.get(f"{category}_{year_key}", 0.0), 2)
+
     def _get_avg_import_rate(self) -> float:
         """7-day average import rate, falling back to current rate."""
         if not self._rate_history:
@@ -768,16 +802,12 @@ class EnergyCalculator:
         daily_grid_import = self._daily_accumulators.get(f"grid_import_{today_str}", 0.0)
         daily_grid_export = self._daily_accumulators.get(f"grid_export_{today_str}", 0.0)
         daily_solar = self._daily_accumulators.get(f"solar_{today_str}", 0.0)
-        daily_home = self._daily_accumulators.get(f"home_{today_str}", 0.0)
-        daily_ev_key = [k for k in self._daily_accumulators if k.startswith("ev_daily_sun_")]
-        daily_ev = sum(self._daily_accumulators.get(k, 0.0) for k in daily_ev_key)
-
-        # Calculate costs at the rate that was active during that day
-        total_consumption = daily_home + daily_ev
-        daily_savings = max(0, (total_consumption - daily_grid_import) * self._import_rate)
-        daily_cost = daily_grid_import * self._import_rate
-        daily_export_revenue = daily_grid_export * self._export_rate
         daily_self_consumed = max(0, daily_solar - daily_grid_export)
+
+        # Use incremental cost accumulators (rate-weighted, accurate for dynamic tariffs)
+        daily_cost = self._daily_cost_accumulators.get(f"cost_import_{today_str}", 0.0)
+        daily_export_revenue = self._daily_cost_accumulators.get(f"cost_export_{today_str}", 0.0)
+        daily_savings = self._daily_cost_accumulators.get(f"cost_savings_{today_str}", 0.0)
 
         # Accumulate into running totals
         self._accumulated_savings += daily_savings
@@ -848,6 +878,30 @@ class EnergyCalculator:
                 del self._yearly_accumulators[key]
         # Note: _lifetime_accumulators never get cleaned up (by design)
 
+        # Clean up cost accumulators — mirror the energy accumulator cleanup
+        today_str = str(today)
+        cost_daily_remove = [
+            k for k in self._daily_cost_accumulators
+            if not k.endswith(today_str)
+        ]
+        for key in cost_daily_remove:
+            del self._daily_cost_accumulators[key]
+
+        cost_monthly_remove = [
+            k for k in self._monthly_cost_accumulators
+            if not k.endswith(month_key)
+        ]
+        for key in cost_monthly_remove:
+            del self._monthly_cost_accumulators[key]
+
+        if year_key:
+            cost_yearly_remove = [
+                k for k in self._yearly_cost_accumulators
+                if not k.endswith(year_key)
+            ]
+            for key in cost_yearly_remove:
+                del self._yearly_cost_accumulators[key]
+
     def get_state(self) -> Dict[str, Any]:
         """Get calculator state for persistence."""
         return {
@@ -855,6 +909,9 @@ class EnergyCalculator:
             "monthly_accumulators": self._monthly_accumulators.copy(),
             "yearly_accumulators": self._yearly_accumulators.copy(),
             "lifetime_accumulators": self._lifetime_accumulators.copy(),
+            "daily_cost_accumulators": self._daily_cost_accumulators.copy(),
+            "monthly_cost_accumulators": self._monthly_cost_accumulators.copy(),
+            "yearly_cost_accumulators": self._yearly_cost_accumulators.copy(),
             "last_update": self._last_update.isoformat() if self._last_update else None,
             "yearly_seeded": self._yearly_seeded,
             "rate_history": list(self._rate_history),
@@ -873,6 +930,9 @@ class EnergyCalculator:
             self._monthly_accumulators = state.get("monthly_accumulators", {})
             self._yearly_accumulators = state.get("yearly_accumulators", {})
             self._lifetime_accumulators = state.get("lifetime_accumulators", {})
+            self._daily_cost_accumulators = state.get("daily_cost_accumulators", {})
+            self._monthly_cost_accumulators = state.get("monthly_cost_accumulators", {})
+            self._yearly_cost_accumulators = state.get("yearly_cost_accumulators", {})
             self._yearly_seeded = state.get("yearly_seeded", False)
             self._rate_history = deque(state.get("rate_history", []), maxlen=30)
             self._accumulated_savings = state.get("accumulated_savings", 0.0)
