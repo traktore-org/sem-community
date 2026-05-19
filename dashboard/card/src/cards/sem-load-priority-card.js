@@ -14,7 +14,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { semTheme, semDefineCard } from '../base/sem-shared.js';
+import { semTheme, semDefineCard, semFormatPower } from '../base/sem-shared.js';
 
 /* ── SortableJS (inlined v1.15.6 MIT) ── */
 (function(){if(window.Sortable)return;/*! Sortable 1.15.6 - MIT | git://github.com/SortableJS/Sortable.git */
@@ -187,7 +187,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     controlMode: info.control_mode || 'peak_only',
                     dependsOn: info.depends_on || [],
                     blockedBy: info.blocked_by || null,
-                    icon: this._getDeviceIcon(info.device_type),
+                    icon: this._resolveDeviceIcon(info),
                 }))
                 .sort((a, b) => a.priority - b.priority);
         }
@@ -290,7 +290,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                             : nothing}
                     </div>
                     <div class="device-power" data-field="power-${device.id}">
-                        ${onOff ? device.power.toFixed(1) + ' kW' : (device.isShed ? this._t('shed_label') : 'OFF')}
+                        ${onOff ? semFormatPower(device.power * 1000) : (device.isShed ? this._t('shed_label') : this._t('off'))}
                     </div>
                 </div>
                 ${device.blockedBy ? html`<div style="font-size:11px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${device.blockedBy}</div>` : nothing}
@@ -298,7 +298,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 ${device.isShed && device.shedReason ? html`<div style="font-size:11px;color:#f44336;padding:2px 0 0 28px">${device.shedReason === 'emergency' ? this._t('shed_emergency') : this._t('shed_peak')}</div>` : nothing}
                 <div class="device-bottom">
                     <div class="status-dot ${onOff ? 'on' : (device.isShed ? 'shed' : '')}" data-field="status-${device.id}"></div>
-                    <span class="dim" data-field="onoff-${device.id}">${onOff ? 'ON' : (device.isShed ? this._t('shed_label') : 'OFF')}</span>
+                    <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
                     <label class="toggle-label" title="${this._t('mode_tooltip')}">
@@ -563,15 +563,27 @@ class SEMLoadPriorityCard extends SEMLitBase {
         return '#4caf50';
     }
 
-    _getDeviceIcon(deviceType) {
+    _resolveDeviceIcon(info) {
+        // Try the original HA entity icon first (user-customizable)
+        for (const eid of [info.switch_entity, info.power_entity, info.control?.entity]) {
+            if (eid) {
+                const s = this._hass?.states[eid];
+                if (s?.attributes?.icon) return s.attributes.icon;
+            }
+        }
+        // Fall back to device_type mapping
         const map = {
             ev_charger: 'mdi:ev-station', ev_charging: 'mdi:ev-station',
             heating: 'mdi:radiator', heat_pump: 'mdi:heat-pump',
             water_heater: 'mdi:water-boiler', hot_water: 'mdi:water-boiler',
             pool_pump: 'mdi:pool', appliance: 'mdi:washing-machine',
             climate: 'mdi:thermostat', light: 'mdi:lightbulb',
+            printer: 'mdi:printer', computer: 'mdi:desktop-classic',
+            network: 'mdi:network', fan: 'mdi:fan',
+            dryer: 'mdi:tumble-dryer', dishwasher: 'mdi:dishwasher',
+            freezer: 'mdi:fridge', refrigerator: 'mdi:fridge',
         };
-        return map[deviceType] || 'mdi:power-plug';
+        return map[info.device_type] || 'mdi:power-plug';
     }
 
     getCardSize() {
