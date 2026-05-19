@@ -273,36 +273,33 @@ class TestCostCalculations:
     """Test cost and savings calculations."""
 
     def test_daily_cost_calculation(self, energy_calculator):
-        """Test daily cost calculation from energy totals."""
+        """Test daily cost calculation from cost accumulators."""
+        from datetime import date
+        today = date.today()
+        # Seed cost accumulators (simulates incremental accumulation)
+        energy_calculator._daily_cost_accumulators[f"cost_import_{today}"] = 3.0   # 10 kWh * 0.30
+        energy_calculator._daily_cost_accumulators[f"cost_export_{today}"] = 0.16  # 2 kWh * 0.08
+
         energy = EnergyTotals()
-        energy.daily_grid_import = 10.0  # 10 kWh imported
-        energy.daily_grid_export = 2.0  # 2 kWh exported
-        energy.daily_home = 8.0
-        energy.daily_ev = 4.0
+        energy.daily_grid_import = 10.0
+        energy.daily_grid_export = 2.0
 
         costs = energy_calculator.calculate_costs(energy)
 
-        # Costs = 10 * 0.30 = 3.00
         assert costs.daily_costs == pytest.approx(3.0, abs=0.01)
-
-        # Export revenue = 2 * 0.08 = 0.16
         assert costs.daily_export_revenue == pytest.approx(0.16, abs=0.01)
-
-        # Net cost = 3.00 - 0.16 = 2.84
         assert costs.daily_net_cost == pytest.approx(2.84, abs=0.01)
 
     def test_savings_calculation(self, energy_calculator):
-        """Test savings calculation (self-consumption value)."""
-        energy = EnergyTotals()
-        energy.daily_grid_import = 5.0  # 5 kWh from grid
-        energy.daily_home = 10.0  # 10 kWh total home
-        energy.daily_ev = 2.0  # 2 kWh EV
+        """Test savings calculation from cost accumulators."""
+        from datetime import date
+        today = date.today()
+        # Seed cost accumulators
+        energy_calculator._daily_cost_accumulators[f"cost_savings_{today}"] = 2.10  # 7 kWh * 0.30
 
+        energy = EnergyTotals()
         costs = energy_calculator.calculate_costs(energy)
 
-        # Total consumption = 10 + 2 = 12 kWh
-        # Self-consumed = 12 - 5 = 7 kWh
-        # Savings = 7 * 0.30 = 2.10
         assert costs.daily_savings == pytest.approx(2.10, abs=0.01)
 
 
