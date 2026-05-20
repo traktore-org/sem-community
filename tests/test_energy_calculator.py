@@ -220,41 +220,187 @@ def test_restore_state_none(calculator):
 
 
 def test_calculate_costs(calculator):
-    """Test cost calculation from energy totals."""
-    energy = EnergyTotals(
-        daily_solar=10.0,
-        daily_home=8.0,
-        daily_ev=2.0,
-        daily_grid_import=3.0,
-        daily_grid_export=2.0,
-        daily_battery_discharge=1.5,
-        monthly_solar=200.0,
-        monthly_home=150.0,
-        monthly_grid_import=60.0,
-        monthly_grid_export=40.0,
-        yearly_solar=2000.0,
-        yearly_home=1500.0,
-        yearly_grid_import=600.0,
-        yearly_grid_export=400.0,
-        yearly_ev=100.0,
-        yearly_battery_charge=300.0,
-        yearly_battery_discharge=280.0,
-    )
+    """Test cost calculation via incremental accumulation path."""
+    from datetime import date
+    today = date(2026, 5, 19)
+    month_key = "2026_5"
+    year_key = "2026"
 
+    # Seed cost accumulators (simulating accumulated cost increments at rate=0.30/0.08)
+    calculator._daily_cost_accumulators[f"cost_import_{today}"] = 0.90       # 3.0 kWh * 0.30
+    calculator._daily_cost_accumulators[f"cost_export_{today}"] = 0.16       # 2.0 kWh * 0.08
+    calculator._daily_cost_accumulators[f"cost_savings_{today}"] = 2.10      # 7.0 kWh * 0.30
+    calculator._daily_cost_accumulators[f"cost_batt_savings_{today}"] = 0.45 # 1.5 kWh * 0.30
+    calculator._monthly_cost_accumulators[f"cost_import_{month_key}"] = 18.0
+    calculator._monthly_cost_accumulators[f"cost_export_{month_key}"] = 3.2
+    calculator._monthly_cost_accumulators[f"cost_savings_{month_key}"] = 27.0
+    calculator._yearly_cost_accumulators[f"cost_import_{year_key}"] = 180.0
+    calculator._yearly_cost_accumulators[f"cost_export_{year_key}"] = 32.0
+    calculator._yearly_cost_accumulators[f"cost_savings_{year_key}"] = 270.0
+    calculator._yearly_cost_accumulators[f"cost_batt_savings_{year_key}"] = 84.0
+
+    energy = EnergyTotals(
+        daily_solar=10.0, daily_home=8.0, daily_ev=2.0,
+        daily_grid_import=3.0, daily_grid_export=2.0, daily_battery_discharge=1.5,
+    )
     costs = calculator.calculate_costs(energy)
 
-    # daily_costs = 3.0 * 0.30 = 0.90
     assert costs.daily_costs == pytest.approx(0.90)
-    # daily_export_revenue = 2.0 * 0.08 = 0.16
     assert costs.daily_export_revenue == pytest.approx(0.16)
-    # daily_net_cost = 0.90 - 0.16 = 0.74
     assert costs.daily_net_cost == pytest.approx(0.74)
-    # daily_savings = (8+2 - 3) * 0.30 = 2.10
     assert costs.daily_savings == pytest.approx(2.10)
-    # daily_battery_savings = 1.5 * 0.30 = 0.45
     assert costs.daily_battery_savings == pytest.approx(0.45)
-    # monthly
-    assert costs.monthly_costs == pytest.approx(60.0 * 0.30)
+    assert costs.monthly_costs == pytest.approx(18.0)
+    assert costs.yearly_battery_savings == pytest.approx(84.0)
+
+
+@patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
+def test_dynamic_tariff_cost_accumulation(mock_dt, calculator):
+    """Costs accumulate at rate active during each interval, not recalculated (#218)."""
+    from datetime import date, timedelta
+    now = datetime(2026, 5, 19, 12, 0, 0)
+    mock_dt.now.return_value = now
+    mock_dt.utcnow.return_value = now
+
+    # Phase 1: 100 cycles at 5000W grid import, rate=0.20
+    calculator._import_rate = 0.20
+    calculator._export_rate = 0.08
+    for i in range(100):
+        t = now + timedelta(seconds=30 * i)
+        mock_dt.now.return_value = t
+        power = _make_power(grid_import=5000, home=5000)
+        calculator.calculate_energy(power)
+
+    energy = EnergyTotals()  # placeholder, not used for cost
+    costs1 = calculator.calculate_costs(energy)
+    cost_after_phase1 = costs1.daily_costs
+
+    # Phase 2: Change rate to 0.60, 100 more cycles at 5000W
+    calculator._import_rate = 0.60
+    for i in range(100, 200):
+        t = now + timedelta(seconds=30 * i)
+        mock_dt.now.return_value = t
+        power = _make_power(grid_import=5000, home=5000)
+        calculator.calculate_energy(power)
+
+    costs2 = calculator.calculate_costs(energy)
+
+    # Each cycle: 5000W * (30/3600)h / 1000 = 0.04167 kWh
+    per_cycle_kwh = 5000 * (30 / 3600) / 1000
+    expected_phase1 = 100 * per_cycle_kwh * 0.20  # ~0.833
+    expected_phase2 = 100 * per_cycle_kwh * 0.60  # ~2.500
+    expected_total = expected_phase1 + expected_phase2  # ~3.333
+
+    # BUG would give: 200 * per_cycle_kwh * 0.60 = ~5.000 (all at new rate)
+    bug_total = 200 * per_cycle_kwh * 0.60
+
+    assert costs2.daily_costs == pytest.approx(expected_total, abs=0.05)
+    # The bug total is significantly higher — verify we're not getting that
+    assert abs(costs2.daily_costs - bug_total) > 0.5
+    # Verify phase 1 cost was preserved
+    assert cost_after_phase1 == pytest.approx(expected_phase1, abs=0.05)
+
+
+@patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
+def test_static_tariff_backward_compatible(mock_dt, calculator):
+    """With a fixed rate, accumulated cost equals energy × rate."""
+    now = datetime(2026, 5, 19, 12, 0, 0)
+    mock_dt.now.return_value = now
+    mock_dt.utcnow.return_value = now
+
+    calculator._import_rate = 0.30
+    calculator._export_rate = 0.08
+
+    # Run 20 cycles: 2000W import, 500W export
+    for i in range(20):
+        t = now + timedelta(seconds=30 * i)
+        mock_dt.now.return_value = t
+        power = _make_power(grid_import=2000, grid_export=500, home=1500)
+        calculator.calculate_energy(power)
+
+    energy = EnergyTotals()
+    costs = calculator.calculate_costs(energy)
+
+    per_cycle_kwh = 30 / 3600 / 1000  # seconds to hours, W to kW
+    total_import_kwh = 20 * 2000 * per_cycle_kwh
+    total_export_kwh = 20 * 500 * per_cycle_kwh
+
+    assert costs.daily_costs == pytest.approx(total_import_kwh * 0.30, abs=0.02)
+    assert costs.daily_export_revenue == pytest.approx(total_export_kwh * 0.08, abs=0.01)
+
+
+def test_cost_persistence_roundtrip(calculator):
+    """Cost accumulators survive get_state/restore_state."""
+    from datetime import date
+    today = date(2026, 5, 19)
+
+    calculator._daily_cost_accumulators[f"cost_import_{today}"] = 1.23
+    calculator._monthly_cost_accumulators["cost_import_2026_5"] = 45.67
+    calculator._yearly_cost_accumulators["cost_import_2026"] = 890.12
+
+    state = calculator.get_state()
+    new_calc = EnergyCalculator(calculator.config, calculator._time_manager)
+    new_calc.restore_state(state)
+
+    assert new_calc._daily_cost_accumulators[f"cost_import_{today}"] == 1.23
+    assert new_calc._monthly_cost_accumulators["cost_import_2026_5"] == 45.67
+    assert new_calc._yearly_cost_accumulators["cost_import_2026"] == 890.12
+
+
+@patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
+def test_tariff_change_midday_multiple(mock_dt, calculator):
+    """Multiple rate changes throughout the day, each segment costed correctly."""
+    now = datetime(2026, 5, 19, 8, 0, 0)
+    mock_dt.now.return_value = now
+    mock_dt.utcnow.return_value = now
+
+    rates = [(0.20, 5), (0.40, 5), (0.10, 5)]  # (rate, num_cycles)
+    expected_cost = 0.0
+    per_cycle_kwh = 1000 * (30 / 3600) / 1000
+
+    cycle = 0
+    for rate, num_cycles in rates:
+        calculator._import_rate = rate
+        for _ in range(num_cycles):
+            t = now + timedelta(seconds=30 * cycle)
+            mock_dt.now.return_value = t
+            power = _make_power(grid_import=1000, home=1000)
+            calculator.calculate_energy(power)
+            cycle += 1
+        expected_cost += num_cycles * per_cycle_kwh * rate
+
+    costs = calculator.calculate_costs(EnergyTotals())
+    assert costs.daily_costs == pytest.approx(expected_cost, abs=0.02)
+
+
+@patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
+def test_export_revenue_dynamic(mock_dt, calculator):
+    """Export revenue accumulates correctly with changing export rates."""
+    now = datetime(2026, 5, 19, 12, 0, 0)
+    mock_dt.now.return_value = now
+    mock_dt.utcnow.return_value = now
+
+    per_cycle_kwh = 500 * (30 / 3600) / 1000
+
+    # 5 cycles at export rate 0.08
+    calculator._export_rate = 0.08
+    for i in range(5):
+        t = now + timedelta(seconds=30 * i)
+        mock_dt.now.return_value = t
+        power = _make_power(solar=500, grid_export=500)
+        calculator.calculate_energy(power)
+
+    # 5 cycles at export rate 0.15
+    calculator._export_rate = 0.15
+    for i in range(5, 10):
+        t = now + timedelta(seconds=30 * i)
+        mock_dt.now.return_value = t
+        power = _make_power(solar=500, grid_export=500)
+        calculator.calculate_energy(power)
+
+    costs = calculator.calculate_costs(EnergyTotals())
+    expected = 5 * per_cycle_kwh * 0.08 + 5 * per_cycle_kwh * 0.15
+    assert costs.daily_export_revenue == pytest.approx(expected, abs=0.01)
 
 
 @patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
