@@ -39,12 +39,14 @@
         "data": {
           "battery_capacity_kwh": "Thuis Batterij Capaciteit (kWh)",
           "target_peak_limit": "Piek Vermogen Limiet (kW)",
-          "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)"
+          "generate_dashboard_on_install": "Genereer het SEM dashboard nu (HA wordt geherstart)",
+          "diagram_style": "Systeemdiagram stijl"
         },
         "data_description": {
           "battery_capacity_kwh": "Totale capaciteit van je thuis batterij in kWh. Wordt gebruikt om voorspellingen te doen ten behoeve van de laad en ontlaad strategie.",
           "target_peak_limit": "Maximaal aantal kW je maximaal mag gebruiken op je energie aansluiting voordat SEM automatisch apparaten gaat uitschakelen.",
-          "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen."
+          "generate_dashboard_on_install": "Als je dit aanzet, zal SEM automatisch je dashboard configureren en meteen na deze stap zal Home Assistant opnieuw opstarten. Je kan dit ook handmatig forceren door de service solar_energy_management.generate_dashboard aan te roepen.",
+          "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren)."
         }
       },
       "reconfigure": {
@@ -137,7 +139,8 @@
           "battery_discharge_control_entity": "Batterij ontladingsregel-entiteit (optioneel)",
           "hot_water_solar_target": "Doeltemperatuur zonneboiler (°C)",
           "legionella_target_temp": "Legionella desinfectie doeltemperatuur (°C)",
-          "legionella_interval_hours": "Maximaal aantal uren tussen desinfectiecycli"
+          "legionella_interval_hours": "Maximaal aantal uren tussen desinfectiecycli",
+          "diagram_style": "Systeemdiagram stijl"
         },
         "data_description": {
           "update_interval": "Hoe vaak de coördinator sensoren uitleest en hardware aanstuurt. 10 s geeft de meest nauwkeurige energie-integratie; waarden boven 30 s zullen energie onderschatten. Bereik 10–60 s.",
@@ -161,7 +164,8 @@
           "demand_charge_rate": "Maandelijkse capaciteitstarief per kW piekvermogen (CHF/kW/maand). Zet op 0 als dit niet van toepassing is.",
           "observer_mode": "Indien AAN, monitort en berekent SEM alles, maar stuurt geen commando's naar hardware. Te gebruiken in een test-/acceptatieomgeving.",
           "smart_night_charging": "Indien AAN, slaat SEM nachtelijk laden slim over of vermindert dit op basis van geschatte EV SOC, zonneverwachting, temperatuurgecorrigeerde verbruiksvoorspelling en geleerde rijpatronen.",
-          "battery_discharge_control_entity": "Nummer-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig."
+          "battery_discharge_control_entity": "Nummer-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig.",
+          "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren)."
         }
       },
       "settings_ev": {
@@ -277,6 +281,9 @@
       },
       "grid_power": {
         "name": "Netvermogen"
+      },
+      "grid_active_power": {
+        "name": "Grid Active Power"
       },
       "grid_import_power": {
         "name": "Netimport"

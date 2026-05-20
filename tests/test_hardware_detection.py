@@ -484,8 +484,9 @@ class _FakeEnergyDashboardConfig:
             "solar_power",
             "solar_energy",
             "grid_import_power",
+            "solar_power_list",
         ):
-            setattr(self, key, kwargs.get(key))
+            setattr(self, key, kwargs.get(key, [] if key == "solar_power_list" else None))
 
 
 class TestDiscoverInverterFromRegistry:
@@ -847,3 +848,371 @@ class TestDiscoverInverterFromRegistry:
         with self._patch_registry(entries):
             result = discover_inverter_from_registry(hass, cfg)
         assert result == "number.sungrow_battery_max_discharge_power"
+
+
+# ============================================================
+# discover_pv_strings_from_registry — PV string / MPPT detection
+# ============================================================
+
+
+class TestDiscoverPvStringsFromRegistry:
+    """Test discover_pv_strings_from_registry()."""
+
+    def _patch_registry(self, entries):
+        from custom_components.solar_energy_management import hardware_detection
+
+        fake_reg = _build_fake_registry(entries)
+        return patch.object(
+            hardware_detection.entity_registry,
+            "async_get",
+            return_value=fake_reg,
+        )
+
+    def test_returns_empty_when_config_is_none(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_pv_strings_from_registry,
+        )
+
+        assert discover_pv_strings_from_registry(MagicMock(), None) == {}
+
+    def test_pv_string_huawei(self):
+        """Huawei pv1_power / pv2_power pattern."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_pv_strings_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.inverter_input_power", "huawei_solar"),
+            _make_registry_entry("sensor.inverter_pv1_power", "huawei_solar"),
+            _make_registry_entry("sensor.inverter_pv2_power", "huawei_solar"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.inverter_input_power")
+
+        with self._patch_registry(entries):
+            result = discover_pv_strings_from_registry(hass, cfg)
+
+        assert result == {
+            "pv1_power": "sensor.inverter_pv1_power",
+            "pv2_power": "sensor.inverter_pv2_power",
+        }
+
+    def test_pv_string_sungrow_mppt(self):
+        """Sungrow mppt1_power / mppt2_power pattern."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_pv_strings_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.sungrow_total_dc_power", "sungrow"),
+            _make_registry_entry("sensor.sungrow_mppt1_power", "sungrow"),
+            _make_registry_entry("sensor.sungrow_mppt2_power", "sungrow"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.sungrow_total_dc_power")
+
+        with self._patch_registry(entries):
+            result = discover_pv_strings_from_registry(hass, cfg)
+
+        assert result == {
+            "pv1_power": "sensor.sungrow_mppt1_power",
+            "pv2_power": "sensor.sungrow_mppt2_power",
+        }
+
+    def test_pv_string_fronius_dc(self):
+        """Fronius / SolarEdge dc_power_1 / dc_power_2 pattern."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_pv_strings_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.fronius_power_ac", "fronius"),
+            _make_registry_entry("sensor.fronius_dc_power_1", "fronius"),
+            _make_registry_entry("sensor.fronius_dc_power_2", "fronius"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.fronius_power_ac")
+
+        with self._patch_registry(entries):
+            result = discover_pv_strings_from_registry(hass, cfg)
+
+        assert result == {
+            "pv1_power": "sensor.fronius_dc_power_1",
+            "pv2_power": "sensor.fronius_dc_power_2",
+        }
+
+    def test_pv_string_none_found(self):
+        """No PV string entities — returns empty dict."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_pv_strings_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.enphase_current_power", "enphase_envoy"),
+            _make_registry_entry("sensor.enphase_today_energy", "enphase_envoy"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.enphase_current_power")
+
+        with self._patch_registry(entries):
+            result = discover_pv_strings_from_registry(hass, cfg)
+
+        assert result == {}
+
+    def test_pv_multi_inverter_fallback(self):
+        """No strings found but 2 inverters in solar_power_list → uses totals."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_pv_strings_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.inverter_1_power", "huawei_solar"),
+            _make_registry_entry("sensor.inverter_2_power", "huawei_solar"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            solar_power="sensor.inverter_1_power",
+            solar_power_list=[
+                "sensor.inverter_1_power",
+                "sensor.inverter_2_power",
+            ],
+        )
+
+        with self._patch_registry(entries):
+            result = discover_pv_strings_from_registry(hass, cfg)
+
+        assert result == {
+            "pv1_power": "sensor.inverter_1_power",
+            "pv2_power": "sensor.inverter_2_power",
+        }
+
+    def test_skips_disabled_entities(self):
+        """Disabled PV string entities should not be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_pv_strings_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.inverter_input_power", "huawei_solar"),
+            _make_registry_entry("sensor.inverter_pv1_power", "huawei_solar", disabled=True),
+            _make_registry_entry("sensor.inverter_pv2_power", "huawei_solar"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.inverter_input_power")
+
+        with self._patch_registry(entries):
+            result = discover_pv_strings_from_registry(hass, cfg)
+
+        assert result == {"pv2_power": "sensor.inverter_pv2_power"}
+
+    def test_max_4_strings(self):
+        """Only first 4 PV strings should be returned."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_pv_strings_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.goodwe_pv_total", "goodwe"),
+        ] + [
+            _make_registry_entry(f"sensor.goodwe_pv{i}_power", "goodwe")
+            for i in range(1, 6)  # pv1 through pv5
+        ]
+        cfg = _FakeEnergyDashboardConfig(solar_power="sensor.goodwe_pv_total")
+
+        with self._patch_registry(entries):
+            result = discover_pv_strings_from_registry(hass, cfg)
+
+        assert len(result) == 4
+        assert "pv5_power" not in result
+
+
+# ============================================================
+# discover_battery_details_from_registry — temperature, voltage, etc.
+# ============================================================
+
+
+class TestDiscoverBatteryDetailsFromRegistry:
+    """Test discover_battery_details_from_registry()."""
+
+    def _patch_registry(self, entries):
+        from custom_components.solar_energy_management import hardware_detection
+
+        fake_reg = _build_fake_registry(entries)
+        return patch.object(
+            hardware_detection.entity_registry,
+            "async_get",
+            return_value=fake_reg,
+        )
+
+    def test_returns_empty_when_config_is_none(self):
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        assert discover_battery_details_from_registry(MagicMock(), None) == {}
+
+    def test_huawei_battery_temperature(self):
+        """Huawei battery temperature and inverter temperature."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.battery_1_lade_entladeleistung", "huawei_solar"),
+            _make_registry_entry("sensor.battery_1_temperature", "huawei_solar"),
+            _make_registry_entry("sensor.inverter_internal_temperature", "huawei_solar"),
+            _make_registry_entry("sensor.battery_1_voltage", "huawei_solar"),
+            _make_registry_entry("sensor.battery_1_current", "huawei_solar"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.battery_1_lade_entladeleistung"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert "battery_temp1" in result
+        assert result["battery_temp1"] == "sensor.battery_1_temperature"
+        assert result["inv_temp"] == "sensor.inverter_internal_temperature"
+        assert result["battery_voltage"] == "sensor.battery_1_voltage"
+        assert result["battery_current"] == "sensor.battery_1_current"
+
+    def test_jk_bms_cell_voltages(self):
+        """JK BMS min/max cell voltage and MOS temperature."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.jk_bms_battery_power", "jk_bms"),
+            _make_registry_entry("sensor.jk_bms_min_cell_voltage", "jk_bms"),
+            _make_registry_entry("sensor.jk_bms_max_cell_voltage", "jk_bms"),
+            _make_registry_entry("sensor.jk_bms_mos_temperature", "jk_bms"),
+            _make_registry_entry("sensor.jk_bms_battery_temperature_1", "jk_bms"),
+            _make_registry_entry("sensor.jk_bms_battery_temperature_2", "jk_bms"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.jk_bms_battery_power"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result["battery_min_cell"] == "sensor.jk_bms_min_cell_voltage"
+        assert result["battery_max_cell"] == "sensor.jk_bms_max_cell_voltage"
+        assert result["battery_mos"] == "sensor.jk_bms_mos_temperature"
+        assert result["battery_temp1"] == "sensor.jk_bms_battery_temperature_1"
+        assert result["battery_temp2"] == "sensor.jk_bms_battery_temperature_2"
+
+    def test_no_details_found(self):
+        """Integration with no matching detail sensors returns empty dict."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.generic_solar_power", "generic_inverter"),
+            _make_registry_entry("sensor.generic_daily_yield", "generic_inverter"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            solar_power="sensor.generic_solar_power"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result == {}
+
+    def test_skips_disabled_entities(self):
+        """Disabled detail sensors should not be detected."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.battery_power", "huawei_solar"),
+            _make_registry_entry("sensor.inverter_internal_temperature", "huawei_solar", disabled=True),
+            _make_registry_entry("sensor.battery_1_temperature", "huawei_solar"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert "inv_temp" not in result
+        assert "battery_temp1" in result
+
+    def test_huawei_dual_battery_temperatures(self):
+        """Huawei with 2 battery modules — battery_1 and battery_2 temps must be separate."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.battery_1_lade_entladeleistung", "huawei_solar"),
+            _make_registry_entry("sensor.battery_1_temperature", "huawei_solar"),
+            _make_registry_entry("sensor.battery_2_temperature", "huawei_solar"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.battery_1_lade_entladeleistung"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result["battery_temp1"] == "sensor.battery_1_temperature"
+        assert result["battery_temp2"] == "sensor.battery_2_temperature"
+
+    def test_battery_voltage_excludes_cell_voltage(self):
+        """battery_voltage must NOT match cell voltage sensors."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.jk_bms_battery_power", "jk_bms"),
+            _make_registry_entry("sensor.jk_bms_battery_voltage", "jk_bms"),
+            _make_registry_entry("sensor.jk_bms_min_cell_voltage", "jk_bms"),
+            _make_registry_entry("sensor.jk_bms_max_cell_voltage", "jk_bms"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(battery_power="sensor.jk_bms_battery_power")
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result["battery_voltage"] == "sensor.jk_bms_battery_voltage"
+        assert result["battery_min_cell"] == "sensor.jk_bms_min_cell_voltage"
+        assert result["battery_max_cell"] == "sensor.jk_bms_max_cell_voltage"
+
+    def test_huawei_german_locale(self):
+        """Huawei DE locale: busspannung, busstrom, interne_temperatur."""
+        from custom_components.solar_energy_management.hardware_detection import (
+            discover_battery_details_from_registry,
+        )
+
+        hass = MagicMock()
+        entries = [
+            _make_registry_entry("sensor.batteries_lade_entladeleistung", "huawei_solar"),
+            _make_registry_entry("sensor.batteries_busspannung", "huawei_solar"),
+            _make_registry_entry("sensor.batteries_busstrom", "huawei_solar"),
+            _make_registry_entry("sensor.inverter_interne_temperatur", "huawei_solar"),
+            _make_registry_entry("sensor.battery_1_temperatur", "huawei_solar"),
+        ]
+        cfg = _FakeEnergyDashboardConfig(
+            battery_power="sensor.batteries_lade_entladeleistung"
+        )
+
+        with self._patch_registry(entries):
+            result = discover_battery_details_from_registry(hass, cfg)
+
+        assert result["battery_voltage"] == "sensor.batteries_busspannung"
+        assert result["battery_current"] == "sensor.batteries_busstrom"
+        assert result["inv_temp"] == "sensor.inverter_interne_temperatur"
+        assert result["battery_temp1"] == "sensor.battery_1_temperatur"

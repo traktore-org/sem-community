@@ -175,12 +175,21 @@ class SEMLoadPriorityCard extends SEMBaseCard {
         this._initSortable();
     }
 
+    _fmtPower(watts) {
+        if (watts < 100) return `${Math.round(watts)} W`;
+        return `${(watts / 1000).toFixed(1)} kW`;
+    }
+
     _renderDevice(device, priority) {
-        const onOff = device.isOn;
+        // Power-aware ON detection: if switch says OFF but power > 10W, device is clearly on
+        const onOff = device.isOn || device.power > 0.01;
         const isChild = device.dependsOn.length > 0;
         // Calculate indent depth for chain dependencies (A→B→C)
         const depth = this._getDependencyDepth(device);
         const indent = depth > 0 ? `margin-left:${depth * 24}px;border-left:2px solid rgba(255,152,0,${0.3 + depth * 0.1});` : '';
+        const onLabel = this._t('on');
+        const offLabel = this._t('off');
+        const configLabel = device.isControllable ? this._t('configure_device') : this._t('configure');
         return `
         <div class="device${isChild ? ' is-child' : ''}" data-id="${device.id}" style="${indent}">
             <div class="drag-handle" title="${isChild ? this._t('locked_under_parent') : this._t('drag_to_reorder')}" style="${isChild ? 'opacity:0.3;cursor:default' : ''}">${isChild ? '·' : '≡'}</div>
@@ -190,17 +199,16 @@ class SEMLoadPriorityCard extends SEMBaseCard {
                         ${isChild ? '<span style="color:#ff9800;font-size:12px;margin-right:4px">↳</span>' : ''}
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
-                        ${device.hasManualMapping ? '<ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px;color:#ffc107;opacity:0.6"></ha-icon>' : ''}
-                        ${!device.isControllable ? `<span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}"><ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px"></ha-icon> ${this._t('configure')}</span>` : ''}
+                        <span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}"><ha-icon icon="mdi:${device.hasManualMapping ? 'wrench' : 'cog'}" style="--mdc-icon-size:14px"></ha-icon> ${configLabel}</span>
                     </div>
-                    <div class="device-power" data-field="power-${device.id}">${onOff ? device.power.toFixed(1) + ' kW' : (device.isShed ? this._t('shed_label') : 'OFF')}</div>
+                    <div class="device-power" data-field="power-${device.id}">${onOff ? this._fmtPower(device.power * 1000) : (device.isShed ? this._t('shed_label') : offLabel)}</div>
                 </div>
                 ${device.blockedBy ? `<div class="dependency-blocked" style="font-size:11px;color:#ff9800;padding:2px 0 0 28px">⏳ Waiting for: ${device.blockedBy}</div>` : ''}
                 ${device.dependsOn.length ? `<div class="dependency-info" style="font-size:11px;opacity:0.55;padding:0 0 0 28px">↳ ${this._t('requires')}: ${device.dependsOn.join(', ')}</div>` : ''}
                 ${device.isShed && device.shedReason ? `<div class="shed-reason" style="font-size:11px;color:#f44336;padding:2px 0 0 28px">${device.shedReason === 'emergency' ? this._t('shed_emergency') : this._t('shed_peak')}</div>` : ''}
                 <div class="device-bottom">
                     <div class="status-dot ${onOff ? 'on' : (device.isShed ? 'shed' : '')}" data-field="status-${device.id}"></div>
-                    <span class="dim" data-field="onoff-${device.id}">${onOff ? 'ON' : (device.isShed ? this._t('shed_label') : 'OFF')}</span>
+                    <span class="dim" data-field="onoff-${device.id}">${onOff ? onLabel : (device.isShed ? this._t('shed_label') : offLabel)}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
                     <label class="toggle-label" title="${this._t('mode_tooltip')}"><span class="dim">${this._t('mode')}</span>
@@ -267,13 +275,13 @@ class SEMLoadPriorityCard extends SEMBaseCard {
 
         // Update per-device values
         this.devices.forEach((d, i) => {
-            const onOff = d.isOn;
+            const onOff = d.isOn || d.power > 0.01;
             const pwEl = root.querySelector(`[data-field="power-${d.id}"]`);
-            if (pwEl) pwEl.textContent = onOff ? d.power.toFixed(1) + ' kW' : 'OFF';
+            if (pwEl) pwEl.textContent = onOff ? this._fmtPower(d.power * 1000) : this._t('off');
             const stEl = root.querySelector(`[data-field="status-${d.id}"]`);
             if (stEl) { stEl.classList.toggle('on', onOff); }
             const ooEl = root.querySelector(`[data-field="onoff-${d.id}"]`);
-            if (ooEl) ooEl.textContent = onOff ? 'ON' : 'OFF';
+            if (ooEl) ooEl.textContent = onOff ? this._t('on') : this._t('off');
             const priEl = root.querySelector(`[data-field="pri-${d.id}"]`);
             if (priEl) priEl.textContent = i + 1;
         });

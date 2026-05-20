@@ -1231,7 +1231,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
             f"{static_path}/card/sem-shared.js",
             f"{static_path}/card/sem-reactive-base.js",
             f"{static_path}/card/sem-load-priority-card.js",
-            f"{static_path}/card/sem-system-diagram-card.js",
+            # sem-system-diagram-card.js is NOT in the Lit bundle — keep it registered
             f"{static_path}/card/sem-period-selector-card.js",
             f"{static_path}/card/sem-chart-card.js",
             f"{static_path}/card/sem-solar-summary-card.js",
@@ -1285,6 +1285,19 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     bundle_item["id"], {"res_type": "module", "url": cards_bundle_url}
                 )
                 _LOGGER.info("Updated SEM Lit bundle: %s → %s", bundle_item["url"], cards_bundle_url)
+
+            # Register standalone diagram card (vanilla JS, not in Lit bundle)
+            diagram_base = f"{static_path}/card/sem-system-diagram-card.js"
+            diagram_url = f"{diagram_base}?v={version}"
+            diagram_item = existing_by_base.get(diagram_base)
+            if diagram_item is None:
+                await resources.async_create_item({"res_type": "module", "url": diagram_url})
+                _LOGGER.info("Registered SEM diagram card: %s", diagram_url)
+            elif diagram_item["url"] != diagram_url:
+                await resources.async_update_item(
+                    diagram_item["id"], {"res_type": "module", "url": diagram_url}
+                )
+                _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
         except Exception as e:
             _LOGGER.warning("Could not register SEM Lovelace resources: %s", e)
 

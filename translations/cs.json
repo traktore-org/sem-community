@@ -39,12 +39,14 @@
         "data": {
           "battery_capacity_kwh": "Home Battery Capacity (kWh)",
           "target_peak_limit": "Peak Power Limit (kW)",
-          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)"
+          "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
+          "diagram_style": "Styl systémového diagramu"
         },
         "data_description": {
           "battery_capacity_kwh": "Total usable capacity of your home battery (NOT the EV) in kWh. Used by the forecast-driven charging strategy to estimate how much battery can bridge a solar deficit. Check your inverter spec.",
           "target_peak_limit": "Maximum kW your grid contract allows before SEM begins load-shedding. For demand-based tariffs typically 3–5 kW; otherwise set to your fuse rating divided by 4 to leave headroom.",
-          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service."
+          "generate_dashboard_on_install": "When enabled, SEM creates the Lovelace dashboard immediately after this step finishes and then restarts Home Assistant ~5 s later so the new dashboard becomes visible. You can always re-run it manually later via the solar_energy_management.generate_dashboard service.",
+          "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť)."
         }
       },
       "reconfigure": {
@@ -137,7 +139,8 @@
           "battery_discharge_control_entity": "Battery discharge control entity (optional)",
           "hot_water_solar_target": "Hot water solar heating target (°C)",
           "legionella_target_temp": "Legionella disinfection target (°C)",
-          "legionella_interval_hours": "Max hours between disinfection cycles"
+          "legionella_interval_hours": "Max hours between disinfection cycles",
+          "diagram_style": "Styl systémového diagramu"
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
@@ -161,7 +164,8 @@
           "demand_charge_rate": "Monthly demand charge per kW of peak (CHF/kW/month). Set to 0 if your contract has no demand charge.",
           "observer_mode": "When ON, SEM monitors and calculates everything but never sends a service call to hardware. Use on a test/staging HA mirroring a production install.",
           "smart_night_charging": "When ON, SEM intelligently skips or reduces night charging based on estimated EV SOC, solar forecast, temperature-adjusted consumption prediction, and learned driving patterns.",
-          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed."
+          "battery_discharge_control_entity": "Number entity that controls the inverter's discharge power limit (e.g. number.batteries_maximale_entladeleistung on Huawei). Auto-detected on install; override here if needed.",
+          "diagram_style": "Vyberte systémový diagram na kartě Domů. 'SEM' používá vestavěný animovaný diagram. 'K-Flow' používá kartu K-Flow HACS (nutno nainstalovat zvlášť)."
         }
       },
       "settings_ev": {
@@ -277,6 +281,9 @@
       },
       "grid_power": {
         "name": "Grid Power"
+      },
+      "grid_active_power": {
+        "name": "Grid Active Power"
       },
       "grid_import_power": {
         "name": "Grid Import"

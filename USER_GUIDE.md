@@ -53,7 +53,10 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 | `power_delta` | — | Minimum power change to trigger update (50-3000W) |
 | `current_delta` | — | Minimum current change threshold (1-10A) |
 | `soc_delta` | — | Battery SOC change sensitivity (1-20%) |
-| `daily_ev_target` | 10 kWh | Target daily EV energy from night charging (5-100 kWh) |
+| `daily_ev_target` | 10 kWh | Target daily EV energy (0-100 kWh). Used for night charging and, when `ev_limit_surplus` is on, also limits surplus charging. |
+| `ev_target_soc` | 80% | EV battery SOC target (50-100%). When a `vehicle_soc_entity` is configured, SEM calculates remaining need from SOC instead of kWh. |
+| `ev_battery_capacity_kwh` | 40 kWh | EV battery capacity for SOC→kWh conversion (10-120 kWh). |
+| `ev_limit_surplus` | off | When on, surplus charging also stops at the target (SOC or kWh). When off (default), surplus is unlimited — free solar energy is never wasted. |
 | `min_solar_power` | 500W | **Config floor** below which SEM won't even attempt to start the charger. Keep well below the **hardware minimum** of your charger (~4140 W on 3-phase, ~1380 W on 1-phase). Slider range 0–5000 W. |
 | `max_grid_import` | — | Maximum grid import power during solar charging (0-2000W) |
 | `ev_charging_mode` | `pv` | Charging mode: `pv` (solar only), `minpv` (Min+PV), `off` (disabled) |
@@ -265,8 +268,8 @@ Night charging starts automatically when night mode activates (after sunset + 10
 
 1. SEM starts the charger at 10A
 2. Each 10s cycle, SEM adjusts current (+-2A ramp, minimum 8A floor) based on peak load management
-3. SEM tracks remaining energy via the daily EV counter
-4. Charging stops when the daily EV target is reached (default 10 kWh)
+3. SEM tracks remaining need — either from the vehicle SOC sensor (if configured) or from the daily EV energy counter (kWh fallback)
+4. Charging stops when the target is reached (vehicle SOC ≥ `ev_target_soc`, or daily energy ≥ `daily_ev_target`)
 
 ### Daily target tracking
 
@@ -282,6 +285,26 @@ When `switch.sem_smart_night_charging` is ON, SEM uses the full EV Intelligence 
 - **Daily SOC decay** — accounts for ~0.5% overnight parasitic drain
 - **Safety net** — maximum 3 consecutive skips to prevent under-charging
 - **Fallback** — when EV Intelligence data is insufficient, SEM falls back to forecast-based reduction (weekday: conservative, weekend: aggressive)
+
+### SOC Target (#215)
+
+If your EV charger integration provides a vehicle battery SOC sensor, you can configure SEM to use it instead of the fixed kWh target:
+
+1. Set `vehicle_soc_entity` to your car's battery SOC sensor
+2. Set `ev_target_soc` to your desired charge limit (default: 80%)
+3. Set `ev_battery_capacity_kwh` to your car's battery size
+
+SEM will then calculate remaining charging need from the SOC gap instead of the kWh counter. This is more accurate and lets you set a percentage-based charge limit for battery longevity.
+
+**Surplus charging behavior** depends on the `ev_limit_surplus` toggle:
+
+| Setup | Night charging | Surplus charging |
+|-------|---------------|-----------------|
+| Default (toggle off) | Stops at target | Unlimited — free solar |
+| Toggle on, with SOC sensor | Stops at SOC target | Stops at SOC target |
+| Toggle on, no SOC sensor | Stops at kWh target | Stops at kWh target |
+
+All settings are per-charger — different vehicles at different chargers can have different targets and policies.
 
 ---
 

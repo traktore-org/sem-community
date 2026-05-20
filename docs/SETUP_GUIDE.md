@@ -267,7 +267,10 @@ Changes take effect within one coordinator cycle (default 10 seconds).
 
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|
-| Daily EV target (kWh) | 10 kWh | How much energy SEM tries to add to your EV overnight. The default covers roughly 50–60 km of range. Change it to match your typical daily driving distance (about 5–6 kWh per 30 km in an average EV). |
+| Daily EV target (kWh) | 10 kWh | How much energy SEM tries to add to your EV overnight. The default covers roughly 50–60 km of range. Change it to match your typical daily driving distance (about 5–6 kWh per 30 km in an average EV). When a vehicle SOC sensor is configured, SEM uses the SOC target instead. |
+| EV target SOC (%) | 80% | Desired charge level for the EV battery (50–100%). Only used when a vehicle SOC sensor is configured. Set to 80% for battery longevity, or 100% before a long trip. Per-charger configurable. |
+| EV battery capacity (kWh) | 40 kWh | Your EV's battery size (10–120 kWh). Used to convert SOC percentage to kWh remaining. Per-charger configurable. |
+| Limit surplus at target | Off | When on, surplus (solar) charging also stops at the target. When off, surplus charging is unlimited — free solar energy is never wasted. Per-charger configurable. |
 | Min solar power to start EV charging (W) | 500 W | How much surplus must appear before solar EV charging begins. The default prevents SEM from starting the charger for tiny, transient surplus spikes. Raise it if your surplus is noisy and the charger starts and stops too often. |
 | Max grid import for Min+PV mode (W) | 1380 W | In Min+PV mode the EV runs at minimum current and uses grid to fill the gap. This cap limits how much grid power is used. Lower it to keep Min+PV fully solar; raise it if you want the charger to run continuously even when solar is weak. |
 | Night charging | On | When on, SEM charges the EV from the grid overnight (during the cheap-rate window) to reach the daily target. Turn it off if you only want solar charging or manage overnight charging yourself. |
