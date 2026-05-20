@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-20T20:49:09.186181+00:00
+// Generated: 2026-05-20T21:16:00.726847+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -763,7 +763,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Reduce load immediately!",
     "Reducing non-critical loads": "Reducing non-critical loads",
     "Monitor - approaching peak limit": "Monitor - approaching peak limit",
-    "low": "low"
+    "low": "low",
+    "on": "On"
   },
   "de": {
     "charging": "Laden",
@@ -1527,7 +1528,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Last sofort reduzieren!",
     "Reducing non-critical loads": "Nicht-kritische Lasten werden reduziert",
     "Monitor - approaching peak limit": "Überwachen - Spitzenlast wird erreicht",
-    "low": "niedrig"
+    "low": "niedrig",
+    "on": "An"
   },
   "fr": {
     "charging": "En charge",
@@ -2291,7 +2293,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Réduire la charge immédiatement !",
     "Reducing non-critical loads": "Réduction des charges non critiques",
     "Monitor - approaching peak limit": "Surveiller - approche de la limite de pointe",
-    "low": "bas"
+    "low": "bas",
+    "on": "Marche"
   },
   "es": {
     "charging": "Cargando",
@@ -3055,7 +3058,8 @@ const _semTranslations = {
     "Reduce load immediately!": "¡Reducir carga inmediatamente!",
     "Reducing non-critical loads": "Reduciendo cargas no críticas",
     "Monitor - approaching peak limit": "Monitorizar - acercándose al límite máximo",
-    "low": "bajo"
+    "low": "bajo",
+    "on": "Enc."
   },
   "it": {
     "charging": "In carica",
@@ -3819,7 +3823,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Ridurre il carico immediatamente!",
     "Reducing non-critical loads": "Riduzione carichi non critici",
     "Monitor - approaching peak limit": "Monitorare - avvicinamento al limite di picco",
-    "low": "basso"
+    "low": "basso",
+    "on": "Acc."
   },
   "nl": {
     "charging": "Laden",
@@ -4583,7 +4588,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Verminder belasting onmiddellijk!",
     "Reducing non-critical loads": "Niet-kritieke belasting wordt verminderd",
     "Monitor - approaching peak limit": "Monitor - pieklimiet wordt benaderd",
-    "low": "laag"
+    "low": "laag",
+    "on": "Aan"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5347,7 +5353,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Snižte zátěž okamžitě!",
     "Reducing non-critical loads": "Snižování nekritické zátěže",
     "Monitor - approaching peak limit": "Sledovat - blíží se špičkový limit",
-    "low": "nízký"
+    "low": "nízký",
+    "on": "Zap."
   },
   "da": {
     "charging": "Oplader",
@@ -6111,7 +6118,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Reducer belastningen straks!",
     "Reducing non-critical loads": "Reducerer ikke-kritiske belastninger",
     "Monitor - approaching peak limit": "Overvåg - nærmer sig spidsgrænsen",
-    "low": "lav"
+    "low": "lav",
+    "on": "Til"
   },
   "fi": {
     "charging": "Lataus",
@@ -6875,7 +6883,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Vähennä kuormaa välittömästi!",
     "Reducing non-critical loads": "Ei-kriittistä kuormaa vähennetään",
     "Monitor - approaching peak limit": "Seuraa - lähestytään huippurajaa",
-    "low": "matala"
+    "low": "matala",
+    "on": "Pääl."
   },
   "hu": {
     "charging": "Töltés",
@@ -7639,7 +7648,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Csökkentse a terhelést azonnal!",
     "Reducing non-critical loads": "Nem kritikus terhelés csökkentése",
     "Monitor - approaching peak limit": "Figyelés - közeledik a csúcshatárhoz",
-    "low": "alacsony"
+    "low": "alacsony",
+    "on": "Be"
   },
   "no": {
     "charging": "Lader",
@@ -8403,7 +8413,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Reduser belastningen umiddelbart!",
     "Reducing non-critical loads": "Reduserer ikke-kritiske belastninger",
     "Monitor - approaching peak limit": "Overvåk - nærmer seg toppgrensen",
-    "low": "lav"
+    "low": "lav",
+    "on": "På"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9167,7 +9178,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Zmniejsz obciążenie natychmiast!",
     "Reducing non-critical loads": "Redukcja obciążeń niekrytycznych",
     "Monitor - approaching peak limit": "Monitoruj - zbliżanie się do limitu szczytowego",
-    "low": "niski"
+    "low": "niski",
+    "on": "Wł."
   },
   "pt": {
     "charging": "A carregar",
@@ -9931,7 +9943,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Reduza a carga imediatamente!",
     "Reducing non-critical loads": "Reduzindo cargas não críticas",
     "Monitor - approaching peak limit": "Monitorar - aproximando-se do limite de pico",
-    "low": "baixo"
+    "low": "baixo",
+    "on": "Lig."
   },
   "ro": {
     "charging": "Încărcare",
@@ -10695,7 +10708,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Reduceți sarcina imediat!",
     "Reducing non-critical loads": "Reducerea sarcinilor necritice",
     "Monitor - approaching peak limit": "Monitorizare - apropierea limitei de vârf",
-    "low": "scăzut"
+    "low": "scăzut",
+    "on": "Porn."
   },
   "sv": {
     "charging": "Laddar",
@@ -11459,7 +11473,8 @@ const _semTranslations = {
     "Reduce load immediately!": "Minska belastningen omedelbart!",
     "Reducing non-critical loads": "Reducerar icke-kritiska belastningar",
     "Monitor - approaching peak limit": "Övervaka - närmar sig toppgränsen",
-    "low": "låg"
+    "low": "låg",
+    "on": "På"
   }
 };
 

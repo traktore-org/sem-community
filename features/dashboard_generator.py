@@ -814,8 +814,19 @@ class DashboardGenerator:
                     card.clear()
                     card.update(kflow_config)
                 elif card_type == "custom:k-flow-card":
-                    # Merge: SEM entity fields overwrite, user styling preserved
-                    card.update(kflow_config)
+                    # Smart merge: only update fields the user hasn't customized.
+                    # A field is user-customized if it has a non-empty value that
+                    # doesn't start with "sensor.sem_" (i.e. user set their own entity).
+                    for key, sem_val in kflow_config.items():
+                        existing = card.get(key)
+                        if existing is None or existing == "":
+                            card[key] = sem_val
+                        elif isinstance(existing, str) and existing.startswith("sensor.sem_"):
+                            card[key] = sem_val
+                        elif not isinstance(sem_val, str):
+                            # Non-entity field (bool, number) — always update
+                            card[key] = sem_val
+                        # else: user set a custom entity — preserve it
                 else:
                     continue
                 pv_info = f", PV strings: {list(pv_strings.keys())}" if pv_strings else ""
