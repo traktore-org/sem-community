@@ -569,6 +569,18 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     "generate_dashboard_on_install",
                     default=True,
                 ): selector.BooleanSelector(),
+                vol.Optional(
+                    "diagram_style",
+                    default="sem",
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value="sem", label="SEM (built-in)"),
+                            selector.SelectOptionDict(value="kflow", label="K-Flow (HACS)"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }),
             description_placeholders={
                 "discharge_entity": discharge_summary,
@@ -1242,6 +1254,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "battery_discharge_control_entity",
                     description={"suggested_value": current_config.get("battery_discharge_control_entity") or None},
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="number")),
+                vol.Optional(
+                    "diagram_style",
+                    default=_c("diagram_style", "sem"),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            selector.SelectOptionDict(value="sem", label="SEM (built-in)"),
+                            selector.SelectOptionDict(value="kflow", label="K-Flow (HACS)"),
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }),
             errors=errors,
         )

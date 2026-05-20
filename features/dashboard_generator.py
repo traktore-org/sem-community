@@ -675,7 +675,24 @@ class DashboardGenerator:
         Checks if K-Flow HACS card is installed, then builds a fully configured
         K-Flow card with SEM entity mappings and auto-detected PV strings.
         Falls back to keeping sem-system-diagram-card when K-Flow is absent.
+
+        Controlled by config option ``diagram_style`` (default "sem").
+        Set to "kflow" to replace the built-in SEM system diagram card with
+        K-Flow when K-Flow is installed.
         """
+        # Check config option — K-Flow only used when explicitly selected
+        from ..const import DOMAIN
+        entries = self.hass.config_entries.async_entries(DOMAIN)
+        if entries:
+            full_config = {**entries[0].data, **entries[0].options}
+            # Support legacy use_kflow_card boolean for existing installs
+            style = full_config.get("diagram_style", "sem")
+            if full_config.get("use_kflow_card", False):
+                style = "kflow"
+            if style != "kflow":
+                _LOGGER.debug("diagram_style=%s, keeping sem-system-diagram-card", style)
+                return
+
         # Check if K-Flow is installed (look for the resource in www/)
         kflow_path = os.path.join(
             self._config_dir, "www", "community", "k-flow-card",
@@ -689,7 +706,6 @@ class DashboardGenerator:
             _LOGGER.debug("K-Flow card not installed, keeping sem-system-diagram-card")
             return
 
-        from ..const import DOMAIN
         from ..hardware_detection import (
             discover_pv_strings_from_registry,
             discover_battery_details_from_registry,
