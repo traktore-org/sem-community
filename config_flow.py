@@ -575,8 +575,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
-                            selector.SelectOptionDict(value="sem", label="SEM (built-in)"),
-                            selector.SelectOptionDict(value="kflow", label="K-Flow (HACS)"),
+                            {"value": "sem", "label": "SEM (built-in)"},
+                            {"value": "kflow", "label": "K-Flow (HACS)"},
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
@@ -1260,8 +1260,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=[
-                            selector.SelectOptionDict(value="sem", label="SEM (built-in)"),
-                            selector.SelectOptionDict(value="kflow", label="K-Flow (HACS)"),
+                            {"value": "sem", "label": "SEM (built-in)"},
+                            {"value": "kflow", "label": "K-Flow (HACS)"},
                         ],
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )

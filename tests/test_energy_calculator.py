@@ -219,10 +219,12 @@ def test_restore_state_none(calculator):
     assert calculator._daily_accumulators == {}
 
 
-def test_calculate_costs(calculator):
+@patch("custom_components.solar_energy_management.coordinator.energy_calculator.dt_util")
+def test_calculate_costs(mock_dt, calculator):
     """Test cost calculation via incremental accumulation path."""
     from datetime import date
     today = date(2026, 5, 19)
+    mock_dt.now.return_value = datetime(2026, 5, 19, 14, 0, 0)
     month_key = "2026_5"
     year_key = "2026"
 
