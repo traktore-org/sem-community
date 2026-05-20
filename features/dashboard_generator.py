@@ -746,7 +746,7 @@ class DashboardGenerator:
             "grid_import_energy": "sensor.sem_daily_grid_import_energy",
             "grid_export_energy": "sensor.sem_daily_grid_export_energy",
             # Home consumption
-            "consumpt": "sensor.sem_home_consumption_power",
+            "consump": "sensor.sem_home_consumption_power",
             "today_load": "sensor.sem_daily_home_energy",
             # Section toggles (K-Flow uses underscore-prefixed names internally)
             "_show_battery": has_battery,
@@ -804,19 +804,26 @@ class DashboardGenerator:
             if field not in kflow_config:
                 kflow_config[field] = ""
 
-        # Find and replace sem-system-diagram-card
+        # Find and replace sem-system-diagram-card, or update existing K-Flow card.
+        # When updating an existing K-Flow card, preserve user customizations
+        # (colors, labels, inverter_name, etc.) and only update SEM entity mappings.
         for view in template.get("views", []):
             for card in self._iter_cards(view):
-                if isinstance(card, dict) and card.get("type") == "custom:sem-system-diagram-card":
+                card_type = card.get("type", "") if isinstance(card, dict) else ""
+                if card_type == "custom:sem-system-diagram-card":
                     card.clear()
                     card.update(kflow_config)
-                    pv_info = f", PV strings: {list(pv_strings.keys())}" if pv_strings else ""
-                    _LOGGER.info(
-                        "Replaced sem-system-diagram-card with K-Flow card"
-                        " (battery=%s, ev=%s%s)",
-                        has_battery, has_ev, pv_info,
-                    )
-                    return
+                elif card_type == "custom:k-flow-card":
+                    # Merge: SEM entity fields overwrite, user styling preserved
+                    card.update(kflow_config)
+                else:
+                    continue
+                pv_info = f", PV strings: {list(pv_strings.keys())}" if pv_strings else ""
+                _LOGGER.info(
+                    "Configured K-Flow card (battery=%s, ev=%s%s)",
+                    has_battery, has_ev, pv_info,
+                )
+                return
 
         _LOGGER.debug("sem-system-diagram-card not found in template for K-Flow replacement")
 
