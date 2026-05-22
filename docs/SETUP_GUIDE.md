@@ -352,11 +352,20 @@ must be stable for 60 seconds before a notification fires).
 | `switch.sem_observer_mode` | Toggle read-only mode without reinstalling |
 | `switch.sem_smart_night_charging` | Toggle forecast-aware night charge evaluation |
 
+### Dashboard settings
+
+| Setting | Default | What it does and when to change it |
+|---------|---------|-------------------------------------|
+| System diagram style | SEM | Choose the system diagram card on the Home tab. **SEM** uses the built-in illustrated SVG diagram with detailed component drawings, animated spark flows, time-based sun arc, and clickable nodes. **K-Flow** uses the third-party K-Flow HACS card with PV string details, cell temperatures, and BMS data. K-Flow must be installed separately via HACS. |
+| Generate dashboard | — | Recreates the SEM Lovelace dashboard. Safe to run at any time — rebuilds all tabs with current settings and language. |
+| Dashboard title | Solar Energy Management | Display name shown in the sidebar. |
+| Dashboard path | sem-dashboard | URL path (lowercase, dashes). Change if you have a naming conflict. |
+
 ### Regenerating the dashboard
 
 Run `solar_energy_management.generate_dashboard` via **Developer Tools >
-Actions** any time you change hardware or want to rebuild the dashboard after
-a language change. It is safe to run at any time.
+Actions** any time you change hardware, switch diagram style, or want to
+rebuild the dashboard after a language change. It is safe to run at any time.
 
 ---
 
