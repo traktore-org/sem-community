@@ -230,7 +230,7 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 
 | View | Description |
 |------|-------------|
-| **Home** | Animated system diagram with device nodes, solar summary card, 7-day chart, weather, smart recommendations |
+| **Home** | Illustrated system diagram with SVG component drawings, spark flow animations, sun arc, solar summary, 7-day chart, weather, smart recommendations |
 | **Energy** | Sankey diagram, self-consumption/autarky gauges, donut chart, 24h power, CO2 avoided, trees saved |
 | **Battery** | SOC radial gauge, 24h charge/discharge chart, zone configuration |
 | **EV** | Charging status, session stats, solar share gauge, lifetime totals, EV Intelligence (taper trend, virtual SOC, charge skip reasoning, battery health) |
@@ -246,6 +246,7 @@ SEM includes a built-in dashboard with 7 views and a unified glassmorphism dark 
 
 ### Dashboard Features
 - **Glassmorphism styling** — frosted glass cards with dot grid backgrounds, radial gradients, hover effects
+- **Illustrated system diagram** — sem-system-diagram-card with detailed SVG illustrations (solar panels, house, battery, grid pole, EV charger), K-Flow-inspired spark flow animations, time-based sun arc with golden sine wave particles, clickable nodes, individual device display on desktop, responsive layouts. Optional K-Flow card via `diagram_style: "kflow"` config
 - **Animated energy flow** — sem-flow-card with real-time power flows, daily energy totals, autarky gauge, config editor, tap/hold/double-tap actions
 - **Custom SEM cards** — flow card, solar summary (glow ring), weather (clock + forecast), chart card (Chart.js), period selector
 - **Drag-and-drop load priority** — reorder device shedding priorities visually
@@ -423,6 +424,20 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 ---
 
 ## Recent Improvements (v1.5.x)
+
+### v1.5.7 — Illustrated System Diagram
+- **System diagram rewrite** — detailed inline SVG illustrations replace abstract outlines; left-to-right desktop layout, vertical mobile layout
+- **Clickable diagram nodes** — tap any component to open HA more-info statistics dialog
+- **Individual device display** — top 3 devices by power consumption shown on desktop with arced connections to house
+- **SEM color scheme on flows** — pink battery charge, teal discharge, purple grid export, blue import
+- **Time-based sun position** — sun moves along arc from sunrise to sunset, moon + stars at night
+- **K-Flow option** — `diagram_style: "kflow"` config option to use K-Flow card instead
+- **Self-consumption %** added to home tab header as 4th stat
+
+### v1.5.6 — Dynamic Tariff & Load Management
+- **Dynamic tariff cost fix** (#218) — incremental cost accumulation instead of total × rate
+- **Load management UX** (#219) — translations, power formatting, HA entity icons for devices
+- **Enhanced diagnostics** — system info, source sensors, sign convention in diagnostic dump
 
 ### Per-Charger EV Enhancements (#193)
 - **Per-charger connected status** — each charger reads its own plug sensor independently (no more all-connected when one car is plugged in)

@@ -43,7 +43,7 @@ The main at-a-glance view with real-time power flows.
 | Card | Description |
 |------|-------------|
 | **Status Chips** | Solar power, battery SOC, autarky rate, EV status, optimization score |
-| **System Diagram** | Animated SVG with hub-spoke layout, glow rings, flow dots, individual device nodes |
+| **System Diagram** | Illustrated SVG with detailed component drawings (solar panels, house, battery, grid pole, EV charger), K-Flow-inspired spark flow animations, time-based sun arc, clickable nodes, individual device list (desktop) |
 | **Solar Summary** | Production metrics with animated glow ring, yield, forecast, self-use, costs, savings |
 | **7-Day Chart** | Bar chart showing daily solar, home, and grid import over the last week |
 | **Smart Recommendation** | AI-powered energy tip based on forecast, pricing, and current conditions |
@@ -175,7 +175,7 @@ These ship with the integration — no HACS installation needed:
 | Card | Purpose |
 |------|---------|
 | `sem-flow-card` | Animated SVG power flow with daily energy, autarky gauge, visual config editor, tap actions, up to 6 individual devices |
-| `sem-system-diagram-card` | Legacy animated power flow (kept for backward compatibility) |
+| `sem-system-diagram-card` | Illustrated SVG energy system diagram with detailed component drawings, animated spark flows, time-based sun arc, clickable nodes, responsive layouts |
 | `sem-solar-summary-card` | Solar production metrics with animated glow ring and forecast |
 | `sem-weather-card` | Live clock, weather conditions, colored temperature forecast bars |
 | `sem-chart-card` | Chart.js-powered charts with 6 presets (costs, savings, energy, power, battery, EV) |
@@ -183,6 +183,17 @@ These ship with the integration — no HACS installation needed:
 | `sem-load-priority-card` | Drag-and-drop device priority with real-time power display, touch support |
 
 Resource URLs include `?v={version}` for automatic cache busting.
+
+### System Diagram Style
+
+SEM includes a built-in illustrated system diagram on the Home tab. Users who prefer the K-Flow card can switch via config options:
+
+| Option | `diagram_style` value | Description |
+|--------|----------------------|-------------|
+| SEM Diagram (default) | `sem` | Illustrated SVG with solar panels, house, battery, grid pole, EV charger, animated flows, sun arc |
+| K-Flow Card | `kflow` | Third-party K-Flow card (must be installed via HACS) with PV string details, cell temps, BMS data |
+
+To switch: Settings → Integrations → SEM → Configure → set `diagram_style` to `kflow`. The dashboard will regenerate with the K-Flow card on the Home tab.
 
 ### Cards Removed in v1.2.0+ (replaced by SEM cards)
 

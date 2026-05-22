@@ -147,7 +147,7 @@ class SEMTabHeader extends SEMLitBase {
         if (!hass) return '';
         const g = (s) => hass.states[`${this._prefix}${s}`]?.state || '';
         const tab = this._tab;
-        if (tab === 'home') return [g('solar_power'), g('autarky_rate'), g('daily_solar_energy')].join(',');
+        if (tab === 'home') return [g('solar_power'), g('autarky_rate'), g('self_consumption_rate'), g('daily_solar_energy')].join(',');
         if (tab === 'energy') return [g('daily_solar_energy'), g('daily_home_energy'), g('self_consumption_rate')].join(',');
         if (tab === 'battery') return [g('battery_soc'), g('battery_power'), g('battery_health')].join(',');
         if (tab === 'ev') return [g('ev_power'), g('daily_ev_energy'), g('charging_state')].join(',');
@@ -166,7 +166,7 @@ class SEMTabHeader extends SEMLitBase {
     _getStatLabels() {
         const t = (k) => _t(k, this._hass);
         const tab = this._tab;
-        if (tab === 'home') return [t('solar'), t('autarky'), t('today')];
+        if (tab === 'home') return [t('solar'), t('autarky'), t('self_use'), t('today')];
         if (tab === 'energy') return [t('solar'), t('home'), t('self_use')];
         if (tab === 'battery') return [t('soc'), t('power'), t('health')];
         if (tab === 'ev') return [t('power'), t('today'), t('session')];
@@ -182,6 +182,7 @@ class SEMTabHeader extends SEMLitBase {
         if (tab === 'home') return [
             semFormatPower(this._getState('solar_power', 0)),
             this._getState('autarky_rate', 0).toFixed(0) + '%',
+            this._getState('self_consumption_rate', 0).toFixed(0) + '%',
             this._getState('daily_solar_energy', 0).toFixed(1) + ' kWh',
         ];
         if (tab === 'energy') return [
