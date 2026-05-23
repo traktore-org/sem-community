@@ -188,9 +188,9 @@ class ForecastTracker:
 
         # Tighten bounds: ±40% max correction (industry standard is ±10-30%)
         factor = max(0.6, min(1.4, factor))
-        # Decay toward neutral (1.0): 15% per day — prevents runaway correction
+        # Decay toward neutral (1.0): 35% per day — converges in ~5 days
         # If raw forecast is already accurate, factor naturally returns to ~1.0
-        DECAY = 0.85
+        DECAY = 0.65
         self._correction_factor = round(factor * DECAY + 1.0 * (1 - DECAY), 4)
 
     def _factor_for_conditions(
