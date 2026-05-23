@@ -567,11 +567,21 @@ class EVTaperDetector:
             _LOGGER.debug("Could not read EV history from recorder: %s", e)
             return None
 
+        # Detect sensor unit to apply correct scale factor.
+        # Some EV power sensors report in W (e.g. KEBA actual_power),
+        # others report in kW. Thresholds below assume kW, so W values need /1000.
+        entity = hass.states.get(ev_power_entity)
+        is_watts = (
+            entity is not None
+            and entity.attributes.get("unit_of_measurement", "").strip().lower() == "w"
+        )
+        scale = 0.001 if is_watts else 1.0  # convert W → kW if needed
+
         # Parse into (timestamp, power_kw) pairs
         readings = []
         for state in states:
             try:
-                val = float(state.state)
+                val = float(state.state) * scale
                 readings.append((state.last_changed, val))
             except (ValueError, TypeError):
                 continue

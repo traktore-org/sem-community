@@ -171,13 +171,17 @@ class EnergyCalculator:
         energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
 
-        # Self-consumption savings (incremental, rate-weighted for dynamic tariff accuracy)
+        # Solar self-consumption savings (incremental, rate-weighted for dynamic tariff accuracy)
+        # Only tracks savings from solar — battery discharge savings are in cost_batt_savings.
+        # Subtracting discharge_incr prevents double-counting: battery discharge is not solar.
         home_incr = (power.home_consumption_power * interval_hours) / 1000 if power.home_consumption_power >= MIN_POWER_THRESHOLD else 0.0
         ev_incr = (power.ev_power * interval_hours) / 1000 if power.ev_power >= MIN_POWER_THRESHOLD else 0.0
         import_incr = (power.grid_import_power * interval_hours) / 1000 if power.grid_import_power >= MIN_POWER_THRESHOLD else 0.0
-        savings_incr = max(0.0, (home_incr + ev_incr) - import_incr)
-        if savings_incr > 0.0:
-            self._accumulate_cost("cost_savings", today, month_key, year_key, savings_incr * self._import_rate)
+        discharge_incr = (power.battery_discharge_power * interval_hours) / 1000 if power.battery_discharge_power >= MIN_POWER_THRESHOLD else 0.0
+        # Solar self-consumed = total consumption minus what came from grid or battery discharge
+        solar_self_consumed = max(0.0, (home_incr + ev_incr) - import_incr - discharge_incr)
+        if solar_self_consumed > 0.0:
+            self._accumulate_cost("cost_savings", today, month_key, year_key, solar_self_consumed * self._import_rate)
 
         # Sanity checks — warn and cap if values exceed physical limits
         battery_capacity = self.config.get("battery_capacity_kwh", 15)
