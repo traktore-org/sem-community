@@ -146,7 +146,6 @@ The config flow has three steps. You can change any setting later via the
 
 ### Step 1: Energy Dashboard Detection
 
-<!-- TODO: screenshot images/sem_config_step1.png -->
 
 SEM scans your Energy Dashboard and auto-detects all configured sensors:
 solar production, grid import/export, battery charge/discharge, and EV charger.
@@ -161,7 +160,6 @@ solar production, grid import/export, battery charge/discharge, and EV charger.
 
 ### Step 2: EV Charger (optional)
 
-<!-- TODO: screenshot images/sem_config_step2.png -->
 
 If you have an EV charger, this step configures how SEM controls it. SEM
 auto-detects your charger from the HA entity registry — review the pre-filled
@@ -190,7 +188,6 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
 ### Step 3: Hardware and Dashboard Settings
 
-<!-- TODO: screenshot images/sem_config_step3.png -->
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -259,7 +256,6 @@ Once SEM is running, open **Settings > Devices & Services**, find the SEM
 card, and click **Configure** to adjust any setting without reinstalling.
 Changes take effect within one coordinator cycle (default 10 seconds).
 
-<!-- TODO: screenshots for each options flow page -->
 
 The options flow is organized into these pages:
 1. **EV Charger** — charger sensors and control method
