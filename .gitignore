@@ -78,6 +78,21 @@ Thumbs.db
 .claude/
 CLAUDE.md
 
+# Ruflo / Agent databases (local only, not for distribution)
+ruvector.db
+agentdb.rvf
+agentdb.rvf.lock
+.claude-flow/
+dashboard/card/ruvector.db
+dashboard/card/.claude-flow/
+
+# GStack browser data
+.gstack/
+
+# Temporary image assets (not for distribution)
+dashboard/card/sem-solar-diagram-bg*.png
+dashboard/card/sem-system-diagram-v2-card.js
+
 # Logo source assets (large files, only sized outputs in root)
 logo/
 
