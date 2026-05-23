@@ -125,7 +125,7 @@ The dashboard has 7 tabs:
 | **Costs** | Financial breakdown — savings, feed-in revenue, costs |
 | **System** | Integration health, sensor status, coordinator info |
 
-**What you should see:** Live power values on the Home tab. The animated system diagram shows energy flowing between solar, grid, battery, and home.
+**What you should see:** Live power values on the Home tab. The illustrated system diagram shows real-time energy flowing between solar panels, inverter, battery, grid, house, and EV charger with animated spark flow paths. The sun tracks its real position on the arc from sunrise to sunset, with golden energy particles flowing from sun to panels during production. Tap any component to open its HA statistics dialog.
 
 ---
 

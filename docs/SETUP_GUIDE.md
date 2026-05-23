@@ -144,69 +144,60 @@ The config flow has three steps. You can change any setting later via the
 
 ![SEM integration detail page](images/sem_integration_detail.png)
 
-### Step 1: Energy Dashboard detection
+### Step 1: Energy Dashboard Detection
 
-SEM scans your Energy Dashboard and shows a summary of what it found:
 
-- Solar production sensor(s)
-- Grid import and export sensors
-- Battery charge and discharge sensors (if present)
-- EV charger sensor (if already configured in the Energy Dashboard)
+SEM scans your Energy Dashboard and auto-detects all configured sensors:
+solar production, grid import/export, battery charge/discharge, and EV charger.
 
-Review the list. If a sensor you expect is missing, check that your Energy
-Dashboard has that sensor type assigned.
+| Field | Default | Description |
+|-------|---------|-------------|
+| **Observer mode** | Off | When ON, SEM only reads data and provides the dashboard — it will not send any commands to your hardware. Use this for testing, secondary HA instances, or monitoring-only setups. You can toggle it later via `switch.sem_observer_mode`. |
 
-**Observer mode** is the one setting on this screen. Enable it if you want
-SEM to read data and provide the dashboard without sending any commands to
-your hardware. Observer mode is useful for:
+> **Tip:** If a sensor you expect is missing from the detection summary,
+> check your Energy Dashboard (**Settings > Dashboards > Energy**) and ensure
+> that sensor type is assigned there first.
 
-- Testing SEM before giving it control
-- Running a second HA instance that should not interfere with the first
-- Households where automation control is not wanted
+### Step 2: EV Charger (optional)
 
-You can toggle observer mode at any time via `switch.sem_observer_mode`
-without reconfiguring the integration.
-
-### Step 2: EV charger (optional)
 
 If you have an EV charger, this step configures how SEM controls it. SEM
-tries to auto-detect your charger from the HA entity registry — review the
-pre-filled values and correct anything that looks wrong.
+auto-detects your charger from the HA entity registry — review the pre-filled
+values and correct anything that looks wrong.
 
-| Field | What to set |
-|-------|-------------|
-| Connected sensor | Binary sensor that is `on` when the car is plugged in |
-| Charging sensor | Binary sensor that is `on` during active charging |
-| Charging power sensor | Power sensor in watts |
-| Control type | Service (KEBA, Easee, Zaptec) or number entity (all others) |
-| Charger service or entity | The HA service or number entity that sets current |
-| Min current | Lowest usable current — typically 6 A, about 4140 W on 3-phase |
-| Max current | Highest safe current — typically 16 A or 32 A |
-| Number of phases | 1 or 3 |
+| Field | Default | Description |
+|-------|---------|-------------|
+| **Connected sensor** | Auto-detected | Binary sensor that reports when the vehicle plug is inserted (e.g. `binary_sensor.keba_p30_plug`) |
+| **Charging sensor** | Auto-detected | Binary sensor that reports when the EV is actively charging |
+| **Charging power sensor** | Auto-detected | Numeric sensor (W) reporting current charging power |
+| **Charger service** | Auto-detected | HA service called to set the charging current (e.g. `keba.set_current`). For number-entity-based chargers, this is the number entity instead |
+| **Service entity ID** | Auto-detected | Entity ID passed as the target of the service call. Auto-filled when SEM detects the charger brand |
+| **Current sensor** | None | Optional. Numeric sensor (A) reporting actual charging current. Enables SEM to verify commands are being applied |
+| **Total energy sensor** | Auto-detected | Optional. Cumulative kWh counter for total energy delivered to the EV |
 
 **Service-based control** (KEBA, Easee, Zaptec): SEM calls an HA service
-like `keba.set_current` to change the charging current. The service and its
-parameters are preset per brand.
+like `keba.set_current` to change the charging current.
 
 **Number entity control** (Wallbox, go-eCharger, Heidelberg, and most
-others): SEM writes a value to a number entity in HA that represents the
-current limit. SEM auto-detects whether the entity expects amps or kilowatts.
+others): SEM writes a value to a number entity that represents the current
+limit. SEM auto-detects whether the entity expects amps or kilowatts.
 
 If you have no EV charger, leave all fields empty and click Submit. You can
-add a charger later via **Configure** on the integration page without
-reinstalling.
+add a charger later via **Configure** without reinstalling. For multiple
+chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
-You can also configure multiple EV chargers. See
-[MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md) for multi-charger setup.
+### Step 3: Hardware and Dashboard Settings
 
-### Step 3: Hardware and dashboard settings
 
-| Setting | Default | What it does |
-|---------|---------|--------------|
-| Battery capacity (kWh) | 10 kWh | Your home battery size. SEM uses this to calculate SOC targets, remaining capacity, and cost attribution. Set it to your actual usable capacity. |
-| Target peak limit (W) | 5000 W | Maximum grid import before SEM starts shedding controllable loads. Set to your electricity contract's peak demand limit, or 0 to disable peak management. |
-| Generate dashboard | On | Creates the SEM dashboard in your sidebar. Leave this on unless you want to build your own dashboard using SEM sensors. |
-| Solar forecast integration | None | Select Solcast or Forecast.Solar if you have one. Required for smart night charging and battery charge scheduling. |
+| Field | Default | Description |
+|-------|---------|-------------|
+| **Target peak limit (kW)** | 5.0 kW | Maximum grid import before SEM starts shedding controllable loads. Set to your electricity contract's peak demand limit, or 0 to disable peak management |
+| **Generate dashboard** | On | Creates the SEM Lovelace dashboard in your sidebar immediately after setup. Leave this on unless you want to build your own dashboard |
+| **System diagram style** | SEM | Choose which system diagram card appears on the Home tab. **SEM** uses the built-in illustrated diagram with SVG animations. **K-Flow** uses the third-party K-Flow card (must be installed via HACS separately) |
+
+> **Diagram style:** You can switch between SEM and K-Flow at any time via
+> **Configure** without reinstalling. The dashboard regenerates automatically
+> with the selected style.
 
 Click **Submit**. SEM starts running immediately. The SEM dashboard appears
 in your sidebar within a few seconds if dashboard generation is enabled.
@@ -242,9 +233,11 @@ Open the **SEM** dashboard from your sidebar.
 
 ![SEM Home tab with system diagram](images/sem_home_tab.png)
 
-The animated system diagram should show flows between solar, grid, battery,
-home, and EV — for whichever components you have. A missing component means
-its sensors were not detected — check the Energy Dashboard. Cards showing
+The illustrated system diagram should show energy flows between your solar
+panels, inverter, battery, grid, house, and EV charger with animated spark
+effects. The sun tracks its real position on the arc during the day. Tap any
+component to open its HA statistics dialog. A missing component means its
+sensors were not detected — check the Energy Dashboard. Cards showing
 "Custom element doesn't exist" mean a required HACS card is missing — see
 [DASHBOARD_GUIDE.md](DASHBOARD_GUIDE.md).
 
@@ -262,6 +255,18 @@ load — check **Settings > System > Logs** (filter for
 Once SEM is running, open **Settings > Devices & Services**, find the SEM
 card, and click **Configure** to adjust any setting without reinstalling.
 Changes take effect within one coordinator cycle (default 10 seconds).
+
+
+The options flow is organized into these pages:
+1. **EV Charger** — charger sensors and control method
+2. **Battery & SOC Zones** — battery capacity, SOC thresholds, discharge protection
+3. **EV Charging & Solar** — daily targets, surplus settings, night charging
+4. **Tariff & Advanced** — electricity rates, tariff mode, update interval
+5. **Load Management** — peak limit, device shedding, critical device protection
+6. **Notifications** — charger display, mobile push, notification types
+7. **Dashboard** — diagram style (SEM/K-Flow), dashboard regeneration
+8. **Heat Pump** *(if configured)* — SG-Ready relay entities, temperature targets
+9. **EV Charger Management** — add/edit/remove individual chargers
 
 ### EV Charging settings
 
@@ -343,11 +348,20 @@ must be stable for 60 seconds before a notification fires).
 | `switch.sem_observer_mode` | Toggle read-only mode without reinstalling |
 | `switch.sem_smart_night_charging` | Toggle forecast-aware night charge evaluation |
 
+### Dashboard settings
+
+| Setting | Default | What it does and when to change it |
+|---------|---------|-------------------------------------|
+| System diagram style | SEM | Choose the system diagram card on the Home tab. **SEM** uses the built-in illustrated SVG diagram with detailed component drawings, animated spark flows, time-based sun arc, and clickable nodes. **K-Flow** uses the third-party K-Flow HACS card with PV string details, cell temperatures, and BMS data. K-Flow must be installed separately via HACS. |
+| Generate dashboard | — | Recreates the SEM Lovelace dashboard. Safe to run at any time — rebuilds all tabs with current settings and language. |
+| Dashboard title | Solar Energy Management | Display name shown in the sidebar. |
+| Dashboard path | sem-dashboard | URL path (lowercase, dashes). Change if you have a naming conflict. |
+
 ### Regenerating the dashboard
 
 Run `solar_energy_management.generate_dashboard` via **Developer Tools >
-Actions** any time you change hardware or want to rebuild the dashboard after
-a language change. It is safe to run at any time.
+Actions** any time you change hardware, switch diagram style, or want to
+rebuild the dashboard after a language change. It is safe to run at any time.
 
 ---
 
