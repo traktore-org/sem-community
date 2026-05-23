@@ -24,6 +24,8 @@ def _make_coordinator():
         }
         coord._battery_session = BatterySessionData()
         coord._battery_session_idle_count = 0
+        # Mock energy calculator with live import rate (used since #223 fix)
+        coord._energy_calculator = type('MockCalc', (), {'_import_rate': 0.30})()
         return coord
 
 
