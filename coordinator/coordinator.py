@@ -2030,12 +2030,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             session.grid_energy_kwh += grid_increment
             if session.energy_kwh > 0:
                 session.solar_share_pct = (session.solar_energy_kwh / session.energy_kwh) * 100
-            import_rate = self.config.get("electricity_import_rate", 0.30)
+            # Use live dynamic tariff rate instead of static config value (#223)
+            import_rate = self._energy_calculator._import_rate
             session.cost += grid_increment * import_rate
         else:  # discharge
             discharge_increment = (power.battery_discharge_power * hours) / 1000.0
             session.energy_kwh += discharge_increment
-            import_rate = self.config.get("electricity_import_rate", 0.30)
+            # Use live dynamic tariff rate instead of static config value (#223)
+            import_rate = self._energy_calculator._import_rate
             session.savings += discharge_increment * import_rate
 
         # Update duration and average power

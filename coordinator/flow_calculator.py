@@ -172,9 +172,18 @@ class FlowCalculator:
         1. Grid export (power going unused to grid)
         2. Redirectable battery charge (slow battery charging to free power for EV)
         3. Active battery discharge (handled separately in coordinator for battery-assist mode)
+
+        Semantics: the returned value is the SETPOINT sent to the charger (total watts
+        the charger is allowed to draw), NOT an increment on top of current consumption.
+        When the EV is already charging at ev_power W and grid_export_power W is going to
+        the grid unused, the new setpoint is ev_power + grid_export_power — this tells the
+        charger to absorb all the surplus. The charger adjusts its draw from ev_power to
+        the new setpoint, naturally consuming the exported surplus without importing. (#229)
         """
         # Source 1: Grid export — always redirectable
         if power.ev_power > 0:
+            # EV already charging: new setpoint = current draw + unused grid export
+            # This is a SETPOINT (target total watts), not a delta to add to current draw.
             base = power.ev_power + power.grid_export_power
         else:
             base = power.grid_export_power

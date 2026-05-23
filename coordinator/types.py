@@ -152,6 +152,7 @@ class CostData:
 
     monthly_costs: float = 0.0
     monthly_savings: float = 0.0
+    monthly_battery_savings: float = 0.0
     monthly_export_revenue: float = 0.0
     monthly_net_cost: float = 0.0
 
@@ -538,7 +539,7 @@ class SEMData:
 
             # Financial additions
             "battery_discharge_value": self.costs.daily_battery_savings,
-            "monthly_battery_savings": self.costs.monthly_savings * 0.3,  # Estimate 30% from battery
+            "monthly_battery_savings": self.costs.monthly_battery_savings,
 
             # Performance
             "self_consumption_rate": self.performance.self_consumption_rate,
