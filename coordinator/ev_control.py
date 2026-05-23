@@ -152,8 +152,11 @@ class EVControlMixin:
                     watts_per_amp = power.ev_power / max(1, ev._current_setpoint)
 
                     peak_limit_w = self._get_peak_limit_w()
-                    headroom_w = peak_limit_w - power.grid_import_power
-                    target = headroom_w / max(1, watts_per_amp)
+                    # Subtract EV's own draw: grid_import includes EV, so
+                    # non_ev_grid = home + other loads (what the grid would
+                    # import if the EV were off)
+                    non_ev_grid = power.grid_import_power - power.ev_power
+                    target = (peak_limit_w - non_ev_grid) / max(1, watts_per_amp)
 
                     # Clamp: configurable min current, max from charger config
                     target = min(ev.max_current, max(min_amps, round(target)))

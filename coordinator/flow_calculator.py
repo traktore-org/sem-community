@@ -172,9 +172,18 @@ class FlowCalculator:
         1. Grid export (power going unused to grid)
         2. Redirectable battery charge (slow battery charging to free power for EV)
         3. Active battery discharge (handled separately in coordinator for battery-assist mode)
+
+        Semantics: the returned value is the SETPOINT sent to the charger (total watts
+        the charger is allowed to draw), NOT an increment on top of current consumption.
+        When the EV is already charging at ev_power W and grid_export_power W is going to
+        the grid unused, the new setpoint is ev_power + grid_export_power — this tells the
+        charger to absorb all the surplus. The charger adjusts its draw from ev_power to
+        the new setpoint, naturally consuming the exported surplus without importing. (#229)
         """
         # Source 1: Grid export — always redirectable
         if power.ev_power > 0:
+            # EV already charging: new setpoint = current draw + unused grid export
+            # This is a SETPOINT (target total watts), not a delta to add to current draw.
             base = power.ev_power + power.grid_export_power
         else:
             base = power.grid_export_power
@@ -203,9 +212,11 @@ class FlowCalculator:
         if forecast_remaining_kwh > 0:
             # Forecast available: redirect proportional to excess forecast
             if forecast_remaining_kwh >= battery_need_kwh and battery_need_kwh > 0:
-                # Forecast covers battery — redirect proportionally
+                # Forecast covers battery — redirect proportionally.
+                # Use max(0.05, ratio) to always redirect at least 5% at the
+                # exact boundary (forecast == battery_need gives ratio=0 without this).
                 ratio = min(1.0, 1.0 - battery_need_kwh / forecast_remaining_kwh)
-                return battery_charge_w * ratio
+                return battery_charge_w * max(0.05, ratio)
             elif battery_need_kwh <= 0.5:
                 # Battery nearly full — redirect all
                 return battery_charge_w
@@ -221,19 +232,24 @@ class FlowCalculator:
     def calculate_available_power(self, power: PowerReadings) -> float:
         """Calculate power available for EV charging.
 
-        Available = Solar - Home - Battery Charge
-        Grid export is already a consequence of this surplus, not additive.
+        Available = Solar - Home - Battery Charge + Battery Discharge (when assisting)
+        Grid export is already a consequence of surplus, not additive.
+        Battery discharge is included when the battery is actively discharging
+        to assist loads — that power is available for the EV as well.
         """
         excess = (
             power.solar_power
             - power.home_consumption_power
             - power.battery_charge_power
         )
+        available = max(0, excess)
 
-        # Don't report more than solar production
-        available = min(power.solar_power, max(0, excess))
+        # Include battery discharge as available when battery is actively discharging
+        if power.battery_discharge_power > 0:
+            available += power.battery_discharge_power
 
-        return round(available, 0)
+        # Cap at solar + battery discharge (can't report more than combined sources)
+        return round(min(available, power.solar_power + power.battery_discharge_power), 0)
 
     def calculate_charging_current(
         self, available_power: float, voltage: float = 230, phases: int = 3

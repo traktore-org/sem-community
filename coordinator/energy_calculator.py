@@ -171,13 +171,17 @@ class EnergyCalculator:
         energy.monthly_battery_discharge = self._get_monthly("battery_discharge", month_key)
         energy.yearly_battery_discharge = self._get_yearly("battery_discharge", year_key)
 
-        # Self-consumption savings (incremental, rate-weighted for dynamic tariff accuracy)
+        # Solar self-consumption savings (incremental, rate-weighted for dynamic tariff accuracy)
+        # Only tracks savings from solar — battery discharge savings are in cost_batt_savings.
+        # Subtracting discharge_incr prevents double-counting: battery discharge is not solar.
         home_incr = (power.home_consumption_power * interval_hours) / 1000 if power.home_consumption_power >= MIN_POWER_THRESHOLD else 0.0
         ev_incr = (power.ev_power * interval_hours) / 1000 if power.ev_power >= MIN_POWER_THRESHOLD else 0.0
         import_incr = (power.grid_import_power * interval_hours) / 1000 if power.grid_import_power >= MIN_POWER_THRESHOLD else 0.0
-        savings_incr = max(0.0, (home_incr + ev_incr) - import_incr)
-        if savings_incr > 0.0:
-            self._accumulate_cost("cost_savings", today, month_key, year_key, savings_incr * self._import_rate)
+        discharge_incr = (power.battery_discharge_power * interval_hours) / 1000 if power.battery_discharge_power >= MIN_POWER_THRESHOLD else 0.0
+        # Solar self-consumed = total consumption minus what came from grid or battery discharge
+        solar_self_consumed = max(0.0, (home_incr + ev_incr) - import_incr - discharge_incr)
+        if solar_self_consumed > 0.0:
+            self._accumulate_cost("cost_savings", today, month_key, year_key, solar_self_consumed * self._import_rate)
 
         # Sanity checks — warn and cap if values exceed physical limits
         battery_capacity = self.config.get("battery_capacity_kwh", 15)
@@ -603,6 +607,7 @@ class EnergyCalculator:
         costs.monthly_export_revenue = self._get_monthly_cost("cost_export", month_key)
         costs.monthly_net_cost = round(costs.monthly_costs - costs.monthly_export_revenue, 2)
         costs.monthly_savings = max(0, self._get_monthly_cost("cost_savings", month_key))
+        costs.monthly_battery_savings = self._get_monthly_cost("cost_batt_savings", month_key)
 
         # Yearly calculations
         costs.yearly_costs = self._get_yearly_cost("cost_import", year_key)
@@ -817,11 +822,13 @@ class EnergyCalculator:
         self._accumulated_self_consumed_kwh += daily_self_consumed
         self._accumulated_export_kwh += daily_grid_export
 
-        # Store today's rate for averaging
+        # Store today's rate for averaging; also record whether snapshot had meaningful data
+        # (used by _check_rollover to detect trivial snapshots that should be retried)
         self._rate_history.append({
             "date": today_str,
             "import_rate": self._import_rate,
             "export_rate": self._export_rate,
+            "energy_kwh": round(daily_solar + daily_grid_import, 4),
         })
 
     def _check_rollover(self, today: date, month_key: str, year_key: str = None) -> None:
@@ -838,9 +845,13 @@ class EnergyCalculator:
             k.endswith(yesterday_str) and not k.startswith("ev_daily_sun")
             for k in self._daily_accumulators
         )
-        already_snapshotted = any(
-            r.get("date") == yesterday_str for r in self._rate_history
+        # A prior snapshot is only considered valid if it captured non-zero energy.
+        # If the system restarted around midnight and snapshotted before real data
+        # accumulated, allow a re-snapshot when meaningful data is now present. (#225)
+        prior_snapshot = next(
+            (r for r in self._rate_history if r.get("date") == yesterday_str), None
         )
+        already_snapshotted = prior_snapshot is not None and prior_snapshot.get("energy_kwh", 1.0) > 0
         if has_yesterday_data and not already_snapshotted:
             self._snapshot_daily_costs(yesterday)
 

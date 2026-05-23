@@ -44,6 +44,7 @@ from .types import (
     HeatPumpSensorData, PVAnalyticsData, EnergyAssistantSensorData,
     UtilitySignalSensorData, SessionData, BatterySessionData,
 )
+from .health_check import HealthCheck
 from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
 from .flow_calculator import FlowCalculator
@@ -138,6 +139,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             custom_entities=None,  # Was config.get("forecast_entities") — never set via UI
         )
         self._forecast_tracker = ForecastTracker()
+        self._forecast_tracker.set_hass(hass)
 
         # Phase 1: Tariff provider
         tariff_mode = config.get("tariff_mode", "static")
@@ -209,6 +211,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # EV Intelligence: taper detection, virtual SOC, charge skip (#106)
         self._ev_taper_detector = EVTaperDetector(config)  # Primary charger
         self._ev_taper_detectors: Dict[str, EVTaperDetector] = {}  # Per-charger (#112)
+
+        # Calculation integrity checker (runs every cycle)
+        self._health_check = HealthCheck()
 
         # Hourly activity tracker for schedule card (#63)
         self._today_surplus_hours: list = [False] * 24
@@ -898,6 +903,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 last_update=dt_util.now(),
             )
 
+            # Step 11.5: Energy balance / calculation health check
+            self._health_check.run_all_checks(
+                power,
+                flows=power_flows,
+                autarky=performance.autarky_rate,
+                self_consumption=performance.self_consumption_rate,
+                costs=costs,
+            )
+
             # Step 12: Notifications (extracted for readability, #29)
             await self._send_notifications(
                 charging_state, power, energy, costs, performance,
@@ -1024,6 +1038,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             result["diag_observer_mode"] = self._observer_mode
             unavail_count = sum(1 for eid in self._sensor_reader._sensor_unavailable)
             result["diag_sensors_unavailable"] = unavail_count
+            result["diag_health_violations"] = self._health_check.total_violations
 
             # Tariff schedule for dashboard card (#25)
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
@@ -2030,12 +2045,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             session.grid_energy_kwh += grid_increment
             if session.energy_kwh > 0:
                 session.solar_share_pct = (session.solar_energy_kwh / session.energy_kwh) * 100
-            import_rate = self.config.get("electricity_import_rate", 0.30)
+            # Use live dynamic tariff rate instead of static config value (#223)
+            import_rate = self._energy_calculator._import_rate
             session.cost += grid_increment * import_rate
         else:  # discharge
             discharge_increment = (power.battery_discharge_power * hours) / 1000.0
             session.energy_kwh += discharge_increment
-            import_rate = self.config.get("electricity_import_rate", 0.30)
+            # Use live dynamic tariff rate instead of static config value (#223)
+            import_rate = self._energy_calculator._import_rate
             session.savings += discharge_increment * import_rate
 
         # Update duration and average power
