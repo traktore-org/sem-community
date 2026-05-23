@@ -138,6 +138,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             custom_entities=None,  # Was config.get("forecast_entities") — never set via UI
         )
         self._forecast_tracker = ForecastTracker()
+        self._forecast_tracker.set_hass(hass)
 
         # Phase 1: Tariff provider
         tariff_mode = config.get("tariff_mode", "static")

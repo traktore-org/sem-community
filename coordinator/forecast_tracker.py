@@ -62,6 +62,38 @@ class ForecastTracker:
         self._today_date: Optional[str] = None
         self._correction_factor: float = 1.0
         self._weather_today: str = "unknown"
+        self._hass: Any = None
+
+    def set_hass(self, hass: Any) -> None:
+        """Set Home Assistant instance for reading sun.sun entity."""
+        self._hass = hass
+
+    def _get_sun_hours(self) -> tuple[float, float]:
+        """Get sunrise/sunset hours from sun.sun entity, fallback to defaults.
+
+        Returns (sunrise_hour, sunset_hour) as fractional hours (e.g. 6.5 = 6:30).
+        Falls back to module-level constants when sun.sun is unavailable (polar regions
+        or HA startup). This prevents hardcoded 6/20 from being wrong in polar areas.
+        """
+        try:
+            if self._hass is not None:
+                sun = self._hass.states.get("sun.sun")
+                if sun and sun.attributes:
+                    rise_str = sun.attributes.get("next_rising", "")
+                    sett_str = sun.attributes.get("next_setting", "")
+                    if rise_str and sett_str:
+                        rise = datetime.fromisoformat(rise_str.replace("Z", "+00:00"))
+                        sett = datetime.fromisoformat(sett_str.replace("Z", "+00:00"))
+                        # Convert to local time hours
+                        local_rise = rise.astimezone(dt_util.DEFAULT_TIME_ZONE)
+                        local_sett = sett.astimezone(dt_util.DEFAULT_TIME_ZONE)
+                        return (
+                            local_rise.hour + local_rise.minute / 60.0,
+                            local_sett.hour + local_sett.minute / 60.0,
+                        )
+        except Exception:
+            pass
+        return float(SUNRISE_HOUR), float(SUNSET_HOUR)
 
     def update(
         self,
@@ -288,23 +320,46 @@ class ForecastTracker:
         # = (1 - cos(π·t/T)) / 2
         return (1 - math.cos(math.pi * solar_hours / DAYLIGHT_HOURS)) / 2
 
+    @staticmethod
+    def _solar_curve_fraction_dynamic(solar_hours: float, daylight_hours: float) -> float:
+        """Expected fraction of daily solar using the actual day length.
+
+        Same sine-curve model as _solar_curve_fraction but uses the real
+        daylight_hours derived from sun.sun, so the curve is correct in
+        polar regions where day length differs significantly from 14h.
+        """
+        import math
+        if solar_hours <= 0:
+            return 0.0
+        if solar_hours >= daylight_hours:
+            return 1.0
+        return (1 - math.cos(math.pi * solar_hours / daylight_hours)) / 2
+
     def _calculate_dampening_factor(self) -> float:
-        """Calculate the dampening factor from live data + history."""
+        """Calculate the dampening factor from live data + history.
+
+        Uses actual sunrise/sunset from sun.sun entity so the daylight window
+        is correct in polar regions. Falls back to hardcoded defaults when
+        sun.sun is unavailable (HA startup, polar night).
+        """
         now = dt_util.now()
         hour = now.hour + now.minute / 60.0
 
+        sunrise_hour, sunset_hour = self._get_sun_hours()
+        daylight_hours = max(1.0, sunset_hour - sunrise_hour)
+
         # Outside daylight hours: use historical correction only
-        if hour < SUNRISE_HOUR or hour > SUNSET_HOUR + 1:
+        if hour < sunrise_hour or hour > sunset_hour + 1:
             return self._correction_factor
 
         if self._today_forecast < MIN_FORECAST_KWH:
             return self._correction_factor
 
         # How many solar hours have elapsed
-        solar_hours = max(0, hour - SUNRISE_HOUR)
+        solar_hours = max(0, hour - sunrise_hour)
 
         # Expected fraction using sine-curve model (not linear)
-        expected_fraction = self._solar_curve_fraction(solar_hours)
+        expected_fraction = self._solar_curve_fraction_dynamic(solar_hours, daylight_hours)
         expected_so_far = self._today_forecast * expected_fraction
 
         # Too early to judge — not enough expected production yet
