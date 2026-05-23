@@ -32,7 +32,7 @@ MIN_FORECAST_KWH = 0.5
 CONFIDENCE_RAMP_HOURS = 3.0
 
 # Outlier detection: cap actual at this multiple of forecast
-MAX_ACTUAL_RATIO = 3.0
+MAX_ACTUAL_RATIO = 2.0  # Cap outlier days at 2× forecast (was 3.0)
 
 # Daylight window for expected-fraction calculation
 SUNRISE_HOUR = 6
@@ -186,7 +186,12 @@ class ForecastTracker:
             # Fallback: rolling 7-day weighted average
             factor = self._rolling_7d_factor()
 
-        self._correction_factor = max(0.3, min(2.0, factor))
+        # Tighten bounds: ±40% max correction (industry standard is ±10-30%)
+        factor = max(0.6, min(1.4, factor))
+        # Decay toward neutral (1.0): 15% per day — prevents runaway correction
+        # If raw forecast is already accurate, factor naturally returns to ~1.0
+        DECAY = 0.85
+        self._correction_factor = round(factor * DECAY + 1.0 * (1 - DECAY), 4)
 
     def _factor_for_conditions(
         self, weather: Optional[str], month: Optional[int]
@@ -263,7 +268,19 @@ class ForecastTracker:
 
     @property
     def accuracy_today(self) -> float:
-        """Today's forecast accuracy percentage."""
+        """Today's corrected forecast accuracy (actual / corrected forecast).
+
+        Shows how accurate the forecast was AFTER correction — what the user sees.
+        100% = perfect, >100% = underforecast, <100% = overforecast.
+        """
+        corrected = self._today_forecast * self._correction_factor
+        if corrected < MIN_FORECAST_KWH:
+            return 0.0
+        return round(self._today_actual / corrected * 100, 1)
+
+    @property
+    def raw_accuracy_today(self) -> float:
+        """Today's raw forecast accuracy (actual / raw forecast, no correction)."""
         if self._today_forecast < MIN_FORECAST_KWH:
             return 0.0
         return round(self._today_actual / self._today_forecast * 100, 1)
@@ -377,7 +394,7 @@ class ForecastTracker:
         # Blend: historical correction × (1 - confidence) + live ratio × confidence
         blended = (1 - confidence) * self._correction_factor + confidence * normalized_ratio
 
-        return max(0.05, min(3.0, blended))
+        return max(0.5, min(1.5, blended))
 
     def apply_dampening(self, forecast_kwh: float) -> float:
         """Apply real-time dampening factor to a forecast value."""
