@@ -61,11 +61,11 @@ class TestDampeningFactor:
 
         # At noon (6h solar), sine-curve expected_fraction ≈ 0.389
         # normalized_ratio = (0.12/31) / 0.389 ≈ 0.01
-        # With full confidence, dampening ≈ normalized_ratio, clamped to 0.05
-        assert factor == 0.05  # clamped floor
+        # With full confidence, dampening ≈ normalized_ratio, clamped to 0.5 (tightened bounds)
+        assert factor == 0.5  # clamped floor (was 0.05, tightened in v1.5.8)
 
         dampened = tracker.apply_dampening(28.0)
-        assert dampened == pytest.approx(1.4, abs=0.1)
+        assert dampened == pytest.approx(14.0, abs=1.0)
 
     @patch(DT_PATH)
     def test_sunny_surprise_boosts(self, mock_dt):
@@ -211,7 +211,7 @@ class TestOutlierDetection:
 
     @patch(DT_PATH)
     def test_outlier_capped(self, mock_dt):
-        """Actual=200 with forecast=50 → capped at 150 (3x)."""
+        """Actual=200 with forecast=50 → capped at 100 (2x, tightened in v1.5.8)."""
         tracker = ForecastTracker()
 
         # Day 1: set up tracker state
@@ -224,9 +224,9 @@ class TestOutlierDetection:
 
         assert len(tracker._history) == 1
         record = tracker._history[0]
-        # Actual should be capped at 3x forecast = 150
-        assert record.actual_kwh == pytest.approx(150.0, abs=0.1)
-        assert record.correction_factor == pytest.approx(3.0, abs=0.01)
+        # Actual should be capped at 2x forecast = 100 (was 3x, tightened in v1.5.8)
+        assert record.actual_kwh == pytest.approx(100.0, abs=0.1)
+        assert record.correction_factor == pytest.approx(2.0, abs=0.01)
 
     @patch(DT_PATH)
     def test_normal_values_not_capped(self, mock_dt):
@@ -280,10 +280,11 @@ class TestWeatherTracking:
         mock_dt.now.return_value = _dt(hour=12)
         tracker.update(30.0, 5.0, "rainy")
 
-        # Rainy correction factor ≈ 0.3 (9/30), sunny ≈ 1.2 (36/30)
-        # With rainy weather, correction should be closer to 0.3 than 1.2
+        # Rainy correction factor ≈ 0.3 (9/30) → clamped to 0.6, decayed to 0.7
+        # Sunny ≈ 1.2 (36/30) → clamped to 1.2, decayed to 1.15
+        # With rainy weather, correction uses rainy-specific factor (lower)
         correction = tracker.correction_factor
-        assert correction < 0.5  # rainy factor dominates
+        assert correction < 0.85  # rainy factor dominates (clamped + decayed)
 
     @patch(DT_PATH)
     def test_get_data_includes_dampening(self, mock_dt):
