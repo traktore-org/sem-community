@@ -166,6 +166,15 @@ NUMBER_TYPES = [
         mode=NumberMode.SLIDER,
     ),
     NumberEntityDescription(
+        key="ev_target_soc",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=50,
+        native_max_value=100,
+        native_step=5,
+        mode=NumberMode.SLIDER,
+        icon="mdi:battery-charging-80",
+    ),
+    NumberEntityDescription(
         key="ev_km_per_kwh",
         native_unit_of_measurement="km/kWh",
         native_min_value=3,
@@ -395,6 +404,14 @@ async def async_setup_entry(
                     native_min_value=6, native_max_value=16, native_step=1,
                     mode=NumberMode.SLIDER,
                 ), "ev_min_current", full_config.get("ev_min_current", 6)),
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_target_soc",
+                    name=f"{cname} Target SOC",
+                    native_unit_of_measurement=PERCENTAGE,
+                    native_min_value=50, native_max_value=100, native_step=5,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:battery-charging-80",
+                ), "ev_target_soc", full_config.get("ev_target_soc", 80)),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(

@@ -42,18 +42,22 @@ class DeviceType(Enum):
 class DeviceControlMode(Enum):
     """How SEM is allowed to control this device (#49).
 
-    Hierarchy: off < peak_only < surplus
+    Hierarchy: off < peak_only < surplus < surplus_target
     Each level adds capability on top of the previous.
 
-    - off:       SEM monitors but never controls this device
-    - peak_only: SEM can shed (turn off) to protect peak limit,
-                 restores to pre-shed state. Never proactively turns on.
-    - surplus:   SEM activates when surplus available, deactivates when
-                 surplus drops. Also includes peak protection (shedding).
+    - off:            SEM monitors but never controls this device
+    - peak_only:      SEM can shed (turn off) to protect peak limit,
+                      restores to pre-shed state. Never proactively turns on.
+    - surplus:        SEM activates when surplus available, deactivates when
+                      surplus drops. Also includes peak protection (shedding).
+    - surplus_target: Same as surplus but stops charging when the configured
+                      target (kWh or SOC %) is reached. The coordinator sets
+                      soc_limit_active=True which halts the state machine.
     """
     OFF = "off"
     PEAK_ONLY = "peak_only"
     SURPLUS = "surplus"
+    SURPLUS_TARGET = "surplus_target"
 
 
 @dataclass

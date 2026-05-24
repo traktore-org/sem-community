@@ -27,10 +27,19 @@ EV_CHARGING_MODES = {
     "off": "Off",
 }
 
+EV_TARGET_MODES = {
+    "kwh": "kWh target",
+    "soc": "SOC % target",
+}
+
 SELECT_TYPES = [
     SelectEntityDescription(
         key="ev_charging_mode",
         options=list(EV_CHARGING_MODES.keys()),
+    ),
+    SelectEntityDescription(
+        key="ev_target_mode",
+        options=list(EV_TARGET_MODES.keys()),
     ),
 ]
 
@@ -69,19 +78,35 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
         self._attr_translation_key = description.key
 
     @property
+    def _valid_options(self) -> dict:
+        """Return the valid options dict for this entity."""
+        key = self.entity_description.key
+        if key == "ev_target_mode":
+            return EV_TARGET_MODES
+        return EV_CHARGING_MODES
+
+    @property
+    def _default_option(self) -> str:
+        """Return the default option for this entity."""
+        if self.entity_description.key == "ev_target_mode":
+            return "kwh"
+        return "auto"
+
+    @property
     def current_option(self) -> str | None:
         """Return the currently selected option."""
         value = self.coordinator.config.get(
-            self.entity_description.key, "auto"
+            self.entity_description.key, self._default_option
         )
-        # Map legacy modes to auto (pv and self_consumption are now internal)
-        if value in ("pv", "self_consumption"):
+        valid = self._valid_options
+        # Map legacy EV charging modes to auto
+        if self.entity_description.key == "ev_charging_mode" and value in ("pv", "self_consumption"):
             return "auto"
-        return value if value in EV_CHARGING_MODES else "auto"
+        return value if value in valid else self._default_option
 
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
-        if option not in EV_CHARGING_MODES:
+        if option not in self._valid_options:
             return
 
         config_key = self.entity_description.key

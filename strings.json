@@ -288,6 +288,7 @@
         "description": "Configure EV charging targets and solar thresholds.",
         "data": {
           "daily_ev_target": "Night charge target (kWh)",
+          "ev_target_mode": "EV target mode",
           "min_solar_power": "Minimum solar power to start EV charging (W)",
           "max_grid_import": "Max grid import during solar charging (W, 0 = pure solar)",
           "observer_mode": "Observer mode (read-only, no hardware control)",
@@ -295,6 +296,7 @@
         },
         "data_description": {
           "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
+          "ev_target_mode": "Whether the surplus charging target uses kWh (daily energy) or SOC % (vehicle state of charge). Select 'SOC %' only if a vehicle SOC sensor is configured.",
           "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
           "max_grid_import": "Maximum grid power (W) SEM may use during solar charging. Set to 0 for pure-solar mode.",
           "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
@@ -1066,6 +1068,9 @@
       "daily_ev_target": {
         "name": "Daily EV Target"
       },
+      "ev_target_soc": {
+        "name": "EV Target SOC (%)"
+      },
       "ev_km_per_kwh": {
         "name": "EV Efficiency"
       },
@@ -1151,6 +1156,13 @@
     "select": {
       "ev_charging_mode": {
         "name": "EV Charging Mode"
+      },
+      "ev_target_mode": {
+        "name": "EV Target Mode",
+        "state": {
+          "kwh": "kWh target",
+          "soc": "SOC % target"
+        }
       }
     }
   },
