@@ -837,10 +837,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
                     )
                 ),
-                vol.Optional(
-                    "ev_limit_surplus",
-                    default=_c("ev_limit_surplus", False),
-                ): selector.BooleanSelector(),
             }),
             errors=errors
         )
@@ -1019,10 +1015,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         unit_of_measurement="kWh", mode="box",
                     )
                 ),
-                vol.Optional(
-                    "ev_limit_surplus",
-                    default=False,
-                ): selector.BooleanSelector(),
             }),
             errors=errors,
         )
@@ -1149,10 +1141,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         unit_of_measurement="kWh", mode="box",
                     )
                 ),
-                vol.Optional(
-                    "ev_limit_surplus",
-                    default=charger.get("ev_limit_surplus", False),
-                ): selector.BooleanSelector(),
             }),
             errors=errors,
         )

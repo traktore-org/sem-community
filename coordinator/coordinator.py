@@ -745,12 +745,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     )
                     per_target_reached = per_remaining <= 0.1
                     per_limit_surplus = charger_cfg.get("ev_limit_surplus", self.config.get("ev_limit_surplus", False))
-                    per_surplus_target = (
-                        ev_dev is not None
-                        and getattr(ev_dev, "control_mode", None) is not None
-                        and ev_dev.control_mode.value == "surplus_target"
-                    )
-                    charging_context.soc_limit_active = (per_limit_surplus or per_surplus_target) and per_target_reached
+                    charging_context.soc_limit_active = per_limit_surplus and per_target_reached
                     charging_context.daily_target_reached = per_target_reached
                     charging_context.remaining_ev_energy = per_remaining
                     charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining
@@ -1870,17 +1865,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     ) -> float:
         """Calculate remaining EV charging need in kWh from the best available source.
 
-        When ev_target_mode is "soc" AND vehicle_soc is available: SOC-based.
-        When ev_target_mode is "kwh" OR vehicle_soc is unavailable: kWh daily target.
+        When ev_target_type is "soc" AND vehicle_soc is available: SOC-based.
+        When ev_target_type is "kwh" OR vehicle_soc is unavailable: kWh daily target.
         Used by both _build_charging_context() and _determine_charging_strategy().
         """
         cfg = charger_cfg or {}
         ev_target_soc = cfg.get("ev_target_soc") if cfg.get("ev_target_soc") is not None else self.config.get("ev_target_soc", 80)
         ev_capacity = cfg.get("ev_battery_capacity_kwh") if cfg.get("ev_battery_capacity_kwh") is not None else self.config.get("ev_battery_capacity_kwh", 40)
         daily_target = cfg.get("daily_ev_target") if cfg.get("daily_ev_target") is not None else self.config.get("daily_ev_target", 10)
-        ev_target_mode = cfg.get("ev_target_mode") or self.config.get("ev_target_mode", "kwh")
+        # ev_target_mode was renamed to ev_target_type (#235); read both for back-compat.
+        ev_target_type = (
+            cfg.get("ev_target_type") or cfg.get("ev_target_mode")
+            or self.config.get("ev_target_type") or self.config.get("ev_target_mode", "kwh")
+        )
 
-        use_soc = ev_target_mode == "soc" and vehicle_soc is not None
+        use_soc = ev_target_type == "soc" and vehicle_soc is not None
         if use_soc:
             return max(0, (ev_target_soc - vehicle_soc) / 100 * ev_capacity)
         return max(0, daily_target - energy.daily_ev)
@@ -1922,14 +1921,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         remaining = self._calculate_remaining_need(energy, self._cycle_vehicle_soc)
         daily_target_reached = remaining <= 0.1
 
-        # Surplus limit: activated by ev_limit_surplus toggle OR surplus_target control mode
+        # Surplus limit: stop surplus charging at the target when the user opts in
+        # via the ev_limit_surplus switch (#235).
         ev_limit_surplus = self.config.get("ev_limit_surplus", False)
-        ev_device_surplus_target = (
-            self._ev_device is not None
-            and getattr(self._ev_device, "control_mode", None) is not None
-            and self._ev_device.control_mode.value == "surplus_target"
-        )
-        soc_limit_active = (ev_limit_surplus or ev_device_surplus_target) and daily_target_reached
+        soc_limit_active = ev_limit_surplus and daily_target_reached
 
         # Calculate excess solar
         excess_solar = power.solar_power - power.home_consumption_power - power.battery_charge_power
@@ -2283,7 +2278,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Reset to a reasonable estimate based on recent session energy
         if estimated_soc <= 0 and self._session_data.energy_kwh > 1.0 and power.ev_connected:
             capacity = self.config.get("ev_battery_capacity_kwh", 40)
-            session_soc = min(95.0, self._session_data.energy_kwh / capacity * 100 * 0.92)
+            session_soc = min(95.0, self._session_data.energy_kwh / capacity * 100 * 0.92) if capacity > 0 else 0.0
             self._ev_taper_detector._energy_since_full = (100 - session_soc) / 100 * capacity
             self._ev_taper_detector._estimated_soc = session_soc
             estimated_soc = session_soc
