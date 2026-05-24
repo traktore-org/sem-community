@@ -54,9 +54,10 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 | `current_delta` | — | Minimum current change threshold (1-10A) |
 | `soc_delta` | — | Battery SOC change sensitivity (1-20%) |
 | `daily_ev_target` | 10 kWh | Target daily EV energy (0-100 kWh). Used for night charging and, when `ev_limit_surplus` is on, also limits surplus charging. |
+| `ev_target_type` | `kwh` | Per-charger target type: `kwh` or `soc`. Set via the unit selector in the **Charge Target** block on the EV card. `soc` is only offered when a `vehicle_soc_entity` is configured for that charger. (Renamed from `ev_target_mode`; old values are migrated automatically.) |
 | `ev_target_soc` | 80% | EV battery SOC target (50-100%). When a `vehicle_soc_entity` is configured, SEM calculates remaining need from SOC instead of kWh. |
 | `ev_battery_capacity_kwh` | 40 kWh | EV battery capacity for SOC→kWh conversion (10-120 kWh). |
-| `ev_limit_surplus` | off | When on, surplus charging also stops at the target (SOC or kWh). When off (default), surplus is unlimited — free solar energy is never wasted. |
+| `ev_limit_surplus` | off | **Limit surplus to target** switch on the EV card. When on, surplus charging also stops at the target (SOC or kWh). When off (default), surplus is unlimited — free solar energy is never wasted. |
 | `min_solar_power` | 500W | **Config floor** below which SEM won't even attempt to start the charger. Keep well below the **hardware minimum** of your charger (~4140 W on 3-phase, ~1380 W on 1-phase). Slider range 0–5000 W. |
 | `max_grid_import` | — | Maximum grid import power during solar charging (0-2000W) |
 | `ev_charging_mode` | `pv` | Charging mode: `pv` (solar only), `minpv` (Min+PV), `off` (disabled) |

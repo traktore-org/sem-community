@@ -84,6 +84,13 @@ class SEMEVStatusCard extends SEMLitBase {
             key += '|' + this._chargers.map(id =>
                 hass.states[`number.sem_charger_${id}_daily_ev_target`]?.state || ''
             ).join(':');
+
+            // Charge Target controls (#235): target type, value (SOC), and surplus limit
+            key += '|' + this._chargers.map(id => [
+                hass.states[`select.sem_charger_${id}_ev_target_type`]?.state || '',
+                hass.states[`number.sem_charger_${id}_target_soc`]?.state || '',
+                hass.states[`switch.sem_charger_${id}_ev_limit_surplus`]?.state || '',
+            ].join(':')).join('|');
         }
 
         key += '|' + this._localizeReady + '|' + this._lang;
@@ -184,10 +191,6 @@ class SEMEVStatusCard extends SEMLitBase {
         const isCharging = power > 50;
         const statusText = isCharging ? this._t('charging') : isConnected ? this._t('connected') : this._t('idle');
 
-        const nightSwitch = this._hass?.states[`switch.sem_charger_${id}_night_charging`];
-        const nightOn = nightSwitch?.state === 'on';
-
-        const nightTarget = this._entityVal(`number.sem_charger_${id}_daily_ev_target`, 10);
         const startAmps = this._entityVal(`number.sem_charger_${id}_night_initial_current`, 10);
         const minAmps = this._entityVal(`number.sem_charger_${id}_minimum_current`, 6);
 
@@ -197,6 +200,36 @@ class SEMEVStatusCard extends SEMLitBase {
         const chargeText = needsCharge ? this._t('yes') : this._t('no');
 
         const nightEntityId = `switch.sem_charger_${id}_night_charging`;
+
+        // Charge Target controls (#235): one adaptive value + unit selector + two toggles
+        const targetTypeId = `select.sem_charger_${id}_ev_target_type`;
+        const targetType = this._stateStr(targetTypeId) || 'kwh';
+        const ttOptions = this._stateAttrs(targetTypeId).options || ['kwh'];
+        const isSoc = targetType === 'soc';
+        const valueEntityId = isSoc
+            ? `number.sem_charger_${id}_target_soc`
+            : `number.sem_charger_${id}_daily_ev_target`;
+        const targetValue = this._entityVal(valueEntityId, isSoc ? 80 : 10);
+        const valueDisplay = isSoc
+            ? String(Math.round(targetValue))
+            : this._fmt(targetValue, targetValue % 1 === 0 ? 0 : 1);
+        const limitEntityId = `switch.sem_charger_${id}_ev_limit_surplus`;
+        const limitOn = this._stateStr(limitEntityId) === 'on';
+        const nightOnLive = this._stateStr(nightEntityId) === 'on';
+
+        const ctToggle = (on, entityId) => html`
+            <span class="ct-sw ${on ? 'on' : 'off'}"
+                @click=${(e) => { e.stopPropagation(); this._toggleSwitch(entityId); }}>
+                <span class="ct-knob"></span>
+            </span>`;
+
+        const unitControl = ttOptions.length > 1
+            ? html`<select class="ct-unit" .value=${targetType}
+                    @click=${(e) => e.stopPropagation()}
+                    @change=${(e) => this._selectOption(targetTypeId, e.target.value)}>
+                    ${ttOptions.map(o => html`<option value=${o}>${o === 'soc' ? '%' : 'kWh'}</option>`)}
+                </select>`
+            : html`<span class="ct-unit-static">${isSoc ? '%' : 'kWh'}</span>`;
 
         return html`
             <div class="charger-section">
@@ -245,29 +278,32 @@ class SEMEVStatusCard extends SEMLitBase {
                     </div>
                 </div>
 
+                <div class="charge-target-group">
+                    <div class="ct-title">
+                        <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
+                        ${this._t('charge_target')}
+                    </div>
+                    <div class="ct-row">
+                        <span class="ct-label">${this._t('charge_to')}</span>
+                        <span class="ct-ctl">
+                            <span
+                                class="ct-val clickable"
+                                @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: valueEntityId } }))}
+                            >${valueDisplay}</span>
+                            ${unitControl}
+                        </span>
+                    </div>
+                    <div class="ct-row">
+                        <span class="ct-label">${this._t('limit_surplus_to_target')}</span>
+                        <span class="ct-ctl">${ctToggle(limitOn, limitEntityId)}</span>
+                    </div>
+                    <div class="ct-row">
+                        <span class="ct-label">${this._t('night_charging')}</span>
+                        <span class="ct-ctl">${ctToggle(nightOnLive, nightEntityId)}</span>
+                    </div>
+                </div>
+
                 <div class="charger-settings">
-                    <div class="setting-item">
-                        <ha-icon icon="mdi:weather-night" style="--mdc-icon-size:16px;color:${nightOn ? '#7986CB' : '#666'}"></ha-icon>
-                        <span class="setting-label">${this._t('night')}</span>
-                        <span
-                            class="setting-toggle ${nightOn ? 'on' : 'off'}"
-                            @click=${(e) => {
-                                e.stopPropagation();
-                                this._toggleSwitch(nightEntityId);
-                            }}
-                        >${nightOn ? 'ON' : 'OFF'}</span>
-                    </div>
-                    <div
-                        class="setting-item clickable"
-                        @click=${() => {
-                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_daily_ev_target` } });
-                            this.dispatchEvent(event);
-                        }}
-                    >
-                        <ha-icon icon="mdi:bullseye-arrow" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
-                        <span class="setting-label">${this._t('night_target')}</span>
-                        <span class="setting-value">${this._fmt(nightTarget, 1)} kWh</span>
-                    </div>
                     <div
                         class="setting-item clickable"
                         @click=${() => {
@@ -675,6 +711,60 @@ class SEMEVStatusCard extends SEMLitBase {
             .setting-toggle.on  { background: rgba(121,134,203,0.25); color: #7986CB; }
             .setting-toggle.off { background: rgba(100,100,100,0.15); color: #666; }
             .setting-toggle:hover { opacity: 0.8; }
+
+            /* Charge Target group (#235) */
+            .charge-target-group {
+                margin-top: 8px;
+                padding: 10px 12px;
+                border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius: 10px;
+                background: rgba(255,255,255,0.025);
+            }
+            .ct-title {
+                font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+                color: var(--secondary-text-color, #999);
+                display: flex; align-items: center; gap: 5px;
+                margin-bottom: 4px;
+            }
+            .ct-row {
+                display: flex; align-items: center; min-height: 32px;
+            }
+            .ct-row + .ct-row { border-top: 1px solid rgba(255,255,255,0.06); }
+            .ct-label { font-size: 12px; color: var(--primary-text-color, #e0e0e0); }
+            .ct-ctl { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+            .ct-val {
+                background: rgba(141,200,146,0.14); color: #8DC892;
+                border: 1px solid rgba(141,200,146,0.35);
+                border-radius: 8px; padding: 3px 11px; font-weight: 600;
+                font-variant-numeric: tabular-nums; min-width: 42px; text-align: center;
+            }
+            .ct-val.clickable { cursor: pointer; }
+            .ct-unit {
+                appearance: none; -webkit-appearance: none;
+                background: var(--secondary-background-color, rgba(255,255,255,0.07));
+                color: var(--primary-text-color, #e0e0e0);
+                border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius: 8px; padding: 4px 8px;
+                font-size: 12px; font-weight: 600; cursor: pointer;
+            }
+            .ct-unit-static {
+                font-size: 12px; font-weight: 600;
+                color: var(--secondary-text-color, #999); padding: 4px 2px;
+            }
+            .ct-sw {
+                width: 38px; height: 22px; border-radius: 12px;
+                position: relative; cursor: pointer; flex-shrink: 0;
+                transition: background 0.18s;
+            }
+            .ct-sw.on { background: #8DC892; }
+            .ct-sw.off { background: rgba(255,255,255,0.16); }
+            .ct-knob {
+                position: absolute; top: 2px; left: 2px;
+                width: 18px; height: 18px; border-radius: 50%;
+                background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+                transition: left 0.18s;
+            }
+            .ct-sw.on .ct-knob { left: 18px; }
 
             @media (max-width: 400px) {
                 .hero { flex-direction: column; align-items: center; text-align: center; }

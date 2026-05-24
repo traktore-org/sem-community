@@ -266,7 +266,7 @@ class EVTaperDetector:
         # This corrects drift from the daily decay prediction (#174)
         if self._hw_total_at_full is not None and hw_total_energy_kwh is not None:
             hw_energy = hw_total_energy_kwh - self._hw_total_at_full
-            if 0 <= hw_energy <= capacity:
+            if capacity > 0 and 0 <= hw_energy <= capacity:
                 if abs(hw_energy - self._energy_since_full) > 0.5:
                     _LOGGER.info(
                         "SOC reconciled from hardware: %.1f kWh (was %.1f from decay)",
@@ -658,7 +658,7 @@ class EVTaperDetector:
                 self._energy_since_full = energy_after
                 self._estimated_soc = max(
                     0.0, 100.0 - (energy_after / capacity * 100.0)
-                )
+                ) if capacity > 0 else 0.0
                 self._soc_anchored = True
                 improved = True
                 _LOGGER.info(

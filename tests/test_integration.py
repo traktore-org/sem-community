@@ -38,15 +38,15 @@ class TestPlatformEntityCounts:
 
     @pytest.mark.asyncio
     async def test_switch_count(self, hass, config_entry, mock_coordinator):
-        """Should create exactly 3 switches."""
+        """Should create the 3 base switches + the global ev_limit_surplus switch (#235)."""
         config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await switch_setup(hass, config_entry, add_entities)
         switches = add_entities.call_args[0][0]
-        assert len(switches) == 3
+        assert len(switches) == 4
         keys = {s.entity_description.key for s in switches}
-        assert keys == {"night_charging", "observer_mode", "smart_night_charging"}
+        assert keys == {"night_charging", "observer_mode", "smart_night_charging", "ev_limit_surplus"}
 
     @pytest.mark.asyncio
     async def test_number_count(self, hass, config_entry, mock_coordinator):

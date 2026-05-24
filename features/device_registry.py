@@ -94,6 +94,17 @@ class UnifiedDevice:
         }
 
 
+def _migrate_control_modes(overrides: Dict[str, str]) -> List[str]:
+    """Map the removed 'surplus_target' control mode to 'surplus' in place (#235).
+
+    Returns the list of device_ids that were migrated.
+    """
+    migrated = [did for did, mode in overrides.items() if mode == "surplus_target"]
+    for did in migrated:
+        overrides[did] = "surplus"
+    return migrated
+
+
 class UnifiedDeviceRegistry:
     """Reads Energy Dashboard devices, discovers controls, syncs to both systems."""
 
@@ -131,6 +142,16 @@ class UnifiedDeviceRegistry:
                 self._manual_mappings = data.get("mappings", {})
                 self._priority_overrides = data.get("priority_overrides", {})
                 self._control_mode_overrides: Dict[str, str] = data.get("control_modes", {})
+                # Migrate the removed "surplus_target" mode (#235): a device set to
+                # surplus_target in v1.5.9 keeps surplus charging (rather than silently
+                # falling back to peak_only). The "stop at target" intent is now the
+                # separate "Limit surplus to target" switch, which the user can re-enable.
+                migrated = _migrate_control_modes(self._control_mode_overrides)
+                if migrated:
+                    _LOGGER.info(
+                        "Migrated %d device(s) from removed 'surplus_target' mode to 'surplus' (#235): %s",
+                        len(migrated), ", ".join(migrated),
+                    )
                 _LOGGER.debug(
                     "Loaded %d manual mappings, %d priority overrides, %d control modes",
                     len(self._manual_mappings),

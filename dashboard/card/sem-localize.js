@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-20T21:16:00.726847+00:00
+// Generated: 2026-05-24T10:51:29.936368+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -764,7 +764,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Reducing non-critical loads",
     "Monitor - approaching peak limit": "Monitor - approaching peak limit",
     "low": "low",
-    "on": "On"
+    "on": "On",
+    "charge_target": "Charge Target",
+    "charge_to": "Charge to",
+    "limit_surplus_to_target": "Limit surplus to target"
   },
   "de": {
     "charging": "Laden",
@@ -1529,7 +1532,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Nicht-kritische Lasten werden reduziert",
     "Monitor - approaching peak limit": "Überwachen - Spitzenlast wird erreicht",
     "low": "niedrig",
-    "on": "An"
+    "on": "An",
+    "charge_target": "Ladeziel",
+    "charge_to": "Laden auf",
+    "limit_surplus_to_target": "Überschuss auf Ziel begrenzen"
   },
   "fr": {
     "charging": "En charge",
@@ -2294,7 +2300,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Réduction des charges non critiques",
     "Monitor - approaching peak limit": "Surveiller - approche de la limite de pointe",
     "low": "bas",
-    "on": "Marche"
+    "on": "Marche",
+    "charge_target": "Objectif de charge",
+    "charge_to": "Charger à",
+    "limit_surplus_to_target": "Limiter le surplus à l'objectif"
   },
   "es": {
     "charging": "Cargando",
@@ -3059,7 +3068,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Reduciendo cargas no críticas",
     "Monitor - approaching peak limit": "Monitorizar - acercándose al límite máximo",
     "low": "bajo",
-    "on": "Enc."
+    "on": "Enc.",
+    "charge_target": "Objetivo de carga",
+    "charge_to": "Cargar a",
+    "limit_surplus_to_target": "Limitar excedente al objetivo"
   },
   "it": {
     "charging": "In carica",
@@ -3824,7 +3836,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Riduzione carichi non critici",
     "Monitor - approaching peak limit": "Monitorare - avvicinamento al limite di picco",
     "low": "basso",
-    "on": "Acc."
+    "on": "Acc.",
+    "charge_target": "Obiettivo di carica",
+    "charge_to": "Carica a",
+    "limit_surplus_to_target": "Limita surplus all'obiettivo"
   },
   "nl": {
     "charging": "Laden",
@@ -4589,7 +4604,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Niet-kritieke belasting wordt verminderd",
     "Monitor - approaching peak limit": "Monitor - pieklimiet wordt benaderd",
     "low": "laag",
-    "on": "Aan"
+    "on": "Aan",
+    "charge_target": "Laaddoel",
+    "charge_to": "Laden tot",
+    "limit_surplus_to_target": "Overschot beperken tot doel"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5354,7 +5372,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Snižování nekritické zátěže",
     "Monitor - approaching peak limit": "Sledovat - blíží se špičkový limit",
     "low": "nízký",
-    "on": "Zap."
+    "on": "Zap.",
+    "charge_target": "Cíl nabíjení",
+    "charge_to": "Nabít na",
+    "limit_surplus_to_target": "Omezit přebytek na cíl"
   },
   "da": {
     "charging": "Oplader",
@@ -6119,7 +6140,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Reducerer ikke-kritiske belastninger",
     "Monitor - approaching peak limit": "Overvåg - nærmer sig spidsgrænsen",
     "low": "lav",
-    "on": "Til"
+    "on": "Til",
+    "charge_target": "Opladningsmål",
+    "charge_to": "Oplad til",
+    "limit_surplus_to_target": "Begræns overskud til mål"
   },
   "fi": {
     "charging": "Lataus",
@@ -6884,7 +6908,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Ei-kriittistä kuormaa vähennetään",
     "Monitor - approaching peak limit": "Seuraa - lähestytään huippurajaa",
     "low": "matala",
-    "on": "Pääl."
+    "on": "Pääl.",
+    "charge_target": "Lataustavoite",
+    "charge_to": "Lataa tasolle",
+    "limit_surplus_to_target": "Rajoita ylijäämä tavoitteeseen"
   },
   "hu": {
     "charging": "Töltés",
@@ -7649,7 +7676,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Nem kritikus terhelés csökkentése",
     "Monitor - approaching peak limit": "Figyelés - közeledik a csúcshatárhoz",
     "low": "alacsony",
-    "on": "Be"
+    "on": "Be",
+    "charge_target": "Töltési cél",
+    "charge_to": "Töltés eddig",
+    "limit_surplus_to_target": "Többlet korlátozása a célig"
   },
   "no": {
     "charging": "Lader",
@@ -8414,7 +8444,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Reduserer ikke-kritiske belastninger",
     "Monitor - approaching peak limit": "Overvåk - nærmer seg toppgrensen",
     "low": "lav",
-    "on": "På"
+    "on": "På",
+    "charge_target": "Lademål",
+    "charge_to": "Lad til",
+    "limit_surplus_to_target": "Begrens overskudd til mål"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9179,7 +9212,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Redukcja obciążeń niekrytycznych",
     "Monitor - approaching peak limit": "Monitoruj - zbliżanie się do limitu szczytowego",
     "low": "niski",
-    "on": "Wł."
+    "on": "Wł.",
+    "charge_target": "Cel ładowania",
+    "charge_to": "Ładuj do",
+    "limit_surplus_to_target": "Ogranicz nadwyżkę do celu"
   },
   "pt": {
     "charging": "A carregar",
@@ -9944,7 +9980,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Reduzindo cargas não críticas",
     "Monitor - approaching peak limit": "Monitorar - aproximando-se do limite de pico",
     "low": "baixo",
-    "on": "Lig."
+    "on": "Lig.",
+    "charge_target": "Meta de carga",
+    "charge_to": "Carregar até",
+    "limit_surplus_to_target": "Limitar excedente ao alvo"
   },
   "ro": {
     "charging": "Încărcare",
@@ -10709,7 +10748,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Reducerea sarcinilor necritice",
     "Monitor - approaching peak limit": "Monitorizare - apropierea limitei de vârf",
     "low": "scăzut",
-    "on": "Porn."
+    "on": "Porn.",
+    "charge_target": "Țintă de încărcare",
+    "charge_to": "Încarcă până la",
+    "limit_surplus_to_target": "Limitează surplusul la țintă"
   },
   "sv": {
     "charging": "Laddar",
@@ -11474,7 +11516,10 @@ const _semTranslations = {
     "Reducing non-critical loads": "Reducerar icke-kritiska belastningar",
     "Monitor - approaching peak limit": "Övervaka - närmar sig toppgränsen",
     "low": "låg",
-    "on": "På"
+    "on": "På",
+    "charge_target": "Laddningsmål",
+    "charge_to": "Ladda till",
+    "limit_surplus_to_target": "Begränsa överskott till mål"
   }
 };
 
