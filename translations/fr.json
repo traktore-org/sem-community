@@ -983,7 +983,7 @@
         "name": "Réduction Nocturne Prévision"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Limiter le surplus à l'objectif"
       }
     },
     "number": {
@@ -1113,10 +1113,10 @@
         "name": "EV Charging Mode"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "Type de cible VE",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "Objectif kWh",
+          "soc": "Objectif SoC %"
         }
       }
     }

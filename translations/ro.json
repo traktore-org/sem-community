@@ -982,7 +982,7 @@
         "name": "Forecast Night Reduction"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Limitează surplusul la țintă"
       }
     },
     "number": {
@@ -1112,10 +1112,10 @@
         "name": "Mod încărcare VE"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "Tip țintă EV",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "Țintă kWh",
+          "soc": "Țintă SoC %"
         }
       }
     }

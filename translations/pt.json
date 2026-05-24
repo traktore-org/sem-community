@@ -982,7 +982,7 @@
         "name": "Forecast Night Reduction"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Limitar excedente ao alvo"
       }
     },
     "number": {
@@ -1112,10 +1112,10 @@
         "name": "Modo de carregamento VE"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "Tipo de meta do VE",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "Meta kWh",
+          "soc": "Meta SoC %"
         }
       }
     }

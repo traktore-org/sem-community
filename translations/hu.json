@@ -982,7 +982,7 @@
         "name": "Forecast Night Reduction"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Többlet korlátozása a célig"
       }
     },
     "number": {
@@ -1112,10 +1112,10 @@
         "name": "EV Töltési mód"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "EV céltípus",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "kWh cél",
+          "soc": "SoC % cél"
         }
       }
     }

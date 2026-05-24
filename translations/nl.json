@@ -982,7 +982,7 @@
         "name": "Voorspelling Nachtreductie"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Overschot beperken tot doel"
       }
     },
     "number": {
@@ -1112,10 +1112,10 @@
         "name": "EV Laad Modus"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "EV-doeltype",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "kWh-doel",
+          "soc": "SoC-%-doel"
         }
       }
     }

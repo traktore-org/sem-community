@@ -982,7 +982,7 @@
         "name": "Forecast Night Reduction"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Rajoita ylijäämä tavoitteeseen"
       }
     },
     "number": {
@@ -1112,10 +1112,10 @@
         "name": "Lataustila"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "Sähköauton tavoitetyyppi",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "kWh-tavoite",
+          "soc": "SoC-%-tavoite"
         }
       }
     }

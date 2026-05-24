@@ -982,7 +982,7 @@
         "name": "Forecast Night Reduction"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Begränsa överskott till mål"
       }
     },
     "number": {
@@ -1112,10 +1112,10 @@
         "name": "EV Laddningsläge"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "EV-måltyp",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "kWh-mål",
+          "soc": "SoC-%-mål"
         }
       }
     }

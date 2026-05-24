@@ -982,7 +982,7 @@
         "name": "Forecast Night Reduction"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Ogranicz nadwyżkę do celu"
       }
     },
     "number": {
@@ -1112,10 +1112,10 @@
         "name": "Tryb ładowania EV"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "Typ celu EV",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "Cel kWh",
+          "soc": "Cel SoC %"
         }
       }
     }

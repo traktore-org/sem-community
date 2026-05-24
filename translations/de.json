@@ -983,7 +983,7 @@
         "name": "Prognose Nachtabsenkung"
       },
       "ev_limit_surplus": {
-        "name": "Limit surplus to target"
+        "name": "Überschuss auf Ziel begrenzen"
       }
     },
     "number": {
@@ -1113,10 +1113,10 @@
         "name": "EV-Lademodus"
       },
       "ev_target_type": {
-        "name": "EV Target Type",
+        "name": "EV-Zieltyp",
         "state": {
-          "kwh": "kWh target",
-          "soc": "SOC % target"
+          "kwh": "kWh-Ziel",
+          "soc": "SoC-%-Ziel"
         }
       }
     }
