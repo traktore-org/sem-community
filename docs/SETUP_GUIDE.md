@@ -453,25 +453,35 @@ Every managed device has a **Mode** setting:
 | **Off** | Never | Never | Devices you control manually |
 | **Peak Only** | Never | Yes, during grid peaks | Devices that should run normally but can be temporarily shed |
 | **Surplus** | Yes, when surplus is available | Yes, when surplus drops or during peaks | Discretionary loads (hot water boiler, pool pump, dishwasher) |
-| **Surplus Target** | Yes, when surplus is available | Yes, when target reached, surplus drops, or during peaks | EV charging: charge from solar but stop at a set target (kWh or SOC %) |
 
 **The default mode is Peak Only.** SEM will never turn a device ON unless you
-explicitly set its mode to Surplus or Surplus Target.
+explicitly set its mode to Surplus.
 
-#### Surplus Target mode for EV charging
+> EV chargers stay in this list for priority ordering, but they no longer show a
+> Mode dropdown — all EV charge-target controls live on the **EV charger card**
+> (see below).
 
-When a charger is set to **Surplus Target**, SEM charges from solar surplus exactly
-like Surplus mode, but automatically stops when the configured target is reached:
+#### Setting an EV charge target
 
-- **EV Target Mode** (`ev_target_mode` entity): choose **kWh target** (uses the
-  daily kWh target minus energy charged today) or **SOC % target** (uses the
-  vehicle's live state-of-charge sensor and `ev_target_soc`).
-- **EV Target SOC** (`ev_target_soc` entity): slider from 50–100 %, step 5 %.
-  Only active when target mode is "SOC %".
+All EV charge-target controls live together in the **Charge Target** block on the
+EV charger card — one place, per charger, no config-flow round-trips:
 
-This replaces the older `ev_limit_surplus` toggle with a richer, per-mode
-approach. The `ev_limit_surplus` toggle continues to work for backward
-compatibility.
+- **Charge to** — the target value, with a unit selector beside it:
+  - **kWh** (default): the daily kWh target (`number.sem_charger_<id>_daily_ev_target`).
+  - **% (SOC)**: the vehicle state-of-charge target (`number.sem_charger_<id>_target_soc`),
+    using the vehicle's live SOC sensor. The unit selector
+    (`select.sem_charger_<id>_ev_target_type`) only offers **%** when that charger has a
+    **vehicle SOC entity** configured — otherwise it shows kWh only.
+- **Limit surplus to target** (`switch.sem_charger_<id>_ev_limit_surplus`): when on,
+  solar-surplus charging stops once the target is reached. When off, surplus charging
+  continues as long as surplus is available.
+- **Night charging** (`switch.sem_charger_<id>_night_charging`): when on, off-peak/night
+  charging tops the car up to the target.
+
+These three controls are independent, so all eight combinations of
+target type × surplus-limit × night-charging are supported. (The old `surplus_target`
+device mode and scattered config-flow toggles have been removed; existing
+`ev_target_mode` settings are migrated to `ev_target_type` automatically.)
 
 ### Controllable and Critical toggles
 

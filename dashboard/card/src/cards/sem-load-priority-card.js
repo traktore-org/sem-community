@@ -301,6 +301,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>
                     <span class="badge priority" data-field="pri-${device.id}">${priority}</span>
                     <div class="spacer"></div>
+                    ${device.deviceType === 'ev_charger' || device.deviceType === 'ev_charging' ? nothing : html`
                     <label class="toggle-label" title="${this._t('mode_tooltip')}">
                         <span class="dim">${this._t('mode')}</span>
                         <select class="mode-select" data-action="control_mode" data-device="${device.id}">
@@ -308,7 +309,7 @@ class SEMLoadPriorityCard extends SEMLitBase {
                             <option value="peak_only" ?selected="${device.controlMode === 'peak_only'}">${this._t('peak_only')}</option>
                             <option value="surplus" ?selected="${device.controlMode === 'surplus'}">${this._t('surplus_mode')}</option>
                         </select>
-                    </label>
+                    </label>`}
                     <label class="toggle-label" title="${this._t('requires_tooltip')}">
                         <span class="dim">${this._t('requires')}</span>
                         <select class="mode-select" data-action="depends_on" data-device="${device.id}">

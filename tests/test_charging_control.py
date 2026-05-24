@@ -355,7 +355,7 @@ class TestCalculateRemainingNeed:
 
     def test_soc_based_remaining(self):
         """With vehicle SOC and target_mode=soc, remaining is based on SOC gap × capacity."""
-        coord = self._make_coordinator({"ev_target_soc": 80, "ev_battery_capacity_kwh": 40, "daily_ev_target": 10, "ev_target_mode": "soc"})
+        coord = self._make_coordinator({"ev_target_soc": 80, "ev_battery_capacity_kwh": 40, "daily_ev_target": 10, "ev_target_type": "soc"})
         energy = self._make_energy()
         # 75% current, 80% target, 40 kWh capacity → 5% × 40 = 2.0 kWh
         remaining = coord._calculate_remaining_need(energy, vehicle_soc=75.0)
@@ -363,7 +363,7 @@ class TestCalculateRemainingNeed:
 
     def test_soc_target_reached(self):
         """When vehicle SOC >= target and target_mode=soc, remaining is 0."""
-        coord = self._make_coordinator({"ev_target_soc": 80, "ev_battery_capacity_kwh": 40, "daily_ev_target": 10, "ev_target_mode": "soc"})
+        coord = self._make_coordinator({"ev_target_soc": 80, "ev_battery_capacity_kwh": 40, "daily_ev_target": 10, "ev_target_type": "soc"})
         energy = self._make_energy()
         remaining = coord._calculate_remaining_need(energy, vehicle_soc=82.0)
         assert remaining == 0.0
@@ -384,9 +384,9 @@ class TestCalculateRemainingNeed:
 
     def test_per_charger_config_override(self):
         """Per-charger config overrides global config."""
-        coord = self._make_coordinator({"ev_target_soc": 80, "ev_battery_capacity_kwh": 40, "daily_ev_target": 10, "ev_target_mode": "soc"})
+        coord = self._make_coordinator({"ev_target_soc": 80, "ev_battery_capacity_kwh": 40, "daily_ev_target": 10, "ev_target_type": "soc"})
         energy = self._make_energy()
-        charger_cfg = {"ev_target_soc": 90, "ev_battery_capacity_kwh": 60, "ev_target_mode": "soc"}
+        charger_cfg = {"ev_target_soc": 90, "ev_battery_capacity_kwh": 60, "ev_target_type": "soc"}
         # 75% current, 90% target, 60 kWh → 15% × 60 = 9.0 kWh
         remaining = coord._calculate_remaining_need(energy, vehicle_soc=75.0, charger_cfg=charger_cfg)
         assert remaining == pytest.approx(9.0)
