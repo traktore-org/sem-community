@@ -336,6 +336,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
         return False
 
+    # Max consecutive cycles to hold the last home-consumption value (#237).
+    # ~2 cycles (≈20-30s) smooths single/double-cycle sensor-lag dips while a
+    # genuinely sustained zero is still reported after the hold window.
+    HOME_HOLD_MAX_CYCLES = 2
+
+    def _smooth_home_consumption(self, power) -> None:
+        """Hold the last positive home-consumption value through transient dips to 0 (#237).
+
+        The energy balance clamps ``home_consumption_power`` to 0 when instantaneous
+        sensor readings momentarily lag a large load. Rather than emit a one-cycle 0,
+        hold the last positive value for up to ``HOME_HOLD_MAX_CYCLES``; a zero that
+        persists beyond that is reported as real. Runs before energy integration so
+        the held value also keeps the home-energy total from under-counting.
+        """
+        if power.home_consumption_power > 0:
+            self._last_home_consumption = power.home_consumption_power
+            self._home_hold_count = 0
+            return
+        last = getattr(self, "_last_home_consumption", 0.0)
+        held = getattr(self, "_home_hold_count", 0)
+        if last > 0 and held < self.HOME_HOLD_MAX_CYCLES:
+            self._home_hold_count = held + 1
+            power.home_consumption_power = last
+            _LOGGER.debug(
+                "Home consumption clamped to 0 — holding last value %.0fW (%d/%d)",
+                last, self._home_hold_count, self.HOME_HOLD_MAX_CYCLES,
+            )
+        else:
+            # Sustained zero (beyond the hold window) — accept it as real.
+            self._home_hold_count = held + 1
+
     @staticmethod
     def _get_version() -> str:
         """Read version from manifest.json (single source of truth with HACS)."""
@@ -520,6 +551,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 flipped = self._check_sign_flip(power)
                 if flipped:
                     power = self._sensor_reader.read_power()
+
+            # Smooth transient one-cycle home-consumption dips to 0 (#237).
+            # Under a large load (EV ramp) the source sensors update on slightly
+            # different cadences, so the energy balance momentarily clamps home to 0
+            # for a single cycle. Hold the last positive value through brief dips.
+            self._smooth_home_consumption(power)
 
             # Update tariff rates before energy/cost calculation so cost accumulators
             # use the current rate for this cycle (fixes dynamic tariff mid-day bug)
