@@ -332,8 +332,8 @@ class SurplusController:
                 continue
 
             if remaining_surplus >= device.min_power_threshold and not device.is_active:
-                # Only activate if device is in "surplus" mode
-                if device.control_mode != DeviceControlMode.SURPLUS:
+                # Only activate if device is in "surplus" or "surplus_target" mode
+                if device.control_mode not in (DeviceControlMode.SURPLUS, DeviceControlMode.SURPLUS_TARGET):
                     continue  # peak_only: never proactively turn on
                 if device.can_activate():
                     consumed = await device.activate(remaining_surplus)
@@ -425,10 +425,10 @@ class SurplusController:
                 )
 
         # Off-peak activation pass: force-activate devices with runtime deficit
-        # Only for "surplus" mode devices — off-peak is a form of proactive activation (#49)
+        # Only for "surplus" or "surplus_target" mode devices — off-peak is a form of proactive activation (#49)
         if price_level in ("cheap", "very_cheap", "negative"):
             for device in devices:
-                if device.control_mode != DeviceControlMode.SURPLUS:
+                if device.control_mode not in (DeviceControlMode.SURPLUS, DeviceControlMode.SURPLUS_TARGET):
                     continue
                 if device.needs_offpeak_activation:
                     consumed = await device.activate(device.min_power_threshold)

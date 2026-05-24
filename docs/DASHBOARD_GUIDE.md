@@ -113,7 +113,7 @@ All settings and device management in one place.
 | **Heat Pump & Hot Water** | Boost offset, hot water max temperature |
 | **Solar & Power** | Min solar power, max grid import |
 | **Tariff & Pricing** | Current rates, cheap/expensive thresholds |
-| **Load Priority** | Drag-and-drop device ordering with real-time power, controllable/critical toggles |
+| **Load Priority** | Drag-and-drop device ordering with real-time power, controllable/critical toggles, per-device control mode (Off / Peak Only / Surplus / Surplus Target) |
 | **Peak & Load Management** | Target peak limit, peak margin, sheddable devices |
 | **Observer Mode** | Read-only toggle for safe monitoring |
 

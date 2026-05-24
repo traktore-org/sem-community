@@ -444,7 +444,7 @@ Peak protection is defensive — it sheds loads to stay within your electricity
 contract limit. Surplus allocation is proactive — it turns devices on when
 free solar power is available and turns them off when surplus disappears.
 
-### The three control modes
+### The four control modes
 
 Every managed device has a **Mode** setting:
 
@@ -453,9 +453,25 @@ Every managed device has a **Mode** setting:
 | **Off** | Never | Never | Devices you control manually |
 | **Peak Only** | Never | Yes, during grid peaks | Devices that should run normally but can be temporarily shed |
 | **Surplus** | Yes, when surplus is available | Yes, when surplus drops or during peaks | Discretionary loads (hot water boiler, pool pump, dishwasher) |
+| **Surplus Target** | Yes, when surplus is available | Yes, when target reached, surplus drops, or during peaks | EV charging: charge from solar but stop at a set target (kWh or SOC %) |
 
 **The default mode is Peak Only.** SEM will never turn a device ON unless you
-explicitly set its mode to Surplus.
+explicitly set its mode to Surplus or Surplus Target.
+
+#### Surplus Target mode for EV charging
+
+When a charger is set to **Surplus Target**, SEM charges from solar surplus exactly
+like Surplus mode, but automatically stops when the configured target is reached:
+
+- **EV Target Mode** (`ev_target_mode` entity): choose **kWh target** (uses the
+  daily kWh target minus energy charged today) or **SOC % target** (uses the
+  vehicle's live state-of-charge sensor and `ev_target_soc`).
+- **EV Target SOC** (`ev_target_soc` entity): slider from 50–100 %, step 5 %.
+  Only active when target mode is "SOC %".
+
+This replaces the older `ev_limit_surplus` toggle with a richer, per-mode
+approach. The `ev_limit_surplus` toggle continues to work for backward
+compatibility.
 
 ### Controllable and Critical toggles
 
