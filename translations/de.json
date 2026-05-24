@@ -117,8 +117,7 @@
           "ev_total_energy_sensor": "EV-Gesamtenergiezähler (optional)",
           "vehicle_soc_entity": "Fahrzeug-Batterie-SOC-Sensor (optional)",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
-          "ev_target_soc": "EV-Ziel-SOC (%)",
-          "ev_limit_surplus": "Limit surplus charging at target"
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -129,8 +128,7 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
-          "ev_limit_surplus": "When enabled, SEM stops surplus charging once the target SOC is reached."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
         }
       },
       "settings": {
@@ -207,16 +205,14 @@
           "min_solar_power": "Minimale Solarleistung zum Starten der EV-Ladung (W)",
           "max_grid_import": "Max. Netzimport während Solarladen (W, 0 = reiner Solarbetrieb)",
           "observer_mode": "Beobachtermodus (nur lesen, keine Hardwaresteuerung)",
-          "smart_night_charging": "Nachtziel basierend auf Prognose von morgen reduzieren",
-          "ev_target_mode": "EV target mode"
+          "smart_night_charging": "Nachtziel basierend auf Prognose von morgen reduzieren"
         },
         "data_description": {
           "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
           "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
           "max_grid_import": "Maximum grid power (W) SEM may use during solar charging. Set to 0 for pure-solar mode.",
           "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
-          "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient.",
-          "ev_target_mode": "Whether the surplus charging target uses kWh (daily energy) or SOC % (vehicle state of charge). Select 'SOC %' only if a vehicle SOC sensor is configured."
+          "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
         }
       },
       "settings_tariff": {
@@ -266,8 +262,7 @@
           "critical_device_protection": "Kritische Geräte schützen",
           "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
-          "ev_target_soc": "EV-Ziel-SOC (%)",
-          "ev_limit_surplus": "Limit surplus charging at target"
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         },
         "data_description": {
           "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
@@ -277,8 +272,7 @@
           "critical_device_protection": "When enabled, devices marked as critical are never shed regardless of peak level.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
-          "ev_limit_surplus": "When enabled, SEM stops surplus charging once the target SOC is reached."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
         }
       },
       "notifications": {
@@ -290,8 +284,7 @@
           "mobile_notification_service": "Mobiler Benachrichtigungsdienst",
           "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
-          "ev_target_soc": "EV-Ziel-SOC (%)",
-          "ev_limit_surplus": "Limit surplus charging at target"
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         },
         "data_description": {
           "enable_charger_notifications": "Enable/disable persistent notification banners on the charger status card.",
@@ -299,8 +292,7 @@
           "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
-          "ev_limit_surplus": "When enabled, SEM stops surplus charging once the target SOC is reached."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
         }
       },
       "dashboard_options": {
@@ -314,8 +306,7 @@
           "include_flows": "Energiefluss-Visualisierung einschließen",
           "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
-          "ev_target_soc": "EV-Ziel-SOC (%)",
-          "ev_limit_surplus": "Limit surplus charging at target"
+          "ev_target_soc": "EV-Ziel-SOC (%)"
         },
         "data_description": {
           "generate_dashboard": "Erstellen Sie ein neues Lovelace-Dashboard für SEM. Wenn bereits ein Dashboard mit demselben Pfad existiert, wird es ersetzt.",
@@ -325,8 +316,7 @@
           "include_flows": "Fügen Sie eine Registerkarte für Energiefluss-Visualisierung mit Sankey-Diagramm hinzu, das Energieflüsse zeigt.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
-          "ev_limit_surplus": "When enabled, SEM stops surplus charging once the target SOC is reached."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
         }
       },
       "battery_scheduler": {
@@ -991,6 +981,9 @@
       },
       "smart_night_charging": {
         "name": "Prognose Nachtabsenkung"
+      },
+      "ev_limit_surplus": {
+        "name": "Limit surplus to target"
       }
     },
     "number": {
@@ -1119,8 +1112,8 @@
       "ev_charging_mode": {
         "name": "EV-Lademodus"
       },
-      "ev_target_mode": {
-        "name": "EV Target Mode",
+      "ev_target_type": {
+        "name": "EV Target Type",
         "state": {
           "kwh": "kWh target",
           "soc": "SOC % target"
