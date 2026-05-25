@@ -70,8 +70,8 @@ const HEALTH_CHIPS = [
 const WATCHED = [
     'sensor.sem_diag_version', 'sensor.sem_diag_grid_mode',
     'sensor.sem_diag_battery_capacity', 'sensor.sem_diag_update_interval',
-    'sensor.sem_diag_charger_count', 'sensor.sem_diag_charger_control_type',
-    'sensor.sem_diag_unavailable_sensors',
+    'sensor.sem_diag_charger_count', 'sensor.sem_diag_charger_control',
+    'sensor.sem_diag_sensors_unavailable', 'sensor.sem_diag_ed_config',
     'sensor.sem_solar_power', 'sensor.sem_grid_power',
     'sensor.sem_battery_soc', 'sensor.sem_ev_power',
     'sensor.sem_forecast_today', 'sensor.sem_tariff_current_import_rate',
@@ -141,12 +141,28 @@ class SEMSystemCard extends SEMLitBase {
         const ver = this._val('diag_version') || '—';
         const gridMode = this._val('diag_grid_mode') || '—';
         const chargerCount = this._val('diag_charger_count') || '—';
-        const controlType = this._val('diag_charger_control_type') || '—';
+        const controlType = this._val('diag_charger_control') || '—';
         const capacity = this._valNum('diag_battery_capacity');
         const capStr = capacity > 0 ? capacity.toFixed(1) : '—';
-        const unavailable = this._val('diag_unavailable_sensors') || '0';
+        const unavailable = this._val('diag_sensors_unavailable') || '0';
 
-        const text = `SEM ${ver} | Grid: ${gridMode} | Chargers: ${chargerCount} (${controlType}) | Battery: ${capStr}kWh | Unavailable: ${unavailable}`;
+        const header = `SEM ${ver} | Grid: ${gridMode} | Chargers: ${chargerCount} (${controlType}) | Battery: ${capStr}kWh | Unavailable: ${unavailable}`;
+
+        // Energy Dashboard mapping with actual entity names, from diag_ed_config
+        // attributes; falls back to the compact state summary if unavailable (#250).
+        const ed = this._hass?.states?.['sensor.sem_diag_ed_config']?.attributes?.energy_dashboard;
+        let edBlock;
+        if (ed) {
+            const v = x => x || '—';
+            edBlock =
+                `Solar:   pwr=${v(ed.solar?.power)} [${v(ed.solar?.power_source)}]  energy=${v(ed.solar?.energy)}\n` +
+                `Grid:    pwr=${v(ed.grid?.power)} [${v(ed.grid?.power_source)}]  imp=${v(ed.grid?.import_energy)}  exp=${v(ed.grid?.export_energy)}\n` +
+                `Battery: pwr=${v(ed.battery?.power)} [${v(ed.battery?.power_source)}]  chg=${v(ed.battery?.charge_energy)}  dis=${v(ed.battery?.discharge_energy)}`;
+        } else {
+            edBlock = `Config: ${this._val('diag_ed_config') || '—'}`;
+        }
+
+        const text = `${header}\n${edBlock}`;
 
         navigator.clipboard.writeText(text).then(() => {
             this._copyFeedback = this._t('copied');
@@ -190,7 +206,7 @@ class SEMSystemCard extends SEMLitBase {
         const cap = this._valNum('diag_battery_capacity');
         const interval = this._valNum('diag_update_interval');
         const chargerCount = this._val('diag_charger_count') || '—';
-        const controlType = this._val('diag_charger_control_type') || '';
+        const controlType = this._val('diag_charger_control') || '';
         const chargersVal = controlType ? `${chargerCount} (${controlType})` : chargerCount;
 
         return html`
@@ -216,7 +232,7 @@ class SEMSystemCard extends SEMLitBase {
             </div>
             <div class="info-row">
                 <span class="info-row-label">${this._t('unavailable_sensors')}</span>
-                <span class="info-row-value">${this._val('diag_unavailable_sensors') || '0'}</span>
+                <span class="info-row-value">${this._val('diag_sensors_unavailable') || '0'}</span>
             </div>
         `;
     }

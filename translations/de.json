@@ -938,6 +938,9 @@
       },
       "diag_charger_count": {
         "name": "Konfigurierte Ladestationen"
+      },
+      "diag_ed_config": {
+        "name": "Energie-Dashboard-Konfiguration"
       }
     },
     "binary_sensor": {

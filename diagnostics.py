@@ -87,6 +87,13 @@ async def async_get_config_entry_diagnostics(
                 "grid": _power_source("grid", ed_config.grid_import_power),
                 "battery": _power_source("battery", ed_config.battery_power),
             },
+            "energy_sensors": {
+                "solar": ed_config.solar_energy,
+                "grid_import": ed_config.grid_import_energy,
+                "grid_export": ed_config.grid_export_energy,
+                "battery_charge": ed_config.battery_charge_energy,
+                "battery_discharge": ed_config.battery_discharge_energy,
+            },
         }
 
     # Split-grid discovery state (issue #166): surface which import/export

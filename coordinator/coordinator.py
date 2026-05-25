@@ -1096,6 +1096,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             result["diag_sensors_unavailable"] = unavail_count
             result["diag_health_violations"] = self._health_check.total_violations
 
+            # Energy Dashboard config summary — surfaces whether power AND energy are
+            # configured per source, and where power came from. Pasted via the System
+            # card's "Copy diagnostics" so "all values 0" reports (#250) are self-
+            # diagnosing: all pwr=none / energy=MISSING ⇒ the dashboard isn't wired up.
+            result["diag_ed_config"] = self._build_ed_config_summary()
+
             # Tariff schedule for dashboard card (#25)
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
                 result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
@@ -2482,6 +2488,76 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     device._daily_runtime_accumulated_sec,
                     device._daily_runtime_meter_day.isoformat(),
                 )
+
+    def get_ed_config_detail(self) -> Optional[Dict[str, Any]]:
+        """Full Energy Dashboard mapping (entity IDs + power source) per source.
+
+        Exposed as attributes on the diag_ed_config sensor so the System card's
+        Copy diagnostics can include the actual entity names — which makes a wrong
+        mapping obvious, not just whether something is configured (#250). Returns
+        None when SEM is not using the Energy Dashboard.
+        """
+        ed = self._energy_dashboard_config
+        if ed is None:
+            return None
+        derived = getattr(ed, "derived_power", {}) or {}
+
+        def _src(kind: str, entity_id) -> str:
+            if kind in derived:
+                return "derived"
+            return "stat_rate" if entity_id else "none"
+
+        return {
+            "solar": {
+                "power": ed.solar_power,
+                "power_source": _src("solar", ed.solar_power),
+                "energy": ed.solar_energy,
+            },
+            "grid": {
+                "power": ed.grid_import_power,
+                "power_source": _src("grid", ed.grid_import_power),
+                "import_energy": ed.grid_import_energy,
+                "export_energy": ed.grid_export_energy,
+            },
+            "battery": {
+                "power": ed.battery_power,
+                "power_source": _src("battery", ed.battery_power),
+                "charge_energy": ed.battery_charge_energy,
+                "discharge_energy": ed.battery_discharge_energy,
+            },
+        }
+
+    def _build_ed_config_summary(self) -> str:
+        """Summarize the Energy Dashboard mapping for the copy-diagnostics string.
+
+        Shows, per source, whether power and energy are configured and where power
+        came from (stat_rate / derived / none). Returns "legacy" when SEM is not
+        using the Energy Dashboard. Kept compact (< 255 chars) for a sensor state.
+        """
+        ed = self._energy_dashboard_config
+        if ed is None:
+            return "legacy"
+
+        derived = getattr(ed, "derived_power", {}) or {}
+
+        def _pwr(kind: str, entity_id) -> str:
+            if kind in derived:
+                return "derived"
+            return "stat_rate" if entity_id else "none"
+
+        def _e(entity_id) -> str:
+            return "ok" if entity_id else "MISSING"
+
+        solar = f"solar:pwr={_pwr('solar', ed.solar_power)},energy={_e(ed.solar_energy)}"
+        grid = (
+            f"grid:pwr={_pwr('grid', ed.grid_import_power)},"
+            f"imp={_e(ed.grid_import_energy)},exp={_e(ed.grid_export_energy)}"
+        )
+        batt = (
+            f"batt:pwr={_pwr('battery', ed.battery_power)},"
+            f"chg={_e(ed.battery_charge_energy)},dis={_e(ed.battery_discharge_energy)}"
+        )
+        return f"{solar} | {grid} | {batt}"
 
     def _build_system_status(self, power: PowerReadings, charging_state: str) -> SystemStatus:
         """Build system status from power readings."""

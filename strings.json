@@ -980,6 +980,9 @@
       },
       "diag_sensors_unavailable": {
         "name": "Sensors Unavailable"
+      },
+      "diag_ed_config": {
+        "name": "Energy Dashboard Config"
       }
     },
     "binary_sensor": {

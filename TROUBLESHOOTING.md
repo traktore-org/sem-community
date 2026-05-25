@@ -247,7 +247,9 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 2. Open each source (Solar / Grid / Battery) and, alongside the energy sensor, add its **power** sensor (W or kW, `state_class: measurement`).
 3. Restart Home Assistant.
 
-**Confirm what SEM resolved:** download diagnostics at **Settings > Devices & Services > Solar Energy Management > ⋮ > Download diagnostics** and check `energy_dashboard.power_sensors` / `energy_dashboard.power_source`. `"derived"` means SEM recovered the sensor itself, `"stat_rate"` means HA provided it, and `null` means none was found (that source reads 0).
+**Confirm what SEM resolved (quickest):** on the dashboard **System** tab, expand **Diagnostics** and press **Copy diagnostics**. The copied text includes a `Config:` line, e.g. `solar:pwr=derived,energy=ok | grid:pwr=stat_rate,imp=ok,exp=ok | batt:pwr=none,chg=ok,dis=ok`. `pwr=none` or `energy=MISSING` shows exactly which source isn't wired up; `pwr=stat_rate` means HA provided the power link, `pwr=derived` means SEM recovered it from the device. Paste this when reporting an issue.
+
+**Full detail:** download diagnostics at **Settings > Devices & Services > Solar Energy Management > ⋮ > Download diagnostics** and check `energy_dashboard.power_sensors` / `power_source` / `energy_sensors` for the exact entity IDs.
 
 **Sign convention:** SolaX uses positive=import for grid (Pattern D) — SEM auto-detects and corrects this from the energy counters; no template sensor needed.
 

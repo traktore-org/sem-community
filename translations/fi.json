@@ -937,6 +937,9 @@
       },
       "diag_charger_count": {
         "name": "Määritetyt laturit"
+      },
+      "diag_ed_config": {
+        "name": "Energianäkymän määritykset"
       }
     },
     "binary_sensor": {
