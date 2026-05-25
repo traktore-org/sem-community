@@ -15,6 +15,13 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard, semFormatPower } from '../base/sem-shared.js';
+import {
+    ENTITY_DOMAINS,
+    controlToFormValues,
+    formValuesToServiceData,
+    buildLoadConfigModalHTML,
+    readFormValues,
+} from './load-config-modal.js';
 
 /* ── SortableJS (inlined v1.15.6 MIT) ── */
 (function(){if(window.Sortable)return;/*! Sortable 1.15.6 - MIT | git://github.com/SortableJS/Sortable.git */
@@ -184,6 +191,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                     isAvailable: info.is_available || false,
                     hasManualMapping: info.has_manual_mapping || false,
                     energySensor: info.energy_sensor || '',
+                    control: info.control || null,
+                    controlEntity: info.control?.entity || info.switch_entity || '',
+                    controlType: info.control?.type || 'switch',
                     controlMode: info.control_mode || 'peak_only',
                     dependsOn: info.depends_on || [],
                     blockedBy: info.blocked_by || null,
@@ -514,42 +524,87 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     // ── Configure modal ──
-    _showConfigureModal(energySensor, deviceName) {
+    // Pre-fills from the saved mapping so reopening shows what is stored (the
+    // #219 "empty on reopen" bug), and supports all four control types SEM can
+    // shed/restore: switch, current, input_boolean (entity-based) and service.
+    // ha-entity-picker is lazy-loaded by HA and is NOT registered on a custom
+    // dashboard by default, so creating one cold yields nothing. Loading the
+    // card helpers + an entities-card config element forces its registration.
+    async _ensureEntityPicker() {
+        if (customElements.get('ha-entity-picker')) return;
+        try {
+            const helpers = await window.loadCardHelpers?.();
+            if (helpers?.createCardElement) {
+                const el = await helpers.createCardElement({ type: 'entities', entities: [] });
+                await el.constructor?.getConfigElement?.();
+            }
+        } catch (e) {
+            // Falls back to the plain text input below.
+        }
+    }
+
+    async _showConfigureModal(energySensor, deviceName) {
         const existing = this.renderRoot.getElementById('sem-config-modal');
         if (existing) existing.remove();
+        const dev = this.devices.find(d => d.energySensor === energySensor);
+        const values = controlToFormValues(dev?.control);
+        await this._ensureEntityPicker();
+
         const overlay = document.createElement('div');
         overlay.id = 'sem-config-modal';
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:center;justify-content:center';
-        overlay.innerHTML = `
-            <div style="background:var(--card-background-color,#1e1e2e);border-radius:12px;padding:24px;min-width:300px;max-width:90vw;color:var(--primary-text-color,#e0e0e0)">
-                <div style="font-weight:700;margin-bottom:16px">${this._t('configure_device')}: ${deviceName}</div>
-                <label style="font-size:13px;opacity:0.7">${this._t('control_entity')}</label>
-                <input id="cfg-entity" type="text" placeholder="switch.example" style="width:100%;padding:8px;margin:6px 0 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);color:inherit;box-sizing:border-box">
-                <label style="font-size:13px;opacity:0.7">${this._t('control_type')}</label>
-                <select id="cfg-type" style="width:100%;padding:8px;margin:6px 0 16px;border-radius:6px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.2);color:inherit">
-                    <option value="switch">${this._t('mode_switch')}</option>
-                    <option value="current">${this._t('mode_current')}</option>
-                </select>
-                <div style="display:flex;gap:8px;justify-content:flex-end">
-                    <button id="cfg-cancel" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;background:rgba(255,255,255,0.1);color:inherit">${this._t('cancel')}</button>
-                    <button id="cfg-save" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;background:#4caf50;color:white">${this._t('save')}</button>
-                </div>
-            </div>`;
+        overlay.innerHTML = buildLoadConfigModalHTML({
+            deviceName, values, t: (k) => this._t(k),
+        });
         this.renderRoot.appendChild(overlay);
+
+        const typeSel      = overlay.querySelector('#cfg-type');
+        const entityGroup  = overlay.querySelector('#cfg-entity-group');
+        const serviceGroup = overlay.querySelector('#cfg-service-group');
+        const entityInput  = overlay.querySelector('#cfg-entity');
+        const errDiv       = overlay.querySelector('.cfg-error');
+        const showError    = (msg) => { errDiv.textContent = msg; errDiv.style.display = 'block'; };
+
+        // Upgrade the plain text box to an ha-entity-picker when HA has it
+        // registered, so the user chooses a valid entity (filtered by control
+        // type) instead of typing — the wrong-switch trap in #219. Falls back
+        // to the text input if the picker element isn't available.
+        let picker = null;
+        if (customElements.get('ha-entity-picker')) {
+            picker = document.createElement('ha-entity-picker');
+            picker.hass = this._hass;
+            picker.allowCustomEntity = true;
+            picker.value = entityInput.value;
+            picker.includeDomains = ENTITY_DOMAINS[typeSel.value];
+            picker.style.cssText = 'display:block;margin:6px 0 12px';
+            picker.addEventListener('value-changed', (e) => { entityInput.value = e.detail.value || ''; });
+            entityInput.style.display = 'none';
+            entityInput.parentNode.insertBefore(picker, entityInput);
+        }
+
+        const applyType = () => {
+            const isService = typeSel.value === 'service';
+            entityGroup.style.display  = isService ? 'none' : 'block';
+            serviceGroup.style.display = isService ? 'block' : 'none';
+            if (picker && !isService) picker.includeDomains = ENTITY_DOMAINS[typeSel.value];
+        };
+        typeSel.addEventListener('change', applyType);
+
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         overlay.querySelector('#cfg-cancel').addEventListener('click', () => overlay.remove());
         overlay.querySelector('#cfg-save').addEventListener('click', () => {
-            const entity = overlay.querySelector('#cfg-entity').value.trim();
-            if (!entity) return;
-            const type = overlay.querySelector('#cfg-type').value;
-            this._hass.callService('solar_energy_management', 'set_device_control_mapping', {
-                energy_sensor: energySensor, control_entity: entity, control_type: type,
-            }).then(() => overlay.remove())
-              .catch(err => {
-                  let errDiv = overlay.querySelector('.cfg-error');
-                  if (!errDiv) { errDiv = document.createElement('div'); errDiv.className = 'cfg-error'; errDiv.style.cssText = 'color:#f44336;font-size:13px;margin-top:8px'; overlay.querySelector('div').appendChild(errDiv); }
-                  errDiv.textContent = err.message;
-              });
+            const formVals = readFormValues(overlay);
+            if (picker) formVals.entity = (picker.value || '').trim();
+            let data;
+            try {
+                data = formValuesToServiceData(energySensor, formVals);
+            } catch (err) {
+                showError(this._t(err.message));   // err.message is a translation key
+                return;
+            }
+            this._hass.callService('solar_energy_management', 'set_device_control_mapping', data)
+                .then(() => overlay.remove())
+                .catch(err => showError(err.message));
         });
     }
 

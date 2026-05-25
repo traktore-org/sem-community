@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-24T10:51:29.936368+00:00
+// Generated: 2026-05-25T18:19:03.804159+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -767,7 +767,15 @@ const _semTranslations = {
     "on": "On",
     "charge_target": "Charge Target",
     "charge_to": "Charge to",
-    "limit_surplus_to_target": "Limit surplus to target"
+    "limit_surplus_to_target": "Limit surplus to target",
+    "mode_service": "Service call",
+    "mode_input_boolean": "Input boolean",
+    "svc_service": "Service (e.g. keba.set_current)",
+    "svc_param": "Parameter name",
+    "svc_shed_value": "Value when reducing",
+    "svc_restore_value": "Value when restoring",
+    "mapping_entity_required": "Please choose a control entity.",
+    "mapping_service_required": "Please enter a service (e.g. keba.set_current)."
   },
   "de": {
     "charging": "Laden",
@@ -1535,7 +1543,15 @@ const _semTranslations = {
     "on": "An",
     "charge_target": "Ladeziel",
     "charge_to": "Laden auf",
-    "limit_surplus_to_target": "Überschuss auf Ziel begrenzen"
+    "limit_surplus_to_target": "Überschuss auf Ziel begrenzen",
+    "mode_service": "Dienst-Aufruf",
+    "mode_input_boolean": "Input-Boolean",
+    "svc_service": "Dienst (z. B. keba.set_current)",
+    "svc_param": "Parametername",
+    "svc_shed_value": "Wert beim Reduzieren",
+    "svc_restore_value": "Wert beim Wiederherstellen",
+    "mapping_entity_required": "Bitte eine Steuer-Entität wählen.",
+    "mapping_service_required": "Bitte einen Dienst angeben (z. B. keba.set_current)."
   },
   "fr": {
     "charging": "En charge",
@@ -4607,7 +4623,15 @@ const _semTranslations = {
     "on": "Aan",
     "charge_target": "Laaddoel",
     "charge_to": "Laden tot",
-    "limit_surplus_to_target": "Overschot beperken tot doel"
+    "limit_surplus_to_target": "Overschot beperken tot doel",
+    "mode_service": "Service-aanroep",
+    "mode_input_boolean": "Input-boolean",
+    "svc_service": "Service (bijv. keba.set_current)",
+    "svc_param": "Parameternaam",
+    "svc_shed_value": "Waarde bij verlagen",
+    "svc_restore_value": "Waarde bij herstellen",
+    "mapping_entity_required": "Kies een besturingsentiteit.",
+    "mapping_service_required": "Voer een service in (bijv. keba.set_current)."
   },
   "cs": {
     "charging": "Nabíjení",

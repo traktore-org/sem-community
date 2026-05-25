@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "rollup -c rollup.config.mjs",
-    "watch": "rollup -c rollup.config.mjs -w"
+    "watch": "rollup -c rollup.config.mjs -w",
+    "test": "node --test"
   },
   "dependencies": {
     "lit": "^3.3.2"

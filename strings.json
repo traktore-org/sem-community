@@ -1178,6 +1178,12 @@
     },
     "invalid_deadline_format": {
       "message": "Invalid deadline format: {deadline}. Use ISO format (YYYY-MM-DDTHH:MM:SS)."
+    },
+    "mapping_entity_required": {
+      "message": "A control entity is required for switch, current, and input_boolean control types."
+    },
+    "mapping_service_required": {
+      "message": "A service (e.g. keba.set_current) is required for the service control type."
     }
   },
   "issues": {
