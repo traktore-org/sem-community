@@ -70,6 +70,8 @@ class MockCoordinator(EVControlMixin):
         self._ev_device = None
         self._ev_devices = {}
         self._ev_stalled_since = None
+        self._ev_reenable_attempts = 0
+        self._ev_charge_refused = False
         self._ev_enable_surplus_since = None
         self._ev_charge_started_at = None
         self._ev_last_change_time = None
@@ -87,6 +89,8 @@ class MockCoordinator(EVControlMixin):
         self._last_ev_connected = False
         # Multi-charger state dicts
         self._ev_stalled_since_per_charger = {}
+        self._ev_reenable_attempts_per_charger = {}
+        self._ev_charge_refused_per_charger = {}
         self._ev_enable_surplus_per_charger = {}
         self._ev_charge_started_per_charger = {}
         self._ev_last_change_per_charger = {}
@@ -170,6 +174,40 @@ class TestMultiChargerContextSwap:
         coord._ev_stalled_since = saved
 
         assert coord._ev_stalled_since == original_stall
+
+    def test_reenable_guard_isolated_between_chargers(self):
+        """#243: charger A's 'car full' latch must not bleed into charger B.
+
+        Mirrors the coordinator.py save/swap/restore sequence for the new
+        false-stall guard fields.
+        """
+        coord = MockCoordinator({})
+        # Charger A latched off (refused), charger B fresh
+        coord._ev_reenable_attempts_per_charger["wb_1"] = 4
+        coord._ev_charge_refused_per_charger["wb_1"] = True
+        coord._ev_reenable_attempts_per_charger["wb_2"] = 0
+        coord._ev_charge_refused_per_charger["wb_2"] = False
+
+        # Swap in charger A
+        coord._ev_reenable_attempts = coord._ev_reenable_attempts_per_charger.get("wb_1", 0)
+        coord._ev_charge_refused = coord._ev_charge_refused_per_charger.get("wb_1", False)
+        assert coord._ev_reenable_attempts == 4 and coord._ev_charge_refused is True
+
+        # Swap in charger B — must see its own fresh state, not A's
+        coord._ev_reenable_attempts = coord._ev_reenable_attempts_per_charger.get("wb_2", 0)
+        coord._ev_charge_refused = coord._ev_charge_refused_per_charger.get("wb_2", False)
+        assert coord._ev_reenable_attempts == 0 and coord._ev_charge_refused is False
+
+    def test_reenable_guard_saved_back_per_charger(self):
+        """New guard state computed during a charger's turn is saved back to its slot."""
+        coord = MockCoordinator({})
+        coord._ev_reenable_attempts = 2
+        coord._ev_charge_refused = False
+        # Save-back (end of charger wb_1's turn)
+        coord._ev_reenable_attempts_per_charger["wb_1"] = coord._ev_reenable_attempts
+        coord._ev_charge_refused_per_charger["wb_1"] = coord._ev_charge_refused
+        assert coord._ev_reenable_attempts_per_charger["wb_1"] == 2
+        assert coord._ev_charge_refused_per_charger["wb_1"] is False
 
 
 # ============================================================
@@ -838,3 +876,108 @@ class TestEVNotificationTriggers:
         assert event_data["event"] == "ev_charge_skip"
         assert event_data["estimated_soc"] == 85
         assert event_data["nights_remaining"] == 3
+
+
+# ============================================================
+# EV false-stall guard (#243)
+# ============================================================
+
+def make_stall_charger(setpoint=10, min_current=6, session_active=True):
+    """Mock charger configured for the false-stall scenario."""
+    dev = MagicMock()
+    dev.device_id = "ev_charger"
+    dev.min_current = min_current
+    dev._current_setpoint = setpoint
+    dev._session_active = session_active
+    return dev
+
+
+def confirm_stall(coord, power):
+    """Run two passes so the >30s stall timer trips on the second call.
+
+    First call arms _ev_stalled_since; second call (simulated 31s later)
+    evaluates the re-enable decision. Returns the second call's result.
+    """
+    coord._ev_stalled_since = None
+    coord._should_reenable_charger(power)  # arm timer
+    # Backdate the arm so the >30s threshold is crossed
+    if coord._ev_stalled_since is not None:
+        coord._ev_stalled_since -= 31
+    return coord._should_reenable_charger(power)
+
+
+class TestEVFalseStallGuard:
+    """#243: full car left plugged in must not loop 're-enabling' forever."""
+
+    def _power(self, ev_power=0.0, ev_connected=True):
+        return PowerReadings(ev_power=ev_power, ev_connected=ev_connected)
+
+    def test_first_attempts_reenable(self):
+        """First few confirmed stalls return True (genuine self-heal)."""
+        coord = MockCoordinator({"ev_max_reenable_attempts": 3})
+        coord._ev_device = make_stall_charger()
+        assert confirm_stall(coord, self._power()) is True
+        assert coord._ev_reenable_attempts == 1
+
+    def test_gives_up_after_max_attempts(self):
+        """After max attempts the car is deemed full → stop re-enabling."""
+        coord = MockCoordinator({"ev_max_reenable_attempts": 3})
+        coord._ev_device = make_stall_charger()
+        power = self._power()
+        results = [confirm_stall(coord, power) for _ in range(5)]
+        # 3 re-enables, then latched off
+        assert results[:3] == [True, True, True]
+        assert results[3] is False
+        assert results[4] is False
+        assert coord._ev_charge_refused is True
+
+    def test_stays_quiet_once_refused(self):
+        """Once refused, further calls short-circuit to False (no spam)."""
+        coord = MockCoordinator({"ev_max_reenable_attempts": 2})
+        coord._ev_device = make_stall_charger()
+        power = self._power()
+        for _ in range(4):
+            confirm_stall(coord, power)
+        assert coord._ev_charge_refused is True
+        # Direct call (no timer) must also stay False without touching timer
+        assert coord._should_reenable_charger(power) is False
+
+    def test_resets_when_car_draws_power(self):
+        """Car starts drawing → latch + counter clear → self-heal re-armed."""
+        coord = MockCoordinator({"ev_max_reenable_attempts": 2})
+        coord._ev_device = make_stall_charger()
+        power = self._power()
+        for _ in range(4):
+            confirm_stall(coord, power)
+        assert coord._ev_charge_refused is True
+        # Car now draws power (>=50W) → healthy branch resets everything
+        coord._should_reenable_charger(self._power(ev_power=4200.0))
+        assert coord._ev_charge_refused is False
+        assert coord._ev_reenable_attempts == 0
+        # A fresh stall can re-enable again
+        assert confirm_stall(coord, power) is True
+
+    def test_resets_when_car_unplugged(self):
+        """Unplug clears the latch so a new session starts fresh."""
+        coord = MockCoordinator({"ev_max_reenable_attempts": 2})
+        coord._ev_device = make_stall_charger()
+        for _ in range(4):
+            confirm_stall(coord, self._power())
+        assert coord._ev_charge_refused is True
+        # Disconnected → healthy branch resets
+        coord._should_reenable_charger(self._power(ev_connected=False))
+        assert coord._ev_charge_refused is False
+        assert coord._ev_reenable_attempts == 0
+
+    def test_no_reenable_when_session_inactive(self):
+        """No session → never re-enable regardless of power."""
+        coord = MockCoordinator({})
+        coord._ev_device = make_stall_charger(session_active=False)
+        assert coord._should_reenable_charger(self._power()) is False
+
+    def test_default_max_attempts_is_three(self):
+        """Without config override, default cap is 3 attempts."""
+        coord = MockCoordinator({})
+        coord._ev_device = make_stall_charger()
+        results = [confirm_stall(coord, self._power()) for _ in range(5)]
+        assert results == [True, True, True, False, False]

@@ -120,6 +120,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
         self._ev_charge_started_per_charger: Dict[str, Optional[float]] = {}
         self._ev_last_change_per_charger: Dict[str, Any] = {}
+        # False-stall guard per charger (#243)
+        self._ev_reenable_attempts_per_charger: Dict[str, int] = {}
+        self._ev_charge_refused_per_charger: Dict[str, bool] = {}
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
         self._daily_ev_per_charger_date: Optional[str] = None
         self._notification_manager = NotificationManager(hass, config)
@@ -227,6 +230,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
+        # False-stall guard: consecutive failed re-enables + "car full" latch (#243)
+        self._ev_reenable_attempts: int = 0
+        self._ev_charge_refused: bool = False
 
         # Session cost tracking (primary charger + per-charger dict)
         self._session_data = SessionData()
@@ -753,12 +759,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         "enable": self._ev_enable_surplus_since,
                         "started": self._ev_charge_started_at,
                         "change": self._ev_last_change_time,
+                        "reenable_attempts": self._ev_reenable_attempts,
+                        "charge_refused": self._ev_charge_refused,
                     }
                     self._ev_device = ev_dev
                     self._ev_stalled_since = self._ev_stalled_since_per_charger.get(cid)
                     self._ev_enable_surplus_since = self._ev_enable_surplus_per_charger.get(cid)
                     self._ev_charge_started_at = self._ev_charge_started_per_charger.get(cid)
                     self._ev_last_change_time = self._ev_last_change_per_charger.get(cid)
+                    self._ev_reenable_attempts = self._ev_reenable_attempts_per_charger.get(cid, 0)
+                    self._ev_charge_refused = self._ev_charge_refused_per_charger.get(cid, False)
                     self._current_charger_budget = ev_budget_per_charger.get(cid)
                     # Set per-charger night target (#193)
                     per_charger_target = getattr(self, '_night_target_per_charger_map', {}).get(cid)
@@ -801,11 +811,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         self._ev_enable_surplus_per_charger[cid] = self._ev_enable_surplus_since
                         self._ev_charge_started_per_charger[cid] = self._ev_charge_started_at
                         self._ev_last_change_per_charger[cid] = self._ev_last_change_time
+                        self._ev_reenable_attempts_per_charger[cid] = self._ev_reenable_attempts
+                        self._ev_charge_refused_per_charger[cid] = self._ev_charge_refused
                         self._ev_device = saved["dev"]
                         self._ev_stalled_since = saved["stalled"]
                         self._ev_enable_surplus_since = saved["enable"]
                         self._ev_charge_started_at = saved["started"]
                         self._ev_last_change_time = saved["change"]
+                        self._ev_reenable_attempts = saved["reenable_attempts"]
+                        self._ev_charge_refused = saved["charge_refused"]
                         self._current_charger_budget = None
                         self._cycle_vehicle_soc = saved_vehicle_soc_ctrl
                 self._save_ev_session_state()

@@ -285,6 +285,8 @@ class EVControlMixin:
         if ev._session_active:
             await ev.stop_session()
         self._ev_stalled_since = None
+        self._ev_reenable_attempts = 0
+        self._ev_charge_refused = False
 
     def _get_peak_limit_w(self) -> float:
         """Get peak limit in watts from load manager or config."""
@@ -362,6 +364,16 @@ class EVControlMixin:
         Works with any charger (KEBA, Wallbox, Easee, etc.) — if SEM set
         a current >= min but the charger reports no power, it may have been
         externally disabled or stalled. Re-enable after cooldown.
+
+        False-stall guard (#243): a car left plugged in at ~100% SOC never
+        draws power despite an offered current, which would otherwise re-enable
+        (and log a warning) on every cycle forever. After a few failed
+        re-enables we conclude the car is not accepting charge (likely full),
+        latch ``_ev_charge_refused``, log once, and go quiet. The latch clears
+        the moment the car actually draws power (>=50 W), is unplugged, or SEM
+        stops offering current — so genuine stalls still self-heal within the
+        first few attempts and a re-plug starts fresh. Charger-agnostic; does
+        not depend on SOC estimation.
         """
         ev = self._ev_device
         if not ev._session_active:
@@ -370,16 +382,38 @@ class EVControlMixin:
         if (ev._current_setpoint >= ev.min_current
                 and power.ev_power < 50
                 and power.ev_connected):
+            # Car already deemed not-accepting this session — stay quiet
+            if getattr(self, "_ev_charge_refused", False):
+                return False
             if self._ev_stalled_since is None:
                 self._ev_stalled_since = dt_util.now().timestamp()
                 return False
             if dt_util.now().timestamp() - self._ev_stalled_since > 30:
-                _LOGGER.warning("EV charger stalled (setpoint=%.0fA, power=%.0fW) — re-enabling",
-                                ev._current_setpoint, power.ev_power)
                 self._ev_stalled_since = None
+                max_attempts = int(self.config.get("ev_max_reenable_attempts", 3))
+                self._ev_reenable_attempts = getattr(self, "_ev_reenable_attempts", 0) + 1
+                if self._ev_reenable_attempts > max_attempts:
+                    # Car keeps refusing — likely full. Stop re-enabling.
+                    self._ev_charge_refused = True
+                    _LOGGER.info(
+                        "EV not accepting charge after %d re-enable attempts "
+                        "(setpoint=%.0fA, power=%.0fW) — car likely full; "
+                        "pausing re-enable until power resumes or car unplugged",
+                        max_attempts, ev._current_setpoint, power.ev_power,
+                    )
+                    return False
+                _LOGGER.warning(
+                    "EV charger stalled (setpoint=%.0fA, power=%.0fW) — "
+                    "re-enabling (attempt %d/%d)",
+                    ev._current_setpoint, power.ev_power,
+                    self._ev_reenable_attempts, max_attempts,
+                )
                 return True
         else:
+            # Healthy: car drawing power, disconnected, or no current offered.
             self._ev_stalled_since = None
+            self._ev_reenable_attempts = 0
+            self._ev_charge_refused = False
         return False
 
     def _calculate_forecast_night_target(
