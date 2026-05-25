@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-24T10:51:29.936368+00:00
+// Generated: 2026-05-25T19:18:03.783810+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -670,7 +670,7 @@ const _semTranslations = {
     "control_entity": "Control entity",
     "control_type": "Control type",
     "mode_switch": "Switch",
-    "mode_current": "Current/Amperage",
+    "mode_current": "Number entity",
     "cancel": "Cancel",
     "save": "Save",
     "monthly": "Monthly",
@@ -767,7 +767,16 @@ const _semTranslations = {
     "on": "On",
     "charge_target": "Charge Target",
     "charge_to": "Charge to",
-    "limit_surplus_to_target": "Limit surplus to target"
+    "limit_surplus_to_target": "Limit surplus to target",
+    "mode_service": "Service call",
+    "mode_input_boolean": "Input boolean",
+    "svc_service": "Service (e.g. keba.set_current)",
+    "svc_param": "Parameter name",
+    "svc_shed_value": "Value when reducing",
+    "svc_restore_value": "Value when restoring",
+    "mapping_entity_required": "Please choose a control entity.",
+    "mapping_service_required": "Please enter a service (e.g. keba.set_current).",
+    "clear_mapping": "Reset to auto-detect"
   },
   "de": {
     "charging": "Laden",
@@ -1438,7 +1447,7 @@ const _semTranslations = {
     "control_entity": "Steuerungsentität",
     "control_type": "Steuerungstyp",
     "mode_switch": "Schalter",
-    "mode_current": "Strom/Ampere",
+    "mode_current": "Number-Entität",
     "cancel": "Abbrechen",
     "save": "Speichern",
     "monthly": "Monatlich",
@@ -1535,7 +1544,16 @@ const _semTranslations = {
     "on": "An",
     "charge_target": "Ladeziel",
     "charge_to": "Laden auf",
-    "limit_surplus_to_target": "Überschuss auf Ziel begrenzen"
+    "limit_surplus_to_target": "Überschuss auf Ziel begrenzen",
+    "mode_service": "Dienst-Aufruf",
+    "mode_input_boolean": "Input-Boolean",
+    "svc_service": "Dienst (z. B. keba.set_current)",
+    "svc_param": "Parametername",
+    "svc_shed_value": "Wert beim Reduzieren",
+    "svc_restore_value": "Wert beim Wiederherstellen",
+    "mapping_entity_required": "Bitte eine Steuer-Entität wählen.",
+    "mapping_service_required": "Bitte einen Dienst angeben (z. B. keba.set_current).",
+    "clear_mapping": "Auf Auto-Erkennung zurücksetzen"
   },
   "fr": {
     "charging": "En charge",
@@ -2206,7 +2224,7 @@ const _semTranslations = {
     "control_entity": "Entité de contrôle",
     "control_type": "Type de contrôle",
     "mode_switch": "Interrupteur",
-    "mode_current": "Courant/Ampérage",
+    "mode_current": "Entité numérique",
     "cancel": "Annuler",
     "save": "Enregistrer",
     "monthly": "Mensuel",
@@ -2303,7 +2321,16 @@ const _semTranslations = {
     "on": "Marche",
     "charge_target": "Objectif de charge",
     "charge_to": "Charger à",
-    "limit_surplus_to_target": "Limiter le surplus à l'objectif"
+    "limit_surplus_to_target": "Limiter le surplus à l'objectif",
+    "mode_service": "Appel de service",
+    "mode_input_boolean": "Booléen d'entrée",
+    "svc_service": "Service (p. ex. keba.set_current)",
+    "svc_param": "Nom du paramètre",
+    "svc_shed_value": "Valeur lors de la réduction",
+    "svc_restore_value": "Valeur lors de la restauration",
+    "mapping_entity_required": "Veuillez choisir une entité de contrôle.",
+    "mapping_service_required": "Veuillez saisir un service (p. ex. keba.set_current).",
+    "clear_mapping": "Réinitialiser en auto-détection"
   },
   "es": {
     "charging": "Cargando",
@@ -2974,7 +3001,7 @@ const _semTranslations = {
     "control_entity": "Entidad de control",
     "control_type": "Tipo de control",
     "mode_switch": "Interruptor",
-    "mode_current": "Corriente/Amperaje",
+    "mode_current": "Entidad numérica",
     "cancel": "Cancelar",
     "save": "Guardar",
     "monthly": "Mensual",
@@ -3071,7 +3098,16 @@ const _semTranslations = {
     "on": "Enc.",
     "charge_target": "Objetivo de carga",
     "charge_to": "Cargar a",
-    "limit_surplus_to_target": "Limitar excedente al objetivo"
+    "limit_surplus_to_target": "Limitar excedente al objetivo",
+    "mode_service": "Llamada de servicio",
+    "mode_input_boolean": "Booleano de entrada",
+    "svc_service": "Servicio (p. ej. keba.set_current)",
+    "svc_param": "Nombre del parámetro",
+    "svc_shed_value": "Valor al reducir",
+    "svc_restore_value": "Valor al restaurar",
+    "mapping_entity_required": "Elija una entidad de control.",
+    "mapping_service_required": "Introduzca un servicio (p. ej. keba.set_current).",
+    "clear_mapping": "Restablecer a autodetección"
   },
   "it": {
     "charging": "In carica",
@@ -3742,7 +3778,7 @@ const _semTranslations = {
     "control_entity": "Entità di controllo",
     "control_type": "Tipo di controllo",
     "mode_switch": "Interruttore",
-    "mode_current": "Corrente/Amperaggio",
+    "mode_current": "Entità numerica",
     "cancel": "Annulla",
     "save": "Salva",
     "monthly": "Mensile",
@@ -3839,7 +3875,16 @@ const _semTranslations = {
     "on": "Acc.",
     "charge_target": "Obiettivo di carica",
     "charge_to": "Carica a",
-    "limit_surplus_to_target": "Limita surplus all'obiettivo"
+    "limit_surplus_to_target": "Limita surplus all'obiettivo",
+    "mode_service": "Chiamata di servizio",
+    "mode_input_boolean": "Input boolean",
+    "svc_service": "Servizio (es. keba.set_current)",
+    "svc_param": "Nome parametro",
+    "svc_shed_value": "Valore durante la riduzione",
+    "svc_restore_value": "Valore durante il ripristino",
+    "mapping_entity_required": "Seleziona un'entità di controllo.",
+    "mapping_service_required": "Inserisci un servizio (es. keba.set_current).",
+    "clear_mapping": "Ripristina rilevamento automatico"
   },
   "nl": {
     "charging": "Laden",
@@ -4510,7 +4555,7 @@ const _semTranslations = {
     "control_entity": "Besturingsentiteit",
     "control_type": "Besturingstype",
     "mode_switch": "Schakelaar",
-    "mode_current": "Stroom/Ampère",
+    "mode_current": "Number-entiteit",
     "cancel": "Annuleren",
     "save": "Opslaan",
     "monthly": "Maandelijks",
@@ -4607,7 +4652,16 @@ const _semTranslations = {
     "on": "Aan",
     "charge_target": "Laaddoel",
     "charge_to": "Laden tot",
-    "limit_surplus_to_target": "Overschot beperken tot doel"
+    "limit_surplus_to_target": "Overschot beperken tot doel",
+    "mode_service": "Service-aanroep",
+    "mode_input_boolean": "Input-boolean",
+    "svc_service": "Service (bijv. keba.set_current)",
+    "svc_param": "Parameternaam",
+    "svc_shed_value": "Waarde bij verlagen",
+    "svc_restore_value": "Waarde bij herstellen",
+    "mapping_entity_required": "Kies een besturingsentiteit.",
+    "mapping_service_required": "Voer een service in (bijv. keba.set_current).",
+    "clear_mapping": "Terug naar autodetectie"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5278,7 +5332,7 @@ const _semTranslations = {
     "control_entity": "Řídicí entita",
     "control_type": "Typ řízení",
     "mode_switch": "Přepínač",
-    "mode_current": "Proud/Ampéry",
+    "mode_current": "Číselná entita",
     "cancel": "Zrušit",
     "save": "Uložit",
     "monthly": "Měsíční",
@@ -5375,7 +5429,16 @@ const _semTranslations = {
     "on": "Zap.",
     "charge_target": "Cíl nabíjení",
     "charge_to": "Nabít na",
-    "limit_surplus_to_target": "Omezit přebytek na cíl"
+    "limit_surplus_to_target": "Omezit přebytek na cíl",
+    "mode_service": "Volání služby",
+    "mode_input_boolean": "Vstupní logická hodnota",
+    "svc_service": "Služba (např. keba.set_current)",
+    "svc_param": "Název parametru",
+    "svc_shed_value": "Hodnota při snížení",
+    "svc_restore_value": "Hodnota při obnovení",
+    "mapping_entity_required": "Vyberte řídicí entitu.",
+    "mapping_service_required": "Zadejte službu (např. keba.set_current).",
+    "clear_mapping": "Obnovit automatickou detekci"
   },
   "da": {
     "charging": "Oplader",
@@ -6046,7 +6109,7 @@ const _semTranslations = {
     "control_entity": "Styringsentitet",
     "control_type": "Styringstype",
     "mode_switch": "Kontakt",
-    "mode_current": "Strøm/Ampere",
+    "mode_current": "Numerisk entitet",
     "cancel": "Annuller",
     "save": "Gem",
     "monthly": "Månedlig",
@@ -6143,7 +6206,16 @@ const _semTranslations = {
     "on": "Til",
     "charge_target": "Opladningsmål",
     "charge_to": "Oplad til",
-    "limit_surplus_to_target": "Begræns overskud til mål"
+    "limit_surplus_to_target": "Begræns overskud til mål",
+    "mode_service": "Tjenestekald",
+    "mode_input_boolean": "Input boolean",
+    "svc_service": "Tjeneste (f.eks. keba.set_current)",
+    "svc_param": "Parameternavn",
+    "svc_shed_value": "Værdi ved reduktion",
+    "svc_restore_value": "Værdi ved gendannelse",
+    "mapping_entity_required": "Vælg en styringsentitet.",
+    "mapping_service_required": "Angiv en tjeneste (f.eks. keba.set_current).",
+    "clear_mapping": "Nulstil til autodetektion"
   },
   "fi": {
     "charging": "Lataus",
@@ -6814,7 +6886,7 @@ const _semTranslations = {
     "control_entity": "Ohjausentiteetti",
     "control_type": "Ohjaustyyppi",
     "mode_switch": "Kytkin",
-    "mode_current": "Virta/Ampeeri",
+    "mode_current": "Numeroentiteetti",
     "cancel": "Peruuta",
     "save": "Tallenna",
     "monthly": "Kuukausittain",
@@ -6911,7 +6983,16 @@ const _semTranslations = {
     "on": "Pääl.",
     "charge_target": "Lataustavoite",
     "charge_to": "Lataa tasolle",
-    "limit_surplus_to_target": "Rajoita ylijäämä tavoitteeseen"
+    "limit_surplus_to_target": "Rajoita ylijäämä tavoitteeseen",
+    "mode_service": "Palvelukutsu",
+    "mode_input_boolean": "Input boolean",
+    "svc_service": "Palvelu (esim. keba.set_current)",
+    "svc_param": "Parametrin nimi",
+    "svc_shed_value": "Arvo vähennettäessä",
+    "svc_restore_value": "Arvo palautettaessa",
+    "mapping_entity_required": "Valitse ohjausentiteetti.",
+    "mapping_service_required": "Anna palvelu (esim. keba.set_current).",
+    "clear_mapping": "Palauta automaattitunnistus"
   },
   "hu": {
     "charging": "Töltés",
@@ -7582,7 +7663,7 @@ const _semTranslations = {
     "control_entity": "Vezérlő entitás",
     "control_type": "Vezérlés típusa",
     "mode_switch": "Kapcsoló",
-    "mode_current": "Áram/Amper",
+    "mode_current": "Szám entitás",
     "cancel": "Mégse",
     "save": "Mentés",
     "monthly": "Havi",
@@ -7679,7 +7760,16 @@ const _semTranslations = {
     "on": "Be",
     "charge_target": "Töltési cél",
     "charge_to": "Töltés eddig",
-    "limit_surplus_to_target": "Többlet korlátozása a célig"
+    "limit_surplus_to_target": "Többlet korlátozása a célig",
+    "mode_service": "Szolgáltatáshívás",
+    "mode_input_boolean": "Bemeneti logikai érték",
+    "svc_service": "Szolgáltatás (pl. keba.set_current)",
+    "svc_param": "Paraméter neve",
+    "svc_shed_value": "Érték csökkentéskor",
+    "svc_restore_value": "Érték visszaállításkor",
+    "mapping_entity_required": "Válasszon vezérlő entitást.",
+    "mapping_service_required": "Adjon meg egy szolgáltatást (pl. keba.set_current).",
+    "clear_mapping": "Visszaállítás automatikus felismerésre"
   },
   "no": {
     "charging": "Lader",
@@ -8350,7 +8440,7 @@ const _semTranslations = {
     "control_entity": "Styringsenhet",
     "control_type": "Styringstype",
     "mode_switch": "Bryter",
-    "mode_current": "Strøm/Ampere",
+    "mode_current": "Numerisk entitet",
     "cancel": "Avbryt",
     "save": "Lagre",
     "monthly": "Månedlig",
@@ -8447,7 +8537,16 @@ const _semTranslations = {
     "on": "På",
     "charge_target": "Lademål",
     "charge_to": "Lad til",
-    "limit_surplus_to_target": "Begrens overskudd til mål"
+    "limit_surplus_to_target": "Begrens overskudd til mål",
+    "mode_service": "Tjenestekall",
+    "mode_input_boolean": "Input boolean",
+    "svc_service": "Tjeneste (f.eks. keba.set_current)",
+    "svc_param": "Parameternavn",
+    "svc_shed_value": "Verdi ved reduksjon",
+    "svc_restore_value": "Verdi ved gjenoppretting",
+    "mapping_entity_required": "Velg en styringsentitet.",
+    "mapping_service_required": "Angi en tjeneste (f.eks. keba.set_current).",
+    "clear_mapping": "Tilbakestill til autodeteksjon"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9118,7 +9217,7 @@ const _semTranslations = {
     "control_entity": "Encja sterująca",
     "control_type": "Typ sterowania",
     "mode_switch": "Przełącznik",
-    "mode_current": "Prąd/Amperaż",
+    "mode_current": "Encja numeryczna",
     "cancel": "Anuluj",
     "save": "Zapisz",
     "monthly": "Miesięczny",
@@ -9215,7 +9314,16 @@ const _semTranslations = {
     "on": "Wł.",
     "charge_target": "Cel ładowania",
     "charge_to": "Ładuj do",
-    "limit_surplus_to_target": "Ogranicz nadwyżkę do celu"
+    "limit_surplus_to_target": "Ogranicz nadwyżkę do celu",
+    "mode_service": "Wywołanie usługi",
+    "mode_input_boolean": "Wejście logiczne",
+    "svc_service": "Usługa (np. keba.set_current)",
+    "svc_param": "Nazwa parametru",
+    "svc_shed_value": "Wartość przy redukcji",
+    "svc_restore_value": "Wartość przy przywracaniu",
+    "mapping_entity_required": "Wybierz encję sterującą.",
+    "mapping_service_required": "Podaj usługę (np. keba.set_current).",
+    "clear_mapping": "Przywróć autowykrywanie"
   },
   "pt": {
     "charging": "A carregar",
@@ -9886,7 +9994,7 @@ const _semTranslations = {
     "control_entity": "Entidade de controle",
     "control_type": "Tipo de controle",
     "mode_switch": "Interruptor",
-    "mode_current": "Corrente/Amperagem",
+    "mode_current": "Entidade numérica",
     "cancel": "Cancelar",
     "save": "Salvar",
     "monthly": "Mensal",
@@ -9983,7 +10091,16 @@ const _semTranslations = {
     "on": "Lig.",
     "charge_target": "Meta de carga",
     "charge_to": "Carregar até",
-    "limit_surplus_to_target": "Limitar excedente ao alvo"
+    "limit_surplus_to_target": "Limitar excedente ao alvo",
+    "mode_service": "Chamada de serviço",
+    "mode_input_boolean": "Booleano de entrada",
+    "svc_service": "Serviço (ex. keba.set_current)",
+    "svc_param": "Nome do parâmetro",
+    "svc_shed_value": "Valor ao reduzir",
+    "svc_restore_value": "Valor ao restaurar",
+    "mapping_entity_required": "Escolha uma entidade de controlo.",
+    "mapping_service_required": "Introduza um serviço (ex. keba.set_current).",
+    "clear_mapping": "Repor para deteção automática"
   },
   "ro": {
     "charging": "Încărcare",
@@ -10654,7 +10771,7 @@ const _semTranslations = {
     "control_entity": "Entitate de control",
     "control_type": "Tip de control",
     "mode_switch": "Comutator",
-    "mode_current": "Curent/Amperaj",
+    "mode_current": "Entitate numerică",
     "cancel": "Anulare",
     "save": "Salvare",
     "monthly": "Lunar",
@@ -10751,7 +10868,16 @@ const _semTranslations = {
     "on": "Porn.",
     "charge_target": "Țintă de încărcare",
     "charge_to": "Încarcă până la",
-    "limit_surplus_to_target": "Limitează surplusul la țintă"
+    "limit_surplus_to_target": "Limitează surplusul la țintă",
+    "mode_service": "Apel de serviciu",
+    "mode_input_boolean": "Input boolean",
+    "svc_service": "Serviciu (ex. keba.set_current)",
+    "svc_param": "Numele parametrului",
+    "svc_shed_value": "Valoare la reducere",
+    "svc_restore_value": "Valoare la restaurare",
+    "mapping_entity_required": "Alegeți o entitate de control.",
+    "mapping_service_required": "Introduceți un serviciu (ex. keba.set_current).",
+    "clear_mapping": "Resetare la detectare automată"
   },
   "sv": {
     "charging": "Laddar",
@@ -11422,7 +11548,7 @@ const _semTranslations = {
     "control_entity": "Styrentitet",
     "control_type": "Styrtyp",
     "mode_switch": "Brytare",
-    "mode_current": "Ström/Ampere",
+    "mode_current": "Numerisk entitet",
     "cancel": "Avbryt",
     "save": "Spara",
     "monthly": "Månadsvis",
@@ -11519,7 +11645,16 @@ const _semTranslations = {
     "on": "På",
     "charge_target": "Laddningsmål",
     "charge_to": "Ladda till",
-    "limit_surplus_to_target": "Begränsa överskott till mål"
+    "limit_surplus_to_target": "Begränsa överskott till mål",
+    "mode_service": "Tjänsteanrop",
+    "mode_input_boolean": "Input boolean",
+    "svc_service": "Tjänst (t.ex. keba.set_current)",
+    "svc_param": "Parameternamn",
+    "svc_shed_value": "Värde vid minskning",
+    "svc_restore_value": "Värde vid återställning",
+    "mapping_entity_required": "Välj en styrentitet.",
+    "mapping_service_required": "Ange en tjänst (t.ex. keba.set_current).",
+    "clear_mapping": "Återställ till autodetektering"
   }
 };
 

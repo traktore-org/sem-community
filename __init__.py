@@ -1020,11 +1020,36 @@ async def _async_register_services(
             )
 
         energy_sensor = call.data.get("energy_sensor")
-        control_entity = call.data.get("control_entity")
+        control_entity = call.data.get("control_entity", "")
         control_type = call.data.get("control_type", "switch")
+        service = call.data.get("service")
 
-        await registry.async_set_manual_mapping(energy_sensor, control_entity, control_type)
-        _LOGGER.info("Manual mapping set: %s → %s (%s)", energy_sensor, control_entity, control_type)
+        # Validate per control type: entity types need an entity; service needs a service.
+        if control_type == "service":
+            if not service:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="mapping_service_required",
+                )
+        elif not control_entity:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="mapping_entity_required",
+            )
+
+        await registry.async_set_manual_mapping(
+            energy_sensor,
+            control_entity,
+            control_type,
+            service=service,
+            param=call.data.get("param"),
+            shed_value=call.data.get("shed_value"),
+            restore_value=call.data.get("restore_value"),
+        )
+        _LOGGER.info(
+            "Manual mapping set: %s → %s (%s)",
+            energy_sensor, service if control_type == "service" else control_entity, control_type,
+        )
 
     try:
         hass.services.async_register(
@@ -1033,13 +1058,44 @@ async def _async_register_services(
             async_set_device_control_mapping,
             schema=vol.Schema({
                 vol.Required("energy_sensor"): cv.string,
-                vol.Required("control_entity"): cv.string,
-                vol.Optional("control_type", default="switch"): vol.In(["switch", "current", "service"]),
+                vol.Optional("control_entity", default=""): cv.string,
+                vol.Optional("control_type", default="switch"): vol.In(
+                    ["switch", "current", "service", "input_boolean"]
+                ),
+                vol.Optional("service"): cv.string,
+                vol.Optional("param"): cv.string,
+                vol.Optional("shed_value"): vol.Coerce(float),
+                vol.Optional("restore_value"): vol.Coerce(float),
             }),
         )
         _LOGGER.debug("Registered service: %s.set_device_control_mapping", DOMAIN)
     except Exception as err:
         _LOGGER.error("Failed to register set_device_control_mapping service: %s", err)
+
+    # ── remove_device_control_mapping service (#219) ──
+
+    async def async_remove_device_control_mapping(call) -> None:
+        """Remove a manual mapping; device reverts to auto-discovery."""
+        registry = getattr(coordinator, '_device_registry', None)
+        if not registry:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_registry_not_initialized",
+            )
+        await registry.async_remove_manual_mapping(call.data.get("energy_sensor"))
+
+    try:
+        hass.services.async_register(
+            DOMAIN,
+            "remove_device_control_mapping",
+            async_remove_device_control_mapping,
+            schema=vol.Schema({
+                vol.Required("energy_sensor"): cv.string,
+            }),
+        )
+        _LOGGER.debug("Registered service: %s.remove_device_control_mapping", DOMAIN)
+    except Exception as err:
+        _LOGGER.error("Failed to register remove_device_control_mapping service: %s", err)
 
     # ── Drag-and-drop priority card services ──
 

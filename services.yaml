@@ -109,13 +109,13 @@ set_device_control_mapping:
           domain: sensor
     control_entity:
       name: Control Entity
-      description: "The entity to use for control (e.g., switch.towelheater_men or number.keba_current)"
-      required: true
+      description: "The entity to use for control (e.g., switch.towelheater_men or number.keba_current). Required for switch, current, and input_boolean types; leave empty for the service type."
+      required: false
       selector:
         entity:
     control_type:
       name: Control Type
-      description: "How the entity is controlled: switch (on/off), current (set amperage), or service (call a service)"
+      description: "How the device is controlled: switch (on/off), current (set amperage on a number entity), input_boolean (toggle), or service (call a service such as keba.set_current)"
       required: false
       default: "switch"
       selector:
@@ -123,7 +123,52 @@ set_device_control_mapping:
           options:
             - switch
             - current
+            - input_boolean
             - service
+    service:
+      name: Service
+      description: "For control_type=service: the service to call (e.g., keba.set_current, easee.set_charger_max_limit)"
+      required: false
+      example: keba.set_current
+      selector:
+        text:
+    param:
+      name: Service Parameter
+      description: "For control_type=service: the parameter name the service expects (default: current)"
+      required: false
+      default: "current"
+      selector:
+        text:
+    shed_value:
+      name: Shed Value
+      description: "For control_type=service: the value to send when reducing/shedding the device (e.g., 0, or 6 for KEBA minimum)"
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 32
+          mode: box
+    restore_value:
+      name: Restore Value
+      description: "For control_type=service: the value to send when restoring the device (e.g., 16)"
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 32
+          mode: box
+
+remove_device_control_mapping:
+  name: Remove Device Control Mapping
+  description: Remove a manual control mapping from an Energy Dashboard device. The device reverts to auto-discovery (its auto-detected control, or none).
+  fields:
+    energy_sensor:
+      name: Energy Sensor
+      description: "The energy sensor entity whose manual mapping should be removed"
+      required: true
+      selector:
+        entity:
+          domain: sensor
 
 register_surplus_device:
   name: Register Surplus Device
