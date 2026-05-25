@@ -264,7 +264,8 @@ class SEMLoadPriorityCard extends SEMLitBase {
     }
 
     _renderDevice(device, priority) {
-        const onOff  = device.isOn;
+        // Power-aware ON detection: if the switch reports OFF but the device draws > 10W, it's clearly on
+        const onOff  = device.isOn || device.power > 0.01;
         const isChild = device.dependsOn.length > 0;
         const depth  = this._getDependencyDepth(device);
         const indentStyle = depth > 0
@@ -282,12 +283,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         ${isChild ? html`<span style="color:#ff9800;font-size:12px;margin-right:4px">&#8618;</span>` : nothing}
                         <ha-icon icon="${device.icon}" style="--mdc-icon-size:20px;color:${onOff ? '#ff9800' : '#666'}"></ha-icon>
                         <span>${device.name}</span>
-                        ${device.hasManualMapping ? html`<ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px;color:#ffc107;opacity:0.6"></ha-icon>` : nothing}
-                        ${!device.isControllable
-                            ? html`<span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}">
-                                <ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px"></ha-icon> ${this._t('configure')}
-                              </span>`
-                            : nothing}
+                        <span class="configure-btn" data-action="configure" data-energy="${device.energySensor}" data-name="${device.name}">
+                            <ha-icon icon="mdi:${device.hasManualMapping ? 'wrench' : 'cog'}" style="--mdc-icon-size:14px"></ha-icon> ${device.isControllable ? this._t('configure_device') : this._t('configure')}
+                        </span>
                     </div>
                     <div class="device-power" data-field="power-${device.id}">
                         ${onOff ? semFormatPower(device.power * 1000) : (device.isShed ? this._t('shed_label') : this._t('off'))}

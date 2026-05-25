@@ -88,20 +88,22 @@ class TestDashboardTemplate:
         assert "overview" not in paths
 
     def test_all_custom_cards_exist(self):
-        """All bundled SEM card JS files should exist."""
+        """The shipped SEM card assets should exist.
+
+        Since the LitElement migration the individual ``sem-*-card.js`` files
+        were folded into the single Rollup bundle ``dist/sem-cards.js`` and the
+        per-card files were removed. Only the bundle plus the assets that are
+        registered/loaded standalone remain on disk.
+        """
         card_dir = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             "dashboard",
             "card",
         )
         expected_cards = [
-            "sem-system-diagram-card.js",
-            "sem-flow-card.js",
-            "sem-solar-summary-card.js",
-            "sem-weather-card.js",
-            "sem-chart-card.js",
-            "sem-period-selector-card.js",
-            "sem-load-priority-card.js",
+            "dist/sem-cards.js",            # Lit bundle — every dashboard card
+            "sem-system-diagram-card.js",   # registered standalone (not in the bundle's registration)
+            "sem-localize.js",              # translations, loaded via add_extra_js_url
         ]
         for card in expected_cards:
             assert os.path.exists(os.path.join(card_dir, card)), f"Missing: {card}"

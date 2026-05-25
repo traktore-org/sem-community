@@ -4497,7 +4497,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     </div>
                 </div>
             </ha-card>
-        `}_renderDevice(t,e){const i=t.isOn,s=t.dependsOn.length>0,r=this._getDependencyDepth(t),a=r>0?`margin-left:${24*r}px;border-left:2px solid rgba(255,152,0,${.3+.1*r});`:"";return H`
+        `}_renderDevice(t,e){const i=t.isOn||t.power>.01,s=t.dependsOn.length>0,r=this._getDependencyDepth(t),a=r>0?`margin-left:${24*r}px;border-left:2px solid rgba(255,152,0,${.3+.1*r});`:"";return H`
         <div class="device${s?" is-child":""}" data-id="${t.id}" style="${a}">
             <div class="drag-handle"
                  title="${s?this._t("locked_under_parent"):this._t("drag_to_reorder")}"
@@ -4508,10 +4508,9 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         ${s?H`<span style="color:#ff9800;font-size:12px;margin-right:4px">&#8618;</span>`:K}
                         <ha-icon icon="${t.icon}" style="--mdc-icon-size:20px;color:${i?"#ff9800":"#666"}"></ha-icon>
                         <span>${t.name}</span>
-                        ${t.hasManualMapping?H`<ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px;color:#ffc107;opacity:0.6"></ha-icon>`:K}
-                        ${t.isControllable?K:H`<span class="configure-btn" data-action="configure" data-energy="${t.energySensor}" data-name="${t.name}">
-                                <ha-icon icon="mdi:wrench" style="--mdc-icon-size:14px"></ha-icon> ${this._t("configure")}
-                              </span>`}
+                        <span class="configure-btn" data-action="configure" data-energy="${t.energySensor}" data-name="${t.name}">
+                            <ha-icon icon="mdi:${t.hasManualMapping?"wrench":"cog"}" style="--mdc-icon-size:14px"></ha-icon> ${t.isControllable?this._t("configure_device"):this._t("configure")}
+                        </span>
                     </div>
                     <div class="device-power" data-field="power-${t.id}">
                         ${i?pt(1e3*t.power):t.isShed?this._t("shed_label"):this._t("off")}

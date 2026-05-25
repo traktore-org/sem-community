@@ -769,6 +769,12 @@ async def _async_register_services(
                 f"/local/custom_components/{DOMAIN}/dashboard/card/{fname}"
                 for fname in installed_cards
             }
+            # The Lit bundle lives under dist/ so it never appears in the
+            # root-level listdir above; whitelist it explicitly or the orphan
+            # cleanup below would deregister it on every generate_dashboard call.
+            installed_bases.add(
+                f"/local/custom_components/{DOMAIN}/dashboard/card/dist/sem-cards.js"
+            )
             cleaned = []
             kept_items = []
             for item in resources_data["items"]:
@@ -1182,7 +1188,11 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
 
         component_path = os.path.dirname(__file__)
         dashboard_path = os.path.join(component_path, "dashboard")
-        card_file_path = os.path.join(dashboard_path, "card", "sem-load-priority-card.js")
+        # Sentinel: the Lit bundle is the file that must exist for the cards to
+        # load. The individual vanilla card files were removed once they were
+        # migrated into dist/sem-cards.js (see _legacy_bases below); don't point
+        # this guard at a per-card file or registration silently stops working.
+        card_file_path = os.path.join(dashboard_path, "card", "dist", "sem-cards.js")
 
         if not os.path.exists(card_file_path):
             return
