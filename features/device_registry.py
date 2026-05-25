@@ -400,21 +400,59 @@ class UnifiedDeviceRegistry:
         energy_sensor: str,
         control_entity: str,
         control_type: str = "switch",
+        *,
+        service: Optional[str] = None,
+        param: Optional[str] = None,
+        shed_value: Optional[float] = None,
+        restore_value: Optional[float] = None,
     ) -> None:
-        """User maps a control entity for a device. Persists and re-syncs."""
-        control: Dict[str, Any] = {
-            "type": control_type,
-            "entity": control_entity,
-            "discovered_via": "manual_mapping",
-        }
+        """User maps a control for a device. Persists and re-syncs.
+
+        Entity-based types (``switch``/``current``/``input_boolean``) store the
+        chosen ``entity``. ``service`` stores the call definition
+        (``service``/``param``/``shed_value``/``restore_value``) that
+        ``load_management`` invokes to shed/restore — it has no entity (#219).
+        """
+        if control_type == "service":
+            control: Dict[str, Any] = {
+                "type": "service",
+                "service": service,
+                "param": param or "current",
+                "shed_value": shed_value if shed_value is not None else 0,
+                "restore_value": restore_value if restore_value is not None else 16,
+                "discovered_via": "manual_mapping",
+            }
+            detail = service
+        else:
+            control = {
+                "type": control_type,
+                "entity": control_entity,
+                "discovered_via": "manual_mapping",
+            }
+            detail = control_entity
 
         self._manual_mappings[energy_sensor] = control
         await self._save_storage()
         await self.async_refresh_devices()
 
         _LOGGER.info(
-            "Manual mapping set: %s → %s (%s)", energy_sensor, control_entity, control_type
+            "Manual mapping set: %s → %s (%s)", energy_sensor, detail, control_type
         )
+
+    async def async_remove_manual_mapping(self, energy_sensor: str) -> bool:
+        """Remove a manual mapping so the device reverts to auto-discovery (#219).
+
+        Returns True if a mapping was removed. After removal, a re-sync re-runs
+        discovery — the device gets its auto-detected control again, or none
+        (e.g. a meter-only device), which is the "clear it and leave it" intent.
+        """
+        if energy_sensor not in self._manual_mappings:
+            return False
+        del self._manual_mappings[energy_sensor]
+        await self._save_storage()
+        await self.async_refresh_devices()
+        _LOGGER.info("Manual mapping removed: %s", energy_sensor)
+        return True
 
     async def async_update_priority_overrides(
         self, priorities: List[Dict[str, Any]]

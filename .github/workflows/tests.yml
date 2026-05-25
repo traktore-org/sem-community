@@ -61,3 +61,20 @@ jobs:
             --cov=custom_components.solar_energy_management \
             --cov-report=term \
             -q --no-header 2>&1 | tail -30 || true
+
+  card-test:
+    # Dashboard-card JS unit tests (no browser): guards the load-device
+    # configure modal pre-fill + control mapping (#219), which Python CI
+    # can't see since it's frontend rendering.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run card unit tests
+        working-directory: dashboard/card
+        run: node --test
