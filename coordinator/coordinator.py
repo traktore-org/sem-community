@@ -721,14 +721,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
                     for cid in self._ev_devices:
                         cfg = charger_cfg_by_id.get(cid, {})
-                        # Per-charger Max from config, fallback to global floor
-                        max_target = cfg.get("daily_ev_target", global_target)
-                        # Night tops up to the floor (Min); falls back to Max when
-                        # no separate Min is set, preserving pre-#245 behaviour.
-                        min_target = cfg.get("daily_ev_target_min")
-                        if min_target is None:
-                            min_target = self.config.get("daily_ev_target_min", 0)
-                        target = max_target if min_target <= 0 else min(min_target, max_target)
+                        # Night tops up to the floor (Min) = the existing per-charger
+                        # daily_ev_target; fall back to the global floor (#245).
+                        target = cfg.get("daily_ev_target", global_target)
                         # Remaining = target - daily energy delivered by this charger
                         daily = self._daily_ev_per_charger.get(cid, 0.0)
                         self._night_target_per_charger_map[cid] = max(0, target - daily)
@@ -1934,27 +1929,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return stable
 
     def _resolve_target(
-        self, cfg: dict, base_key: str, bound: str, default_max: float,
+        self, cfg: dict, base_key: str, bound: str, default: float,
     ) -> float:
-        """Resolve the min or max charge target for a config key (#245).
+        """Resolve the floor (Min) or ceiling (Max) charge target (#245).
 
-        Max reuses the existing single-value key (e.g. ``daily_ev_target``) — the
-        legacy entities ARE the max/ceiling controls, so no migration is needed.
-        Min is the new ``{base_key}_min`` key (default 0).
+        The existing single-value key (e.g. ``daily_ev_target``) is the FLOOR
+        (Min) — the grid-guaranteed amount that night charging tops up to. Night
+        behaviour is therefore identical to pre-#245 and needs no migration.
 
-        When Min is 0 or unset, the floor follows Max — this preserves pre-#245
-        behaviour exactly (night charging tops up to the single target) and means
-        a fresh install with Min=0 charges to Max overnight rather than to nothing.
-        Min is clamped to ``<= Max`` so a misconfigured Min can never exceed it.
+        The new ``{base_key}_max`` key is the optional solar CEILING (Max):
+        surplus charging may continue past Min up to Max. When Max is unset it
+        defaults to Min, so surplus stops at the single target exactly as before.
+        Max is clamped to ``>= Min`` so a misconfigured Max can never fall below
+        the guaranteed floor.
         """
-        max_val = cfg.get(base_key) if cfg.get(base_key) is not None else self.config.get(base_key, default_max)
-        if bound != "min":
-            return max_val
-        min_key = f"{base_key}_min"
-        min_val = cfg.get(min_key) if cfg.get(min_key) is not None else self.config.get(min_key, 0)
-        if min_val <= 0:
-            return max_val
-        return min(min_val, max_val)
+        min_val = cfg.get(base_key) if cfg.get(base_key) is not None else self.config.get(base_key, default)
+        if bound == "min":
+            return min_val
+        max_key = f"{base_key}_max"
+        max_val = cfg.get(max_key) if cfg.get(max_key) is not None else self.config.get(max_key)
+        if max_val is None:
+            return min_val
+        return max(max_val, min_val)
 
     def _calculate_remaining_need(
         self, energy, vehicle_soc: float | None = None, charger_cfg: dict | None = None,
@@ -1967,9 +1963,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         Used by both _build_charging_context() and _determine_charging_strategy().
 
         ``bound`` selects which target to measure against (#245):
+          - "min" (floor = the existing single target): night/grid tops up to this.
           - "max" (default, ceiling): surplus charges up to this; gates ev_limit_surplus.
-          - "min" (floor): night/grid tops up to at least this. Falls back to max when
-            no separate Min is configured.
+            Defaults to the floor when no separate Max is configured.
         """
         cfg = charger_cfg or {}
         ev_capacity = cfg.get("ev_battery_capacity_kwh") if cfg.get("ev_battery_capacity_kwh") is not None else self.config.get("ev_battery_capacity_kwh", 40)
