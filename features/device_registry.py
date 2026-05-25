@@ -439,6 +439,21 @@ class UnifiedDeviceRegistry:
             "Manual mapping set: %s → %s (%s)", energy_sensor, detail, control_type
         )
 
+    async def async_remove_manual_mapping(self, energy_sensor: str) -> bool:
+        """Remove a manual mapping so the device reverts to auto-discovery (#219).
+
+        Returns True if a mapping was removed. After removal, a re-sync re-runs
+        discovery — the device gets its auto-detected control again, or none
+        (e.g. a meter-only device), which is the "clear it and leave it" intent.
+        """
+        if energy_sensor not in self._manual_mappings:
+            return False
+        del self._manual_mappings[energy_sensor]
+        await self._save_storage()
+        await self.async_refresh_devices()
+        _LOGGER.info("Manual mapping removed: %s", energy_sensor)
+        return True
+
     async def async_update_priority_overrides(
         self, priorities: List[Dict[str, Any]]
     ) -> None:

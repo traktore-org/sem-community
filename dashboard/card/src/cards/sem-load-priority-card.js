@@ -548,13 +548,14 @@ class SEMLoadPriorityCard extends SEMLitBase {
         if (existing) existing.remove();
         const dev = this.devices.find(d => d.energySensor === energySensor);
         const values = controlToFormValues(dev?.control);
+        const hasManual = dev?.control?.discovered_via === 'manual_mapping';
         await this._ensureEntityPicker();
 
         const overlay = document.createElement('div');
         overlay.id = 'sem-config-modal';
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:999;display:flex;align-items:center;justify-content:center';
         overlay.innerHTML = buildLoadConfigModalHTML({
-            deviceName, values, t: (k) => this._t(k),
+            deviceName, values, t: (k) => this._t(k), hasManual,
         });
         this.renderRoot.appendChild(overlay);
 
@@ -592,6 +593,15 @@ class SEMLoadPriorityCard extends SEMLitBase {
 
         overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
         overlay.querySelector('#cfg-cancel').addEventListener('click', () => overlay.remove());
+        const removeBtn = overlay.querySelector('#cfg-remove');
+        if (removeBtn) {
+            removeBtn.addEventListener('click', () => {
+                this._hass.callService('solar_energy_management', 'remove_device_control_mapping', {
+                    energy_sensor: energySensor,
+                }).then(() => overlay.remove())
+                  .catch(err => showError(err.message));
+            });
+        }
         overlay.querySelector('#cfg-save').addEventListener('click', () => {
             const formVals = readFormValues(overlay);
             if (picker) formVals.entity = (picker.value || '').trim();

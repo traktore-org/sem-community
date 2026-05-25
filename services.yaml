@@ -158,6 +158,18 @@ set_device_control_mapping:
           max: 32
           mode: box
 
+remove_device_control_mapping:
+  name: Remove Device Control Mapping
+  description: Remove a manual control mapping from an Energy Dashboard device. The device reverts to auto-discovery (its auto-detected control, or none).
+  fields:
+    energy_sensor:
+      name: Energy Sensor
+      description: "The energy sensor entity whose manual mapping should be removed"
+      required: true
+      selector:
+        entity:
+          domain: sensor
+
 register_surplus_device:
   name: Register Surplus Device
   description: Register a device (switch, relay, smart plug) for solar surplus control. The device will be activated when surplus power is available, based on its priority.

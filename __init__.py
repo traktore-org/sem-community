@@ -1072,6 +1072,31 @@ async def _async_register_services(
     except Exception as err:
         _LOGGER.error("Failed to register set_device_control_mapping service: %s", err)
 
+    # ── remove_device_control_mapping service (#219) ──
+
+    async def async_remove_device_control_mapping(call) -> None:
+        """Remove a manual mapping; device reverts to auto-discovery."""
+        registry = getattr(coordinator, '_device_registry', None)
+        if not registry:
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="device_registry_not_initialized",
+            )
+        await registry.async_remove_manual_mapping(call.data.get("energy_sensor"))
+
+    try:
+        hass.services.async_register(
+            DOMAIN,
+            "remove_device_control_mapping",
+            async_remove_device_control_mapping,
+            schema=vol.Schema({
+                vol.Required("energy_sensor"): cv.string,
+            }),
+        )
+        _LOGGER.debug("Registered service: %s.remove_device_control_mapping", DOMAIN)
+    except Exception as err:
+        _LOGGER.error("Failed to register remove_device_control_mapping service: %s", err)
+
     # ── Drag-and-drop priority card services ──
 
     async def async_update_device_priorities(call) -> None:

@@ -85,3 +85,25 @@ async def test_remapping_overwrites_previous(registry):
     await registry.async_set_manual_mapping("sensor.x", "switch.wrong", "switch")
     await registry.async_set_manual_mapping("sensor.x", "switch.right", "switch")
     assert registry._manual_mappings["sensor.x"]["entity"] == "switch.right"
+
+
+@pytest.mark.asyncio
+async def test_remove_manual_mapping(registry):
+    """Removing a mapping clears it and persists (the Clear button, #219)."""
+    await registry.async_set_manual_mapping("sensor.x", "switch.wrong", "switch")
+    registry._store.async_save.reset_mock()
+
+    removed = await registry.async_remove_manual_mapping("sensor.x")
+    assert removed is True
+    assert "sensor.x" not in registry._manual_mappings
+    registry._store.async_save.assert_awaited_once()
+    saved = registry._store.async_save.call_args[0][0]
+    assert "sensor.x" not in saved["mappings"]
+
+
+@pytest.mark.asyncio
+async def test_remove_unknown_mapping_is_noop(registry):
+    """Removing a non-existent mapping returns False and doesn't persist."""
+    removed = await registry.async_remove_manual_mapping("sensor.nope")
+    assert removed is False
+    registry._store.async_save.assert_not_awaited()

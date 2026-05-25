@@ -111,3 +111,12 @@ test('formValuesToServiceData: service type without service throws', () => {
     assert.throws(() => formValuesToServiceData('sensor.e', { type: 'service', service: '' }),
         /mapping_service_required/);
 });
+
+// ── Remove-mapping button (#219 follow-up: clear a mapping) ──
+test('buildLoadConfigModalHTML shows Remove button only for a manual mapping', () => {
+    const values = controlToFormValues({ type: 'switch', entity: 'switch.x' });
+    const withManual = buildLoadConfigModalHTML({ deviceName: 'D', values, t, hasManual: true });
+    const noManual = buildLoadConfigModalHTML({ deviceName: 'D', values, t, hasManual: false });
+    assert.match(withManual, /id="cfg-remove"/);
+    assert.doesNotMatch(noManual, /id="cfg-remove"/);
+});

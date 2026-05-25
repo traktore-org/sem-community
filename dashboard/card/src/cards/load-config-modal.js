@@ -81,8 +81,9 @@ const FIELD_STYLE =
  * @param {string} deviceName
  * @param {object} values  from controlToFormValues()
  * @param {(key:string)=>string} t  translate fn
+ * @param {boolean} hasManual  show the "Remove mapping" button (manual mapping set)
  */
-export function buildLoadConfigModalHTML({ deviceName, values, t }) {
+export function buildLoadConfigModalHTML({ deviceName, values, t, hasManual = false }) {
     const v = values;
     const isService = v.type === 'service';
     const opt = (val, label) =>
@@ -118,7 +119,9 @@ export function buildLoadConfigModalHTML({ deviceName, values, t }) {
                 </div>
             </div>
             <div class="cfg-error" style="color:#f44336;font-size:13px;margin:4px 0 8px;display:none"></div>
-            <div style="display:flex;gap:8px;justify-content:flex-end">
+            <div style="display:flex;gap:8px;align-items:center">
+                ${hasManual ? `<button id="cfg-remove" style="padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:transparent;color:#f44336">${t('clear_mapping')}</button>` : ''}
+                <div style="flex:1"></div>
                 <button id="cfg-cancel" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;background:rgba(255,255,255,0.1);color:inherit">${t('cancel')}</button>
                 <button id="cfg-save" style="padding:8px 16px;border-radius:6px;border:none;cursor:pointer;background:#4caf50;color:white">${t('save')}</button>
             </div>
