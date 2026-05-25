@@ -313,6 +313,28 @@ class TestEdConfigSummary:
         assert "grid:pwr=none" in summary
         assert "batt:pwr=none" in summary
 
+    def test_detail_exposes_entity_ids_and_source(self, coordinator):
+        coordinator._energy_dashboard_config = self._ed(
+            solar_power="sensor.s_p", solar_energy="sensor.s_e",
+            grid_import_power="sensor.g_p", grid_import_energy="sensor.g_i",
+            grid_export_energy="sensor.g_o", battery_power="sensor.b_p",
+            battery_charge_energy="sensor.b_c", battery_discharge_energy="sensor.b_d",
+            derived_power={"battery": "sensor.b_p"},
+        )
+        detail = coordinator.get_ed_config_detail()
+        assert detail["solar"] == {
+            "power": "sensor.s_p", "power_source": "stat_rate", "energy": "sensor.s_e",
+        }
+        assert detail["grid"]["power"] == "sensor.g_p"
+        assert detail["grid"]["import_energy"] == "sensor.g_i"
+        assert detail["grid"]["export_energy"] == "sensor.g_o"
+        # battery power was derived
+        assert detail["battery"]["power_source"] == "derived"
+
+    def test_detail_none_when_legacy(self, coordinator):
+        coordinator._energy_dashboard_config = None
+        assert coordinator.get_ed_config_detail() is None
+
 
 class TestEnergyTotals:
     """Test EnergyTotals dataclass."""

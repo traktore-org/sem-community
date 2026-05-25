@@ -1933,6 +1933,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             attrs["schedule_surplus_hours"] = self.coordinator.data.get("schedule_surplus_hours", [])
             attrs["schedule_ev_hours"] = self.coordinator.data.get("schedule_ev_hours", [])
 
+        # Energy Dashboard mapping (#250) — attach full entity IDs so the System
+        # card's Copy diagnostics can list the actual sensors, not just presence.
+        if self.entity_description.key == "diag_ed_config":
+            try:
+                detail = self.coordinator.get_ed_config_detail()
+                if detail:
+                    attrs["energy_dashboard"] = detail
+            except Exception:
+                pass
+
         # Battery charge scheduler (#6) — attach schedule to state sensor
         if self.entity_description.key == "battery_scheduler_state":
             schedule = self.coordinator.data.get("battery_scheduler_schedule", {})

@@ -145,11 +145,24 @@ class SEMSystemCard extends SEMLitBase {
         const capacity = this._valNum('diag_battery_capacity');
         const capStr = capacity > 0 ? capacity.toFixed(1) : '—';
         const unavailable = this._val('diag_sensors_unavailable') || '0';
-        const edConfig = this._val('diag_ed_config') || '—';
 
-        const text =
-            `SEM ${ver} | Grid: ${gridMode} | Chargers: ${chargerCount} (${controlType}) | Battery: ${capStr}kWh | Unavailable: ${unavailable}\n` +
-            `Config: ${edConfig}`;
+        const header = `SEM ${ver} | Grid: ${gridMode} | Chargers: ${chargerCount} (${controlType}) | Battery: ${capStr}kWh | Unavailable: ${unavailable}`;
+
+        // Energy Dashboard mapping with actual entity names, from diag_ed_config
+        // attributes; falls back to the compact state summary if unavailable (#250).
+        const ed = this._hass?.states?.['sensor.sem_diag_ed_config']?.attributes?.energy_dashboard;
+        let edBlock;
+        if (ed) {
+            const v = x => x || '—';
+            edBlock =
+                `Solar:   pwr=${v(ed.solar?.power)} [${v(ed.solar?.power_source)}]  energy=${v(ed.solar?.energy)}\n` +
+                `Grid:    pwr=${v(ed.grid?.power)} [${v(ed.grid?.power_source)}]  imp=${v(ed.grid?.import_energy)}  exp=${v(ed.grid?.export_energy)}\n` +
+                `Battery: pwr=${v(ed.battery?.power)} [${v(ed.battery?.power_source)}]  chg=${v(ed.battery?.charge_energy)}  dis=${v(ed.battery?.discharge_energy)}`;
+        } else {
+            edBlock = `Config: ${this._val('diag_ed_config') || '—'}`;
+        }
+
+        const text = `${header}\n${edBlock}`;
 
         navigator.clipboard.writeText(text).then(() => {
             this._copyFeedback = this._t('copied');

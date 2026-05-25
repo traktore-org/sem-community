@@ -2489,6 +2489,44 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     device._daily_runtime_meter_day.isoformat(),
                 )
 
+    def get_ed_config_detail(self) -> Optional[Dict[str, Any]]:
+        """Full Energy Dashboard mapping (entity IDs + power source) per source.
+
+        Exposed as attributes on the diag_ed_config sensor so the System card's
+        Copy diagnostics can include the actual entity names — which makes a wrong
+        mapping obvious, not just whether something is configured (#250). Returns
+        None when SEM is not using the Energy Dashboard.
+        """
+        ed = self._energy_dashboard_config
+        if ed is None:
+            return None
+        derived = getattr(ed, "derived_power", {}) or {}
+
+        def _src(kind: str, entity_id) -> str:
+            if kind in derived:
+                return "derived"
+            return "stat_rate" if entity_id else "none"
+
+        return {
+            "solar": {
+                "power": ed.solar_power,
+                "power_source": _src("solar", ed.solar_power),
+                "energy": ed.solar_energy,
+            },
+            "grid": {
+                "power": ed.grid_import_power,
+                "power_source": _src("grid", ed.grid_import_power),
+                "import_energy": ed.grid_import_energy,
+                "export_energy": ed.grid_export_energy,
+            },
+            "battery": {
+                "power": ed.battery_power,
+                "power_source": _src("battery", ed.battery_power),
+                "charge_energy": ed.battery_charge_energy,
+                "discharge_energy": ed.battery_discharge_energy,
+            },
+        }
+
     def _build_ed_config_summary(self) -> str:
         """Summarize the Energy Dashboard mapping for the copy-diagnostics string.
 
