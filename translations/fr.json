@@ -938,6 +938,9 @@
       },
       "diag_charger_count": {
         "name": "Chargeurs configurés"
+      },
+      "diag_ed_config": {
+        "name": "Configuration du tableau de bord énergie"
       }
     },
     "binary_sensor": {

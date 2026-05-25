@@ -937,6 +937,9 @@
       },
       "diag_charger_count": {
         "name": "Nakonfigurované nabíječky"
+      },
+      "diag_ed_config": {
+        "name": "Konfigurace energetického panelu"
       }
     },
     "binary_sensor": {

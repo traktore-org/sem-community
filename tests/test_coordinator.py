@@ -249,6 +249,71 @@ class TestCoordinatorMethods:
         assert coordinator.config["daily_ev_target"] == 15
 
 
+class TestEdConfigSummary:
+    """Test the Energy Dashboard config summary used by Copy diagnostics (#250)."""
+
+    def _ed(self, **kw):
+        """Mock EnergyDashboardConfig with all fields None unless overridden."""
+        ed = Mock()
+        for f in (
+            "solar_power", "solar_energy", "grid_import_power", "grid_import_energy",
+            "grid_export_energy", "battery_power", "battery_charge_energy",
+            "battery_discharge_energy",
+        ):
+            setattr(ed, f, kw.get(f))
+        ed.derived_power = kw.get("derived_power", {})
+        return ed
+
+    def test_legacy_when_no_energy_dashboard(self, coordinator):
+        coordinator._energy_dashboard_config = None
+        assert coordinator._build_ed_config_summary() == "legacy"
+
+    def test_fully_configured_via_stat_rate(self, coordinator):
+        coordinator._energy_dashboard_config = self._ed(
+            solar_power="sensor.s_p", solar_energy="sensor.s_e",
+            grid_import_power="sensor.g_p", grid_import_energy="sensor.g_i",
+            grid_export_energy="sensor.g_o", battery_power="sensor.b_p",
+            battery_charge_energy="sensor.b_c", battery_discharge_energy="sensor.b_d",
+        )
+        summary = coordinator._build_ed_config_summary()
+        assert summary == (
+            "solar:pwr=stat_rate,energy=ok | "
+            "grid:pwr=stat_rate,imp=ok,exp=ok | "
+            "batt:pwr=stat_rate,chg=ok,dis=ok"
+        )
+
+    def test_derived_power_and_missing_export(self, coordinator):
+        # SolaX #250 shape: power derived from device, no export energy configured.
+        coordinator._energy_dashboard_config = self._ed(
+            solar_power="sensor.solax_pv_power_total", solar_energy="sensor.solax_pv_energy_total",
+            grid_import_power="sensor.solax_measured_power", grid_import_energy="sensor.solax_grid_import",
+            battery_power="sensor.solax_battery_power_charge",
+            battery_charge_energy="sensor.solax_battery_input_energy_total",
+            battery_discharge_energy="sensor.solax_battery_output_energy_total",
+            derived_power={
+                "solar": "sensor.solax_pv_power_total",
+                "grid": "sensor.solax_measured_power",
+                "battery": "sensor.solax_battery_power_charge",
+            },
+        )
+        summary = coordinator._build_ed_config_summary()
+        assert "solar:pwr=derived,energy=ok" in summary
+        assert "grid:pwr=derived,imp=ok,exp=MISSING" in summary
+        assert "batt:pwr=derived,chg=ok,dis=ok" in summary
+
+    def test_energy_only_no_power(self, coordinator):
+        # The pre-fix all-zeros case: energy present, no power anywhere.
+        coordinator._energy_dashboard_config = self._ed(
+            solar_energy="sensor.s_e", grid_import_energy="sensor.g_i",
+            grid_export_energy="sensor.g_o", battery_charge_energy="sensor.b_c",
+            battery_discharge_energy="sensor.b_d",
+        )
+        summary = coordinator._build_ed_config_summary()
+        assert "solar:pwr=none,energy=ok" in summary
+        assert "grid:pwr=none" in summary
+        assert "batt:pwr=none" in summary
+
+
 class TestEnergyTotals:
     """Test EnergyTotals dataclass."""
 

@@ -937,6 +937,9 @@
       },
       "diag_charger_count": {
         "name": "Caricatori configurati"
+      },
+      "diag_ed_config": {
+        "name": "Configurazione dashboard energia"
       }
     },
     "binary_sensor": {

@@ -937,6 +937,9 @@
       },
       "diag_charger_count": {
         "name": "Carregadores configurados"
+      },
+      "diag_ed_config": {
+        "name": "Configuração do painel de energia"
       }
     },
     "binary_sensor": {

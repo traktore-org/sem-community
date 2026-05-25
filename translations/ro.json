@@ -937,6 +937,9 @@
       },
       "diag_charger_count": {
         "name": "Încărcătoare configurate"
+      },
+      "diag_ed_config": {
+        "name": "Configurare panou energie"
       }
     },
     "binary_sensor": {

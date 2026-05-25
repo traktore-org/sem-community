@@ -1388,6 +1388,10 @@ SENSOR_TYPES = [
         key="diag_sensors_unavailable",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    SensorEntityDescription(
+        key="diag_ed_config",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 ]
 
 
