@@ -432,8 +432,8 @@ async def async_setup_entry(
                     mode=NumberMode.SLIDER,
                     icon="mdi:battery-charging-80",
                 ), "ev_target_soc", full_config.get("ev_target_soc", 80)),
-                # Optional solar ceiling (Max), disabled by default; defaults to
-                # full (charge freely from sun) until the user caps it (#245).
+                # Solar ceiling (Max) = the Max handle of the EV-card range slider;
+                # defaults to full (charge freely from sun) until the user caps it (#245).
                 (NumberEntityDescription(
                     key=f"charger_{cid}_daily_ev_target_max",
                     name=f"{cname} Solar Max",
@@ -441,7 +441,6 @@ async def async_setup_entry(
                     native_min_value=0, native_max_value=100, native_step=0.5,
                     mode=NumberMode.SLIDER,
                     icon="mdi:solar-power-variant",
-                    entity_registry_enabled_default=False,
                 ), "daily_ev_target_max",
                     charger_cfg.get("daily_ev_target_max", 100)),
                 (NumberEntityDescription(
@@ -451,7 +450,6 @@ async def async_setup_entry(
                     native_min_value=50, native_max_value=100, native_step=5,
                     mode=NumberMode.SLIDER,
                     icon="mdi:battery-charging-high",
-                    entity_registry_enabled_default=False,
                 ), "ev_target_soc_max",
                     charger_cfg.get("ev_target_soc_max", 100)),
             ]:
@@ -531,10 +529,10 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
 
-    # Optional solar-ceiling (Max) entities are hidden until a user opts in (#245).
-    # They default to full (100% / 100 kWh) = "charge freely from sun"; set lower
-    # to cap surplus. See _resolve_target() in the coordinator.
-    DISABLED_BY_DEFAULT: set = {"daily_ev_target_max", "ev_target_soc_max"}
+    # Solar-ceiling (Max) entities are enabled: they are the Max handle of the
+    # dual-handle range slider on the EV card (#245), and default to full
+    # (100% / 100 kWh) = "charge freely from sun" until the user caps surplus.
+    DISABLED_BY_DEFAULT: set = set()
 
     def __init__(
         self,

@@ -147,18 +147,27 @@ SOC  0%  ───────────────────────�
 
 SEM calculates remaining EV charging need from a single unified helper (`_calculate_remaining_need()`), called from both `_build_charging_context()` and `_determine_charging_strategy()`:
 
+The target is a **Min/Max range** (#245). `_calculate_remaining_need(bound=...)` resolves
+either bound via `_resolve_target()`:
 ```
+floor (Min, bound="min")  = ev_target_soc / daily_ev_target          (the guaranteed target)
+ceiling (Max, bound="max") = ev_target_soc_max / daily_ev_target_max  (defaults to full=100; clamped >= Min)
+
 if vehicle_soc is available:
-    remaining = max(0, (ev_target_soc - vehicle_soc) / 100 × ev_battery_capacity_kwh)
+    remaining = max(0, (target - vehicle_soc) / 100 × ev_battery_capacity_kwh)
 else:
-    remaining = max(0, daily_ev_target - daily_ev_energy)
+    remaining = max(0, target - daily_ev_energy)
 ```
 
-This value drives both night and surplus charging decisions. The per-charger `ev_limit_surplus` toggle controls whether surplus (solar) charging also stops at the target:
-- **Off (default):** Surplus charging is unlimited. Night charging stops at the target.
-- **On:** ALL charging stops at the target.
+- **Night/grid charging** tops up to the **floor (Min)** — `night_target_kwh = remaining(bound="min")`.
+- **Surplus (solar) charging** stops at the **ceiling (Max)** — `soc_limit_active = remaining(bound="max") <= 0.1`.
+  Max defaults to full, so by default surplus charges freely to car-full.
 
-All settings (`ev_target_soc`, `ev_battery_capacity_kwh`, `ev_limit_surplus`) are per-charger. The multi-charger loop patches `ChargingContext.soc_limit_active` per charger before calling `_execute_ev_control()`.
+The old `ev_limit_surplus` switch (#235) was folded into Max (Max < full == limit on); a
+setup-time migration sets Max = the prior target for users who had the switch on. All settings
+(`ev_target_soc`, `*_max`, `ev_battery_capacity_kwh`) are per-charger; the multi-charger loop
+patches `ChargingContext.soc_limit_active` / `night_target_kwh` per charger before calling
+`_execute_ev_control()`.
 
 ---
 
