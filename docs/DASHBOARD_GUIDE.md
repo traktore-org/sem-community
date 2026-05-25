@@ -113,9 +113,22 @@ All settings and device management in one place.
 | **Heat Pump & Hot Water** | Boost offset, hot water max temperature |
 | **Solar & Power** | Min solar power, max grid import |
 | **Tariff & Pricing** | Current rates, cheap/expensive thresholds |
-| **Load Priority** | Drag-and-drop device ordering with real-time power, controllable/critical toggles, per-device control mode (Off / Peak Only / Surplus). EV chargers have no mode dropdown here — their charge target is set in the **Charge Target** block on the EV card |
+| **Load Priority** | Drag-and-drop device ordering with real-time power, controllable/critical toggles, per-device control mode (Off / Peak Only / Surplus), and a per-device **Configure** button (see below). EV chargers have no mode dropdown here — their charge target is set in the **Charge Target** block on the EV card |
 | **Peak & Load Management** | Target peak limit, peak margin, sheddable devices |
 | **Observer Mode** | Read-only toggle for safe monitoring |
+
+#### Configure a device's control (manual mapping)
+
+When SEM can't auto-detect how to control a load (e.g. a Shelly Pro3EM meter whose relay lives on a separate device), use the **Configure** button on the Load Priority card to map it manually. The dialog pre-fills with the current mapping and supports all four control methods SEM can shed/restore:
+
+| Control type | Use for | What you pick |
+|---|---|---|
+| **Switch** | on/off appliances, smart plugs | the `switch.*` entity |
+| **Number entity** | chargers with a current/amperage number (Wallbox, go-eCharger, …) | the `number.*` / `input_number.*` entity (set to 0 to reduce) |
+| **Input boolean** | automation-triggered loads | the `input_boolean.*` entity |
+| **Service call** | service-driven chargers (KEBA, Easee) | the service (e.g. `keba.set_current`), parameter, and reduce/restore values |
+
+Entity types use a searchable entity picker filtered to the right domain. **Reset to auto-detect** removes a manual mapping and reverts the device to auto-discovery (for an auto-discoverable device this re-populates the same entity; to stop SEM controlling a device entirely, set its control mode to **Off**).
 
 ### Costs
 
