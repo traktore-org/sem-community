@@ -244,10 +244,12 @@ class SEMEVStatusCard extends SEMLitBase {
         const onUp = (ev) => {
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
             this._setNumber(entId, compute(ev.clientX));
         };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);  // mobile scroll-interrupt cleanup
     }
 
     _renderChargerSection(id, idx) {

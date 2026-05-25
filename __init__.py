@@ -175,7 +175,13 @@ def _migrate_limit_surplus_to_max(hass: HomeAssistant, entry: SEMConfigEntry) ->
     changed = False
 
     # Global scope (the switch persisted to options, but read data too for safety).
-    if "ev_limit_surplus" in opts or "ev_limit_surplus" in data:
+    # `entry.data` is read-only here, so a key living only in data can't be removed;
+    # skip it once Max is already populated to avoid re-running (and log spam) forever.
+    if "ev_limit_surplus" in opts or (
+        "ev_limit_surplus" in data
+        and opts.get("daily_ev_target_max") is None
+        and opts.get("ev_target_soc_max") is None
+    ):
         if bool(opts.get("ev_limit_surplus", data.get("ev_limit_surplus"))):
             cur_kwh = opts.get("daily_ev_target", data.get("daily_ev_target"))
             if cur_kwh is not None and opts.get("daily_ev_target_max") is None:

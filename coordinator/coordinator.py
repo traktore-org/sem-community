@@ -1684,13 +1684,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "solar_only", "battery_assist", "night_grid", "idle"
         """
         vehicle_soc = self._cycle_vehicle_soc
+        # Measured against the floor (Min, the default): this is the guaranteed
+        # target used for the night top-up decision and the auto-mode forecast
+        # ratio. Solar surplus still continues past Min up to the Max ceiling —
+        # that stop is gated separately by soc_limit_active, not here (#245).
         remaining_need = self._calculate_remaining_need(energy, vehicle_soc)
 
         # EV not connected → idle
         if not power.ev_connected:
             return ("idle", f"ev disconnected")
 
-        # Night mode → grid charging tops up to the floor (Min), not the ceiling (#245)
+        # Night mode → grid charging tops up to the floor (Min) (#245)
         if self.time_manager.is_night_mode():
             remaining_need = self._calculate_remaining_need(energy, vehicle_soc, bound="min")
             if remaining_need < 0.5:
@@ -1859,7 +1863,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 pass
 
         if remaining_need < 0.5:
-            return ("idle", "auto: EV target reached")
+            # Floor (Min) met — no forecast-based pacing needed. Solar surplus
+            # still continues up to the Max ceiling via the surplus path (#245).
+            return ("idle", "auto: min target met, solar continues to ceiling")
 
         ratio = remaining_solar / remaining_need if remaining_need > 0 else 99
 

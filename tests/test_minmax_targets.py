@@ -293,6 +293,19 @@ class TestLimitSurplusMigration:
         self._migrate()(hass, entry)
         hass.config_entries.async_update_entry.assert_not_called()
 
+    def test_key_in_data_only_migrates_once(self):
+        # entry.data is read-only; once Max is populated the guard must stop re-running.
+        hass = MagicMock()
+        entry = self._entry({}, data={"ev_limit_surplus": True, "daily_ev_target": 6})
+        self._migrate()(hass, entry)
+        opts = hass.config_entries.async_update_entry.call_args.kwargs["options"]
+        assert opts["daily_ev_target_max"] == 6
+        # Re-run with Max already set in options → no further update (no log spam).
+        hass2 = MagicMock()
+        entry2 = self._entry({"daily_ev_target_max": 6}, data={"ev_limit_surplus": True, "daily_ev_target": 6})
+        self._migrate()(hass2, entry2)
+        hass2.config_entries.async_update_entry.assert_not_called()
+
     def test_per_charger_switch_on_only_for_enabled(self):
         hass = MagicMock()
         entry = self._entry({"ev_chargers": [
