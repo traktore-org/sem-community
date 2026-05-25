@@ -1207,21 +1207,46 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         # cache_headers=False, because Lovelace resources are fetched once
         # and kept in the service worker cache.
         manifest_path = os.path.join(component_path, "manifest.json")
+        card_dir = os.path.join(dashboard_path, "card")
 
-        def _read_version():
+        def _asset_versions():
+            """Per-asset cache-bust tokens: manifest version + short content hash.
+
+            A plain rsync+restart deploy does NOT bump the manifest version, so a
+            bare ``?v={version}`` stayed constant and browsers kept serving stale
+            JS from the service-worker cache — notably a stale ``sem-localize.js``,
+            which surfaced as stale dashboard translations on PROD (#240). Hashing
+            the on-disk file makes ``?v=`` follow the actual content, busting the
+            cache on any real change while staying stable across unrelated restarts.
+            """
+            import hashlib
+
             try:
                 with open(manifest_path) as f:
-                    return json.load(f).get("version", "0")
+                    base = json.load(f).get("version", "0")
             except Exception:
-                return "0"
+                base = "0"
 
-        version = await hass.async_add_executor_job(_read_version)
+            def _token(*rel_parts):
+                try:
+                    with open(os.path.join(card_dir, *rel_parts), "rb") as f:
+                        return f"{base}-{hashlib.sha1(f.read()).hexdigest()[:8]}"
+                except OSError:
+                    return base
+
+            return {
+                "localize": _token("sem-localize.js"),
+                "bundle": _token("dist", "sem-cards.js"),
+                "diagram": _token("sem-system-diagram-card.js"),
+            }
+
+        asset_v = await hass.async_add_executor_job(_asset_versions)
 
         localize_base = f"{static_path}/card/sem-localize.js"
         # Single Lit bundle replaces all individual card JS files
         cards_bundle_base = f"{static_path}/card/dist/sem-cards.js"
-        localize_url = f"{localize_base}?v={version}"
-        cards_bundle_url = f"{cards_bundle_base}?v={version}"
+        localize_url = f"{localize_base}?v={asset_v['localize']}"
+        cards_bundle_url = f"{cards_bundle_base}?v={asset_v['bundle']}"
 
         # Load semLocalize via add_extra_js_url — must be available before cards
         add_extra_js_url(hass, localize_url)
@@ -1288,7 +1313,7 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
 
             # Register standalone diagram card (vanilla JS, not in Lit bundle)
             diagram_base = f"{static_path}/card/sem-system-diagram-card.js"
-            diagram_url = f"{diagram_base}?v={version}"
+            diagram_url = f"{diagram_base}?v={asset_v['diagram']}"
             diagram_item = existing_by_base.get(diagram_base)
             if diagram_item is None:
                 await resources.async_create_item({"res_type": "module", "url": diagram_url})
