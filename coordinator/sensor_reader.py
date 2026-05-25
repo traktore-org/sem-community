@@ -804,9 +804,19 @@ class SensorReader:
                         continue
                     eid = entity_entry.entity_id
                     eid_lower = eid.lower()
-                    # Check if entity name contains SOC keywords
-                    if any(kw in eid_lower for kw in soc_keywords):
-                        state = self.hass.states.get(eid)
+                    state = self.hass.states.get(eid)
+                    # Accept by name keyword OR by the canonical SOC signature:
+                    # device_class "battery" + unit "%". The latter catches
+                    # integrations that name SOC unconventionally — e.g. SolaX
+                    # solax-modbus calls it "Battery Capacity"
+                    # (sensor.*_battery_capacity), which no SOC keyword matches (#250).
+                    by_keyword = any(kw in eid_lower for kw in soc_keywords)
+                    by_signature = False
+                    if state is not None:
+                        dc = state.attributes.get("device_class")
+                        unit = (state.attributes.get("unit_of_measurement") or "").strip()
+                        by_signature = dc == "battery" and unit == "%"
+                    if by_keyword or by_signature:
                         if state and state.state not in ("unknown", "unavailable", None):
                             try:
                                 val = float(state.state)
@@ -876,11 +886,17 @@ class SensorReader:
                 continue
             if state.state in ("unknown", "unavailable", None):
                 continue
+            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            dc = state.attributes.get("device_class")
+            # Skip SOC sensors: "Battery Capacity" matches the keyword above but on
+            # SolaX (and others) it is the SOC percentage, not rated energy. A 80%
+            # SOC would otherwise be misread as 80 kWh of rated capacity (#250).
+            if dc == "battery" or unit in ("%", "percent"):
+                continue
             try:
                 value = float(state.state)
                 if value <= 0:
                     continue
-                unit = (state.attributes.get("unit_of_measurement") or "").lower()
                 if unit == "wh" or value > 500:
                     value /= 1000  # Wh → kWh
                 if 1 <= value <= 200:  # Sanity: 1-200 kWh

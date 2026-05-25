@@ -59,12 +59,34 @@ async def async_get_config_entry_diagnostics(
     ed_config = getattr(coordinator, "_energy_dashboard_config", None)
     ed_info = {}
     if ed_config:
+        # Resolved power sensors + where each came from. "derived" means it was
+        # recovered from the energy sensor's device because the Energy Dashboard
+        # had no stat_rate power link (#250); "stat_rate" means HA had it; None
+        # means no power sensor — that source reads 0. Makes "all values are 0"
+        # reports diagnosable at a glance.
+        derived = getattr(ed_config, "derived_power", {}) or {}
+
+        def _power_source(kind: str, entity_id) -> str | None:
+            if kind in derived:
+                return "derived"
+            return "stat_rate" if entity_id else None
+
         ed_info = {
             "has_solar": ed_config.has_solar,
             "has_grid": ed_config.has_grid,
             "has_battery": ed_config.has_battery,
             "has_ev": ed_config.has_ev,
             "device_count": len(ed_config.device_consumption),
+            "power_sensors": {
+                "solar": ed_config.solar_power,
+                "grid": ed_config.grid_import_power,
+                "battery": ed_config.battery_power,
+            },
+            "power_source": {
+                "solar": _power_source("solar", ed_config.solar_power),
+                "grid": _power_source("grid", ed_config.grid_import_power),
+                "battery": _power_source("battery", ed_config.battery_power),
+            },
         }
 
     # Split-grid discovery state (issue #166): surface which import/export

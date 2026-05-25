@@ -13,8 +13,40 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 _LOGGER = logging.getLogger(__name__)
+
+# Per-type keyword rules for deriving a power sensor from the energy sensor's
+# device when the Energy Dashboard has no stat_rate power link (issue #250).
+# "include" = entity_id substrings that qualify a candidate; "prefer" = substrings
+# that break ties (earlier = higher priority). Device-scoped search + device_class
+# filtering keeps false positives low even when one device exposes every sensor
+# (as SolaX solax-modbus does).
+_POWER_DERIVE_RULES: Dict[str, Dict[str, tuple]] = {
+    "solar": {
+        "include": ("pv_power", "solar_power", "production_power"),
+        "prefer": ("total",),
+    },
+    "grid": {
+        "include": (
+            "measured_power", "grid_power", "meter_active_power",
+            "active_power_total", "total_active_power", "power_meter",
+            "grid_active_power",
+        ),
+        "prefer": ("measured", "total"),
+    },
+    "battery": {
+        # No "charge"/"discharge" preference on purpose: when a device exposes a
+        # combined `battery_power` AND a `battery_power_charge`, the shortest-name
+        # tie-break favours the combined (bidirectional) sensor. SolaX only has
+        # `battery_power_charge` (which is itself signed), so it is still picked.
+        "include": ("battery_power", "batt_power", "power_battery"),
+        "prefer": ("total",),
+    },
+}
+# Substrings that disqualify a candidate regardless of type (non-real power).
+_POWER_DERIVE_EXCLUDE: tuple = ("reactive", "apparent", "factor")
 
 
 @dataclass
@@ -54,6 +86,12 @@ class EnergyDashboardConfig:
     has_grid: bool = False
     has_battery: bool = False
     has_ev: bool = False
+
+    # Power sensors that were derived from the energy sensor's device because the
+    # Energy Dashboard had no stat_rate link (issue #250). Maps "solar"/"grid"/
+    # "battery" → entity_id. Surfaced in diagnostics to distinguish stat_rate
+    # power from auto-recovered power.
+    derived_power: Dict[str, str] = field(default_factory=dict)
 
     def is_minimally_configured(self) -> bool:
         """Check if Energy Dashboard has minimum required configuration.
@@ -145,6 +183,13 @@ async def read_energy_dashboard_config(hass: HomeAssistant) -> Optional[EnergyDa
         device_consumption = data.get("device_consumption", [])
         config.device_consumption = device_consumption
         _extract_ev_from_devices(device_consumption, config)
+
+        # Derive any power sensors the Energy Dashboard left unset (no stat_rate).
+        # HA 2025.12+ power links are configured manually and are frequently absent
+        # (e.g. SolaX solax-modbus energy-only setups, issue #250). Without them SEM
+        # has no real-time power and every entity reads 0. Recover by finding a power
+        # sensor on the same device as the configured energy sensor.
+        _derive_missing_power_sensors(hass, config)
 
         _LOGGER.info(
             "Read Energy Dashboard config: solar=%s (%d sources), grid=%s (%d import, %d export), battery=%s (%d units), ev=%s",
@@ -340,6 +385,128 @@ def _extract_ev_from_devices(
                 config.ev_power,
             )
             break
+
+
+def _find_power_sensor_on_device(
+    hass: HomeAssistant, energy_entity: str, rule: Dict[str, tuple],
+) -> Optional[str]:
+    """Find a power sensor on the same device as ``energy_entity``.
+
+    Mirrors the device-registry strategy used by
+    ``SensorReader._auto_detect_battery_soc``: resolve the energy sensor's
+    device, then scan its sensor entities for a power sensor whose entity_id
+    matches the rule's ``include`` keywords. Ties are broken by ``prefer``
+    keyword order, then by shortest entity_id (favours the "total"/parent over
+    per-string variants like pv_power_1).
+
+    Returns the entity_id, or None if no suitable candidate exists.
+    """
+    if not energy_entity:
+        return None
+    try:
+        registry = er.async_get(hass)
+        energy_entry = registry.async_get(energy_entity)
+        if not energy_entry or not energy_entry.device_id:
+            return None
+
+        candidates: List[str] = []
+        for entry in er.async_entries_for_device(registry, energy_entry.device_id):
+            if entry.domain != "sensor" or entry.disabled_by is not None:
+                continue
+            eid = entry.entity_id
+            eid_lower = eid.lower()
+            if any(x in eid_lower for x in _POWER_DERIVE_EXCLUDE):
+                continue
+            if not any(kw in eid_lower for kw in rule["include"]):
+                continue
+            # Must look like a live power sensor.
+            state = hass.states.get(eid)
+            if not state:
+                continue
+            dc = state.attributes.get("device_class")
+            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            if dc != "power" and unit not in ("w", "kw"):
+                continue
+            candidates.append(eid)
+
+        if not candidates:
+            return None
+
+        def _rank(eid: str) -> tuple:
+            low = eid.lower()
+            prefer = rule.get("prefer", ())
+            pref_rank = next(
+                (i for i, kw in enumerate(prefer) if kw in low), len(prefer),
+            )
+            return (pref_rank, len(eid))
+
+        candidates.sort(key=_rank)
+        return candidates[0]
+    except Exception as e:  # noqa: BLE001 — best-effort, never block setup
+        _LOGGER.debug("Power sensor derivation failed for %s: %s", energy_entity, e)
+        return None
+
+
+def _derive_missing_power_sensors(
+    hass: Optional[HomeAssistant], config: EnergyDashboardConfig,
+) -> None:
+    """Recover power sensors not linked in the Energy Dashboard (issue #250).
+
+    SEM reads real-time power from the Energy Dashboard ``stat_rate`` links
+    (HA 2025.12+). Those are configured manually and are frequently absent —
+    the standard SolaX solax-modbus setup wires only energy sensors. Without
+    power links SEM reads 0 for everything. When a source has an energy sensor
+    but no power sensor, derive the power sensor from the same device.
+
+    Sign conventions are intentionally NOT handled here — the runtime
+    ``SensorReader._detect_grid_sign`` / ``_detect_battery_sign`` auto-detection
+    corrects direction from the energy counters (SolaX = grid Pattern D).
+    """
+    if hass is None:
+        return
+
+    # Solar: pv_power_total etc.
+    if not config.solar_power and config.solar_energy:
+        found = _find_power_sensor_on_device(
+            hass, config.solar_energy, _POWER_DERIVE_RULES["solar"],
+        )
+        if found:
+            config.solar_power = found
+            config.solar_power_list.append(found)
+            config.derived_power["solar"] = found
+            _LOGGER.info(
+                "Derived solar power sensor %s from energy device "
+                "(no stat_rate in Energy Dashboard)", found,
+            )
+
+    # Grid: combined meter power (measured_power etc.). Sign auto-detected later.
+    if not config.grid_import_power and config.grid_import_energy:
+        found = _find_power_sensor_on_device(
+            hass, config.grid_import_energy, _POWER_DERIVE_RULES["grid"],
+        )
+        if found:
+            config.grid_import_power = found
+            config.grid_power_list.append(found)
+            config.derived_power["grid"] = found
+            _LOGGER.info(
+                "Derived grid power sensor %s from energy device "
+                "(no stat_rate in Energy Dashboard)", found,
+            )
+
+    # Battery: battery_power* (positive=charge per SEM; sign auto-detected later).
+    battery_energy = config.battery_charge_energy or config.battery_discharge_energy
+    if not config.battery_power and battery_energy:
+        found = _find_power_sensor_on_device(
+            hass, battery_energy, _POWER_DERIVE_RULES["battery"],
+        )
+        if found:
+            config.battery_power = found
+            config.battery_power_list.append(found)
+            config.derived_power["battery"] = found
+            _LOGGER.info(
+                "Derived battery power sensor %s from energy device "
+                "(no stat_rate in Energy Dashboard)", found,
+            )
 
 
 def get_all_individual_devices(config: EnergyDashboardConfig, hass=None) -> List[Dict[str, Any]]:

@@ -640,11 +640,14 @@ SMA = MockInverter(
 
 SOLAX = MockInverter(
     name="SolaX",
+    # Entity IDs match the real wills106/homeassistant-solax-modbus integration
+    # (plugin_solax.py keys): pv_power_total, pv_energy_total, measured_power,
+    # grid_import, grid_export, battery_power_charge, battery_capacity, etc.
     solar_power="sensor.solax_pv_power_total",
-    solar_energy="sensor.solax_total_energy",
+    solar_energy="sensor.solax_pv_energy_total",
     grid_power="sensor.solax_measured_power",
-    grid_import_energy="sensor.solax_grid_import_total",
-    grid_export_energy="sensor.solax_grid_export_total",
+    grid_import_energy="sensor.solax_grid_import",
+    grid_export_energy="sensor.solax_grid_export",
     battery_power="sensor.solax_battery_power_charge",
     battery_soc="sensor.solax_battery_capacity",
     battery_charge_energy="sensor.solax_battery_input_energy_total",
@@ -1117,3 +1120,278 @@ class TestE2E_DEYE_Peblar(E2ETestBase):
     """DEYE/Sunsynk (matches SEM) + Peblar (switch charge control)."""
     inverter = DEYE
     charger = PEBLAR
+
+
+# ════════════════════════════════════════════
+# Regression: SolaX energy-only Energy Dashboard (#250)
+# ════════════════════════════════════════════
+
+class TestSolaXEnergyOnlyDerivation:
+    """SolaX solax-modbus with NO stat_rate power links (issue #250).
+
+    The standard SolaX energy-dashboard setup wires only energy (kWh) sensors.
+    Without stat_rate, SEM used to read 0 for everything. SEM must now derive the
+    power sensors from the same device as the configured energy sensors.
+
+    Mirrors the real wills106/homeassistant-solax-modbus entity layout: one device
+    exposes every solar/grid/battery sensor, so derivation must pick the right one
+    by keyword (pv_power_total / measured_power / battery_power_charge).
+    """
+
+    # All entities live on a single solax-modbus device.
+    _DEVICE = "solax_dev_001"
+    _ENTITIES = {
+        # entity_id: (unit, device_class)
+        "sensor.solax_pv_power_1": ("W", "power"),
+        "sensor.solax_pv_power_2": ("W", "power"),
+        "sensor.solax_pv_power_total": ("W", "power"),
+        "sensor.solax_measured_power": ("W", "power"),
+        "sensor.solax_battery_power_charge": ("W", "power"),
+        "sensor.solax_house_load": ("W", "power"),          # no keyword → ignored
+        "sensor.solax_inverter_power_factor": ("", None),    # excluded by _POWER_DERIVE_EXCLUDE
+        "sensor.solax_pv_energy_total": ("kWh", "energy"),
+        "sensor.solax_grid_import": ("kWh", "energy"),
+        "sensor.solax_grid_export": ("kWh", "energy"),
+        "sensor.solax_battery_input_energy_total": ("kWh", "energy"),
+        "sensor.solax_battery_output_energy_total": ("kWh", "energy"),
+        "sensor.solax_battery_capacity": ("%", "battery"),
+    }
+
+    def _energy_only_file(self, tmp_path) -> str:
+        """Energy Dashboard file with energy sensors but NO stat_rate / power."""
+        energy_config = {
+            "version": 1,
+            "data": {
+                "energy_sources": [
+                    {"type": "solar", "stat_energy_from": "sensor.solax_pv_energy_total"},
+                    {
+                        "type": "grid",
+                        "flow_from": [{"stat_energy_from": "sensor.solax_grid_import"}],
+                        "flow_to": [{"stat_energy_to": "sensor.solax_grid_export"}],
+                    },
+                    {
+                        "type": "battery",
+                        "stat_energy_from": "sensor.solax_battery_output_energy_total",
+                        "stat_energy_to": "sensor.solax_battery_input_energy_total",
+                    },
+                ],
+                "device_consumption": [],
+            },
+        }
+        storage_dir = tmp_path / ".storage"
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        (storage_dir / "energy").write_text(json.dumps(energy_config))
+        return str(tmp_path)
+
+    def _mock_registry(self):
+        """Mock entity registry: every sensor on one device."""
+        entries = []
+        for eid, (_unit, dc) in self._ENTITIES.items():
+            e = MagicMock()
+            e.entity_id = eid
+            e.domain = "sensor"
+            e.disabled_by = None
+            e.device_id = self._DEVICE
+            e.original_device_class = dc
+            entries.append(e)
+
+        registry = MagicMock()
+        by_id = {e.entity_id: e for e in entries}
+        registry.async_get = lambda eid: by_id.get(eid)
+        return registry, entries
+
+    def _states(self):
+        states = {}
+        for eid, (unit, dc) in self._ENTITIES.items():
+            # Power = a surplus scenario; energy = baselines; SOC = 80%.
+            if dc == "power":
+                val = {
+                    "sensor.solax_pv_power_total": 8000,
+                    "sensor.solax_pv_power_1": 4000,
+                    "sensor.solax_pv_power_2": 4000,
+                    # SolaX Pattern D: positive = import. Exporting 2kW → -2000.
+                    "sensor.solax_measured_power": -2000,
+                    "sensor.solax_battery_power_charge": 500,
+                    "sensor.solax_house_load": 1500,
+                }.get(eid, 0)
+                states[eid] = _state(val, unit=unit, device_class=dc)
+            elif dc == "energy":
+                states[eid] = _state(100, unit=unit, device_class=dc)
+            elif dc == "battery":
+                states[eid] = _state(80, unit=unit, device_class=dc)
+            else:
+                states[eid] = _state(0, unit=unit)
+        return states
+
+    @pytest.mark.asyncio
+    async def test_derives_power_sensors_without_stat_rate(self, tmp_path):
+        """read_energy_dashboard_config derives solar/grid/battery power."""
+        import custom_components.solar_energy_management.ha_energy_reader as har
+
+        config_dir = self._energy_only_file(tmp_path)
+        registry, entries = self._mock_registry()
+        states = self._states()
+
+        hass = MagicMock()
+        hass.config.config_dir = config_dir
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn: fn())
+        hass.states.get = lambda eid: states.get(eid)
+
+        with patch.object(har.er, "async_get", return_value=registry), \
+             patch.object(har.er, "async_entries_for_device", return_value=entries):
+            config = await har.read_energy_dashboard_config(hass)
+
+        assert config is not None
+        # Derived the right power sensor for each source (not the per-string /
+        # house-load / power-factor entities).
+        assert config.solar_power == "sensor.solax_pv_power_total"
+        assert config.grid_import_power == "sensor.solax_measured_power"
+        assert config.battery_power == "sensor.solax_battery_power_charge"
+        # All three recorded as derived (for diagnostics).
+        assert config.derived_power == {
+            "solar": "sensor.solax_pv_power_total",
+            "grid": "sensor.solax_measured_power",
+            "battery": "sensor.solax_battery_power_charge",
+        }
+
+    @pytest.mark.asyncio
+    async def test_no_derivation_when_stat_rate_present(self, tmp_path):
+        """If the Energy Dashboard has stat_rate, derivation must NOT fire.
+
+        Guards the no-regression path for Huawei/SolarEdge/Fronius etc. that
+        already provide power links.
+        """
+        import custom_components.solar_energy_management.ha_energy_reader as har
+
+        energy_config = {
+            "version": 1,
+            "data": {
+                "energy_sources": [
+                    {
+                        "type": "solar",
+                        "stat_energy_from": "sensor.solax_pv_energy_total",
+                        "stat_rate": "sensor.solax_pv_power_total",
+                    },
+                    {
+                        "type": "grid",
+                        "flow_from": [{"stat_energy_from": "sensor.solax_grid_import"}],
+                        "flow_to": [{"stat_energy_to": "sensor.solax_grid_export"}],
+                        "power": [{"stat_rate": "sensor.solax_measured_power"}],
+                    },
+                    {
+                        "type": "battery",
+                        "stat_energy_from": "sensor.solax_battery_output_energy_total",
+                        "stat_energy_to": "sensor.solax_battery_input_energy_total",
+                        "stat_rate": "sensor.solax_battery_power_charge",
+                    },
+                ],
+                "device_consumption": [],
+            },
+        }
+        storage_dir = tmp_path / ".storage"
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        (storage_dir / "energy").write_text(json.dumps(energy_config))
+
+        registry, entries = self._mock_registry()
+        hass = MagicMock()
+        hass.config.config_dir = str(tmp_path)
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn: fn())
+        hass.states.get = lambda eid: self._states().get(eid)
+
+        # async_entries_for_device would raise if derivation tried to run; assert
+        # it is never called because every source already has its power sensor.
+        called = {"n": 0}
+
+        def _spy(*a, **k):
+            called["n"] += 1
+            return entries
+
+        with patch.object(har.er, "async_get", return_value=registry), \
+             patch.object(har.er, "async_entries_for_device", side_effect=_spy):
+            config = await har.read_energy_dashboard_config(hass)
+
+        assert config.solar_power == "sensor.solax_pv_power_total"
+        assert config.grid_import_power == "sensor.solax_measured_power"
+        assert config.battery_power == "sensor.solax_battery_power_charge"
+        assert config.derived_power == {}
+        assert called["n"] == 0, "derivation ran despite stat_rate being present"
+
+    def test_battery_tiebreak_prefers_combined_sensor(self):
+        """Device with both battery_power and battery_power_charge → pick combined."""
+        import custom_components.solar_energy_management.ha_energy_reader as har
+
+        device = "dev1"
+        ents = []
+        for eid in (
+            "sensor.inv_battery_output_energy_total",  # energy anchor
+            "sensor.inv_battery_power_charge",
+            "sensor.inv_battery_power",                # combined — should win
+        ):
+            e = MagicMock()
+            e.entity_id = eid
+            e.domain = "sensor"
+            e.disabled_by = None
+            e.device_id = device
+            ents.append(e)
+
+        registry = MagicMock()
+        registry.async_get = lambda eid: next(
+            (e for e in ents if e.entity_id == eid), None
+        )
+
+        def _state_for(eid):
+            if eid.endswith("energy_total"):
+                return _state(100, unit="kWh", device_class="energy")
+            return _state(300, unit="W", device_class="power")
+
+        hass = MagicMock()
+        hass.states.get = _state_for
+
+        with patch.object(har.er, "async_get", return_value=registry), \
+             patch.object(har.er, "async_entries_for_device", return_value=ents):
+            found = har._find_power_sensor_on_device(
+                hass, "sensor.inv_battery_output_energy_total",
+                har._POWER_DERIVE_RULES["battery"],
+            )
+        assert found == "sensor.inv_battery_power"
+
+    @pytest.mark.asyncio
+    async def test_pipeline_nonzero_including_soc(self, tmp_path):
+        """Full pipeline: derived sensors → non-zero power; SOC via signature."""
+        from custom_components.solar_energy_management.coordinator import (
+            sensor_reader as sr,
+        )
+        import custom_components.solar_energy_management.ha_energy_reader as har
+
+        config_dir = self._energy_only_file(tmp_path)
+        registry, entries = self._mock_registry()
+        states = self._states()
+
+        hass = MagicMock()
+        hass.config.config_dir = config_dir
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn: fn())
+        hass.states.get = lambda eid: states.get(eid)
+
+        with patch.object(har.er, "async_get", return_value=registry), \
+             patch.object(har.er, "async_entries_for_device", return_value=entries):
+            ed = await har.read_energy_dashboard_config(hass)
+
+        reader = sr.SensorReader(hass, {"update_interval": 10})
+        reader.set_energy_dashboard_config(ed)
+
+        # Patch the reader's registry so SOC auto-detection resolves on the same
+        # device (SolaX SOC = sensor.solax_battery_capacity, device_class battery/%).
+        with patch.object(sr.er, "async_get", return_value=registry), \
+             patch.object(sr.er, "async_entries_for_device", return_value=entries):
+            power = reader.read_power()
+
+        # Before the fix every one of these read 0.
+        assert power.solar_power == 8000
+        assert power.battery_power == 500            # charging, SEM convention
+        # Grid is non-zero (was 0). The raw measured_power is read directly; sign
+        # correction (SolaX Pattern D) needs energy-counter movement across cycles
+        # and is covered by test_split_grid_integration.py::test_pattern_d_solax.
+        assert power.grid_power != 0
+        # SOC detected via the device_class=battery + unit=% signature (not by name).
+        assert power.battery_soc == 80
+        assert not power.battery_soc_unavailable

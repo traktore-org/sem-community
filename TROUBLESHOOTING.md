@@ -234,6 +234,25 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 
 ---
 
+## Most values show 0 (SolaX and other energy-only setups)
+
+**Symptom:** SEM installs, but the majority of entities (solar/grid/battery power and everything derived from them) stay at **0**. Reported for SolaX via the *SolaX Inverter Modbus* (`solax-modbus`) integration (#250).
+
+**Cause:** SEM reads real-time power from the HA Energy Dashboard's **power** links (the `stat_rate` field added in HA 2025.12). Those are configured separately from the energy (kWh) sensors and are often missing — many integrations, including SolaX, only get their *energy* sensors wired into the dashboard. With no power link, SEM has no live power to read.
+
+**Fix (automatic):** As of v1.5.13, SEM **auto-derives** the missing power sensor from the same device as the configured energy sensor — e.g. for SolaX it finds `sensor.solax_pv_power_total` (solar), `sensor.solax_measured_power` (grid), and `sensor.solax_battery_power_charge` (battery) on its own. The SolaX SOC sensor (named *Battery Capacity*, `sensor.solax_battery_capacity`) is now detected via its `device_class: battery` + `%` unit. Just update and restart — no manual steps needed in most cases.
+
+**If values are still 0:** add the power sensors to the Energy Dashboard manually:
+1. Go to **Settings > Dashboards > Energy**.
+2. Open each source (Solar / Grid / Battery) and, alongside the energy sensor, add its **power** sensor (W or kW, `state_class: measurement`).
+3. Restart Home Assistant.
+
+**Confirm what SEM resolved:** download diagnostics at **Settings > Devices & Services > Solar Energy Management > ⋮ > Download diagnostics** and check `energy_dashboard.power_sensors` / `energy_dashboard.power_source`. `"derived"` means SEM recovered the sensor itself, `"stat_rate"` means HA provided it, and `null` means none was found (that source reads 0).
+
+**Sign convention:** SolaX uses positive=import for grid (Pattern D) — SEM auto-detects and corrects this from the energy counters; no template sensor needed.
+
+---
+
 ## Debug logging
 
 To enable detailed logging for SEM, add this to your `configuration.yaml`:

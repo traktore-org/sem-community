@@ -390,7 +390,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         try:
             dashboard_config = await read_energy_dashboard_config(self.hass)
 
-            if dashboard_config and (dashboard_config.solar_power or dashboard_config.grid_import_power):
+            # Activate whenever the dashboard is minimally configured (solar + grid),
+            # not only when a stat_rate power sensor exists. ha_energy_reader already
+            # derives missing power sensors from the energy sensor's device (#250); if
+            # none can be derived we still want energy counters + SOC working instead
+            # of dropping to the empty legacy path (→ all zeros).
+            if dashboard_config and dashboard_config.is_minimally_configured():
                 self._energy_dashboard_config = dashboard_config
                 self._sensor_reader.set_energy_dashboard_config(dashboard_config)
                 _LOGGER.info(
