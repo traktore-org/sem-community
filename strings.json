@@ -1065,6 +1065,12 @@
       "ev_target_soc": {
         "name": "EV Target SOC (%)"
       },
+      "daily_ev_target_max": {
+        "name": "EV Solar Charge Max (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "EV Solar Charge Max SOC (%)"
+      },
       "ev_km_per_kwh": {
         "name": "EV Efficiency"
       },

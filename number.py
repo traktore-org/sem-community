@@ -174,6 +174,26 @@ NUMBER_TYPES = [
         mode=NumberMode.SLIDER,
         icon="mdi:battery-charging-80",
     ),
+    # Optional solar ceiling (Max) — surplus may charge past the target up to this.
+    # Disabled by default; defaults to the target (Min) when unset (#245).
+    NumberEntityDescription(
+        key="daily_ev_target_max",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        native_min_value=0,
+        native_max_value=100,
+        native_step=0.5,
+        mode=NumberMode.SLIDER,
+        icon="mdi:solar-power-variant",
+    ),
+    NumberEntityDescription(
+        key="ev_target_soc_max",
+        native_unit_of_measurement=PERCENTAGE,
+        native_min_value=50,
+        native_max_value=100,
+        native_step=5,
+        mode=NumberMode.SLIDER,
+        icon="mdi:battery-charging-high",
+    ),
     NumberEntityDescription(
         key="ev_km_per_kwh",
         native_unit_of_measurement="km/kWh",
@@ -412,6 +432,28 @@ async def async_setup_entry(
                     mode=NumberMode.SLIDER,
                     icon="mdi:battery-charging-80",
                 ), "ev_target_soc", full_config.get("ev_target_soc", 80)),
+                # Optional solar ceiling (Max), disabled by default; defaults to
+                # this charger's target (floor) when unset (#245).
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_daily_ev_target_max",
+                    name=f"{cname} Solar Max",
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    native_min_value=0, native_max_value=100, native_step=0.5,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:solar-power-variant",
+                    entity_registry_enabled_default=False,
+                ), "daily_ev_target_max",
+                    charger_cfg.get("daily_ev_target", full_config.get("daily_ev_target", 10))),
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_target_soc_max",
+                    name=f"{cname} Solar Max SOC",
+                    native_unit_of_measurement=PERCENTAGE,
+                    native_min_value=50, native_max_value=100, native_step=5,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:battery-charging-high",
+                    entity_registry_enabled_default=False,
+                ), "ev_target_soc_max",
+                    charger_cfg.get("ev_target_soc", full_config.get("ev_target_soc", 80))),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(
@@ -489,8 +531,14 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
 
-    # All number entities are enabled by default
-    DISABLED_BY_DEFAULT: set = set()
+    # Optional solar-ceiling (Max) entities are hidden until a user opts in (#245).
+    DISABLED_BY_DEFAULT: set = {"daily_ev_target_max", "ev_target_soc_max"}
+
+    # Max/ceiling entities default to the current floor (target) when unset (#245).
+    _MAX_FLOOR_MAP = {
+        "daily_ev_target_max": "daily_ev_target",
+        "ev_target_soc_max": "ev_target_soc",
+    }
 
     def __init__(
         self,
@@ -537,6 +585,9 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         value = config.get(config_key)
         if value is None:
             value = config.get(description.key)
+        if value is None and description.key in self._MAX_FLOOR_MAP:
+            # Ceiling defaults to the floor (target) — see _resolve_target (#245)
+            value = config.get(self._MAX_FLOOR_MAP[description.key])
         if value is None:
             value = self._get_default_value(description.key)
         self._attr_native_value = value
@@ -579,6 +630,8 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
             "maximum_grid_import": DEFAULT_MAX_GRID_IMPORT,
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
+            "daily_ev_target_max": DEFAULT_DAILY_EV_TARGET,
+            "ev_target_soc_max": 80,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
             "regulation_offset": DEFAULT_REGULATION_OFFSET,
             "demand_charge_rate": DEFAULT_DEMAND_CHARGE_RATE,

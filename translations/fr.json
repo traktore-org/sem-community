@@ -1109,6 +1109,12 @@
       },
       "ev_target_soc": {
         "name": "EV Target SOC (%)"
+      },
+      "daily_ev_target_max": {
+        "name": "Charge solaire max VE (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "Charge solaire max VE SOC (%)"
       }
     },
     "select": {

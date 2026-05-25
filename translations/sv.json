@@ -1108,6 +1108,12 @@
       },
       "ev_target_soc": {
         "name": "EV Target SOC (%)"
+      },
+      "daily_ev_target_max": {
+        "name": "Solladdning max elbil (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "Solladdning max elbil SOC (%)"
       }
     },
     "select": {

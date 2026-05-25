@@ -837,6 +837,24 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
                     )
                 ),
+                # Optional solar ceiling (Max): surplus may charge past the target
+                # up to this; defaults to the target so leaving it = today (#245).
+                vol.Optional(
+                    "daily_ev_target_max",
+                    default=_c("daily_ev_target_max", _c("daily_ev_target", 10)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100, step=0.5, unit_of_measurement="kWh", mode="slider"
+                    )
+                ),
+                vol.Optional(
+                    "ev_target_soc_max",
+                    default=_c("ev_target_soc_max", _c("ev_target_soc", 80)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=50, max=100, step=5, unit_of_measurement="%", mode="slider"
+                    )
+                ),
             }),
             errors=errors
         )
@@ -1097,6 +1115,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         unit_of_measurement="kWh", mode="slider",
                     )
                 ),
+                # Optional solar ceiling (Max): surplus may charge past the target
+                # up to this; defaults to the target so leaving it = today (#245).
+                vol.Optional(
+                    "daily_ev_target_max",
+                    default=charger.get("daily_ev_target_max", charger.get("daily_ev_target", self._data.get("daily_ev_target", 10))),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100, step=0.5,
+                        unit_of_measurement="kWh", mode="slider",
+                    )
+                ),
                 vol.Optional(
                     "ev_night_initial_current",
                     default=charger.get("ev_night_initial_current", self._data.get("ev_night_initial_current", 10)),
@@ -1126,6 +1155,15 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     "ev_target_soc",
                     default=charger.get("ev_target_soc", self._data.get("ev_target_soc", 80)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=50, max=100, step=5,
+                        unit_of_measurement="%", mode="slider",
+                    )
+                ),
+                vol.Optional(
+                    "ev_target_soc_max",
+                    default=charger.get("ev_target_soc_max", charger.get("ev_target_soc", self._data.get("ev_target_soc", 80))),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=50, max=100, step=5,
