@@ -888,6 +888,9 @@
       "vehicle_soc": {
         "name": "Vehicle SOC"
       },
+      "ev_remaining_range": {
+        "name": "EV Range"
+      },
       "battery_scheduler_state": {
         "name": "Battery Scheduler State"
       },
@@ -1026,9 +1029,6 @@
       },
       "smart_night_charging": {
         "name": "Forecast Night Reduction"
-      },
-      "ev_limit_surplus": {
-        "name": "Limit surplus to target"
       }
     },
     "number": {

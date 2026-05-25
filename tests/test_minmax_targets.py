@@ -6,9 +6,10 @@ amount night charging tops up to. A NEW optional `{key}_max` is the solar
 CEILING (Max): surplus may continue past Min up to Max.
 
 This keeps night charging identical to pre-#245 with no migration:
-- bound="min" (floor) -> existing key, drives night/grid top-up.
-- bound="max" (ceiling) -> {key}_max, defaults to floor when unset, clamped >= floor;
-  drives the ev_limit_surplus stop.
+- bound="min" (floor, the DEFAULT) -> existing key, drives night/grid top-up.
+- bound="max" (ceiling) -> {key}_max, defaults to FULL (100% / 100 kWh) when unset
+  = "charge freely from sun"; clamped >= floor. Drives the surplus stop. (The old
+  ev_limit_surplus switch was folded into Max: Max < full == limit on.)
 """
 import pytest
 from unittest.mock import MagicMock
@@ -58,26 +59,28 @@ def _ceiling(coord, energy, vehicle_soc=None, charger_cfg=None):
 class TestPreExistingBehaviourUnchanged:
     """With no *_max keys, floor == ceiling == old single-target behaviour."""
 
-    def test_kwh_default_bound_is_ceiling(self):
+    def test_kwh_default_bound_is_floor(self):
         coord = _make_coordinator({"daily_ev_target": 10})
         energy = _make_energy(daily_ev=3.0)
-        # Default bound="max"; with no _max it falls back to the single target.
+        # Default bound="min" = remaining to the guaranteed target (floor).
         assert coord._calculate_remaining_need(energy) == pytest.approx(7.0)
 
-    def test_kwh_ceiling_follows_floor_when_no_max(self):
+    def test_kwh_ceiling_defaults_to_full_when_no_max(self):
+        # No _max → surplus ceiling defaults to full (100 kWh) = charge freely.
         coord = _make_coordinator({"daily_ev_target": 10})
         energy = _make_energy(daily_ev=3.0)
-        assert _floor(coord, energy) == pytest.approx(7.0)
-        assert _ceiling(coord, energy) == pytest.approx(7.0)
+        assert _floor(coord, energy) == pytest.approx(7.0)      # 10 - 3 (target floor)
+        assert _ceiling(coord, energy) == pytest.approx(97.0)   # 100 - 3 (full ceiling)
 
-    def test_soc_ceiling_follows_floor_when_no_max(self):
+    def test_soc_ceiling_defaults_to_full_when_no_max(self):
+        # No _max → SOC ceiling defaults to 100% (car full).
         coord = _make_coordinator({
             "ev_target_type": "soc", "ev_target_soc": 80,
             "ev_battery_capacity_kwh": 40,
         })
         energy = _make_energy()
-        assert _floor(coord, energy, vehicle_soc=60.0) == pytest.approx(8.0)
-        assert _ceiling(coord, energy, vehicle_soc=60.0) == pytest.approx(8.0)
+        assert _floor(coord, energy, vehicle_soc=60.0) == pytest.approx(8.0)     # (80-60)%·40
+        assert _ceiling(coord, energy, vehicle_soc=60.0) == pytest.approx(16.0)  # (100-60)%·40
 
     def test_night_floor_is_the_existing_target(self):
         """The existing target is the night floor — night behaviour is unchanged."""
@@ -126,6 +129,12 @@ class TestKwhRange:
         energy = _make_energy(daily_ev=0.0)
         assert _floor(coord, energy) == pytest.approx(30.0)
         assert _ceiling(coord, energy) == pytest.approx(30.0)
+
+    def test_night_floor_ignores_max(self):
+        """The night floor uses Min only; a higher Max never changes it."""
+        coord = _make_coordinator({"daily_ev_target": 10, "daily_ev_target_max": 80})
+        energy = _make_energy(daily_ev=2.0)
+        assert _floor(coord, energy) == pytest.approx(8.0)   # 10 - 2, Max irrelevant
 
 
 # ──────────────────────────────────────────────
@@ -203,12 +212,12 @@ class TestPerChargerRange:
         assert _floor(coord, energy, charger_cfg=cfg) == pytest.approx(15.0)
         assert _ceiling(coord, energy, charger_cfg=cfg) == pytest.approx(50.0)
 
-    def test_per_charger_no_max_anywhere_ceiling_follows_floor(self):
+    def test_per_charger_no_max_anywhere_ceiling_defaults_to_full(self):
         coord = _make_coordinator({"daily_ev_target": 20})
         energy = _make_energy(daily_ev=0.0)
         cfg = {"id": "ev1", "daily_ev_target": 40}
         assert _floor(coord, energy, charger_cfg=cfg) == pytest.approx(40.0)
-        assert _ceiling(coord, energy, charger_cfg=cfg) == pytest.approx(40.0)
+        assert _ceiling(coord, energy, charger_cfg=cfg) == pytest.approx(100.0)
 
 
 # ──────────────────────────────────────────────
@@ -219,26 +228,80 @@ class TestResolveTarget:
 
     def test_min_bound_returns_base_key(self):
         coord = _make_coordinator({"daily_ev_target": 22})
-        assert coord._resolve_target({}, "daily_ev_target", "min", 10) == 22
+        assert coord._resolve_target({}, "daily_ev_target", "min", 10, 100) == 22
 
     def test_min_bound_uses_default_when_unset(self):
         coord = _make_coordinator({})
-        assert coord._resolve_target({}, "daily_ev_target", "min", 10) == 10
+        assert coord._resolve_target({}, "daily_ev_target", "min", 10, 100) == 10
 
     def test_max_bound_returns_max_key(self):
         coord = _make_coordinator({"daily_ev_target": 22, "daily_ev_target_max": 50})
-        assert coord._resolve_target({}, "daily_ev_target", "max", 10) == 50
+        assert coord._resolve_target({}, "daily_ev_target", "max", 10, 100) == 50
 
-    def test_max_bound_falls_back_to_floor_when_unset(self):
+    def test_max_bound_falls_back_to_full_when_unset(self):
         coord = _make_coordinator({"daily_ev_target": 22})
-        assert coord._resolve_target({}, "daily_ev_target", "max", 10) == 22
+        assert coord._resolve_target({}, "daily_ev_target", "max", 10, 100) == 100
 
     def test_max_bound_clamped_up_to_min(self):
         coord = _make_coordinator({"daily_ev_target": 22, "daily_ev_target_max": 5})
-        assert coord._resolve_target({}, "daily_ev_target", "max", 10) == 22
+        assert coord._resolve_target({}, "daily_ev_target", "max", 10, 100) == 22
 
     def test_cfg_takes_precedence_over_config(self):
         coord = _make_coordinator({"daily_ev_target": 22, "daily_ev_target_max": 50})
         cfg = {"daily_ev_target": 40, "daily_ev_target_max": 60}
-        assert coord._resolve_target(cfg, "daily_ev_target", "min", 10) == 40
-        assert coord._resolve_target(cfg, "daily_ev_target", "max", 10) == 60
+        assert coord._resolve_target(cfg, "daily_ev_target", "min", 10, 100) == 40
+        assert coord._resolve_target(cfg, "daily_ev_target", "max", 10, 100) == 60
+
+
+# ──────────────────────────────────────────────
+# Migration: ev_limit_surplus switch (#235) folded into Max (#245)
+# ──────────────────────────────────────────────
+
+class TestLimitSurplusMigration:
+    """_migrate_limit_surplus_to_max(): switch ON -> Max=target; key dropped."""
+
+    def _entry(self, options, data=None):
+        e = MagicMock()
+        e.options = options
+        e.data = data or {}
+        return e
+
+    def _migrate(self):
+        from custom_components.solar_energy_management import _migrate_limit_surplus_to_max
+        return _migrate_limit_surplus_to_max
+
+    def test_global_switch_on_sets_max_to_target(self):
+        hass = MagicMock()
+        entry = self._entry({"ev_limit_surplus": True, "daily_ev_target": 8, "ev_target_soc": 70})
+        self._migrate()(hass, entry)
+        opts = hass.config_entries.async_update_entry.call_args.kwargs["options"]
+        assert "ev_limit_surplus" not in opts
+        assert opts["daily_ev_target_max"] == 8
+        assert opts["ev_target_soc_max"] == 70
+
+    def test_global_switch_off_drops_key_no_cap(self):
+        hass = MagicMock()
+        entry = self._entry({"ev_limit_surplus": False, "daily_ev_target": 8})
+        self._migrate()(hass, entry)
+        opts = hass.config_entries.async_update_entry.call_args.kwargs["options"]
+        assert "ev_limit_surplus" not in opts          # legacy key removed
+        assert "daily_ev_target_max" not in opts        # no cap → stays full
+
+    def test_no_legacy_key_no_update(self):
+        hass = MagicMock()
+        entry = self._entry({"daily_ev_target": 8})
+        self._migrate()(hass, entry)
+        hass.config_entries.async_update_entry.assert_not_called()
+
+    def test_per_charger_switch_on_only_for_enabled(self):
+        hass = MagicMock()
+        entry = self._entry({"ev_chargers": [
+            {"id": "ev1", "ev_limit_surplus": True, "daily_ev_target": 12},
+            {"id": "ev2", "ev_limit_surplus": False, "daily_ev_target": 5},
+        ]})
+        self._migrate()(hass, entry)
+        chargers = hass.config_entries.async_update_entry.call_args.kwargs["options"]["ev_chargers"]
+        assert chargers[0]["daily_ev_target_max"] == 12
+        assert "ev_limit_surplus" not in chargers[0]
+        assert "daily_ev_target_max" not in chargers[1]   # was off
+        assert "ev_limit_surplus" not in chargers[1]

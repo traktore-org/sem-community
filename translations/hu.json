@@ -815,6 +815,9 @@
       "vehicle_soc": {
         "name": "Vehicle SOC"
       },
+      "ev_remaining_range": {
+        "name": "EV hatótáv"
+      },
       "best_surplus_window": {
         "name": "Best Surplus Window"
       },
@@ -983,9 +986,6 @@
       },
       "smart_night_charging": {
         "name": "Forecast Night Reduction"
-      },
-      "ev_limit_surplus": {
-        "name": "Többlet korlátozása a célig"
       }
     },
     "number": {

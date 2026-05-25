@@ -433,7 +433,7 @@ async def async_setup_entry(
                     icon="mdi:battery-charging-80",
                 ), "ev_target_soc", full_config.get("ev_target_soc", 80)),
                 # Optional solar ceiling (Max), disabled by default; defaults to
-                # this charger's target (floor) when unset (#245).
+                # full (charge freely from sun) until the user caps it (#245).
                 (NumberEntityDescription(
                     key=f"charger_{cid}_daily_ev_target_max",
                     name=f"{cname} Solar Max",
@@ -443,7 +443,7 @@ async def async_setup_entry(
                     icon="mdi:solar-power-variant",
                     entity_registry_enabled_default=False,
                 ), "daily_ev_target_max",
-                    charger_cfg.get("daily_ev_target", full_config.get("daily_ev_target", 10))),
+                    charger_cfg.get("daily_ev_target_max", 100)),
                 (NumberEntityDescription(
                     key=f"charger_{cid}_target_soc_max",
                     name=f"{cname} Solar Max SOC",
@@ -453,7 +453,7 @@ async def async_setup_entry(
                     icon="mdi:battery-charging-high",
                     entity_registry_enabled_default=False,
                 ), "ev_target_soc_max",
-                    charger_cfg.get("ev_target_soc", full_config.get("ev_target_soc", 80))),
+                    charger_cfg.get("ev_target_soc_max", 100)),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(
@@ -532,13 +532,9 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
     _attr_entity_category = EntityCategory.CONFIG
 
     # Optional solar-ceiling (Max) entities are hidden until a user opts in (#245).
+    # They default to full (100% / 100 kWh) = "charge freely from sun"; set lower
+    # to cap surplus. See _resolve_target() in the coordinator.
     DISABLED_BY_DEFAULT: set = {"daily_ev_target_max", "ev_target_soc_max"}
-
-    # Max/ceiling entities default to the current floor (target) when unset (#245).
-    _MAX_FLOOR_MAP = {
-        "daily_ev_target_max": "daily_ev_target",
-        "ev_target_soc_max": "ev_target_soc",
-    }
 
     def __init__(
         self,
@@ -585,9 +581,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         value = config.get(config_key)
         if value is None:
             value = config.get(description.key)
-        if value is None and description.key in self._MAX_FLOOR_MAP:
-            # Ceiling defaults to the floor (target) — see _resolve_target (#245)
-            value = config.get(self._MAX_FLOOR_MAP[description.key])
         if value is None:
             value = self._get_default_value(description.key)
         self._attr_native_value = value
@@ -630,8 +623,9 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
             "maximum_grid_import": DEFAULT_MAX_GRID_IMPORT,
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
-            "daily_ev_target_max": DEFAULT_DAILY_EV_TARGET,
-            "ev_target_soc_max": 80,
+            # Ceiling defaults to full (charge freely from sun until capped) (#245)
+            "daily_ev_target_max": 100,
+            "ev_target_soc_max": 100,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
             "regulation_offset": DEFAULT_REGULATION_OFFSET,
             "demand_charge_rate": DEFAULT_DEMAND_CHARGE_RATE,

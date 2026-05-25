@@ -816,6 +816,9 @@
       "vehicle_soc": {
         "name": "Fahrzeug-SOC"
       },
+      "ev_remaining_range": {
+        "name": "EV-Reichweite"
+      },
       "best_surplus_window": {
         "name": "Bestes Überschuss-Fenster"
       },
@@ -984,9 +987,6 @@
       },
       "smart_night_charging": {
         "name": "Prognose Nachtabsenkung"
-      },
-      "ev_limit_surplus": {
-        "name": "Überschuss auf Ziel begrenzen"
       }
     },
     "number": {

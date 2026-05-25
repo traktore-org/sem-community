@@ -815,6 +815,9 @@
       "vehicle_soc": {
         "name": "Vehicle SOC"
       },
+      "ev_remaining_range": {
+        "name": "Dojezd EV"
+      },
       "best_surplus_window": {
         "name": "Best Surplus Window"
       },
@@ -983,9 +986,6 @@
       },
       "smart_night_charging": {
         "name": "Forecast Night Reduction"
-      },
-      "ev_limit_surplus": {
-        "name": "Omezit přebytek na cíl"
       }
     },
     "number": {

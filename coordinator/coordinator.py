@@ -795,14 +795,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 pass
                     # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245)
                     per_remaining = self._calculate_remaining_need(
-                        energy, self._cycle_vehicle_soc, charger_cfg
+                        energy, self._cycle_vehicle_soc, charger_cfg, bound="max"
                     )
                     per_remaining_floor = self._calculate_remaining_need(
                         energy, self._cycle_vehicle_soc, charger_cfg, bound="min"
                     )
+                    # Surplus stops at this charger's Max ceiling (default full) (#245)
                     per_target_reached = per_remaining <= 0.1
-                    per_limit_surplus = charger_cfg.get("ev_limit_surplus", self.config.get("ev_limit_surplus", False))
-                    charging_context.soc_limit_active = per_limit_surplus and per_target_reached
+                    charging_context.soc_limit_active = per_target_reached
                     charging_context.daily_target_reached = per_target_reached
                     charging_context.remaining_ev_energy = per_remaining
                     charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining_floor
@@ -1072,6 +1072,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Vehicle SOC (from per-cycle cache)
             if self._cycle_vehicle_soc is not None:
                 result["vehicle_soc"] = self._cycle_vehicle_soc
+
+            # EV driving range (#245): prefer a real range entity, else derive
+            # from SOC × usable capacity × efficiency (ev_km_per_kwh).
+            _range_entity = self.config.get("vehicle_range_entity", "")
+            if _range_entity:
+                _rs = self.hass.states.get(_range_entity)
+                if _rs and _rs.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    try:
+                        result["ev_remaining_range"] = round(float(_rs.state))
+                    except (ValueError, TypeError):
+                        pass
+            if "ev_remaining_range" not in result and self._cycle_vehicle_soc is not None:
+                _cap = self.config.get("ev_battery_capacity_kwh", 40)
+                _kpk = self.config.get("ev_km_per_kwh", 5.5)
+                result["ev_remaining_range"] = round(
+                    self._cycle_vehicle_soc / 100 * _cap * _kpk
+                )
 
             # EV departure time (if configured via input_datetime entity)
             departure_entity = self.config.get("ev_departure_time_entity", "")
@@ -1929,7 +1946,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return stable
 
     def _resolve_target(
-        self, cfg: dict, base_key: str, bound: str, default: float,
+        self, cfg: dict, base_key: str, bound: str, default: float, full: float,
     ) -> float:
         """Resolve the floor (Min) or ceiling (Max) charge target (#245).
 
@@ -1939,9 +1956,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         The new ``{base_key}_max`` key is the optional solar CEILING (Max):
         surplus charging may continue past Min up to Max. When Max is unset it
-        defaults to Min, so surplus stops at the single target exactly as before.
-        Max is clamped to ``>= Min`` so a misconfigured Max can never fall below
-        the guaranteed floor.
+        defaults to ``full`` (100% / 100 kWh) — i.e. "charge freely from the sun",
+        which preserves the pre-#245 default (surplus runs to car-full). Setting a
+        Max below full caps surplus. Max is clamped to ``>= Min`` so a misconfigured
+        Max can never fall below the guaranteed floor. (The old ev_limit_surplus
+        switch was folded into Max: Max < full == limit on.)
         """
         min_val = cfg.get(base_key) if cfg.get(base_key) is not None else self.config.get(base_key, default)
         if bound == "min":
@@ -1949,12 +1968,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         max_key = f"{base_key}_max"
         max_val = cfg.get(max_key) if cfg.get(max_key) is not None else self.config.get(max_key)
         if max_val is None:
-            return min_val
+            return full
         return max(max_val, min_val)
 
     def _calculate_remaining_need(
         self, energy, vehicle_soc: float | None = None, charger_cfg: dict | None = None,
-        bound: str = "max",
+        bound: str = "min",
     ) -> float:
         """Calculate remaining EV charging need in kWh from the best available source.
 
@@ -1963,9 +1982,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         Used by both _build_charging_context() and _determine_charging_strategy().
 
         ``bound`` selects which target to measure against (#245):
-          - "min" (floor = the existing single target): night/grid tops up to this.
-          - "max" (default, ceiling): surplus charges up to this; gates ev_limit_surplus.
-            Defaults to the floor when no separate Max is configured.
+          - "min" (default, floor = the existing single target): the guaranteed
+            amount; night/grid tops up to this. This is what callers usually mean
+            by "remaining to target".
+          - "max" (ceiling): surplus charges up to this, then stops. Defaults to
+            full (100% / 100 kWh ≈ unlimited) when no Max is set.
         """
         cfg = charger_cfg or {}
         ev_capacity = cfg.get("ev_battery_capacity_kwh") if cfg.get("ev_battery_capacity_kwh") is not None else self.config.get("ev_battery_capacity_kwh", 40)
@@ -1977,9 +1998,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         use_soc = ev_target_type == "soc" and vehicle_soc is not None
         if use_soc:
-            soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80)
+            # SOC ceiling defaults to 100% (car full); floor default 80%.
+            soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
             return max(0, (soc_target - vehicle_soc) / 100 * ev_capacity)
-        daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10)
+        # kWh ceiling defaults to 100 kWh/day (≈ unlimited); floor default 10.
+        daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
         return max(0, daily_target - energy.daily_ev)
 
     def _build_charging_context(
@@ -2017,16 +2040,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         battery_too_low = power.battery_soc < battery_min_soc
         battery_needs_priority = power.battery_soc < battery_priority_soc
         # Ceiling (Max) gates the surplus stop; floor (Min) drives night top-up (#245).
-        remaining = self._calculate_remaining_need(energy, self._cycle_vehicle_soc)
+        # Ceiling (Max, default full) gates the surplus stop; floor (Min) drives
+        # night top-up (#245).
+        remaining = self._calculate_remaining_need(
+            energy, self._cycle_vehicle_soc, bound="max"
+        )
         remaining_floor = self._calculate_remaining_need(
             energy, self._cycle_vehicle_soc, bound="min"
         )
+        # "daily_target_reached" here means the surplus CEILING (Max) is reached.
         daily_target_reached = remaining <= 0.1
 
-        # Surplus limit: stop surplus charging at the target when the user opts in
-        # via the ev_limit_surplus switch (#235).
-        ev_limit_surplus = self.config.get("ev_limit_surplus", False)
-        soc_limit_active = ev_limit_surplus and daily_target_reached
+        # Surplus stops at the Max ceiling (#245). Max defaults to full, so by
+        # default this is only true at car-full — i.e. surplus charges freely.
+        # (The ev_limit_surplus switch from #235 was folded into Max.)
+        soc_limit_active = daily_target_reached
 
         # Calculate excess solar
         excess_solar = power.solar_power - power.home_consumption_power - power.battery_charge_power

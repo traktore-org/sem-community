@@ -815,6 +815,9 @@
       "vehicle_soc": {
         "name": "SOC Veicolo"
       },
+      "ev_remaining_range": {
+        "name": "Autonomia VE"
+      },
       "best_surplus_window": {
         "name": "Miglior Finestra Eccedenza"
       },
@@ -983,9 +986,6 @@
       },
       "smart_night_charging": {
         "name": "Riduzione Notturna Previsione"
-      },
-      "ev_limit_surplus": {
-        "name": "Limita surplus all'obiettivo"
       }
     },
     "number": {

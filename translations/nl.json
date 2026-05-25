@@ -815,6 +815,9 @@
       "vehicle_soc": {
         "name": "Voertuig SOC"
       },
+      "ev_remaining_range": {
+        "name": "EV-bereik"
+      },
       "best_surplus_window": {
         "name": "Beste Overschotvenster"
       },
@@ -983,9 +986,6 @@
       },
       "smart_night_charging": {
         "name": "Voorspelling Nachtreductie"
-      },
-      "ev_limit_surplus": {
-        "name": "Overschot beperken tot doel"
       }
     },
     "number": {

@@ -39,8 +39,11 @@ SWITCH_TYPES = [
 ]
 
 # Global switches whose state is persisted into the config entry options and
-# read back by the coordinator via self.config (#235).
-CONFIG_SWITCH_KEYS = ["ev_limit_surplus"]
+# read back by the coordinator via self.config.
+# ev_limit_surplus (#235) was folded into the optional Max ceiling (#245): set a
+# Max below full to cap surplus. The old switch entity is auto-removed by the
+# stale-entity cleanup below (it's no longer in valid_keys).
+CONFIG_SWITCH_KEYS: list[str] = []
 
 
 async def async_setup_entry(
@@ -78,17 +81,8 @@ async def async_setup_entry(
             switches.append(SEMPerChargerSwitch(
                 coordinator, desc, entry.entry_id, cid, cname,
             ))
-
-            # Per-charger "limit surplus to target" switch (#235) — persisted to config
-            limit_desc = SwitchEntityDescription(
-                key=f"charger_{cid}_ev_limit_surplus",
-                entity_category=EntityCategory.CONFIG,
-            )
-            per_charger_keys.add(limit_desc.key)
-            switches.append(SEMPerChargerConfigSwitch(
-                coordinator, limit_desc, entry, cid, "ev_limit_surplus",
-                charger_cfg.get("ev_limit_surplus", False),
-            ))
+            # Per-charger ev_limit_surplus switch (#235) removed (#245): folded into
+            # the per-charger Solar Max ceiling. Old entity auto-removed by cleanup.
         _LOGGER.info(
             "Created per-charger switches for %d charger(s)",
             len(ev_chargers),

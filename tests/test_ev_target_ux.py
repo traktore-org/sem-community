@@ -93,15 +93,16 @@ def _make_energy(daily_ev=0.0):
 
 
 def _soc_limit_active(coord, energy, vehicle_soc=None):
-    """Reproduce the coordinator's soc_limit_active derivation (#235).
+    """Reproduce the coordinator's surplus-stop derivation (#245).
 
-    soc_limit_active = ev_limit_surplus switch AND target reached.
-    The surplus_target control mode no longer exists.
+    The ev_limit_surplus switch (#235) was folded into the Max ceiling: surplus
+    stops when the remaining-to-Max <= 0.1. Max defaults to full (100), so with
+    no Max configured surplus only stops at car-full.
     """
-    remaining = coord._calculate_remaining_need(energy, vehicle_soc=vehicle_soc)
-    daily_target_reached = remaining <= 0.1
-    ev_limit_surplus = coord.config.get("ev_limit_surplus", False)
-    return ev_limit_surplus and daily_target_reached
+    remaining_max = coord._calculate_remaining_need(
+        energy, vehicle_soc=vehicle_soc, bound="max"
+    )
+    return remaining_max <= 0.1
 
 
 # ──────────────────────────────────────────────
@@ -270,28 +271,28 @@ class TestTargetTypeBackCompat:
 
 
 # ──────────────────────────────────────────────
-# Surplus limit (ev_limit_surplus switch) → soc_limit_active
+# Surplus stop = Max ceiling reached (#245; folds ev_limit_surplus #235)
 # ──────────────────────────────────────────────
 
 class TestSurplusLimit:
-    """soc_limit_active = ev_limit_surplus AND target reached (#235)."""
+    """Surplus stops when the Max ceiling is reached; Max defaults to full."""
 
-    def test_limit_on_and_target_reached_is_active(self):
-        coord = _make_coordinator({"daily_ev_target": 10, "ev_limit_surplus": True})
+    def test_max_set_and_reached_is_active(self):
+        coord = _make_coordinator({"daily_ev_target": 10, "daily_ev_target_max": 10})
         coord._cycle_vehicle_soc = None
         assert _soc_limit_active(coord, _make_energy(daily_ev=10.0)) is True
 
-    def test_limit_off_is_never_active(self):
-        coord = _make_coordinator({"daily_ev_target": 10, "ev_limit_surplus": False})
+    def test_no_max_charges_freely_until_full(self):
+        # No Max → ceiling defaults to 100 kWh; 10 kWh delivered → not reached.
+        coord = _make_coordinator({"daily_ev_target": 10})
         coord._cycle_vehicle_soc = None
-        # target reached but limit off → not active
         assert _soc_limit_active(coord, _make_energy(daily_ev=10.0)) is False
 
-    def test_limit_on_but_target_not_reached_is_inactive(self):
-        coord = _make_coordinator({"daily_ev_target": 10, "ev_limit_surplus": True})
+    def test_max_set_but_not_reached_is_inactive(self):
+        coord = _make_coordinator({"daily_ev_target": 10, "daily_ev_target_max": 20})
         coord._cycle_vehicle_soc = None
-        # only 3 kWh delivered → target not reached → inactive
-        assert _soc_limit_active(coord, _make_energy(daily_ev=3.0)) is False
+        # 10 of 20 kWh ceiling → not reached → surplus continues
+        assert _soc_limit_active(coord, _make_energy(daily_ev=10.0)) is False
 
     @pytest.mark.asyncio
     async def test_off_mode_device_never_activated(self):

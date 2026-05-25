@@ -162,6 +162,54 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
     return True
 
 
+def _migrate_limit_surplus_to_max(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
+    """Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
+
+    Users who had limit-surplus ON get Max set to their current target so surplus
+    still stops there; the legacy key is then dropped. Idempotent — only acts while
+    the key is present. Default-OFF users (the norm) get no change: Max stays unset
+    → full → "charge freely from sun", exactly as before.
+    """
+    opts = {**entry.options}
+    data = entry.data
+    changed = False
+
+    # Global scope (the switch persisted to options, but read data too for safety).
+    if "ev_limit_surplus" in opts or "ev_limit_surplus" in data:
+        if bool(opts.get("ev_limit_surplus", data.get("ev_limit_surplus"))):
+            cur_kwh = opts.get("daily_ev_target", data.get("daily_ev_target"))
+            if cur_kwh is not None and opts.get("daily_ev_target_max") is None:
+                opts["daily_ev_target_max"] = cur_kwh
+            cur_soc = opts.get("ev_target_soc", data.get("ev_target_soc"))
+            if cur_soc is not None and opts.get("ev_target_soc_max") is None:
+                opts["ev_target_soc_max"] = cur_soc
+        opts.pop("ev_limit_surplus", None)
+        changed = True
+
+    # Per-charger scope.
+    chargers = opts.get("ev_chargers")
+    if isinstance(chargers, list):
+        new_chargers = []
+        per_changed = False
+        for c in chargers:
+            if isinstance(c, dict) and "ev_limit_surplus" in c:
+                c = dict(c)
+                if bool(c.pop("ev_limit_surplus")):
+                    if c.get("daily_ev_target") is not None and c.get("daily_ev_target_max") is None:
+                        c["daily_ev_target_max"] = c["daily_ev_target"]
+                    if c.get("ev_target_soc") is not None and c.get("ev_target_soc_max") is None:
+                        c["ev_target_soc_max"] = c["ev_target_soc"]
+                per_changed = True
+            new_chargers.append(c)
+        if per_changed:
+            opts["ev_chargers"] = new_chargers
+            changed = True
+
+    if changed:
+        hass.config_entries.async_update_entry(entry, options=opts)
+        _LOGGER.info("Folded ev_limit_surplus into the Max charge ceiling (#245)")
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Set up Solar Energy Management from a config entry.
 
@@ -179,6 +227,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
     # Initialize domain data storage (kept for backward compatibility with services)
     hass.data.setdefault(DOMAIN, {})
+
+    # Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
+    # Idempotent; only acts while the legacy key is present.
+    _migrate_limit_surplus_to_max(hass, entry)
 
     # Merge entry.data and entry.options for complete configuration
     full_config = {**entry.data, **entry.options}
