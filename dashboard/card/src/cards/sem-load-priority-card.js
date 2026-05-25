@@ -598,8 +598,12 @@ class SEMLoadPriorityCard extends SEMLitBase {
             removeBtn.addEventListener('click', () => {
                 this._hass.callService('solar_energy_management', 'remove_device_control_mapping', {
                     energy_sensor: energySensor,
-                }).then(() => overlay.remove())
-                  .catch(err => showError(err.message));
+                }).then(() => {
+                    // Optimistically clear locally so an immediate reopen reflects it;
+                    // the next authoritative refresh restores any auto-discovered control.
+                    if (dev) { dev.control = null; this.requestUpdate(); }
+                    overlay.remove();
+                }).catch(err => showError(err.message));
             });
         }
         overlay.querySelector('#cfg-save').addEventListener('click', () => {
@@ -613,7 +617,23 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 return;
             }
             this._hass.callService('solar_energy_management', 'set_device_control_mapping', data)
-                .then(() => overlay.remove())
+                .then(() => {
+                    // Optimistically update local state so reopening the dialog in the
+                    // same session shows the saved mapping (the card's hass-update gate
+                    // keys on sensor STATE, not the per-device control attribute, so a
+                    // control-only change wouldn't otherwise refresh this.devices). The
+                    // next authoritative refresh confirms it.
+                    if (dev) {
+                        dev.control = data.control_type === 'service'
+                            ? { type: 'service', service: data.service, param: data.param,
+                                shed_value: data.shed_value, restore_value: data.restore_value,
+                                discovered_via: 'manual_mapping' }
+                            : { type: data.control_type, entity: data.control_entity,
+                                discovered_via: 'manual_mapping' };
+                        this.requestUpdate();
+                    }
+                    overlay.remove();
+                })
                 .catch(err => showError(err.message));
         });
     }

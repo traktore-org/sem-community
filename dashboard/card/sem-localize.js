@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-25T19:00:46.675668+00:00
+// Generated: 2026-05-25T19:18:03.783810+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -776,7 +776,7 @@ const _semTranslations = {
     "svc_restore_value": "Value when restoring",
     "mapping_entity_required": "Please choose a control entity.",
     "mapping_service_required": "Please enter a service (e.g. keba.set_current).",
-    "clear_mapping": "Remove mapping"
+    "clear_mapping": "Reset to auto-detect"
   },
   "de": {
     "charging": "Laden",
@@ -1553,7 +1553,7 @@ const _semTranslations = {
     "svc_restore_value": "Wert beim Wiederherstellen",
     "mapping_entity_required": "Bitte eine Steuer-Entität wählen.",
     "mapping_service_required": "Bitte einen Dienst angeben (z. B. keba.set_current).",
-    "clear_mapping": "Zuordnung entfernen"
+    "clear_mapping": "Auf Auto-Erkennung zurücksetzen"
   },
   "fr": {
     "charging": "En charge",
@@ -2330,7 +2330,7 @@ const _semTranslations = {
     "svc_restore_value": "Valeur lors de la restauration",
     "mapping_entity_required": "Veuillez choisir une entité de contrôle.",
     "mapping_service_required": "Veuillez saisir un service (p. ex. keba.set_current).",
-    "clear_mapping": "Supprimer le mappage"
+    "clear_mapping": "Réinitialiser en auto-détection"
   },
   "es": {
     "charging": "Cargando",
@@ -3107,7 +3107,7 @@ const _semTranslations = {
     "svc_restore_value": "Valor al restaurar",
     "mapping_entity_required": "Elija una entidad de control.",
     "mapping_service_required": "Introduzca un servicio (p. ej. keba.set_current).",
-    "clear_mapping": "Eliminar asignación"
+    "clear_mapping": "Restablecer a autodetección"
   },
   "it": {
     "charging": "In carica",
@@ -3884,7 +3884,7 @@ const _semTranslations = {
     "svc_restore_value": "Valore durante il ripristino",
     "mapping_entity_required": "Seleziona un'entità di controllo.",
     "mapping_service_required": "Inserisci un servizio (es. keba.set_current).",
-    "clear_mapping": "Rimuovi mappatura"
+    "clear_mapping": "Ripristina rilevamento automatico"
   },
   "nl": {
     "charging": "Laden",
@@ -4661,7 +4661,7 @@ const _semTranslations = {
     "svc_restore_value": "Waarde bij herstellen",
     "mapping_entity_required": "Kies een besturingsentiteit.",
     "mapping_service_required": "Voer een service in (bijv. keba.set_current).",
-    "clear_mapping": "Koppeling verwijderen"
+    "clear_mapping": "Terug naar autodetectie"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5438,7 +5438,7 @@ const _semTranslations = {
     "svc_restore_value": "Hodnota při obnovení",
     "mapping_entity_required": "Vyberte řídicí entitu.",
     "mapping_service_required": "Zadejte službu (např. keba.set_current).",
-    "clear_mapping": "Odebrat mapování"
+    "clear_mapping": "Obnovit automatickou detekci"
   },
   "da": {
     "charging": "Oplader",
@@ -6215,7 +6215,7 @@ const _semTranslations = {
     "svc_restore_value": "Værdi ved gendannelse",
     "mapping_entity_required": "Vælg en styringsentitet.",
     "mapping_service_required": "Angiv en tjeneste (f.eks. keba.set_current).",
-    "clear_mapping": "Fjern tilknytning"
+    "clear_mapping": "Nulstil til autodetektion"
   },
   "fi": {
     "charging": "Lataus",
@@ -6992,7 +6992,7 @@ const _semTranslations = {
     "svc_restore_value": "Arvo palautettaessa",
     "mapping_entity_required": "Valitse ohjausentiteetti.",
     "mapping_service_required": "Anna palvelu (esim. keba.set_current).",
-    "clear_mapping": "Poista määritys"
+    "clear_mapping": "Palauta automaattitunnistus"
   },
   "hu": {
     "charging": "Töltés",
@@ -7769,7 +7769,7 @@ const _semTranslations = {
     "svc_restore_value": "Érték visszaállításkor",
     "mapping_entity_required": "Válasszon vezérlő entitást.",
     "mapping_service_required": "Adjon meg egy szolgáltatást (pl. keba.set_current).",
-    "clear_mapping": "Hozzárendelés eltávolítása"
+    "clear_mapping": "Visszaállítás automatikus felismerésre"
   },
   "no": {
     "charging": "Lader",
@@ -8546,7 +8546,7 @@ const _semTranslations = {
     "svc_restore_value": "Verdi ved gjenoppretting",
     "mapping_entity_required": "Velg en styringsentitet.",
     "mapping_service_required": "Angi en tjeneste (f.eks. keba.set_current).",
-    "clear_mapping": "Fjern tilordning"
+    "clear_mapping": "Tilbakestill til autodeteksjon"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9323,7 +9323,7 @@ const _semTranslations = {
     "svc_restore_value": "Wartość przy przywracaniu",
     "mapping_entity_required": "Wybierz encję sterującą.",
     "mapping_service_required": "Podaj usługę (np. keba.set_current).",
-    "clear_mapping": "Usuń przypisanie"
+    "clear_mapping": "Przywróć autowykrywanie"
   },
   "pt": {
     "charging": "A carregar",
@@ -10100,7 +10100,7 @@ const _semTranslations = {
     "svc_restore_value": "Valor ao restaurar",
     "mapping_entity_required": "Escolha uma entidade de controlo.",
     "mapping_service_required": "Introduza um serviço (ex. keba.set_current).",
-    "clear_mapping": "Remover mapeamento"
+    "clear_mapping": "Repor para deteção automática"
   },
   "ro": {
     "charging": "Încărcare",
@@ -10877,7 +10877,7 @@ const _semTranslations = {
     "svc_restore_value": "Valoare la restaurare",
     "mapping_entity_required": "Alegeți o entitate de control.",
     "mapping_service_required": "Introduceți un serviciu (ex. keba.set_current).",
-    "clear_mapping": "Eliminați maparea"
+    "clear_mapping": "Resetare la detectare automată"
   },
   "sv": {
     "charging": "Laddar",
@@ -11654,7 +11654,7 @@ const _semTranslations = {
     "svc_restore_value": "Värde vid återställning",
     "mapping_entity_required": "Välj en styrentitet.",
     "mapping_service_required": "Ange en tjänst (t.ex. keba.set_current).",
-    "clear_mapping": "Ta bort mappning"
+    "clear_mapping": "Återställ till autodetektering"
   }
 };
 
