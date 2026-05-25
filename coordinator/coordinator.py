@@ -721,8 +721,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
                     for cid in self._ev_devices:
                         cfg = charger_cfg_by_id.get(cid, {})
-                        # Per-charger target from config, fallback to global
-                        target = cfg.get("daily_ev_target", global_target)
+                        # Per-charger Max from config, fallback to global floor
+                        max_target = cfg.get("daily_ev_target", global_target)
+                        # Night tops up to the floor (Min); falls back to Max when
+                        # no separate Min is set, preserving pre-#245 behaviour.
+                        min_target = cfg.get("daily_ev_target_min")
+                        if min_target is None:
+                            min_target = self.config.get("daily_ev_target_min", 0)
+                        target = max_target if min_target <= 0 else min(min_target, max_target)
                         # Remaining = target - daily energy delivered by this charger
                         daily = self._daily_ev_per_charger.get(cid, 0.0)
                         self._night_target_per_charger_map[cid] = max(0, target - daily)
@@ -792,15 +798,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 self._cycle_vehicle_soc = float(soc_st.state)
                             except (ValueError, TypeError):
                                 pass
+                    # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245)
                     per_remaining = self._calculate_remaining_need(
                         energy, self._cycle_vehicle_soc, charger_cfg
+                    )
+                    per_remaining_floor = self._calculate_remaining_need(
+                        energy, self._cycle_vehicle_soc, charger_cfg, bound="min"
                     )
                     per_target_reached = per_remaining <= 0.1
                     per_limit_surplus = charger_cfg.get("ev_limit_surplus", self.config.get("ev_limit_surplus", False))
                     charging_context.soc_limit_active = per_limit_surplus and per_target_reached
                     charging_context.daily_target_reached = per_target_reached
                     charging_context.remaining_ev_energy = per_remaining
-                    charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining
+                    charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining_floor
 
                     try:
                         await self._execute_ev_control(
@@ -1668,8 +1678,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if not power.ev_connected:
             return ("idle", f"ev disconnected")
 
-        # Night mode → grid charging, but only if target not reached
+        # Night mode → grid charging tops up to the floor (Min), not the ceiling (#245)
         if self.time_manager.is_night_mode():
+            remaining_need = self._calculate_remaining_need(energy, vehicle_soc, bound="min")
             if remaining_need < 0.5:
                 soc_info = f", SOC={vehicle_soc:.0f}%" if vehicle_soc is not None else ""
                 return ("idle", f"night target reached ({energy.daily_ev:.1f}kWh{soc_info})")
@@ -1922,19 +1933,46 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         )
         return stable
 
+    def _resolve_target(
+        self, cfg: dict, base_key: str, bound: str, default_max: float,
+    ) -> float:
+        """Resolve the min or max charge target for a config key (#245).
+
+        Max reuses the existing single-value key (e.g. ``daily_ev_target``) — the
+        legacy entities ARE the max/ceiling controls, so no migration is needed.
+        Min is the new ``{base_key}_min`` key (default 0).
+
+        When Min is 0 or unset, the floor follows Max — this preserves pre-#245
+        behaviour exactly (night charging tops up to the single target) and means
+        a fresh install with Min=0 charges to Max overnight rather than to nothing.
+        Min is clamped to ``<= Max`` so a misconfigured Min can never exceed it.
+        """
+        max_val = cfg.get(base_key) if cfg.get(base_key) is not None else self.config.get(base_key, default_max)
+        if bound != "min":
+            return max_val
+        min_key = f"{base_key}_min"
+        min_val = cfg.get(min_key) if cfg.get(min_key) is not None else self.config.get(min_key, 0)
+        if min_val <= 0:
+            return max_val
+        return min(min_val, max_val)
+
     def _calculate_remaining_need(
         self, energy, vehicle_soc: float | None = None, charger_cfg: dict | None = None,
+        bound: str = "max",
     ) -> float:
         """Calculate remaining EV charging need in kWh from the best available source.
 
         When ev_target_type is "soc" AND vehicle_soc is available: SOC-based.
         When ev_target_type is "kwh" OR vehicle_soc is unavailable: kWh daily target.
         Used by both _build_charging_context() and _determine_charging_strategy().
+
+        ``bound`` selects which target to measure against (#245):
+          - "max" (default, ceiling): surplus charges up to this; gates ev_limit_surplus.
+          - "min" (floor): night/grid tops up to at least this. Falls back to max when
+            no separate Min is configured.
         """
         cfg = charger_cfg or {}
-        ev_target_soc = cfg.get("ev_target_soc") if cfg.get("ev_target_soc") is not None else self.config.get("ev_target_soc", 80)
         ev_capacity = cfg.get("ev_battery_capacity_kwh") if cfg.get("ev_battery_capacity_kwh") is not None else self.config.get("ev_battery_capacity_kwh", 40)
-        daily_target = cfg.get("daily_ev_target") if cfg.get("daily_ev_target") is not None else self.config.get("daily_ev_target", 10)
         # ev_target_mode was renamed to ev_target_type (#235); read both for back-compat.
         ev_target_type = (
             cfg.get("ev_target_type") or cfg.get("ev_target_mode")
@@ -1943,7 +1981,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         use_soc = ev_target_type == "soc" and vehicle_soc is not None
         if use_soc:
-            return max(0, (ev_target_soc - vehicle_soc) / 100 * ev_capacity)
+            soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80)
+            return max(0, (soc_target - vehicle_soc) / 100 * ev_capacity)
+        daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10)
         return max(0, daily_target - energy.daily_ev)
 
     def _build_charging_context(
@@ -1980,7 +2020,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         battery_too_low = power.battery_soc < battery_min_soc
         battery_needs_priority = power.battery_soc < battery_priority_soc
+        # Ceiling (Max) gates the surplus stop; floor (Min) drives night top-up (#245).
         remaining = self._calculate_remaining_need(energy, self._cycle_vehicle_soc)
+        remaining_floor = self._calculate_remaining_need(
+            energy, self._cycle_vehicle_soc, bound="min"
+        )
         daily_target_reached = remaining <= 0.1
 
         # Surplus limit: stop surplus charging at the target when the user opts in
@@ -2016,12 +2060,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             strategy, reason,
         )
 
-        # Night charging target: optionally reduced by forecast
-        night_target = remaining
+        # Night charging tops up to the floor (Min), optionally reduced by forecast (#245)
+        night_target = remaining_floor
         forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_SMART_NIGHT_CHARGING}", "on")
         if self.time_manager.is_night_mode() and forecast_reduction:
             night_target = self._calculate_forecast_night_target(
-                remaining, energy,
+                remaining_floor, energy,
             )
 
         return ChargingContext(
