@@ -49,16 +49,48 @@ async def async_setup_entry(
     """Set up SEM Solar Energy Management switches."""
     coordinator: SEMCoordinator = entry.runtime_data
 
-    switches = [
-        SEMSolarSwitch(coordinator, description, entry.entry_id)
-        for description in SWITCH_TYPES
-    ]
-
-    # Per-charger night charging switches (#193)
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
+    has_chargers = len(ev_chargers) >= 1
+
+    # #255: night charging is PER-CHARGER when chargers exist — drop the duplicate
+    # GLOBAL master switch. Keep it only for legacy / no-charger installs, where the
+    # night gate falls back to it.
+    active_global = [
+        d for d in SWITCH_TYPES
+        if not (d.key == "night_charging" and has_chargers)
+    ]
+    switches = [
+        SEMSolarSwitch(coordinator, description, entry.entry_id)
+        for description in active_global
+    ]
+
+    # One-time reconciliation (#255): a user who disabled night charging via the GLOBAL
+    # switch (leaving a per-charger switch on) must NOT be silently re-enabled now that
+    # the gate moves to per-charger. If the (removed) global switch was last OFF, force
+    # the per-charger night switches OFF this once. Marker lives in entry.data; the
+    # snapshot guard keeps async_update_options from reloading (options are unchanged).
+    night_force_off = False
+    if has_chargers and not entry.data.get("_night_gate_reconciled"):
+        try:
+            from homeassistant.helpers.restore_state import async_get as _restore_get
+            stored = _restore_get(hass).last_states.get("switch.sem_night_charging")
+            if stored is not None and getattr(stored.state, "state", None) == "off":
+                night_force_off = True
+                _LOGGER.info(
+                    "#255 reconciliation: global night charging was OFF — forcing "
+                    "per-charger night switches OFF (one-time)"
+                )
+            coordinator._skip_options_reload = dict(entry.options)
+            hass.config_entries.async_update_entry(
+                entry, data={**entry.data, "_night_gate_reconciled": True}
+            )
+        except Exception as e:
+            _LOGGER.debug("Night-gate reconciliation skipped: %s", e)
+
+    # Per-charger night charging switches (#193)
     per_charger_keys = set()
-    if len(ev_chargers) >= 1:
+    if has_chargers:
         for charger_cfg in ev_chargers:
             cid = charger_cfg.get("id", "ev_charger")
             cname = charger_cfg.get("name", "EV Charger")
@@ -69,9 +101,8 @@ async def async_setup_entry(
             per_charger_keys.add(desc.key)
             switches.append(SEMPerChargerSwitch(
                 coordinator, desc, entry.entry_id, cid, cname,
+                force_off=night_force_off,
             ))
-            # Per-charger ev_limit_surplus switch (#235) removed (#245): folded into
-            # the per-charger Solar Max ceiling. Old entity auto-removed by cleanup.
         _LOGGER.info(
             "Created per-charger switches for %d charger(s)",
             len(ev_chargers),
@@ -97,7 +128,7 @@ async def async_setup_entry(
     # Clean up stale switch entities from previous versions
     try:
         registry = er.async_get(hass)
-        valid_keys = {d.key for d in SWITCH_TYPES} | per_charger_keys
+        valid_keys = {d.key for d in active_global} | per_charger_keys
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != "switch":
                 continue
@@ -214,6 +245,7 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         entry_id: str,
         charger_id: str,
         charger_name: str,
+        force_off: bool = False,
     ) -> None:
         """Initialize per-charger switch."""
         super().__init__(coordinator)
@@ -224,6 +256,9 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self._attr_device_info = coordinator.device_info
         self.entity_id = f"switch.sem_{description.key}"
         self._charger_id = charger_id
+        # One-time #255 reconciliation: force OFF over the restored state when the removed
+        # global night switch was last OFF (so a globally-disabled user isn't re-enabled).
+        self._force_off = force_off
         # Opt-in (#256): default OFF. A newly-added charger won't night-charge until
         # the user enables it, so it can't silently inherit a grid top-up. Existing
         # chargers keep their state via RestoreEntity in async_added_to_hass below.
@@ -235,6 +270,8 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._is_on = last_state.state == "on"
+        if self._force_off:
+            self._is_on = False  # #255 one-time reconciliation (global was OFF)
 
     @property
     def available(self) -> bool:
