@@ -417,7 +417,7 @@ class EVControlMixin:
         return False
 
     def _calculate_forecast_night_target(
-        self, remaining_kwh: float, energy: Any,
+        self, remaining_kwh: float, energy: Any, charger_cfg: dict | None = None,
     ) -> float:
         """Reduce night charging target based on tomorrow's solar forecast.
 
@@ -445,9 +445,14 @@ class EVControlMixin:
             estimated_soc = ev_taper.get_virtual_soc(
                 getattr(self, "_cycle_vehicle_soc", None)
             )
-            target_soc = self.config.get("ev_target_soc", 80)
-            min_soc = self.config.get("ev_min_soc_threshold", 20)
-            capacity = self.config.get("ev_battery_capacity_kwh", 40)
+            # Per-car target/capacity (one car per charger); fall back to global.
+            _cfg = charger_cfg or {}
+            def _pc(key, default):
+                v = _cfg.get(key)
+                return v if v is not None else self.config.get(key, default)
+            target_soc = _pc("ev_target_soc", 80)
+            min_soc = _pc("ev_min_soc_threshold", 20)
+            capacity = _pc("ev_battery_capacity_kwh", 40)
 
             predicted_daily = 0.0
             predictor = getattr(self, "_predictor", None)

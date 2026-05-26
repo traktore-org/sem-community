@@ -263,31 +263,10 @@ views:
           - type: custom:sem-tab-header
             tab: ev
           # ── EV Hero (Lumina) ──
+          # Each charger section already shows its own SOC gauge on the left, so
+          # a separate global "Vehicle Battery" gauge here was redundant (#245).
           - type: custom:sem-ev-status-card
             entity_prefix: sensor.sem_
-
-          # ── Vehicle SOC (conditional — only when car API provides SOC) ──
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: sensor.sem_vehicle_soc
-                state_not: unavailable
-              - condition: state
-                entity: sensor.sem_vehicle_soc
-                state_not: unknown
-            card:
-              type: gauge
-              entity: sensor.sem_vehicle_soc
-              name: Vehicle Battery
-              min: 0
-              max: 100
-              needle: true
-              severity:
-                green: 60
-                yellow: 30
-                red: 0
-              card_mod:
-                style: *glass_card
 
           # ── EV Power Chart (sem-chart-card replaces apexcharts) ──
           - type: custom:sem-chart-card

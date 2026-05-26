@@ -717,15 +717,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 if num_chargers >= 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
                     ev_chargers_cfg = self.config.get("ev_chargers", [])
                     charger_cfg_by_id = {c.get("id"): c for c in ev_chargers_cfg}
-                    global_target = charging_context.night_target_kwh
 
                     for cid in self._ev_devices:
                         cfg = charger_cfg_by_id.get(cid, {})
-                        # Per-charger target from config, fallback to global
-                        target = cfg.get("daily_ev_target", global_target)
-                        # Remaining = target - daily energy delivered by this charger
-                        daily = self._daily_ev_per_charger.get(cid, 0.0)
-                        self._night_target_per_charger_map[cid] = max(0, target - daily)
+                        ttype = (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
+                                 or self.config.get("ev_target_type", "kwh"))
+                        if ttype == "soc":
+                            # SOC mode: kWh to reach the PER-CHARGER SOC floor (#245
+                            # propagation fix) — not the kWh daily_ev_target.
+                            per_soc = self._resolve_charger_soc(cid, cfg)
+                            self._night_target_per_charger_map[cid] = (
+                                self._calculate_remaining_need(energy, per_soc, cfg, bound="min")
+                            )
+                        else:
+                            # kWh mode: per-charger daily target − this charger's delivered energy
+                            target = cfg.get("daily_ev_target")
+                            if target is None:
+                                target = self.config.get("daily_ev_target", 10)
+                            daily = self._daily_ev_per_charger.get(cid, 0.0)
+                            self._night_target_per_charger_map[cid] = max(0, target - daily)
 
                     # Backward compat: set the old scalar for single-value reads
                     self._night_target_per_charger = None
@@ -792,15 +802,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 self._cycle_vehicle_soc = float(soc_st.state)
                             except (ValueError, TypeError):
                                 pass
+                    # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245)
                     per_remaining = self._calculate_remaining_need(
-                        energy, self._cycle_vehicle_soc, charger_cfg
+                        energy, self._cycle_vehicle_soc, charger_cfg, bound="max"
                     )
+                    per_remaining_floor = self._calculate_remaining_need(
+                        energy, self._cycle_vehicle_soc, charger_cfg, bound="min"
+                    )
+                    # Surplus stops at this charger's Max ceiling (default full) (#245)
                     per_target_reached = per_remaining <= 0.1
-                    per_limit_surplus = charger_cfg.get("ev_limit_surplus", self.config.get("ev_limit_surplus", False))
-                    charging_context.soc_limit_active = per_limit_surplus and per_target_reached
+                    charging_context.soc_limit_active = per_target_reached
                     charging_context.daily_target_reached = per_target_reached
                     charging_context.remaining_ev_energy = per_remaining
-                    charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining
+                    charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining_floor
 
                     try:
                         await self._execute_ev_control(
@@ -996,6 +1010,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             result = sem_data.to_dict()
 
             # Add per-charger data (#131): power + session
+            per_charger_soc: Dict[str, float] = {}
             for cid, ev_dev in self._ev_devices.items():
                 charger_power = 0.0
                 if ev_dev.power_entity_id:
@@ -1026,7 +1041,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     result[f"charger_{cid}_taper_ratio"] = round(
                         (charger_power / taper_det._session_peak_w * 100) if taper_det._session_peak_w > 0 else 0, 1
                     )
-                # Per-charger vehicle SOC (#193)
+                # Per-charger vehicle SOC (#193) — collected for the global
+                # vehicle_soc/range fallback below (no dedicated per-charger
+                # sensor consumes this, so don't write it into result; #245 review #2).
                 ev_chargers_cfg = self.config.get("ev_chargers", [])
                 charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
                 charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
@@ -1034,7 +1051,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     soc_state = self.hass.states.get(charger_soc_entity)
                     if soc_state and soc_state.state not in ("unknown", "unavailable"):
                         try:
-                            result[f"charger_{cid}_vehicle_soc"] = float(soc_state.state)
+                            per_charger_soc[cid] = float(soc_state.state)
                         except (ValueError, TypeError):
                             pass
 
@@ -1064,9 +1081,40 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 solar = lifetime.get("total_solar_kwh", 0)
                 result["lifetime_ev_solar_share"] = round(solar / total * 100, 1) if total > 0 else 0
 
-            # Vehicle SOC (from per-cycle cache)
+            # Vehicle SOC (from per-cycle cache). Fall back to a per-charger SOC
+            # when no GLOBAL vehicle_soc_entity is set but a charger has its own —
+            # otherwise the global vehicle_soc/range sensors stay unavailable in a
+            # multi-charger / per-charger-only setup (#245 review #3).
+            if self._cycle_vehicle_soc is None and per_charger_soc:
+                self._cycle_vehicle_soc = next(iter(per_charger_soc.values()))
             if self._cycle_vehicle_soc is not None:
                 result["vehicle_soc"] = self._cycle_vehicle_soc
+
+            # EV driving range (#245): prefer a real range entity, else derive
+            # from SOC × usable capacity ÷ consumption (ev_kwh_per_100km).
+            _range_entity = self.config.get("vehicle_range_entity", "")
+            if _range_entity:
+                _rs = self.hass.states.get(_range_entity)
+                if _rs and _rs.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                    try:
+                        result["ev_remaining_range"] = round(float(_rs.state))
+                    except (ValueError, TypeError):
+                        pass
+            if "ev_remaining_range" not in result and self._cycle_vehicle_soc is not None:
+                # Capacity + efficiency are per-car → read the (primary) charger's
+                # values, falling back to global config. One car per charger (#245).
+                _pcfg = (self.config.get("ev_chargers") or [{}])[0]
+
+                def _per_car(key, default):
+                    v = _pcfg.get(key)
+                    return v if v is not None else self.config.get(key, default)
+
+                _cap = _per_car("ev_battery_capacity_kwh", 40)
+                _cons = _per_car("ev_kwh_per_100km", 18)  # consumption, kWh/100km
+                if _cons and _cons > 0:
+                    result["ev_remaining_range"] = round(
+                        self._cycle_vehicle_soc / 100 * _cap / _cons * 100
+                    )
 
             # EV departure time (if configured via input_datetime entity)
             departure_entity = self.config.get("ev_departure_time_entity", "")
@@ -1649,7 +1697,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         _LOGGER.info("EV charger registered via late discovery: service=%s", ev_auto.get("ev_charger_service"))
 
-    def _determine_charging_strategy(self, power: PowerReadings, energy: Any) -> tuple:
+    def _determine_charging_strategy(self, power: PowerReadings, energy: Any,
+                                     charger_cfg: dict | None = None) -> tuple:
         """SOC-zone-based charging strategy decision (inspired by evcc).
 
         SOC Zones:
@@ -1662,19 +1711,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "solar_only", "battery_assist", "night_grid", "idle"
         """
         vehicle_soc = self._cycle_vehicle_soc
-        remaining_need = self._calculate_remaining_need(energy, vehicle_soc)
+        # Measured against the floor (Min, the default): this is the guaranteed
+        # target used for the night top-up decision and the auto-mode forecast
+        # ratio. Solar surplus still continues past Min up to the Max ceiling —
+        # that stop is gated separately by soc_limit_active, not here (#245).
+        # charger_cfg makes the night go/stop decision honor the PER-CHARGER target
+        # (Min floor) instead of only the global one (#245 propagation review).
+        remaining_need = self._calculate_remaining_need(energy, vehicle_soc, charger_cfg)
 
         # EV not connected → idle
         if not power.ev_connected:
             return ("idle", f"ev disconnected")
 
-        # Night mode → grid charging, but only if target not reached
+        # Night mode → grid charging tops up to the floor (Min) (#245).
+        # remaining_need above is already the Min-bound value (default bound="min").
         if self.time_manager.is_night_mode():
             if remaining_need < 0.5:
                 soc_info = f", SOC={vehicle_soc:.0f}%" if vehicle_soc is not None else ""
                 return ("idle", f"night target reached ({energy.daily_ev:.1f}kWh{soc_info})")
 
-            _target_soc = self.config.get("ev_target_soc", 80)
+            _cfg = charger_cfg or {}
+            _target_soc = (
+                _cfg.get("ev_target_soc") if _cfg.get("ev_target_soc") is not None
+                else self.config.get("ev_target_soc", 80)
+            )
             soc_info = f", SOC={vehicle_soc:.0f}%→{_target_soc}%" if vehicle_soc is not None else ""
 
             # Price-optimized: check if current hour is cheap enough for charging
@@ -1836,7 +1896,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 pass
 
         if remaining_need < 0.5:
-            return ("idle", "auto: EV target reached")
+            # Floor (Min) met — no forecast-based pacing needed. Solar surplus
+            # still continues up to the Max ceiling via the surplus path (#245).
+            return ("idle", "auto: min target met, solar continues to ceiling")
 
         ratio = remaining_solar / remaining_need if remaining_need > 0 else 99
 
@@ -1922,28 +1984,92 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         )
         return stable
 
+    def _resolve_target(
+        self, cfg: dict, base_key: str, bound: str, default: float, full: float,
+    ) -> float:
+        """Resolve the floor (Min) or ceiling (Max) charge target (#245).
+
+        The existing single-value key (e.g. ``daily_ev_target``) is the FLOOR
+        (Min) — the grid-guaranteed amount that night charging tops up to. Night
+        behaviour is therefore identical to pre-#245 and needs no migration.
+
+        The new ``{base_key}_max`` key is the optional solar CEILING (Max):
+        surplus charging may continue past Min up to Max. When Max is unset it
+        defaults to ``full`` (100% / 100 kWh) — i.e. "charge freely from the sun",
+        which preserves the pre-#245 default (surplus runs to car-full). Setting a
+        Max below full caps surplus. Max is clamped to ``>= Min`` so a misconfigured
+        Max can never fall below the guaranteed floor. (The old ev_limit_surplus
+        switch was folded into Max: Max < full == limit on.)
+        """
+        min_val = cfg.get(base_key) if cfg.get(base_key) is not None else self.config.get(base_key, default)
+        if bound == "min":
+            return min_val
+        max_key = f"{base_key}_max"
+        max_val = cfg.get(max_key) if cfg.get(max_key) is not None else self.config.get(max_key)
+        if max_val is None:
+            return full
+        return max(max_val, min_val)
+
+    def _resolve_charger_soc(self, cid: str, cfg: dict) -> float | None:
+        """Per-charger vehicle SOC: real sensor, else anchored virtual SOC, else None."""
+        ent = cfg.get("vehicle_soc_entity")
+        if ent:
+            st = self.hass.states.get(ent)
+            if st and st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                try:
+                    return float(st.state)
+                except (ValueError, TypeError):
+                    pass
+        det = (getattr(self, "_ev_taper_detectors", {}) or {}).get(cid)
+        if det is not None and getattr(det, "_soc_anchored", False):
+            return det.get_virtual_soc(None)
+        return None
+
     def _calculate_remaining_need(
         self, energy, vehicle_soc: float | None = None, charger_cfg: dict | None = None,
+        bound: str = "min",
     ) -> float:
         """Calculate remaining EV charging need in kWh from the best available source.
 
         When ev_target_type is "soc" AND vehicle_soc is available: SOC-based.
         When ev_target_type is "kwh" OR vehicle_soc is unavailable: kWh daily target.
         Used by both _build_charging_context() and _determine_charging_strategy().
+
+        ``bound`` selects which target to measure against (#245):
+          - "min" (default, floor = the existing single target): the guaranteed
+            amount; night/grid tops up to this. This is what callers usually mean
+            by "remaining to target".
+          - "max" (ceiling): surplus charges up to this, then stops. Defaults to
+            full (100% / 100 kWh ≈ unlimited) when no Max is set.
         """
         cfg = charger_cfg or {}
-        ev_target_soc = cfg.get("ev_target_soc") if cfg.get("ev_target_soc") is not None else self.config.get("ev_target_soc", 80)
         ev_capacity = cfg.get("ev_battery_capacity_kwh") if cfg.get("ev_battery_capacity_kwh") is not None else self.config.get("ev_battery_capacity_kwh", 40)
-        daily_target = cfg.get("daily_ev_target") if cfg.get("daily_ev_target") is not None else self.config.get("daily_ev_target", 10)
         # ev_target_mode was renamed to ev_target_type (#235); read both for back-compat.
         ev_target_type = (
             cfg.get("ev_target_type") or cfg.get("ev_target_mode")
             or self.config.get("ev_target_type") or self.config.get("ev_target_mode", "kwh")
         )
 
+        # De-trap %: if % is selected but there's no real SOC sensor, fall back to
+        # the EV-intelligence virtual SOC — but only when it has a confident anchor
+        # (a detected full charge / car-API calibration). The estimate is a *soft*
+        # ceiling: taper detection is still the hard "full" stop, and the Min floor
+        # still grid-tops-up, so an estimate error is bounded. With no real SOC and
+        # no anchored estimate, fall through to the kWh target (no silent no-op). (#245)
+        if ev_target_type == "soc" and vehicle_soc is None:
+            cid = cfg.get("id")
+            detectors = getattr(self, "_ev_taper_detectors", {}) or {}
+            detector = detectors.get(cid) if cid else getattr(self, "_ev_taper_detector", None)
+            if detector is not None and getattr(detector, "_soc_anchored", False):
+                vehicle_soc = detector.get_virtual_soc(None)
+
         use_soc = ev_target_type == "soc" and vehicle_soc is not None
         if use_soc:
-            return max(0, (ev_target_soc - vehicle_soc) / 100 * ev_capacity)
+            # SOC ceiling defaults to 100% (car full); floor default 80%.
+            soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
+            return max(0, (soc_target - vehicle_soc) / 100 * ev_capacity)
+        # kWh ceiling defaults to 100 kWh/day (≈ unlimited); floor default 10.
+        daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
         return max(0, daily_target - energy.daily_ev)
 
     def _build_charging_context(
@@ -1980,13 +2106,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         battery_too_low = power.battery_soc < battery_min_soc
         battery_needs_priority = power.battery_soc < battery_priority_soc
-        remaining = self._calculate_remaining_need(energy, self._cycle_vehicle_soc)
+        # Ceiling (Max, default full) gates the surplus stop; floor (Min) drives
+        # night top-up (#245). Resolve the (primary) charger's config so the base
+        # context honors the PER-CHARGER targets, not just global. One car per
+        # charger; the multi-charger loop still overrides per charger downstream.
+        _primary_cfg = (self.config.get("ev_chargers") or [{}])[0]
+        remaining = self._calculate_remaining_need(
+            energy, self._cycle_vehicle_soc, _primary_cfg, bound="max"
+        )
+        remaining_floor = self._calculate_remaining_need(
+            energy, self._cycle_vehicle_soc, _primary_cfg, bound="min"
+        )
+        # "daily_target_reached" here means the surplus CEILING (Max) is reached.
         daily_target_reached = remaining <= 0.1
 
-        # Surplus limit: stop surplus charging at the target when the user opts in
-        # via the ev_limit_surplus switch (#235).
-        ev_limit_surplus = self.config.get("ev_limit_surplus", False)
-        soc_limit_active = ev_limit_surplus and daily_target_reached
+        # Surplus stops at the Max ceiling (#245). Max defaults to full, so by
+        # default this is only true at car-full — i.e. surplus charges freely.
+        # (The ev_limit_surplus switch from #235 was folded into Max.)
+        soc_limit_active = daily_target_reached
 
         # Calculate excess solar
         excess_solar = power.solar_power - power.home_consumption_power - power.battery_charge_power
@@ -2008,20 +2145,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         )
         ev_current = self._flow_calculator.calculate_charging_current(ev_budget)
 
-        # Forecast-driven charging strategy
-        strategy, reason = self._determine_charging_strategy(power, energy)
+        # Forecast-driven charging strategy (per-charger target via _primary_cfg)
+        strategy, reason = self._determine_charging_strategy(power, energy, _primary_cfg)
 
         _LOGGER.debug(
             "Charging strategy: %s — %s",
             strategy, reason,
         )
 
-        # Night charging target: optionally reduced by forecast
-        night_target = remaining
+        # Night charging tops up to the floor (Min), optionally reduced by forecast (#245)
+        night_target = remaining_floor
         forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_SMART_NIGHT_CHARGING}", "on")
         if self.time_manager.is_night_mode() and forecast_reduction:
             night_target = self._calculate_forecast_night_target(
-                remaining, energy,
+                remaining_floor, energy, _primary_cfg,
             )
 
         return ChargingContext(
@@ -2369,9 +2506,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         elif not self.time_manager.is_night_mode():
             self._skip_recorded_tonight = False
 
+        # No real SOC and no calibration yet → the virtual 100% default is
+        # misleading. Report None so the sensor shows "unknown" until a real
+        # reference (sensor / taper / stall) — do NOT prefill a guessed value.
+        # Matches the per-charger path in _build_per_charger_intelligence. (#245)
+        _d = self._ev_taper_detector
+        if self._cycle_vehicle_soc is None and not _d._soc_anchored and _d._energy_since_full == 0.0:
+            estimated_soc_display: Optional[float] = None
+        else:
+            estimated_soc_display = round(estimated_soc, 1)
+
         return EVIntelligenceData(
             taper=taper_data,
-            estimated_soc_pct=round(estimated_soc, 1),
+            estimated_soc_pct=estimated_soc_display,
             last_full_charge=self._ev_taper_detector.last_full_timestamp,
             energy_since_full_kwh=round(self._ev_taper_detector.energy_since_full, 2),
             predicted_daily_ev_kwh=predicted_daily,

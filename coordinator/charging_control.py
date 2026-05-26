@@ -55,8 +55,9 @@ class ChargingContext:
         charging_strategy_reason: Human-readable explanation of strategy choice.
         night_target_kwh: Night charging target (kWh), may be forecast-adjusted if enabled.
             For night mode, remaining is derived from this field directly.
-        soc_limit_active: When True, stop ALL charging including surplus (#215).
-            Set when ev_limit_surplus toggle is on AND target is reached.
+        soc_limit_active: When True, stop surplus (solar) charging (#245).
+            Set when the Max ceiling is reached (remaining-to-Max <= 0.1). Max
+            defaults to full, so by default this only fires at car-full.
             Only gates the solar state machine — night mode uses night_target_kwh directly.
     """
     # EV status
@@ -168,9 +169,9 @@ class ChargingStateMachine:
             _LOGGER.info(f"Solar: Paused - battery too low ({ctx.battery_soc:.0f}%)")
             return ChargingState.SOLAR_PAUSE_LOW_BATTERY
 
-        # Target limit — stop surplus when user opts in via ev_limit_surplus (#215).
-        # Night mode does NOT need this gate — it stops via night_target_kwh <= 0.1,
-        # which is already SOC-aware through _calculate_remaining_need().
+        # Surplus ceiling — stop solar charging once the Max ceiling is reached (#245).
+        # Night mode does NOT need this gate — it stops via night_target_kwh <= 0.1
+        # (the Min floor), already SOC-aware through _calculate_remaining_need().
         if ctx.soc_limit_active:
             return ChargingState.SOLAR_TARGET_REACHED
 

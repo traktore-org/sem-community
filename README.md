@@ -29,7 +29,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Six charging modes** — Auto (forecast-aware), Solar+Battery, Self-Consumption, Min+PV, Maximum, Off
 - **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
-- **SOC target charging** — set a per-charger charge target (kWh or SOC %, e.g. 80%) for battery longevity; the **Limit surplus to target** switch automatically stops solar-surplus charging once the goal is met. All target controls live in one **Charge Target** block on the EV card
+- **Min/Max charge-target range** — a per-charger dual-handle slider (kWh or SOC %): **Min** is the guaranteed amount (night/grid tops up to it), **Max** is the solar ceiling (surplus charges up to it, then stops). E.g. *Min 50% / Max 80%* — always keep 50% from the grid, let solar add up to 80% for battery longevity. Max defaults to full (charge freely from sun)
 - **Night charging with battery protection** — charges EV from grid overnight without draining home battery
 - **Hot water solar boost** — SEM supplements your existing heating system with solar surplus (does not replace your boiler/heat pump), with mandatory Legionella prevention cycle (DVGW W 551, SIA 385/1, ÖNORM B 5019)
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority, with appliance dependency chains (e.g. heater only runs when pump is active)

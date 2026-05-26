@@ -115,7 +115,11 @@
           "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
-          "ev_target_soc": "EV target SOC (%)"
+          "ev_target_soc": "EV target SOC (%)",
+          "daily_ev_target_max": "Solar charge limit (kWh)",
+          "ev_target_soc_max": "Solar charge limit (SOC %)",
+          "vehicle_range_entity": "Vehicle range sensor",
+          "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -126,7 +130,11 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
+          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun.",
+          "vehicle_range_entity": "Optional real range sensor. Otherwise range is estimated from SOC × capacity × efficiency.",
+          "ev_kwh_per_100km": "Used to estimate driving range when no range sensor is configured."
         }
       },
       "heat_pump": {
@@ -172,7 +180,9 @@
           "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
           "ev_charger_service": "Set-Current Service (KEBA, Easee — optional)",
           "ev_charger_service_entity_id": "Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)"
+          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "daily_ev_target_max": "Solar charge limit (kWh)",
+          "ev_target_soc_max": "Solar charge limit (SOC %)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard (e.g. 'Garage' or 'Carport').",
@@ -182,7 +192,9 @@
           "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
           "ev_charger_service": "HA service used to set the charging current (e.g. keba.set_current). Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority."
+          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
+          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun."
         }
       },
       "ev_charger_edit": {
@@ -196,7 +208,9 @@
           "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
           "ev_charger_service": "Set-Current Service (KEBA, Easee — optional)",
           "ev_charger_service_entity_id": "Service Target Entity (optional)",
-          "ev_surplus_priority": "Surplus Priority (1=highest)"
+          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "daily_ev_target_max": "Solar charge limit (kWh)",
+          "ev_target_soc_max": "Solar charge limit (SOC %)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard.",
@@ -206,7 +220,9 @@
           "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority."
+          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
+          "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun."
         }
       },
       "ev_charger_remove": {
@@ -888,6 +904,9 @@
       "vehicle_soc": {
         "name": "Vehicle SOC"
       },
+      "ev_remaining_range": {
+        "name": "EV Range"
+      },
       "battery_scheduler_state": {
         "name": "Battery Scheduler State"
       },
@@ -1026,9 +1045,6 @@
       },
       "smart_night_charging": {
         "name": "Forecast Night Reduction"
-      },
-      "ev_limit_surplus": {
-        "name": "Limit surplus to target"
       }
     },
     "number": {
@@ -1065,8 +1081,11 @@
       "ev_target_soc": {
         "name": "EV Target SOC (%)"
       },
-      "ev_km_per_kwh": {
-        "name": "EV Efficiency"
+      "daily_ev_target_max": {
+        "name": "EV Solar Charge Max (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "EV Solar Charge Max SOC (%)"
       },
       "public_charging_rate": {
         "name": "Public Charging Rate"
@@ -1145,6 +1164,9 @@
       },
       "legionella_interval_hours": {
         "name": "Legionella Interval Hours"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Vehicle consumption (kWh/100km)"
       }
     },
     "select": {

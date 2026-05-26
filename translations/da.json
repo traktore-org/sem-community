@@ -117,7 +117,11 @@
           "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
-          "ev_target_soc": "EV target SOC (%)"
+          "ev_target_soc": "EV target SOC (%)",
+          "daily_ev_target_max": "Solopladningsgrænse (kWh)",
+          "ev_target_soc_max": "Solopladningsgrænse (SOC %)",
+          "vehicle_range_entity": "Køretøjets rækkeviddesensor",
+          "ev_kwh_per_100km": "Køretøjets forbrug (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -345,7 +349,9 @@
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
           "ev_surplus_priority": "Overskudsprioritet (1=højeste)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)"
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "daily_ev_target_max": "Solopladningsgrænse (kWh)",
+          "ev_target_soc_max": "Solopladningsgrænse (SOC %)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard.",
@@ -356,6 +362,12 @@
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
           "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+        }
+      },
+      "ev_charger_add": {
+        "data": {
+          "daily_ev_target_max": "Solopladningsgrænse (kWh)",
+          "ev_target_soc_max": "Solopladningsgrænse (SOC %)"
         }
       }
     }
@@ -815,6 +827,9 @@
       "vehicle_soc": {
         "name": "Vehicle SOC"
       },
+      "ev_remaining_range": {
+        "name": "Elbil rækkevidde"
+      },
       "best_surplus_window": {
         "name": "Best Surplus Window"
       },
@@ -983,9 +998,6 @@
       },
       "smart_night_charging": {
         "name": "Forecast Night Reduction"
-      },
-      "ev_limit_surplus": {
-        "name": "Begræns overskud til mål"
       }
     },
     "number": {
@@ -1018,9 +1030,6 @@
       },
       "daily_ev_target": {
         "name": "Daily EV Target"
-      },
-      "ev_km_per_kwh": {
-        "name": "EV Efficiency"
       },
       "public_charging_rate": {
         "name": "Public Charging Rate"
@@ -1108,6 +1117,15 @@
       },
       "ev_target_soc": {
         "name": "EV Target SOC (%)"
+      },
+      "daily_ev_target_max": {
+        "name": "Solopladning maks. elbil (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "Solopladning maks. elbil SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Køretøjets forbrug (kWh/100km)"
       }
     },
     "select": {

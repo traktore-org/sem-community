@@ -117,7 +117,11 @@
           "ev_total_energy_sensor": "Compteur d'énergie totale VE (optionnel)",
           "vehicle_soc_entity": "Capteur SOC batterie véhicule (optionnel)",
           "ev_battery_capacity_kwh": "Capacité batterie VE (kWh)",
-          "ev_target_soc": "SOC cible VE (%)"
+          "ev_target_soc": "SOC cible VE (%)",
+          "daily_ev_target_max": "Limite de charge solaire (kWh)",
+          "ev_target_soc_max": "Limite de charge solaire (SOC %)",
+          "vehicle_range_entity": "Capteur d'autonomie du véhicule",
+          "ev_kwh_per_100km": "Consommation du véhicule (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -346,7 +350,9 @@
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
           "ev_surplus_priority": "Priorité surplus (1=plus haute)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)"
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "daily_ev_target_max": "Limite de charge solaire (kWh)",
+          "ev_target_soc_max": "Limite de charge solaire (SOC %)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard.",
@@ -357,6 +363,12 @@
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
           "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+        }
+      },
+      "ev_charger_add": {
+        "data": {
+          "daily_ev_target_max": "Limite de charge solaire (kWh)",
+          "ev_target_soc_max": "Limite de charge solaire (SOC %)"
         }
       }
     }
@@ -816,6 +828,9 @@
       "vehicle_soc": {
         "name": "SOC Véhicule"
       },
+      "ev_remaining_range": {
+        "name": "Autonomie VE"
+      },
       "best_surplus_window": {
         "name": "Meilleur Créneau Surplus"
       },
@@ -984,9 +999,6 @@
       },
       "smart_night_charging": {
         "name": "Réduction Nocturne Prévision"
-      },
-      "ev_limit_surplus": {
-        "name": "Limiter le surplus à l'objectif"
       }
     },
     "number": {
@@ -1019,9 +1031,6 @@
       },
       "daily_ev_target": {
         "name": "Objectif VE Quotidien"
-      },
-      "ev_km_per_kwh": {
-        "name": "Efficacité VE"
       },
       "public_charging_rate": {
         "name": "Tarif Charge Publique"
@@ -1109,6 +1118,15 @@
       },
       "ev_target_soc": {
         "name": "EV Target SOC (%)"
+      },
+      "daily_ev_target_max": {
+        "name": "Charge solaire max VE (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "Charge solaire max VE SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Consommation du véhicule (kWh/100km)"
       }
     },
     "select": {

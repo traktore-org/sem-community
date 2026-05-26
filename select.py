@@ -177,10 +177,10 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
         # Update coordinator config immediately
         await self.coordinator.async_update_config({config_key: option})
 
-        # Persist without triggering integration reload
-        self.coordinator._skip_options_reload = True
+        # Persist without triggering integration reload (snapshot-keyed skip — #245)
         new_options = {**self._entry.options}
         new_options[config_key] = option
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(
             self._entry, options=new_options
         )
@@ -259,7 +259,10 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             return
         self._value = option
         new_options = {**self._entry.options}
-        ev_chargers = list(new_options.get("ev_chargers", []))
+        # Copy each charger dict — mutating the shared dicts in place leaves
+        # entry.options == new_options, so async_update_entry detects no change
+        # and never persists to .storage (the value then reverts on restart). (#245)
+        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
         for charger in ev_chargers:
             if charger.get("id") == self._charger_id:
                 charger[self._config_key] = option
@@ -267,7 +270,7 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         new_options["ev_chargers"] = ev_chargers
         if isinstance(getattr(self.coordinator, "config", None), dict):
             self.coordinator.config.update({**self._entry.data, **new_options})
-        self.coordinator._skip_options_reload = True
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
         _LOGGER.info(

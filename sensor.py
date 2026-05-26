@@ -19,6 +19,7 @@ from homeassistant.const import (
     UnitOfPower,
     UnitOfEnergy,
     UnitOfElectricCurrent,
+    UnitOfLength,
     UnitOfTemperature,
     UnitOfTime,
     PERCENTAGE,
@@ -1281,6 +1282,16 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
+    ),
+    # Estimated driving range (#245): from a real range entity if configured,
+    # else derived from vehicle SOC × capacity ÷ consumption (ev_kwh_per_100km).
+    SensorEntityDescription(
+        key="ev_remaining_range",
+        device_class=SensorDeviceClass.DISTANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfLength.KILOMETERS,
+        suggested_display_precision=0,
+        icon="mdi:map-marker-distance",
     ),
 
     # ============================================================================

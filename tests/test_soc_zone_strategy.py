@@ -581,7 +581,7 @@ class TestAutoMode:
         assert result is None
 
     def test_auto_target_reached_idle(self):
-        """EV target reached → idle."""
+        """Min floor met → auto returns idle (solar still continues to Max via surplus)."""
         coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
         coord._cycle_forecast = _MockForecast(available=True, remaining=20.0)
         coord._forecast_tracker = MagicMock()
@@ -591,7 +591,7 @@ class TestAutoMode:
             _make_power(solar=5000, battery_soc=80), _MockEnergy(daily_ev=10), 0.1
         )
         assert result[0] == "idle"
-        assert "target reached" in result[1]
+        assert "min target met" in result[1]
 
 
 class TestSelfConsumptionStrategy:
