@@ -298,7 +298,14 @@ class SEMEVStatusCard extends SEMLitBase {
             ? `number.sem_charger_${id}_target_soc_max`
             : `number.sem_charger_${id}_daily_ev_target_max`;
         const nightOnLive = this._stateStr(nightEntityId) === 'on';
-        const rangeKm = this._val('ev_remaining_range', null);
+
+        // Range the charge will ADD to reach the Min (guaranteed) target, in km —
+        // updates live as the Min handle moves. Solar may add more, up to Max. (#245)
+        const minTarget = this._entityVal(minEntityId, isSoc ? 80 : 10);
+        const gapKwh = isSoc
+            ? Math.max(0, (minTarget - soc) / 100 * capacityKwh)
+            : Math.max(0, minTarget - dailyEnergy);
+        const chargeKm = consumption > 0 ? Math.round(gapKwh / consumption * 100) : null;
 
         const ctToggle = (on, entityId) => html`
             <span class="ct-sw ${on ? 'on' : 'off'}"
@@ -365,7 +372,7 @@ class SEMEVStatusCard extends SEMLitBase {
                     <div class="ct-title">
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
                         ${this._t('charge_target')}
-                        ${rangeKm != null ? html`<span class="ct-range">· ${Math.round(rangeKm)} km</span>` : nothing}
+                        ${chargeKm != null && chargeKm > 0 ? html`<span class="ct-range">· +${chargeKm} km</span>` : nothing}
                         <span class="ct-spacer"></span>
                         ${unitControl}
                     </div>
