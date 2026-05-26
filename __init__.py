@@ -661,7 +661,7 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     snapshot = getattr(coordinator, "_skip_options_reload", None) if coordinator else None
     if coordinator is not None:
         coordinator._skip_options_reload = None  # always consume — no leak
-    if snapshot is not None and dict(entry.options) == dict(snapshot):
+    if isinstance(snapshot, dict) and dict(entry.options) == snapshot:
         _LOGGER.debug("Options update from runtime tweak — skipping reload")
         return
 
