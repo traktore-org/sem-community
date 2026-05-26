@@ -325,6 +325,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 return True
         return False
 
+    def _per_charger_daily_report(self, energy) -> Dict[str, float]:
+        """Per-charger daily EV energy for the sensors.
+
+        The per-charger integrator (``_daily_ev_per_charger``) is rebuilt from power
+        each restart, while the GLOBAL daily_ev is persisted + sunrise-reset — so after a
+        restart the per-charger value under-reports vs the global summary. For a SINGLE
+        charger the two are the same quantity by definition, so report the global daily_ev
+        to keep them consistent. Multiple chargers report their own (persisted) accumulators,
+        which sum to the global.
+        """
+        pcd = dict(self._daily_ev_per_charger)
+        chargers = self.config.get("ev_chargers") or []
+        if len(chargers) == 1 and isinstance(chargers[0], dict):
+            cid = chargers[0].get("id", "ev_charger")
+            pcd[cid] = round(getattr(energy, "daily_ev", 0.0) or 0.0, 3)
+        return pcd
+
     @property
     def battery_capacity_kwh(self) -> float:
         """Battery capacity in kWh — auto-detected or from config (#84)."""
@@ -526,6 +543,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Restore EV intelligence state (#106)
             ev_intel_state = self._storage.get_ev_intelligence_state()
             self._ev_taper_detector.restore_state(ev_intel_state)
+
+            # Restore per-charger daily EV energy. It was in-memory only, so it reset to
+            # 0 on every restart while the global daily_ev persisted — desyncing the
+            # per-charger daily sensor AND (worse) the per-charger night-charge remaining,
+            # which would let a charger re-charge its full target after a restart in a
+            # multi-charger setup. Persisting it keeps each charger's start/stop on its
+            # own delivered+target.
+            pcd = self._storage._daily_data.get("per_charger_daily", {})
+            if isinstance(pcd, dict) and isinstance(pcd.get("values"), dict):
+                self._daily_ev_per_charger = dict(pcd["values"])
+                self._daily_ev_per_charger_date = pcd.get("date")
 
             # Seed EV intelligence from recorder history (improves cold starts
             # and upgrades from older versions without EV intelligence data)
@@ -1039,7 +1067,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ev_charger_ids=list(self._ev_devices.keys()),
                 ev_intelligence=ev_intelligence,
                 per_charger_intelligence=self._build_per_charger_intelligence(),
-                per_charger_daily_energy=dict(self._daily_ev_per_charger),
+                per_charger_daily_energy=self._per_charger_daily_report(energy),
                 last_update=dt_util.now(),
             )
 
@@ -1074,6 +1102,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._storage._daily_data["predictor"] = self._predictor.get_state()
                 # Persist EV intelligence state (#106)
                 self._storage.set_ev_intelligence_state(self._ev_taper_detector.get_state())
+                # Persist per-charger daily EV energy so it survives restarts (so the
+                # per-charger night-charge remaining + daily sensor stay correct).
+                self._storage._daily_data["per_charger_daily"] = {
+                    "date": self._daily_ev_per_charger_date,
+                    "values": dict(self._daily_ev_per_charger),
+                }
                 await self._storage.async_save_energy_delayed()
 
             self._initial_update_done = True
