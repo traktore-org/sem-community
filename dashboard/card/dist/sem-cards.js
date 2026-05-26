@@ -2619,7 +2619,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     </div>
                 </div>
             </div>
-        `}render(){if(!this._config||!this._hass)return K;const t=this._binaryState("ev_connected"),e=this._binaryState("ev_charging"),i=this._val("ev_power",0),s=this._val("calculated_current",0),r=this._val("session_energy",0),a=this._val("session_solar_share",0),o=this._val("session_cost",0),n=this._val("daily_ev_energy",0),l=this._valStr("charging_state"),c=ut(this._hass),d=this._hass?.states[this._pcEntity("select","ev_charging_mode","select.sem_ev_charging_mode")],h=d?.state||"auto",p={auto:this._t("mode_auto"),minpv:this._t("mode_minpv"),now:this._t("maximum"),off:this._t("off")},g=e?"wrap state-charging":t?"wrap state-connected":"wrap state-disconnected",u=e?this._t("charging"):t?this._t("connected"):this._t("disconnected"),_=e?"status-value charging":t?"status-value connected":"status-value disconnected";return H`
+        `}render(){if(!this._config||!this._hass)return K;const t=this._binaryState("ev_connected"),e=this._binaryState("ev_charging"),i=this._val("ev_power",0);this._val("calculated_current",0),this._val("session_energy",0);const s=this._val("session_solar_share",0),r=this._val("session_cost",0),a=this._val("daily_ev_energy",0);this._valStr("charging_state");const o=ut(this._hass);this._hass?.states[this._pcEntity("select","ev_charging_mode","select.sem_ev_charging_mode")];this._t("mode_auto"),this._t("mode_minpv"),this._t("maximum"),this._t("off");const n=e?"wrap state-charging":t?"wrap state-connected":"wrap state-disconnected",l=e?this._t("charging"):t?this._t("connected"):this._t("disconnected"),c=e?"status-value charging":t?"status-value connected":"status-value disconnected";return H`
             <svg class="glow-svg">
                 <defs>
                     <filter id="ev-glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -2636,7 +2636,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             </svg>
 
             <ha-card>
-                <div class="${g}">
+                <div class="${n}">
                     <div class="hero">
                         <div class="ev-icon-area">
                             <svg viewBox="0 0 100 100">
@@ -2660,7 +2660,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                             <div class="metrics-col">
                                 <div class="metric-row">
                                     <span class="metric-label">${this._t("status")}</span>
-                                    <span class="${_}">${u}</span>
+                                    <span class="${c}">${l}</span>
                                 </div>
                                 ${e?H`
                                     <div class="metric-row power-row">
@@ -2669,28 +2669,12 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                                     </div>
                                 `:K}
                                 <div class="metric-row">
-                                    <span class="metric-label">${this._t("current")}</span>
-                                    <span class="metric-value">${this._fmt(s,0)} A</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">${this._t("session")}</span>
-                                    <span class="metric-value">${this._fmt(r,1)} kWh</span>
-                                </div>
-                                <div class="metric-row">
                                     <span class="metric-label">${this._t("today")}</span>
-                                    <span class="metric-value">${this._fmt(n,1)} kWh</span>
+                                    <span class="metric-value">${this._fmt(a,1)} kWh</span>
                                 </div>
                                 <div class="metric-row">
                                     <span class="metric-label">${this._t("solar_share")}</span>
-                                    <span class="metric-value solar-share-value">${this._fmt(a,0)}%</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">${this._t("strategy")}</span>
-                                    <span class="strategy-value">${l?this._t(l):"—"}</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">${this._t("mode")}</span>
-                                    <span class="metric-value">${p[h]||h}</span>
+                                    <span class="metric-value solar-share-value">${this._fmt(s,0)}%</span>
                                 </div>
                             </div>
                         `}
@@ -2700,7 +2684,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         <div class="bottom-bar">
                             <div class="chip">
                                 <span class="chip-label">${this._t("session_cost")}</span>
-                                <span class="cost-chip-value">${this._fmt(o,2)} ${c}</span>
+                                <span class="cost-chip-value">${this._fmt(r,2)} ${o}</span>
                             </div>
                         </div>
                     `}
