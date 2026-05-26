@@ -1001,6 +1001,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             result = sem_data.to_dict()
 
             # Add per-charger data (#131): power + session
+            per_charger_soc: Dict[str, float] = {}
             for cid, ev_dev in self._ev_devices.items():
                 charger_power = 0.0
                 if ev_dev.power_entity_id:
@@ -1031,7 +1032,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     result[f"charger_{cid}_taper_ratio"] = round(
                         (charger_power / taper_det._session_peak_w * 100) if taper_det._session_peak_w > 0 else 0, 1
                     )
-                # Per-charger vehicle SOC (#193)
+                # Per-charger vehicle SOC (#193) — collected for the global
+                # vehicle_soc/range fallback below (no dedicated per-charger
+                # sensor consumes this, so don't write it into result; #245 review #2).
                 ev_chargers_cfg = self.config.get("ev_chargers", [])
                 charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
                 charger_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
@@ -1039,7 +1042,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     soc_state = self.hass.states.get(charger_soc_entity)
                     if soc_state and soc_state.state not in ("unknown", "unavailable"):
                         try:
-                            result[f"charger_{cid}_vehicle_soc"] = float(soc_state.state)
+                            per_charger_soc[cid] = float(soc_state.state)
                         except (ValueError, TypeError):
                             pass
 
@@ -1069,7 +1072,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 solar = lifetime.get("total_solar_kwh", 0)
                 result["lifetime_ev_solar_share"] = round(solar / total * 100, 1) if total > 0 else 0
 
-            # Vehicle SOC (from per-cycle cache)
+            # Vehicle SOC (from per-cycle cache). Fall back to a per-charger SOC
+            # when no GLOBAL vehicle_soc_entity is set but a charger has its own —
+            # otherwise the global vehicle_soc/range sensors stay unavailable in a
+            # multi-charger / per-charger-only setup (#245 review #3).
+            if self._cycle_vehicle_soc is None and per_charger_soc:
+                self._cycle_vehicle_soc = next(iter(per_charger_soc.values()))
             if self._cycle_vehicle_soc is not None:
                 result["vehicle_soc"] = self._cycle_vehicle_soc
 
@@ -1694,9 +1702,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if not power.ev_connected:
             return ("idle", f"ev disconnected")
 
-        # Night mode → grid charging tops up to the floor (Min) (#245)
+        # Night mode → grid charging tops up to the floor (Min) (#245).
+        # remaining_need above is already the Min-bound value (default bound="min").
         if self.time_manager.is_night_mode():
-            remaining_need = self._calculate_remaining_need(energy, vehicle_soc, bound="min")
             if remaining_need < 0.5:
                 soc_info = f", SOC={vehicle_soc:.0f}%" if vehicle_soc is not None else ""
                 return ("idle", f"night target reached ({energy.daily_ev:.1f}kWh{soc_info})")

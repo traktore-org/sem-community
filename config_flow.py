@@ -829,6 +829,22 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=10, max=120, step=5, unit_of_measurement="kWh", mode="box"
                     )
                 ),
+                # Optional real range sensor; else range is derived from
+                # SOC × capacity × efficiency (km/kWh) (#245).
+                vol.Optional(
+                    "vehicle_range_entity",
+                    description={"suggested_value": _opt("vehicle_range_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="distance")
+                ),
+                vol.Optional(
+                    "ev_km_per_kwh",
+                    default=_c("ev_km_per_kwh", 5.5),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=2, max=12, step=0.1, unit_of_measurement="km/kWh", mode="box"
+                    )
+                ),
                 vol.Optional(
                     "ev_target_soc",
                     default=_c("ev_target_soc", 80),
@@ -989,6 +1005,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         unit_of_measurement="kWh", mode="slider",
                     )
                 ),
+                # Solar ceiling (Max): surplus charges up to this, then stops.
+                # Default full (100) = charge freely from sun (#245).
+                vol.Optional(
+                    "daily_ev_target_max",
+                    default=self._data.get("daily_ev_target_max", 100),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100, step=0.5,
+                        unit_of_measurement="kWh", mode="slider",
+                    )
+                ),
                 vol.Optional(
                     "ev_night_initial_current",
                     default=self._data.get("ev_night_initial_current", 10),
@@ -1014,10 +1041,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
-                # Per-charger SOC target (#215)
+                # Per-charger SOC target (#215): Min floor + Max solar ceiling (#245)
                 vol.Optional(
                     "ev_target_soc",
                     default=self._data.get("ev_target_soc", 80),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=50, max=100, step=5,
+                        unit_of_measurement="%", mode="slider",
+                    )
+                ),
+                vol.Optional(
+                    "ev_target_soc_max",
+                    default=self._data.get("ev_target_soc_max", 100),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=50, max=100, step=5,

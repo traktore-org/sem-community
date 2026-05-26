@@ -309,8 +309,8 @@ class SEMConfigSwitch(CoordinatorEntity, SwitchEntity):
         # Keep the coordinator's in-memory config in sync immediately
         if isinstance(getattr(self.coordinator, "config", None), dict):
             self.coordinator.config.update({**self._entry.data, **new_options})
-        # Persist without triggering an integration reload
-        self.coordinator._skip_options_reload = True
+        # Persist without triggering an integration reload (snapshot-keyed skip)
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
         _LOGGER.info("Updated %s to %s", self._config_key, value)
@@ -382,7 +382,7 @@ class SEMPerChargerConfigSwitch(CoordinatorEntity, SwitchEntity):
         new_options["ev_chargers"] = ev_chargers
         if isinstance(getattr(self.coordinator, "config", None), dict):
             self.coordinator.config.update({**self._entry.data, **new_options})
-        self.coordinator._skip_options_reload = True
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
         _LOGGER.info(

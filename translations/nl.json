@@ -117,7 +117,11 @@
           "ev_total_energy_sensor": "EV totale energieteller (optioneel)",
           "vehicle_soc_entity": "Voertuig-batterij-SOC-sensor (optioneel)",
           "ev_battery_capacity_kwh": "EV-batterijcapaciteit (kWh)",
-          "ev_target_soc": "EV-doel-SOC (%)"
+          "ev_target_soc": "EV-doel-SOC (%)",
+          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
+          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
+          "vehicle_range_entity": "Voertuig-bereiksensor",
+          "ev_km_per_kwh": "Voertuigefficiëntie (km/kWh)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -345,7 +349,9 @@
           "ev_charger_service": "Lader stroom-instel service (optioneel)",
           "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
           "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)"
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
+          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard.",
@@ -356,6 +362,12 @@
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
           "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+        }
+      },
+      "ev_charger_add": {
+        "data": {
+          "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
+          "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         }
       }
     }

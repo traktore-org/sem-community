@@ -645,15 +645,24 @@ def _schedule_post_startup_tasks(
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update.
 
-    Skips reload when the change came from a number entity stepper (runtime
-    config tweak).  Those updates set _skip_options_reload on the coordinator
-    so the in-memory config is already current and a full integration reload
-    (which destroys all 255 entities for ~1 s) is unnecessary.
+    Skips reload when the change came from a number/switch entity (runtime
+    config tweak): those updates already mirrored the value into the
+    coordinator's in-memory config, so a full reload (which destroys all
+    entities for ~1 s) is wasteful.
+
+    The skip is keyed to the *exact* options payload the entity persisted
+    (``_skip_options_reload`` holds that snapshot), and is consumed once. A
+    bare boolean used to leak — a stale flag from an earlier stepper could
+    swallow a later options-FLOW save (e.g. ``vehicle_soc_entity``), which then
+    only took effect after a full restart (#245 review #1). Comparing against
+    the snapshot makes a flow change (different options) always reload.
     """
     coordinator = entry.runtime_data if hasattr(entry, "runtime_data") else None
-    if coordinator and getattr(coordinator, "_skip_options_reload", False):
-        coordinator._skip_options_reload = False
-        _LOGGER.debug("Options update from number entity — skipping reload")
+    snapshot = getattr(coordinator, "_skip_options_reload", None) if coordinator else None
+    if coordinator is not None:
+        coordinator._skip_options_reload = None  # always consume — no leak
+    if snapshot is not None and dict(entry.options) == dict(snapshot):
+        _LOGGER.debug("Options update from runtime tweak — skipping reload")
         return
 
     _LOGGER.info("Config options updated, reloading integration")

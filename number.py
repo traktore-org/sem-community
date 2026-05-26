@@ -682,9 +682,10 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         # async_update_entry fires the update listener which normally calls
         # async_reload — destroying all 255 entities for ~1s and causing card
         # flashes. The _skip_options_reload flag tells the listener to skip.
-        self.coordinator._skip_options_reload = True
         new_options = {**self._entry.options}
         new_options[config_key] = value
+        # Skip reload only for THIS exact payload (snapshot) — see async_update_options.
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(
             self._entry,
             options=new_options
@@ -751,8 +752,8 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):
             self.coordinator.config.update({**self._entry.data, **new_options})
 
-        # Persist without triggering integration reload
-        self.coordinator._skip_options_reload = True
+        # Persist without triggering integration reload (snapshot-keyed skip)
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(
             self._entry,
             options=new_options,
