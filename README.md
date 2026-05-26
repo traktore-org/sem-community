@@ -29,7 +29,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Six charging modes** — Auto (forecast-aware), Solar+Battery, Self-Consumption, Min+PV, Maximum, Off
 - **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
-- **SOC target charging** — set a per-charger charge target (kWh or SOC %, e.g. 80%) for battery longevity; the **Limit surplus to target** switch automatically stops solar-surplus charging once the goal is met. All target controls live in one **Charge Target** block on the EV card
+- **Min/Max charge-target range** — a per-charger dual-handle slider (kWh or SOC %): **Min** is the guaranteed amount (night/grid tops up to it), **Max** is the solar ceiling (surplus charges up to it, then stops). E.g. *Min 50% / Max 80%* — always keep 50% from the grid, let solar add up to 80% for battery longevity. Max defaults to full (charge freely from sun)
 - **Night charging with battery protection** — charges EV from grid overnight without draining home battery
 - **Hot water solar boost** — SEM supplements your existing heating system with solar surplus (does not replace your boiler/heat pump), with mandatory Legionella prevention cycle (DVGW W 551, SIA 385/1, ÖNORM B 5019)
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority, with appliance dependency chains (e.g. heater only runs when pump is active)
@@ -188,15 +188,15 @@ Enable peak load management if your utility bills based on peak demand:
 
 ## User Controls
 
-SEM is designed to be mostly automatic. There are only 3 switches to manage:
+SEM is designed to be mostly automatic. The switches that matter:
 
 | Switch | Default | What it does |
 |--------|---------|-------------|
-| `switch.sem_night_charging` | ON | Enable/disable overnight grid charging |
-| `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware |
-| `switch.sem_smart_night_charging` | OFF | Intelligently skip or reduce night charges based on EV SOC, solar forecast, temperature, and learned driving patterns |
+| `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware (global) |
+| `switch.sem_charger_<id>_night_charging` | OFF | **Per-charger** (#255). Enable/disable overnight grid charging for that charger (opt-in — solar surplus only until you turn it on; #256) |
+| `switch.sem_charger_<id>_smart_night_charging` | OFF | **Per-charger** (#255). Intelligently skip/reduce that charger's night charge based on EV SOC, solar forecast, temperature, and learned patterns |
 
-Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.
+EV charge targets, charging mode, currents, phases and consumption are all **per-charger** entities too (`number.sem_charger_<id>_…`, `select.sem_charger_<id>_…`) — the global EV settings were removed in #255 (per-charger is the source of truth; globals are read-only summaries). Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.
 
 ---
 
@@ -214,9 +214,7 @@ Set via integration options: `ev_charging_mode = "minpv"`.
 
 ### Night Charging
 
-Overnight grid charging starts automatically after sunset. SEM charges at a peak-managed rate to avoid demand spikes and stops when the daily EV target is reached. Battery discharge protection prevents the home battery from powering the EV overnight.
-
-Enable/disable with `switch.sem_night_charging`.
+**Opt-in (off by default).** SEM charges on solar surplus only until you enable overnight grid charging — so a fresh install never pulls from the grid unasked. Once enabled with `switch.sem_night_charging` (and the per-charger switch in a multi-charger setup), overnight grid charging starts automatically after sunset, runs at a peak-managed rate to avoid demand spikes, and stops when the daily EV target is reached. Battery discharge protection prevents the home battery from powering the EV overnight. Upgrading users keep their existing setting.
 
 ### Battery-Assisted Charging
 
@@ -424,6 +422,16 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 ---
 
 ## Recent Improvements (v1.5.x)
+
+### v1.5.14 — Multi-device cleanup, EV range targets & night-charge peak safety
+- **Night charging respects the peak limit** (#268) — night-charge current is now sized from the house load alone, so grid import stays ≤ your configured peak limit regardless of battery behaviour. Previously battery discharge could inflate the EV current and push grid import well past the limit.
+- **Per-charger is canonical** (#255) — duplicate global EV settings removed; per-charger entities (night charging, mode, phases, target, current) are the source of truth and globals become read-only summaries. Idempotent v3→v4 config migration.
+- **EV Min/Max range targets** (#245) — set a guaranteed Min (grid/night) and a solar-only Max ceiling, in kWh or SoC % (SoC option appears when a vehicle SOC sensor is configured), with live driving-range display.
+- **Night-charging opt-in** (#256) — night charging is per-charger opt-in; no charger charges overnight unless you enable it.
+- **Surfaced silent failures** (#259) — dashboard generation, device mapping, and load-management errors now raise clear, translated messages instead of failing silently; a repair issue flags an unconfigured EV charger.
+- **Per-charger daily energy** (#267) — per-charger daily kWh now persists across restarts and matches the global total.
+- **SolaX derivation fix** (#250) — improved sensor derivation for the SolaX Modbus integration.
+- **Translations completed** — exception/repair messages and the EV range-target help are now translated across all 15 languages.
 
 ### v1.5.7 — Illustrated System Diagram
 - **System diagram rewrite** — detailed inline SVG illustrations replace abstract outlines; left-to-right desktop layout, vertical mobile layout

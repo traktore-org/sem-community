@@ -117,7 +117,11 @@
           "ev_total_energy_sensor": "Contador de energía total VE (opcional)",
           "vehicle_soc_entity": "Sensor SOC batería vehículo (opcional)",
           "ev_battery_capacity_kwh": "Capacidad batería VE (kWh)",
-          "ev_target_soc": "SOC objetivo VE (%)"
+          "ev_target_soc": "SOC objetivo VE (%)",
+          "daily_ev_target_max": "Límite de carga solar (kWh)",
+          "ev_target_soc_max": "Límite de carga solar (SOC %)",
+          "vehicle_range_entity": "Sensor de autonomía del vehículo",
+          "ev_kwh_per_100km": "Consumo del vehículo (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -128,7 +132,11 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "daily_ev_target_max": "El excedente solar carga hasta este valor y luego se detiene. Déjalo al máximo para cargar libremente con el sol.",
+          "ev_target_soc_max": "El excedente solar carga hasta este SOC y luego se detiene. Déjalo al 100 % para cargar libremente con el sol.",
+          "ev_kwh_per_100km": "Se usa para estimar la autonomía cuando no hay un sensor de autonomía configurado.",
+          "vehicle_range_entity": "Sensor de autonomía real opcional. De lo contrario, la autonomía se estima a partir de SOC × capacidad × eficiencia."
         }
       },
       "settings": {
@@ -345,7 +353,9 @@
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)"
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "daily_ev_target_max": "Límite de carga solar (kWh)",
+          "ev_target_soc_max": "Límite de carga solar (SOC %)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard.",
@@ -355,7 +365,19 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "daily_ev_target_max": "El excedente solar carga hasta este valor y luego se detiene. Déjalo al máximo para cargar libremente con el sol.",
+          "ev_target_soc_max": "El excedente solar carga hasta este SOC y luego se detiene. Déjalo al 100 % para cargar libremente con el sol."
+        }
+      },
+      "ev_charger_add": {
+        "data": {
+          "daily_ev_target_max": "Límite de carga solar (kWh)",
+          "ev_target_soc_max": "Límite de carga solar (SOC %)"
+        },
+        "data_description": {
+          "daily_ev_target_max": "El excedente solar carga hasta este valor y luego se detiene. Déjalo al máximo para cargar libremente con el sol.",
+          "ev_target_soc_max": "El excedente solar carga hasta este SOC y luego se detiene. Déjalo al 100 % para cargar libremente con el sol."
         }
       }
     }
@@ -815,6 +837,9 @@
       "vehicle_soc": {
         "name": "SOC Vehículo"
       },
+      "ev_remaining_range": {
+        "name": "Autonomía VE"
+      },
       "best_surplus_window": {
         "name": "Mejor Ventana Excedente"
       },
@@ -937,6 +962,9 @@
       },
       "diag_charger_count": {
         "name": "Cargadores configurados"
+      },
+      "diag_ed_config": {
+        "name": "Configuración del panel de energía"
       }
     },
     "binary_sensor": {
@@ -980,9 +1008,6 @@
       },
       "smart_night_charging": {
         "name": "Reducción Nocturna Previsión"
-      },
-      "ev_limit_surplus": {
-        "name": "Limitar excedente al objetivo"
       }
     },
     "number": {
@@ -1015,9 +1040,6 @@
       },
       "daily_ev_target": {
         "name": "Objetivo VE Diario"
-      },
-      "ev_km_per_kwh": {
-        "name": "Eficiencia VE"
       },
       "public_charging_rate": {
         "name": "Tarifa Carga Pública"
@@ -1105,6 +1127,15 @@
       },
       "ev_target_soc": {
         "name": "EV Target SOC (%)"
+      },
+      "daily_ev_target_max": {
+        "name": "Carga solar máx VE (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "Carga solar máx VE SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Consumo del vehículo (kWh/100km)"
       }
     },
     "select": {
@@ -1118,6 +1149,38 @@
           "soc": "Objetivo SoC %"
         }
       }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "No se pudo generar el panel de SEM. Consulta los registros de Home Assistant para más detalles."
+    },
+    "load_management_not_initialized": {
+      "message": "La gestión de carga aún no está lista. Espera a que la integración termine de iniciarse e inténtalo de nuevo."
+    },
+    "device_registry_not_initialized": {
+      "message": "El registro de dispositivos aún no está listo. Espera a que la integración termine de iniciarse e inténtalo de nuevo."
+    },
+    "mapping_service_required": {
+      "message": "Se requiere un servicio cuando el tipo de control es «servicio». Indica un servicio que llamar."
+    },
+    "mapping_entity_required": {
+      "message": "Se requiere una entidad de control para este tipo de control. Indica una entidad de control."
+    },
+    "device_not_found": {
+      "message": "No se encontró el dispositivo «{device_id}»."
+    },
+    "invalid_device_property": {
+      "message": "Propiedad de dispositivo no válida: «{property}»."
+    },
+    "invalid_deadline_format": {
+      "message": "Formato de fecha límite no válido: «{deadline}». Usa el formato ISO 8601, por ejemplo 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "Cargador de VE no configurado",
+      "description": "No hay sensores del cargador de VE configurados, por lo que las funciones de carga de VE no están disponibles. Añade un sensor de «conectado» o un sensor de potencia de carga en las opciones de la integración para habilitar la carga de VE."
     }
   }
 }

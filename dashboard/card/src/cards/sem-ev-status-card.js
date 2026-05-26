@@ -85,12 +85,16 @@ class SEMEVStatusCard extends SEMLitBase {
                 hass.states[`number.sem_charger_${id}_daily_ev_target`]?.state || ''
             ).join(':');
 
-            // Charge Target controls (#235): target type, value (SOC), and surplus limit
+            // Charge Target range (#245): type, SOC floor, both Max ceilings, capacity
             key += '|' + this._chargers.map(id => [
                 hass.states[`select.sem_charger_${id}_ev_target_type`]?.state || '',
                 hass.states[`number.sem_charger_${id}_target_soc`]?.state || '',
-                hass.states[`switch.sem_charger_${id}_ev_limit_surplus`]?.state || '',
+                hass.states[`number.sem_charger_${id}_daily_ev_target_max`]?.state || '',
+                hass.states[`number.sem_charger_${id}_target_soc_max`]?.state || '',
+                hass.states[`number.sem_charger_${id}_ev_battery_capacity_kwh`]?.state || '',
+                hass.states[`number.sem_charger_${id}_ev_kwh_per_100km`]?.state || '',
             ].join(':')).join('|');
+            key += '|' + (hass.states[`${prefix}ev_remaining_range`]?.state || '');
         }
 
         key += '|' + this._localizeReady + '|' + this._lang;
@@ -171,6 +175,85 @@ class SEMEVStatusCard extends SEMLitBase {
         `;
     }
 
+    /**
+     * Dual-handle charge-target range slider (#245).
+     * Min handle = guaranteed (night/grid) floor; Max handle = solar ceiling.
+     * Right edge (Max == scale max) = "full" (charge freely from sun).
+     */
+    _renderRangeSlider(minEntityId, maxEntityId, isSoc) {
+        const minEnt = this._hass?.states[minEntityId];
+        const maxEnt = this._hass?.states[maxEntityId];
+        const unit = isSoc ? '%' : ' kWh';
+        const fmt = (v) => isSoc ? String(Math.round(v)) : this._fmt(v, v % 1 === 0 ? 0 : 1);
+
+        // Fall back to a single editable value if the Max entity isn't available.
+        if (!minEnt || !maxEnt) {
+            const v = this._entityVal(minEntityId, isSoc ? 80 : 10);
+            return html`<div class="ct-row">
+                <span class="ct-label">${this._t('charge_to')}</span>
+                <span class="ct-ctl"><span class="ct-val clickable"
+                    @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: minEntityId } }))}
+                >${fmt(v)}${unit}</span></span></div>`;
+        }
+
+        const scaleMin = Math.min(parseFloat(minEnt.attributes.min ?? 0), parseFloat(maxEnt.attributes.min ?? 0));
+        const scaleMax = Math.max(parseFloat(minEnt.attributes.max ?? 100), parseFloat(maxEnt.attributes.max ?? 100));
+        const span = (scaleMax - scaleMin) || 1;
+        let minVal = this._entityVal(minEntityId, isSoc ? 80 : 10);
+        let maxVal = this._entityVal(maxEntityId, 100);
+        if (maxVal < minVal) maxVal = minVal;
+        const minPct = ((minVal - scaleMin) / span) * 100;
+        const maxPct = ((maxVal - scaleMin) / span) * 100;
+        const atFull = maxVal >= scaleMax - 1e-6;
+
+        return html`
+            <div class="range-wrap">
+                <div class="range-labels">
+                    <span>${this._t('at_least')} <b style="color:#8DC892">${fmt(minVal)}${unit}</b></span>
+                    <span>${this._t('up_to')} <b style="color:#ff9800">${atFull ? this._t('full') : fmt(maxVal) + unit}</b></span>
+                </div>
+                <div class="range-track">
+                    <div class="range-fill" style="left:${minPct}%;width:${Math.max(0, maxPct - minPct)}%"></div>
+                    <div class="range-handle range-handle-min" style="left:${minPct}%"
+                        @pointerdown=${(e) => this._rangeHandleStart(e, 'min', minEntityId, maxEntityId, scaleMin, scaleMax)}></div>
+                    <div class="range-handle range-handle-max" style="left:${maxPct}%"
+                        @pointerdown=${(e) => this._rangeHandleStart(e, 'max', minEntityId, maxEntityId, scaleMin, scaleMax)}></div>
+                </div>
+            </div>`;
+    }
+
+    _rangeHandleStart(e, which, minEntityId, maxEntityId, scaleMin, scaleMax) {
+        e.stopPropagation();
+        e.preventDefault();
+        const track = e.currentTarget.closest('.range-track');
+        if (!track) return;
+        const entId = which === 'min' ? minEntityId : maxEntityId;
+        const otherId = which === 'min' ? maxEntityId : minEntityId;
+        const ent = this._hass?.states[entId];
+        const step = parseFloat(ent?.attributes?.step) || (scaleMax > 50 ? 1 : 0.5);
+        const span = (scaleMax - scaleMin) || 1;
+        const compute = (clientX) => {
+            const rect = track.getBoundingClientRect();
+            let frac = (clientX - rect.left) / (rect.width || 1);
+            frac = Math.max(0, Math.min(1, frac));
+            let v = Math.round((scaleMin + frac * span) / step) * step;
+            const other = this._entityVal(otherId, which === 'min' ? scaleMax : scaleMin);
+            if (which === 'min') v = Math.min(v, other);
+            else v = Math.max(v, other);
+            return Math.max(scaleMin, Math.min(scaleMax, v));
+        };
+        const onMove = (ev) => { this._freezeEntity(entId, compute(ev.clientX)); this.requestUpdate(); };
+        const onUp = (ev) => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+            window.removeEventListener('pointercancel', onUp);
+            this._setNumber(entId, compute(ev.clientX));
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);  // mobile scroll-interrupt cleanup
+    }
+
     _renderChargerSection(id, idx) {
         const color = CHARGER_COLORS[idx % CHARGER_COLORS.length];
         const power = this._val(`charger_${id}_power`, 0);
@@ -193,6 +276,8 @@ class SEMEVStatusCard extends SEMLitBase {
 
         const startAmps = this._entityVal(`number.sem_charger_${id}_night_initial_current`, 10);
         const minAmps = this._entityVal(`number.sem_charger_${id}_minimum_current`, 6);
+        const capacityKwh = this._entityVal(`number.sem_charger_${id}_ev_battery_capacity_kwh`, 40);
+        const consumption = this._entityVal(`number.sem_charger_${id}_ev_kwh_per_100km`, 18);
 
         const needsCharge = chargeNeeded === 'True' || chargeNeeded === 'true';
         const chargeIcon = needsCharge ? 'mdi:battery-alert' : 'mdi:battery-check';
@@ -201,21 +286,26 @@ class SEMEVStatusCard extends SEMLitBase {
 
         const nightEntityId = `switch.sem_charger_${id}_night_charging`;
 
-        // Charge Target controls (#235): one adaptive value + unit selector + two toggles
+        // Charge Target range (#245): Min (floor/night) + Max (solar ceiling) handles
         const targetTypeId = `select.sem_charger_${id}_ev_target_type`;
         const targetType = this._stateStr(targetTypeId) || 'kwh';
         const ttOptions = this._stateAttrs(targetTypeId).options || ['kwh'];
         const isSoc = targetType === 'soc';
-        const valueEntityId = isSoc
+        const minEntityId = isSoc
             ? `number.sem_charger_${id}_target_soc`
             : `number.sem_charger_${id}_daily_ev_target`;
-        const targetValue = this._entityVal(valueEntityId, isSoc ? 80 : 10);
-        const valueDisplay = isSoc
-            ? String(Math.round(targetValue))
-            : this._fmt(targetValue, targetValue % 1 === 0 ? 0 : 1);
-        const limitEntityId = `switch.sem_charger_${id}_ev_limit_surplus`;
-        const limitOn = this._stateStr(limitEntityId) === 'on';
+        const maxEntityId = isSoc
+            ? `number.sem_charger_${id}_target_soc_max`
+            : `number.sem_charger_${id}_daily_ev_target_max`;
         const nightOnLive = this._stateStr(nightEntityId) === 'on';
+
+        // Range the charge will ADD to reach the Min (guaranteed) target, in km —
+        // updates live as the Min handle moves. Solar may add more, up to Max. (#245)
+        const minTarget = this._entityVal(minEntityId, isSoc ? 80 : 10);
+        const gapKwh = isSoc
+            ? Math.max(0, (minTarget - soc) / 100 * capacityKwh)
+            : Math.max(0, minTarget - dailyEnergy);
+        const chargeKm = consumption > 0 ? Math.round(gapKwh / consumption * 100) : null;
 
         const ctToggle = (on, entityId) => html`
             <span class="ct-sw ${on ? 'on' : 'off'}"
@@ -227,7 +317,7 @@ class SEMEVStatusCard extends SEMLitBase {
             ? html`<select class="ct-unit" .value=${targetType}
                     @click=${(e) => e.stopPropagation()}
                     @change=${(e) => this._selectOption(targetTypeId, e.target.value)}>
-                    ${ttOptions.map(o => html`<option value=${o}>${o === 'soc' ? '%' : 'kWh'}</option>`)}
+                    ${ttOptions.map(o => html`<option value=${o} ?selected=${o === targetType}>${o === 'soc' ? '%' : 'kWh'}</option>`)}
                 </select>`
             : html`<span class="ct-unit-static">${isSoc ? '%' : 'kWh'}</span>`;
 
@@ -282,21 +372,11 @@ class SEMEVStatusCard extends SEMLitBase {
                     <div class="ct-title">
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
                         ${this._t('charge_target')}
+                        ${chargeKm != null && chargeKm > 0 ? html`<span class="ct-range">· +${chargeKm} km</span>` : nothing}
+                        <span class="ct-spacer"></span>
+                        ${unitControl}
                     </div>
-                    <div class="ct-row">
-                        <span class="ct-label">${this._t('charge_to')}</span>
-                        <span class="ct-ctl">
-                            <span
-                                class="ct-val clickable"
-                                @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: valueEntityId } }))}
-                            >${valueDisplay}</span>
-                            ${unitControl}
-                        </span>
-                    </div>
-                    <div class="ct-row">
-                        <span class="ct-label">${this._t('limit_surplus_to_target')}</span>
-                        <span class="ct-ctl">${ctToggle(limitOn, limitEntityId)}</span>
-                    </div>
+                    ${this._renderRangeSlider(minEntityId, maxEntityId, isSoc)}
                     <div class="ct-row">
                         <span class="ct-label">${this._t('night_charging')}</span>
                         <span class="ct-ctl">${ctToggle(nightOnLive, nightEntityId)}</span>
@@ -324,6 +404,26 @@ class SEMEVStatusCard extends SEMLitBase {
                         <ha-icon icon="mdi:speedometer-slow" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
                         <span class="setting-value">${this._fmt(minAmps, 0)}A</span>
                     </div>
+                    <div
+                        class="setting-item clickable"
+                        @click=${() => {
+                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_battery_capacity_kwh` } });
+                            this.dispatchEvent(event);
+                        }}
+                    >
+                        <ha-icon icon="mdi:car-battery" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
+                        <span class="setting-value">${this._fmt(capacityKwh, 0)} kWh</span>
+                    </div>
+                    <div
+                        class="setting-item clickable"
+                        @click=${() => {
+                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_kwh_per_100km` } });
+                            this.dispatchEvent(event);
+                        }}
+                    >
+                        <ha-icon icon="mdi:map-marker-distance" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
+                        <span class="setting-value">${this._fmt(consumption, 0)} kWh/100km</span>
+                    </div>
                 </div>
             </div>
         `;
@@ -343,7 +443,9 @@ class SEMEVStatusCard extends SEMLitBase {
         const strategy = this._valStr('charging_state');
         const curr = semGetCurrency(this._hass);
 
-        const modeEntity = this._hass?.states['select.sem_ev_charging_mode'];
+        // #255: charging mode is per-charger — resolve primary (fallback global).
+        const modeEntity = this._hass?.states[
+            this._pcEntity('select', 'ev_charging_mode', 'select.sem_ev_charging_mode')];
         const mode = modeEntity?.state || 'auto';
         const modeLabels = {
             auto: this._t('mode_auto'),
@@ -726,6 +828,34 @@ class SEMEVStatusCard extends SEMLitBase {
                 display: flex; align-items: center; gap: 5px;
                 margin-bottom: 4px;
             }
+            .ct-range { color: #5BC8D8; font-weight: 600; text-transform: none; letter-spacing: 0; }
+            .ct-spacer { margin-left: auto; }
+            /* Dual-handle charge-target range slider (#245) */
+            .range-wrap { padding: 6px 8px 10px; }
+            .range-labels {
+                display: flex; justify-content: space-between;
+                font-size: 12px; color: var(--primary-text-color, #e0e0e0);
+                margin-bottom: 10px;
+            }
+            .range-labels b { font-variant-numeric: tabular-nums; }
+            .range-track {
+                position: relative; height: 6px; border-radius: 3px;
+                background: rgba(255,255,255,0.14); margin: 6px 9px;
+                touch-action: none;
+            }
+            .range-fill {
+                position: absolute; top: 0; height: 100%; border-radius: 3px;
+                background: linear-gradient(90deg, #8DC892, #ff9800);
+            }
+            .range-handle {
+                position: absolute; top: 50%; width: 18px; height: 18px;
+                border-radius: 50%; transform: translate(-50%, -50%);
+                background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+                cursor: grab; touch-action: none;
+            }
+            .range-handle:active { cursor: grabbing; }
+            .range-handle-min { border: 3px solid #8DC892; }
+            .range-handle-max { border: 3px solid #ff9800; }
             .ct-row {
                 display: flex; align-items: center; min-height: 32px;
             }
@@ -741,10 +871,16 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-val.clickable { cursor: pointer; }
             .ct-unit {
                 appearance: none; -webkit-appearance: none;
-                background: var(--secondary-background-color, rgba(255,255,255,0.07));
+                background-color: var(--secondary-background-color, rgba(255,255,255,0.07));
+                /* explicit caret — appearance:none drops the native arrow, which made
+                   this look like a static label rather than a kWh/% toggle (#245) */
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bbbbbb' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 3px center;
+                background-size: 14px;
                 color: var(--primary-text-color, #e0e0e0);
                 border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
-                border-radius: 8px; padding: 4px 8px;
+                border-radius: 8px; padding: 4px 20px 4px 8px;
                 font-size: 12px; font-weight: 600; cursor: pointer;
             }
             .ct-unit-static {
@@ -767,10 +903,11 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-sw.on .ct-knob { left: 18px; }
 
             @media (max-width: 400px) {
-                .hero { flex-direction: column; align-items: center; text-align: center; }
+                /* Match the Battery tab exactly: stack the hero, keep the base
+                   align-items:center so the metrics sit as a content-width block with
+                   label-left / value-right rows (not stretched edge-to-edge). */
+                .hero { flex-direction: column; gap: 12px; }
                 .ev-icon-area { width: 80px; height: 80px; }
-                .metric-row { justify-content: center; gap: 8px; }
-                .metrics-col { align-items: center; }
             }
         `;
     }

@@ -25,7 +25,19 @@
    - 3-phase chargers: ~4140 W (6 A × 3 × 230 V)
 
    The `min_solar_power` setting (default 500 W in the Optimization Settings step) is the surplus *floor* below which SEM won't even attempt to start the charger — keep it well **below** the hardware minimum so SEM has headroom to ramp up before the cliff.
-5. For night charging: check that `switch.sem_night_charging` is enabled and it's within the night window
+5. For night charging: it is **opt-in (off by default)** — turn on `switch.sem_night_charging` (and the per-charger `…_night_charging` switch in a multi-charger setup), and make sure it's within the night window
+
+---
+
+## Car charged overnight when I only wanted solar surplus
+
+**Cause:** Grid-assisted **night charging** is enabled, with a charge target (a daily kWh target or a target SOC %) the car hadn't reached, so SEM topped it up from the grid overnight. On fresh installs this is now off by default, but it stays enabled on upgraded systems that already had it on, and a multi-charger setup tracks an enable switch *per charger*.
+
+**Fix:** To make a charger surplus-only, either:
+1. Turn **off** that charger's `…_night_charging` switch (or the global `switch.sem_night_charging` to disable night charging for all chargers), **or**
+2. Set that charger's **Night Target to 0** (kWh mode) / its **Target SOC to its current level** (SOC mode).
+
+With the floor at zero and/or night charging off, the charger only draws solar surplus. *(#256)*
 
 ---
 
@@ -231,6 +243,27 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 **GoodWe sign conventions:** SEM auto-detects the sign convention by comparing power sensors against energy counters. GoodWe typically uses positive=export for grid and positive=charge for battery — SEM handles this automatically.
 
 **GoodWe + Easee charger:** If using an Easee charger with GoodWe, the Easee power sensor is disabled by default in HA. Enable it at **Settings > Devices > Easee > Entities** before configuring SEM.
+
+---
+
+## Most values show 0 (SolaX and other energy-only setups)
+
+**Symptom:** SEM installs, but the majority of entities (solar/grid/battery power and everything derived from them) stay at **0**. Reported for SolaX via the *SolaX Inverter Modbus* (`solax-modbus`) integration (#250).
+
+**Cause:** SEM reads real-time power from the HA Energy Dashboard's **power** links (the `stat_rate` field added in HA 2025.12). Those are configured separately from the energy (kWh) sensors and are often missing — many integrations, including SolaX, only get their *energy* sensors wired into the dashboard. With no power link, SEM has no live power to read.
+
+**Fix (automatic):** As of v1.5.13, SEM **auto-derives** the missing power sensor from the same device as the configured energy sensor — e.g. for SolaX it finds `sensor.solax_pv_power_total` (solar), `sensor.solax_measured_power` (grid), and `sensor.solax_battery_power_charge` (battery) on its own. The SolaX SOC sensor (named *Battery Capacity*, `sensor.solax_battery_capacity`) is now detected via its `device_class: battery` + `%` unit. Just update and restart — no manual steps needed in most cases.
+
+**If values are still 0:** add the power sensors to the Energy Dashboard manually:
+1. Go to **Settings > Dashboards > Energy**.
+2. Open each source (Solar / Grid / Battery) and, alongside the energy sensor, add its **power** sensor (W or kW, `state_class: measurement`).
+3. Restart Home Assistant.
+
+**Confirm what SEM resolved (quickest):** on the dashboard **System** tab, expand **Diagnostics** and press **Copy diagnostics**. The copied text includes a `Config:` line, e.g. `solar:pwr=derived,energy=ok | grid:pwr=stat_rate,imp=ok,exp=ok | batt:pwr=none,chg=ok,dis=ok`. `pwr=none` or `energy=MISSING` shows exactly which source isn't wired up; `pwr=stat_rate` means HA provided the power link, `pwr=derived` means SEM recovered it from the device. Paste this when reporting an issue.
+
+**Full detail:** download diagnostics at **Settings > Devices & Services > Solar Energy Management > ⋮ > Download diagnostics** and check `energy_dashboard.power_sensors` / `power_source` / `energy_sensors` for the exact entity IDs.
+
+**Sign convention:** SolaX uses positive=import for grid (Pattern D) — SEM auto-detects and corrects this from the energy counters; no template sensor needed.
 
 ---
 

@@ -117,7 +117,11 @@
           "ev_total_energy_sensor": "EV Total Energy Counter (optional)",
           "vehicle_soc_entity": "Vehicle Battery SOC sensor (optional)",
           "ev_battery_capacity_kwh": "EV battery capacity (kWh)",
-          "ev_target_soc": "EV target SOC (%)"
+          "ev_target_soc": "EV target SOC (%)",
+          "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
+          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)",
+          "vehicle_range_entity": "Senzor dojezdu vozidla",
+          "ev_kwh_per_100km": "Spotřeba vozidla (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -128,7 +132,11 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
+          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce.",
+          "ev_kwh_per_100km": "Slouží k odhadu dojezdu, pokud není nakonfigurován senzor dojezdu.",
+          "vehicle_range_entity": "Volitelný skutečný senzor dojezdu. Jinak se dojezd odhaduje z SOC × kapacita × účinnost."
         }
       },
       "settings": {
@@ -345,7 +353,9 @@
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
           "ev_surplus_priority": "Priorita přebytku (1=nejvyšší)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)"
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
+          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)"
         },
         "data_description": {
           "charger_name": "Friendly name for this charger shown in the dashboard.",
@@ -355,7 +365,19 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
+          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce."
+        }
+      },
+      "ev_charger_add": {
+        "data": {
+          "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
+          "ev_target_soc_max": "Limit solárního nabíjení (SOC %)"
+        },
+        "data_description": {
+          "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
+          "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce."
         }
       }
     }
@@ -815,6 +837,9 @@
       "vehicle_soc": {
         "name": "Vehicle SOC"
       },
+      "ev_remaining_range": {
+        "name": "Dojezd EV"
+      },
       "best_surplus_window": {
         "name": "Best Surplus Window"
       },
@@ -937,6 +962,9 @@
       },
       "diag_charger_count": {
         "name": "Nakonfigurované nabíječky"
+      },
+      "diag_ed_config": {
+        "name": "Konfigurace energetického panelu"
       }
     },
     "binary_sensor": {
@@ -980,9 +1008,6 @@
       },
       "smart_night_charging": {
         "name": "Forecast Night Reduction"
-      },
-      "ev_limit_surplus": {
-        "name": "Omezit přebytek na cíl"
       }
     },
     "number": {
@@ -1015,9 +1040,6 @@
       },
       "daily_ev_target": {
         "name": "Daily EV Target"
-      },
-      "ev_km_per_kwh": {
-        "name": "EV Efficiency"
       },
       "public_charging_rate": {
         "name": "Public Charging Rate"
@@ -1105,6 +1127,15 @@
       },
       "ev_target_soc": {
         "name": "EV Target SOC (%)"
+      },
+      "daily_ev_target_max": {
+        "name": "Max. solární nabíjení EV (kWh)"
+      },
+      "ev_target_soc_max": {
+        "name": "Max. solární nabíjení EV SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Spotřeba vozidla (kWh/100km)"
       }
     },
     "select": {
@@ -1118,6 +1149,38 @@
           "soc": "Cíl SoC %"
         }
       }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "Nepodařilo se vygenerovat řídicí panel SEM. Podrobnosti najdete v protokolech Home Assistant."
+    },
+    "load_management_not_initialized": {
+      "message": "Správa zátěže ještě není připravena. Počkejte, až se integrace plně spustí, a zkuste to znovu."
+    },
+    "device_registry_not_initialized": {
+      "message": "Registr zařízení ještě není připraven. Počkejte, až se integrace plně spustí, a zkuste to znovu."
+    },
+    "mapping_service_required": {
+      "message": "Když je typ ovládání „služba“, je vyžadována služba. Zadejte službu, která se má volat."
+    },
+    "mapping_entity_required": {
+      "message": "Pro tento typ ovládání je vyžadována ovládací entita. Zadejte ovládací entitu."
+    },
+    "device_not_found": {
+      "message": "Zařízení „{device_id}“ nebylo nalezeno."
+    },
+    "invalid_device_property": {
+      "message": "Neplatná vlastnost zařízení: „{property}“."
+    },
+    "invalid_deadline_format": {
+      "message": "Neplatný formát termínu: „{deadline}“. Použijte formát ISO 8601, například 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "Nabíječka EV není nakonfigurována",
+      "description": "Nejsou nakonfigurovány žádné senzory nabíječky EV, takže funkce nabíjení EV nejsou dostupné. Chcete-li povolit nabíjení EV, přidejte v možnostech integrace senzor „připojeno“ nebo senzor nabíjecího výkonu."
     }
   }
 }

@@ -147,14 +147,14 @@ Once installed, SEM runs without manual intervention:
 - **Clouds roll in** — EV charging reduces or pauses, resumes when surplus returns
 - **Battery reaches priority SOC** — surplus is redirected to EV charging
 - **Evening** — solar charging stops; system monitors overnight
-- **Night charging** — if enabled, grid-charges the EV to your daily target
+- **Night charging** — *opt-in (off by default)*; when enabled, grid-charges the EV to your daily-target floor
 - **Smart forecast** — if tomorrow is sunny, tonight's grid charging is reduced or skipped
 
 The three switches that matter most:
 
 | Switch | Default | Purpose |
 |--------|---------|---------|
-| `switch.sem_night_charging` | ON | Grid-charges EV overnight to daily target |
+| `switch.sem_night_charging` | OFF | Opt-in: grid-charges EV overnight to the daily-target floor (off by default → solar surplus only) |
 | `switch.sem_observer_mode` | OFF | Monitor-only, no hardware control |
 | `switch.sem_smart_night_charging` | OFF | Reduces overnight charging when a good solar forecast exists |
 

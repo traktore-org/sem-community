@@ -125,6 +125,24 @@ export class SEMLitBase extends LitElement {
         return (e && e.state !== 'unavailable' && e.state !== 'unknown') ? e.state : '';
     }
 
+    // Resolve the primary charger's per-charger entity id for a setting suffix,
+    // falling back to the legacy global id (#255 — global EV setting entities were
+    // removed; per-charger is canonical). e.g. _pcEntity('number', 'daily_ev_target',
+    // 'number.sem_daily_ev_target').
+    _pcEntity(domain, suffix, globalFallback) {
+        const st = this._hass?.states || {};
+        const re = new RegExp(`^${domain}\\.sem_charger_.+_${suffix}$`);
+        let match = Object.keys(st).filter(id => re.test(id));
+        // `_${suffix}$` over-matches when one key is a tail of a longer one:
+        // `night_charging` also matches `smart_night_charging`. Drop the longer key so a
+        // request for the plain switch can never resolve to the smart one (only clash).
+        if (suffix === 'night_charging') {
+            match = match.filter(id => !id.endsWith('_smart_night_charging'));
+        }
+        match.sort();
+        return match.length ? match[0] : globalFallback;
+    }
+
     _stateAttrs(entityId) {
         return this._hass?.states[entityId]?.attributes || {};
     }

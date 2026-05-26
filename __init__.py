@@ -158,8 +158,106 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 4:
+        try:
+            # v3 → v4 (#255): per-charger entities are becoming the source of truth, so
+            # the duplicate GLOBAL EV settings will be removed. Seed each charger's
+            # per-charger value from the matching global where it's unset, so removing the
+            # global later never silently resets a user's configured value. Behaviour-
+            # neutral today (per-charger already falls back to the global at runtime).
+            _SEED_KEYS = (
+                "daily_ev_target", "daily_ev_target_max",
+                "ev_target_soc", "ev_target_soc_max",
+                "ev_min_current", "ev_night_initial_current",
+                "ev_kwh_per_100km", "ev_target_type",
+                # #255 Phase 4 — also converted to per-charger
+                "ev_charging_mode", "ev_phases",
+            )
+            new_data = {**entry.data}
+            new_options = {**entry.options}
+            full = {**new_data, **new_options}
+            chargers = new_options.get("ev_chargers", new_data.get("ev_chargers"))
+            if isinstance(chargers, list):
+                seeded = []
+                for c in chargers:
+                    c = dict(c) if isinstance(c, dict) else c
+                    if isinstance(c, dict):
+                        for key in _SEED_KEYS:
+                            gval = full.get(key)
+                            # ev_target_type carries a legacy alias (ev_target_mode, #235)
+                            if key == "ev_target_type" and gval is None:
+                                gval = full.get("ev_target_mode")
+                            if c.get(key) is None and gval is not None:
+                                c[key] = gval
+                    seeded.append(c)
+                new_options["ev_chargers"] = seeded
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=4, minor_version=1,
+            )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v4 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
+
+
+def _migrate_limit_surplus_to_max(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
+    """Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
+
+    Users who had limit-surplus ON get Max set to their current target so surplus
+    still stops there; the legacy key is then dropped. Idempotent — only acts while
+    the key is present. Default-OFF users (the norm) get no change: Max stays unset
+    → full → "charge freely from sun", exactly as before.
+    """
+    opts = {**entry.options}
+    data = entry.data
+    changed = False
+
+    # Global scope (the switch persisted to options, but read data too for safety).
+    # `entry.data` is read-only here, so a key living only in data can't be removed;
+    # skip it once Max is already populated to avoid re-running (and log spam) forever.
+    if "ev_limit_surplus" in opts or (
+        "ev_limit_surplus" in data
+        and opts.get("daily_ev_target_max") is None
+        and opts.get("ev_target_soc_max") is None
+    ):
+        if bool(opts.get("ev_limit_surplus", data.get("ev_limit_surplus"))):
+            cur_kwh = opts.get("daily_ev_target", data.get("daily_ev_target"))
+            if cur_kwh is not None and opts.get("daily_ev_target_max") is None:
+                opts["daily_ev_target_max"] = cur_kwh
+            cur_soc = opts.get("ev_target_soc", data.get("ev_target_soc"))
+            if cur_soc is not None and opts.get("ev_target_soc_max") is None:
+                opts["ev_target_soc_max"] = cur_soc
+        opts.pop("ev_limit_surplus", None)
+        changed = True
+
+    # Per-charger scope.
+    chargers = opts.get("ev_chargers")
+    if isinstance(chargers, list):
+        new_chargers = []
+        per_changed = False
+        for c in chargers:
+            if isinstance(c, dict) and "ev_limit_surplus" in c:
+                c = dict(c)
+                if bool(c.pop("ev_limit_surplus")):
+                    if c.get("daily_ev_target") is not None and c.get("daily_ev_target_max") is None:
+                        c["daily_ev_target_max"] = c["daily_ev_target"]
+                    if c.get("ev_target_soc") is not None and c.get("ev_target_soc_max") is None:
+                        c["ev_target_soc_max"] = c["ev_target_soc"]
+                per_changed = True
+            new_chargers.append(c)
+        if per_changed:
+            opts["ev_chargers"] = new_chargers
+            changed = True
+
+    if changed:
+        hass.config_entries.async_update_entry(entry, options=opts)
+        _LOGGER.info("Folded ev_limit_surplus into the Max charge ceiling (#245)")
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
@@ -179,6 +277,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
     # Initialize domain data storage (kept for backward compatibility with services)
     hass.data.setdefault(DOMAIN, {})
+
+    # Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
+    # Idempotent; only acts while the legacy key is present.
+    _migrate_limit_surplus_to_max(hass, entry)
 
     # Merge entry.data and entry.options for complete configuration
     full_config = {**entry.data, **entry.options}
@@ -587,15 +689,24 @@ def _schedule_post_startup_tasks(
 async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle options update.
 
-    Skips reload when the change came from a number entity stepper (runtime
-    config tweak).  Those updates set _skip_options_reload on the coordinator
-    so the in-memory config is already current and a full integration reload
-    (which destroys all 255 entities for ~1 s) is unnecessary.
+    Skips reload when the change came from a number/switch entity (runtime
+    config tweak): those updates already mirrored the value into the
+    coordinator's in-memory config, so a full reload (which destroys all
+    entities for ~1 s) is wasteful.
+
+    The skip is keyed to the *exact* options payload the entity persisted
+    (``_skip_options_reload`` holds that snapshot), and is consumed once. A
+    bare boolean used to leak — a stale flag from an earlier stepper could
+    swallow a later options-FLOW save (e.g. ``vehicle_soc_entity``), which then
+    only took effect after a full restart (#245 review #1). Comparing against
+    the snapshot makes a flow change (different options) always reload.
     """
     coordinator = entry.runtime_data if hasattr(entry, "runtime_data") else None
-    if coordinator and getattr(coordinator, "_skip_options_reload", False):
-        coordinator._skip_options_reload = False
-        _LOGGER.debug("Options update from number entity — skipping reload")
+    snapshot = getattr(coordinator, "_skip_options_reload", None) if coordinator else None
+    if coordinator is not None:
+        coordinator._skip_options_reload = None  # always consume — no leak
+    if isinstance(snapshot, dict) and dict(entry.options) == snapshot:
+        _LOGGER.debug("Options update from runtime tweak — skipping reload")
         return
 
     _LOGGER.info("Config options updated, reloading integration")

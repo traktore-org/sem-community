@@ -19,6 +19,7 @@ from homeassistant.const import (
     UnitOfPower,
     UnitOfEnergy,
     UnitOfElectricCurrent,
+    UnitOfLength,
     UnitOfTemperature,
     UnitOfTime,
     PERCENTAGE,
@@ -1282,6 +1283,16 @@ SENSOR_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=1,
     ),
+    # Estimated driving range (#245): from a real range entity if configured,
+    # else derived from vehicle SOC × capacity ÷ consumption (ev_kwh_per_100km).
+    SensorEntityDescription(
+        key="ev_remaining_range",
+        device_class=SensorDeviceClass.DISTANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfLength.KILOMETERS,
+        suggested_display_precision=0,
+        icon="mdi:map-marker-distance",
+    ),
 
     # ============================================================================
     # EV INTELLIGENCE (#106)
@@ -1386,6 +1397,10 @@ SENSOR_TYPES = [
     ),
     SensorEntityDescription(
         key="diag_sensors_unavailable",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="diag_ed_config",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
@@ -1928,6 +1943,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         if self.entity_description.key == "surplus_total_w":
             attrs["schedule_surplus_hours"] = self.coordinator.data.get("schedule_surplus_hours", [])
             attrs["schedule_ev_hours"] = self.coordinator.data.get("schedule_ev_hours", [])
+
+        # Energy Dashboard mapping (#250) — attach full entity IDs so the System
+        # card's Copy diagnostics can list the actual sensors, not just presence.
+        if self.entity_description.key == "diag_ed_config":
+            try:
+                detail = self.coordinator.get_ed_config_detail()
+                if detail:
+                    attrs["energy_dashboard"] = detail
+            except Exception:
+                pass
 
         # Battery charge scheduler (#6) — attach schedule to state sensor
         if self.entity_description.key == "battery_scheduler_state":

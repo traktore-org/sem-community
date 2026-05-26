@@ -178,7 +178,21 @@ class TestPerChargerSwitches:
         )
         assert switch._charger_id == "ev_charger_1"
         assert switch.entity_id == "switch.sem_charger_ev_charger_1_night_charging"
-        assert switch.is_on is True  # default ON
+        assert switch.is_on is False  # opt-in (#256): default OFF, won't night-charge until enabled
+
+    @pytest.mark.asyncio
+    async def test_per_charger_switch_existing_state_preserved(self):
+        """Existing per-charger switches keep their state on upgrade: a restored 'on'
+        wins over the new default-OFF, so multi-charger users aren't silently changed (#256)."""
+        from homeassistant.helpers.update_coordinator import CoordinatorEntity
+        coord = _mock_coordinator(TWO_CHARGERS)
+        desc = SwitchEntityDescription(key="charger_ev_charger_1_night_charging")
+        switch = SEMPerChargerSwitch(coord, desc, "test", "ev_charger_1", "Wallbox")
+        assert switch.is_on is False  # new default
+        switch.async_get_last_state = AsyncMock(return_value=MagicMock(state="on"))
+        with patch.object(CoordinatorEntity, "async_added_to_hass", AsyncMock()):
+            await switch.async_added_to_hass()
+        assert switch.is_on is True  # prior state restored, not overwritten
 
     def test_per_charger_switch_unique_ids(self):
         """Each per-charger switch should have a unique ID."""
@@ -196,12 +210,14 @@ class TestPerChargerSwitches:
         coord.async_request_refresh = AsyncMock()
         desc = SwitchEntityDescription(key="charger_ev_charger_night_charging")
         switch = SEMPerChargerSwitch(coord, desc, "test", "ev_charger", "KEBA")
+        switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
 
+        assert switch.is_on is False  # opt-in default (#256)
+        await switch.async_turn_on()
         assert switch.is_on is True
         await switch.async_turn_off()
         assert switch.is_on is False
-        await switch.async_turn_on()
-        assert switch.is_on is True
+        assert switch.async_write_ha_state.call_count == 2  # both toggles pushed state (#259)
 
     def test_per_charger_switch_available(self):
         """Per-charger switch should be unavailable when coordinator fails."""

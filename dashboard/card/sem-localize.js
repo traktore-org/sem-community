@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-25T19:18:03.783810+00:00
+// Generated: 2026-05-25T21:51:31.668570+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -767,7 +767,6 @@ const _semTranslations = {
     "on": "On",
     "charge_target": "Charge Target",
     "charge_to": "Charge to",
-    "limit_surplus_to_target": "Limit surplus to target",
     "mode_service": "Service call",
     "mode_input_boolean": "Input boolean",
     "svc_service": "Service (e.g. keba.set_current)",
@@ -776,7 +775,10 @@ const _semTranslations = {
     "svc_restore_value": "Value when restoring",
     "mapping_entity_required": "Please choose a control entity.",
     "mapping_service_required": "Please enter a service (e.g. keba.set_current).",
-    "clear_mapping": "Reset to auto-detect"
+    "clear_mapping": "Reset to auto-detect",
+    "at_least": "At least",
+    "up_to": "Up to",
+    "full": "Full"
   },
   "de": {
     "charging": "Laden",
@@ -1544,7 +1546,6 @@ const _semTranslations = {
     "on": "An",
     "charge_target": "Ladeziel",
     "charge_to": "Laden auf",
-    "limit_surplus_to_target": "Überschuss auf Ziel begrenzen",
     "mode_service": "Dienst-Aufruf",
     "mode_input_boolean": "Input-Boolean",
     "svc_service": "Dienst (z. B. keba.set_current)",
@@ -1553,7 +1554,10 @@ const _semTranslations = {
     "svc_restore_value": "Wert beim Wiederherstellen",
     "mapping_entity_required": "Bitte eine Steuer-Entität wählen.",
     "mapping_service_required": "Bitte einen Dienst angeben (z. B. keba.set_current).",
-    "clear_mapping": "Auf Auto-Erkennung zurücksetzen"
+    "clear_mapping": "Auf Auto-Erkennung zurücksetzen",
+    "at_least": "Mindestens",
+    "up_to": "Bis zu",
+    "full": "Voll"
   },
   "fr": {
     "charging": "En charge",
@@ -2321,7 +2325,6 @@ const _semTranslations = {
     "on": "Marche",
     "charge_target": "Objectif de charge",
     "charge_to": "Charger à",
-    "limit_surplus_to_target": "Limiter le surplus à l'objectif",
     "mode_service": "Appel de service",
     "mode_input_boolean": "Booléen d'entrée",
     "svc_service": "Service (p. ex. keba.set_current)",
@@ -2330,7 +2333,10 @@ const _semTranslations = {
     "svc_restore_value": "Valeur lors de la restauration",
     "mapping_entity_required": "Veuillez choisir une entité de contrôle.",
     "mapping_service_required": "Veuillez saisir un service (p. ex. keba.set_current).",
-    "clear_mapping": "Réinitialiser en auto-détection"
+    "clear_mapping": "Réinitialiser en auto-détection",
+    "at_least": "Au moins",
+    "up_to": "Jusqu'à",
+    "full": "Plein"
   },
   "es": {
     "charging": "Cargando",
@@ -3098,7 +3104,6 @@ const _semTranslations = {
     "on": "Enc.",
     "charge_target": "Objetivo de carga",
     "charge_to": "Cargar a",
-    "limit_surplus_to_target": "Limitar excedente al objetivo",
     "mode_service": "Llamada de servicio",
     "mode_input_boolean": "Booleano de entrada",
     "svc_service": "Servicio (p. ej. keba.set_current)",
@@ -3107,7 +3112,10 @@ const _semTranslations = {
     "svc_restore_value": "Valor al restaurar",
     "mapping_entity_required": "Elija una entidad de control.",
     "mapping_service_required": "Introduzca un servicio (p. ej. keba.set_current).",
-    "clear_mapping": "Restablecer a autodetección"
+    "clear_mapping": "Restablecer a autodetección",
+    "at_least": "Al menos",
+    "up_to": "Hasta",
+    "full": "Completo"
   },
   "it": {
     "charging": "In carica",
@@ -3875,7 +3883,6 @@ const _semTranslations = {
     "on": "Acc.",
     "charge_target": "Obiettivo di carica",
     "charge_to": "Carica a",
-    "limit_surplus_to_target": "Limita surplus all'obiettivo",
     "mode_service": "Chiamata di servizio",
     "mode_input_boolean": "Input boolean",
     "svc_service": "Servizio (es. keba.set_current)",
@@ -3884,7 +3891,10 @@ const _semTranslations = {
     "svc_restore_value": "Valore durante il ripristino",
     "mapping_entity_required": "Seleziona un'entità di controllo.",
     "mapping_service_required": "Inserisci un servizio (es. keba.set_current).",
-    "clear_mapping": "Ripristina rilevamento automatico"
+    "clear_mapping": "Ripristina rilevamento automatico",
+    "at_least": "Almeno",
+    "up_to": "Fino a",
+    "full": "Pieno"
   },
   "nl": {
     "charging": "Laden",
@@ -4652,7 +4662,6 @@ const _semTranslations = {
     "on": "Aan",
     "charge_target": "Laaddoel",
     "charge_to": "Laden tot",
-    "limit_surplus_to_target": "Overschot beperken tot doel",
     "mode_service": "Service-aanroep",
     "mode_input_boolean": "Input-boolean",
     "svc_service": "Service (bijv. keba.set_current)",
@@ -4661,7 +4670,10 @@ const _semTranslations = {
     "svc_restore_value": "Waarde bij herstellen",
     "mapping_entity_required": "Kies een besturingsentiteit.",
     "mapping_service_required": "Voer een service in (bijv. keba.set_current).",
-    "clear_mapping": "Terug naar autodetectie"
+    "clear_mapping": "Terug naar autodetectie",
+    "at_least": "Ten minste",
+    "up_to": "Tot",
+    "full": "Vol"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5429,7 +5441,6 @@ const _semTranslations = {
     "on": "Zap.",
     "charge_target": "Cíl nabíjení",
     "charge_to": "Nabít na",
-    "limit_surplus_to_target": "Omezit přebytek na cíl",
     "mode_service": "Volání služby",
     "mode_input_boolean": "Vstupní logická hodnota",
     "svc_service": "Služba (např. keba.set_current)",
@@ -5438,7 +5449,10 @@ const _semTranslations = {
     "svc_restore_value": "Hodnota při obnovení",
     "mapping_entity_required": "Vyberte řídicí entitu.",
     "mapping_service_required": "Zadejte službu (např. keba.set_current).",
-    "clear_mapping": "Obnovit automatickou detekci"
+    "clear_mapping": "Obnovit automatickou detekci",
+    "at_least": "Alespoň",
+    "up_to": "Až do",
+    "full": "Plně"
   },
   "da": {
     "charging": "Oplader",
@@ -6206,7 +6220,6 @@ const _semTranslations = {
     "on": "Til",
     "charge_target": "Opladningsmål",
     "charge_to": "Oplad til",
-    "limit_surplus_to_target": "Begræns overskud til mål",
     "mode_service": "Tjenestekald",
     "mode_input_boolean": "Input boolean",
     "svc_service": "Tjeneste (f.eks. keba.set_current)",
@@ -6215,7 +6228,10 @@ const _semTranslations = {
     "svc_restore_value": "Værdi ved gendannelse",
     "mapping_entity_required": "Vælg en styringsentitet.",
     "mapping_service_required": "Angiv en tjeneste (f.eks. keba.set_current).",
-    "clear_mapping": "Nulstil til autodetektion"
+    "clear_mapping": "Nulstil til autodetektion",
+    "at_least": "Mindst",
+    "up_to": "Op til",
+    "full": "Fuld"
   },
   "fi": {
     "charging": "Lataus",
@@ -6983,7 +6999,6 @@ const _semTranslations = {
     "on": "Pääl.",
     "charge_target": "Lataustavoite",
     "charge_to": "Lataa tasolle",
-    "limit_surplus_to_target": "Rajoita ylijäämä tavoitteeseen",
     "mode_service": "Palvelukutsu",
     "mode_input_boolean": "Input boolean",
     "svc_service": "Palvelu (esim. keba.set_current)",
@@ -6992,7 +7007,10 @@ const _semTranslations = {
     "svc_restore_value": "Arvo palautettaessa",
     "mapping_entity_required": "Valitse ohjausentiteetti.",
     "mapping_service_required": "Anna palvelu (esim. keba.set_current).",
-    "clear_mapping": "Palauta automaattitunnistus"
+    "clear_mapping": "Palauta automaattitunnistus",
+    "at_least": "Vähintään",
+    "up_to": "Enintään",
+    "full": "Täysi"
   },
   "hu": {
     "charging": "Töltés",
@@ -7760,7 +7778,6 @@ const _semTranslations = {
     "on": "Be",
     "charge_target": "Töltési cél",
     "charge_to": "Töltés eddig",
-    "limit_surplus_to_target": "Többlet korlátozása a célig",
     "mode_service": "Szolgáltatáshívás",
     "mode_input_boolean": "Bemeneti logikai érték",
     "svc_service": "Szolgáltatás (pl. keba.set_current)",
@@ -7769,7 +7786,10 @@ const _semTranslations = {
     "svc_restore_value": "Érték visszaállításkor",
     "mapping_entity_required": "Válasszon vezérlő entitást.",
     "mapping_service_required": "Adjon meg egy szolgáltatást (pl. keba.set_current).",
-    "clear_mapping": "Visszaállítás automatikus felismerésre"
+    "clear_mapping": "Visszaállítás automatikus felismerésre",
+    "at_least": "Legalább",
+    "up_to": "Legfeljebb",
+    "full": "Tele"
   },
   "no": {
     "charging": "Lader",
@@ -8537,7 +8557,6 @@ const _semTranslations = {
     "on": "På",
     "charge_target": "Lademål",
     "charge_to": "Lad til",
-    "limit_surplus_to_target": "Begrens overskudd til mål",
     "mode_service": "Tjenestekall",
     "mode_input_boolean": "Input boolean",
     "svc_service": "Tjeneste (f.eks. keba.set_current)",
@@ -8546,7 +8565,10 @@ const _semTranslations = {
     "svc_restore_value": "Verdi ved gjenoppretting",
     "mapping_entity_required": "Velg en styringsentitet.",
     "mapping_service_required": "Angi en tjeneste (f.eks. keba.set_current).",
-    "clear_mapping": "Tilbakestill til autodeteksjon"
+    "clear_mapping": "Tilbakestill til autodeteksjon",
+    "at_least": "Minst",
+    "up_to": "Opptil",
+    "full": "Full"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9314,7 +9336,6 @@ const _semTranslations = {
     "on": "Wł.",
     "charge_target": "Cel ładowania",
     "charge_to": "Ładuj do",
-    "limit_surplus_to_target": "Ogranicz nadwyżkę do celu",
     "mode_service": "Wywołanie usługi",
     "mode_input_boolean": "Wejście logiczne",
     "svc_service": "Usługa (np. keba.set_current)",
@@ -9323,7 +9344,10 @@ const _semTranslations = {
     "svc_restore_value": "Wartość przy przywracaniu",
     "mapping_entity_required": "Wybierz encję sterującą.",
     "mapping_service_required": "Podaj usługę (np. keba.set_current).",
-    "clear_mapping": "Przywróć autowykrywanie"
+    "clear_mapping": "Przywróć autowykrywanie",
+    "at_least": "Co najmniej",
+    "up_to": "Do",
+    "full": "Pełny"
   },
   "pt": {
     "charging": "A carregar",
@@ -10091,7 +10115,6 @@ const _semTranslations = {
     "on": "Lig.",
     "charge_target": "Meta de carga",
     "charge_to": "Carregar até",
-    "limit_surplus_to_target": "Limitar excedente ao alvo",
     "mode_service": "Chamada de serviço",
     "mode_input_boolean": "Booleano de entrada",
     "svc_service": "Serviço (ex. keba.set_current)",
@@ -10100,7 +10123,10 @@ const _semTranslations = {
     "svc_restore_value": "Valor ao restaurar",
     "mapping_entity_required": "Escolha uma entidade de controlo.",
     "mapping_service_required": "Introduza um serviço (ex. keba.set_current).",
-    "clear_mapping": "Repor para deteção automática"
+    "clear_mapping": "Repor para deteção automática",
+    "at_least": "Pelo menos",
+    "up_to": "Até",
+    "full": "Cheio"
   },
   "ro": {
     "charging": "Încărcare",
@@ -10868,7 +10894,6 @@ const _semTranslations = {
     "on": "Porn.",
     "charge_target": "Țintă de încărcare",
     "charge_to": "Încarcă până la",
-    "limit_surplus_to_target": "Limitează surplusul la țintă",
     "mode_service": "Apel de serviciu",
     "mode_input_boolean": "Input boolean",
     "svc_service": "Serviciu (ex. keba.set_current)",
@@ -10877,7 +10902,10 @@ const _semTranslations = {
     "svc_restore_value": "Valoare la restaurare",
     "mapping_entity_required": "Alegeți o entitate de control.",
     "mapping_service_required": "Introduceți un serviciu (ex. keba.set_current).",
-    "clear_mapping": "Resetare la detectare automată"
+    "clear_mapping": "Resetare la detectare automată",
+    "at_least": "Cel puțin",
+    "up_to": "Până la",
+    "full": "Plin"
   },
   "sv": {
     "charging": "Laddar",
@@ -11645,7 +11673,6 @@ const _semTranslations = {
     "on": "På",
     "charge_target": "Laddningsmål",
     "charge_to": "Ladda till",
-    "limit_surplus_to_target": "Begränsa överskott till mål",
     "mode_service": "Tjänsteanrop",
     "mode_input_boolean": "Input boolean",
     "svc_service": "Tjänst (t.ex. keba.set_current)",
@@ -11654,7 +11681,10 @@ const _semTranslations = {
     "svc_restore_value": "Värde vid återställning",
     "mapping_entity_required": "Välj en styrentitet.",
     "mapping_service_required": "Ange en tjänst (t.ex. keba.set_current).",
-    "clear_mapping": "Återställ till autodetektering"
+    "clear_mapping": "Återställ till autodetektering",
+    "at_least": "Minst",
+    "up_to": "Upp till",
+    "full": "Full"
   }
 };
 

@@ -272,13 +272,14 @@ The options flow is organized into these pages:
 
 | Setting | Default | What it does and when to change it |
 |---------|---------|-------------------------------------|
-| Daily EV target (kWh) | 10 kWh | How much energy SEM tries to add to your EV overnight. The default covers roughly 50–60 km of range. Change it to match your typical daily driving distance (about 5–6 kWh per 30 km in an average EV). When a vehicle SOC sensor is configured, SEM uses the SOC target instead. |
-| EV target SOC (%) | 80% | Desired charge level for the EV battery (50–100%). Only used when a vehicle SOC sensor is configured. Set to 80% for battery longevity, or 100% before a long trip. Per-charger configurable. |
+| Daily EV target (kWh) — **Min** | 10 kWh | The *guaranteed* overnight amount: night/grid charging tops up to at least this. The default covers roughly 50–60 km of range. When a vehicle SOC sensor is configured, the SOC target is used instead. |
+| EV solar max (kWh) — **Max** | 100 kWh | The *solar ceiling*: surplus charges up to this, then stops. Defaults to full (charge freely from sun); lower it to cap surplus. Must be ≥ Min. |
+| EV target SOC (%) — **Min** | 80% | Guaranteed SOC (50–100%), reached via night/grid. Only used when a vehicle SOC sensor is configured. Per-charger configurable. |
+| EV solar max SOC (%) — **Max** | 100% | Solar SOC ceiling. Defaults to 100% (charge to full from sun); set to e.g. 80% to cap solar charging for battery longevity while still guaranteeing the Min via grid. |
 | EV battery capacity (kWh) | 40 kWh | Your EV's battery size (10–120 kWh). Used to convert SOC percentage to kWh remaining. Per-charger configurable. |
-| Limit surplus at target | Off | When on, surplus (solar) charging also stops at the target. When off, surplus charging is unlimited — free solar energy is never wasted. Per-charger configurable. |
 | Min solar power to start EV charging (W) | 500 W | How much surplus must appear before solar EV charging begins. The default prevents SEM from starting the charger for tiny, transient surplus spikes. Raise it if your surplus is noisy and the charger starts and stops too often. |
 | Max grid import for Min+PV mode (W) | 1380 W | In Min+PV mode the EV runs at minimum current and uses grid to fill the gap. This cap limits how much grid power is used. Lower it to keep Min+PV fully solar; raise it if you want the charger to run continuously even when solar is weak. |
-| Night charging | On | When on, SEM charges the EV from the grid overnight (during the cheap-rate window) to reach the daily target. Turn it off if you only want solar charging or manage overnight charging yourself. |
+| Night charging | **Off** | **Opt-in** (#256). When on, SEM charges the EV from the grid overnight (during the cheap-rate window) to reach the daily-target floor. Off by default so a fresh install charges on **solar surplus only** — turn it on if you want grid-assisted overnight charging. Existing installs keep their previous setting on upgrade. |
 | Smart night charging | Off | When on, SEM evaluates whether tonight's grid charge is actually needed. If tomorrow's solar forecast is strong and the battery is reasonably full, SEM reduces or skips the overnight charge. Enable after SEM has been running for a week and you have a calibrated forecast integration. |
 
 ### Battery SOC Zone settings
@@ -472,9 +473,10 @@ EV charger card — one place, per charger, no config-flow round-trips:
     using the vehicle's live SOC sensor. The unit selector
     (`select.sem_charger_<id>_ev_target_type`) only offers **%** when that charger has a
     **vehicle SOC entity** configured — otherwise it shows kWh only.
-- **Limit surplus to target** (`switch.sem_charger_<id>_ev_limit_surplus`): when on,
-  solar-surplus charging stops once the target is reached. When off, surplus charging
-  continues as long as surplus is available.
+- **Solar max** (`number.sem_charger_<id>_daily_ev_target_max` / `_target_soc_max`): the
+  Max handle of the range slider — solar-surplus charging stops once this ceiling is
+  reached. Defaults to full (charge freely from sun); lower it to cap surplus. (Replaces
+  the former *Limit surplus* switch.)
 - **Night charging** (`switch.sem_charger_<id>_night_charging`): when on, off-peak/night
   charging tops the car up to the target.
 

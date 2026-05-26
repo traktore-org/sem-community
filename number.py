@@ -156,33 +156,11 @@ NUMBER_TYPES = [
         native_step=100,
         mode=NumberMode.SLIDER,
     ),
-    # EV Charging
-    NumberEntityDescription(
-        key="daily_ev_target",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        native_min_value=0,
-        native_max_value=100,
-        native_step=0.5,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="ev_target_soc",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=50,
-        native_max_value=100,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-        icon="mdi:battery-charging-80",
-    ),
-    NumberEntityDescription(
-        key="ev_km_per_kwh",
-        native_unit_of_measurement="km/kWh",
-        native_min_value=3,
-        native_max_value=10,
-        native_step=0.5,
-        mode=NumberMode.BOX,
-        entity_category=EntityCategory.CONFIG,
-    ),
+    # EV charge-target / consumption settings (daily_ev_target[_max], ev_target_soc[_max],
+    # ev_kwh_per_100km) are PER-CHARGER only (#255) — global duplicates removed; see the
+    # per-charger descriptions in async_setup_entry. Stale registry entities are
+    # auto-removed by _cleanup_stale_entities; values were seeded per-charger by the v3→v4
+    # migration so nothing resets.
     NumberEntityDescription(
         key="public_charging_rate",
         native_unit_of_measurement="CHF/kWh",
@@ -200,23 +178,8 @@ NUMBER_TYPES = [
         native_step=500,
         mode=NumberMode.SLIDER,
     ),
-    # EV Charging Parameters
-    NumberEntityDescription(
-        key="ev_night_initial_current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        native_min_value=6,
-        native_max_value=32,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="ev_minimum_current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        native_min_value=6,
-        native_max_value=16,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
+    # EV Charging Parameters — global night_initial_current + minimum_current removed as
+    # per-charger duplicates (#255); ev_stall_cooldown stays a global tuning constant.
     NumberEntityDescription(
         key="ev_stall_cooldown",
         native_unit_of_measurement=UnitOfTime.SECONDS,
@@ -225,13 +188,8 @@ NUMBER_TYPES = [
         native_step=10,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="ev_phases",
-        native_min_value=1,
-        native_max_value=3,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
+    # ev_phases is PER-CHARGER only (#255) — it's a charger hardware property. Global
+    # entity removed (seeded per-charger by the v3→v4 migration; stale entity auto-removed).
     # Tariff rates (previously only in OptionsFlow)
     NumberEntityDescription(
         key="electricity_import_rate",
@@ -412,6 +370,61 @@ async def async_setup_entry(
                     mode=NumberMode.SLIDER,
                     icon="mdi:battery-charging-80",
                 ), "ev_target_soc", full_config.get("ev_target_soc", 80)),
+                # Solar ceiling (Max) = the Max handle of the EV-card range slider;
+                # defaults to full (charge freely from sun) until the user caps it (#245).
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_daily_ev_target_max",
+                    name=f"{cname} Solar Max",
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    native_min_value=0, native_max_value=100, native_step=0.5,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:solar-power-variant",
+                ), "daily_ev_target_max",
+                    charger_cfg.get("daily_ev_target_max", 100)),
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_target_soc_max",
+                    name=f"{cname} Solar Max SOC",
+                    native_unit_of_measurement=PERCENTAGE,
+                    native_min_value=50, native_max_value=100, native_step=5,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:battery-charging-high",
+                ), "ev_target_soc_max",
+                    charger_cfg.get("ev_target_soc_max", 100)),
+                # Car battery capacity (kWh) — feeds the SOC/range math; editable
+                # from the EV card so users don't have to open the options flow (#245).
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_ev_battery_capacity_kwh",
+                    name=f"{cname} Battery Capacity",
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    native_min_value=10, native_max_value=120, native_step=1,
+                    mode=NumberMode.BOX,
+                    icon="mdi:car-battery",
+                    entity_category=EntityCategory.CONFIG,
+                ), "ev_battery_capacity_kwh",
+                    charger_cfg.get("ev_battery_capacity_kwh",
+                                    full_config.get("ev_battery_capacity_kwh", 40))),
+                # Per-car consumption (kWh/100km) — feeds the driving-range estimate.
+                # Individual per car, hence per charger (one car per charger). (#245)
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_ev_kwh_per_100km",
+                    name=f"{cname} Consumption",
+                    native_unit_of_measurement="kWh/100km",
+                    native_min_value=8, native_max_value=50, native_step=0.5,
+                    mode=NumberMode.BOX,
+                    icon="mdi:map-marker-distance",
+                    entity_category=EntityCategory.CONFIG,
+                ), "ev_kwh_per_100km",
+                    charger_cfg.get("ev_kwh_per_100km",
+                                    full_config.get("ev_kwh_per_100km", 18))),
+                # Per-charger phase count (#255) — a charger hardware property (1 or 3).
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_ev_phases",
+                    name=f"{cname} Phases",
+                    native_min_value=1, native_max_value=3, native_step=1,
+                    mode=NumberMode.SLIDER,
+                    entity_category=EntityCategory.CONFIG,
+                ), "ev_phases",
+                    charger_cfg.get("ev_phases", full_config.get("ev_phases", 3))),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(
@@ -489,7 +502,9 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
     _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.CONFIG
 
-    # All number entities are enabled by default
+    # Solar-ceiling (Max) entities are enabled: they are the Max handle of the
+    # dual-handle range slider on the EV card (#245), and default to full
+    # (100% / 100 kWh) = "charge freely from sun" until the user caps surplus.
     DISABLED_BY_DEFAULT: set = set()
 
     def __init__(
@@ -579,6 +594,9 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
             "maximum_grid_import": DEFAULT_MAX_GRID_IMPORT,
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
+            # Ceiling defaults to full (charge freely from sun until capped) (#245)
+            "daily_ev_target_max": 100,
+            "ev_target_soc_max": 100,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
             "regulation_offset": DEFAULT_REGULATION_OFFSET,
             "demand_charge_rate": DEFAULT_DEMAND_CHARGE_RATE,
@@ -594,7 +612,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "ev_minimum_current": DEFAULT_EV_MIN_CURRENT,
             "ev_stall_cooldown": DEFAULT_EV_STALL_COOLDOWN,
             "ev_phases": 3,
-            "ev_km_per_kwh": 5.5,
+            "ev_kwh_per_100km": 18,
             "public_charging_rate": 0.55,
             "electricity_import_rate": 0.3387,
             "electricity_export_rate": 0.075,
@@ -637,9 +655,10 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         # async_update_entry fires the update listener which normally calls
         # async_reload — destroying all 255 entities for ~1s and causing card
         # flashes. The _skip_options_reload flag tells the listener to skip.
-        self.coordinator._skip_options_reload = True
         new_options = {**self._entry.options}
         new_options[config_key] = value
+        # Skip reload only for THIS exact payload (snapshot) — see async_update_options.
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(
             self._entry,
             options=new_options
@@ -696,7 +715,9 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
 
         # Keep coordinator's in-memory config in sync immediately
         new_options = {**self._entry.options}
-        ev_chargers = list(new_options.get("ev_chargers", []))
+        # Copy each charger dict — in-place mutation leaves entry.options unchanged,
+        # so async_update_entry skips persisting and the value reverts on restart (#245).
+        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
         for charger in ev_chargers:
             if charger.get("id") == self._charger_id:
                 charger[self._config_key] = value
@@ -706,8 +727,8 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):
             self.coordinator.config.update({**self._entry.data, **new_options})
 
-        # Persist without triggering integration reload
-        self.coordinator._skip_options_reload = True
+        # Persist without triggering integration reload (snapshot-keyed skip)
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(
             self._entry,
             options=new_options,

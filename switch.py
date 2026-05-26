@@ -38,9 +38,9 @@ SWITCH_TYPES = [
     ),
 ]
 
-# Global switches whose state is persisted into the config entry options and
-# read back by the coordinator via self.config (#235).
-CONFIG_SWITCH_KEYS = ["ev_limit_surplus"]
+# (ev_limit_surplus (#235) was folded into the optional Max ceiling (#245); its
+# global config-switch mechanism + entity are gone. Old entities are auto-removed
+# by the stale-entity cleanup below since they're no longer in valid_keys.)
 
 
 async def async_setup_entry(
@@ -49,24 +49,49 @@ async def async_setup_entry(
     """Set up SEM Solar Energy Management switches."""
     coordinator: SEMCoordinator = entry.runtime_data
 
-    switches = [
-        SEMSolarSwitch(coordinator, description, entry.entry_id)
-        for description in SWITCH_TYPES
-    ]
-
-    # Global config-backed switches (e.g. ev_limit_surplus) — persisted to options (#235)
-    for key in CONFIG_SWITCH_KEYS:
-        switches.append(SEMConfigSwitch(
-            coordinator,
-            SwitchEntityDescription(key=key, entity_category=EntityCategory.CONFIG),
-            entry,
-        ))
-
-    # Per-charger night charging switches (#193)
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
+    has_chargers = len(ev_chargers) >= 1
+
+    # #255: night charging is PER-CHARGER when chargers exist — drop the duplicate
+    # GLOBAL master switch. Keep it only for legacy / no-charger installs, where the
+    # night gate falls back to it.
+    active_global = [
+        d for d in SWITCH_TYPES
+        if not (d.key in ("night_charging", "smart_night_charging") and has_chargers)
+    ]
+    switches = [
+        SEMSolarSwitch(coordinator, description, entry.entry_id)
+        for description in active_global
+    ]
+
+    # One-time reconciliation (#255): a user who disabled night charging via the GLOBAL
+    # switch (leaving a per-charger switch on) must NOT be silently re-enabled now that
+    # the gate moves to per-charger. If the (removed) global switch was last OFF, force
+    # the per-charger night switches OFF this once. Marker lives in entry.data; the
+    # snapshot guard keeps async_update_options from reloading (options are unchanged).
+    night_force_off = False
+    if has_chargers and not entry.data.get("_night_gate_reconciled"):
+        try:
+            from homeassistant.helpers.restore_state import async_get as _restore_get
+            # last_states maps entity_id → StoredState; .state is a State, .state.state a str.
+            stored = _restore_get(hass).last_states.get("switch.sem_night_charging")
+            if stored is not None and getattr(stored.state, "state", None) == "off":
+                night_force_off = True
+                _LOGGER.info(
+                    "#255 reconciliation: global night charging was OFF — forcing "
+                    "per-charger night switches OFF (one-time)"
+                )
+            coordinator._skip_options_reload = dict(entry.options)
+            hass.config_entries.async_update_entry(
+                entry, data={**entry.data, "_night_gate_reconciled": True}
+            )
+        except Exception as e:
+            _LOGGER.debug("Night-gate reconciliation skipped: %s", e)
+
+    # Per-charger night charging switches (#193)
     per_charger_keys = set()
-    if len(ev_chargers) >= 1:
+    if has_chargers:
         for charger_cfg in ev_chargers:
             cid = charger_cfg.get("id", "ev_charger")
             cname = charger_cfg.get("name", "EV Charger")
@@ -77,17 +102,16 @@ async def async_setup_entry(
             per_charger_keys.add(desc.key)
             switches.append(SEMPerChargerSwitch(
                 coordinator, desc, entry.entry_id, cid, cname,
+                force_off=night_force_off,
             ))
-
-            # Per-charger "limit surplus to target" switch (#235) — persisted to config
-            limit_desc = SwitchEntityDescription(
-                key=f"charger_{cid}_ev_limit_surplus",
+            # Per-charger smart (forecast-aware) night charging (#255) — was global.
+            smart_desc = SwitchEntityDescription(
+                key=f"charger_{cid}_smart_night_charging",
                 entity_category=EntityCategory.CONFIG,
             )
-            per_charger_keys.add(limit_desc.key)
-            switches.append(SEMPerChargerConfigSwitch(
-                coordinator, limit_desc, entry, cid, "ev_limit_surplus",
-                charger_cfg.get("ev_limit_surplus", False),
+            per_charger_keys.add(smart_desc.key)
+            switches.append(SEMPerChargerSwitch(
+                coordinator, smart_desc, entry.entry_id, cid, cname,
             ))
         _LOGGER.info(
             "Created per-charger switches for %d charger(s)",
@@ -114,7 +138,7 @@ async def async_setup_entry(
     # Clean up stale switch entities from previous versions
     try:
         registry = er.async_get(hass)
-        valid_keys = {d.key for d in SWITCH_TYPES} | per_charger_keys | set(CONFIG_SWITCH_KEYS)
+        valid_keys = {d.key for d in active_global} | per_charger_keys
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != "switch":
                 continue
@@ -167,7 +191,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self.entity_id = f"switch.sem_{description.key}"
 
         if description.key == "night_charging":
-            self._is_on = True  # Default to ON (will be restored from last state if available)
+            # Opt-in (#256): default OFF so a fresh install charges on solar surplus only
+            # and never grid-charges the car overnight unasked. RestoreEntity below
+            # preserves existing users — they keep whatever state they already had.
+            self._is_on = False
         elif description.key == "observer_mode":
             self._is_on = coordinator.config_entry.options.get("observer_mode", False)
         else:
@@ -194,6 +221,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         """Turn the switch on."""
         _LOGGER.info("Turning on %s", self.entity_description.key)
         self._is_on = True
+        # Push the new state immediately (#259): otherwise the UI only reflects the
+        # toggle on the next coordinator push, and a swallowed refresh error below
+        # would silently leave HA showing the old state.
+        self.async_write_ha_state()
 
         try:
             await self.coordinator.async_request_refresh()
@@ -204,6 +235,7 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         """Turn the switch off."""
         _LOGGER.info("Turning off %s", self.entity_description.key)
         self._is_on = False
+        self.async_write_ha_state()  # reflect immediately (#259)
 
         try:
             await self.coordinator.async_request_refresh()
@@ -223,6 +255,7 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         entry_id: str,
         charger_id: str,
         charger_name: str,
+        force_off: bool = False,
     ) -> None:
         """Initialize per-charger switch."""
         super().__init__(coordinator)
@@ -233,7 +266,13 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self._attr_device_info = coordinator.device_info
         self.entity_id = f"switch.sem_{description.key}"
         self._charger_id = charger_id
-        self._is_on = True  # Default: night charging enabled
+        # One-time #255 reconciliation: force OFF over the restored state when the removed
+        # global night switch was last OFF (so a globally-disabled user isn't re-enabled).
+        self._force_off = force_off
+        # Opt-in (#256): default OFF. A newly-added charger won't night-charge until
+        # the user enables it, so it can't silently inherit a grid top-up. Existing
+        # chargers keep their state via RestoreEntity in async_added_to_hass below.
+        self._is_on = False
 
     async def async_added_to_hass(self) -> None:
         """Restore previous state."""
@@ -241,6 +280,8 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._is_on = last_state.state == "on"
+        if self._force_off:
+            self._is_on = False  # #255 one-time reconciliation (global was OFF)
 
     @property
     def available(self) -> bool:
@@ -255,143 +296,12 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on night charging for this charger."""
         self._is_on = True
+        self.async_write_ha_state()  # reflect immediately (#259)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off night charging for this charger."""
         self._is_on = False
+        self.async_write_ha_state()  # reflect immediately (#259)
         await self.coordinator.async_request_refresh()
 
-
-class SEMConfigSwitch(CoordinatorEntity, SwitchEntity):
-    """Global switch whose on/off state is persisted to the config entry options (#235).
-
-    Used for settings the coordinator reads from ``self.config`` (e.g.
-    ``ev_limit_surplus``) so toggling the switch takes effect without a reload.
-    """
-
-    _attr_has_entity_name = True
-
-    def __init__(
-        self,
-        coordinator: SEMCoordinator,
-        description: SwitchEntityDescription,
-        entry: SEMConfigEntry,
-    ) -> None:
-        """Initialize the config-backed switch."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        self._entry = entry
-        self._config_key = description.key
-        self._attr_unique_id = f"sem_{description.key}"
-        self._attr_translation_key = description.key
-        self._attr_suggested_object_id = f"sem_{description.key}"
-        self._attr_device_info = coordinator.device_info
-        self.entity_id = f"switch.sem_{description.key}"
-        self._is_on = bool(coordinator.config.get(description.key, False))
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.last_update_success
-
-    @property
-    def is_on(self) -> bool:
-        """Return true if switch is on."""
-        return self._is_on
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable the setting."""
-        await self._persist(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable the setting."""
-        await self._persist(False)
-
-    async def _persist(self, value: bool) -> None:
-        self._is_on = value
-        new_options = {**self._entry.options}
-        new_options[self._config_key] = value
-        # Keep the coordinator's in-memory config in sync immediately
-        if isinstance(getattr(self.coordinator, "config", None), dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-        # Persist without triggering an integration reload
-        self.coordinator._skip_options_reload = True
-        self.hass.config_entries.async_update_entry(self._entry, options=new_options)
-        self.async_write_ha_state()
-        _LOGGER.info("Updated %s to %s", self._config_key, value)
-
-
-class SEMPerChargerConfigSwitch(CoordinatorEntity, SwitchEntity):
-    """Per-charger switch persisted into the charger's config dict (#235).
-
-    Mirrors ``SEMPerChargerNumber`` persistence so the coordinator picks up the
-    value from ``self.config['ev_chargers']`` on the next cycle.
-    """
-
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.CONFIG
-
-    def __init__(
-        self,
-        coordinator: SEMCoordinator,
-        description: SwitchEntityDescription,
-        entry: SEMConfigEntry,
-        charger_id: str,
-        config_key: str,
-        initial_on: bool,
-    ) -> None:
-        """Initialize per-charger config switch."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        self._entry = entry
-        self._charger_id = charger_id
-        self._config_key = config_key
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        # Reuse the shared ev_limit_surplus name so per-charger switches read nicely
-        self._attr_translation_key = config_key
-        self._attr_suggested_object_id = f"sem_{description.key}"
-        self.entity_id = f"switch.sem_{description.key}"
-        self._is_on = bool(initial_on)
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.last_update_success
-
-    @property
-    def device_info(self):
-        """Return device information."""
-        return self.coordinator.device_info
-
-    @property
-    def is_on(self) -> bool:
-        """Return true if switch is on."""
-        return self._is_on
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable surplus limit for this charger."""
-        await self._persist(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable surplus limit for this charger."""
-        await self._persist(False)
-
-    async def _persist(self, value: bool) -> None:
-        self._is_on = value
-        new_options = {**self._entry.options}
-        ev_chargers = list(new_options.get("ev_chargers", []))
-        for charger in ev_chargers:
-            if charger.get("id") == self._charger_id:
-                charger[self._config_key] = value
-                break
-        new_options["ev_chargers"] = ev_chargers
-        if isinstance(getattr(self.coordinator, "config", None), dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-        self.coordinator._skip_options_reload = True
-        self.hass.config_entries.async_update_entry(self._entry, options=new_options)
-        self.async_write_ha_state()
-        _LOGGER.info(
-            "Updated per-charger %s.%s to %s",
-            self._charger_id, self._config_key, value,
-        )

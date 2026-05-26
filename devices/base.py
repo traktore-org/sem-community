@@ -52,7 +52,8 @@ class DeviceControlMode(Enum):
                       surplus drops. Also includes peak protection (shedding).
 
     Stopping surplus charging at a target (kWh or SOC %) is handled separately
-    by the per-charger ``ev_limit_surplus`` switch (#235), not by a control mode.
+    by the per-charger Max ceiling (``*_max``) of the charge-target range (#245),
+    not by a control mode.
     """
     OFF = "off"
     PEAK_ONLY = "peak_only"

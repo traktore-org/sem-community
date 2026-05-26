@@ -87,6 +87,9 @@ class SensorReader:
             "warned": False,
         }
         self._uses_split_grid: bool = False
+        # Warn-once guard for the discovery-*exception* path (#259); distinct from the
+        # dict "warned" key (which guards "no sensor found"). Reset on cache invalidate.
+        self._split_grid_discovery_warned: bool = False
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -543,7 +546,14 @@ class SensorReader:
                 _LOGGER.debug("No split grid power sensors found")
 
         except Exception as e:
-            _LOGGER.debug("Split grid power discovery failed: %s", e)
+            # Surface once at warning (#259): a discovery failure leaves split-meter
+            # setups (Growatt, P1/DSMR) reading 0 grid power with no signal. Warn on
+            # the first failure, then drop to debug so we don't spam every cycle.
+            if not self._split_grid_discovery_warned:
+                _LOGGER.warning("Split grid power discovery failed: %s", e)
+                self._split_grid_discovery_warned = True
+            else:
+                _LOGGER.debug("Split grid power discovery failed: %s", e)
             import_power = None
             export_power = None
             confidence = None
@@ -562,6 +572,9 @@ class SensorReader:
             "confidence": None,
             "warned": self._split_grid_discovery.get("warned", False),
         }
+        # Re-allow the discovery-exception warning after a rediscovery (#259) — circumstances
+        # have changed (e.g. a new sensor appeared), so a fresh failure is worth surfacing.
+        self._split_grid_discovery_warned = False
 
     def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
         """Get device_id for an entity from the entity registry."""
@@ -571,7 +584,8 @@ class SensorReader:
             registry = er.async_get(self.hass)
             entry = registry.async_get(entity_id)
             return entry.device_id if entry else None
-        except Exception:
+        except Exception as e:
+            _LOGGER.debug("Device lookup failed for %s: %s (#259)", entity_id, e)
             return None
 
     def _read_battery_soc_average(self, battery_power_entities: list) -> float:
@@ -804,9 +818,19 @@ class SensorReader:
                         continue
                     eid = entity_entry.entity_id
                     eid_lower = eid.lower()
-                    # Check if entity name contains SOC keywords
-                    if any(kw in eid_lower for kw in soc_keywords):
-                        state = self.hass.states.get(eid)
+                    state = self.hass.states.get(eid)
+                    # Accept by name keyword OR by the canonical SOC signature:
+                    # device_class "battery" + unit "%". The latter catches
+                    # integrations that name SOC unconventionally — e.g. SolaX
+                    # solax-modbus calls it "Battery Capacity"
+                    # (sensor.*_battery_capacity), which no SOC keyword matches (#250).
+                    by_keyword = any(kw in eid_lower for kw in soc_keywords)
+                    by_signature = False
+                    if state is not None:
+                        dc = state.attributes.get("device_class")
+                        unit = (state.attributes.get("unit_of_measurement") or "").strip()
+                        by_signature = dc == "battery" and unit == "%"
+                    if by_keyword or by_signature:
                         if state and state.state not in ("unknown", "unavailable", None):
                             try:
                                 val = float(state.state)
@@ -819,7 +843,7 @@ class SensorReader:
                                         self._battery_soc_logged = True
                                     return eid
                             except (ValueError, TypeError):
-                                pass
+                                _LOGGER.debug("Battery SOC candidate %s not numeric: %r (#259)", eid, state.state)
         except Exception as e:
             _LOGGER.debug("Device registry SOC lookup failed: %s", e)
 
@@ -839,7 +863,7 @@ class SensorReader:
                             self._battery_soc_logged = True
                         return candidate
                 except (ValueError, TypeError):
-                    pass
+                    _LOGGER.debug("Battery SOC candidate %s not numeric: %r (#259)", candidate, state.state)
         return None
 
     def auto_detect_battery_capacity_kwh(self) -> Optional[float]:
@@ -876,11 +900,17 @@ class SensorReader:
                 continue
             if state.state in ("unknown", "unavailable", None):
                 continue
+            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            dc = state.attributes.get("device_class")
+            # Skip SOC sensors: "Battery Capacity" matches the keyword above but on
+            # SolaX (and others) it is the SOC percentage, not rated energy. A 80%
+            # SOC would otherwise be misread as 80 kWh of rated capacity (#250).
+            if dc == "battery" or unit in ("%", "percent"):
+                continue
             try:
                 value = float(state.state)
                 if value <= 0:
                     continue
-                unit = (state.attributes.get("unit_of_measurement") or "").lower()
                 if unit == "wh" or value > 500:
                     value /= 1000  # Wh → kWh
                 if 1 <= value <= 200:  # Sanity: 1-200 kWh

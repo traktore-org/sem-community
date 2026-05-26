@@ -55,8 +55,9 @@ class ChargingContext:
         charging_strategy_reason: Human-readable explanation of strategy choice.
         night_target_kwh: Night charging target (kWh), may be forecast-adjusted if enabled.
             For night mode, remaining is derived from this field directly.
-        soc_limit_active: When True, stop ALL charging including surplus (#215).
-            Set when ev_limit_surplus toggle is on AND target is reached.
+        soc_limit_active: When True, stop surplus (solar) charging (#245).
+            Set when the Max ceiling is reached (remaining-to-Max <= 0.1). Max
+            defaults to full, so by default this only fires at car-full.
             Only gates the solar state machine — night mode uses night_target_kwh directly.
     """
     # EV status
@@ -168,9 +169,9 @@ class ChargingStateMachine:
             _LOGGER.info(f"Solar: Paused - battery too low ({ctx.battery_soc:.0f}%)")
             return ChargingState.SOLAR_PAUSE_LOW_BATTERY
 
-        # Target limit — stop surplus when user opts in via ev_limit_surplus (#215).
-        # Night mode does NOT need this gate — it stops via night_target_kwh <= 0.1,
-        # which is already SOC-aware through _calculate_remaining_need().
+        # Surplus ceiling — stop solar charging once the Max ceiling is reached (#245).
+        # Night mode does NOT need this gate — it stops via night_target_kwh <= 0.1
+        # (the Min floor), already SOC-aware through _calculate_remaining_need().
         if ctx.soc_limit_active:
             return ChargingState.SOLAR_TARGET_REACHED
 
@@ -228,6 +229,21 @@ class ChargingStateMachine:
             return ChargingState.SOLAR_CHARGING_ALLOWED
         return ChargingState.SOLAR_WAITING_BATTERY_PRIORITY
 
+    def _any_night_charging_enabled(self) -> bool:
+        """True if night charging is enabled for at least one charger (#255).
+
+        Per-charger switches are canonical. With no chargers configured (legacy), fall
+        back to the removed-elsewhere global ``switch.sem_night_charging``.
+        """
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers:
+            return self.hass.states.is_state("switch.sem_night_charging", "on")
+        for c in chargers:
+            cid = c.get("id", "ev_charger") if isinstance(c, dict) else "ev_charger"
+            if self.hass.states.is_state(f"switch.sem_charger_{cid}_night_charging", "on"):
+                return True
+        return False
+
     def _night_state_machine(self, ctx: ChargingContext) -> str:
         """Night charging state machine.
 
@@ -237,9 +253,11 @@ class ChargingStateMachine:
         if not ctx.ev_connected:
             return ChargingState.NIGHT_IDLE
 
-        # Check if night charging is enabled
-        night_charging_entity = "switch.sem_night_charging"
-        if not self.hass.states.is_state(night_charging_entity, "on"):
+        # Check if night charging is enabled (#255: per-charger is canonical — night
+        # charging is on when ANY charger's per-charger switch is on; the per-charger
+        # control loop then skips the chargers that are off. Falls back to the global
+        # master switch only for legacy / no-charger installs.)
+        if not self._any_night_charging_enabled():
             return ChargingState.NIGHT_DISABLED
 
         remaining_needed = ctx.night_target_kwh

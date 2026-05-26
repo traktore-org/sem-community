@@ -31,11 +31,27 @@ class TestSEMSwitches:
         assert keys == ["night_charging", "observer_mode", "smart_night_charging"]
 
     @pytest.mark.asyncio
-    async def test_night_charging_default_on(self, mock_coordinator):
-        """Test night_charging defaults to ON."""
+    async def test_night_charging_default_off(self, mock_coordinator):
+        """night_charging defaults to OFF — opt-in (#256). A fresh install charges on
+        solar surplus only; existing users keep their state via RestoreEntity."""
         description = create_switch_description("night_charging")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
-        assert switch._is_on is True
+        assert switch._is_on is False
+
+    @pytest.mark.asyncio
+    async def test_night_charging_existing_state_preserved(self, mock_coordinator):
+        """Existing users are preserved: a restored 'on' state wins over the new
+        default-OFF, so upgrading doesn't silently stop anyone's night charging (#256)."""
+        from unittest.mock import patch
+        from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+        description = create_switch_description("night_charging")
+        switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
+        assert switch._is_on is False  # new default
+        switch.async_get_last_state = AsyncMock(return_value=MagicMock(state="on"))
+        with patch.object(CoordinatorEntity, "async_added_to_hass", AsyncMock()):
+            await switch.async_added_to_hass()
+        assert switch._is_on is True  # prior state restored, not overwritten by the default
 
     @pytest.mark.asyncio
     async def test_observer_mode_default_from_config(self, mock_coordinator):
@@ -67,10 +83,12 @@ class TestSEMSwitches:
         description = create_switch_description("night_charging")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
         switch._is_on = False
+        switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
 
         await switch.async_turn_on()
 
         assert switch._is_on is True
+        switch.async_write_ha_state.assert_called()  # state pushed immediately (#259)
         mock_coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
@@ -79,10 +97,12 @@ class TestSEMSwitches:
         description = create_switch_description("night_charging")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
         switch._is_on = True
+        switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
 
         await switch.async_turn_off()
 
         assert switch._is_on is False
+        switch.async_write_ha_state.assert_called()  # state pushed immediately (#259)
         mock_coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
@@ -122,6 +142,7 @@ class TestSEMSwitches:
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
 
         mock_coordinator.async_request_refresh = AsyncMock(side_effect=Exception("Refresh error"))
+        switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
 
         # Should not raise
         await switch.async_turn_on()

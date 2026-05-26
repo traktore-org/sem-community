@@ -36,14 +36,9 @@ EV_TARGET_TYPES = {
 }
 
 SELECT_TYPES = [
-    SelectEntityDescription(
-        key="ev_charging_mode",
-        options=list(EV_CHARGING_MODES.keys()),
-    ),
-    SelectEntityDescription(
-        key="ev_target_type",
-        options=list(EV_TARGET_TYPES.keys()),
-    ),
+    # ev_charging_mode and ev_target_type are PER-CHARGER only (#255) — the global
+    # duplicates were removed (seeded per-charger by the v3→v4 migration). The old
+    # global entities are removed from the registry below. No global selects remain.
 ]
 
 
@@ -60,48 +55,55 @@ async def async_setup_entry(
     """Set up SEM select entities."""
     coordinator: SEMCoordinator = entry.runtime_data
 
-    # Migrate the renamed global select entity (#235): ev_target_mode → ev_target_type.
-    # Idempotent registry rename so existing installs don't leave an orphaned entity.
-    # (Config values are read with a back-compat fallback, so no data migration is needed.)
+    # Remove the now-removed GLOBAL target-type select (#255): ev_target_type is
+    # per-charger only. Drop both the renamed global entity and its legacy
+    # ev_target_mode predecessor (#235) from the registry. Per-charger values were
+    # seeded from the global by the v3→v4 migration, so no data is lost.
     try:
         registry = er.async_get(hass)
-        old_uid = f"{entry.entry_id}_ev_target_mode"
-        new_uid = f"{entry.entry_id}_ev_target_type"
-        old_eid = registry.async_get_entity_id("select", DOMAIN, old_uid)
-        if old_eid:
-            if registry.async_get_entity_id("select", DOMAIN, new_uid) is None:
-                new_eid = "select.sem_ev_target_type"
-                update = {"new_unique_id": new_uid}
-                if registry.async_get(new_eid) is None:
-                    update["new_entity_id"] = new_eid
-                registry.async_update_entity(old_eid, **update)
-                _LOGGER.info("Migrated select entity %s → %s (%s)", old_uid, new_uid, old_eid)
-            else:
-                # New entity already exists — drop the orphaned old one.
-                registry.async_remove(old_eid)
-                _LOGGER.info("Removed orphaned select entity %s", old_eid)
+        for uid in (
+            f"{entry.entry_id}_ev_target_type", f"{entry.entry_id}_ev_target_mode",
+            f"{entry.entry_id}_ev_charging_mode",
+        ):
+            eid = registry.async_get_entity_id("select", DOMAIN, uid)
+            if eid:
+                registry.async_remove(eid)
+                _LOGGER.info("Removed global select %s (now per-charger, #255)", eid)
     except Exception as e:
-        _LOGGER.debug("ev_target_type select migration skipped: %s", e)
+        _LOGGER.debug("Global select removal skipped: %s", e)
 
     entities = [
         SEMSelectEntity(coordinator, entry, description)
         for description in SELECT_TYPES
     ]
 
-    # Per-charger target-type selects (#235) — kWh / SOC %, SOC gated on vehicle SOC entity
+    # Per-charger selects (#235, #255): target-type (kWh / SOC %) + charging mode.
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
     if len(ev_chargers) >= 1:
         for charger_cfg in ev_chargers:
             cid = charger_cfg.get("id", "ev_charger")
-            desc = SelectEntityDescription(
-                key=f"charger_{cid}_ev_target_type",
-                options=list(EV_TARGET_TYPES.keys()),
-                entity_category=EntityCategory.CONFIG,
-            )
             entities.append(SEMPerChargerSelect(
-                coordinator, desc, entry, cid, "ev_target_type",
+                coordinator,
+                SelectEntityDescription(
+                    key=f"charger_{cid}_ev_target_type",
+                    options=list(EV_TARGET_TYPES.keys()),
+                    entity_category=EntityCategory.CONFIG,
+                ),
+                entry, cid, "ev_target_type",
                 charger_cfg.get("ev_target_type") or charger_cfg.get("ev_target_mode") or "kwh",
+            ))
+            # Per-charger charging mode (#255) — each car can have its own mode.
+            entities.append(SEMPerChargerSelect(
+                coordinator,
+                SelectEntityDescription(
+                    key=f"charger_{cid}_ev_charging_mode",
+                    options=list(EV_CHARGING_MODES.keys()),
+                    entity_category=EntityCategory.CONFIG,
+                ),
+                entry, cid, "ev_charging_mode",
+                charger_cfg.get("ev_charging_mode")
+                or full_config.get("ev_charging_mode") or "pv",
             ))
 
     async_add_entities(entities)
@@ -177,10 +179,10 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
         # Update coordinator config immediately
         await self.coordinator.async_update_config({config_key: option})
 
-        # Persist without triggering integration reload
-        self.coordinator._skip_options_reload = True
+        # Persist without triggering integration reload (snapshot-keyed skip — #245)
         new_options = {**self._entry.options}
         new_options[config_key] = option
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(
             self._entry, options=new_options
         )
@@ -259,7 +261,10 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             return
         self._value = option
         new_options = {**self._entry.options}
-        ev_chargers = list(new_options.get("ev_chargers", []))
+        # Copy each charger dict — mutating the shared dicts in place leaves
+        # entry.options == new_options, so async_update_entry detects no change
+        # and never persists to .storage (the value then reverts on restart). (#245)
+        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
         for charger in ev_chargers:
             if charger.get("id") == self._charger_id:
                 charger[self._config_key] = option
@@ -267,7 +272,7 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         new_options["ev_chargers"] = ev_chargers
         if isinstance(getattr(self.coordinator, "config", None), dict):
             self.coordinator.config.update({**self._entry.data, **new_options})
-        self.coordinator._skip_options_reload = True
+        self.coordinator._skip_options_reload = new_options
         self.hass.config_entries.async_update_entry(self._entry, options=new_options)
         self.async_write_ha_state()
         _LOGGER.info(

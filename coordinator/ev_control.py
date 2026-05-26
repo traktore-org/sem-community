@@ -129,8 +129,15 @@ class EVControlMixin:
 
             if not ev._session_active:
                 # Fresh start: set_current BEFORE start_session
-                # (KEBA ignores enable at 0A)
-                initial_current = min(ev.max_current, initial_amps)
+                # (KEBA ignores enable at 0A). Cap the kickstart to the peak
+                # headroom too: the car is not drawing yet, so estimate W/A from
+                # phases*voltage. Without this the first cycle starts at
+                # initial_amps (default 10A ~ 6.9kW) which alone can exceed the
+                # peak limit before the dynamic loop takes over.
+                est_wpa = ev.phases * ev.voltage
+                peak_amps = self._night_peak_managed_amps(
+                    power, est_wpa, min_amps, ev.max_current)
+                initial_current = min(initial_amps, peak_amps)
                 await ev._set_current(initial_current)
                 await ev.start_session(energy_target_kwh=0)
                 self._ev_last_change_time = dt_util.now()
@@ -150,16 +157,9 @@ class EVControlMixin:
                 if power.ev_power > 100:
                     # W/A from actual charger readings (adapts to any car)
                     watts_per_amp = power.ev_power / max(1, ev._current_setpoint)
-
-                    peak_limit_w = self._get_peak_limit_w()
-                    # Subtract EV's own draw: grid_import includes EV, so
-                    # non_ev_grid = home + other loads (what the grid would
-                    # import if the EV were off)
-                    non_ev_grid = power.grid_import_power - power.ev_power
-                    target = (peak_limit_w - non_ev_grid) / max(1, watts_per_amp)
-
-                    # Clamp: configurable min current, max from charger config
-                    target = min(ev.max_current, max(min_amps, round(target)))
+                    target = self._night_peak_managed_amps(
+                        power, watts_per_amp, min_amps, ev.max_current)
+                    peak_limit_w = self._get_peak_limit_w()  # for the log line
 
                     # Ramp limit: configurable ±N amps per cycle
                     ramp_rate = int(self.config.get("ev_ramp_rate_amps", 2))
@@ -298,6 +298,37 @@ class EVControlMixin:
                 pass
         return self.config.get("target_peak_limit", 5.0) * 1000
 
+    def _night_peak_managed_amps(
+        self,
+        power: PowerReadings,
+        watts_per_amp: float,
+        min_amps: int,
+        max_amps: int,
+    ) -> int:
+        """Charging current that keeps grid import <= the peak limit at night.
+
+        Sized from the pure house load (``home_consumption_power``), NOT from
+        ``grid_import - ev_power``. The latter equals ``home + batt_charge -
+        batt_discharge`` (see ``PowerReadings.calculate_derived``), so battery
+        discharge drives it negative and inflates the apparent headroom — the EV
+        ramps up while the battery is discharging, then grid import overshoots
+        the peak the instant the battery backs off (observed on PROD: EV 10kW /
+        grid 10kW against a 6kW limit). ``home_consumption_power`` excludes both
+        EV and battery, so ``grid = home + ev`` stays <= peak regardless of what
+        the battery does — night charging must not lean on the home battery
+        (the battery may still reduce grid below peak, it is just never relied
+        upon). Result is clamped to ``[min_amps, max_amps]``.
+
+        Residual limitation: if the inverter autonomously charges the battery
+        from the grid during the night window (e.g. a dynamic-tariff or timed
+        grid-charge SEM does not command), ``grid = peak + net_batt_charge`` and
+        the peak may still be exceeded by that charge. SEM cannot size around
+        inverter-managed charging it doesn't control.
+        """
+        headroom_w = self._get_peak_limit_w() - power.home_consumption_power
+        target = round(headroom_w / max(1.0, watts_per_amp))
+        return min(max_amps, max(min_amps, target))
+
     def _calculate_solar_ev_budget(
         self, state: str, power: PowerReadings, context: ChargingContext,
     ) -> float:
@@ -417,7 +448,7 @@ class EVControlMixin:
         return False
 
     def _calculate_forecast_night_target(
-        self, remaining_kwh: float, energy: Any,
+        self, remaining_kwh: float, energy: Any, charger_cfg: dict | None = None,
     ) -> float:
         """Reduce night charging target based on tomorrow's solar forecast.
 
@@ -445,9 +476,14 @@ class EVControlMixin:
             estimated_soc = ev_taper.get_virtual_soc(
                 getattr(self, "_cycle_vehicle_soc", None)
             )
-            target_soc = self.config.get("ev_target_soc", 80)
-            min_soc = self.config.get("ev_min_soc_threshold", 20)
-            capacity = self.config.get("ev_battery_capacity_kwh", 40)
+            # Per-car target/capacity (one car per charger); fall back to global.
+            _cfg = charger_cfg or {}
+            def _pc(key, default):
+                v = _cfg.get(key)
+                return v if v is not None else self.config.get(key, default)
+            target_soc = _pc("ev_target_soc", 80)
+            min_soc = _pc("ev_min_soc_threshold", 20)
+            capacity = _pc("ev_battery_capacity_kwh", 40)
 
             predicted_daily = 0.0
             predictor = getattr(self, "_predictor", None)
