@@ -229,6 +229,21 @@ class ChargingStateMachine:
             return ChargingState.SOLAR_CHARGING_ALLOWED
         return ChargingState.SOLAR_WAITING_BATTERY_PRIORITY
 
+    def _any_night_charging_enabled(self) -> bool:
+        """True if night charging is enabled for at least one charger (#255).
+
+        Per-charger switches are canonical. With no chargers configured (legacy), fall
+        back to the removed-elsewhere global ``switch.sem_night_charging``.
+        """
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers:
+            return self.hass.states.is_state("switch.sem_night_charging", "on")
+        for c in chargers:
+            cid = c.get("id", "ev_charger") if isinstance(c, dict) else "ev_charger"
+            if self.hass.states.is_state(f"switch.sem_charger_{cid}_night_charging", "on"):
+                return True
+        return False
+
     def _night_state_machine(self, ctx: ChargingContext) -> str:
         """Night charging state machine.
 
@@ -238,9 +253,11 @@ class ChargingStateMachine:
         if not ctx.ev_connected:
             return ChargingState.NIGHT_IDLE
 
-        # Check if night charging is enabled
-        night_charging_entity = "switch.sem_night_charging"
-        if not self.hass.states.is_state(night_charging_entity, "on"):
+        # Check if night charging is enabled (#255: per-charger is canonical — night
+        # charging is on when ANY charger's per-charger switch is on; the per-charger
+        # control loop then skips the chargers that are off. Falls back to the global
+        # master switch only for legacy / no-charger installs.)
+        if not self._any_night_charging_enabled():
             return ChargingState.NIGHT_DISABLED
 
         remaining_needed = ctx.night_target_kwh

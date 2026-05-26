@@ -443,7 +443,9 @@ class SEMEVStatusCard extends SEMLitBase {
         const strategy = this._valStr('charging_state');
         const curr = semGetCurrency(this._hass);
 
-        const modeEntity = this._hass?.states['select.sem_ev_charging_mode'];
+        // #255: charging mode is per-charger — resolve primary (fallback global).
+        const modeEntity = this._hass?.states[
+            this._pcEntity('select', 'ev_charging_mode', 'select.sem_ev_charging_mode')];
         const mode = modeEntity?.state || 'auto';
         const modeLabels = {
             auto: this._t('mode_auto'),

@@ -150,26 +150,19 @@ class TestSwitchDefaults:
 class TestEVConfigurableParams:
     """Verify EV parameters are configurable via number entities."""
 
-    def test_ev_number_entities_exist(self):
-        """Required EV number entities should be in NUMBER_TYPES."""
+    def test_ev_target_current_settings_are_per_charger_only(self):
+        """#255: global EV target/current/consumption settings were removed — they're
+        per-charger only now (ranges covered in test_per_charger_entities)."""
         keys = {n.key for n in NUMBER_TYPES}
-        assert "ev_night_initial_current" in keys
-        assert "ev_minimum_current" in keys
+        for removed in (
+            "daily_ev_target", "daily_ev_target_max",
+            "ev_target_soc", "ev_target_soc_max",
+            "ev_minimum_current", "ev_night_initial_current", "ev_kwh_per_100km",
+        ):
+            assert removed not in keys, f"{removed} should be per-charger only (#255)"
+        # Tuning constant + battery-assist power stay global.
         assert "ev_stall_cooldown" in keys
-        assert "daily_ev_target" in keys
         assert "battery_assist_max_power" in keys
-
-    def test_ev_min_current_range(self):
-        """ev_minimum_current should have 6-16A range."""
-        desc = next(n for n in NUMBER_TYPES if n.key == "ev_minimum_current")
-        assert desc.native_min_value == 6
-        assert desc.native_max_value == 16
-
-    def test_ev_initial_current_range(self):
-        """ev_night_initial_current should have 6-32A range."""
-        desc = next(n for n in NUMBER_TYPES if n.key == "ev_night_initial_current")
-        assert desc.native_min_value == 6
-        assert desc.native_max_value == 32
 
     def test_ev_stall_cooldown_range(self):
         """ev_stall_cooldown should have 30-300s range."""

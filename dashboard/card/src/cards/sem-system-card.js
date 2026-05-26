@@ -75,8 +75,11 @@ const WATCHED = [
     'sensor.sem_solar_power', 'sensor.sem_grid_power',
     'sensor.sem_battery_soc', 'sensor.sem_ev_power',
     'sensor.sem_forecast_today', 'sensor.sem_tariff_current_import_rate',
-    'switch.sem_observer_mode', 'switch.sem_night_charging',
-    'switch.sem_smart_night_charging',
+    'switch.sem_observer_mode',
+    // Per-charger night switches (#255), default charger id — for reactivity; other
+    // ids refresh on the energy tick.
+    'switch.sem_charger_ev_charger_night_charging',
+    'switch.sem_charger_ev_charger_smart_night_charging',
     'sensor.sem_home_consumption_power', 'sensor.sem_grid_import_power',
     'sensor.sem_grid_export_power', 'sensor.sem_autarky_rate',
     'sensor.sem_self_consumption_rate', 'sensor.sem_battery_power',
@@ -274,10 +277,13 @@ class SEMSystemCard extends SEMLitBase {
     }
 
     _renderModesSection(T) {
+        // #255: night-charging switches are per-charger — resolve the primary (fallback global).
+        const eNight = this._pcEntity('switch', 'night_charging', 'switch.sem_night_charging');
+        const eSmart = this._pcEntity('switch', 'smart_night_charging', 'switch.sem_smart_night_charging');
         return html`
             <div class="toggle-group">
-                ${this._renderToggle('switch.sem_night_charging', 'night_charging', T)}
-                ${this._renderToggle('switch.sem_smart_night_charging', 'smart_night', T)}
+                ${this._renderToggle(eNight, 'night_charging', T)}
+                ${this._renderToggle(eSmart, 'smart_night', T)}
             </div>
         `;
     }

@@ -138,7 +138,9 @@ def _detect_hardware_specs(hass: HomeAssistant) -> Dict[str, float]:
 class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Solar Energy Management."""
 
-    VERSION = 2
+    # v4 (#255): per-charger settings seeded from globals (async_migrate_entry).
+    # (Was 2 while async_migrate_entry already emitted v3 — corrected to match.)
+    VERSION = 4
 
     @staticmethod
     @callback

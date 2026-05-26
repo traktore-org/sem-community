@@ -475,6 +475,8 @@ This minimizes changes to `ev_control.py` — the control logic works identicall
 
 Config entry v2→v3: flat `ev_*` keys wrapped into `ev_chargers` list automatically. The `__init__.py` registration loop creates `CurrentControlDevice` per charger.
 
+Config entry v3→v4 (#255): **per-charger is the source of truth for all EV settings**; the duplicate GLOBAL EV setting entities (`daily_ev_target[_max]`, `ev_target_soc[_max]`, `ev_min_current`, `ev_night_initial_current`, `ev_kwh_per_100km`, `ev_target_type`, `ev_charging_mode`, `ev_phases`, the `night_charging` / `smart_night_charging` switches) were removed. The migration seeds each charger's per-charger value from the matching global so nothing resets. Globals remain only as **read-only summary sensors**. The night-charging gate is now "any charger enabled" (`ChargingStateMachine._any_night_charging_enabled`); a one-time reconciliation forces per-charger night switches OFF if the removed global switch was last OFF (so a globally-disabled user isn't silently re-enabled). A few global-context consumers read the primary charger's values via `SEMCoordinator._mirror_primary_charger_to_global()` (exact for single-charger). `ev_stall_cooldown` stays global (tuning constant).
+
 ### Per-Charger State
 
 Each charger has independent:

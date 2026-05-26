@@ -88,6 +88,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self.hass = hass
         self.config = config
         self.config_entry: Optional[ConfigEntry] = None
+        # #255: the duplicate GLOBAL EV settings entities were removed; per-charger is
+        # canonical. Mirror the primary charger's values into the legacy global config
+        # keys so the remaining global-context consumers (recommendations, notifications,
+        # forecast, summaries) read fresh per-charger values — exact for single-charger,
+        # primary charger as representative for multi.
+        self._mirror_primary_charger_to_global()
 
         # Update interval
         update_interval = config.get("update_interval", DEFAULT_UPDATE_INTERVAL)
@@ -277,6 +283,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._observer_mode:
             _LOGGER.info("Observer mode: hardware control disabled")
         _LOGGER.info("SEM Coordinator initialized with %ss update interval", update_interval)
+
+    def _mirror_primary_charger_to_global(self) -> None:
+        """Mirror the primary charger's per-charger EV settings into the legacy global
+        config keys (#255).
+
+        The duplicate global EV setting entities were removed — per-charger is canonical.
+        A few global-context consumers (recommendations, notifications, forecast,
+        summaries) still read the legacy global keys; this keeps those reads fresh from
+        the primary charger so a single-charger setup is exact and multi-charger uses the
+        primary as a representative. The per-charger control loop reads per-charger config
+        directly and is unaffected.
+        """
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers or not isinstance(chargers[0], dict):
+            return
+        pc = chargers[0]
+        for key in (
+            "daily_ev_target", "daily_ev_target_max",
+            "ev_target_soc", "ev_target_soc_max",
+            "ev_min_current", "ev_night_initial_current",
+            "ev_kwh_per_100km", "ev_target_type",
+            "ev_charging_mode", "ev_phases",
+        ):
+            if pc.get(key) is not None:
+                self.config[key] = pc[key]
+
+    def _smart_night_charging_enabled(self) -> bool:
+        """True if smart (forecast-aware) night charging is on for any charger (#255).
+
+        Per-charger is canonical; falls back to the global switch for legacy installs.
+        (Also fixes the previously-malformed global entity reference — the feature was
+        effectively dead before this.)
+        """
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers:
+            return self.hass.states.is_state("switch.sem_smart_night_charging", "on")
+        for c in chargers:
+            cid = c.get("id", "ev_charger") if isinstance(c, dict) else "ev_charger"
+            if self.hass.states.is_state(f"switch.sem_charger_{cid}_smart_night_charging", "on"):
+                return True
+        return False
 
     @property
     def battery_capacity_kwh(self) -> float:
@@ -2175,7 +2222,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Night charging tops up to the floor (Min), optionally reduced by forecast (#245)
         night_target = remaining_floor
-        forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_SMART_NIGHT_CHARGING}", "on")
+        forecast_reduction = self._smart_night_charging_enabled()
         if self.time_manager.is_night_mode() and forecast_reduction:
             night_target = self._calculate_forecast_night_target(
                 remaining_floor, energy, _primary_cfg,
@@ -2759,6 +2806,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     async def async_update_config(self, config_update: Dict[str, Any]) -> None:
         """Update coordinator configuration."""
         self.config = {**self.config, **config_update}
+        self._mirror_primary_charger_to_global()  # keep legacy global keys fresh (#255)
         _LOGGER.info("Configuration updated: %s", list(config_update.keys()))
 
     def sensors_ready(self) -> bool:
