@@ -274,10 +274,13 @@ class SEMSystemCard extends SEMLitBase {
     }
 
     _renderModesSection(T) {
+        // #255: night-charging switches are per-charger — resolve the primary (fallback global).
+        const eNight = this._pcEntity('switch', 'night_charging', 'switch.sem_night_charging');
+        const eSmart = this._pcEntity('switch', 'smart_night_charging', 'switch.sem_smart_night_charging');
         return html`
             <div class="toggle-group">
-                ${this._renderToggle('switch.sem_night_charging', 'night_charging', T)}
-                ${this._renderToggle('switch.sem_smart_night_charging', 'smart_night', T)}
+                ${this._renderToggle(eNight, 'night_charging', T)}
+                ${this._renderToggle(eSmart, 'smart_night', T)}
             </div>
         `;
     }

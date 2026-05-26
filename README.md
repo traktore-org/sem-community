@@ -188,15 +188,15 @@ Enable peak load management if your utility bills based on peak demand:
 
 ## User Controls
 
-SEM is designed to be mostly automatic. There are only 3 switches to manage:
+SEM is designed to be mostly automatic. The switches that matter:
 
 | Switch | Default | What it does |
 |--------|---------|-------------|
-| `switch.sem_night_charging` | OFF | Enable/disable overnight grid charging (opt-in — solar surplus only until you turn it on; #256) |
-| `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware |
-| `switch.sem_smart_night_charging` | OFF | Intelligently skip or reduce night charges based on EV SOC, solar forecast, temperature, and learned driving patterns |
+| `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware (global) |
+| `switch.sem_charger_<id>_night_charging` | OFF | **Per-charger** (#255). Enable/disable overnight grid charging for that charger (opt-in — solar surplus only until you turn it on; #256) |
+| `switch.sem_charger_<id>_smart_night_charging` | OFF | **Per-charger** (#255). Intelligently skip/reduce that charger's night charge based on EV SOC, solar forecast, temperature, and learned patterns |
 
-Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.
+EV charge targets, charging mode, currents, phases and consumption are all **per-charger** entities too (`number.sem_charger_<id>_…`, `select.sem_charger_<id>_…`) — the global EV settings were removed in #255 (per-charger is the source of truth; globals are read-only summaries). Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.
 
 ---
 
