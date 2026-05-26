@@ -125,6 +125,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_charge_refused_per_charger: Dict[str, bool] = {}
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
         self._daily_ev_per_charger_date: Optional[str] = None
+        # Warn-once guards so per-cycle surfacing (#259) doesn't spam the log.
+        self._tariff_rate_warned: bool = False
+        self._night_global_fallback_logged: set[str] = set()
         self._notification_manager = NotificationManager(hass, config)
 
         # Storage will be initialized with entry_id later
@@ -575,8 +578,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 _tariff = self._tariff_provider.get_tariff_data()
                 self._energy_calculator._import_rate = _tariff.current_import_rate
                 self._energy_calculator._export_rate = _tariff.current_export_rate
-            except (ValueError, TypeError, AttributeError):
-                pass  # Use previous rates
+                if self._tariff_rate_warned:
+                    _LOGGER.info("Tariff rate update recovered")
+                    self._tariff_rate_warned = False
+            except (ValueError, TypeError, AttributeError) as e:
+                # Surface once at warning (#259): on failure cost calculations silently
+                # keep using stale rates, so users get wrong cost feedback with no signal.
+                # Warn on the first failure (and on recovery above); stay quiet otherwise.
+                if not self._tariff_rate_warned:
+                    _LOGGER.warning("Tariff rate update failed; using previous rates: %s", e)
+                    self._tariff_rate_warned = True
 
             # Step 2: Calculate energy from power integration
             energy = self._energy_calculator.calculate_energy(power)
@@ -734,6 +745,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             target = cfg.get("daily_ev_target")
                             if target is None:
                                 target = self.config.get("daily_ev_target", 10)
+                                # Surface the inheritance once per charger (#259): a charger
+                                # with no own target silently adopts the global floor (the
+                                # #256 class). Behaviour change deferred to #255.
+                                if cid not in self._night_global_fallback_logged:
+                                    _LOGGER.info(
+                                        "Charger %s has no per-charger night target; "
+                                        "inheriting global %.1f kWh", cid, target,
+                                    )
+                                    self._night_global_fallback_logged.add(cid)
                             daily = self._daily_ev_per_charger.get(cid, 0.0)
                             self._night_target_per_charger_map[cid] = max(0, target - daily)
 

@@ -180,6 +180,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         """Turn the switch on."""
         _LOGGER.info("Turning on %s", self.entity_description.key)
         self._is_on = True
+        # Push the new state immediately (#259): otherwise the UI only reflects the
+        # toggle on the next coordinator push, and a swallowed refresh error below
+        # would silently leave HA showing the old state.
+        self.async_write_ha_state()
 
         try:
             await self.coordinator.async_request_refresh()
@@ -190,6 +194,7 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         """Turn the switch off."""
         _LOGGER.info("Turning off %s", self.entity_description.key)
         self._is_on = False
+        self.async_write_ha_state()  # reflect immediately (#259)
 
         try:
             await self.coordinator.async_request_refresh()
@@ -244,10 +249,12 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on night charging for this charger."""
         self._is_on = True
+        self.async_write_ha_state()  # reflect immediately (#259)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off night charging for this charger."""
         self._is_on = False
+        self.async_write_ha_state()  # reflect immediately (#259)
         await self.coordinator.async_request_refresh()
 
