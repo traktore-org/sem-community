@@ -39,7 +39,24 @@ class SEMEvProgressCard extends SEMLitBase {
             `${DEFAULT_PREFIX}${SUFFIX_LIFETIME_EV_COST}`,
             `${DEFAULT_PREFIX}${SUFFIX_LIFETIME_EV_SESSIONS}`,
             'number.sem_daily_ev_target',
+            // Per-charger target (default charger id) so the bar reacts to the
+            // EV-card slider; other ids still refresh on the energy tick. (#245)
+            'number.sem_charger_ev_charger_daily_ev_target',
         ];
+    }
+
+    /** EV daily kWh target — prefer the per-charger value the EV-card slider
+     *  edits; fall back to the legacy global number entity. (#245) */
+    _evDailyTarget() {
+        const st = this._hass?.states || {};
+        const perCharger = Object.keys(st)
+            .filter(id => /^number\.sem_charger_.+_daily_ev_target$/.test(id))
+            .sort();
+        if (perCharger.length) {
+            const v = parseFloat(st[perCharger[0]]?.state);
+            if (!isNaN(v)) return v;
+        }
+        return this._state('number.sem_daily_ev_target', 10);
     }
 
     setConfig(config) {
@@ -89,7 +106,7 @@ class SEMEvProgressCard extends SEMLitBase {
         const prefix = this._prefix();
 
         const daily    = this._state(`${prefix}${SUFFIX_DAILY_EV_ENERGY}`);
-        const target   = this._state('number.sem_daily_ev_target', 10);
+        const target   = this._evDailyTarget();
         const ltEnergy = this._state(`${prefix}${SUFFIX_LIFETIME_EV_ENERGY}`);
         const ltSolar  = this._state(`${prefix}${SUFFIX_LIFETIME_EV_SOLAR}`);
         const ltCost   = this._state(`${prefix}${SUFFIX_LIFETIME_EV_COST}`);
