@@ -58,7 +58,7 @@ async def async_setup_entry(
     # night gate falls back to it.
     active_global = [
         d for d in SWITCH_TYPES
-        if not (d.key == "night_charging" and has_chargers)
+        if not (d.key in ("night_charging", "smart_night_charging") and has_chargers)
     ]
     switches = [
         SEMSolarSwitch(coordinator, description, entry.entry_id)
@@ -102,6 +102,15 @@ async def async_setup_entry(
             switches.append(SEMPerChargerSwitch(
                 coordinator, desc, entry.entry_id, cid, cname,
                 force_off=night_force_off,
+            ))
+            # Per-charger smart (forecast-aware) night charging (#255) — was global.
+            smart_desc = SwitchEntityDescription(
+                key=f"charger_{cid}_smart_night_charging",
+                entity_category=EntityCategory.CONFIG,
+            )
+            per_charger_keys.add(smart_desc.key)
+            switches.append(SEMPerChargerSwitch(
+                coordinator, smart_desc, entry.entry_id, cid, cname,
             ))
         _LOGGER.info(
             "Created per-charger switches for %d charger(s)",

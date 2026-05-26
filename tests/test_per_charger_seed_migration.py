@@ -101,3 +101,27 @@ async def test_unset_global_not_seeded():
     c, _ = _seeded_charger(hass)
     # nothing to seed from → charger keeps only its identity keys
     assert "daily_ev_target" not in c
+
+
+@pytest.mark.asyncio
+async def test_phase4_charging_mode_and_phases_seeded():
+    """#255 Phase 4: ev_charging_mode + ev_phases are also seeded per-charger."""
+    hass = MagicMock()
+    entry = _entry(
+        options={"ev_chargers": [{"id": "c1"}]},
+        data={"ev_charging_mode": "minpv", "ev_phases": 1},
+    )
+    await async_migrate_entry(hass, entry)
+    c, _ = _seeded_charger(hass)
+    assert c["ev_charging_mode"] == "minpv"
+    assert c["ev_phases"] == 1
+
+
+def test_phase4_globals_removed_from_descriptions():
+    """The converted globals are no longer global entities (#255 Phase 4)."""
+    from custom_components.solar_energy_management.number import NUMBER_TYPES
+    from custom_components.solar_energy_management.select import SELECT_TYPES
+    assert "ev_phases" not in {n.key for n in NUMBER_TYPES}
+    assert "ev_charging_mode" not in {s.key for s in SELECT_TYPES}
+    # ev_stall_cooldown stays global (tuning constant)
+    assert "ev_stall_cooldown" in {n.key for n in NUMBER_TYPES}

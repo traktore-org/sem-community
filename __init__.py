@@ -170,6 +170,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 "ev_target_soc", "ev_target_soc_max",
                 "ev_min_current", "ev_night_initial_current",
                 "ev_kwh_per_100km", "ev_target_type",
+                # #255 Phase 4 — also converted to per-charger
+                "ev_charging_mode", "ev_phases",
             )
             new_data = {**entry.data}
             new_options = {**entry.options}

@@ -36,12 +36,9 @@ EV_TARGET_TYPES = {
 }
 
 SELECT_TYPES = [
-    SelectEntityDescription(
-        key="ev_charging_mode",
-        options=list(EV_CHARGING_MODES.keys()),
-    ),
-    # ev_target_type is PER-CHARGER only (#255) — the global duplicate was removed
-    # (seeded per-charger by the v3→v4 migration). Old global entity removed below.
+    # ev_charging_mode and ev_target_type are PER-CHARGER only (#255) — the global
+    # duplicates were removed (seeded per-charger by the v3→v4 migration). The old
+    # global entities are removed from the registry below. No global selects remain.
 ]
 
 
@@ -64,33 +61,49 @@ async def async_setup_entry(
     # seeded from the global by the v3→v4 migration, so no data is lost.
     try:
         registry = er.async_get(hass)
-        for uid in (f"{entry.entry_id}_ev_target_type", f"{entry.entry_id}_ev_target_mode"):
+        for uid in (
+            f"{entry.entry_id}_ev_target_type", f"{entry.entry_id}_ev_target_mode",
+            f"{entry.entry_id}_ev_charging_mode", "sem_ev_charging_mode", "sem_ev_target_type",
+        ):
             eid = registry.async_get_entity_id("select", DOMAIN, uid)
             if eid:
                 registry.async_remove(eid)
-                _LOGGER.info("Removed global target-type select %s (now per-charger, #255)", eid)
+                _LOGGER.info("Removed global select %s (now per-charger, #255)", eid)
     except Exception as e:
-        _LOGGER.debug("Global target-type select removal skipped: %s", e)
+        _LOGGER.debug("Global select removal skipped: %s", e)
 
     entities = [
         SEMSelectEntity(coordinator, entry, description)
         for description in SELECT_TYPES
     ]
 
-    # Per-charger target-type selects (#235) — kWh / SOC %, SOC gated on vehicle SOC entity
+    # Per-charger selects (#235, #255): target-type (kWh / SOC %) + charging mode.
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
     if len(ev_chargers) >= 1:
         for charger_cfg in ev_chargers:
             cid = charger_cfg.get("id", "ev_charger")
-            desc = SelectEntityDescription(
-                key=f"charger_{cid}_ev_target_type",
-                options=list(EV_TARGET_TYPES.keys()),
-                entity_category=EntityCategory.CONFIG,
-            )
             entities.append(SEMPerChargerSelect(
-                coordinator, desc, entry, cid, "ev_target_type",
+                coordinator,
+                SelectEntityDescription(
+                    key=f"charger_{cid}_ev_target_type",
+                    options=list(EV_TARGET_TYPES.keys()),
+                    entity_category=EntityCategory.CONFIG,
+                ),
+                entry, cid, "ev_target_type",
                 charger_cfg.get("ev_target_type") or charger_cfg.get("ev_target_mode") or "kwh",
+            ))
+            # Per-charger charging mode (#255) — each car can have its own mode.
+            entities.append(SEMPerChargerSelect(
+                coordinator,
+                SelectEntityDescription(
+                    key=f"charger_{cid}_ev_charging_mode",
+                    options=list(EV_CHARGING_MODES.keys()),
+                    entity_category=EntityCategory.CONFIG,
+                ),
+                entry, cid, "ev_charging_mode",
+                charger_cfg.get("ev_charging_mode")
+                or full_config.get("ev_charging_mode") or "pv",
             ))
 
     async_add_entities(entities)

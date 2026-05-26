@@ -304,9 +304,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "ev_target_soc", "ev_target_soc_max",
             "ev_min_current", "ev_night_initial_current",
             "ev_kwh_per_100km", "ev_target_type",
+            "ev_charging_mode", "ev_phases",
         ):
             if pc.get(key) is not None:
                 self.config[key] = pc[key]
+
+    def _smart_night_charging_enabled(self) -> bool:
+        """True if smart (forecast-aware) night charging is on for any charger (#255).
+
+        Per-charger is canonical; falls back to the global switch for legacy installs.
+        (Also fixes the previously-malformed global entity reference — the feature was
+        effectively dead before this.)
+        """
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers:
+            return self.hass.states.is_state("switch.sem_smart_night_charging", "on")
+        for c in chargers:
+            cid = c.get("id", "ev_charger") if isinstance(c, dict) else "ev_charger"
+            if self.hass.states.is_state(f"switch.sem_charger_{cid}_smart_night_charging", "on"):
+                return True
+        return False
 
     @property
     def battery_capacity_kwh(self) -> float:
@@ -2205,7 +2222,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Night charging tops up to the floor (Min), optionally reduced by forecast (#245)
         night_target = remaining_floor
-        forecast_reduction = self.hass.states.is_state(f"switch.{ENTITY_SMART_NIGHT_CHARGING}", "on")
+        forecast_reduction = self._smart_night_charging_enabled()
         if self.time_manager.is_night_mode() and forecast_reduction:
             night_target = self._calculate_forecast_night_target(
                 remaining_floor, energy, _primary_cfg,

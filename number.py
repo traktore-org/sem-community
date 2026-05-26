@@ -188,13 +188,8 @@ NUMBER_TYPES = [
         native_step=10,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="ev_phases",
-        native_min_value=1,
-        native_max_value=3,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
+    # ev_phases is PER-CHARGER only (#255) — it's a charger hardware property. Global
+    # entity removed (seeded per-charger by the v3→v4 migration; stale entity auto-removed).
     # Tariff rates (previously only in OptionsFlow)
     NumberEntityDescription(
         key="electricity_import_rate",
@@ -421,6 +416,15 @@ async def async_setup_entry(
                 ), "ev_kwh_per_100km",
                     charger_cfg.get("ev_kwh_per_100km",
                                     full_config.get("ev_kwh_per_100km", 18))),
+                # Per-charger phase count (#255) — a charger hardware property (1 or 3).
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_ev_phases",
+                    name=f"{cname} Phases",
+                    native_min_value=1, native_max_value=3, native_step=1,
+                    mode=NumberMode.SLIDER,
+                    entity_category=EntityCategory.CONFIG,
+                ), "ev_phases",
+                    charger_cfg.get("ev_phases", full_config.get("ev_phases", 3))),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(
