@@ -132,7 +132,11 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
+          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból.",
+          "ev_kwh_per_100km": "A hatótáv becsléséhez használatos, ha nincs hatótáv-érzékelő konfigurálva.",
+          "vehicle_range_entity": "Opcionális valós hatótáv-érzékelő. Egyébként a hatótáv becslése: SOC × kapacitás × hatékonyság."
         }
       },
       "settings": {
@@ -361,13 +365,19 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
+          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból."
         }
       },
       "ev_charger_add": {
         "data": {
           "daily_ev_target_max": "Napelemes töltési limit (kWh)",
           "ev_target_soc_max": "Napelemes töltési limit (SOC %)"
+        },
+        "data_description": {
+          "daily_ev_target_max": "A napelemes többlet eddig tölt, majd leáll. Hagyja maximumon, hogy szabadon töltsön a napból.",
+          "ev_target_soc_max": "A napelemes többlet eddig a töltöttségi szintig tölt, majd leáll. Hagyja 100%-on, hogy szabadon töltsön a napból."
         }
       }
     }
@@ -1139,6 +1149,38 @@
           "soc": "SoC % cél"
         }
       }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "A SEM irányítópult létrehozása sikertelen. A részletekért tekintse meg a Home Assistant naplóit."
+    },
+    "load_management_not_initialized": {
+      "message": "A terheléskezelés még nem áll készen. Várja meg, amíg az integráció elindul, majd próbálja újra."
+    },
+    "device_registry_not_initialized": {
+      "message": "Az eszköznyilvántartás még nem áll készen. Várja meg, amíg az integráció elindul, majd próbálja újra."
+    },
+    "mapping_service_required": {
+      "message": "Ha a vezérlés típusa „szolgáltatás”, szolgáltatás megadása szükséges. Adjon meg egy meghívandó szolgáltatást."
+    },
+    "mapping_entity_required": {
+      "message": "Ehhez a vezérléstípushoz vezérlőentitás szükséges. Adjon meg egy vezérlőentitást."
+    },
+    "device_not_found": {
+      "message": "A(z) „{device_id}” eszköz nem található."
+    },
+    "invalid_device_property": {
+      "message": "Érvénytelen eszköztulajdonság: „{property}”."
+    },
+    "invalid_deadline_format": {
+      "message": "Érvénytelen határidőformátum: „{deadline}”. Használjon ISO 8601 formátumot, például 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "Az EV-töltő nincs konfigurálva",
+      "description": "Nincsenek konfigurálva EV-töltő érzékelők, ezért az EV-töltési funkciók nem érhetők el. Az EV-töltés engedélyezéséhez adjon hozzá egy „csatlakoztatva” érzékelőt vagy egy töltési teljesítmény érzékelőt az integráció beállításaiban."
     }
   }
 }

@@ -156,7 +156,6 @@
           "battery_assist_max_power": "Batterie-Unterstützung Max. Leistung (W)",
           "battery_capacity_kwh": "Batteriekapazität (kWh)",
           "battery_discharge_protection_enabled": "Batterieentladeschutz aktivieren",
-          "battery_min_discharge_power": "Minimale Entladeleistung (W)",
           "battery_max_discharge_power": "Maximale Entladeleistung (W)",
           "electricity_import_rate": "Stromimporttarif (pro kWh)",
           "electricity_export_rate": "Stromexporttarif (pro kWh)",
@@ -1150,6 +1149,38 @@
           "soc": "SoC-%-Ziel"
         }
       }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "Das SEM-Dashboard konnte nicht erstellt werden. Details finden Sie in den Home-Assistant-Protokollen."
+    },
+    "load_management_not_initialized": {
+      "message": "Das Lastmanagement ist noch nicht bereit. Bitte warten Sie, bis die Integration vollständig gestartet ist, und versuchen Sie es erneut."
+    },
+    "device_registry_not_initialized": {
+      "message": "Die Geräteregistrierung ist noch nicht bereit. Bitte warten Sie, bis die Integration vollständig gestartet ist, und versuchen Sie es erneut."
+    },
+    "mapping_service_required": {
+      "message": "Beim Steuerungstyp „Dienst“ ist ein Dienst erforderlich. Bitte geben Sie einen aufzurufenden Dienst an."
+    },
+    "mapping_entity_required": {
+      "message": "Für diesen Steuerungstyp ist eine Steuerungs-Entität erforderlich. Bitte geben Sie eine Steuerungs-Entität an."
+    },
+    "device_not_found": {
+      "message": "Gerät „{device_id}“ wurde nicht gefunden."
+    },
+    "invalid_device_property": {
+      "message": "Ungültige Geräteeigenschaft: „{property}“."
+    },
+    "invalid_deadline_format": {
+      "message": "Ungültiges Fristformat: „{deadline}“. Verwenden Sie das ISO-8601-Format, zum Beispiel 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "EV-Ladegerät nicht konfiguriert",
+      "description": "Es sind keine Sensoren für das EV-Ladegerät konfiguriert, daher sind die EV-Ladefunktionen nicht verfügbar. Fügen Sie in den Integrationsoptionen einen „Verbunden“-Sensor oder einen Ladeleistungssensor hinzu, um das EV-Laden zu aktivieren."
     }
   }
 }

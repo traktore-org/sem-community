@@ -1150,5 +1150,37 @@
         }
       }
     }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "Failed to generate the SEM dashboard. Check the Home Assistant logs for details."
+    },
+    "load_management_not_initialized": {
+      "message": "Load management is not ready yet. Please wait for the integration to finish starting and try again."
+    },
+    "device_registry_not_initialized": {
+      "message": "The device registry is not ready yet. Please wait for the integration to finish starting and try again."
+    },
+    "mapping_service_required": {
+      "message": "A service is required when the control type is “service”. Please provide a service to call."
+    },
+    "mapping_entity_required": {
+      "message": "A control entity is required for this control type. Please provide a control entity."
+    },
+    "device_not_found": {
+      "message": "Device “{device_id}” was not found."
+    },
+    "invalid_device_property": {
+      "message": "Invalid device property: “{property}”."
+    },
+    "invalid_deadline_format": {
+      "message": "Invalid deadline format: “{deadline}”. Use ISO 8601 format, for example 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "EV charger not configured",
+      "description": "No EV charger sensors are configured, so EV charging features are unavailable. Add an EV “connected” sensor or a charging-power sensor in the integration options to enable EV charging."
+    }
   }
 }

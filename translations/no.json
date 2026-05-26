@@ -132,7 +132,11 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
+          "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol.",
+          "ev_kwh_per_100km": "Brukes til å anslå rekkevidden når ingen rekkeviddesensor er konfigurert.",
+          "vehicle_range_entity": "Valgfri reell rekkeviddesensor. Ellers anslås rekkevidden fra SOC × kapasitet × effektivitet."
         }
       },
       "settings": {
@@ -361,13 +365,19 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
+          "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol."
         }
       },
       "ev_charger_add": {
         "data": {
           "daily_ev_target_max": "Solladegrense (kWh)",
           "ev_target_soc_max": "Solladegrense (SOC %)"
+        },
+        "data_description": {
+          "daily_ev_target_max": "Soloverskudd lader opp til dette og stopper deretter. La stå på full for å lade fritt fra sol.",
+          "ev_target_soc_max": "Soloverskudd lader opp til denne SOC-en og stopper deretter. La stå på 100 % for å lade fritt fra sol."
         }
       }
     }
@@ -1139,6 +1149,38 @@
           "soc": "SoC-%-mål"
         }
       }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "Kunne ikke generere SEM-dashbordet. Se Home Assistant-loggene for detaljer."
+    },
+    "load_management_not_initialized": {
+      "message": "Laststyringen er ikke klar ennå. Vent til integrasjonen er ferdig med å starte, og prøv igjen."
+    },
+    "device_registry_not_initialized": {
+      "message": "Enhetsregisteret er ikke klart ennå. Vent til integrasjonen er ferdig med å starte, og prøv igjen."
+    },
+    "mapping_service_required": {
+      "message": "En tjeneste kreves når styringstypen er «tjeneste». Angi en tjeneste som skal kalles."
+    },
+    "mapping_entity_required": {
+      "message": "En styringsentitet kreves for denne styringstypen. Angi en styringsentitet."
+    },
+    "device_not_found": {
+      "message": "Enheten «{device_id}» ble ikke funnet."
+    },
+    "invalid_device_property": {
+      "message": "Ugyldig enhetsegenskap: «{property}»."
+    },
+    "invalid_deadline_format": {
+      "message": "Ugyldig fristformat: «{deadline}». Bruk ISO 8601-format, for eksempel 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "EV-lader er ikke konfigurert",
+      "description": "Ingen sensorer for EV-laderen er konfigurert, så EV-ladefunksjonene er utilgjengelige. Legg til en «tilkoblet»-sensor eller en ladeeffektsensor i integrasjonsalternativene for å aktivere EV-lading."
     }
   }
 }
