@@ -321,7 +321,7 @@ class EVIntelligenceData:
     prediction, and charge skip logic into a single output structure.
     """
     taper: EVTaperData = field(default_factory=EVTaperData)
-    estimated_soc_pct: float = 0.0           # Virtual SOC (0-100)
+    estimated_soc_pct: Optional[float] = 0.0  # Virtual SOC (0-100); None = unknown (no anchor yet)
     last_full_charge: Optional[str] = None   # ISO timestamp of last detected full
     energy_since_full_kwh: float = 0.0       # Energy consumed since last full
     predicted_daily_ev_kwh: float = 0.0      # Tomorrow's predicted EV consumption

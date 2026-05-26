@@ -2464,9 +2464,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         elif not self.time_manager.is_night_mode():
             self._skip_recorded_tonight = False
 
+        # No real SOC and no calibration yet → the virtual 100% default is
+        # misleading. Report None so the sensor shows "unknown" until a real
+        # reference (sensor / taper / stall) — do NOT prefill a guessed value.
+        # Matches the per-charger path in _build_per_charger_intelligence. (#245)
+        _d = self._ev_taper_detector
+        if self._cycle_vehicle_soc is None and not _d._soc_anchored and _d._energy_since_full == 0.0:
+            estimated_soc_display: Optional[float] = None
+        else:
+            estimated_soc_display = round(estimated_soc, 1)
+
         return EVIntelligenceData(
             taper=taper_data,
-            estimated_soc_pct=round(estimated_soc, 1),
+            estimated_soc_pct=estimated_soc_display,
             last_full_charge=self._ev_taper_detector.last_full_timestamp,
             energy_since_full_kwh=round(self._ev_taper_detector.energy_since_full, 2),
             predicted_daily_ev_kwh=predicted_daily,
