@@ -111,6 +111,8 @@ deploy-prod.sh
 
 # Node/Playwright (local testing)
 node_modules/
+node_modules
+# (the bare form also ignores a node_modules *symlink* used locally for builds)
 package-lock.json
 package.json
 
