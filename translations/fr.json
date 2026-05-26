@@ -132,7 +132,11 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
+          "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil.",
+          "ev_kwh_per_100km": "Utilisé pour estimer l’autonomie lorsqu’aucun capteur d’autonomie n’est configuré.",
+          "vehicle_range_entity": "Capteur d’autonomie réel optionnel. Sinon, l’autonomie est estimée à partir de SOC × capacité × efficacité."
         }
       },
       "settings": {
@@ -152,7 +156,6 @@
           "battery_assist_max_power": "Puissance Max. Assistance Batterie (W)",
           "battery_capacity_kwh": "Capacité Batterie (kWh)",
           "battery_discharge_protection_enabled": "Activer la Protection de Décharge Batterie",
-          "battery_min_discharge_power": "Puissance de Décharge Minimale (W)",
           "battery_max_discharge_power": "Puissance de Décharge Maximale (W)",
           "electricity_import_rate": "Tarif d'Import d'Électricité (par kWh)",
           "electricity_export_rate": "Tarif d'Export d'Électricité (par kWh)",
@@ -362,13 +365,19 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
+          "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil."
         }
       },
       "ev_charger_add": {
         "data": {
           "daily_ev_target_max": "Limite de charge solaire (kWh)",
           "ev_target_soc_max": "Limite de charge solaire (SOC %)"
+        },
+        "data_description": {
+          "daily_ev_target_max": "Le surplus solaire charge jusqu’à cette valeur, puis s’arrête. Laissez au maximum pour charger librement au soleil.",
+          "ev_target_soc_max": "Le surplus solaire charge jusqu’à ce SOC, puis s’arrête. Laissez à 100 % pour charger librement au soleil."
         }
       }
     }
@@ -1140,6 +1149,38 @@
           "soc": "Objectif SoC %"
         }
       }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "Échec de la génération du tableau de bord SEM. Consultez les journaux de Home Assistant pour plus de détails."
+    },
+    "load_management_not_initialized": {
+      "message": "La gestion de charge n’est pas encore prête. Veuillez attendre que l’intégration ait fini de démarrer, puis réessayez."
+    },
+    "device_registry_not_initialized": {
+      "message": "Le registre des appareils n’est pas encore prêt. Veuillez attendre que l’intégration ait fini de démarrer, puis réessayez."
+    },
+    "mapping_service_required": {
+      "message": "Un service est requis lorsque le type de commande est « service ». Veuillez indiquer un service à appeler."
+    },
+    "mapping_entity_required": {
+      "message": "Une entité de commande est requise pour ce type de commande. Veuillez indiquer une entité de commande."
+    },
+    "device_not_found": {
+      "message": "Appareil « {device_id} » introuvable."
+    },
+    "invalid_device_property": {
+      "message": "Propriété d’appareil invalide : « {property} »."
+    },
+    "invalid_deadline_format": {
+      "message": "Format d’échéance invalide : « {deadline} ». Utilisez le format ISO 8601, par exemple 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "Chargeur VE non configuré",
+      "description": "Aucun capteur de chargeur VE n’est configuré, les fonctions de charge VE sont donc indisponibles. Ajoutez un capteur « connecté » ou un capteur de puissance de charge dans les options de l’intégration pour activer la charge VE."
     }
   }
 }

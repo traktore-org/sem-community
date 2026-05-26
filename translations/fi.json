@@ -132,7 +132,11 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
+          "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta.",
+          "ev_kwh_per_100km": "Käytetään toimintamatkan arviointiin, kun matka-anturia ei ole määritetty.",
+          "vehicle_range_entity": "Valinnainen todellinen matka-anturi. Muuten matka arvioidaan: SOC × kapasiteetti × hyötysuhde."
         }
       },
       "settings": {
@@ -361,13 +365,19 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
+          "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta."
         }
       },
       "ev_charger_add": {
         "data": {
           "daily_ev_target_max": "Aurinkolatauksen raja (kWh)",
           "ev_target_soc_max": "Aurinkolatauksen raja (SOC %)"
+        },
+        "data_description": {
+          "daily_ev_target_max": "Aurinkoylijäämä lataa tähän asti ja pysähtyy sitten. Jätä täyteen ladataksesi vapaasti auringosta.",
+          "ev_target_soc_max": "Aurinkoylijäämä lataa tähän varaustasoon asti ja pysähtyy sitten. Jätä 100 %:iin ladataksesi vapaasti auringosta."
         }
       }
     }
@@ -1139,6 +1149,38 @@
           "soc": "SoC-%-tavoite"
         }
       }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "SEM-koontinäytön luominen epäonnistui. Katso lisätiedot Home Assistantin lokeista."
+    },
+    "load_management_not_initialized": {
+      "message": "Kuormanhallinta ei ole vielä valmis. Odota, että integraatio on käynnistynyt kokonaan, ja yritä uudelleen."
+    },
+    "device_registry_not_initialized": {
+      "message": "Laiterekisteri ei ole vielä valmis. Odota, että integraatio on käynnistynyt kokonaan, ja yritä uudelleen."
+    },
+    "mapping_service_required": {
+      "message": "Palvelu vaaditaan, kun ohjaustyyppi on ”palvelu”. Anna kutsuttava palvelu."
+    },
+    "mapping_entity_required": {
+      "message": "Tämä ohjaustyyppi vaatii ohjausentiteetin. Anna ohjausentiteetti."
+    },
+    "device_not_found": {
+      "message": "Laitetta ”{device_id}” ei löytynyt."
+    },
+    "invalid_device_property": {
+      "message": "Virheellinen laiteominaisuus: ”{property}”."
+    },
+    "invalid_deadline_format": {
+      "message": "Virheellinen määräajan muoto: ”{deadline}”. Käytä ISO 8601 -muotoa, esimerkiksi 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "Latauslaitetta ei ole määritetty",
+      "description": "Sähköauton latauslaitteen antureita ei ole määritetty, joten latausominaisuudet eivät ole käytettävissä. Ota lataus käyttöön lisäämällä integraation asetuksiin ”yhdistetty”-anturi tai lataustehon anturi."
     }
   }
 }

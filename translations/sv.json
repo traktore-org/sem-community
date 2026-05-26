@@ -132,7 +132,11 @@
           "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "daily_ev_target_max": "Solöverskott laddar upp till detta och stoppar sedan. Lämna på fullt för att ladda fritt från solen.",
+          "ev_target_soc_max": "Solöverskott laddar upp till denna SOC och stoppar sedan. Lämna på 100 % för att ladda fritt från solen.",
+          "ev_kwh_per_100km": "Används för att uppskatta räckvidden när ingen räckviddssensor är konfigurerad.",
+          "vehicle_range_entity": "Valfri verklig räckviddssensor. Annars uppskattas räckvidden från SOC × kapacitet × verkningsgrad."
         }
       },
       "settings": {
@@ -361,13 +365,19 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers."
+          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "daily_ev_target_max": "Solöverskott laddar upp till detta och stoppar sedan. Lämna på fullt för att ladda fritt från solen.",
+          "ev_target_soc_max": "Solöverskott laddar upp till denna SOC och stoppar sedan. Lämna på 100 % för att ladda fritt från solen."
         }
       },
       "ev_charger_add": {
         "data": {
           "daily_ev_target_max": "Solladdningsgräns (kWh)",
           "ev_target_soc_max": "Solladdningsgräns (SOC %)"
+        },
+        "data_description": {
+          "daily_ev_target_max": "Solöverskott laddar upp till detta och stoppar sedan. Lämna på fullt för att ladda fritt från solen.",
+          "ev_target_soc_max": "Solöverskott laddar upp till denna SOC och stoppar sedan. Lämna på 100 % för att ladda fritt från solen."
         }
       }
     }
@@ -1139,6 +1149,38 @@
           "soc": "SoC-%-mål"
         }
       }
+    }
+  },
+  "exceptions": {
+    "dashboard_generation_failed": {
+      "message": "Det gick inte att generera SEM-instrumentpanelen. Se Home Assistant-loggarna för detaljer."
+    },
+    "load_management_not_initialized": {
+      "message": "Lasthanteringen är inte redo ännu. Vänta tills integrationen har startat klart och försök igen."
+    },
+    "device_registry_not_initialized": {
+      "message": "Enhetsregistret är inte redo ännu. Vänta tills integrationen har startat klart och försök igen."
+    },
+    "mapping_service_required": {
+      "message": "En tjänst krävs när styrtypen är ”tjänst”. Ange en tjänst att anropa."
+    },
+    "mapping_entity_required": {
+      "message": "En styrentitet krävs för den här styrtypen. Ange en styrentitet."
+    },
+    "device_not_found": {
+      "message": "Enheten ”{device_id}” hittades inte."
+    },
+    "invalid_device_property": {
+      "message": "Ogiltig enhetsegenskap: ”{property}”."
+    },
+    "invalid_deadline_format": {
+      "message": "Ogiltigt deadlineformat: ”{deadline}”. Använd ISO 8601-format, till exempel 2026-05-27T07:00:00."
+    }
+  },
+  "issues": {
+    "ev_charger_not_configured": {
+      "title": "EV-laddare ej konfigurerad",
+      "description": "Inga sensorer för EV-laddaren är konfigurerade, så EV-laddningsfunktionerna är inte tillgängliga. Lägg till en ”ansluten”-sensor eller en laddningseffektsensor i integrationsalternativen för att aktivera EV-laddning."
     }
   }
 }
