@@ -584,7 +584,8 @@ class SensorReader:
             registry = er.async_get(self.hass)
             entry = registry.async_get(entity_id)
             return entry.device_id if entry else None
-        except Exception:
+        except Exception as e:
+            _LOGGER.debug("Device lookup failed for %s: %s (#259)", entity_id, e)
             return None
 
     def _read_battery_soc_average(self, battery_power_entities: list) -> float:
@@ -842,7 +843,7 @@ class SensorReader:
                                         self._battery_soc_logged = True
                                     return eid
                             except (ValueError, TypeError):
-                                pass
+                                _LOGGER.debug("Battery SOC candidate %s not numeric: %r (#259)", eid, state.state)
         except Exception as e:
             _LOGGER.debug("Device registry SOC lookup failed: %s", e)
 
@@ -862,7 +863,7 @@ class SensorReader:
                             self._battery_soc_logged = True
                         return candidate
                 except (ValueError, TypeError):
-                    pass
+                    _LOGGER.debug("Battery SOC candidate %s not numeric: %r (#259)", candidate, state.state)
         return None
 
     def auto_detect_battery_capacity_kwh(self) -> Optional[float]:
