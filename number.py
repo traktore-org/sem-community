@@ -156,53 +156,11 @@ NUMBER_TYPES = [
         native_step=100,
         mode=NumberMode.SLIDER,
     ),
-    # EV Charging
-    NumberEntityDescription(
-        key="daily_ev_target",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        native_min_value=0,
-        native_max_value=100,
-        native_step=0.5,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="ev_target_soc",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=50,
-        native_max_value=100,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-        icon="mdi:battery-charging-80",
-    ),
-    # Optional solar ceiling (Max) — surplus may charge past the target up to this.
-    # Disabled by default; defaults to the target (Min) when unset (#245).
-    NumberEntityDescription(
-        key="daily_ev_target_max",
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        native_min_value=0,
-        native_max_value=100,
-        native_step=0.5,
-        mode=NumberMode.SLIDER,
-        icon="mdi:solar-power-variant",
-    ),
-    NumberEntityDescription(
-        key="ev_target_soc_max",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=50,
-        native_max_value=100,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-        icon="mdi:battery-charging-high",
-    ),
-    NumberEntityDescription(
-        key="ev_kwh_per_100km",
-        native_unit_of_measurement="kWh/100km",
-        native_min_value=8,
-        native_max_value=50,
-        native_step=0.5,
-        mode=NumberMode.BOX,
-        entity_category=EntityCategory.CONFIG,
-    ),
+    # EV charge-target / consumption settings (daily_ev_target[_max], ev_target_soc[_max],
+    # ev_kwh_per_100km) are PER-CHARGER only (#255) — global duplicates removed; see the
+    # per-charger descriptions in async_setup_entry. Stale registry entities are
+    # auto-removed by _cleanup_stale_entities; values were seeded per-charger by the v3→v4
+    # migration so nothing resets.
     NumberEntityDescription(
         key="public_charging_rate",
         native_unit_of_measurement="CHF/kWh",
@@ -220,23 +178,8 @@ NUMBER_TYPES = [
         native_step=500,
         mode=NumberMode.SLIDER,
     ),
-    # EV Charging Parameters
-    NumberEntityDescription(
-        key="ev_night_initial_current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        native_min_value=6,
-        native_max_value=32,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="ev_minimum_current",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        native_min_value=6,
-        native_max_value=16,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
+    # EV Charging Parameters — global night_initial_current + minimum_current removed as
+    # per-charger duplicates (#255); ev_stall_cooldown stays a global tuning constant.
     NumberEntityDescription(
         key="ev_stall_cooldown",
         native_unit_of_measurement=UnitOfTime.SECONDS,

@@ -40,10 +40,8 @@ SELECT_TYPES = [
         key="ev_charging_mode",
         options=list(EV_CHARGING_MODES.keys()),
     ),
-    SelectEntityDescription(
-        key="ev_target_type",
-        options=list(EV_TARGET_TYPES.keys()),
-    ),
+    # ev_target_type is PER-CHARGER only (#255) — the global duplicate was removed
+    # (seeded per-charger by the v3→v4 migration). Old global entity removed below.
 ]
 
 
@@ -60,28 +58,19 @@ async def async_setup_entry(
     """Set up SEM select entities."""
     coordinator: SEMCoordinator = entry.runtime_data
 
-    # Migrate the renamed global select entity (#235): ev_target_mode → ev_target_type.
-    # Idempotent registry rename so existing installs don't leave an orphaned entity.
-    # (Config values are read with a back-compat fallback, so no data migration is needed.)
+    # Remove the now-removed GLOBAL target-type select (#255): ev_target_type is
+    # per-charger only. Drop both the renamed global entity and its legacy
+    # ev_target_mode predecessor (#235) from the registry. Per-charger values were
+    # seeded from the global by the v3→v4 migration, so no data is lost.
     try:
         registry = er.async_get(hass)
-        old_uid = f"{entry.entry_id}_ev_target_mode"
-        new_uid = f"{entry.entry_id}_ev_target_type"
-        old_eid = registry.async_get_entity_id("select", DOMAIN, old_uid)
-        if old_eid:
-            if registry.async_get_entity_id("select", DOMAIN, new_uid) is None:
-                new_eid = "select.sem_ev_target_type"
-                update = {"new_unique_id": new_uid}
-                if registry.async_get(new_eid) is None:
-                    update["new_entity_id"] = new_eid
-                registry.async_update_entity(old_eid, **update)
-                _LOGGER.info("Migrated select entity %s → %s (%s)", old_uid, new_uid, old_eid)
-            else:
-                # New entity already exists — drop the orphaned old one.
-                registry.async_remove(old_eid)
-                _LOGGER.info("Removed orphaned select entity %s", old_eid)
+        for uid in (f"{entry.entry_id}_ev_target_type", f"{entry.entry_id}_ev_target_mode"):
+            eid = registry.async_get_entity_id("select", DOMAIN, uid)
+            if eid:
+                registry.async_remove(eid)
+                _LOGGER.info("Removed global target-type select %s (now per-charger, #255)", eid)
     except Exception as e:
-        _LOGGER.debug("ev_target_type select migration skipped: %s", e)
+        _LOGGER.debug("Global target-type select removal skipped: %s", e)
 
     entities = [
         SEMSelectEntity(coordinator, entry, description)
