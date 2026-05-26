@@ -264,7 +264,9 @@ Once battery-assist mode activates (Zone 3 or 4), it stays active even if SOC dr
 
 ## Night Charging
 
-Night charging starts automatically when night mode activates (after sunset + 10 minutes, or 20:30, whichever comes first).
+> **Night charging is opt-in (off by default).** SEM is a *solar* energy manager, so out of the box it charges your car on solar surplus only and never pulls from the grid overnight unasked. To enable grid-assisted night charging, turn on **`switch.sem_night_charging`** (and, for a multi-charger setup, the per-charger `…_night_charging` switch for each charger you want to top up). Upgrading users keep whatever state they already had — only fresh installs and newly-added chargers start off. *(#256)*
+
+Once enabled, night charging starts automatically when night mode activates (after sunset + 10 minutes, or 20:30, whichever comes first).
 
 ### How it works
 

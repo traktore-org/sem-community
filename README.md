@@ -192,7 +192,7 @@ SEM is designed to be mostly automatic. There are only 3 switches to manage:
 
 | Switch | Default | What it does |
 |--------|---------|-------------|
-| `switch.sem_night_charging` | ON | Enable/disable overnight grid charging |
+| `switch.sem_night_charging` | OFF | Enable/disable overnight grid charging (opt-in — solar surplus only until you turn it on; #256) |
 | `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware |
 | `switch.sem_smart_night_charging` | OFF | Intelligently skip or reduce night charges based on EV SOC, solar forecast, temperature, and learned driving patterns |
 
@@ -214,9 +214,7 @@ Set via integration options: `ev_charging_mode = "minpv"`.
 
 ### Night Charging
 
-Overnight grid charging starts automatically after sunset. SEM charges at a peak-managed rate to avoid demand spikes and stops when the daily EV target is reached. Battery discharge protection prevents the home battery from powering the EV overnight.
-
-Enable/disable with `switch.sem_night_charging`.
+**Opt-in (off by default).** SEM charges on solar surplus only until you enable overnight grid charging — so a fresh install never pulls from the grid unasked. Once enabled with `switch.sem_night_charging` (and the per-charger switch in a multi-charger setup), overnight grid charging starts automatically after sunset, runs at a peak-managed rate to avoid demand spikes, and stops when the daily EV target is reached. Battery discharge protection prevents the home battery from powering the EV overnight. Upgrading users keep their existing setting.
 
 ### Battery-Assisted Charging
 

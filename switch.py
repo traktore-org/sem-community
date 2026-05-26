@@ -150,7 +150,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self.entity_id = f"switch.sem_{description.key}"
 
         if description.key == "night_charging":
-            self._is_on = True  # Default to ON (will be restored from last state if available)
+            # Opt-in (#256): default OFF so a fresh install charges on solar surplus only
+            # and never grid-charges the car overnight unasked. RestoreEntity below
+            # preserves existing users — they keep whatever state they already had.
+            self._is_on = False
         elif description.key == "observer_mode":
             self._is_on = coordinator.config_entry.options.get("observer_mode", False)
         else:
@@ -216,7 +219,10 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self._attr_device_info = coordinator.device_info
         self.entity_id = f"switch.sem_{description.key}"
         self._charger_id = charger_id
-        self._is_on = True  # Default: night charging enabled
+        # Opt-in (#256): default OFF. A newly-added charger won't night-charge until
+        # the user enables it, so it can't silently inherit a grid top-up. Existing
+        # chargers keep their state via RestoreEntity in async_added_to_hass below.
+        self._is_on = False
 
     async def async_added_to_hass(self) -> None:
         """Restore previous state."""
