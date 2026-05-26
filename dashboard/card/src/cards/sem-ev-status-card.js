@@ -838,10 +838,16 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-val.clickable { cursor: pointer; }
             .ct-unit {
                 appearance: none; -webkit-appearance: none;
-                background: var(--secondary-background-color, rgba(255,255,255,0.07));
+                background-color: var(--secondary-background-color, rgba(255,255,255,0.07));
+                /* explicit caret — appearance:none drops the native arrow, which made
+                   this look like a static label rather than a kWh/% toggle (#245) */
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bbbbbb' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 3px center;
+                background-size: 14px;
                 color: var(--primary-text-color, #e0e0e0);
                 border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
-                border-radius: 8px; padding: 4px 8px;
+                border-radius: 8px; padding: 4px 20px 4px 8px;
                 font-size: 12px; font-weight: 600; cursor: pointer;
             }
             .ct-unit-static {
