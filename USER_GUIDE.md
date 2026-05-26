@@ -298,6 +298,12 @@ If your EV charger integration provides a vehicle battery SOC sensor, you can co
 
 SEM will then calculate remaining charging need from the SOC gap instead of the kWh counter. This is more accurate and lets you set a percentage-based charge limit for battery longevity.
 
+**Driving range.** SEM also publishes `sensor.sem_ev_remaining_range`. If your car
+integration exposes a real range sensor, set `vehicle_range_entity` to it; otherwise SEM
+estimates range from SOC × `ev_battery_capacity_kwh` × `ev_km_per_kwh` (efficiency, default
+5.5 km/kWh). Both `vehicle_range_entity` and `ev_km_per_kwh` are configurable in the
+EV step of the options flow.
+
 **Charge-target range (Min/Max).** The EV card shows a **dual-handle slider**: the
 **Min** handle is the *guaranteed* amount (night/grid tops up to it), the **Max**
 handle is the *solar ceiling* (surplus charges up to it, then stops). This replaces
