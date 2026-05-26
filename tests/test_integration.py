@@ -124,10 +124,11 @@ class TestCurrencyConfiguration:
 class TestSwitchDefaults:
     """Verify switch default states."""
 
-    def test_night_charging_default_on(self, mock_coordinator):
+    def test_night_charging_default_off(self, mock_coordinator):
+        # Opt-in (#256): surplus-only by default; existing users preserved via RestoreEntity.
         desc = SWITCH_TYPES[0]  # night_charging
         switch = SEMSolarSwitch(mock_coordinator, desc, "test")
-        assert switch._is_on is True
+        assert switch._is_on is False
 
     def test_observer_mode_default_off(self, mock_coordinator):
         mock_coordinator.config_entry.options = {}

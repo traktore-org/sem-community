@@ -25,7 +25,19 @@
    - 3-phase chargers: ~4140 W (6 A × 3 × 230 V)
 
    The `min_solar_power` setting (default 500 W in the Optimization Settings step) is the surplus *floor* below which SEM won't even attempt to start the charger — keep it well **below** the hardware minimum so SEM has headroom to ramp up before the cliff.
-5. For night charging: check that `switch.sem_night_charging` is enabled and it's within the night window
+5. For night charging: it is **opt-in (off by default)** — turn on `switch.sem_night_charging` (and the per-charger `…_night_charging` switch in a multi-charger setup), and make sure it's within the night window
+
+---
+
+## Car charged overnight when I only wanted solar surplus
+
+**Cause:** Grid-assisted **night charging** is enabled, with a charge target (a daily kWh target or a target SOC %) the car hadn't reached, so SEM topped it up from the grid overnight. On fresh installs this is now off by default, but it stays enabled on upgraded systems that already had it on, and a multi-charger setup tracks an enable switch *per charger*.
+
+**Fix:** To make a charger surplus-only, either:
+1. Turn **off** that charger's `…_night_charging` switch (or the global `switch.sem_night_charging` to disable night charging for all chargers), **or**
+2. Set that charger's **Night Target to 0** (kWh mode) / its **Target SOC to its current level** (SOC mode).
+
+With the floor at zero and/or night charging off, the charger only draws solar surplus. *(#256)*
 
 ---
 
