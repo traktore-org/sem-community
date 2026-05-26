@@ -54,6 +54,19 @@ SEM supports SG-Ready heat pump control via two relay entities (Shelly, ESPHome,
 - **Temperature correction** — requires an outdoor temperature sensor (auto-detected from a `weather.*` entity). Without it, temperature correction is disabled and predictions assume 20°C.
 - **Battery health tracking** — requires multiple charge sessions over weeks/months to produce meaningful estimates. Short-term values may fluctuate.
 
+## One vehicle per charger
+
+By design, SEM models **one car per charger** — the charger *is* the vehicle. All
+vehicle-specific settings (SOC sensor, battery capacity, efficiency, and the SOC/% charge
+targets) and the virtual-SOC estimate are stored per charger. Multiple chargers (one car
+each) are fully supported; **two different cars sharing a single charger are not**.
+
+If two cars share one charger, the SOC-based features (% target, virtual SOC, derived range)
+will be inaccurate because the per-charger state can't represent two vehicles. The
+**car-agnostic** features still work correctly for either car: use a **kWh** charge target
+(not %), and taper detection still stops charging when the battery is full regardless of
+which car is plugged in.
+
 ## Multi-device aggregation
 
 SEM supports multiple solar inverters, battery units, and grid tariff entries from the HA Energy Dashboard (v1.3.0+). Limitations:
