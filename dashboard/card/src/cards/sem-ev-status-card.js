@@ -903,10 +903,11 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-sw.on .ct-knob { left: 18px; }
 
             @media (max-width: 400px) {
-                .hero { flex-direction: column; align-items: stretch; gap: 12px; }
-                .ev-icon-area { width: 80px; height: 80px; align-self: center; }
-                .metrics-col { align-items: stretch; }
-                /* keep .metric-row's base space-between: label left, value right (not centered) */
+                /* Match the Battery tab exactly: stack the hero, keep the base
+                   align-items:center so the metrics sit as a content-width block with
+                   label-left / value-right rows (not stretched edge-to-edge). */
+                .hero { flex-direction: column; gap: 12px; }
+                .ev-icon-area { width: 80px; height: 80px; }
             }
         `;
     }
