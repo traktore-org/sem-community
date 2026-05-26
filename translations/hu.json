@@ -121,7 +121,7 @@
           "daily_ev_target_max": "Napelemes töltési limit (kWh)",
           "ev_target_soc_max": "Napelemes töltési limit (SOC %)",
           "vehicle_range_entity": "Jármű hatótáv-érzékelő",
-          "ev_km_per_kwh": "Jármű hatékonyság (km/kWh)"
+          "ev_kwh_per_100km": "Jármű fogyasztás (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -1031,9 +1031,6 @@
       "daily_ev_target": {
         "name": "Daily EV Target"
       },
-      "ev_km_per_kwh": {
-        "name": "EV Efficiency"
-      },
       "public_charging_rate": {
         "name": "Public Charging Rate"
       },
@@ -1126,6 +1123,9 @@
       },
       "ev_target_soc_max": {
         "name": "Max. napelemes EV töltés SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Jármű fogyasztás (kWh/100km)"
       }
     },
     "select": {

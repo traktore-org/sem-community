@@ -121,7 +121,7 @@
           "daily_ev_target_max": "Limită încărcare solară (kWh)",
           "ev_target_soc_max": "Limită încărcare solară (SOC %)",
           "vehicle_range_entity": "Senzor autonomie vehicul",
-          "ev_km_per_kwh": "Eficiență vehicul (km/kWh)"
+          "ev_kwh_per_100km": "Consum vehicul (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -1031,9 +1031,6 @@
       "daily_ev_target": {
         "name": "Daily EV Target"
       },
-      "ev_km_per_kwh": {
-        "name": "EV Efficiency"
-      },
       "public_charging_rate": {
         "name": "Public Charging Rate"
       },
@@ -1126,6 +1123,9 @@
       },
       "ev_target_soc_max": {
         "name": "Încărcare solară max VE SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Consum vehicul (kWh/100km)"
       }
     },
     "select": {

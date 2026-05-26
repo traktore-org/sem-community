@@ -830,7 +830,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     )
                 ),
                 # Optional real range sensor; else range is derived from
-                # SOC × capacity × efficiency (km/kWh) (#245).
+                # SOC × capacity ÷ consumption (kWh/100km) (#245).
                 vol.Optional(
                     "vehicle_range_entity",
                     description={"suggested_value": _opt("vehicle_range_entity")},
@@ -838,11 +838,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.EntitySelectorConfig(domain="sensor", device_class="distance")
                 ),
                 vol.Optional(
-                    "ev_km_per_kwh",
-                    default=_c("ev_km_per_kwh", 5.5),
+                    "ev_kwh_per_100km",
+                    default=_c("ev_kwh_per_100km", 18),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=2, max=12, step=0.1, unit_of_measurement="km/kWh", mode="box"
+                        min=8, max=50, step=0.5, unit_of_measurement="kWh/100km", mode="box"
                     )
                 ),
                 vol.Optional(

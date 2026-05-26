@@ -121,7 +121,7 @@
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)",
           "vehicle_range_entity": "Voertuig-bereiksensor",
-          "ev_km_per_kwh": "Voertuigefficiëntie (km/kWh)"
+          "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -1031,9 +1031,6 @@
       "daily_ev_target": {
         "name": "Dagelijks EV-doel"
       },
-      "ev_km_per_kwh": {
-        "name": "EV-efficiëntie"
-      },
       "public_charging_rate": {
         "name": "Openbaar Laadtarief"
       },
@@ -1126,6 +1123,9 @@
       },
       "ev_target_soc_max": {
         "name": "EV zonne-laadmaximum SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Voertuigverbruik (kWh/100km)"
       }
     },
     "select": {

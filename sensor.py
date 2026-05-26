@@ -1284,7 +1284,7 @@ SENSOR_TYPES = [
         suggested_display_precision=1,
     ),
     # Estimated driving range (#245): from a real range entity if configured,
-    # else derived from vehicle SOC × capacity × efficiency (ev_km_per_kwh).
+    # else derived from vehicle SOC × capacity ÷ consumption (ev_kwh_per_100km).
     SensorEntityDescription(
         key="ev_remaining_range",
         device_class=SensorDeviceClass.DISTANCE,

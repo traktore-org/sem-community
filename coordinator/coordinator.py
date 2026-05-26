@@ -1082,7 +1082,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 result["vehicle_soc"] = self._cycle_vehicle_soc
 
             # EV driving range (#245): prefer a real range entity, else derive
-            # from SOC × usable capacity × efficiency (ev_km_per_kwh).
+            # from SOC × usable capacity ÷ consumption (ev_kwh_per_100km).
             _range_entity = self.config.get("vehicle_range_entity", "")
             if _range_entity:
                 _rs = self.hass.states.get(_range_entity)
@@ -1101,10 +1101,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     return v if v is not None else self.config.get(key, default)
 
                 _cap = _per_car("ev_battery_capacity_kwh", 40)
-                _kpk = _per_car("ev_km_per_kwh", 5.5)
-                result["ev_remaining_range"] = round(
-                    self._cycle_vehicle_soc / 100 * _cap * _kpk
-                )
+                _cons = _per_car("ev_kwh_per_100km", 18)  # consumption, kWh/100km
+                if _cons and _cons > 0:
+                    result["ev_remaining_range"] = round(
+                        self._cycle_vehicle_soc / 100 * _cap / _cons * 100
+                    )
 
             # EV departure time (if configured via input_datetime entity)
             departure_entity = self.config.get("ev_departure_time_entity", "")

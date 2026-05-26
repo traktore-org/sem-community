@@ -195,10 +195,10 @@ NUMBER_TYPES = [
         icon="mdi:battery-charging-high",
     ),
     NumberEntityDescription(
-        key="ev_km_per_kwh",
-        native_unit_of_measurement="km/kWh",
-        native_min_value=3,
-        native_max_value=10,
+        key="ev_kwh_per_100km",
+        native_unit_of_measurement="kWh/100km",
+        native_min_value=8,
+        native_max_value=50,
         native_step=0.5,
         mode=NumberMode.BOX,
         entity_category=EntityCategory.CONFIG,
@@ -465,19 +465,19 @@ async def async_setup_entry(
                 ), "ev_battery_capacity_kwh",
                     charger_cfg.get("ev_battery_capacity_kwh",
                                     full_config.get("ev_battery_capacity_kwh", 40))),
-                # Per-car efficiency (km/kWh) — feeds the driving-range estimate.
+                # Per-car consumption (kWh/100km) — feeds the driving-range estimate.
                 # Individual per car, hence per charger (one car per charger). (#245)
                 (NumberEntityDescription(
-                    key=f"charger_{cid}_ev_km_per_kwh",
-                    name=f"{cname} Efficiency",
-                    native_unit_of_measurement="km/kWh",
-                    native_min_value=2, native_max_value=12, native_step=0.1,
+                    key=f"charger_{cid}_ev_kwh_per_100km",
+                    name=f"{cname} Consumption",
+                    native_unit_of_measurement="kWh/100km",
+                    native_min_value=8, native_max_value=50, native_step=0.5,
                     mode=NumberMode.BOX,
                     icon="mdi:map-marker-distance",
                     entity_category=EntityCategory.CONFIG,
-                ), "ev_km_per_kwh",
-                    charger_cfg.get("ev_km_per_kwh",
-                                    full_config.get("ev_km_per_kwh", 5.5))),
+                ), "ev_kwh_per_100km",
+                    charger_cfg.get("ev_kwh_per_100km",
+                                    full_config.get("ev_kwh_per_100km", 18))),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(
@@ -665,7 +665,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "ev_minimum_current": DEFAULT_EV_MIN_CURRENT,
             "ev_stall_cooldown": DEFAULT_EV_STALL_COOLDOWN,
             "ev_phases": 3,
-            "ev_km_per_kwh": 5.5,
+            "ev_kwh_per_100km": 18,
             "public_charging_rate": 0.55,
             "electricity_import_rate": 0.3387,
             "electricity_export_rate": 0.075,

@@ -121,7 +121,7 @@
           "daily_ev_target_max": "Solladdningsgräns (kWh)",
           "ev_target_soc_max": "Solladdningsgräns (SOC %)",
           "vehicle_range_entity": "Fordonets räckviddssensor",
-          "ev_km_per_kwh": "Fordonseffektivitet (km/kWh)"
+          "ev_kwh_per_100km": "Fordonsförbrukning (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -1031,9 +1031,6 @@
       "daily_ev_target": {
         "name": "Daily EV Target"
       },
-      "ev_km_per_kwh": {
-        "name": "EV Efficiency"
-      },
       "public_charging_rate": {
         "name": "Public Charging Rate"
       },
@@ -1126,6 +1123,9 @@
       },
       "ev_target_soc_max": {
         "name": "Solladdning max elbil SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Fordonsförbrukning (kWh/100km)"
       }
     },
     "select": {

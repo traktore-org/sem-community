@@ -121,7 +121,7 @@
           "daily_ev_target_max": "Solar charge limit (kWh)",
           "ev_target_soc_max": "Solar charge limit (SOC %)",
           "vehicle_range_entity": "Vehicle range sensor",
-          "ev_km_per_kwh": "Vehicle efficiency (km/kWh)"
+          "ev_kwh_per_100km": "Vehicle consumption (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -136,7 +136,7 @@
           "daily_ev_target_max": "Solar surplus charges up to this, then stops. Leave at full to charge freely from sun.",
           "ev_target_soc_max": "Solar surplus charges up to this SOC, then stops. Leave at 100% to charge freely from sun.",
           "vehicle_range_entity": "Optional real range sensor. Otherwise range is estimated from SOC × capacity × efficiency.",
-          "ev_km_per_kwh": "Used to estimate driving range when no range sensor is configured."
+          "ev_kwh_per_100km": "Used to estimate driving range when no range sensor is configured."
         }
       },
       "settings": {
@@ -1041,9 +1041,6 @@
       "daily_ev_target": {
         "name": "Daily EV Target"
       },
-      "ev_km_per_kwh": {
-        "name": "EV Efficiency"
-      },
       "public_charging_rate": {
         "name": "Public Charging Rate"
       },
@@ -1136,6 +1133,9 @@
       },
       "ev_target_soc_max": {
         "name": "EV Solar Charge Max SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Vehicle consumption (kWh/100km)"
       }
     },
     "select": {

@@ -92,7 +92,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 hass.states[`number.sem_charger_${id}_daily_ev_target_max`]?.state || '',
                 hass.states[`number.sem_charger_${id}_target_soc_max`]?.state || '',
                 hass.states[`number.sem_charger_${id}_ev_battery_capacity_kwh`]?.state || '',
-                hass.states[`number.sem_charger_${id}_ev_km_per_kwh`]?.state || '',
+                hass.states[`number.sem_charger_${id}_ev_kwh_per_100km`]?.state || '',
             ].join(':')).join('|');
             key += '|' + (hass.states[`${prefix}ev_remaining_range`]?.state || '');
         }
@@ -277,7 +277,7 @@ class SEMEVStatusCard extends SEMLitBase {
         const startAmps = this._entityVal(`number.sem_charger_${id}_night_initial_current`, 10);
         const minAmps = this._entityVal(`number.sem_charger_${id}_minimum_current`, 6);
         const capacityKwh = this._entityVal(`number.sem_charger_${id}_ev_battery_capacity_kwh`, 40);
-        const kmPerKwh = this._entityVal(`number.sem_charger_${id}_ev_km_per_kwh`, 5.5);
+        const consumption = this._entityVal(`number.sem_charger_${id}_ev_kwh_per_100km`, 18);
 
         const needsCharge = chargeNeeded === 'True' || chargeNeeded === 'true';
         const chargeIcon = needsCharge ? 'mdi:battery-alert' : 'mdi:battery-check';
@@ -410,12 +410,12 @@ class SEMEVStatusCard extends SEMLitBase {
                     <div
                         class="setting-item clickable"
                         @click=${() => {
-                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_km_per_kwh` } });
+                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_kwh_per_100km` } });
                             this.dispatchEvent(event);
                         }}
                     >
                         <ha-icon icon="mdi:map-marker-distance" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
-                        <span class="setting-value">${this._fmt(kmPerKwh, 1)} km/kWh</span>
+                        <span class="setting-value">${this._fmt(consumption, 0)} kWh/100km</span>
                     </div>
                 </div>
             </div>

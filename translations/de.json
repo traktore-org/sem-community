@@ -121,7 +121,7 @@
           "daily_ev_target_max": "Solar-Ladelimit (kWh)",
           "ev_target_soc_max": "Solar-Ladelimit (SOC %)",
           "vehicle_range_entity": "Fahrzeug-Reichweitensensor",
-          "ev_km_per_kwh": "Fahrzeugeffizienz (km/kWh)"
+          "ev_kwh_per_100km": "Fahrzeugverbrauch (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -136,7 +136,7 @@
           "daily_ev_target_max": "Solarüberschuss lädt bis hierhin, dann Stopp. Auf Voll lassen, um frei aus der Sonne zu laden.",
           "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden.",
           "vehicle_range_entity": "Optionaler echter Reichweitensensor. Sonst wird die Reichweite aus SOC × Kapazität × Effizienz geschätzt.",
-          "ev_km_per_kwh": "Wird zur Schätzung der Reichweite verwendet, wenn kein Reichweitensensor konfiguriert ist."
+          "ev_kwh_per_100km": "Wird zur Schätzung der Reichweite verwendet, wenn kein Reichweitensensor konfiguriert ist."
         }
       },
       "settings": {
@@ -1042,9 +1042,6 @@
       "daily_ev_target": {
         "name": "Tägliches EV-Ziel"
       },
-      "ev_km_per_kwh": {
-        "name": "EV-Effizienz"
-      },
       "public_charging_rate": {
         "name": "Öffentlicher Ladetarif"
       },
@@ -1137,6 +1134,9 @@
       },
       "ev_target_soc_max": {
         "name": "EV Solar-Lademaximum SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Fahrzeugverbrauch (kWh/100km)"
       }
     },
     "select": {

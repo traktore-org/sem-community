@@ -121,7 +121,7 @@
           "daily_ev_target_max": "Limite di carica solare (kWh)",
           "ev_target_soc_max": "Limite di carica solare (SOC %)",
           "vehicle_range_entity": "Sensore di autonomia del veicolo",
-          "ev_km_per_kwh": "Efficienza del veicolo (km/kWh)"
+          "ev_kwh_per_100km": "Consumo del veicolo (kWh/100km)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
@@ -1031,9 +1031,6 @@
       "daily_ev_target": {
         "name": "Obiettivo VE Giornaliero"
       },
-      "ev_km_per_kwh": {
-        "name": "Efficienza VE"
-      },
       "public_charging_rate": {
         "name": "Tariffa Ricarica Pubblica"
       },
@@ -1126,6 +1123,9 @@
       },
       "ev_target_soc_max": {
         "name": "Carica solare max VE SOC (%)"
+      },
+      "ev_kwh_per_100km": {
+        "name": "Consumo del veicolo (kWh/100km)"
       }
     },
     "select": {
