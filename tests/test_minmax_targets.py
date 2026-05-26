@@ -187,6 +187,48 @@ class TestSocRange:
         assert _floor(coord, energy, vehicle_soc=None) == pytest.approx(2.0)   # 4 - 2 (kWh floor)
         assert _ceiling(coord, energy, vehicle_soc=None) == pytest.approx(8.0)  # 10 - 2 (kWh ceiling)
 
+    def test_soc_uses_virtual_soc_when_anchored_and_no_sensor(self):
+        """De-trap: no real SOC but an ANCHORED EV-intelligence estimate → SOC-based."""
+        coord = _make_coordinator({
+            "ev_target_type": "soc",
+            "ev_target_soc": 50, "ev_target_soc_max": 80,
+            "ev_battery_capacity_kwh": 40,
+        })
+        det = MagicMock(); det._soc_anchored = True; det.get_virtual_soc.return_value = 40.0
+        coord._ev_taper_detector = det
+        coord._ev_taper_detectors = {}
+        energy = _make_energy()
+        # virtual SOC 40% → floor (50-40)/100*40=4.0 ; ceiling (80-40)/100*40=16.0
+        assert _floor(coord, energy, vehicle_soc=None) == pytest.approx(4.0)
+        assert _ceiling(coord, energy, vehicle_soc=None) == pytest.approx(16.0)
+
+    def test_soc_falls_back_to_kwh_when_estimate_not_anchored(self):
+        """No real SOC and the estimate is NOT anchored → kWh (no risky guess)."""
+        coord = _make_coordinator({
+            "ev_target_type": "soc",
+            "ev_target_soc": 50, "ev_target_soc_max": 80,
+            "daily_ev_target": 4, "daily_ev_target_max": 10,
+            "ev_battery_capacity_kwh": 40,
+        })
+        det = MagicMock(); det._soc_anchored = False
+        coord._ev_taper_detector = det
+        coord._ev_taper_detectors = {}
+        energy = _make_energy(daily_ev=2.0)
+        assert _floor(coord, energy, vehicle_soc=None) == pytest.approx(2.0)   # kWh
+        assert _ceiling(coord, energy, vehicle_soc=None) == pytest.approx(8.0)  # kWh
+
+    def test_soc_per_charger_uses_that_chargers_anchored_estimate(self):
+        """Per-charger: the charger's own anchored detector supplies the estimate."""
+        coord = _make_coordinator({"ev_battery_capacity_kwh": 40})
+        det = MagicMock(); det._soc_anchored = True; det.get_virtual_soc.return_value = 30.0
+        coord._ev_taper_detectors = {"ev1": det}
+        coord._ev_taper_detector = MagicMock()  # global detector (must not be used)
+        energy = _make_energy()
+        cfg = {"id": "ev1", "ev_target_type": "soc", "ev_target_soc": 50,
+               "ev_battery_capacity_kwh": 40}
+        # virtual 30% → floor (50-30)/100*40 = 8.0
+        assert _floor(coord, energy, vehicle_soc=None, charger_cfg=cfg) == pytest.approx(8.0)
+
 
 # ──────────────────────────────────────────────
 # Per-charger overrides and global inheritance

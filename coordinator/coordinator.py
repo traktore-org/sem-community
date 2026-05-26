@@ -2010,6 +2010,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             or self.config.get("ev_target_type") or self.config.get("ev_target_mode", "kwh")
         )
 
+        # De-trap %: if % is selected but there's no real SOC sensor, fall back to
+        # the EV-intelligence virtual SOC — but only when it has a confident anchor
+        # (a detected full charge / car-API calibration). The estimate is a *soft*
+        # ceiling: taper detection is still the hard "full" stop, and the Min floor
+        # still grid-tops-up, so an estimate error is bounded. With no real SOC and
+        # no anchored estimate, fall through to the kWh target (no silent no-op). (#245)
+        if ev_target_type == "soc" and vehicle_soc is None:
+            cid = cfg.get("id")
+            detectors = getattr(self, "_ev_taper_detectors", {}) or {}
+            detector = detectors.get(cid) if cid else getattr(self, "_ev_taper_detector", None)
+            if detector is not None and getattr(detector, "_soc_anchored", False):
+                vehicle_soc = detector.get_virtual_soc(None)
+
         use_soc = ev_target_type == "soc" and vehicle_soc is not None
         if use_soc:
             # SOC ceiling defaults to 100% (car full); floor default 80%.

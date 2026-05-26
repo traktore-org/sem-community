@@ -298,6 +298,13 @@ If your EV charger integration provides a vehicle battery SOC sensor, you can co
 
 SEM will then calculate remaining charging need from the SOC gap instead of the kWh counter. This is more accurate and lets you set a percentage-based charge limit for battery longevity.
 
+**No SOC sensor? SEM uses the EV-intelligence estimate.** If you select % mode without a
+`vehicle_soc_entity`, SEM falls back to the **virtual SOC** from EV intelligence — but only
+once it has a confident anchor (after a detected full charge / taper event). The estimate is
+a *soft* ceiling: taper detection is still the hard "battery full" stop, and the night/grid
+**Min** floor still tops up, so an estimate error stays bounded. Until the estimate is
+anchored, % mode uses the **kWh** daily target instead (so it's never a silent no-op).
+
 **Driving range.** SEM also publishes `sensor.sem_ev_remaining_range`. If your car
 integration exposes a real range sensor, set `vehicle_range_entity` to it; otherwise SEM
 estimates range from SOC × `ev_battery_capacity_kwh` × `ev_km_per_kwh` (efficiency, default
