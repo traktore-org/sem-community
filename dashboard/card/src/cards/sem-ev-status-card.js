@@ -903,10 +903,10 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-sw.on .ct-knob { left: 18px; }
 
             @media (max-width: 400px) {
-                .hero { flex-direction: column; align-items: center; text-align: center; }
-                .ev-icon-area { width: 80px; height: 80px; }
-                .metric-row { justify-content: center; gap: 8px; }
-                .metrics-col { align-items: center; }
+                .hero { flex-direction: column; align-items: stretch; gap: 12px; }
+                .ev-icon-area { width: 80px; height: 80px; align-self: center; }
+                .metrics-col { align-items: stretch; }
+                /* keep .metric-row's base space-between: label left, value right (not centered) */
             }
         `;
     }
