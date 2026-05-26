@@ -308,7 +308,7 @@ class SEMEVStatusCard extends SEMLitBase {
             ? html`<select class="ct-unit" .value=${targetType}
                     @click=${(e) => e.stopPropagation()}
                     @change=${(e) => this._selectOption(targetTypeId, e.target.value)}>
-                    ${ttOptions.map(o => html`<option value=${o}>${o === 'soc' ? '%' : 'kWh'}</option>`)}
+                    ${ttOptions.map(o => html`<option value=${o} ?selected=${o === targetType}>${o === 'soc' ? '%' : 'kWh'}</option>`)}
                 </select>`
             : html`<span class="ct-unit-static">${isSoc ? '%' : 'kWh'}</span>`;
 
