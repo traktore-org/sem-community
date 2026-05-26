@@ -132,7 +132,14 @@ export class SEMLitBase extends LitElement {
     _pcEntity(domain, suffix, globalFallback) {
         const st = this._hass?.states || {};
         const re = new RegExp(`^${domain}\\.sem_charger_.+_${suffix}$`);
-        const match = Object.keys(st).filter(id => re.test(id)).sort();
+        let match = Object.keys(st).filter(id => re.test(id));
+        // `_${suffix}$` over-matches when one key is a tail of a longer one:
+        // `night_charging` also matches `smart_night_charging`. Drop the longer key so a
+        // request for the plain switch can never resolve to the smart one (only clash).
+        if (suffix === 'night_charging') {
+            match = match.filter(id => !id.endsWith('_smart_night_charging'));
+        }
+        match.sort();
         return match.length ? match[0] : globalFallback;
     }
 
