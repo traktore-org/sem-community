@@ -177,6 +177,30 @@ class TestTariffGating:
         assert not p.should_wait_for_cheap
         assert not p.reachable
 
+    def test_partial_slot_before_deadline_not_overcounted(self):
+        # One cheap slot starts 02:00 (ends 03:00) but deadline is 02:30 → only
+        # 0.5h usable. At 22A*0.69kW=15.2kW that's ~7.6 kWh deliverable. Need 12
+        # kWh → cannot wait (would miss the deadline). Regression for review #1.
+        now = datetime(2026, 5, 27, 1, 0, 0)  # 01:00
+        cheap = [datetime(2026, 5, 27, 2, 0)]  # 02:00–03:00
+        p = plan_night_charge(
+            now=now, remaining_to_min_kwh=12.0, min_amps=6, max_amps=22,
+            watts_per_amp=WPA, target_time="02:30", night_end="07:00",
+            tariff_optimized=True, cheap_slots=cheap,
+        )
+        assert not p.should_wait_for_cheap
+
+    def test_full_slot_before_deadline_can_wait(self):
+        # Same slot but deadline 03:00 → full 1h usable (~15 kWh) ≥ 12 → can wait.
+        now = datetime(2026, 5, 27, 1, 0, 0)
+        cheap = [datetime(2026, 5, 27, 2, 0)]
+        p = plan_night_charge(
+            now=now, remaining_to_min_kwh=12.0, min_amps=6, max_amps=22,
+            watts_per_amp=WPA, target_time="03:00", night_end="07:00",
+            tariff_optimized=True, cheap_slots=cheap,
+        )
+        assert p.should_wait_for_cheap
+
     def test_next_cheap_surfaced_even_when_charging(self):
         # Now cheap but the next window start is still reported for the card.
         cheap = [datetime(2026, 5, 26, 22), datetime(2026, 5, 27, 2)]

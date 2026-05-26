@@ -188,9 +188,16 @@ def plan_night_charge(
             plan.reason = "tariff: deadline at risk — charging despite price"
         else:
             # Can we still hit Min using only the cheap slots before the deadline?
+            # Clip each slot to the time actually left before the deadline — a slot
+            # that starts just before the deadline only delivers a fraction of its
+            # hour, so counting the whole slot could make us wait and then miss Min.
             limit = deadline if deadline is not None else (now + timedelta(hours=24))
-            cheap_before_deadline = [s for s in cheap_slots if s < limit and s >= now]
-            deliverable_kwh = len(cheap_before_deadline) * slot_hours * max_rate_kw
+            deliverable_kwh = 0.0
+            for s in cheap_slots:
+                if s >= limit:
+                    continue
+                usable_h = min(slot_hours, max(0.0, (limit - max(s, now)).total_seconds() / 3600.0))
+                deliverable_kwh += usable_h * max_rate_kw
             if deliverable_kwh + 1e-6 >= remaining_to_min_kwh:
                 plan.should_wait_for_cheap = True
                 nxt = plan.next_cheap_start
