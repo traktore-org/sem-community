@@ -519,28 +519,12 @@ class SEMEVStatusCard extends SEMLitBase {
                                     </div>
                                 ` : nothing}
                                 <div class="metric-row">
-                                    <span class="metric-label">${this._t('current')}</span>
-                                    <span class="metric-value">${this._fmt(current, 0)} A</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">${this._t('session')}</span>
-                                    <span class="metric-value">${this._fmt(sessionEnergy, 1)} kWh</span>
-                                </div>
-                                <div class="metric-row">
                                     <span class="metric-label">${this._t('today')}</span>
                                     <span class="metric-value">${this._fmt(dailyEnergy, 1)} kWh</span>
                                 </div>
                                 <div class="metric-row">
                                     <span class="metric-label">${this._t('solar_share')}</span>
                                     <span class="metric-value solar-share-value">${this._fmt(solarShare, 0)}%</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">${this._t('strategy')}</span>
-                                    <span class="strategy-value">${strategy ? this._t(strategy) : '\u2014'}</span>
-                                </div>
-                                <div class="metric-row">
-                                    <span class="metric-label">${this._t('mode')}</span>
-                                    <span class="metric-value">${modeLabels[mode] || mode}</span>
                                 </div>
                             </div>
                         `}
