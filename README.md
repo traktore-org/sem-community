@@ -423,6 +423,16 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ## Recent Improvements (v1.5.x)
 
+### v1.5.14 — Multi-device cleanup, EV range targets & night-charge peak safety
+- **Night charging respects the peak limit** (#268) — night-charge current is now sized from the house load alone, so grid import stays ≤ your configured peak limit regardless of battery behaviour. Previously battery discharge could inflate the EV current and push grid import well past the limit.
+- **Per-charger is canonical** (#255) — duplicate global EV settings removed; per-charger entities (night charging, mode, phases, target, current) are the source of truth and globals become read-only summaries. Idempotent v3→v4 config migration.
+- **EV Min/Max range targets** (#245) — set a guaranteed Min (grid/night) and a solar-only Max ceiling, in kWh or SoC % (SoC option appears when a vehicle SOC sensor is configured), with live driving-range display.
+- **Night-charging opt-in** (#256) — night charging is per-charger opt-in; no charger charges overnight unless you enable it.
+- **Surfaced silent failures** (#259) — dashboard generation, device mapping, and load-management errors now raise clear, translated messages instead of failing silently; a repair issue flags an unconfigured EV charger.
+- **Per-charger daily energy** (#267) — per-charger daily kWh now persists across restarts and matches the global total.
+- **SolaX derivation fix** (#250) — improved sensor derivation for the SolaX Modbus integration.
+- **Translations completed** — exception/repair messages and the EV range-target help are now translated across all 15 languages.
+
 ### v1.5.7 — Illustrated System Diagram
 - **System diagram rewrite** — detailed inline SVG illustrations replace abstract outlines; left-to-right desktop layout, vertical mobile layout
 - **Clickable diagram nodes** — tap any component to open HA more-info statistics dialog
