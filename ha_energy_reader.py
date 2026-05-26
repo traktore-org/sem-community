@@ -443,7 +443,9 @@ def _find_power_sensor_on_device(
         candidates.sort(key=_rank)
         return candidates[0]
     except Exception as e:  # noqa: BLE001 — best-effort, never block setup
-        _LOGGER.debug("Power sensor derivation failed for %s: %s", energy_entity, e)
+        # Surface at warning (#259): a failure here is the #250 class — power can't be
+        # derived, so the affected source silently reads 0 everywhere. Make it visible.
+        _LOGGER.warning("Power sensor derivation failed for %s: %s", energy_entity, e)
         return None
 
 

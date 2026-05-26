@@ -83,10 +83,12 @@ class TestSEMSwitches:
         description = create_switch_description("night_charging")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
         switch._is_on = False
+        switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
 
         await switch.async_turn_on()
 
         assert switch._is_on is True
+        switch.async_write_ha_state.assert_called()  # state pushed immediately (#259)
         mock_coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
@@ -95,10 +97,12 @@ class TestSEMSwitches:
         description = create_switch_description("night_charging")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
         switch._is_on = True
+        switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
 
         await switch.async_turn_off()
 
         assert switch._is_on is False
+        switch.async_write_ha_state.assert_called()  # state pushed immediately (#259)
         mock_coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
@@ -138,6 +142,7 @@ class TestSEMSwitches:
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
 
         mock_coordinator.async_request_refresh = AsyncMock(side_effect=Exception("Refresh error"))
+        switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
 
         # Should not raise
         await switch.async_turn_on()

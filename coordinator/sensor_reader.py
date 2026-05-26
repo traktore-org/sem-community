@@ -87,6 +87,9 @@ class SensorReader:
             "warned": False,
         }
         self._uses_split_grid: bool = False
+        # Warn-once guard for the discovery-*exception* path (#259); distinct from the
+        # dict "warned" key (which guards "no sensor found"). Reset on cache invalidate.
+        self._split_grid_discovery_warned: bool = False
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -543,7 +546,14 @@ class SensorReader:
                 _LOGGER.debug("No split grid power sensors found")
 
         except Exception as e:
-            _LOGGER.debug("Split grid power discovery failed: %s", e)
+            # Surface once at warning (#259): a discovery failure leaves split-meter
+            # setups (Growatt, P1/DSMR) reading 0 grid power with no signal. Warn on
+            # the first failure, then drop to debug so we don't spam every cycle.
+            if not self._split_grid_discovery_warned:
+                _LOGGER.warning("Split grid power discovery failed: %s", e)
+                self._split_grid_discovery_warned = True
+            else:
+                _LOGGER.debug("Split grid power discovery failed: %s", e)
             import_power = None
             export_power = None
             confidence = None
@@ -562,6 +572,9 @@ class SensorReader:
             "confidence": None,
             "warned": self._split_grid_discovery.get("warned", False),
         }
+        # Re-allow the discovery-exception warning after a rediscovery (#259) — circumstances
+        # have changed (e.g. a new sensor appeared), so a fresh failure is worth surfacing.
+        self._split_grid_discovery_warned = False
 
     def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
         """Get device_id for an entity from the entity registry."""

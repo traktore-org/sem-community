@@ -210,12 +210,14 @@ class TestPerChargerSwitches:
         coord.async_request_refresh = AsyncMock()
         desc = SwitchEntityDescription(key="charger_ev_charger_night_charging")
         switch = SEMPerChargerSwitch(coord, desc, "test", "ev_charger", "KEBA")
+        switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
 
         assert switch.is_on is False  # opt-in default (#256)
         await switch.async_turn_on()
         assert switch.is_on is True
         await switch.async_turn_off()
         assert switch.is_on is False
+        assert switch.async_write_ha_state.call_count == 2  # both toggles pushed state (#259)
 
     def test_per_charger_switch_available(self):
         """Per-charger switch should be unavailable when coordinator fails."""
