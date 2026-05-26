@@ -158,6 +158,48 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 4:
+        try:
+            # v3 → v4 (#255): per-charger entities are becoming the source of truth, so
+            # the duplicate GLOBAL EV settings will be removed. Seed each charger's
+            # per-charger value from the matching global where it's unset, so removing the
+            # global later never silently resets a user's configured value. Behaviour-
+            # neutral today (per-charger already falls back to the global at runtime).
+            _SEED_KEYS = (
+                "daily_ev_target", "daily_ev_target_max",
+                "ev_target_soc", "ev_target_soc_max",
+                "ev_min_current", "ev_night_initial_current",
+                "ev_kwh_per_100km", "ev_target_type",
+            )
+            new_data = {**entry.data}
+            new_options = {**entry.options}
+            full = {**new_data, **new_options}
+            chargers = new_options.get("ev_chargers", new_data.get("ev_chargers"))
+            if isinstance(chargers, list):
+                seeded = []
+                for c in chargers:
+                    c = dict(c) if isinstance(c, dict) else c
+                    if isinstance(c, dict):
+                        for key in _SEED_KEYS:
+                            gval = full.get(key)
+                            # ev_target_type carries a legacy alias (ev_target_mode, #235)
+                            if key == "ev_target_type" and gval is None:
+                                gval = full.get("ev_target_mode")
+                            if c.get(key) is None and gval is not None:
+                                c[key] = gval
+                    seeded.append(c)
+                new_options["ev_chargers"] = seeded
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=4, minor_version=1,
+            )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v4 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
