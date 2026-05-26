@@ -374,7 +374,9 @@ class SEMPerChargerConfigSwitch(CoordinatorEntity, SwitchEntity):
     async def _persist(self, value: bool) -> None:
         self._is_on = value
         new_options = {**self._entry.options}
-        ev_chargers = list(new_options.get("ev_chargers", []))
+        # Copy each charger dict — in-place mutation leaves entry.options unchanged,
+        # so async_update_entry skips persisting and the value reverts on restart (#245).
+        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
         for charger in ev_chargers:
             if charger.get("id") == self._charger_id:
                 charger[self._config_key] = value

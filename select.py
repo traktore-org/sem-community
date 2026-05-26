@@ -259,7 +259,10 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             return
         self._value = option
         new_options = {**self._entry.options}
-        ev_chargers = list(new_options.get("ev_chargers", []))
+        # Copy each charger dict — mutating the shared dicts in place leaves
+        # entry.options == new_options, so async_update_entry detects no change
+        # and never persists to .storage (the value then reverts on restart). (#245)
+        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
         for charger in ev_chargers:
             if charger.get("id") == self._charger_id:
                 charger[self._config_key] = option
