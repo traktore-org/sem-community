@@ -279,7 +279,7 @@ The options flow is organized into these pages:
 | EV battery capacity (kWh) | 40 kWh | Your EV's battery size (10–120 kWh). Used to convert SOC percentage to kWh remaining. Per-charger configurable. |
 | Min solar power to start EV charging (W) | 500 W | How much surplus must appear before solar EV charging begins. The default prevents SEM from starting the charger for tiny, transient surplus spikes. Raise it if your surplus is noisy and the charger starts and stops too often. |
 | Max grid import for Min+PV mode (W) | 1380 W | In Min+PV mode the EV runs at minimum current and uses grid to fill the gap. This cap limits how much grid power is used. Lower it to keep Min+PV fully solar; raise it if you want the charger to run continuously even when solar is weak. |
-| Night charging | On | When on, SEM charges the EV from the grid overnight (during the cheap-rate window) to reach the daily target. Turn it off if you only want solar charging or manage overnight charging yourself. |
+| Night charging | **Off** | **Opt-in** (#256). When on, SEM charges the EV from the grid overnight (during the cheap-rate window) to reach the daily-target floor. Off by default so a fresh install charges on **solar surplus only** — turn it on if you want grid-assisted overnight charging. Existing installs keep their previous setting on upgrade. |
 | Smart night charging | Off | When on, SEM evaluates whether tonight's grid charge is actually needed. If tomorrow's solar forecast is strong and the battery is reasonably full, SEM reduces or skips the overnight charge. Enable after SEM has been running for a week and you have a calibrated forecast integration. |
 
 ### Battery SOC Zone settings
