@@ -38,12 +38,9 @@ SWITCH_TYPES = [
     ),
 ]
 
-# Global switches whose state is persisted into the config entry options and
-# read back by the coordinator via self.config.
-# ev_limit_surplus (#235) was folded into the optional Max ceiling (#245): set a
-# Max below full to cap surplus. The old switch entity is auto-removed by the
-# stale-entity cleanup below (it's no longer in valid_keys).
-CONFIG_SWITCH_KEYS: list[str] = []
+# (ev_limit_surplus (#235) was folded into the optional Max ceiling (#245); its
+# global config-switch mechanism + entity are gone. Old entities are auto-removed
+# by the stale-entity cleanup below since they're no longer in valid_keys.)
 
 
 async def async_setup_entry(
@@ -56,14 +53,6 @@ async def async_setup_entry(
         SEMSolarSwitch(coordinator, description, entry.entry_id)
         for description in SWITCH_TYPES
     ]
-
-    # Global config-backed switches (e.g. ev_limit_surplus) — persisted to options (#235)
-    for key in CONFIG_SWITCH_KEYS:
-        switches.append(SEMConfigSwitch(
-            coordinator,
-            SwitchEntityDescription(key=key, entity_category=EntityCategory.CONFIG),
-            entry,
-        ))
 
     # Per-charger night charging switches (#193)
     full_config = {**entry.data, **entry.options}
@@ -108,7 +97,7 @@ async def async_setup_entry(
     # Clean up stale switch entities from previous versions
     try:
         registry = er.async_get(hass)
-        valid_keys = {d.key for d in SWITCH_TYPES} | per_charger_keys | set(CONFIG_SWITCH_KEYS)
+        valid_keys = {d.key for d in SWITCH_TYPES} | per_charger_keys
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != "switch":
                 continue
@@ -256,138 +245,3 @@ class SEMPerChargerSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         self._is_on = False
         await self.coordinator.async_request_refresh()
 
-
-class SEMConfigSwitch(CoordinatorEntity, SwitchEntity):
-    """Global switch whose on/off state is persisted to the config entry options (#235).
-
-    Used for settings the coordinator reads from ``self.config`` (e.g.
-    ``ev_limit_surplus``) so toggling the switch takes effect without a reload.
-    """
-
-    _attr_has_entity_name = True
-
-    def __init__(
-        self,
-        coordinator: SEMCoordinator,
-        description: SwitchEntityDescription,
-        entry: SEMConfigEntry,
-    ) -> None:
-        """Initialize the config-backed switch."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        self._entry = entry
-        self._config_key = description.key
-        self._attr_unique_id = f"sem_{description.key}"
-        self._attr_translation_key = description.key
-        self._attr_suggested_object_id = f"sem_{description.key}"
-        self._attr_device_info = coordinator.device_info
-        self.entity_id = f"switch.sem_{description.key}"
-        self._is_on = bool(coordinator.config.get(description.key, False))
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.last_update_success
-
-    @property
-    def is_on(self) -> bool:
-        """Return true if switch is on."""
-        return self._is_on
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable the setting."""
-        await self._persist(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable the setting."""
-        await self._persist(False)
-
-    async def _persist(self, value: bool) -> None:
-        self._is_on = value
-        new_options = {**self._entry.options}
-        new_options[self._config_key] = value
-        # Keep the coordinator's in-memory config in sync immediately
-        if isinstance(getattr(self.coordinator, "config", None), dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-        # Persist without triggering an integration reload (snapshot-keyed skip)
-        self.coordinator._skip_options_reload = new_options
-        self.hass.config_entries.async_update_entry(self._entry, options=new_options)
-        self.async_write_ha_state()
-        _LOGGER.info("Updated %s to %s", self._config_key, value)
-
-
-class SEMPerChargerConfigSwitch(CoordinatorEntity, SwitchEntity):
-    """Per-charger switch persisted into the charger's config dict (#235).
-
-    Mirrors ``SEMPerChargerNumber`` persistence so the coordinator picks up the
-    value from ``self.config['ev_chargers']`` on the next cycle.
-    """
-
-    _attr_has_entity_name = True
-    _attr_entity_category = EntityCategory.CONFIG
-
-    def __init__(
-        self,
-        coordinator: SEMCoordinator,
-        description: SwitchEntityDescription,
-        entry: SEMConfigEntry,
-        charger_id: str,
-        config_key: str,
-        initial_on: bool,
-    ) -> None:
-        """Initialize per-charger config switch."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        self._entry = entry
-        self._charger_id = charger_id
-        self._config_key = config_key
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        # Reuse the shared ev_limit_surplus name so per-charger switches read nicely
-        self._attr_translation_key = config_key
-        self._attr_suggested_object_id = f"sem_{description.key}"
-        self.entity_id = f"switch.sem_{description.key}"
-        self._is_on = bool(initial_on)
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.last_update_success
-
-    @property
-    def device_info(self):
-        """Return device information."""
-        return self.coordinator.device_info
-
-    @property
-    def is_on(self) -> bool:
-        """Return true if switch is on."""
-        return self._is_on
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        """Enable surplus limit for this charger."""
-        await self._persist(True)
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        """Disable surplus limit for this charger."""
-        await self._persist(False)
-
-    async def _persist(self, value: bool) -> None:
-        self._is_on = value
-        new_options = {**self._entry.options}
-        # Copy each charger dict — in-place mutation leaves entry.options unchanged,
-        # so async_update_entry skips persisting and the value reverts on restart (#245).
-        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
-        for charger in ev_chargers:
-            if charger.get("id") == self._charger_id:
-                charger[self._config_key] = value
-                break
-        new_options["ev_chargers"] = ev_chargers
-        if isinstance(getattr(self.coordinator, "config", None), dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-        self.coordinator._skip_options_reload = new_options
-        self.hass.config_entries.async_update_entry(self._entry, options=new_options)
-        self.async_write_ha_state()
-        _LOGGER.info(
-            "Updated per-charger %s.%s to %s",
-            self._charger_id, self._config_key, value,
-        )
