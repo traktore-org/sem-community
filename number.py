@@ -452,6 +452,19 @@ async def async_setup_entry(
                     icon="mdi:battery-charging-high",
                 ), "ev_target_soc_max",
                     charger_cfg.get("ev_target_soc_max", 100)),
+                # Car battery capacity (kWh) — feeds the SOC/range math; editable
+                # from the EV card so users don't have to open the options flow (#245).
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_ev_battery_capacity_kwh",
+                    name=f"{cname} Battery Capacity",
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    native_min_value=10, native_max_value=120, native_step=1,
+                    mode=NumberMode.BOX,
+                    icon="mdi:car-battery",
+                    entity_category=EntityCategory.CONFIG,
+                ), "ev_battery_capacity_kwh",
+                    charger_cfg.get("ev_battery_capacity_kwh",
+                                    full_config.get("ev_battery_capacity_kwh", 40))),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(

@@ -85,12 +85,13 @@ class SEMEVStatusCard extends SEMLitBase {
                 hass.states[`number.sem_charger_${id}_daily_ev_target`]?.state || ''
             ).join(':');
 
-            // Charge Target range (#245): type, SOC floor, and both Max ceilings
+            // Charge Target range (#245): type, SOC floor, both Max ceilings, capacity
             key += '|' + this._chargers.map(id => [
                 hass.states[`select.sem_charger_${id}_ev_target_type`]?.state || '',
                 hass.states[`number.sem_charger_${id}_target_soc`]?.state || '',
                 hass.states[`number.sem_charger_${id}_daily_ev_target_max`]?.state || '',
                 hass.states[`number.sem_charger_${id}_target_soc_max`]?.state || '',
+                hass.states[`number.sem_charger_${id}_ev_battery_capacity_kwh`]?.state || '',
             ].join(':')).join('|');
             key += '|' + (hass.states[`${prefix}ev_remaining_range`]?.state || '');
         }
@@ -274,6 +275,7 @@ class SEMEVStatusCard extends SEMLitBase {
 
         const startAmps = this._entityVal(`number.sem_charger_${id}_night_initial_current`, 10);
         const minAmps = this._entityVal(`number.sem_charger_${id}_minimum_current`, 6);
+        const capacityKwh = this._entityVal(`number.sem_charger_${id}_ev_battery_capacity_kwh`, 40);
 
         const needsCharge = chargeNeeded === 'True' || chargeNeeded === 'true';
         const chargeIcon = needsCharge ? 'mdi:battery-alert' : 'mdi:battery-check';
@@ -392,6 +394,16 @@ class SEMEVStatusCard extends SEMLitBase {
                     >
                         <ha-icon icon="mdi:speedometer-slow" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
                         <span class="setting-value">${this._fmt(minAmps, 0)}A</span>
+                    </div>
+                    <div
+                        class="setting-item clickable"
+                        @click=${() => {
+                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_battery_capacity_kwh` } });
+                            this.dispatchEvent(event);
+                        }}
+                    >
+                        <ha-icon icon="mdi:car-battery" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
+                        <span class="setting-value">${this._fmt(capacityKwh, 0)} kWh</span>
                     </div>
                 </div>
             </div>
