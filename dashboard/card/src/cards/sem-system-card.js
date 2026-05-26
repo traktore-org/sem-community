@@ -75,8 +75,11 @@ const WATCHED = [
     'sensor.sem_solar_power', 'sensor.sem_grid_power',
     'sensor.sem_battery_soc', 'sensor.sem_ev_power',
     'sensor.sem_forecast_today', 'sensor.sem_tariff_current_import_rate',
-    'switch.sem_observer_mode', 'switch.sem_night_charging',
-    'switch.sem_smart_night_charging',
+    'switch.sem_observer_mode',
+    // Per-charger night switches (#255), default charger id — for reactivity; other
+    // ids refresh on the energy tick.
+    'switch.sem_charger_ev_charger_night_charging',
+    'switch.sem_charger_ev_charger_smart_night_charging',
     'sensor.sem_home_consumption_power', 'sensor.sem_grid_import_power',
     'sensor.sem_grid_export_power', 'sensor.sem_autarky_rate',
     'sensor.sem_self_consumption_rate', 'sensor.sem_battery_power',

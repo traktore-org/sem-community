@@ -74,6 +74,7 @@ async def async_setup_entry(
     if has_chargers and not entry.data.get("_night_gate_reconciled"):
         try:
             from homeassistant.helpers.restore_state import async_get as _restore_get
+            # last_states maps entity_id → StoredState; .state is a State, .state.state a str.
             stored = _restore_get(hass).last_states.get("switch.sem_night_charging")
             if stored is not None and getattr(stored.state, "state", None) == "off":
                 night_force_off = True

@@ -63,7 +63,7 @@ async def async_setup_entry(
         registry = er.async_get(hass)
         for uid in (
             f"{entry.entry_id}_ev_target_type", f"{entry.entry_id}_ev_target_mode",
-            f"{entry.entry_id}_ev_charging_mode", "sem_ev_charging_mode", "sem_ev_target_type",
+            f"{entry.entry_id}_ev_charging_mode",
         ):
             eid = registry.async_get_entity_id("select", DOMAIN, uid)
             if eid:
