@@ -307,9 +307,10 @@ anchored, % mode uses the **kWh** daily target instead (so it's never a silent n
 
 **Driving range.** SEM also publishes `sensor.sem_ev_remaining_range`. If your car
 integration exposes a real range sensor, set `vehicle_range_entity` to it; otherwise SEM
-estimates range from SOC × `ev_battery_capacity_kwh` × `ev_km_per_kwh` (efficiency, default
-5.5 km/kWh). Both `vehicle_range_entity` and `ev_km_per_kwh` are configurable in the
-EV step of the options flow.
+estimates range from SOC × **battery capacity** × **efficiency** (km/kWh, default 5.5).
+Battery capacity and efficiency are **per car** — edit them straight from the EV card
+(tap the 🔋 / distance chips under each charger) or in the options flow; the range and
+SOC math use that charger's values. `vehicle_range_entity` is set in the options flow.
 
 **Charge-target range (Min/Max).** The EV card shows a **dual-handle slider**: the
 **Min** handle is the *guaranteed* amount (night/grid tops up to it), the **Max**

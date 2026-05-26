@@ -465,6 +465,19 @@ async def async_setup_entry(
                 ), "ev_battery_capacity_kwh",
                     charger_cfg.get("ev_battery_capacity_kwh",
                                     full_config.get("ev_battery_capacity_kwh", 40))),
+                # Per-car efficiency (km/kWh) — feeds the driving-range estimate.
+                # Individual per car, hence per charger (one car per charger). (#245)
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_ev_km_per_kwh",
+                    name=f"{cname} Efficiency",
+                    native_unit_of_measurement="km/kWh",
+                    native_min_value=2, native_max_value=12, native_step=0.1,
+                    mode=NumberMode.BOX,
+                    icon="mdi:map-marker-distance",
+                    entity_category=EntityCategory.CONFIG,
+                ), "ev_km_per_kwh",
+                    charger_cfg.get("ev_km_per_kwh",
+                                    full_config.get("ev_km_per_kwh", 5.5))),
             ]:
                 per_charger_descriptions.append(base_desc)
                 entities.append(SEMPerChargerNumber(

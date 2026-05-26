@@ -1092,8 +1092,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     except (ValueError, TypeError):
                         pass
             if "ev_remaining_range" not in result and self._cycle_vehicle_soc is not None:
-                _cap = self.config.get("ev_battery_capacity_kwh", 40)
-                _kpk = self.config.get("ev_km_per_kwh", 5.5)
+                # Capacity + efficiency are per-car → read the (primary) charger's
+                # values, falling back to global config. One car per charger (#245).
+                _pcfg = (self.config.get("ev_chargers") or [{}])[0]
+
+                def _per_car(key, default):
+                    v = _pcfg.get(key)
+                    return v if v is not None else self.config.get(key, default)
+
+                _cap = _per_car("ev_battery_capacity_kwh", 40)
+                _kpk = _per_car("ev_km_per_kwh", 5.5)
                 result["ev_remaining_range"] = round(
                     self._cycle_vehicle_soc / 100 * _cap * _kpk
                 )
