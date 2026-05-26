@@ -601,7 +601,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     try:
                         self._cycle_vehicle_soc = float(_soc_state.state)
                     except (ValueError, TypeError):
-                        pass
+                        _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", _vehicle_soc_entity, _soc_state.state)
 
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()
@@ -662,7 +662,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 if unit == "kW":
                                     cp *= 1000
                             except (ValueError, TypeError):
-                                pass
+                                _LOGGER.debug(
+                                    "Charger %s power not numeric: %r (#259)",
+                                    cid, getattr(pstate, "state", None),
+                                )
                     charger_powers[cid] = cp
                 total_charger_power = sum(charger_powers.values())
 
@@ -703,7 +706,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             try:
                                 self._cycle_vehicle_soc = float(soc_state.state)
                             except (ValueError, TypeError):
-                                pass
+                                _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_charger_soc_entity, soc_state.state)
                     self._ev_device = ev_dev
                     self._session_data = self._session_data_per_charger[cid]
                     self._last_ev_connected = self._last_ev_connected_per_charger[cid]
@@ -868,7 +871,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             try:
                                 self._cycle_vehicle_soc = float(soc_st.state)
                             except (ValueError, TypeError):
-                                pass
+                                _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
                     # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245)
                     per_remaining = self._calculate_remaining_need(
                         energy, self._cycle_vehicle_soc, charger_cfg, bound="max"
@@ -2615,7 +2618,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     try:
                         per_charger_vehicle_soc = float(soc_state.state)
                     except (ValueError, TypeError):
-                        pass
+                        _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_charger_soc_entity, soc_state.state)
 
             # If we have no real SOC and the detector has no calibration data,
             # the virtual 100% default is misleading — return None so the sensor
