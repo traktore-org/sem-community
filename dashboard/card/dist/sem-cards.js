@@ -3049,10 +3049,11 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             .ct-sw.on .ct-knob { left: 18px; }
 
             @media (max-width: 400px) {
-                .hero { flex-direction: column; align-items: stretch; gap: 12px; }
-                .ev-icon-area { width: 80px; height: 80px; align-self: center; }
-                .metrics-col { align-items: stretch; }
-                /* keep .metric-row's base space-between: label left, value right (not centered) */
+                /* Match the Battery tab exactly: stack the hero, keep the base
+                   align-items:center so the metrics sit as a content-width block with
+                   label-left / value-right rows (not stretched edge-to-edge). */
+                .hero { flex-direction: column; gap: 12px; }
+                .ev-icon-area { width: 80px; height: 80px; }
             }
         `}getCardSize(){return this._chargers.length>=1?3+2*this._chargers.length:3}static getStubConfig(){return{}}},{type:"sem-ev-status-card",name:"SEM EV Status",description:"Lumina-styled EV charging hero card with per-charger intelligence and settings"});const te=["sensor.sem_solar_power","sensor.sem_battery_soc","sensor.sem_autarky_rate","sensor.sem_ev_power","sensor.sem_energy_optimization_score","sensor.sem_energy_tip","sensor.sem_best_surplus_window","sensor.sem_forecast_remaining_today_kwh","sensor.sem_current_vs_peak_percentage","sensor.sem_consecutive_peak_15min","sensor.sem_target_peak_limit","sensor.sem_daily_co2_avoided","sensor.sem_lifetime_co2_avoided","sensor.sem_diag_forecast_provider","switch.sem_observer_mode"];ft("sem-home-status-card",class extends mt{static get watchedEntities(){return te}setConfig(t){super.setConfig(t),this._prefix=t.entity_prefix||"sensor.sem_"}_val(t,e=0){const i=this._hass?.states[`${this._prefix}${t}`];return i&&"unavailable"!==i.state&&"unknown"!==i.state?parseFloat(i.state)??e:e}_valStr(t){const e=this._hass?.states[`${this._prefix}${t}`];return e&&"unavailable"!==e.state&&"unknown"!==e.state?e.state:""}_switchOn(t){const e=this._frozenEntities[t];return e?"on"===e.value:"on"===this._hass?.states[t]?.state}_scoreColor(t){return t>=80?"#8DC892":t>=50?"#ff9800":"#f44336"}_peakColor(t){return t>90?"#f44336":t>70?"#ff9800":"#8DC892"}_peakStatusKey(t){return t>90?"peak_critical":t>70?"peak_warning":"peak_safe"}_renderChip(t,e,i){return H`
             <div class="chip">
