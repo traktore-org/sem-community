@@ -90,6 +90,16 @@ class ChargingContext:
     # Surplus limit: when True, stop ALL charging (including surplus) at target
     soc_limit_active: bool = False
 
+    # Target-time deadline (#246) + tariff-optimized timing (#247).
+    # night_deadline_amps: current floor (A) to reach Min by the deadline (0 = none).
+    # night_deadline_active: deadline is forcing current above the gentle ramp.
+    # night_tariff_wait: tariff mode wants to idle now and charge in a cheaper window.
+    # night_deadline_reachable: Min can still be met by the deadline at max current.
+    night_deadline_amps: int = 0
+    night_deadline_active: bool = False
+    night_tariff_wait: bool = False
+    night_deadline_reachable: bool = True
+
 
 class ChargingStateMachine:
     """Dual state machine for solar and night charging modes."""
@@ -269,6 +279,12 @@ class ChargingStateMachine:
 
         if remaining_needed <= 0.1:
             return ChargingState.NIGHT_TARGET_REACHED
+
+        # Tariff-optimized (#247): idle until a cheap window. The Min floor is
+        # still guaranteed before the deadline — the planner only sets this flag
+        # when waiting can still meet Min in time (else it charges regardless).
+        if ctx.night_tariff_wait:
+            return ChargingState.TARIFF_WAITING_FOR_CHEAP
 
         return ChargingState.NIGHT_CHARGING_ACTIVE
 

@@ -46,6 +46,8 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.BINARY_SENSOR,
     Platform.SELECT,
+    Platform.TIME,
+    Platform.BUTTON,
 ]
 
 
@@ -172,6 +174,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 "ev_kwh_per_100km", "ev_target_type",
                 # #255 Phase 4 — also converted to per-charger
                 "ev_charging_mode", "ev_phases",
+                # #246 Phase 2 — per-charger charge-by deadline
+                "ev_target_time",
             )
             new_data = {**entry.data}
             new_options = {**entry.options}

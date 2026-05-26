@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-25T21:51:31.668570+00:00
+// Generated: 2026-05-26T23:39:28.519224+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -778,7 +778,15 @@ const _semTranslations = {
     "clear_mapping": "Reset to auto-detect",
     "at_least": "At least",
     "up_to": "Up to",
-    "full": "Full"
+    "full": "Full",
+    "state_tariff_waiting": "Tariff mode - Waiting for cheap price",
+    "notif_ev_deadline_unreachable": "{name} can't reach its target by {deadline} — {kwh:.1f} kWh still needed in {hours:.1f} h",
+    "ev_charge_by": "Charge by",
+    "ev_next_cheap": "Next cheap window",
+    "ev_tariff_mode": "Tariff-optimized",
+    "ev_deadline_unreachable_short": "Target not reachable in time",
+    "ev_charge_by_deadline": "Charge target deadline",
+    "set_as_default": "Set as default"
   },
   "de": {
     "charging": "Laden",
@@ -1557,7 +1565,15 @@ const _semTranslations = {
     "clear_mapping": "Auf Auto-Erkennung zurücksetzen",
     "at_least": "Mindestens",
     "up_to": "Bis zu",
-    "full": "Voll"
+    "full": "Voll",
+    "state_tariff_waiting": "Tarifmodus - Warte auf günstigen Preis",
+    "notif_ev_deadline_unreachable": "{name} erreicht das Ziel nicht bis {deadline} — {kwh:.1f} kWh in {hours:.1f} h benötigt",
+    "ev_charge_by": "Fertig bis",
+    "ev_next_cheap": "Nächstes günstiges Fenster",
+    "ev_tariff_mode": "Tarifoptimiert",
+    "ev_deadline_unreachable_short": "Ziel nicht rechtzeitig erreichbar",
+    "ev_charge_by_deadline": "Ladeziel-Frist",
+    "set_as_default": "Als Standard"
   },
   "fr": {
     "charging": "En charge",
@@ -2336,7 +2352,15 @@ const _semTranslations = {
     "clear_mapping": "Réinitialiser en auto-détection",
     "at_least": "Au moins",
     "up_to": "Jusqu'à",
-    "full": "Plein"
+    "full": "Plein",
+    "state_tariff_waiting": "Mode tarif - Attente d'un prix bas",
+    "notif_ev_deadline_unreachable": "{name} n'atteindra pas l'objectif avant {deadline} — {kwh:.1f} kWh requis en {hours:.1f} h",
+    "ev_charge_by": "Prêt à",
+    "ev_next_cheap": "Prochain créneau bas",
+    "ev_tariff_mode": "Optimisé tarif",
+    "ev_deadline_unreachable_short": "Objectif non atteignable à temps",
+    "ev_charge_by_deadline": "Échéance objectif",
+    "set_as_default": "Par défaut"
   },
   "es": {
     "charging": "Cargando",
@@ -3115,7 +3139,15 @@ const _semTranslations = {
     "clear_mapping": "Restablecer a autodetección",
     "at_least": "Al menos",
     "up_to": "Hasta",
-    "full": "Completo"
+    "full": "Completo",
+    "state_tariff_waiting": "Modo tarifa - Esperando precio bajo",
+    "notif_ev_deadline_unreachable": "{name} no alcanzará el objetivo antes de {deadline} — faltan {kwh:.1f} kWh en {hours:.1f} h",
+    "ev_charge_by": "Listo a las",
+    "ev_next_cheap": "Próxima ventana barata",
+    "ev_tariff_mode": "Optimizado por tarifa",
+    "ev_deadline_unreachable_short": "Objetivo no alcanzable a tiempo",
+    "ev_charge_by_deadline": "Plazo objetivo",
+    "set_as_default": "Predeterminado"
   },
   "it": {
     "charging": "In carica",
@@ -3894,7 +3926,15 @@ const _semTranslations = {
     "clear_mapping": "Ripristina rilevamento automatico",
     "at_least": "Almeno",
     "up_to": "Fino a",
-    "full": "Pieno"
+    "full": "Pieno",
+    "state_tariff_waiting": "Modalità tariffa - In attesa di prezzo basso",
+    "notif_ev_deadline_unreachable": "{name} non raggiungerà l'obiettivo entro le {deadline} — servono {kwh:.1f} kWh in {hours:.1f} h",
+    "ev_charge_by": "Pronto entro",
+    "ev_next_cheap": "Prossima finestra economica",
+    "ev_tariff_mode": "Ottimizzato per tariffa",
+    "ev_deadline_unreachable_short": "Obiettivo non raggiungibile in tempo",
+    "ev_charge_by_deadline": "Scadenza obiettivo",
+    "set_as_default": "Predefinito"
   },
   "nl": {
     "charging": "Laden",
@@ -4673,7 +4713,15 @@ const _semTranslations = {
     "clear_mapping": "Terug naar autodetectie",
     "at_least": "Ten minste",
     "up_to": "Tot",
-    "full": "Vol"
+    "full": "Vol",
+    "state_tariff_waiting": "Tariefmodus - Wachten op goedkoop tarief",
+    "notif_ev_deadline_unreachable": "{name} haalt het doel niet vóór {deadline} — {kwh:.1f} kWh nodig in {hours:.1f} h",
+    "ev_charge_by": "Klaar om",
+    "ev_next_cheap": "Volgend goedkoop venster",
+    "ev_tariff_mode": "Tariefgeoptimaliseerd",
+    "ev_deadline_unreachable_short": "Doel niet op tijd haalbaar",
+    "ev_charge_by_deadline": "Laaddoel-deadline",
+    "set_as_default": "Als standaard"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5452,7 +5500,15 @@ const _semTranslations = {
     "clear_mapping": "Obnovit automatickou detekci",
     "at_least": "Alespoň",
     "up_to": "Až do",
-    "full": "Plně"
+    "full": "Plně",
+    "state_tariff_waiting": "Tarifní režim - Čekání na nízkou cenu",
+    "notif_ev_deadline_unreachable": "{name} nedosáhne cíle do {deadline} — potřeba {kwh:.1f} kWh za {hours:.1f} h",
+    "ev_charge_by": "Nabít do",
+    "ev_next_cheap": "Další levné okno",
+    "ev_tariff_mode": "Optimalizováno dle tarifu",
+    "ev_deadline_unreachable_short": "Cíl nelze stihnout včas",
+    "ev_charge_by_deadline": "Termín cíle nabití",
+    "set_as_default": "Jako výchozí"
   },
   "da": {
     "charging": "Oplader",
@@ -6231,7 +6287,15 @@ const _semTranslations = {
     "clear_mapping": "Nulstil til autodetektion",
     "at_least": "Mindst",
     "up_to": "Op til",
-    "full": "Fuld"
+    "full": "Fuld",
+    "state_tariff_waiting": "Tariftilstand - Venter på lav pris",
+    "notif_ev_deadline_unreachable": "{name} når ikke målet inden {deadline} — {kwh:.1f} kWh mangler på {hours:.1f} t",
+    "ev_charge_by": "Klar kl.",
+    "ev_next_cheap": "Næste billige vindue",
+    "ev_tariff_mode": "Tarifoptimeret",
+    "ev_deadline_unreachable_short": "Mål kan ikke nås i tide",
+    "ev_charge_by_deadline": "Ladningsmålfrist",
+    "set_as_default": "Som standard"
   },
   "fi": {
     "charging": "Lataus",
@@ -7010,7 +7074,15 @@ const _semTranslations = {
     "clear_mapping": "Palauta automaattitunnistus",
     "at_least": "Vähintään",
     "up_to": "Enintään",
-    "full": "Täysi"
+    "full": "Täysi",
+    "state_tariff_waiting": "Tariffitila - Odotetaan halpaa hintaa",
+    "notif_ev_deadline_unreachable": "{name} ei saavuta tavoitetta klo {deadline} — {kwh:.1f} kWh tarvitaan {hours:.1f} h",
+    "ev_charge_by": "Valmis klo",
+    "ev_next_cheap": "Seuraava halpa ikkuna",
+    "ev_tariff_mode": "Tariffioptimoitu",
+    "ev_deadline_unreachable_short": "Tavoitetta ei ehditä",
+    "ev_charge_by_deadline": "Latauksen määräaika",
+    "set_as_default": "Oletukseksi"
   },
   "hu": {
     "charging": "Töltés",
@@ -7789,7 +7861,15 @@ const _semTranslations = {
     "clear_mapping": "Visszaállítás automatikus felismerésre",
     "at_least": "Legalább",
     "up_to": "Legfeljebb",
-    "full": "Tele"
+    "full": "Tele",
+    "state_tariff_waiting": "Tarifa mód - Várakozás olcsó árra",
+    "notif_ev_deadline_unreachable": "{name} nem éri el a célt {deadline}-ig — {kwh:.1f} kWh kell {hours:.1f} óra alatt",
+    "ev_charge_by": "Kész eddig",
+    "ev_next_cheap": "Következő olcsó ablak",
+    "ev_tariff_mode": "Tarifaoptimalizált",
+    "ev_deadline_unreachable_short": "A cél időben nem érhető el",
+    "ev_charge_by_deadline": "Töltési cél határidő",
+    "set_as_default": "Alapértelmezett"
   },
   "no": {
     "charging": "Lader",
@@ -8568,7 +8648,15 @@ const _semTranslations = {
     "clear_mapping": "Tilbakestill til autodeteksjon",
     "at_least": "Minst",
     "up_to": "Opptil",
-    "full": "Full"
+    "full": "Full",
+    "state_tariff_waiting": "Tariffmodus - Venter på lav pris",
+    "notif_ev_deadline_unreachable": "{name} når ikke målet innen {deadline} — {kwh:.1f} kWh mangler på {hours:.1f} t",
+    "ev_charge_by": "Klar kl.",
+    "ev_next_cheap": "Neste billige vindu",
+    "ev_tariff_mode": "Tariffoptimalisert",
+    "ev_deadline_unreachable_short": "Målet nås ikke i tide",
+    "ev_charge_by_deadline": "Ladingsmålfrist",
+    "set_as_default": "Som standard"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9347,7 +9435,15 @@ const _semTranslations = {
     "clear_mapping": "Przywróć autowykrywanie",
     "at_least": "Co najmniej",
     "up_to": "Do",
-    "full": "Pełny"
+    "full": "Pełny",
+    "state_tariff_waiting": "Tryb taryfowy - Oczekiwanie na niską cenę",
+    "notif_ev_deadline_unreachable": "{name} nie osiągnie celu do {deadline} — potrzeba {kwh:.1f} kWh w {hours:.1f} h",
+    "ev_charge_by": "Gotowe do",
+    "ev_next_cheap": "Następne tanie okno",
+    "ev_tariff_mode": "Optymalizacja taryfowa",
+    "ev_deadline_unreachable_short": "Cel nieosiągalny na czas",
+    "ev_charge_by_deadline": "Termin celu",
+    "set_as_default": "Jako domyślne"
   },
   "pt": {
     "charging": "A carregar",
@@ -10126,7 +10222,15 @@ const _semTranslations = {
     "clear_mapping": "Repor para deteção automática",
     "at_least": "Pelo menos",
     "up_to": "Até",
-    "full": "Cheio"
+    "full": "Cheio",
+    "state_tariff_waiting": "Modo tarifa - À espera de preço baixo",
+    "notif_ev_deadline_unreachable": "{name} não atinge o alvo até {deadline} — faltam {kwh:.1f} kWh em {hours:.1f} h",
+    "ev_charge_by": "Pronto às",
+    "ev_next_cheap": "Próxima janela barata",
+    "ev_tariff_mode": "Otimizado por tarifa",
+    "ev_deadline_unreachable_short": "Alvo não atingível a tempo",
+    "ev_charge_by_deadline": "Prazo do alvo",
+    "set_as_default": "Como padrão"
   },
   "ro": {
     "charging": "Încărcare",
@@ -10905,7 +11009,15 @@ const _semTranslations = {
     "clear_mapping": "Resetare la detectare automată",
     "at_least": "Cel puțin",
     "up_to": "Până la",
-    "full": "Plin"
+    "full": "Plin",
+    "state_tariff_waiting": "Mod tarifar - Se așteaptă preț scăzut",
+    "notif_ev_deadline_unreachable": "{name} nu atinge ținta până la {deadline} — mai sunt {kwh:.1f} kWh în {hours:.1f} h",
+    "ev_charge_by": "Gata până la",
+    "ev_next_cheap": "Următoarea fereastră ieftină",
+    "ev_tariff_mode": "Optimizat tarifar",
+    "ev_deadline_unreachable_short": "Ținta nu poate fi atinsă la timp",
+    "ev_charge_by_deadline": "Termen țintă",
+    "set_as_default": "Implicit"
   },
   "sv": {
     "charging": "Laddar",
@@ -11684,7 +11796,15 @@ const _semTranslations = {
     "clear_mapping": "Återställ till autodetektering",
     "at_least": "Minst",
     "up_to": "Upp till",
-    "full": "Full"
+    "full": "Full",
+    "state_tariff_waiting": "Tarifläge - Väntar på lågt pris",
+    "notif_ev_deadline_unreachable": "{name} når inte målet före {deadline} — {kwh:.1f} kWh behövs på {hours:.1f} h",
+    "ev_charge_by": "Klar kl.",
+    "ev_next_cheap": "Nästa billiga fönster",
+    "ev_tariff_mode": "Tarifoptimerad",
+    "ev_deadline_unreachable_short": "Målet nås inte i tid",
+    "ev_charge_by_deadline": "Laddmålsfrist",
+    "set_as_default": "Som standard"
   }
 };
 

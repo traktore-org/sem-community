@@ -30,6 +30,8 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Auto mode** — automatically switches between self-consumption and fast charging based on solar forecast vs EV need
 - **Battery-aware** — four-zone SOC strategy decides when battery helps the EV and when it charges first
 - **Min/Max charge-target range** — a per-charger dual-handle slider (kWh or SOC %): **Min** is the guaranteed amount (night/grid tops up to it), **Max** is the solar ceiling (surplus charges up to it, then stops). E.g. *Min 50% / Max 80%* — always keep 50% from the grid, let solar add up to 80% for battery longevity. Max defaults to full (charge freely from sun)
+- **Charge-by deadline** — set a per-charger "be ready by HH:MM" time and SEM scales the night current to reach Min by then (overriding the gentle ramp when time is short), and warns if the target can't physically be met in time. "Set as default" copies a charger's target + deadline to the global defaults
+- **Tariff-optimized charging** — opt-in per charger: defer night charging to the cheapest contiguous price window (Min still guaranteed by the deadline) and pause daytime grid top-up during expensive hours — surfaced live as the next-cheap-window on the EV card
 - **Night charging with battery protection** — charges EV from grid overnight without draining home battery
 - **Hot water solar boost** — SEM supplements your existing heating system with solar surplus (does not replace your boiler/heat pump), with mandatory Legionella prevention cycle (DVGW W 551, SIA 385/1, ÖNORM B 5019)
 - **Multi-device surplus distribution** — EV, heat pump, hot water, appliances — each gets surplus by priority, with appliance dependency chains (e.g. heater only runs when pump is active)
@@ -422,6 +424,10 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 ---
 
 ## Recent Improvements (v1.5.x)
+
+### Unreleased — EV charge-target deadline & tariff-optimized charging
+- **Charge-by deadline** (#246) — per-charger "reach Min by HH:MM" (`time.sem_charger_<id>_target_time`). When set earlier than the night-window end, night current scales to hit Min by the deadline (overriding the gentle ramp / peak limit); an impossible deadline raises a "can't reach target in time" notification. A new **Set Target As Default** button copies a charger's Min/Max + deadline to the global defaults. Default deadline (= window end) keeps existing peak-managed behaviour unchanged.
+- **Tariff-optimized charging** (#247) — opt-in per-charger switch (`switch.sem_charger_<id>_tariff_optimized`). Night charging defers to the cheapest *contiguous* price window via a new `TARIFF_WAITING_FOR_CHEAP` state (Min still guaranteed by the deadline); daytime Min+PV grid top-up pauses during expensive hours and resumes on a price drop or sufficient solar. Next cheap window is surfaced on the EV card. Consolidates the parked #6 EV scheduling.
 
 ### v1.5.14 — Multi-device cleanup, EV range targets & night-charge peak safety
 - **Night charging respects the peak limit** (#268) — night-charge current is now sized from the house load alone, so grid import stays ≤ your configured peak limit regardless of battery behaviour. Previously battery discharge could inflate the EV current and push grid import well past the limit.

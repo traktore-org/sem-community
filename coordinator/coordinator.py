@@ -236,6 +236,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Per-cycle caches (initialized here, populated in _async_update_data)
         self._cycle_forecast = None
         self._cycle_vehicle_soc: Optional[float] = None
+        # Night charge plan for the (primary) charger this cycle (#246/#247)
+        self._cycle_night_plan = None
+        # Per-charger night plans for surfacing + the "unreachable deadline" notify
+        self._night_plan_per_charger = {}
+        self._deadline_warned_chargers: set = set()
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -305,6 +310,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "ev_min_current", "ev_night_initial_current",
             "ev_kwh_per_100km", "ev_target_type",
             "ev_charging_mode", "ev_phases",
+            "ev_target_time",  # #246 charge-by deadline
         ):
             if pc.get(key) is not None:
                 self.config[key] = pc[key]
@@ -801,9 +807,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ev_budget_per_charger = {}
                 num_chargers = len(self._ev_devices)
 
-                # Night target: use per-charger targets if configured (#193)
+                # Night target: use per-charger targets if configured (#193).
+                # TARIFF_WAITING_FOR_CHEAP is also a night state (#247) — compute
+                # the per-charger targets so a waiting charger can still re-plan.
                 self._night_target_per_charger_map = {}
-                if num_chargers >= 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                if num_chargers >= 1 and charging_state in (
+                    ChargingState.NIGHT_CHARGING_ACTIVE,
+                    ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                ):
                     ev_chargers_cfg = self.config.get("ev_chargers", [])
                     charger_cfg_by_id = {c.get("id"): c for c in ev_chargers_cfg}
 
@@ -858,7 +869,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 )
                 for cid, ev_dev in sorted_chargers:
                     # Check per-charger night charging switch (#193)
-                    if charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                    if charging_state in (
+                        ChargingState.NIGHT_CHARGING_ACTIVE,
+                        ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                    ):
                         night_switch = self.hass.states.get(
                             f"switch.sem_charger_{cid}_night_charging"
                         )
@@ -914,9 +928,39 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     charging_context.remaining_ev_energy = per_remaining
                     charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining_floor
 
+                    # Per-charger deadline + tariff plan (#246/#247): recompute
+                    # for THIS charger and pick its effective night state. Each car
+                    # can have its own deadline / tariff toggle, so the displayed
+                    # (primary) state isn't authoritative for the rest.
+                    effective_state = charging_state
+                    charging_context.night_deadline_amps = 0
+                    charging_context.night_deadline_active = False
+                    charging_context.night_tariff_wait = False
+                    charging_context.night_deadline_reachable = True
+                    if charging_state in (
+                        ChargingState.NIGHT_CHARGING_ACTIVE,
+                        ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                    ):
+                        pc_target = charging_context.night_target_kwh
+                        if pc_target <= 0.1:
+                            effective_state = ChargingState.NIGHT_TARGET_REACHED
+                        else:
+                            plan = self._compute_night_plan(charger_cfg, pc_target)
+                            self._night_plan_per_charger[cid] = plan
+                            charging_context.night_deadline_amps = plan.deadline_amps
+                            charging_context.night_deadline_active = plan.deadline_active
+                            charging_context.night_tariff_wait = plan.should_wait_for_cheap
+                            charging_context.night_deadline_reachable = plan.reachable
+                            effective_state = (
+                                ChargingState.TARIFF_WAITING_FOR_CHEAP
+                                if plan.should_wait_for_cheap
+                                else ChargingState.NIGHT_CHARGING_ACTIVE
+                            )
+                            await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
+
                     try:
                         await self._execute_ev_control(
-                            charging_state, power, energy, charging_context
+                            effective_state, power, energy, charging_context
                         )
                     except (HomeAssistantError, ServiceValidationError) as e:
                         _LOGGER.error("EV control service failed for %s: %s", cid, e)
@@ -1226,6 +1270,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 dep_state = self.hass.states.get(departure_entity)
                 if dep_state and dep_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     result["ev_departure_time"] = dep_state.state
+
+            # EV charge-target deadline (#246) + tariff-optimized status (#247) —
+            # surfaced for the EV card / status. target_time + tariff toggle are
+            # always available (config); the deadline/cheap-window fields come from
+            # the per-cycle night plan (primary charger), present only at night.
+            _dl_pcfg = (self.config.get("ev_chargers") or [{}])[0]
+            result["ev_target_time"] = self._charger_target_time(_dl_pcfg)
+            result["ev_tariff_optimized"] = self._tariff_optimized_for(_dl_pcfg)
+            _night_plan = self._cycle_night_plan
+            if _night_plan is not None:
+                result["ev_deadline_reachable"] = _night_plan.reachable
+                result["ev_tariff_waiting"] = _night_plan.should_wait_for_cheap
+                if _night_plan.hours_to_deadline is not None:
+                    result["ev_deadline_hours"] = _night_plan.hours_to_deadline
+                if _night_plan.next_cheap_start is not None:
+                    result["ev_next_cheap_window"] = _night_plan.next_cheap_start.isoformat()
 
             # Diagnostics summary for dashboard System tab
             result["diag_version"] = self._get_version()
@@ -1867,6 +1927,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Charging mode selection: pv (default), minpv, now, off
         charging_mode = self.config.get("ev_charging_mode", "pv")
+        _cmode = (charger_cfg or {}).get("ev_charging_mode")
+        if _cmode:
+            charging_mode = _cmode
+
+        # Tariff-optimized daytime pause (#247): during expensive price windows,
+        # drop the Min+PV grid guarantee and fall back to surplus / battery-assist
+        # only (the zone logic below). Resumes automatically when the price drops
+        # or solar is sufficient. The explicit "now" override and pure-surplus
+        # modes are intentionally left untouched.
+        if charging_mode == "minpv" and self._tariff_optimized_for(charger_cfg or {}):
+            try:
+                level = self._tariff_provider.get_price_level()
+                if level in (PriceLevel.EXPENSIVE, PriceLevel.VERY_EXPENSIVE):
+                    _LOGGER.debug(
+                        "Tariff pause: %s price — Min+PV grid guarantee dropped "
+                        "to surplus-only", level.value,
+                    )
+                    charging_mode = "pv"  # fall through to zone-based surplus logic
+            except Exception as e:
+                _LOGGER.debug("Tariff price-level check failed: %s", e)
+
         if charging_mode == "now":
             return ("now", "Now mode — charge at max immediately")
         if charging_mode == "off":
@@ -2265,6 +2346,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 remaining_floor, energy, _primary_cfg,
             )
 
+        # Deadline (#246) + tariff-optimized timing (#247) plan for the (primary)
+        # charger — drives the displayed state and the single-charger control path.
+        # The multi-charger loop recomputes this per charger downstream.
+        night_plan = None
+        deadline_amps = 0
+        deadline_active = False
+        tariff_wait = False
+        deadline_reachable = True
+        if self.time_manager.is_night_mode() and night_target > 0.1:
+            night_plan = self._compute_night_plan(_primary_cfg, night_target)
+            deadline_amps = night_plan.deadline_amps
+            deadline_active = night_plan.deadline_active
+            tariff_wait = night_plan.should_wait_for_cheap
+            deadline_reachable = night_plan.reachable
+        self._cycle_night_plan = night_plan
+
         return ChargingContext(
             ev_connected=power.ev_connected,
             ev_charging=power.ev_charging,
@@ -2282,6 +2379,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charging_strategy_reason=reason,
             night_target_kwh=night_target,
             soc_limit_active=soc_limit_active,
+            night_deadline_amps=deadline_amps,
+            night_deadline_active=deadline_active,
+            night_tariff_wait=tariff_wait,
+            night_deadline_reachable=deadline_reachable,
         )
 
     def _update_battery_session_tracking(

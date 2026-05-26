@@ -519,19 +519,40 @@ class DynamicTariffProvider(TariffProvider):
         self,
         hours_needed: int,
         within_hours: int = 24,
+        prefer_consecutive: bool = False,
     ) -> List[PricePoint]:
-        """Find the cheapest consecutive or non-consecutive hours.
+        """Find the cheapest hours for scheduling night charging.
 
-        Useful for scheduling night charging at cheapest times.
+        Args:
+            hours_needed: Number of price slots to select.
+            within_hours: How far ahead to look.
+            prefer_consecutive: When True, return the cheapest *contiguous* block
+                of ``hours_needed`` slots (lowest summed price) instead of the
+                globally-cheapest scattered slots. Block-wise scheduling (#247)
+                avoids fragmenting a charge across the night and reduces
+                start/stop cycling on the charger. Falls back to scattered
+                selection when fewer than ``hours_needed`` slots are available.
         """
         prices = self._read_prices_list()
         now = dt_util.now()
-        future_prices = [p for p in prices if p.timestamp > now][:within_hours]
+        # Include the slot currently in progress (started <= now < start+interval)
+        # so "is now cheap?" works at the top of an hour.
+        future_prices = [p for p in prices if p.timestamp > now - timedelta(hours=1)][:within_hours]
 
         if not future_prices or len(future_prices) < hours_needed:
             return future_prices
 
-        # Find cheapest non-consecutive hours
+        if prefer_consecutive and hours_needed > 0:
+            ordered = sorted(future_prices, key=lambda p: p.timestamp)
+            best_start, best_sum = 0, None
+            for i in range(0, len(ordered) - hours_needed + 1):
+                window = ordered[i:i + hours_needed]
+                total = sum(p.price for p in window)
+                if best_sum is None or total < best_sum:
+                    best_sum, best_start = total, i
+            return ordered[best_start:best_start + hours_needed]
+
+        # Cheapest scattered slots (default, back-compat behaviour).
         sorted_by_price = sorted(future_prices, key=lambda p: p.price)
         return sorted(sorted_by_price[:hours_needed], key=lambda p: p.timestamp)
 

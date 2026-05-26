@@ -557,6 +557,45 @@ class NotificationManager:
             group="sem_charging",
         )
 
+    async def notify_ev_deadline_unreachable(
+        self, remaining_kwh: float, hours_left: float, deadline: str,
+        *, charger_name: str | None = None,
+    ) -> None:
+        """Notify that the EV charge target can't be reached by its deadline (#246).
+
+        Fires once per charger until the deadline becomes reachable again
+        (the coordinator clears the flag), so a borderline forecast that flips
+        reachable/unreachable won't spam.
+        """
+        flag = f"ev_deadline_unreachable_{charger_name}" if charger_name else "ev_deadline_unreachable"
+        if flag in self._notified_flags:
+            return
+        self._notified_flags.add(flag)
+
+        label = charger_name or "EV"
+        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
+            "category": "charging",
+            "event": "ev_deadline_unreachable",
+            "charger_name": label,
+            "remaining_kwh": round(remaining_kwh, 1),
+            "hours_left": round(hours_left, 1),
+            "deadline": deadline,
+        })
+        from ..utils.translate import get_text
+        await self._send_mobile_notification(
+            get_text(self.hass, "notif_ev_deadline_unreachable",
+                "{name} can't reach its target by {deadline} — "
+                "{kwh:.1f} kWh still needed in {hours:.1f} h",
+                name=label, deadline=deadline, kwh=remaining_kwh, hours=hours_left),
+            channel=_CHANNEL_CHARGING,
+            group="sem_charging",
+        )
+
+    def clear_deadline_warning(self, charger_name: str | None = None) -> None:
+        """Clear the unreachable-deadline flag so it can fire again next time."""
+        flag = f"ev_deadline_unreachable_{charger_name}" if charger_name else "ev_deadline_unreachable"
+        self._notified_flags.discard(flag)
+
     def reset(self) -> None:
         """Reset notification state."""
         self._last_notified_state = None

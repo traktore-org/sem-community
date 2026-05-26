@@ -39,6 +39,10 @@ class ChargingState:
     NIGHT_WAITING_FOR_WINDOW = "night_waiting_for_window"
     NIGHT_TIME_EXPIRED = "night_time_expired"
 
+    # Tariff-optimized (#247): night charging paused, waiting for a cheap price
+    # window. The Min floor is still guaranteed before the deadline regardless.
+    TARIFF_WAITING_FOR_CHEAP = "tariff_waiting_for_cheap"
+
     # Min+PV Mode
     SOLAR_MIN_PV = "solar_min_pv"
 
@@ -76,6 +80,7 @@ STATUS_MESSAGES: Final = {
     ChargingState.NIGHT_TARGET_REACHED: "Night mode - Target reached",
     ChargingState.NIGHT_WAITING_FOR_WINDOW: "Night mode - Waiting for charging window",
     ChargingState.NIGHT_TIME_EXPIRED: "Night charging window expired",
+    ChargingState.TARIFF_WAITING_FOR_CHEAP: "Tariff mode - Waiting for cheap price window",
 }
 
 # Map charging states to translation keys in dashboard/translations.json (#62)
@@ -104,6 +109,7 @@ _STATE_TRANSLATION_KEYS: Final = {
     ChargingState.NIGHT_TARGET_REACHED: "state_night_target",
     ChargingState.NIGHT_WAITING_FOR_WINDOW: "state_night_waiting",
     ChargingState.NIGHT_TIME_EXPIRED: "state_night_expired",
+    ChargingState.TARIFF_WAITING_FOR_CHEAP: "state_tariff_waiting",
 }
 
 
