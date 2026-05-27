@@ -407,13 +407,21 @@ class SEMEVStatusCard extends SEMLitBase {
                     </div>
                     ${this._renderRangeSlider(minEntityId, maxEntityId, isSoc)}
                     <div class="ct-row">
-                        <span class="ct-label">${this._t('night_charging')}</span>
+                        <span class="ct-label">${this._t('ev_grid_charging')}</span>
                         <span class="ct-ctl">${ctToggle(nightOnLive, nightEntityId)}</span>
                     </div>
-                    <div class="ct-row">
+                    <!-- Tariff is a refinement OF grid charging (when, not whether): nest it. -->
+                    <div class="ct-row ct-subrow">
                         <span class="ct-label">${this._t('ev_tariff_mode')}</span>
                         <span class="ct-ctl">${ctToggle(tariffOnLive, tariffEntityId)}</span>
                     </div>
+                    ${tariffOnLive ? html`
+                        <div class="ct-subhint">
+                            ${this._t('ev_tariff_hint')}${nextCheapLabel
+                                ? html` · ${this._t('ev_next_cheap')} <b style="color:#8DC892">${nextCheapLabel}</b>`
+                                : nothing}
+                        </div>
+                    ` : nothing}
                     <div class="ct-row clickable"
                         @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info',
                             { bubbles: true, composed: true, detail: { entityId: targetTimeId } }))}>
@@ -423,12 +431,6 @@ class SEMEVStatusCard extends SEMLitBase {
                             ${targetTimeLabel}
                         </span>
                     </div>
-                    ${tariffOnLive && nextCheapLabel ? html`
-                        <div class="ct-row">
-                            <span class="ct-label">${this._t('ev_next_cheap')}</span>
-                            <span class="ct-ctl ct-time" style="color:#8DC892">${nextCheapLabel}</span>
-                        </div>
-                    ` : nothing}
                     ${deadlineUnreachable ? html`
                         <div class="ct-warn">
                             <ha-icon icon="mdi:clock-alert" style="--mdc-icon-size:14px;color:#f06292"></ha-icon>
@@ -906,6 +908,15 @@ class SEMEVStatusCard extends SEMLitBase {
             }
             .ct-row + .ct-row { border-top: 1px solid rgba(255,255,255,0.06); }
             .ct-row.clickable { cursor: pointer; }
+            /* Tariff is nested under "Overnight grid charging" — it refines WHEN
+               grid charging happens, not WHETHER (#247 UX). */
+            .ct-subrow { padding-left: 14px; border-left: 2px solid rgba(141,200,146,0.35); margin-left: 2px; }
+            .ct-subrow .ct-label { color: var(--secondary-text-color, #b5b5b5); }
+            .ct-subhint {
+                padding: 2px 0 4px 16px; margin-left: 2px;
+                border-left: 2px solid rgba(141,200,146,0.18);
+                font-size: 10.5px; line-height: 1.3; color: var(--secondary-text-color, #999);
+            }
             .ct-label { font-size: 12px; color: var(--primary-text-color, #e0e0e0); }
             .ct-ctl { margin-left: auto; display: flex; align-items: center; gap: 7px; }
             .ct-time {
