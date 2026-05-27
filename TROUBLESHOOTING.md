@@ -267,6 +267,16 @@ Update to SEM v1.2.0 or newer. This issue does not occur on v1.2.0+.
 
 ---
 
+## Values are 0 after an HA restart, but fine after reloading the integration (#274)
+
+**Symptom:** After restarting Home Assistant (soft or hard) the SEM readings stay at **0** / blank. Reloading the SEM integration (**Settings > Devices & Services > Solar Energy Management > ⋮ > Reload**) brings them right back. Reported for SolaX (`solax-modbus`).
+
+**Cause:** SEM derives its real-time power sensors from the source integration's *device* (see the section above). On a cold start, SEM can finish loading **before** the source integration (e.g. solax-modbus) has registered its entities, so that derivation finds nothing — leaving power at 0. A manual reload works because by then the source is fully loaded.
+
+**Fix (automatic):** As of v1.5.15, SEM keeps **re-deriving the power sensors on each update cycle** until they resolve, so the readings start on their own within a cycle or two of the source integration coming up — no manual reload needed. You'll see `Energy Dashboard power sensors resolved on attempt N — readings starting (#274)` in the log once it recovers. The retry is bounded, so an energy-only setup with no power sensor at all simply stops trying instead of looping.
+
+---
+
 ## Debug logging
 
 To enable detailed logging for SEM, add this to your `configuration.yaml`:

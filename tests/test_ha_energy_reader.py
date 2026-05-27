@@ -79,6 +79,50 @@ class TestEnergyDashboardConfig:
         missing = config.get_missing_components()
         assert missing == ["Grid"]
 
+    # --- power_resolution_incomplete (#274 cold-start recovery) ---
+
+    def test_power_incomplete_when_solar_power_unresolved(self):
+        # Solar energy sensor present but power not yet derived (source integration
+        # not registered at cold start) → incomplete → coordinator keeps re-deriving.
+        config = EnergyDashboardConfig(
+            has_solar=True, has_grid=True,
+            solar_energy="sensor.solax_pv_energy_total", solar_power=None,
+            grid_import_power="sensor.solax_grid_power",
+        )
+        assert config.power_resolution_incomplete() is True
+
+    def test_power_complete_when_solar_power_resolved(self):
+        config = EnergyDashboardConfig(
+            has_solar=True, has_grid=True,
+            solar_energy="sensor.solax_pv_energy_total",
+            solar_power="sensor.solax_pv_power_total",
+            grid_import_power="sensor.solax_grid_power",
+        )
+        assert config.power_resolution_incomplete() is False
+
+    def test_power_incomplete_when_battery_power_unresolved(self):
+        config = EnergyDashboardConfig(
+            has_solar=True, has_grid=True,
+            solar_power="sensor.pv_power",
+            battery_charge_energy="sensor.batt_charge_energy", battery_power=None,
+        )
+        assert config.power_resolution_incomplete() is True
+
+    def test_power_complete_ignores_missing_grid_power_for_split_grid(self):
+        # Split-grid setups resolve grid power via runtime discovery, not here —
+        # a missing grid_import_power must NOT trigger endless re-derivation.
+        config = EnergyDashboardConfig(
+            has_solar=True, has_grid=True,
+            solar_power="sensor.pv_power",
+            grid_import_energy="sensor.grid_import_energy", grid_import_power=None,
+        )
+        assert config.power_resolution_incomplete() is False
+
+    def test_power_complete_when_not_minimally_configured(self):
+        config = EnergyDashboardConfig(has_solar=True, has_grid=False,
+                                       solar_energy="s", solar_power=None)
+        assert config.power_resolution_incomplete() is False
+
     def test_config_to_dict(self):
         config = EnergyDashboardConfig(
             solar_power="sensor.solar_power",
