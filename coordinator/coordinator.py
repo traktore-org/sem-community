@@ -466,7 +466,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """
         _info = _LOGGER.debug if quiet else _LOGGER.info
         try:
-            dashboard_config = await read_energy_dashboard_config(self.hass)
+            dashboard_config = await read_energy_dashboard_config(self.hass, quiet=quiet)
 
             # Activate whenever the dashboard is minimally configured (solar + grid),
             # not only when a stat_rate power sensor exists. ha_energy_reader already

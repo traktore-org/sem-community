@@ -159,22 +159,27 @@ class EnergyDashboardConfig:
         }
 
 
-async def read_energy_dashboard_config(hass: HomeAssistant) -> Optional[EnergyDashboardConfig]:
+async def read_energy_dashboard_config(
+    hass: HomeAssistant, quiet: bool = False,
+) -> Optional[EnergyDashboardConfig]:
     """Read sensor configuration from HA Energy Dashboard.
 
     Args:
         hass: Home Assistant instance
+        quiet: Demote routine INFO logs to DEBUG. Used by the cold-start
+            re-derivation retry (#274) so it doesn't spam the log each cycle.
 
     Returns:
         EnergyDashboardConfig with extracted sensor entity IDs, or None if not configured
     """
-    _LOGGER.info("Reading Energy Dashboard config from .storage/energy...")
+    _info = _LOGGER.debug if quiet else _LOGGER.info
+    _info("Reading Energy Dashboard config from .storage/energy...")
     try:
         energy_file = os.path.join(hass.config.config_dir, ".storage", "energy")
-        _LOGGER.info("Energy Dashboard file path: %s", energy_file)
+        _info("Energy Dashboard file path: %s", energy_file)
 
         if not os.path.exists(energy_file):
-            _LOGGER.info("Energy Dashboard not configured (file not found)")
+            _info("Energy Dashboard not configured (file not found)")
             return None
 
         # Read the energy configuration file
@@ -217,7 +222,7 @@ async def read_energy_dashboard_config(hass: HomeAssistant) -> Optional[EnergyDa
         # sensor on the same device as the configured energy sensor.
         _derive_missing_power_sensors(hass, config)
 
-        _LOGGER.info(
+        _info(
             "Read Energy Dashboard config: solar=%s (%d sources), grid=%s (%d import, %d export), battery=%s (%d units), ev=%s",
             config.has_solar, len(config.solar_power_list),
             config.has_grid, len(config.grid_import_energy_list), len(config.grid_export_energy_list),
