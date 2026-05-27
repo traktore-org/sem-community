@@ -50,6 +50,7 @@ class NightChargePlan:
     deadline_amps: int = 0
     deadline_active: bool = False
     reachable: bool = True
+    should_warn_unreachable: bool = False
     next_cheap_start: Optional[datetime] = None
     deadline_dt: Optional[datetime] = None
     hours_to_deadline: Optional[float] = None
@@ -96,6 +97,7 @@ def plan_night_charge(
     tariff_optimized: bool = False,
     cheap_slots: Optional[List[datetime]] = None,
     slot_hours: float = 1.0,
+    peak_managed_amps: Optional[int] = None,
 ) -> NightChargePlan:
     """Decide this cycle's night-charging action for one charger.
 
@@ -111,6 +113,13 @@ def plan_night_charge(
         cheap_slots: Sorted hour-start datetimes selected as the cheapest block
             (from the tariff provider). Empty/None disables tariff gating.
         slot_hours: Length of each price slot (1.0 = hourly, 0.5 = half-hourly).
+        peak_managed_amps: Realistic current (A) the charger can sustain under
+            the peak limit given expected (average) home consumption, clamped to
+            [min, max]. This is the rate non-forcing night charging actually runs
+            at — the wait/reachability math uses it instead of ``max_amps`` so the
+            planner doesn't wait for a cheap window it can't fill at the peak-
+            limited rate and then miss Min (#274/C1). ``None`` ⇒ assume max
+            (pre-#274 behaviour, no peak awareness).
 
     Returns:
         A populated :class:`NightChargePlan`.
@@ -146,7 +155,17 @@ def plan_night_charge(
         hours_left = max(0.0, (deadline - now).total_seconds() / 3600.0)
         plan.hours_to_deadline = round(hours_left, 2)
 
+    # Effective charge rate (#274/C1). A forcing deadline overrides the peak
+    # limit and charges at the charger max; otherwise night charging is
+    # peak-managed, so the realistic sustained rate is bounded by the peak
+    # headroom (peak_managed_amps, derived from average home consumption).
+    # Sizing the wait/reachability math at max_amps while charging is actually
+    # peak-capped is what let the planner wait for a cheap window and then miss
+    # Min. peak_managed_amps is None ⇒ no peak info ⇒ assume max (pre-#274).
     max_rate_kw = max_amps * watts_per_amp / 1000.0
+    pm_amps = max_amps if peak_managed_amps is None else max(min_amps, min(max_amps, int(peak_managed_amps)))
+    peak_rate_kw = pm_amps * watts_per_amp / 1000.0
+    effective_rate_kw = max_rate_kw if is_forcing else peak_rate_kw
 
     # --- Deadline scaling (#246) ---------------------------------------------
     if hours_left is not None and hours_left > 0:
@@ -154,17 +173,14 @@ def plan_night_charge(
         required_amps = math.ceil(required_w / watts_per_amp)
         plan.deadline_amps = max(min_amps, min(max_amps, required_amps))
         plan.deadline_active = is_forcing and required_amps > min_amps
-        # Reachable only if even max current finishes in the time left — but
-        # only flag (and warn) for an explicit, forcing deadline.
-        if is_forcing and max_rate_kw > 0:
-            plan.reachable = (remaining_to_min_kwh / max_rate_kw) <= hours_left + 1e-6
-        else:
-            plan.reachable = True
-        if not plan.reachable:
-            plan.reason = (
-                f"deadline unreachable: need {remaining_to_min_kwh:.1f}kWh in "
-                f"{hours_left:.1f}h, max {max_rate_kw:.1f}kW"
-            )
+        # Reachable at the rate we'll ACTUALLY charge: max when forcing (peak
+        # overridden), peak-managed otherwise. Computed on both paths now so a
+        # peak-limited window that can't deliver Min surfaces a warning instead
+        # of silently under-charging (#274/C1).
+        plan.reachable = (
+            (remaining_to_min_kwh / effective_rate_kw) <= hours_left + 1e-6
+            if effective_rate_kw > 0 else False
+        )
     elif is_forcing and hours_left is not None and hours_left <= 0:
         # Explicit deadline has arrived/passed and Min not met — charge hard now.
         plan.deadline_amps = max_amps
@@ -174,10 +190,20 @@ def plan_night_charge(
     else:
         plan.deadline_amps = 0  # no forcing deadline configured
 
+    if not plan.reachable and not plan.reason:
+        plan.reason = (
+            f"deadline unreachable: need {remaining_to_min_kwh:.1f}kWh in "
+            f"{hours_left:.1f}h at {effective_rate_kw:.1f}kW"
+            + ("" if is_forcing else " (peak-limited — raise peak limit or set an earlier deadline)")
+        )
+
     # --- Tariff gating (#247) ------------------------------------------------
-    cheap_slots = sorted(cheap_slots) if cheap_slots else []
-    if cheap_slots:
-        plan.next_cheap_start = next((s for s in cheap_slots if s + timedelta(hours=slot_hours) > now), cheap_slots[0])
+    # Drop slots that have already ended (stale tariff data / past slots that
+    # survived the provider's lookback filter) so they don't inflate the
+    # deliverable estimate or surface a past "next cheap" time (#274/H3).
+    slot_len = timedelta(hours=slot_hours)
+    cheap_slots = sorted(s for s in (cheap_slots or []) if s + slot_len > now)
+    plan.next_cheap_start = cheap_slots[0] if cheap_slots else None
 
     if tariff_optimized and cheap_slots:
         now_is_cheap = _is_within_slot(now, cheap_slots, slot_hours)
@@ -187,17 +213,16 @@ def plan_night_charge(
             # Can't make the deadline anyway — don't also wait for cheap.
             plan.reason = "tariff: deadline at risk — charging despite price"
         else:
-            # Can we still hit Min using only the cheap slots before the deadline?
-            # Clip each slot to the time actually left before the deadline — a slot
-            # that starts just before the deadline only delivers a fraction of its
-            # hour, so counting the whole slot could make us wait and then miss Min.
+            # Can we still hit Min using only the cheap slots before the deadline,
+            # AT THE RATE WE'LL ACTUALLY CHARGE (peak-managed unless forcing)?
+            # Clip each slot to the time left before the deadline.
             limit = deadline if deadline is not None else (now + timedelta(hours=24))
             deliverable_kwh = 0.0
             for s in cheap_slots:
                 if s >= limit:
                     continue
                 usable_h = min(slot_hours, max(0.0, (limit - max(s, now)).total_seconds() / 3600.0))
-                deliverable_kwh += usable_h * max_rate_kw
+                deliverable_kwh += usable_h * effective_rate_kw
             if deliverable_kwh + 1e-6 >= remaining_to_min_kwh:
                 plan.should_wait_for_cheap = True
                 nxt = plan.next_cheap_start
@@ -205,9 +230,14 @@ def plan_night_charge(
                 plan.reason = f"tariff: waiting for cheap window (next {when})"
             else:
                 plan.reason = (
-                    "tariff: not enough cheap hours before deadline — "
-                    "charging to guarantee min"
+                    "tariff: not enough cheap hours at the peak-limited rate — "
+                    "charging now to guarantee min"
                 )
+
+    # Only warn the user when they opted into deadline/tariff behaviour (#274/C1):
+    # a plain default-deadline night charge that simply can't finish within the
+    # window at the peak limit shouldn't nag users who never set a deadline.
+    plan.should_warn_unreachable = (not plan.reachable) and (is_forcing or tariff_optimized)
 
     if not plan.reason:
         plan.reason = "night charging"

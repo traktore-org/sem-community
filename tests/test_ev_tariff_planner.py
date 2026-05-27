@@ -206,3 +206,54 @@ class TestTariffGating:
         cheap = [datetime(2026, 5, 26, 22), datetime(2026, 5, 27, 2)]
         p = _plan(tariff_optimized=True, cheap_slots=cheap)
         assert p.next_cheap_start is not None
+
+
+class TestPeakAwareRate:
+    """#274/C1: wait/reachability sized at the realistic peak-managed rate."""
+
+    def test_peak_managed_rate_blocks_unfillable_wait(self):
+        # At max rate, 2 cheap hours cover 10 kWh and we'd wait. At the peak-
+        # managed rate (7 A ≈ 4.8 kW), 2 h ≈ 9.6 kWh < 10 → must NOT wait.
+        cheap = [datetime(2026, 5, 27, h) for h in (1, 2)]
+        at_max = _plan(remaining_to_min_kwh=10.0, tariff_optimized=True, cheap_slots=cheap)
+        assert at_max.should_wait_for_cheap
+        peak_aware = _plan(remaining_to_min_kwh=10.0, tariff_optimized=True,
+                           cheap_slots=cheap, peak_managed_amps=7)
+        assert not peak_aware.should_wait_for_cheap
+
+    def test_peak_managed_rate_allows_fillable_wait(self):
+        cheap = [datetime(2026, 5, 27, h) for h in (1, 2, 3)]  # 3h*4.8≈14.5 ≥ 10
+        p = _plan(remaining_to_min_kwh=10.0, tariff_optimized=True,
+                  cheap_slots=cheap, peak_managed_amps=7)
+        assert p.should_wait_for_cheap
+
+    def test_non_forcing_unreachable_warns_only_when_opted_in(self):
+        # 60 kWh by 07:00 (9h) at 7 A ≈ 4.8 kW → ~43 kWh < 60 → unreachable.
+        warned = _plan(remaining_to_min_kwh=60.0, tariff_optimized=True,
+                       cheap_slots=[NOW + timedelta(hours=2)], peak_managed_amps=7)
+        assert not warned.reachable
+        assert warned.should_warn_unreachable
+        quiet = _plan(remaining_to_min_kwh=60.0, tariff_optimized=False, peak_managed_amps=7)
+        assert not quiet.reachable
+        assert not quiet.should_warn_unreachable  # never opted in → no nag
+
+    def test_stale_past_cheap_slots_dropped(self):
+        past = NOW - timedelta(hours=2)     # 20:00, already ended
+        future = NOW + timedelta(hours=2)   # 00:00 next day
+        p = _plan(remaining_to_min_kwh=5.0, tariff_optimized=True,
+                  cheap_slots=[past, future], peak_managed_amps=10)
+        assert p.next_cheap_start == future
+
+    def test_next_cheap_start_none_when_all_past(self):
+        past = [NOW - timedelta(hours=h) for h in (2, 3)]
+        p = _plan(remaining_to_min_kwh=5.0, tariff_optimized=True, cheap_slots=past)
+        assert p.next_cheap_start is None
+
+    def test_forcing_deadline_still_uses_max_rate(self):
+        # A forcing deadline overrides peak → reachability uses max, not peak.
+        # 40 kWh by 02:00 (4h): at max 22 kW → 88 kWh reachable; peak_managed
+        # is irrelevant on the forcing path.
+        p = _plan(remaining_to_min_kwh=40.0, target_time="02:00", max_amps=32,
+                  peak_managed_amps=6)
+        assert p.deadline_active
+        assert p.reachable

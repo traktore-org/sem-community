@@ -146,14 +146,51 @@ class TestComputeNightPlan:
     def test_tariff_wait_when_cheap_window_ahead(self):
         coord = _build_coordinator(tariff_on=True)
         base = dt_util.now().replace(hour=22, minute=0, second=0, microsecond=0)
+        # Two consecutive cheap hours ahead. Peak-managed rate here is
+        # (6 kW peak - ~0.75 kW home)/690 ≈ 7 A ≈ 4.8 kW; 2 h * 4.8 ≈ 9.6 kWh,
+        # which covers an 8 kWh need at the realistic rate → wait is viable.
+        cheap = [
+            PricePoint(timestamp=base.replace(hour=1) + timedelta(days=1), price=0.1, level=PriceLevel.CHEAP),
+            PricePoint(timestamp=base.replace(hour=2) + timedelta(days=1), price=0.1, level=PriceLevel.CHEAP),
+        ]
+        coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=cheap)
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+        with patch.object(dt_util, "now", return_value=base):
+            plan = coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
+        assert plan.should_wait_for_cheap
+
+    def test_peak_limited_declines_unfillable_wait(self):
+        # C1 regression (#274): one cheap hour cannot deliver 10 kWh at the
+        # peak-limited rate (~4.8 kW), so the planner must NOT wait — it charges
+        # now (using all hours) to guarantee Min, instead of waiting then missing.
+        coord = _build_coordinator(tariff_on=True)
+        base = dt_util.now().replace(hour=22, minute=0, second=0, microsecond=0)
         cheap = [PricePoint(timestamp=base.replace(hour=1) + timedelta(days=1),
                             price=0.1, level=PriceLevel.CHEAP)]
-        # not enough? 1 cheap hour * 22kW = 22kWh >= 10 needed → can wait
         coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=cheap)
         cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
         with patch.object(dt_util, "now", return_value=base):
             plan = coord._compute_night_plan(cfg, remaining_to_min_kwh=10.0)
-        assert plan.should_wait_for_cheap
+        assert not plan.should_wait_for_cheap
+
+    def test_predictor_pattern_sizes_peak_rate(self):
+        # Predictor-based path (#274): a high learned overnight load shrinks the
+        # peak headroom, so even a generous cheap window can't fill Min → no wait.
+        coord = _build_coordinator(tariff_on=True)
+        coord._predictor = MagicMock()
+        # 5500 W learned night load → headroom 6000-5500=500 W → clamps to min (6A,
+        # ~4.1 kW)... so use a load that drops realistic rate below the need.
+        coord._predictor.predict_consumption_24h = MagicMock(return_value=[5500.0] * 24)
+        coord.time_manager.get_night_window_hours = MagicMock(return_value=8.0)
+        base = dt_util.now().replace(hour=22, minute=0, second=0, microsecond=0)
+        cheap = [PricePoint(timestamp=base.replace(hour=h) + timedelta(days=1),
+                            price=0.1, level=PriceLevel.CHEAP) for h in (1, 2)]
+        coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=cheap)
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+        with patch.object(dt_util, "now", return_value=base):
+            plan = coord._compute_night_plan(cfg, remaining_to_min_kwh=12.0)
+        # 2 cheap h at min-clamped ~4.1 kW ≈ 8.3 kWh < 12 → must not wait
+        assert not plan.should_wait_for_cheap
 
     def test_no_tariff_no_wait(self):
         coord = _build_coordinator(tariff_on=False)

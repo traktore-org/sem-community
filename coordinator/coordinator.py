@@ -241,6 +241,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Per-charger night plans for surfacing + the "unreachable deadline" notify
         # (notification dedup itself lives in NotificationManager._notified_flags)
         self._night_plan_per_charger = {}
+        # Shared night peak budget (#274/H1): watts committed to higher-priority
+        # chargers so far this cycle. Reset before the per-charger loop; each
+        # charger's peak-managed sizing subtracts it so the fleet stays under peak.
+        self._night_committed_w = 0.0
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -867,6 +871,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_devices.items(),
                     key=lambda x: x[1].priority,
                 )
+                # Shared night peak budget (#274/H1): chargers are sized in
+                # priority order against one peak headroom; reset the running
+                # commitment before the loop.
+                self._night_committed_w = 0.0
                 for cid, ev_dev in sorted_chargers:
                     # Check per-charger night charging switch (#193)
                     if charging_state in (
@@ -945,7 +953,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         if pc_target <= 0.1:
                             effective_state = ChargingState.NIGHT_TARGET_REACHED
                         else:
-                            plan = self._compute_night_plan(charger_cfg, pc_target)
+                            plan = self._compute_night_plan(charger_cfg, pc_target, energy)
                             self._night_plan_per_charger[cid] = plan
                             charging_context.night_deadline_amps = plan.deadline_amps
                             charging_context.night_deadline_active = plan.deadline_active
@@ -962,6 +970,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         await self._execute_ev_control(
                             effective_state, power, energy, charging_context
                         )
+                        # Add this charger's just-committed draw to the shared night
+                        # peak budget so lower-priority chargers size against the
+                        # remaining headroom (#274/H1). Estimate from the setpoint
+                        # (the commitment), not the lagging measured power.
+                        try:
+                            self._night_committed_w += max(0.0, (
+                                ev_dev._current_setpoint * ev_dev.phases * ev_dev.voltage
+                            ))
+                        except (AttributeError, TypeError):
+                            pass
                     except (HomeAssistantError, ServiceValidationError) as e:
                         _LOGGER.error("EV control service failed for %s: %s", cid, e)
                     except ValueError as e:
@@ -2364,7 +2382,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         tariff_wait = False
         deadline_reachable = True
         if self.time_manager.is_night_mode() and night_target > 0.1:
-            night_plan = self._compute_night_plan(_primary_cfg, night_target)
+            night_plan = self._compute_night_plan(_primary_cfg, night_target, energy)
             deadline_amps = night_plan.deadline_amps
             deadline_active = night_plan.deadline_active
             tariff_wait = night_plan.should_wait_for_cheap

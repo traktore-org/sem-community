@@ -87,7 +87,7 @@ class EVControlMixin:
         return val or DEFAULT_EV_TARGET_TIME
 
     def _compute_night_plan(
-        self, charger_cfg: dict, remaining_to_min_kwh: float,
+        self, charger_cfg: dict, remaining_to_min_kwh: float, energy: Any = None,
     ) -> NightChargePlan:
         """Build the per-charger night charge plan (deadline + tariff) (#246/#247).
 
@@ -114,23 +114,50 @@ class EVControlMixin:
         target_time = self._charger_target_time(cfg)
         try:
             night_end = self.time_manager.get_night_end_time()
+            window_h = self.time_manager.get_night_window_hours()
         except (ValueError, AttributeError):
             night_end = DEFAULT_EV_TARGET_TIME
+            window_h = 8.0
 
-        # Cheapest contiguous window covering the remaining need (block-wise) (#247)
+        # Realistic peak-managed rate (#274/C1): night charging is sized from the
+        # house load to keep grid import <= the peak limit, so the rate the car
+        # actually sustains is (peak_limit - expected home consumption) / W-per-A,
+        # NOT the charger max. Using the learned overnight consumption pattern (or
+        # the rolling monthly average) here is what stops the planner waiting for a
+        # cheap window it can't fill at the peak-limited rate and then missing Min.
+        peak_limit_w = self._get_peak_limit_w()
+        expected_home_w = self._expected_night_home_w(energy, window_h)
+        # Subtract draw already committed to higher-priority chargers this cycle
+        # so the fleet shares one peak budget (#274/H1).
+        committed_w = getattr(self, "_night_committed_w", 0.0)
+        peak_managed_amps = max(
+            min_amps,
+            min(max_amps, round((peak_limit_w - expected_home_w - committed_w) / watts_per_amp)),
+        )
+        peak_rate_kw = max(0.1, peak_managed_amps * watts_per_amp / 1000.0)
+
+        # Cheapest contiguous window covering the remaining need (block-wise) (#247).
+        # Size the request at the realistic peak-managed rate so we fetch enough
+        # cheap hours to actually cover Min (#274/H2 slot length inferred below).
         cheap_slots = None
+        slot_hours = 1.0
         if tariff_optimized and remaining_to_min_kwh > 0.1:
             tariff = getattr(self, "_tariff_provider", None)
             if tariff is not None and hasattr(tariff, "find_cheapest_hours"):
                 try:
-                    max_rate_kw = max(0.1, max_amps * watts_per_amp / 1000.0)
-                    hours_needed = max(1, int(remaining_to_min_kwh / max_rate_kw + 0.999))
+                    hours_needed = max(1, int(remaining_to_min_kwh / peak_rate_kw + 0.999))
                     points = tariff.find_cheapest_hours(
                         hours_needed,
                         within_hours=int(EV_DEADLINE_LOOKAHEAD_HOURS),
                         prefer_consecutive=True,
                     )
                     cheap_slots = [p.timestamp for p in points] if points else None
+                    # Infer slot length from the consecutive block (#274/H2):
+                    # 30/15-min markets must not be counted as full hours.
+                    if cheap_slots and len(cheap_slots) >= 2:
+                        gap = (cheap_slots[1] - cheap_slots[0]).total_seconds() / 3600.0
+                        if 0 < gap <= 1.0:
+                            slot_hours = gap
                 except (ValueError, TypeError, AttributeError) as e:
                     _LOGGER.debug("Tariff cheap-window lookup failed: %s", e)
 
@@ -144,7 +171,35 @@ class EVControlMixin:
             night_end=night_end,
             tariff_optimized=tariff_optimized,
             cheap_slots=cheap_slots,
+            slot_hours=slot_hours,
+            peak_managed_amps=peak_managed_amps,
         )
+
+    def _expected_night_home_w(self, energy: Any, window_hours: float = 8.0) -> float:
+        """Expected average home consumption (W) over the upcoming night window.
+
+        Reuses the learned hourly consumption pattern (ConsumptionPredictor) when
+        it's trained — averaging the first ``window_hours`` of its 24h forecast,
+        which are the night hours — then falls back to the rolling monthly-average
+        daily home / 24h, then the config estimate. Same sources
+        ``_calculate_forecast_night_target`` already uses; pulled out so the
+        peak-aware night plan (#274/C1) sizes the charge rate from real data.
+        """
+        now = dt_util.now()
+        predictor = getattr(self, "_predictor", None)
+        if predictor is not None:
+            try:
+                hourly = predictor.predict_consumption_24h(now)  # W per hour
+                n = max(1, min(len(hourly), int(round(window_hours)) or 1))
+                window = [v for v in hourly[:n] if v is not None]
+                if window:
+                    return max(0.0, sum(window) / len(window))
+            except Exception:
+                pass
+        day = now.day
+        if energy is not None and day >= 7 and getattr(energy, "monthly_home", 0) > 0:
+            return max(0.0, energy.monthly_home / day / 24.0 * 1000.0)
+        return max(0.0, self.config.get("daily_home_consumption_estimate", 18.0) / 24.0 * 1000.0)
 
     async def _maybe_warn_unreachable_deadline(
         self, cid: str, charger_cfg: dict, plan: NightChargePlan,
@@ -158,7 +213,10 @@ class EVControlMixin:
         if nm is None or plan.deadline_dt is None:
             return
         name = (charger_cfg or {}).get("name") or "EV"
-        if plan.reachable:
+        # Only warn when the user opted into deadline/tariff behaviour (#274/C1) —
+        # plan.should_warn_unreachable already encodes (not reachable) AND
+        # (forcing OR tariff). Otherwise clear any prior warning.
+        if not plan.should_warn_unreachable:
             nm.clear_deadline_warning(charger_name=name)
             return
         try:
@@ -463,8 +521,14 @@ class EVControlMixin:
         grid-charge SEM does not command), ``grid = peak + net_batt_charge`` and
         the peak may still be exceeded by that charge. SEM cannot size around
         inverter-managed charging it doesn't control.
+
+        Multi-charger (#274/H1): also subtract the draw already committed to
+        higher-priority chargers this cycle (``_night_committed_w``), so a fleet
+        of chargers shares one peak budget instead of each independently sizing to
+        the full ``peak - home`` headroom and summing past the limit.
         """
-        headroom_w = self._get_peak_limit_w() - power.home_consumption_power
+        committed_w = getattr(self, "_night_committed_w", 0.0)
+        headroom_w = self._get_peak_limit_w() - power.home_consumption_power - committed_w
         target = round(headroom_w / max(1.0, watts_per_amp))
         return min(max_amps, max(min_amps, target))
 
