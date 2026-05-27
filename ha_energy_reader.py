@@ -100,6 +100,32 @@ class EnergyDashboardConfig:
         """
         return self.has_solar and self.has_grid
 
+    def power_resolution_incomplete(self) -> bool:
+        """True when a source has an energy sensor but no resolved power sensor (#274).
+
+        Real-time power sensors are derived from the energy sensor's *device*
+        (``_derive_missing_power_sensors``). On a cold HA start SEM can run that
+        derivation before the source integration (e.g. solax-modbus) has
+        registered its entities, so nothing is found and SEM reads 0 until a
+        manual reload re-derives. The coordinator re-derives each cycle while
+        this is True, so the readings start on their own.
+
+        Solar (always a single combined PV sensor) and battery are used as the
+        canary. Grid is intentionally excluded — split-grid setups (Growatt,
+        DSMR) resolve grid power via a separate runtime discovery, never here, so
+        a missing ``grid_import_power`` is normal for them and must not trigger
+        endless re-derivation. The source entities all register together, so
+        fixing solar/battery implies the registry is ready and grid re-derives in
+        the same pass.
+        """
+        if not self.is_minimally_configured():
+            return False
+        battery_energy = self.battery_charge_energy or self.battery_discharge_energy
+        return bool(
+            (self.solar_energy and not self.solar_power)
+            or (battery_energy and not self.battery_power)
+        )
+
     def get_missing_components(self) -> List[str]:
         """Return list of missing required components."""
         missing = []
