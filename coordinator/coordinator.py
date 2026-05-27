@@ -28,6 +28,7 @@ from ..const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_CAPACITY_KWH,
+    ED_RESOLVE_MAX_ATTEMPTS,
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
     ENTITY_SOLAR_POWER,
@@ -141,6 +142,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Energy Dashboard config
         self._energy_dashboard_config: Optional[EnergyDashboardConfig] = None
+        # Cold-start recovery (#274): re-derive ED power sensors each cycle while
+        # they're unresolved (source integration registered after SEM), bounded.
+        self._ed_resolve_pending: bool = False
+        self._ed_resolve_attempts: int = 0
 
         # Phase 0: Surplus controller (always-on) & forecast reader
         regulation_offset = config.get("regulation_offset", 50)
@@ -452,10 +457,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except (OSError, ValueError):
             return "0.0.0"
 
-    async def async_initialize_energy_dashboard(self) -> bool:
-        """Initialize sensors from HA Energy Dashboard."""
+    async def async_initialize_energy_dashboard(self, quiet: bool = False) -> bool:
+        """Initialize sensors from HA Energy Dashboard.
+
+        ``quiet`` demotes the routine INFO logs to DEBUG — used by the
+        cold-start re-derivation retry (#274) so it doesn't spam the log each
+        cycle while waiting for the source integration to register.
+        """
+        _info = _LOGGER.debug if quiet else _LOGGER.info
         try:
-            dashboard_config = await read_energy_dashboard_config(self.hass)
+            dashboard_config = await read_energy_dashboard_config(self.hass, quiet=quiet)
 
             # Activate whenever the dashboard is minimally configured (solar + grid),
             # not only when a stat_rate power sensor exists. ha_energy_reader already
@@ -465,14 +476,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if dashboard_config and dashboard_config.is_minimally_configured():
                 self._energy_dashboard_config = dashboard_config
                 self._sensor_reader.set_energy_dashboard_config(dashboard_config)
-                _LOGGER.info(
+                _info(
                     f"Using Energy Dashboard sensors: "
                     f"solar={dashboard_config.solar_power}, "
                     f"grid={dashboard_config.grid_import_power}, "
                     f"battery={dashboard_config.battery_power}"
                 )
             else:
-                _LOGGER.info("Energy Dashboard not configured or incomplete")
+                _info("Energy Dashboard not configured or incomplete")
 
         except Exception as e:
             _LOGGER.warning("Failed to read Energy Dashboard: %s", e)
@@ -486,12 +497,54 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Log EV sensor configuration
         ev_power = self._sensor_reader.config.ev_power_sensor
         ed_ev = getattr(self._energy_dashboard_config, 'ev_power', None) if self._energy_dashboard_config else None
-        _LOGGER.info(
+        _info(
             "EV sensors: ed_power=%s, config_power=%s",
             ed_ev, ev_power,
         )
 
+        # Cold-start recovery flag (#274): if a source has an energy sensor but its
+        # real-time power sensor couldn't be derived yet (the source integration
+        # hadn't registered its entities when we ran), keep re-deriving each cycle.
+        self._ed_resolve_pending = bool(
+            self._energy_dashboard_config
+            and self._energy_dashboard_config.power_resolution_incomplete()
+        )
+
         return self._energy_dashboard_config is not None
+
+    async def _retry_energy_dashboard_resolution(self) -> None:
+        """Re-derive Energy Dashboard power sensors after a cold start (#274).
+
+        On HA restart SEM can run its power-sensor derivation before the source
+        integration (e.g. solax-modbus) has registered its entities, so the
+        device-registry lookup finds nothing and every reading sits at 0 until the
+        user manually reloads. Re-running the derivation each update cycle picks
+        the sensors up the moment the source registers — no reload needed.
+
+        Bounded by ``ED_RESOLVE_MAX_ATTEMPTS`` so a genuinely power-less setup
+        (energy-only sensors) stops retrying instead of re-reading the energy
+        prefs forever. ``async_initialize_energy_dashboard`` recomputes
+        ``_ed_resolve_pending``, so this clears itself the cycle it succeeds.
+        """
+        if self._ed_resolve_attempts >= ED_RESOLVE_MAX_ATTEMPTS:
+            self._ed_resolve_pending = False
+            _LOGGER.warning(
+                "Energy Dashboard power sensors still unresolved after %d attempts "
+                "— giving up (check the source integration is loaded). #274",
+                self._ed_resolve_attempts,
+            )
+            return
+        self._ed_resolve_attempts += 1
+        try:
+            await self.async_initialize_energy_dashboard(quiet=True)
+        except Exception as e:  # never let recovery break the update cycle
+            _LOGGER.debug("Energy Dashboard re-resolution attempt failed: %s", e)
+            return
+        if not self._ed_resolve_pending:
+            _LOGGER.info(
+                "Energy Dashboard power sensors resolved on attempt %d — "
+                "readings starting (#274)", self._ed_resolve_attempts,
+            )
 
     async def async_initialize_load_management(self, config_entry: ConfigEntry) -> None:
         """Initialize load management after coordinator is set up."""
@@ -630,6 +683,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         self._cycle_vehicle_soc = float(_soc_state.state)
                     except (ValueError, TypeError):
                         _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", _vehicle_soc_entity, _soc_state.state)
+
+            # Cold-start recovery (#274): re-derive Energy Dashboard power sensors
+            # if they were unresolved at setup (source integration registered after
+            # SEM). Bounded; clears itself once resolved. Runs BEFORE reading so the
+            # very next read uses the recovered sensors.
+            if self._ed_resolve_pending:
+                await self._retry_energy_dashboard_resolution()
 
             # Step 1: Read power values from sensors
             power = self._sensor_reader.read_power()

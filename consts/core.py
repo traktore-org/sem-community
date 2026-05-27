@@ -8,6 +8,10 @@ DOMAIN: Final = "solar_energy_management"
 # ============================================
 DEFAULT_OBSERVER_MODE: Final = False  # When True, skip all hardware control (read-only monitoring)
 DEFAULT_UPDATE_INTERVAL: Final = 10  # seconds - 10 seconds for highly accurate energy integration
+# Cold-start recovery (#274): re-derive Energy Dashboard power sensors for this many
+# update cycles while they're still unresolved (source integration not yet registered),
+# then give up. ~40 cycles ≈ 7-20 min depending on update_interval.
+ED_RESOLVE_MAX_ATTEMPTS: Final = 40
 DEFAULT_POWER_DELTA: Final = 1000  # Watts - only major changes
 DEFAULT_CURRENT_DELTA: Final = 5  # Amps - significant current changes only
 DEFAULT_SOC_DELTA: Final = 10  # Percent - battery changes slowly anyway

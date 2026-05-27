@@ -423,6 +423,9 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ## Recent Improvements (v1.5.x)
 
+### v1.5.15 — Cold-start readings fix
+- **Readings start automatically after an HA restart** (#274) — SEM derives its real-time power sensors from the source integration's device. On a cold start it could run that derivation before the source integration (e.g. solax-modbus) had registered its entities, leaving every reading at 0 until you manually reloaded the integration. SEM now re-derives the power sensors each update cycle until they resolve, so the readings come up on their own within a cycle or two of the source loading — no reload needed. Bounded and a complete no-op for setups that already resolve normally.
+
 ### v1.5.14 — Multi-device cleanup, EV range targets & night-charge peak safety
 - **Night charging respects the peak limit** (#268) — night-charge current is now sized from the house load alone, so grid import stays ≤ your configured peak limit regardless of battery behaviour. Previously battery discharge could inflate the EV current and push grid import well past the limit.
 - **Per-charger is canonical** (#255) — duplicate global EV settings removed; per-charger entities (night charging, mode, phases, target, current) are the source of truth and globals become read-only summaries. Idempotent v3→v4 config migration.
