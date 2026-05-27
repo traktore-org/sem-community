@@ -55,6 +55,23 @@ class TestResolveDeadline:
         assert resolve_deadline(NOW, "") is None
         assert resolve_deadline(NOW, "garbage") is None
 
+    def test_resolve_deadline_dst_fallback_is_actual_elapsed(self):
+        # #274/M2: on a fall-back night (Europe/Zurich 2026-10-25, clocks go
+        # 03:00 CEST → 02:00 CET), 01:00 → 07:00 is 7 ACTUAL hours, not the 6 a
+        # naive wall-clock diff gives. The zoneinfo-aware subtraction must reflect
+        # the extra repeated hour so the deadline current isn't mis-sized.
+        try:
+            from zoneinfo import ZoneInfo
+            zh = ZoneInfo("Europe/Zurich")
+        except Exception:
+            pytest.skip("zoneinfo/tzdata unavailable")
+        now = datetime(2026, 10, 25, 1, 0, tzinfo=zh)  # 01:00 CEST
+        p = plan_night_charge(
+            now=now, remaining_to_min_kwh=10.0, min_amps=6, max_amps=32,
+            watts_per_amp=WPA, target_time="07:00", night_end="07:00",
+        )
+        assert p.hours_to_deadline == pytest.approx(7.0, abs=0.05)
+
 
 # --------------------------------------------------------------------------
 # Deadline scaling (#246)

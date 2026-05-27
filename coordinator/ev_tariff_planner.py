@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 
@@ -64,6 +64,14 @@ def resolve_deadline(now: datetime, target_time: Optional[str]) -> Optional[date
     Night charging spans midnight, so a 07:00 deadline set at 22:00 means 07:00
     *tomorrow*. If the time has already passed today, roll to tomorrow. Returns
     ``None`` for blank / malformed input (caller falls back to the night-end).
+
+    DST (#274/M2): ``now`` is a zoneinfo-aware ``dt_util.now()``. ``.replace(hour=)``
+    keeps the zoneinfo tzinfo (not a frozen offset), so the resolved deadline gets
+    the offset for *its* wall-clock time, and the caller's ``(deadline - now)``
+    subtraction converts both via their own UTC offsets — yielding the true elapsed
+    hours across a DST fold/gap (e.g. 7 actual hours for 01:00→07:00 on a fall-back
+    night, not the 6 a naive wall-clock subtraction would give). Locked by
+    test_resolve_deadline_dst_fallback_is_actual_elapsed.
     """
     if not target_time:
         return None
@@ -83,6 +91,21 @@ def _is_within_slot(now: datetime, slot_starts: List[datetime], slot_hours: floa
     """True when ``now`` falls inside one of the (hour-long) cheap slots."""
     span = timedelta(hours=slot_hours)
     return any(s <= now < s + span for s in slot_starts)
+
+
+def _hours_between(start: datetime, end: datetime) -> float:
+    """Elapsed hours from ``start`` to ``end``, DST-correct (#274/M2).
+
+    Python subtracts two aware datetimes that share the *same* tzinfo (e.g. both
+    ``dt_util.now()``-zone) in wall-clock space, ignoring the UTC offset — so a
+    fall-back night under-counts by the repeated hour (07:00−01:00 reads 6 h, not
+    the true 7 h). Convert to UTC first when both are aware. Naive datetimes
+    (unit tests) are subtracted directly.
+    """
+    if start.tzinfo is not None and end.tzinfo is not None:
+        start = start.astimezone(timezone.utc)
+        end = end.astimezone(timezone.utc)
+    return (end - start).total_seconds() / 3600.0
 
 
 def plan_night_charge(
@@ -152,7 +175,7 @@ def plan_night_charge(
 
     hours_left = None
     if deadline is not None:
-        hours_left = max(0.0, (deadline - now).total_seconds() / 3600.0)
+        hours_left = max(0.0, _hours_between(now, deadline))
         plan.hours_to_deadline = round(hours_left, 2)
 
     # Effective charge rate (#274/C1). A forcing deadline overrides the peak
@@ -221,7 +244,7 @@ def plan_night_charge(
             for s in cheap_slots:
                 if s >= limit:
                     continue
-                usable_h = min(slot_hours, max(0.0, (limit - max(s, now)).total_seconds() / 3600.0))
+                usable_h = min(slot_hours, max(0.0, _hours_between(max(s, now), limit)))
                 deliverable_kwh += usable_h * effective_rate_kw
             if deliverable_kwh + 1e-6 >= remaining_to_min_kwh:
                 plan.should_wait_for_cheap = True

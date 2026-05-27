@@ -198,6 +198,43 @@ class TestComputeNightPlan:
         plan = coord._compute_night_plan(cfg, remaining_to_min_kwh=10.0)
         assert not plan.should_wait_for_cheap
 
+    def test_tariff_hysteresis_holds_decision_within_dwell(self):
+        # M4 (#274): once charging (now cheap), a brief flip to "wait" within the
+        # dwell must be held → no stop/start contactor cycling.
+        coord = _build_coordinator(tariff_on=True)
+        coord.config["ev_tariff_dwell_seconds"] = 600
+        base = dt_util.now().replace(hour=22, minute=0, second=0, microsecond=0)
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+
+        # Call 1: now IS cheap → charge now (should_wait False), records the decision.
+        coord._tariff_provider.find_cheapest_hours = MagicMock(
+            return_value=[PricePoint(timestamp=base, price=0.1, level=PriceLevel.CHEAP)])
+        with patch.object(dt_util, "now", return_value=base):
+            p1 = coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
+        assert not p1.should_wait_for_cheap
+
+        # Call 2, 60 s later (within dwell): cheap window now ahead → raw says wait,
+        # but the dwell holds the previous "charging" decision.
+        cheap_ahead = [PricePoint(timestamp=base.replace(hour=h) + timedelta(days=1),
+                                  price=0.1, level=PriceLevel.CHEAP) for h in (1, 2, 3)]
+        coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=cheap_ahead)
+        with patch.object(dt_util, "now", return_value=base + timedelta(seconds=60)):
+            p2 = coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
+        assert not p2.should_wait_for_cheap  # held — not flipped to wait
+
+
+def test_spotmarket_provider_arg_order(monkeypatch):
+    # H4 (#274): SpotMarketProvider must not land export_rate in the
+    # forecast_entity positional slot.
+    from custom_components.solar_energy_management.tariff.tariff_provider import (
+        SpotMarketProvider,
+    )
+    hass = MagicMock()
+    hass.states.get = MagicMock(return_value=None)
+    prov = SpotMarketProvider(hass, price_entity="sensor.spot", export_rate=0.09)
+    assert prov._forecast_entity is None       # not the 0.09 float
+    assert prov.export_rate == 0.09
+
 
 # ---------------------------------------------------------------------------
 # Daytime tariff pause in _determine_charging_strategy (#247)

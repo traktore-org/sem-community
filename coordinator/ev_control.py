@@ -161,7 +161,7 @@ class EVControlMixin:
                 except (ValueError, TypeError, AttributeError) as e:
                     _LOGGER.debug("Tariff cheap-window lookup failed: %s", e)
 
-        return plan_night_charge(
+        plan = plan_night_charge(
             now=dt_util.now(),
             remaining_to_min_kwh=remaining_to_min_kwh,
             min_amps=min_amps,
@@ -174,6 +174,26 @@ class EVControlMixin:
             slot_hours=slot_hours,
             peak_managed_amps=peak_managed_amps,
         )
+
+        # Hysteresis (#274/M4): hold the previous wait↔charge decision until the
+        # dwell elapses, so a price hovering at the cheap/expensive boundary
+        # doesn't stop/start the charger (contactor cycling) every cycle.
+        if tariff_optimized:
+            cid = cfg.get("id", "ev_charger")
+            dwell = int(self.config.get("ev_tariff_dwell_seconds", 600))
+            decisions = getattr(self, "_tariff_decision_per_charger", None)
+            if decisions is None:
+                decisions = self._tariff_decision_per_charger = {}
+            now_ts = dt_util.now().timestamp()
+            prev = decisions.get(cid)
+            if (prev is not None
+                    and plan.should_wait_for_cheap != prev[0]
+                    and (now_ts - prev[1]) < dwell):
+                plan.should_wait_for_cheap = prev[0]  # hold within dwell
+            if prev is None or prev[0] != plan.should_wait_for_cheap:
+                decisions[cid] = (plan.should_wait_for_cheap, now_ts)
+
+        return plan
 
     def _expected_night_home_w(self, energy: Any, window_hours: float = 8.0) -> float:
         """Expected average home consumption (W) over the upcoming night window.
@@ -213,11 +233,12 @@ class EVControlMixin:
         if nm is None or plan.deadline_dt is None:
             return
         name = (charger_cfg or {}).get("name") or "EV"
+        flag_key = cid or (charger_cfg or {}).get("id") or name  # dedup by id (#274/M3)
         # Only warn when the user opted into deadline/tariff behaviour (#274/C1) —
         # plan.should_warn_unreachable already encodes (not reachable) AND
         # (forcing OR tariff). Otherwise clear any prior warning.
         if not plan.should_warn_unreachable:
-            nm.clear_deadline_warning(charger_name=name)
+            nm.clear_deadline_warning(charger_name=name, flag_key=flag_key)
             return
         try:
             await nm.notify_ev_deadline_unreachable(
@@ -225,6 +246,7 @@ class EVControlMixin:
                 hours_left=plan.hours_to_deadline or 0.0,
                 deadline=plan.deadline_dt.strftime("%H:%M"),
                 charger_name=name,
+                flag_key=flag_key,
             )
         except Exception as e:  # notifications must never break the control loop
             _LOGGER.debug("Deadline-unreachable notify failed: %s", e)

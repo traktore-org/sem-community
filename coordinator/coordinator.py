@@ -133,6 +133,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._daily_ev_per_charger_date: Optional[str] = None
         # Warn-once guards so per-cycle surfacing (#259) doesn't spam the log.
         self._tariff_rate_warned: bool = False
+        self._tariff_pause_warned: bool = False  # #274/L1 one-time provider-error warn
         self._night_global_fallback_logged: set[str] = set()
         self._notification_manager = NotificationManager(hass, config)
 
@@ -245,6 +246,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # chargers so far this cycle. Reset before the per-charger loop; each
         # charger's peak-managed sizing subtracts it so the fleet stays under peak.
         self._night_committed_w = 0.0
+        # Tariff wait↔charge hysteresis (#274/M4): {cid: (should_wait, ts)} of the
+        # last effective decision, so price hovering at the cheap boundary doesn't
+        # stop/start the charger every cycle.
+        self._tariff_decision_per_charger = {}
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -1972,8 +1977,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         "to surplus-only", level.value,
                     )
                     charging_mode = "pv"  # fall through to zone-based surplus logic
+                if getattr(self, "_tariff_pause_warned", False):
+                    self._tariff_pause_warned = False  # provider recovered
             except Exception as e:
-                _LOGGER.debug("Tariff price-level check failed: %s", e)
+                # Surface once (#274/L1): a persistently broken provider would
+                # otherwise silently drop the Min+PV grid guarantee with no signal.
+                if not getattr(self, "_tariff_pause_warned", False):
+                    _LOGGER.warning(
+                        "Tariff-optimized daytime pause disabled — price provider "
+                        "error (Min+PV grid guarantee unchanged): %s", e,
+                    )
+                    self._tariff_pause_warned = True
 
         if charging_mode == "now":
             return ("now", "Now mode — charge at max immediately")

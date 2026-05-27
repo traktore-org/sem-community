@@ -105,7 +105,14 @@ class SEMPerChargerSetDefaultButton(CoordinatorEntity, ButtonEntity):
         return {}
 
     async def async_press(self) -> None:
-        """Copy the charger's current target + deadline into the global defaults."""
+        """Copy the charger's current target + deadline into the global defaults.
+
+        Race-safety (#274/M1): there is intentionally NO ``await`` between reading
+        ``self._entry.options`` below and ``async_update_entry`` at the end, so in
+        HA's single-threaded event loop no concurrent options-flow / number write
+        can interleave and be clobbered — the read reflects the latest committed
+        options and the write is atomic with it.
+        """
         cfg = self._charger_cfg()
         if not cfg:
             _LOGGER.warning("Set-default: charger %s not found", self._charger_id)

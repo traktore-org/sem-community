@@ -559,15 +559,19 @@ class NotificationManager:
 
     async def notify_ev_deadline_unreachable(
         self, remaining_kwh: float, hours_left: float, deadline: str,
-        *, charger_name: str | None = None,
+        *, charger_name: str | None = None, flag_key: str | None = None,
     ) -> None:
         """Notify that the EV charge target can't be reached by its deadline (#246).
 
         Fires once per charger until the deadline becomes reachable again
         (the coordinator clears the flag), so a borderline forecast that flips
         reachable/unreachable won't spam.
+
+        ``flag_key`` (the charger id) keys the dedup flag so two chargers sharing
+        a display name (or the default "EV") don't share one flag (#274/M3).
         """
-        flag = f"ev_deadline_unreachable_{charger_name}" if charger_name else "ev_deadline_unreachable"
+        key = flag_key or charger_name
+        flag = f"ev_deadline_unreachable_{key}" if key else "ev_deadline_unreachable"
         if flag in self._notified_flags:
             return
         self._notified_flags.add(flag)
@@ -591,9 +595,12 @@ class NotificationManager:
             group="sem_charging",
         )
 
-    def clear_deadline_warning(self, charger_name: str | None = None) -> None:
+    def clear_deadline_warning(
+        self, charger_name: str | None = None, flag_key: str | None = None,
+    ) -> None:
         """Clear the unreachable-deadline flag so it can fire again next time."""
-        flag = f"ev_deadline_unreachable_{charger_name}" if charger_name else "ev_deadline_unreachable"
+        key = flag_key or charger_name
+        flag = f"ev_deadline_unreachable_{key}" if key else "ev_deadline_unreachable"
         self._notified_flags.discard(flag)
 
     def reset(self) -> None:

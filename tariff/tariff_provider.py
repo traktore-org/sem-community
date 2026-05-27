@@ -619,7 +619,11 @@ class SpotMarketProvider(DynamicTariffProvider):
         currency: str = "EUR",
     ):
         super().__init__(
-            hass, price_entity, export_rate,
+            hass,
+            price_entity=price_entity,
+            # Keyword args: positional would land export_rate in the
+            # forecast_entity slot and corrupt the price forecast (#274/H4).
+            export_rate=export_rate,
             cheap_threshold=0.05,  # 5 ct/kWh
             expensive_threshold=0.25,  # 25 ct/kWh
             currency=currency,
