@@ -60,6 +60,10 @@ views:
           - type: custom:sem-home-status-card
             entity_prefix: sensor.sem_
 
+          # ── Dynamic electricity price (#257) ──
+          - type: custom:sem-price-card
+            entity: sensor.sem_tariff_current_import_rate
+
           # ── Solar Summary ── (&glass_card anchor defined here)
           - type: custom:sem-solar-card
             entity_prefix: sensor.sem_
