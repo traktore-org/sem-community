@@ -792,8 +792,23 @@ async def _async_register_services(
                 "custom_components", DOMAIN, "dashboard", "card",
             )
 
+            # Top-level JS files we install as Lovelace resources. The
+            # canonical card bundle is at dashboard/card/dist/sem-cards.js
+            # (registered by _async_register_frontend_resources via its hashed
+            # URL) — a top-level sem-cards.js is ALWAYS a stale rsync artifact
+            # and would shadow the dist bundle by winning the
+            # customElements.define race (#282 / user-reported regression
+            # where the EV card kept reappearing on the Control tab after
+            # being removed in code).
+            CANONICAL_TOP_LEVEL = {
+                "sem-localize.js",
+                "sem-reactive-base.js",
+                "sem-shared.js",
+                "sem-system-diagram-card.js",
+            }
+
             def _install_assets() -> tuple[bool, list[str]]:
-                """Sync all dashboard assets to /config/www/. Runs in executor."""
+                """Sync top-level dashboard assets to /config/www/. Runs in executor."""
                 os.makedirs(www_target_dir, exist_ok=True)
                 svg_installed = False
                 if os.path.exists(svg_source):
@@ -802,14 +817,38 @@ async def _async_register_services(
 
                 os.makedirs(card_www_dir, exist_ok=True)
                 cards: list[str] = []
+                shadow_removed: list[str] = []
                 if os.path.isdir(card_src_dir):
                     for fname in os.listdir(card_src_dir):
-                        if fname.endswith(".js"):
-                            shutil.copy2(
-                                os.path.join(card_src_dir, fname),
-                                os.path.join(card_www_dir, fname),
-                            )
-                            cards.append(fname)
+                        if not fname.endswith(".js"):
+                            continue
+                        # Hard whitelist: never install a top-level
+                        # sem-cards.js (it shadows the dist bundle) or any
+                        # other unrecognised top-level *.js that isn't part
+                        # of the canonical set.
+                        if fname not in CANONICAL_TOP_LEVEL:
+                            stale_target = os.path.join(card_www_dir, fname)
+                            if os.path.exists(stale_target):
+                                os.remove(stale_target)
+                                shadow_removed.append(fname)
+                            continue
+                        shutil.copy2(
+                            os.path.join(card_src_dir, fname),
+                            os.path.join(card_www_dir, fname),
+                        )
+                        cards.append(fname)
+                # Also nuke any pre-existing /config/www/ shadow of the
+                # bundle from earlier bad installs — the dist bundle is the
+                # only valid sem-cards.js.
+                stale_top_cards = os.path.join(card_www_dir, "sem-cards.js")
+                if os.path.exists(stale_top_cards):
+                    os.remove(stale_top_cards)
+                    shadow_removed.append("sem-cards.js (top-level shadow)")
+                if shadow_removed:
+                    _LOGGER.info(
+                        "Removed %d shadow card file(s) from %s: %s",
+                        len(shadow_removed), card_www_dir, shadow_removed,
+                    )
                 return svg_installed, cards
 
             svg_installed, installed_cards = await hass.async_add_executor_job(_install_assets)
@@ -846,8 +885,14 @@ async def _async_register_services(
             if "items" not in resources_data:
                 resources_data["items"] = []
 
-            # Remove stale standalone resource entries (/local/sem-*.js)
+            # Remove stale standalone resource entries (/local/sem-*.js) AND
+            # any top-level sem-cards.js shadow (the canonical bundle is at
+            # /dist/sem-cards.js — a top-level one is always a stale rsync
+            # artifact and shadows the dist bundle by winning the
+            # customElements.define race, leaving users with the OLD bundle
+            # rendered even after a clean redeploy). See #282 regression.
             component_prefix = f"/local/custom_components/{DOMAIN}/"
+            shadow_url = f"{component_prefix}dashboard/card/sem-cards.js"
             before_count = len(resources_data["items"])
             resources_data["items"] = [
                 item for item in resources_data["items"]
@@ -855,10 +900,14 @@ async def _async_register_services(
                     item.get("url", "").startswith("/local/sem-")
                     and component_prefix not in item.get("url", "")
                 )
+                and item.get("url", "").split("?")[0] != shadow_url
             ]
             stale_count = before_count - len(resources_data["items"])
             if stale_count:
-                _LOGGER.info("Removed %d stale Lovelace resource(s)", stale_count)
+                _LOGGER.info(
+                    "Removed %d stale Lovelace resource(s) (incl. any sem-cards.js shadow)",
+                    stale_count,
+                )
 
             # Cache-busting: use timestamp so every generate_dashboard
             # call forces browsers to reload card JS files.
