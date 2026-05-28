@@ -2578,13 +2578,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             pass
 
         battery_capacity = self.battery_capacity_kwh
+
+        # Forecast-driven charging strategy (per-charger target via _primary_cfg).
+        # Run the strategy decision BEFORE the budget calc so the diagnostic
+        # ev_current sensor reflects the surplus-aware cap when strategy is
+        # solar_only — otherwise the dashboard shows a "calculated_current"
+        # that disagrees with what the charger is actually told to do (#282).
+        strategy, reason = self._determine_charging_strategy(power, energy, _primary_cfg)
+
         ev_budget = self._flow_calculator.calculate_ev_budget(
             power, forecast_remaining, power.battery_soc, battery_capacity,
+            solar_only=(strategy == "solar_only"),
         )
-        ev_current = self._flow_calculator.calculate_charging_current(ev_budget)
-
-        # Forecast-driven charging strategy (per-charger target via _primary_cfg)
-        strategy, reason = self._determine_charging_strategy(power, energy, _primary_cfg)
+        ev_current = self._flow_calculator.calculate_charging_current(
+            ev_budget, round_down=(strategy == "solar_only"),
+        )
 
         _LOGGER.debug(
             "Charging strategy: %s — %s",

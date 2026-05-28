@@ -589,14 +589,18 @@ class EVControlMixin:
     ) -> float:
         """Calculate watts available for EV from solar + optional battery discharge.
 
-        Base budget comes from FlowCalculator.calculate_ev_budget() (grid export +
-        forecast-aware battery redirect). For SOLAR_SUPER_CHARGING, adds proportional
-        battery discharge based on SOC zone (Zone 4: 100%, Zone 3: 50-100% ramp).
+        Base budget comes from FlowCalculator.calculate_ev_budget(). For
+        ``charging_strategy == "solar_only"`` we pass ``solar_only=True``
+        so the budget is hard-capped at ``solar - home`` and the actuator
+        can never silently leak grid into the EV (#282 / Scenario 0).
+        For SOLAR_SUPER_CHARGING (battery-assist mode), the proportional
+        battery discharge branch below still adds on top.
 
         Args:
             state: Current charging state.
             power: Current sensor readings (for battery discharge measurement).
-            context: Charging context (unused directly, reserved for future use).
+            context: Charging context. ``context.charging_strategy`` selects
+                surplus-only vs legacy semantics.
 
         Returns:
             Available power for EV in watts (>= 0).
@@ -612,9 +616,20 @@ class EVControlMixin:
 
         battery_capacity = self.config.get("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH)
 
-        # Base budget: grid export + forecast-aware battery charge redirect
+        # Hard surplus cap when strategy is solar_only. Without this, the
+        # budget falls back to the legacy ``ev_power + grid_export`` baseline
+        # which silently allows the EV to keep drawing whatever the car asks
+        # for, with grid filling any gap.
+        solar_only_active = (
+            getattr(context, "charging_strategy", None) == "solar_only"
+        )
+
+        # Base budget: grid export + forecast-aware battery charge redirect.
+        # When solar_only is active, calculate_ev_budget enforces the
+        # surplus ceiling via max(0, solar - home) instead of ev_power.
         base = self._flow_calculator.calculate_ev_budget(
             power, forecast_remaining, power.battery_soc, battery_capacity,
+            solar_only=solar_only_active,
         )
 
         # Battery-assist mode: ALSO add active battery discharge (proportional to SOC zone)

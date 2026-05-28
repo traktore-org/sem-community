@@ -1,0 +1,118 @@
+name: "2026-05-28 surplus leak — Zone 3 solar_only, EV pulled grid"
+description: |
+  PROD plug-in 16:12 local (14:12 UTC). Battery SOC 75% (Zone 3, above
+  the 70% buffer SOC), Auto mode, late-afternoon solar 5.2 kW dropping
+  to 2.7 kW under cloud. EV ramped from 0 → 10 kW within ~60 s and held
+  there. SEM's strategy decision was correctly "solar_only" with reason
+  "Zone 3: SOC=75% ≥ buffer=70.0%, forecast surplus 1.9 kWh >> need 0.0
+  kWh" — but the charger kept drawing 10 kW with no solar increase, so
+  the gap was filled by battery + grid (~3 kW battery, ~1.5 kW grid at
+  steady state, more during the cloud dip).
+
+  Expected enforcement: with strategy=solar_only, the actuator current
+  must be capped at ``(solar - home) / (V * phases)``. With solar=5200W
+  and home=500W, surplus=4700W → max ~6.8A (or 0 if below the 6A min).
+  Anything above that is grid backfill that solar_only is supposed to
+  prevent.
+
+  Today's behaviour: SEM allowed 13A (≈9 kW) instead of the surplus
+  ceiling. Captured here as a failing regression — it MUST be locked
+  in until the three leaks in flow_calculator.py and ev_control.py are
+  fixed.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_charging_mode: "auto"
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      ev_charging_mode: "auto"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  # ─ Pre-plug-in: house is exporting most of the solar, battery topping
+  #   up, SOC 75% (Zone 3). EV not yet drawing.
+  - t: 0
+    solar_power: 5200
+    grid_power: 4500    # +ve = export
+    battery_power: 200  # +ve = charge
+    battery_soc: 75
+    ev_power: 0
+    ev_connected: true
+
+  # ─ Plug-in → ramp. KEBA pulls 10 kW within ~60s. Solar unchanged.
+  #   Grid flips from export to import because demand now exceeds supply.
+  - t: 30
+    ev_power: 3500
+    grid_power: 1200     # still exporting a bit
+    battery_power: -200
+
+  - t: 60
+    ev_power: 9900
+    grid_power: -3500    # -ve = import — bug starts here
+    battery_power: -1200
+
+  # ─ Steady state — EV holding 10 kW, solar still 5.2 kW, grid filling
+  #   ~3.5 kW, battery discharging ~1.2 kW. With strategy=solar_only,
+  #   the actuator MUST ramp the EV down to surplus = max(0, solar-home).
+  - t: 300
+    solar_power: 5180
+    ev_power: 9920
+    grid_power: -3600
+    battery_power: -1240
+
+  - t: 600
+    solar_power: 5150
+    ev_power: 9930
+    grid_power: -3700
+    battery_power: -1100
+
+  # ─ Cloud dip — solar drops to 2.7 kW. Grid + battery contribution rises.
+  - t: 900
+    solar_power: 2700
+    ev_power: 9920
+    grid_power: -6400
+    battery_power: -900
+
+  # ─ Recovery — solar back up, but EV still pulling.
+  - t: 1200
+    solar_power: 4800
+    ev_power: 10020
+    grid_power: -4500
+    battery_power: -800
+
+  # ─ Late session — solar tapering with afternoon. EV holds.
+  - t: 1500
+    solar_power: 3200
+    ev_power: 9990
+    grid_power: -6200
+    battery_power: -640
+
+expect:
+  # The strategy MUST be solar_only with the SOC at 75% — locks in
+  # the decision path so we know we're testing the right scenario.
+  strategy_substring: "solar_only"
+
+  # Hard constraint: when strategy is solar_only, the actuator current
+  # must not exceed the true surplus (solar minus home consumption).
+  # 500 W margin accounts for sensor noise + one cycle of ramp-down lag.
+  #
+  # This is the single source of truth for the bug. The proportional
+  # flow_grid_to_ev attribution depends on ev_power which the harness
+  # reads from the trace (not from SEM's commanded current) — so a
+  # cumulative-kWh assertion would chase the trace's reality, not SEM's
+  # response. The actuator-amps ceiling proves the fix correctly.
+  actuator_current_a:
+    when_strategy: "solar_only"
+    formula: "max(0, solar_power - home_consumption_power)"
+    max_w_minus_margin: 500

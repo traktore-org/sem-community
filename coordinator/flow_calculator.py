@@ -261,7 +261,8 @@ class FlowCalculator:
     def calculate_ev_budget(self, power: PowerReadings,
                            forecast_remaining_kwh: float = 0,
                            battery_soc: float = 0,
-                           battery_capacity_kwh: float = 15) -> float:
+                           battery_capacity_kwh: float = 15,
+                           solar_only: bool = False) -> float:
         """Power budget for EV, including forecast-aware battery charge redirect.
 
         Three sources of power for EV:
@@ -275,8 +276,37 @@ class FlowCalculator:
         the grid unused, the new setpoint is ev_power + grid_export_power — this tells the
         charger to absorb all the surplus. The charger adjusts its draw from ev_power to
         the new setpoint, naturally consuming the exported surplus without importing. (#229)
+
+        Args:
+            solar_only: When True, enforce a hard surplus ceiling of
+                ``max(0, solar - home)`` — the charger MUST NOT exceed what
+                solar alone can supply. This is the regime the ``solar_only``
+                strategy promises but historically didn't enforce: the base
+                included ``power.ev_power`` (the current draw), so the charger
+                was never asked to ramp DOWN when surplus dropped, silently
+                letting grid backfill the gap. Captured by Scenario 0 (#282).
+                Default False preserves legacy behaviour for the budget-as-
+                informational-display callers.
         """
-        # Source 1: Grid export — always redirectable
+        if solar_only:
+            # Hard surplus ceiling: only what solar can supply right now.
+            # Subtract the home load and ALSO the active battery charge —
+            # solar still "belongs" to the battery in this regime; the
+            # redirect logic below decides whether some can be borrowed.
+            true_surplus = max(
+                0.0,
+                power.solar_power - power.home_consumption_power
+                - power.battery_charge_power,
+            )
+            # Allow the same forecast-aware battery-charge redirect when the
+            # forecast/SOC math says the battery doesn't need this slice.
+            redirect = self._calculate_battery_redirect(
+                power.battery_charge_power, battery_soc,
+                battery_capacity_kwh, forecast_remaining_kwh,
+            )
+            return round(max(0.0, true_surplus + redirect), 0)
+
+        # Legacy path: setpoint = current EV draw + unused grid export + redirect.
         if power.ev_power > 0:
             # EV already charging: new setpoint = current draw + unused grid export
             # This is a SETPOINT (target total watts), not a delta to add to current draw.
@@ -348,17 +378,32 @@ class FlowCalculator:
         return round(min(available, power.solar_power + power.battery_discharge_power), 0)
 
     def calculate_charging_current(
-        self, available_power: float, voltage: float = 230, phases: int = 3
+        self, available_power: float, voltage: float = 230, phases: int = 3,
+        round_down: bool = False,
     ) -> float:
-        """Calculate EV charging current from available power."""
+        """Calculate EV charging current from available power.
+
+        Args:
+            round_down: When True (use this for surplus / solar_only budgets),
+                floor instead of round-to-nearest. Round-to-nearest can push
+                the actuator into grid territory by ~0.5 A at the boundary —
+                e.g. 5200 W surplus → 7.53 A → rounds to 8 A → 5520 W → 320 W
+                of grid backfill. Floor keeps the charger strictly under the
+                budget. Captured by Scenario 0 (#282). Default False preserves
+                legacy round-nearest behaviour for non-surplus paths.
+        """
         if available_power <= 0:
             return 0.0
 
         # I = P / (V * phases)
         current = available_power / (voltage * phases)
 
-        # Round to nearest amp, min 6A, max 16A
-        current = round(current)
+        # Round to integer amps with the requested direction, then clamp.
+        if round_down:
+            import math
+            current = math.floor(current)
+        else:
+            current = round(current)
         current = max(0, min(16, current))
 
         return current
