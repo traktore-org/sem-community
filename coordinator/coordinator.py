@@ -131,7 +131,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_reenable_attempts_per_charger: Dict[str, int] = {}
         self._ev_charge_refused_per_charger: Dict[str, bool] = {}
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
-        self._daily_ev_per_charger_date: Optional[str] = None
+        # Per-charger "EV day" boundary, keyed by charger id. Each charger's day
+        # ends at its own ``Charge by`` deadline (#246) — NOT at sunrise — so the
+        # counter doesn't wipe between hitting Min and the deadline (which on
+        # short summer nights happened between sunrise ~05:30 and night_end
+        # 07:00, causing SEM to re-fire night charging and double-bill the user).
+        self._daily_ev_per_charger_date: Dict[str, str] = {}
         # Warn-once guards so per-cycle surfacing (#259) doesn't spam the log.
         self._tariff_rate_warned: bool = False
         self._tariff_pause_warned: bool = False  # #274/L1 one-time provider-error warn
@@ -621,7 +626,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             pcd = self._storage._daily_data.get("per_charger_daily", {})
             if isinstance(pcd, dict) and isinstance(pcd.get("values"), dict):
                 self._daily_ev_per_charger = dict(pcd["values"])
-                self._daily_ev_per_charger_date = pcd.get("date")
+                # Per-charger date is a dict[cid → iso-date] since #280. Legacy
+                # stores hold a single string (global sunrise reset) — promote
+                # it so every charger inherits the last reset cleanly. First
+                # cycle after restore re-evaluates against each charger's own
+                # deadline, so any drift self-heals within one update tick.
+                raw_date = pcd.get("date")
+                if isinstance(raw_date, dict):
+                    self._daily_ev_per_charger_date = dict(raw_date)
+                elif isinstance(raw_date, str):
+                    self._daily_ev_per_charger_date = {
+                        cid: raw_date for cid in self._daily_ev_per_charger
+                    }
+                else:
+                    self._daily_ev_per_charger_date = {}
 
             # Seed EV intelligence from recorder history (improves cold starts
             # and upgrades from older versions without EV intelligence data)
@@ -2704,14 +2722,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 if not charger_connected and ev_dev.power_entity_id:
                     charger_connected = charger_power > 50
 
-                # Accumulate per-charger daily energy (#193)
-                # Use sunrise-based day (offset by 7h) so midnight doesn't
-                # split a night-charging session across two "days".
+                # Accumulate per-charger daily energy (#193).
+                #
+                # Boundary: each charger's "EV day" ends at its own ``Charge by``
+                # deadline (#280) — not sunrise. The legacy sunrise boundary
+                # wiped the counter between hitting Min (~03:00) and the night
+                # window's end (~07:00) on short summer nights, causing SEM to
+                # see ``remaining = daily_target`` again and re-fire night
+                # charging until 07:00 — billing the user twice for the same
+                # daily target. Resetting at the deadline instead means the
+                # counter only rolls over once today's commitment is closed.
+                # Solar charging between sunrise and the deadline accumulates
+                # into yesterday's bucket — harmless, since Min was already hit.
                 if charger_power > 0:
-                    ev_day = self.time_manager.get_current_meter_day_sunrise_based().isoformat()
-                    if self._daily_ev_per_charger_date != ev_day:
-                        self._daily_ev_per_charger = {}
-                        self._daily_ev_per_charger_date = ev_day
+                    cfg_for_cid = (
+                        next((c for c in (self.config.get("ev_chargers") or [])
+                              if c.get("id") == cid), {})
+                    ) or {}
+                    target_time = self._charger_target_time(cfg_for_cid)
+                    ev_day = self.time_manager.get_current_meter_day_offset_based(
+                        target_time
+                    ).isoformat()
+                    if self._daily_ev_per_charger_date.get(cid) != ev_day:
+                        # Per-charger reset (Car A at 07:00, Car B at 08:00 don't
+                        # disturb each other) — only this cid's bucket rolls over.
+                        self._daily_ev_per_charger[cid] = 0.0
+                        self._daily_ev_per_charger_date[cid] = ev_day
                     increment = charger_power * interval_hours / 1000  # W → kWh
                     self._daily_ev_per_charger[cid] = (
                         self._daily_ev_per_charger.get(cid, 0.0) + increment

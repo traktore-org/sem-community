@@ -200,9 +200,21 @@ Every 10 s during the night window, for each charger:
 
 ---
 
-## 9. What changes between releases?
+## 9. When does the daily target counter reset?
 
-- **1.5.x and earlier**: only `night_charging` + `smart_night_charging` existed. No deadline, no tariff-aware night.
+Each charger has its own daily energy bucket (`daily_ev` for that charger). The bucket rolls over at the charger's own **`Charge by`** time (defaults to the night window end, e.g. 07:00).
+
+**Why not at sunrise?** Sunrise can be *earlier* than the night-window end on short summer nights (sunrise 05:30, window end 07:00). A sunrise-based reset would wipe the bucket after Min was met (~03:00) but before the night window closes — making SEM see `remaining = daily_target` again and **re-fire night charging until 07:00**, double-billing the user. The deadline-based boundary closes that window: the bucket only rolls over once today's commitment is done. (#280)
+
+**Multi-charger:** each charger's bucket resets at *its own* deadline. Car A at 07:00 and Car B at 08:00 reset independently — Car B isn't disturbed when Car A's day rolls over.
+
+**Solar between sunrise and the deadline:** still counted into yesterday's bucket. Harmless, since Min was already hit.
+
+---
+
+## 10. What changes between releases?
+
+- **1.5.x and earlier**: only `night_charging` + `smart_night_charging` existed. No deadline, no tariff-aware night. Daily bucket reset at sunrise (had the double-charge race condition above).
 - **1.5.16 (unreleased)**:
   - **`Charge by`** time picker (#246) — per-charger deadline with forcing behaviour.
   - **`Cheapest hours (tariff)`** opt-in switch (#247) — night defer + daytime Min+PV pause.
@@ -210,10 +222,11 @@ Every 10 s during the night window, for each charger:
   - Multi-charger night runs on a **shared peak budget** (#274/H1).
   - DST-correct hour subtraction (#274/M2).
   - **"Set as default"** button (#246) — propagate per-charger settings to global defaults.
+  - **Daily bucket reset moved from sunrise to per-charger deadline** (#280) — kills the summer double-charge race.
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
@@ -223,10 +236,11 @@ Every 10 s during the night window, for each charger:
 | "Can't reach target in time" notification | Min too high for the time left at max current | Lower Min, set an earlier deadline, raise Max current, or accept the notification (charges to whatever is possible at max) |
 | Multi-charger: one stays idle | Shared peak budget allocated to higher-priority charger first | Surplus priority + `daily_ev_target` per charger; check coordinator logs for peak-budget allocation |
 | Daytime Min+PV not pulling grid on cloudy day | Cheapest hours ON + price = EXPENSIVE | Either accept the pause or turn Cheapest hours OFF |
+| Daily target counter shows yesterday's number into the morning | Working as intended — bucket only resets at *Charge by* time | `sensor.sem_charger_*_daily_ev`. Pre-#280 reset at sunrise; now at deadline to prevent double-charge race |
 
 ---
 
-## 11. Related docs
+## 12. Related docs
 
 - [README — Recent Improvements](../README.md#recent-improvements-v15x) — release notes for each version
 - [USER_GUIDE — Configuration Options](../USER_GUIDE.md#configuration-options) — full settings reference
