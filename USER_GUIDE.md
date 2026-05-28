@@ -14,6 +14,7 @@ Complete reference for Solar Energy Management (SEM).
 
 - [Configuration Options](#configuration-options)
 - [Charging Modes](#charging-modes)
+- **[EV Charging Logic — full decision reference](docs/EV_CHARGING_LOGIC.md)** ⭐
 - [SOC Zone Strategy](#soc-zone-strategy)
 - [Night Charging](#night-charging)
 - [EV Intelligence](#ev-intelligence)
@@ -178,6 +179,9 @@ The Legionella prevention cycle is a safety requirement mandated by building cod
 
 SEM supports four EV charging modes, selectable from the **Control tab** on the dashboard:
 
+> **Need the full picture?** [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md) is the canonical reference covering all 6 user controls (mode + Overnight grid + Cheapest hours + Smart night + Charge by + Min/Max), their priority cascade, and every interaction scenario including worked examples.
+
+
 ### Auto (`auto`) — Default
 
 The smart mode. SEM automatically decides the best strategy based on solar forecast and how much charging the EV still needs:
@@ -263,6 +267,8 @@ Once battery-assist mode activates (Zone 3 or 4), it stays active even if SOC dr
 ---
 
 ## Night Charging
+
+> **See also:** [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md) — full decision matrix covering night charging, the optional **Charge by HH:MM** deadline, and the optional **Cheapest hours (tariff)** mode, with worked examples for the edge cases (e.g. cheap window shorter than time-to-Min).
 
 > **Night charging is opt-in (off by default).** SEM is a *solar* energy manager, so out of the box it charges your car on solar surplus only and never pulls from the grid overnight unasked. To enable grid-assisted night charging, turn on **`switch.sem_night_charging`** (and, for a multi-charger setup, the per-charger `…_night_charging` switch for each charger you want to top up). Upgrading users keep whatever state they already had — only fresh installs and newly-added chargers start off. *(#256)*
 
