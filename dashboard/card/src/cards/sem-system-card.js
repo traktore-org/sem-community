@@ -62,11 +62,22 @@ const HEALTH_CHIPS = [
     { key: 'grid_power',                 icon: 'mdi:transmission-tower', color: '#488fc2', suffix: 'W' },
     { key: 'battery_soc',                icon: 'mdi:battery',            color: '#4db6ac', suffix: '%' },
     { key: 'ev_power',                   icon: 'mdi:ev-station',         color: '#8DC892', suffix: 'W' },
-    { key: 'forecast_today',             icon: 'mdi:weather-sunny',      color: '#ff9800', suffix: 'kWh' },
+    // forecast_today_kwh — was previously `forecast_today` which doesn't
+    // exist; chip silently rendered '—' (audit finding from #282).
+    { key: 'forecast_today_kwh',         icon: 'mdi:weather-sunny',      color: '#ff9800', suffix: 'kWh' },
     { key: 'tariff_current_import_rate', icon: 'mdi:tag',                color: '#96CAEE', suffix: '' },
 ];
 
-/** Watched entity IDs for shouldUpdate comparison. */
+/** Watched entity IDs for shouldUpdate comparison.
+ *
+ * Cleaned in #282/audit: removed 6 references to entities that don't exist
+ * (sem_forecast_today → sem_forecast_today_kwh; sem_night_mode,
+ * sem_solar_mode, sem_night_mode_status, sem_solar_mode_status had no
+ * corresponding sensor.py keys; sem_ev_connected lives under binary_sensor).
+ * Replaced sem_daily_ev_target (sensor) with the actual number entity
+ * sem_daily_ev_target_global. Added sem_charging_state since the card reads
+ * its today_plan attribute downstream.
+ */
 const WATCHED = [
     'sensor.sem_diag_version', 'sensor.sem_diag_grid_mode',
     'sensor.sem_diag_battery_capacity', 'sensor.sem_diag_update_interval',
@@ -74,7 +85,7 @@ const WATCHED = [
     'sensor.sem_diag_sensors_unavailable', 'sensor.sem_diag_ed_config',
     'sensor.sem_solar_power', 'sensor.sem_grid_power',
     'sensor.sem_battery_soc', 'sensor.sem_ev_power',
-    'sensor.sem_forecast_today', 'sensor.sem_tariff_current_import_rate',
+    'sensor.sem_forecast_today_kwh', 'sensor.sem_tariff_current_import_rate',
     'switch.sem_observer_mode',
     // Per-charger night switches (#255), default charger id — for reactivity; other
     // ids refresh on the energy tick.
@@ -83,11 +94,11 @@ const WATCHED = [
     'sensor.sem_home_consumption_power', 'sensor.sem_grid_import_power',
     'sensor.sem_grid_export_power', 'sensor.sem_autarky_rate',
     'sensor.sem_self_consumption_rate', 'sensor.sem_battery_power',
-    'sensor.sem_night_mode', 'sensor.sem_solar_mode', 'sensor.sem_ev_connected',
+    'binary_sensor.sem_ev_connected',
     'sensor.sem_calculated_current', 'sensor.sem_daily_ev_energy',
-    'sensor.sem_daily_ev_target', 'sensor.sem_night_mode_status',
-    'sensor.sem_solar_mode_status', 'sensor.sem_battery_status',
-    'sensor.sem_grid_status',
+    'sensor.sem_night_charging_status',
+    'sensor.sem_battery_status', 'sensor.sem_grid_status',
+    'sensor.sem_charging_state',
 ];
 
 class SEMSystemCard extends SEMLitBase {
