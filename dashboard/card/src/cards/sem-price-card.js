@@ -32,6 +32,7 @@ class SEMPriceCard extends SEMLitBase {
     setConfig(config) {
         super.setConfig(config);
         this._entity = config.entity || DEFAULT_ENTITY;
+        this._compact = !!config.compact;  // Home-tab chip mode (#257): one-row glance
     }
 
     set hass(hass) {
@@ -70,6 +71,14 @@ class SEMPriceCard extends SEMLitBase {
             return html`<ha-card><div class="wrap empty">${this._t('current_electricity_price')}: —</div></ha-card>`;
         }
         const a = e.attributes || {};
+        // Hide entirely on a static tariff (#257 follow-up): there's no live
+        // curve or cheap-window insight, just a flat current rate — that's
+        // already shown elsewhere; the card would only add noise.
+        if (a.is_dynamic === false) {
+            this.style.display = 'none';
+            return nothing;
+        }
+        this.style.display = '';
         const price = parseFloat(e.state);
         const cur = a.currency || '';
         const lvl = this._levelInfo(a.price_level);
@@ -78,6 +87,25 @@ class SEMPriceCard extends SEMLitBase {
         const upcoming = Array.isArray(a.upcoming) ? a.upcoming : [];
         const nextCheap = this._hm(a.next_cheap_start);
         const nextCheapEnd = this._hm(a.next_cheap_end);
+
+        if (this._compact) {
+            // One-row chip for the Home tab (#257 part 1, follow-up): glanceable
+            // price + level, with next-cheap hint if available. The full panel
+            // (chart + min/avg/max) lives on the Costs tab.
+            return html`
+                <ha-card>
+                    <div class="chip-row">
+                        <span class="chip-title">${this._t('current_electricity_price')}</span>
+                        <span class="chip-price" style="color:${lvl.color}">${fmt(price)}</span>
+                        <span class="chip-unit">${cur}/kWh</span>
+                        <span class="chip-badge" style="background:${lvl.color}22;color:${lvl.color};border-color:${lvl.color}55">
+                            ${this._t(lvl.key)}
+                        </span>
+                        ${nextCheap ? html`<span class="chip-next">${this._t('price_next_cheap')}: <b style="color:#8DC892">${nextCheap}</b></span>` : nothing}
+                    </div>
+                </ha-card>
+            `;
+        }
 
         return html`
             <ha-card>
@@ -171,6 +199,18 @@ class SEMPriceCard extends SEMLitBase {
             .summary .cheap b { color: #8DC892; }
             .strip { display: block; overflow: visible; }
             .static-note { font-size: 11.5px; color: var(--secondary-text-color,#999); padding-top: 2px; }
+            /* Compact chip (#257, compact: true) — one row, glance-only. */
+            .chip-row {
+                display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+                padding: 8px 14px;
+            }
+            .chip-title { font-size: 12px; font-weight: 600; color: var(--primary-text-color,#e0e0e0); }
+            .chip-price { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+            .chip-unit { font-size: 11px; color: var(--secondary-text-color,#999); }
+            .chip-badge { font-size: 10.5px; font-weight: 600; padding: 1px 8px;
+                          border-radius: 9px; border: 1px solid; text-transform: capitalize; }
+            .chip-next { margin-left: auto; font-size: 11px; color: var(--secondary-text-color,#aaa); }
+            .chip-next b { font-variant-numeric: tabular-nums; }
         `;
     }
 }
