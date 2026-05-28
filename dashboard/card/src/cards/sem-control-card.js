@@ -12,17 +12,13 @@
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 
+// EV section removed in #282 audit: every control (charging mode, night
+// charging, smart night, target, currents, phases, stall cooldown) is
+// per-charger now (#193, #255) and presented per-charger on the EV tab.
+// Surfacing them again here under a global-looking 'EV Charging' label
+// silently controlled only the primary charger in multi-charger setups
+// and duplicated the EV tab's UI in single-charger setups.
 const SECTIONS = [
-    {
-        id: 'ev', icon: 'mdi:ev-station', color: '#8DC892', titleKey: 'ev_charging_title',
-        subtitleFn: (c) => {
-            // charging_state is already translated server-side via get_status_message()
-            const state = c._val('charging_state') || '—';
-            const daily = c._valNum('daily_ev_energy').toFixed(1);
-            const target = c._numVal('daily_ev_target').toFixed(0);
-            return `${state} · ${daily}/${target} kWh`;
-        },
-    },
     {
         id: 'surplus', icon: 'mdi:solar-power', color: '#ff9800', titleKey: 'surplus_control',
         subtitleFn: (c) => {
@@ -71,19 +67,13 @@ const SECTIONS = [
     },
 ];
 
-/** All entity IDs watched for shouldUpdate comparison. */
+/** All entity IDs watched for shouldUpdate comparison.
+ *
+ * Cleaned in #282 audit: dropped all EV-related entities now that the EV
+ * section has been removed from this card (per-charger controls live on
+ * the EV tab via sem-ev-status-card).
+ */
 const WATCHED = [
-    'sensor.sem_charging_state', 'sensor.sem_daily_ev_energy',
-    'number.sem_ev_stall_cooldown',
-    // Per-charger EV settings (#255), default charger id — so the Control tab reacts
-    // to changes; other ids still refresh on the energy tick.
-    'number.sem_charger_ev_charger_daily_ev_target',
-    'select.sem_charger_ev_charger_ev_charging_mode',
-    'switch.sem_charger_ev_charger_night_charging',
-    'switch.sem_charger_ev_charger_smart_night_charging',
-    'number.sem_charger_ev_charger_night_initial_current',
-    'number.sem_charger_ev_charger_minimum_current',
-    'number.sem_charger_ev_charger_ev_phases',
     'sensor.sem_surplus_active_devices', 'sensor.sem_surplus_total_devices',
     'sensor.sem_surplus_allocated_w', 'sensor.sem_surplus_total_w',
     'sensor.sem_surplus_distributable_w', 'sensor.sem_surplus_unallocated_w',
@@ -226,41 +216,6 @@ class SEMControlCard extends SEMLitBase {
     }
 
     // ── Section content renderers ──
-
-    _renderEvSection(T) {
-        // #255: EV settings are per-charger now — resolve the primary charger's entities
-        // (falls back to the legacy global id for legacy installs). ev_stall_cooldown
-        // stays global.
-        const eMode = this._pcEntity('select', 'ev_charging_mode', 'select.sem_ev_charging_mode');
-        const eNight = this._pcEntity('switch', 'night_charging', 'switch.sem_night_charging');
-        const eSmart = this._pcEntity('switch', 'smart_night_charging', 'switch.sem_smart_night_charging');
-        const eTarget = this._pcEntity('number', 'daily_ev_target', 'number.sem_daily_ev_target');
-        const eStart = this._pcEntity('number', 'night_initial_current', 'number.sem_ev_night_initial_current');
-        const eMinCur = this._pcEntity('number', 'minimum_current', 'number.sem_ev_minimum_current');
-        const ePhases = this._pcEntity('number', 'ev_phases', 'number.sem_ev_phases');
-
-        const minCurEntity = this._hass?.states[eMinCur];
-        const showMinCur = minCurEntity && parseFloat(minCurEntity.state) > 0;
-        const phasesEntity = this._hass?.states[ePhases];
-        const showPhases = phasesEntity && parseFloat(phasesEntity.state) > 0;
-
-        return html`
-            ${this._renderSelect(eMode, 'ev_charging_mode', T)}
-            <div class="toggle-group">
-                ${this._renderToggle(eNight, 'night_charging', T)}
-                ${this._renderToggle(eSmart, 'smart_night', T)}
-            </div>
-            ${this._renderStepper(eTarget, 'night_charge_target', T)}
-            <div class="stepper-pair">
-                ${this._renderStepper(eStart, 'night_start_amps', T)}
-                ${showMinCur ? this._renderStepper(eMinCur, 'min_current', T) : nothing}
-            </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_ev_stall_cooldown', 'stall_cooldown', T)}
-                ${showPhases ? this._renderStepper(ePhases, 'charger_phases', T) : nothing}
-            </div>
-        `;
-    }
 
     _renderSurplusSection(T) {
         const total = this._valNum('surplus_total_w').toFixed(0);
@@ -455,7 +410,6 @@ class SEMControlCard extends SEMLitBase {
         const obsOn = this._switchOn('observer_mode');
 
         const sectionRenderers = {
-            ev:       (T) => this._renderEvSection(T),
             surplus:  (T) => this._renderSurplusSection(T),
             battery:  (T) => this._renderBatterySection(T),
             hotwater: (T) => this._renderHotWaterSection(T),

@@ -997,27 +997,55 @@ async def _async_register_services(
 
             await dashboards_store.async_save(dashboards_data)
 
-            await hass.services.async_call(
-                "persistent_notification", "create",
-                {
-                    "title": "SEM Dashboard Created",
-                    "message": (
-                        f"Dashboard **{dashboard_title}** created with {len(views)} views.\n\n"
-                        f"Access at: /lovelace/{dashboard_path}\n\n"
-                        f"Home Assistant will restart in 5 seconds to apply changes."
-                    ),
-                    "notification_id": "sem_dashboard_success",
-                },
-            )
-            _LOGGER.info("Dashboard created: %s at /%s — scheduling restart", dashboard_title, dashboard_path)
+            # Restart only when the live-reload path didn't fire — that's the
+            # first-install case where HA hasn't yet registered the dashboard
+            # in its in-memory Lovelace registry, so the on-disk write alone
+            # won't surface the new dashboard until next startup. When live-
+            # reload succeeded (#257 / 1.5.15+), the in-memory cache and the
+            # `lovelace_updated` event already pushed the new config to every
+            # connected client — a browser hard-refresh is enough, and the
+            # forced restart was both unnecessary and surprising (#282/UX).
+            if reloaded_live:
+                await hass.services.async_call(
+                    "persistent_notification", "create",
+                    {
+                        "title": "SEM Dashboard Updated",
+                        "message": (
+                            f"Dashboard **{dashboard_title}** regenerated with {len(views)} views.\n\n"
+                            f"Changes are live now — refresh the browser if cards look stale.\n\n"
+                            f"Access at: /lovelace/{dashboard_path}"
+                        ),
+                        "notification_id": "sem_dashboard_success",
+                    },
+                )
+                _LOGGER.info(
+                    "Dashboard updated live: %s at /%s — no restart needed",
+                    dashboard_title, dashboard_path,
+                )
+            else:
+                await hass.services.async_call(
+                    "persistent_notification", "create",
+                    {
+                        "title": "SEM Dashboard Created",
+                        "message": (
+                            f"Dashboard **{dashboard_title}** created with {len(views)} views.\n\n"
+                            f"Access at: /lovelace/{dashboard_path}\n\n"
+                            f"Home Assistant will restart in 5 seconds to apply the first install."
+                        ),
+                        "notification_id": "sem_dashboard_success",
+                    },
+                )
+                _LOGGER.info(
+                    "Dashboard created: %s at /%s — scheduling first-install restart",
+                    dashboard_title, dashboard_path,
+                )
 
-            # Schedule HA restart so the new dashboard is visible in the browser
-            async def _delayed_restart(_now):
-                _LOGGER.info("Restarting Home Assistant to apply dashboard changes")
-                await hass.services.async_call("homeassistant", "restart")
+                async def _delayed_restart(_now):
+                    _LOGGER.info("Restarting Home Assistant to apply first-install dashboard")
+                    await hass.services.async_call("homeassistant", "restart")
 
-            from homeassistant.helpers.event import async_call_later
-            async_call_later(hass, 5, _delayed_restart)
+                from homeassistant.helpers.event import async_call_later
+                async_call_later(hass, 5, _delayed_restart)
 
         except Exception as e:
             _LOGGER.error("Dashboard generation failed: %s", e, exc_info=True)
