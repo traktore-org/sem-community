@@ -198,6 +198,42 @@ class TestComputeNightPlan:
         plan = coord._compute_night_plan(cfg, remaining_to_min_kwh=10.0)
         assert not plan.should_wait_for_cheap
 
+    def test_lookahead_capped_at_hours_to_deadline(self):
+        # #281/D1, S1: caller MUST NOT ask the tariff provider for slots past
+        # the deadline. Otherwise a post-deadline price dip can be returned as
+        # "the cheap window", silently dropping the real pre-deadline option.
+        coord = _build_coordinator(tariff_on=True)
+        # 22:00 with deadline 07:00 → 9 hours horizon, must clamp the 12h
+        # global lookahead down to 9.
+        base = dt_util.now().replace(hour=22, minute=0, second=0, microsecond=0)
+        coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=[])
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+        with patch.object(dt_util, "now", return_value=base):
+            coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
+        # The provider was queried — assert the lookahead is the deadline horizon.
+        call = coord._tariff_provider.find_cheapest_hours.call_args
+        assert call is not None, "find_cheapest_hours must be called when tariff is on"
+        # within_hours is a kwarg
+        within_hours = call.kwargs.get("within_hours")
+        assert within_hours is not None
+        assert within_hours <= 10, (
+            f"lookahead must be capped at ~9h to deadline, got {within_hours}h "
+            "— the global 12h lookahead is leaking through (#281/D1)"
+        )
+
+    def test_lookahead_uncapped_when_no_deadline_resolvable(self):
+        # Fallback path: when target_time / night_end are both unresolvable,
+        # the global EV_DEADLINE_LOOKAHEAD_HOURS still bounds the query.
+        coord = _build_coordinator(tariff_on=True)
+        coord.time_manager.get_night_end_time = MagicMock(side_effect=ValueError("bust"))
+        coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=[])
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": None}
+        coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
+        call = coord._tariff_provider.find_cheapest_hours.call_args
+        # Falls back to EV_DEADLINE_LOOKAHEAD_HOURS (12) — both deadlines unresolvable
+        within_hours = call.kwargs.get("within_hours")
+        assert within_hours == 12, f"expected global fallback 12h, got {within_hours}"
+
     def test_tariff_hysteresis_holds_decision_within_dwell(self):
         # M4 (#274): once charging (now cheap), a brief flip to "wait" within the
         # dwell must be held → no stop/start contactor cycling.

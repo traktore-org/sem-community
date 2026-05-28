@@ -2022,33 +2022,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             )
             soc_info = f", SOC={vehicle_soc:.0f}%→{_target_soc}%" if vehicle_soc is not None else ""
 
-            # Tariff-optimized cheap-hour waiting is now OPT-IN (#247): this used
-            # to run implicitly for every dynamic-tariff user. The authoritative
-            # gating + Min-floor guarantee + deadline awareness lives in the night
-            # planner (_compute_night_plan → night_tariff_wait → the
-            # TARIFF_WAITING_FOR_CHEAP state); this only sets the strategy reason
-            # string to stay consistent with that state. Skipped entirely unless
-            # the charger's tariff_optimized switch is on, so a dynamic-tariff
-            # user who hasn't opted in charges immediately as before.
+            # Tariff-optimized cheap-hour waiting is OPT-IN (#247). The authoritative
+            # decision lives in the night planner (_compute_night_plan →
+            # NightChargePlan.should_wait_for_cheap → TARIFF_WAITING_FOR_CHEAP
+            # state). This branch only sets the strategy reason string; consult
+            # the SAME plan to avoid the two paths disagreeing (#281/D3): the old
+            # code re-ran its own cheap-hour calc with a hardcoded 12h lookahead
+            # and no peak-awareness, so it could report "waiting for cheaper
+            # hour" while the planner had already decided to charge now because
+            # Min would miss — a contradictory state for debugging.
             if self._tariff_optimized_for(charger_cfg or {}):
-                tariff = getattr(self, '_tariff_provider', None)
-                if tariff and hasattr(tariff, 'find_cheapest_hours'):
-                    try:
-                        ev_max_power = self.config.get("ev_night_initial_current", 10) * 3 * 230 / 1000  # kW
-                        hours_needed = max(1, int(remaining_need / ev_max_power + 0.5))
-                        cheapest = tariff.find_cheapest_hours(
-                            hours_needed, within_hours=12, prefer_consecutive=True)
-                        if cheapest:
-                            now = dt_util.now()
-                            is_cheap_hour = any(
-                                p.timestamp <= now < p.timestamp + timedelta(hours=1)
-                                for p in cheapest
-                            )
-                            if not is_cheap_hour:
-                                cheap_start = cheapest[0].timestamp.strftime("%H:%M")
-                                return ("idle", f"night: waiting for cheaper hour (next: {cheap_start}){soc_info}")
-                    except (ValueError, TypeError, AttributeError) as e:
-                        _LOGGER.debug("Price optimization unavailable, falling back to immediate charging: %s", e)
+                primary_cid = (charger_cfg or {}).get("id")
+                cached_plan = self._night_plan_per_charger.get(primary_cid)
+                if cached_plan is not None and cached_plan.should_wait_for_cheap:
+                    nxt = cached_plan.next_cheap_start
+                    when = nxt.strftime("%H:%M") if nxt else "?"
+                    return ("idle", f"night: waiting for cheaper hour (next: {when}){soc_info}")
 
             return ("night_grid", f"night mode, remaining={remaining_need:.1f}kWh{soc_info}")
 

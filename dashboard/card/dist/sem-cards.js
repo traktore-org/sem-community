@@ -3403,7 +3403,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         <span>${this._t("today")}: <b>min ${a(e.today_min)}</b> · avg ${a(e.today_avg)} · <b>max ${a(e.today_max)}</b></span>
                         ${n?W`<span class="cheap">${this._t("price_next_cheap")}: <b>${n}${l?"–"+l:""}</b></span>`:K}
                     </div>
-                    ${o.length>=2?this._renderStrip(o):!1===e.is_dynamic?W`<div class="static-note">${this._t("price_level")}: ${this._t(r.key)}</div>`:K}
+                    ${o.length>=2?this._renderStrip(o):K}
                 </div>
             </ha-card>
         `}_renderStrip(t){const e=Date.now(),i=t.map(t=>({t:new Date(t.t).getTime(),price:t.price,level:t.level})).filter(t=>!isNaN(t.t)).sort((t,e)=>t.t-e.t).filter(t=>t.t>=e-36e5).slice(0,24);if(i.length<2)return K;const s=i.map(t=>t.price),r=Math.min(...s),a=Math.max(...s)-r||1,o=i.length,n=(320-2*(o-1))/o,l=i.map((t,i)=>{const s=6+52*((t.price-r)/a),o=i*(n+2),l=64-s,c=this._levelInfo(t.level).color,d=t.t<=e&&e<t.t+36e5;return G`<rect x="${o}" y="${l}" width="${n}" height="${s}" rx="1.5"

@@ -64,19 +64,21 @@ class EVControlMixin:
     def _tariff_optimized_for(self, charger_cfg: dict) -> bool:
         """True when tariff-optimized timing is enabled for this charger (#247).
 
-        Per-charger ``switch.sem_charger_{id}_tariff_optimized`` (opt-in, default
-        OFF), mirroring the per-charger night-charging switch. Falls back to the
-        legacy global ``switch.sem_tariff_optimized`` for no-charger installs.
+        Per-charger ``switch.sem_charger_{id}_tariff_optimized`` (opt-in,
+        default OFF) — created in ``switch.py`` for every config-flow charger.
+        Returns False when there is no charger config (``ev_chargers`` empty),
+        which can only happen pre-setup; #281/S2 removed the dead legacy
+        ``switch.sem_tariff_optimized`` fallback (that switch was never created).
         """
         hass = getattr(self, "hass", None)
         if hass is None:
             return False
         cid = charger_cfg.get("id") if charger_cfg else None
-        if cid:
-            return hass.states.is_state(
-                f"switch.sem_charger_{cid}_tariff_optimized", "on"
-            )
-        return hass.states.is_state("switch.sem_tariff_optimized", "on")
+        if not cid:
+            return False
+        return hass.states.is_state(
+            f"switch.sem_charger_{cid}_tariff_optimized", "on"
+        )
 
     def _charger_target_time(self, charger_cfg: dict) -> str:
         """Per-charger ``HH:MM`` charge-by deadline (#246), or global / default."""
@@ -112,11 +114,15 @@ class EVControlMixin:
 
         tariff_optimized = self._tariff_optimized_for(cfg)
         target_time = self._charger_target_time(cfg)
+        # Split try blocks (#281/D4): a single try around both would let a
+        # later failure overwrite an earlier successful read.
         try:
             night_end = self.time_manager.get_night_end_time()
-            window_h = self.time_manager.get_night_window_hours()
         except (ValueError, AttributeError):
             night_end = DEFAULT_EV_TARGET_TIME
+        try:
+            window_h = self.time_manager.get_night_window_hours()
+        except (ValueError, AttributeError):
             window_h = 8.0
 
         # Realistic peak-managed rate (#274/C1): night charging is sized from the

@@ -126,9 +126,9 @@ class SEMPriceCard extends SEMLitBase {
                         <span>${this._t('today')}: <b>min ${fmt(a.today_min)}</b> · avg ${fmt(a.today_avg)} · <b>max ${fmt(a.today_max)}</b></span>
                         ${nextCheap ? html`<span class="cheap">${this._t('price_next_cheap')}: <b>${nextCheap}${nextCheapEnd ? '–' + nextCheapEnd : ''}</b></span>` : nothing}
                     </div>
-                    ${upcoming.length >= 2 ? this._renderStrip(upcoming) : (a.is_dynamic === false
-                        ? html`<div class="static-note">${this._t('price_level')}: ${this._t(lvl.key)}</div>`
-                        : nothing)}
+                    ${/* The is_dynamic===false branch is unreachable — line 77
+                          early-returns for static tariffs. (#281/S3) */
+                      upcoming.length >= 2 ? this._renderStrip(upcoming) : nothing}
                 </div>
             </ha-card>
         `;
