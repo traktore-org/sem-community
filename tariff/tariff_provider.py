@@ -561,11 +561,17 @@ class DynamicTariffProvider(TariffProvider):
     ) -> List[Dict[str, Any]]:
         """Generate tariff schedule blocks from dynamic price forecast.
 
-        Maps price levels to HT/NT for the schedule card:
-        - cheap/very_cheap/negative → NT (green)
-        - normal/expensive/very_expensive → HT (orange)
+        Returns blocks with both the legacy ``tariff`` field (HT/NT, for the
+        existing schedule card) and the richer ``level`` field (5-tier
+        cheap/normal/expensive classification, for sem-today-plan-card and
+        sem-price-card consumers — #282).
 
-        Returns list of {"start": "HH:MM", "end": "HH:MM", "tariff": "HT"|"NT"}.
+        Each block also carries ``avg_price`` so cards can show "0.10 CHF avg"
+        without re-querying the curve.
+
+        Returns:
+            ``[{"start": "HH:MM", "end": "HH:MM", "tariff": "HT"|"NT",
+                "level": "cheap"|..., "avg_price": float}, ...]``
         """
         prices = self._read_prices_list()
         target_date = (date or dt_util.now()).date()
@@ -577,28 +583,45 @@ class DynamicTariffProvider(TariffProvider):
             return []
 
         _CHEAP = (PriceLevel.NEGATIVE, PriceLevel.VERY_CHEAP, PriceLevel.CHEAP)
+
+        def _coarse_level(level: PriceLevel) -> str:
+            """Collapse the 5-tier scale into 3 user-facing bands.
+
+            cheap-ish → ``cheap``; expensive-ish → ``expensive``; rest → ``normal``.
+            """
+            if level in _CHEAP:
+                return "cheap"
+            if level in (PriceLevel.EXPENSIVE, PriceLevel.VERY_EXPENSIVE):
+                return "expensive"
+            return "normal"
+
         schedule: List[Dict[str, Any]] = []
-        current_tariff: Optional[str] = None
+        current_level: Optional[str] = None
         block_start: Optional[str] = None
+        block_prices: List[float] = []
+
+        def _close_block(end_time_str: str) -> None:
+            if current_level is not None and block_start is not None and block_prices:
+                avg = sum(block_prices) / len(block_prices)
+                schedule.append({
+                    "start": block_start, "end": end_time_str,
+                    "tariff": "NT" if current_level == "cheap" else "HT",
+                    "level": current_level,
+                    "avg_price": round(avg, 4),
+                })
 
         for p in today_prices:
-            tariff = "NT" if p.level in _CHEAP else "HT"
+            lvl = _coarse_level(p.level)
             time_str = f"{p.timestamp.hour:02d}:{p.timestamp.minute:02d}"
-            if tariff != current_tariff:
-                if current_tariff is not None and block_start is not None:
-                    schedule.append({
-                        "start": block_start, "end": time_str,
-                        "tariff": current_tariff,
-                    })
+            if lvl != current_level:
+                _close_block(time_str)
                 block_start = time_str
-                current_tariff = tariff
+                current_level = lvl
+                block_prices = [p.price]
+            else:
+                block_prices.append(p.price)
 
-        if current_tariff is not None and block_start is not None:
-            schedule.append({
-                "start": block_start, "end": "24:00",
-                "tariff": current_tariff,
-            })
-
+        _close_block("24:00")
         return schedule
 
 

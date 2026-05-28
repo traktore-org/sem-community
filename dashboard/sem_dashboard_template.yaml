@@ -57,6 +57,11 @@ views:
             entity: sensor.sem_tariff_current_import_rate
             compact: true
 
+          # ── Today's plan (#282) ── forward-looking schedule, self-hides
+          # until coordinator has computed at least one transition row.
+          - type: custom:sem-today-plan-card
+            entity: sensor.sem_charging_state
+
           # ── System Diagram (animated power flow) ──
           - type: custom:sem-system-diagram-card
             entity_prefix: sensor.sem_

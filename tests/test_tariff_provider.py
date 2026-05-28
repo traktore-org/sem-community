@@ -896,10 +896,13 @@ class TestDynamicTariffSchedule:
             provider = DynamicTariffProvider(hass, price_entity="sensor.price")
             schedule = provider.get_schedule_for_day(now)
 
+        # Block shape was extended in #282 with `level` + `avg_price` — assert
+        # the legacy NT/HT contract still holds without locking the dict shape.
         assert len(schedule) == 3
-        assert schedule[0] == {"start": "00:00", "end": "06:00", "tariff": "NT"}
-        assert schedule[1] == {"start": "06:00", "end": "20:00", "tariff": "HT"}
-        assert schedule[2] == {"start": "20:00", "end": "24:00", "tariff": "NT"}
+        def _legacy(b): return {"start": b["start"], "end": b["end"], "tariff": b["tariff"]}
+        assert _legacy(schedule[0]) == {"start": "00:00", "end": "06:00", "tariff": "NT"}
+        assert _legacy(schedule[1]) == {"start": "06:00", "end": "20:00", "tariff": "HT"}
+        assert _legacy(schedule[2]) == {"start": "20:00", "end": "24:00", "tariff": "NT"}
 
     def test_schedule_from_30min_prices(self, hass):
         """Generate schedule from Amber/Octopus 30-min intervals."""
@@ -961,7 +964,10 @@ class TestDynamicTariffSchedule:
             schedule = provider.get_schedule_for_day(now)
 
         assert len(schedule) == 1
-        assert schedule[0] == {"start": "00:00", "end": "24:00", "tariff": "NT"}
+        # Block shape extended in #282; keep legacy NT/HT contract intact.
+        assert schedule[0]["start"] == "00:00"
+        assert schedule[0]["end"] == "24:00"
+        assert schedule[0]["tariff"] == "NT"
 
     def test_schedule_empty_no_prices(self, hass):
         """No prices for target day → empty schedule (card uses fallback)."""

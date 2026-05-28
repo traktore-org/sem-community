@@ -1439,6 +1439,67 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             except Exception as e:
                 _LOGGER.debug("Tariff price-curve surface failed (#257): %s", e)
 
+            # Today's plan (#282): compose a forward-looking schedule from the
+            # tariff curve + solar forecast + night window + EV state. Surfaced
+            # on charging_state attributes for sem-today-plan-card. Pure helper
+            # in coordinator/today_plan.py so logic is unit-testable.
+            try:
+                from .today_plan import compose_today_plan
+                _now = dt_util.now()
+                # Solar — read directly from the forecast reader's cached data
+                _peak_t = None
+                _solar_remaining = None
+                try:
+                    _fcd = self._forecast_reader.forecast_data
+                    _peak_t = _fcd.peak_time_today
+                    _solar_remaining = _fcd.forecast_remaining_today_kwh
+                except AttributeError:
+                    pass
+                # Night window — get HH:MM endpoints, resolve to datetime.
+                # If we're past the window's start today, the next window opens
+                # tomorrow (handled by get_offset_time returning today's time
+                # and us adding a day when it's already past).
+                _night_start = None
+                _night_end_dt = None
+                try:
+                    ns_hhmm, ne_hhmm = self.time_manager.get_night_window()
+                    _night_start = self.time_manager.get_offset_time(ns_hhmm)
+                    if _night_start <= _now:
+                        _night_start = _night_start + timedelta(days=1)
+                    _night_end_dt = self.time_manager.get_offset_time(ne_hhmm)
+                    if _night_end_dt <= _now:
+                        _night_end_dt = _night_end_dt + timedelta(days=1)
+                except (AttributeError, ValueError):
+                    pass
+                _np = self._cycle_night_plan
+                _ev_remaining = _np.remaining_kwh if _np else None
+                _ev_deadline_dt = _np.deadline_dt if _np else None
+                _ev_rate_kw = None
+                if _np and _np.hours_to_deadline and _np.hours_to_deadline > 0 and _np.remaining_kwh:
+                    # The planner's reachable=True implies remaining/rate <= hours_left;
+                    # this is the rough effective rate (peak-managed unless forcing).
+                    _ev_rate_kw = _np.remaining_kwh / max(0.1, _np.hours_to_deadline)
+                result["today_plan"] = compose_today_plan(
+                    now=_now,
+                    upcoming_prices=result.get("tariff_upcoming"),
+                    solar_peak_time=_peak_t,
+                    solar_remaining_kwh=_solar_remaining,
+                    night_start=_night_start,
+                    night_end=_night_end_dt,
+                    ev_min_remaining_kwh=_ev_remaining,
+                    ev_deadline=_ev_deadline_dt,
+                    ev_tariff_optimized=result.get("ev_tariff_optimized", False),
+                    ev_tariff_waiting=result.get("ev_tariff_waiting", False),
+                    ev_next_cheap_window=(
+                        _np.next_cheap_start if _np and _np.next_cheap_start else None
+                    ),
+                    ev_effective_rate_kw=_ev_rate_kw,
+                    currency=result.get("tariff_currency", ""),
+                )
+            except Exception as e:
+                _LOGGER.debug("today_plan compose failed (#282): %s", e)
+                result["today_plan"] = []
+
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()
             today_date = now_time.date()

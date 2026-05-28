@@ -1868,6 +1868,9 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "ev_deadline_reachable": self.coordinator.data.get("ev_deadline_reachable"),
                 "ev_deadline_hours": self.coordinator.data.get("ev_deadline_hours"),
                 "ev_next_cheap_window": self.coordinator.data.get("ev_next_cheap_window"),
+                # Today's plan rows (#282) — list of {when, kind, label, detail, values}.
+                # sem-today-plan-card consumes this directly.
+                "today_plan": self.coordinator.data.get("today_plan") or [],
             })
         elif self.entity_description.key == "charging_strategy":
             attrs.update({
