@@ -801,7 +801,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "de": {
     "charging": "Laden",
@@ -1605,7 +1609,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "fr": {
     "charging": "En charge",
@@ -2409,7 +2417,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "es": {
     "charging": "Cargando",
@@ -3213,7 +3225,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "it": {
     "charging": "In carica",
@@ -4017,7 +4033,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "nl": {
     "charging": "Laden",
@@ -4821,7 +4841,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5625,7 +5649,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "da": {
     "charging": "Oplader",
@@ -6429,7 +6457,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "fi": {
     "charging": "Lataus",
@@ -7233,7 +7265,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "hu": {
     "charging": "Töltés",
@@ -8037,7 +8073,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "no": {
     "charging": "Lader",
@@ -8841,7 +8881,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9645,7 +9689,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "pt": {
     "charging": "A carregar",
@@ -10449,7 +10497,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "ro": {
     "charging": "Încărcare",
@@ -11253,7 +11305,11 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   },
   "sv": {
     "charging": "Laddar",
@@ -12057,6 +12113,10 @@
     "plan_ev_charge_tariff": "tariff-optimized, waiting for cheap window",
     "plan_ev_charge_night": "gentle peak-managed ramp",
     "plan_ev_min_reached": "Min reached ({kwh} kWh)",
-    "plan_ev_deadline": "Charge-by deadline"
+    "plan_ev_deadline": "Charge-by deadline",
+    "plan_strip_idle": "idle",
+    "plan_strip_wait": "waiting",
+    "plan_strip_charging": "charging",
+    "plan_strip_done": "done"
   }
 }

@@ -1479,6 +1479,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     # The planner's reachable=True implies remaining/rate <= hours_left;
                     # this is the rough effective rate (peak-managed unless forcing).
                     _ev_rate_kw = _np.remaining_kwh / max(0.1, _np.hours_to_deadline)
+                # Daytime fallback (#282): the night planner only runs inside the
+                # night window, so during the day _np is None and the strip would
+                # have no EV rows. Estimate remaining_to_min from the daily target
+                # vs accumulated, and resolve deadline from the charger config so
+                # the EV card can show "tonight's plan" as a preview.
+                if _ev_remaining is None or _ev_remaining <= 0.1:
+                    try:
+                        _pcfg = _dl_pcfg or {}
+                        _cid = _pcfg.get("id")
+                        _target = (_pcfg.get("daily_ev_target")
+                                   or self.config.get("daily_ev_target", 10))
+                        if _cid and _cid in self._daily_ev_per_charger:
+                            _daily = self._daily_ev_per_charger[_cid]
+                        else:
+                            _daily = getattr(energy, "daily_ev", 0.0) or 0.0
+                        _remain = max(0.0, float(_target) - float(_daily))
+                        if _remain > 0.1:
+                            _ev_remaining = _remain
+                            # Resolve deadline from charger config — same path the
+                            # planner uses, just without the full plan computation.
+                            from .ev_tariff_planner import resolve_deadline
+                            _tt = self._charger_target_time(_pcfg)
+                            _ev_deadline_dt = resolve_deadline(_now, _tt)
+                            # Rate estimate at 3-phase peak floor; the strip is a
+                            # preview, not the truth — close enough for the visual.
+                            _ev_rate_kw = 4.1  # ~6A x 690 W/A
+                    except (ValueError, TypeError, AttributeError):
+                        pass
                 result["today_plan"] = compose_today_plan(
                     now=_now,
                     upcoming_prices=result.get("tariff_upcoming"),

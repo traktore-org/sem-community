@@ -10,7 +10,7 @@
  *   entity_prefix: sensor.sem_   # default
  */
 
-import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -181,6 +181,125 @@ class SEMEVStatusCard extends SEMLitBase {
                     ${soc != null ? Math.round(soc) + '%' : '\u2014'}
                 </text>
             </svg>
+        `;
+    }
+
+    /**
+     * 12h EV plan strip (#282): a thin horizontal timeline rendered from the
+     * today_plan attribute on sem_charging_state. Walks the plan rows and
+     * paints a contiguous bar segment per EV state (idle / wait / charging /
+     * done) plus expensive-window tinting overlay. Self-renders nothing when
+     * there's no plan to show (no charger configured, Min already met, etc.).
+     */
+    _renderPlanStrip() {
+        const cs = this._hass?.states['sensor.sem_charging_state'];
+        const plan = cs?.attributes?.today_plan || [];
+        if (!Array.isArray(plan) || plan.length < 2) return nothing;
+        // Only show when there's at least one EV-specific row — otherwise the
+        // info value is too thin to justify the row.
+        const evKinds = new Set(['ev_charge_start','ev_min_reached','ev_deadline']);
+        if (!plan.some(r => evKinds.has(r.kind))) return nothing;
+
+        const now = Date.now();
+        const horizon = 12 * 3600 * 1000;  // 12h window
+        const end = now + horizon;
+        const w = 100;  // viewBox units (percent-like)
+        const xOf = (ts) => Math.max(0, Math.min(w, ((ts - now) / horizon) * w));
+
+        // Build EV state segments by walking the plan. State machine:
+        //   start         → idle
+        //   night_open    → wait (if tariff_waiting) else charging
+        //   ev_charge_start → charging
+        //   ev_min_reached  → done
+        //   ev_deadline     → end of horizon coverage
+        const evRows = plan.filter(r => ['now','night_open','ev_charge_start',
+            'ev_min_reached','ev_deadline'].includes(r.kind));
+        evRows.sort((a,b) => new Date(a.when) - new Date(b.when));
+        const tariffWait = !!cs?.attributes?.ev_tariff_waiting;
+        const segments = [];
+        let cursor = now;
+        let state = 'idle';
+        for (const r of evRows) {
+            const t = new Date(r.when).getTime();
+            if (t > cursor && t <= end) segments.push({s: cursor, e: t, state});
+            cursor = t;
+            if (r.kind === 'night_open') state = tariffWait ? 'wait' : 'charging';
+            else if (r.kind === 'ev_charge_start') state = 'charging';
+            else if (r.kind === 'ev_min_reached') state = 'done';
+            else if (r.kind === 'ev_deadline') state = 'done';
+        }
+        if (cursor < end) segments.push({s: cursor, e: end, state});
+
+        // Tinting overlay: expensive blocks darken the strip + cheap blocks lighten
+        const overlays = [];
+        for (const r of plan) {
+            const t = new Date(r.when).getTime();
+            if (r.kind === 'expensive_start' && t < end) {
+                // detail string holds end HH:MM — find end time by walking
+                const endHHMM = r.values?.end;
+                if (endHHMM) {
+                    const [hh, mm] = endHHMM.split(':').map(Number);
+                    const endDt = new Date(t); endDt.setHours(hh, mm, 0, 0);
+                    if (endDt.getTime() < t) endDt.setDate(endDt.getDate()+1);
+                    overlays.push({s: t, e: Math.min(endDt.getTime(), end),
+                                   kind: 'expensive'});
+                }
+            } else if (r.kind === 'cheap_start' && t < end) {
+                const endHHMM = r.values?.end;
+                if (endHHMM) {
+                    const [hh, mm] = endHHMM.split(':').map(Number);
+                    const endDt = new Date(t); endDt.setHours(hh, mm, 0, 0);
+                    if (endDt.getTime() < t) endDt.setDate(endDt.getDate()+1);
+                    overlays.push({s: t, e: Math.min(endDt.getTime(), end),
+                                   kind: 'cheap'});
+                }
+            }
+        }
+
+        const stateColor = (s) => ({
+            idle:     '#3a4252',
+            wait:     '#8353d1',
+            charging: '#8DC892',
+            done:     '#4db6ac',
+        })[s] || '#3a4252';
+        const overlayColor = (k) => k === 'cheap' ? '#8DC892' : '#f06292';
+
+        // Hourly ticks for time labels (every 3h)
+        const ticks = [];
+        for (let h = 0; h <= 12; h += 3) {
+            const t = now + h * 3600 * 1000;
+            const label = new Date(t).toLocaleTimeString([],
+                { hour: '2-digit', minute: '2-digit' });
+            ticks.push({x: xOf(t), label});
+        }
+
+        return html`
+            <div class="plan-strip" title="${this._t('today_plan_title')} (12h)">
+                <svg viewBox="0 0 ${w} 14" preserveAspectRatio="none" class="strip-svg">
+                    ${segments.map(s => svg`
+                        <rect x="${xOf(s.s)}" y="3" width="${xOf(s.e)-xOf(s.s)}"
+                              height="6" fill="${stateColor(s.state)}" />
+                    `)}
+                    ${overlays.map(o => svg`
+                        <rect x="${xOf(o.s)}" y="0" width="${xOf(o.e)-xOf(o.s)}"
+                              height="2" fill="${overlayColor(o.kind)}"
+                              opacity="0.75" />
+                    `)}
+                    <line x1="0" y1="9" x2="${w}" y2="9"
+                          stroke="rgba(255,255,255,0.08)" stroke-width="0.3" />
+                </svg>
+                <div class="strip-axis">
+                    ${ticks.map(t => html`
+                        <span class="tick" style="left: ${t.x}%">${t.label}</span>
+                    `)}
+                </div>
+                <div class="strip-legend">
+                    <span><i style="background:#3a4252"></i>${this._t('plan_strip_idle')}</span>
+                    <span><i style="background:#8353d1"></i>${this._t('plan_strip_wait')}</span>
+                    <span><i style="background:#8DC892"></i>${this._t('plan_strip_charging')}</span>
+                    <span><i style="background:#4db6ac"></i>${this._t('plan_strip_done')}</span>
+                </div>
+            </div>
         `;
     }
 
@@ -441,6 +560,7 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span>${this._t('ev_deadline_unreachable_short')}</span>
                         </div>
                     ` : nothing}
+                    ${this._renderPlanStrip()}
                     <div class="ct-row">
                         <span class="ct-set-default"
                             @click=${() => this._callService('button', 'press', { entity_id: setDefaultBtnId })}>
@@ -930,6 +1050,34 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-warn {
                 display: flex; align-items: center; gap: 6px;
                 font-size: 11.5px; color: #f06292; padding: 5px 0 2px;
+            }
+            /* 12h EV plan strip (#282) */
+            .plan-strip {
+                margin: 8px 0 2px; padding: 4px 0 2px;
+                border-top: 1px dashed rgba(255,255,255,0.06);
+            }
+            .strip-svg {
+                width: 100%; height: 14px; display: block;
+            }
+            .strip-axis {
+                position: relative; height: 12px; margin-top: 2px;
+                font-size: 9.5px; color: var(--secondary-text-color, #888);
+            }
+            .strip-axis .tick {
+                position: absolute; transform: translateX(-50%);
+                font-variant-numeric: tabular-nums; white-space: nowrap;
+            }
+            .strip-legend {
+                display: flex; gap: 8px; flex-wrap: wrap;
+                font-size: 9.5px; color: var(--secondary-text-color, #888);
+                margin-top: 4px;
+            }
+            .strip-legend span {
+                display: inline-flex; align-items: center; gap: 3px;
+            }
+            .strip-legend i {
+                width: 8px; height: 8px; border-radius: 2px;
+                display: inline-block;
             }
             .ct-set-default {
                 margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
