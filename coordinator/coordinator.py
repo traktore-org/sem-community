@@ -1484,10 +1484,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # have no EV rows. Estimate remaining_to_min from the daily target
                 # vs accumulated, and resolve deadline from the charger config so
                 # the EV card can show "tonight's plan" as a preview.
+                #
+                # Gate on the night_charging switch being ON: when the user has
+                # explicitly disabled overnight grid charging, surfacing a "EV
+                # will charge at 21:22" row is misleading — the charger will
+                # NOT actually charge. Respect their opt-out.
                 if _ev_remaining is None or _ev_remaining <= 0.1:
                     try:
                         _pcfg = _dl_pcfg or {}
                         _cid = _pcfg.get("id")
+                        _night_on = (
+                            _cid and self.hass.states.is_state(
+                                f"switch.sem_charger_{_cid}_night_charging", "on"
+                            )
+                        )
+                        if not _night_on:
+                            raise ValueError("night charging disabled — no EV preview")
                         _target = (_pcfg.get("daily_ev_target")
                                    or self.config.get("daily_ev_target", 10))
                         if _cid and _cid in self._daily_ev_per_charger:
