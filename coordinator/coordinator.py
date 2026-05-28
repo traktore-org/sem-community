@@ -2709,12 +2709,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 pass
 
     def _restore_ev_session_state(self) -> None:
-        """Restore EV session state from storage on startup."""
+        """Restore EV session state from storage on startup.
+
+        Persists more than the session_active flag now (#282 follow-up): the
+        whole SessionData record (energy, source split, start time, cost) gets
+        round-tripped so an HA restart mid-session no longer wipes the meter
+        and creates a phantom "new session" with 0 kWh. The previous code only
+        persisted the active flag, so on restart _session_data was rebuilt
+        empty and the next cycle started a brand-new SessionData — visible to
+        the user as a session counter that resets to 0 mid-charge.
+        """
         if not self._storage:
             return
         state = self._storage.get_ev_session_state()
         if not state:
             return
+
+        from .types import SessionData
+
+        def _restore_session_data(saved: dict) -> SessionData:
+            return SessionData(
+                active=saved.get("session_active", False),
+                start_time=saved.get("start_time"),
+                duration_minutes=saved.get("duration_minutes", 0.0),
+                energy_kwh=saved.get("energy_kwh", 0.0),
+                solar_energy_kwh=saved.get("solar_energy_kwh", 0.0),
+                grid_energy_kwh=saved.get("grid_energy_kwh", 0.0),
+                battery_energy_kwh=saved.get("battery_energy_kwh", 0.0),
+                solar_share_pct=saved.get("solar_share_pct", 0.0),
+                cost_chf=saved.get("cost_chf", 0.0),
+                avg_power_w=saved.get("avg_power_w", 0.0),
+            )
 
         # Multi-charger (#112): restore all chargers
         if self._ev_devices:
@@ -2723,17 +2748,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 cstate = per_charger.get(cid, state if cid == next(iter(self._ev_devices)) else {})
                 ev_dev._session_active = cstate.get("session_active", False)
                 ev_dev._current_setpoint = cstate.get("current_setpoint", 0.0)
+                # Restore the full SessionData (#282) — energy_kwh, source
+                # split, start_time, cost. Without this the next cycle's
+                # _update_session_tracking sees `not _session_data.active`
+                # and starts a brand-new SessionData mid-charge.
+                self._session_data_per_charger[cid] = _restore_session_data(cstate)
                 _LOGGER.info(
-                    "Restored EV session for %s: active=%s, setpoint=%.0fA",
+                    "Restored EV session for %s: active=%s, setpoint=%.0fA, %.2fkWh",
                     ev_dev.name, ev_dev._session_active, ev_dev._current_setpoint,
+                    self._session_data_per_charger[cid].energy_kwh,
                 )
+            # Seed the primary _session_data so legacy callers reading it
+            # directly see the restored values too.
+            primary_cid = next(iter(self._ev_devices))
+            self._session_data = self._session_data_per_charger[primary_cid]
         elif self._ev_device:
             ev = self._ev_device
             ev._session_active = state.get("session_active", False)
             ev._current_setpoint = state.get("current_setpoint", 0.0)
+            self._session_data = _restore_session_data(state)
             _LOGGER.info(
-                "Restored EV session: active=%s, setpoint=%.0fA",
-                ev._session_active, ev._current_setpoint,
+                "Restored EV session: active=%s, setpoint=%.0fA, %.2fkWh",
+                ev._session_active, ev._current_setpoint, self._session_data.energy_kwh,
             )
         self._ev_last_change_time = None
 
@@ -2746,23 +2782,57 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._ev_devices:
             per_charger = {}
             for cid, ev_dev in self._ev_devices.items():
-                per_charger[cid] = {
-                    "session_active": ev_dev._session_active,
-                    "current_setpoint": ev_dev._current_setpoint,
-                }
-            # Also save primary charger at top level for backward compat
-            primary = next(iter(self._ev_devices.values()))
+                sd = self._session_data_per_charger.get(cid)
+                per_charger[cid] = self._serialize_session_state(
+                    ev_dev._session_active, ev_dev._current_setpoint, sd,
+                )
+            # Also save primary charger at top level for backward compat with
+            # older releases that read the top-level keys without traversing
+            # the "chargers" dict.
+            primary_cid = next(iter(self._ev_devices))
+            primary_dev = self._ev_devices[primary_cid]
+            primary_sd = self._session_data_per_charger.get(primary_cid)
             self._storage.set_ev_session_state({
-                "session_active": primary._session_active,
-                "current_setpoint": primary._current_setpoint,
+                **self._serialize_session_state(
+                    primary_dev._session_active, primary_dev._current_setpoint, primary_sd,
+                ),
                 "chargers": per_charger,
             })
         elif self._ev_device:
             ev = self._ev_device
-            self._storage.set_ev_session_state({
-                "session_active": ev._session_active,
-                "current_setpoint": ev._current_setpoint,
+            self._storage.set_ev_session_state(
+                self._serialize_session_state(
+                    ev._session_active, ev._current_setpoint, self._session_data,
+                ),
+            )
+
+    def _serialize_session_state(
+        self, session_active: bool, current_setpoint: float, sd,
+    ) -> dict:
+        """Build a storage-safe dict for one charger's session state (#282).
+
+        Persists more than session_active/current_setpoint now: the full
+        SessionData record so an HA restart mid-charge doesn't reset the
+        session meter to 0. ``sd`` may be None for chargers that have not
+        had a session yet — emit only the always-on fields in that case.
+        """
+        payload = {
+            "session_active": session_active,
+            "current_setpoint": current_setpoint,
+        }
+        if sd is not None:
+            payload.update({
+                "start_time": sd.start_time,
+                "duration_minutes": sd.duration_minutes,
+                "energy_kwh": sd.energy_kwh,
+                "solar_energy_kwh": sd.solar_energy_kwh,
+                "grid_energy_kwh": sd.grid_energy_kwh,
+                "battery_energy_kwh": sd.battery_energy_kwh,
+                "solar_share_pct": sd.solar_share_pct,
+                "cost_chf": sd.cost_chf,
+                "avg_power_w": sd.avg_power_w,
             })
+        return payload
 
     def _update_ev_intelligence(
         self, power: PowerReadings, energy,

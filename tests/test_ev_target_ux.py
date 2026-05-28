@@ -354,10 +354,14 @@ class TestTargetTypeSocGating:
     def test_helper_offers_both_with_vehicle_soc(self):
         assert _target_type_options(has_vehicle_soc=True) == ["kwh", "soc"]
 
-    def _make_per_charger_select(self, charger_cfg):
+    def _make_per_charger_select(self, charger_cfg, config_key="ev_target_type", value="kwh"):
         sel = SEMPerChargerSelect.__new__(SEMPerChargerSelect)
         sel._charger_id = charger_cfg.get("id", "ev_charger")
-        sel._value = "kwh"
+        # _config_key is required since the #282 generalisation — the class
+        # now branches on it to decide target-type vs charging-mode options.
+        sel._config_key = config_key
+        sel._value = value
+        sel.entity_description = MagicMock(options=[value])
         coord = MagicMock()
         coord.config = {"ev_chargers": [charger_cfg]}
         sel.coordinator = coord
@@ -375,6 +379,48 @@ class TestTargetTypeSocGating:
         sel = self._make_per_charger_select({"id": "c1"})
         sel._value = "soc"  # stale value, but SOC not offered
         assert sel.current_option == "kwh"
+
+
+class TestChargingModeSelect:
+    """Per-charger ev_charging_mode select (#255, generalised in #282).
+
+    The previous class hardcoded target-type behaviour everywhere; the
+    charging-mode select silently inherited kwh/soc options, locking users
+    to whatever mode was in the config dict because they couldn't actually
+    change it from the UI.
+    """
+
+    def _make_select(self, *, initial_value="auto"):
+        from custom_components.solar_energy_management.select import (
+            EV_CHARGING_MODES, SEMPerChargerSelect,
+        )
+        sel = SEMPerChargerSelect.__new__(SEMPerChargerSelect)
+        sel._charger_id = "c1"
+        sel._config_key = "ev_charging_mode"
+        sel._value = initial_value
+        sel.entity_description = MagicMock(options=list(EV_CHARGING_MODES.keys()))
+        coord = MagicMock()
+        coord.config = {"ev_chargers": [{"id": "c1"}]}
+        sel.coordinator = coord
+        return sel
+
+    def test_options_returns_charging_modes_not_target_types(self):
+        sel = self._make_select()
+        # Authoritative: should be the EV_CHARGING_MODES set, NOT kwh/soc.
+        assert set(sel.options) == {"auto", "minpv", "now", "off"}
+        assert "kwh" not in sel.options
+
+    def test_current_option_preserves_charging_mode_value(self):
+        sel = self._make_select(initial_value="minpv")
+        # Previously this would silently clamp to "kwh" because the options
+        # property hardcoded the target-type options. The fix unblocks the
+        # actual mode from being displayed.
+        assert sel.current_option == "minpv"
+
+    def test_unknown_initial_value_falls_back_to_first_option(self):
+        sel = self._make_select(initial_value="garbage_mode")
+        # current_option clamps to options[0] when _value isn't in options.
+        assert sel.current_option in sel.options
 
 
 # ──────────────────────────────────────────────
