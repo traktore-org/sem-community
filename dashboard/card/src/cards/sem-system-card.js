@@ -259,12 +259,20 @@ class SEMSystemCard extends SEMLitBase {
                     const available = this._available(entityId);
                     const e = this._hass?.states[entityId];
                     const val = e ? e.state : '—';
+                    // Tariff chip: suffix is derived from the currency attribute
+                    // (#282 audit) so it reads e.g. "0.20 CHF/kWh" instead of
+                    // a bare number. Empty when currency is unknown.
+                    let suffix = chip.suffix;
+                    if (chip.key === 'tariff_current_import_rate') {
+                        const cur = e?.attributes?.currency;
+                        suffix = cur ? ` ${cur}/kWh` : '';
+                    }
                     const chipBg = available ? 'rgba(141,200,146,0.12)' : 'rgba(244,67,54,0.12)';
                     const chipBorder = available ? 'rgba(141,200,146,0.3)' : 'rgba(244,67,54,0.3)';
                     return html`
                         <div class="health-chip" style="background:${chipBg};border:1px solid ${chipBorder}">
                             <ha-icon icon="${chip.icon}" style="--mdc-icon-size:16px;color:${chip.color}"></ha-icon>
-                            <span class="chip-value">${available ? `${val}${chip.suffix}` : '—'}</span>
+                            <span class="chip-value">${available ? `${val}${suffix}` : '—'}</span>
                         </div>
                     `;
                 })}
@@ -323,19 +331,37 @@ class SEMSystemCard extends SEMLitBase {
         const selfCons = this._valNum('self_consumption_rate').toFixed(0);
         const derivedStr = `Home ${home}W · Import ${imp}W · Export ${exp}W · Autarky ${autarky}% · Self ${selfCons}%`;
 
-        const nightMode = this._val('night_mode') || '—';
-        const solarMode = this._val('solar_mode') || '—';
-        const calcCurrent = this._val('calculated_current') || '—';
+        // EV diagnostics — rewritten in #282 audit: the previous version read
+        // sensor.sem_night_mode / .solar_mode / .daily_ev_target / .ev_connected
+        // — entities that don't exist (they were either renamed in the
+        // multi-charger refactor #193 or never existed). Every value rendered
+        // as '—'. Now uses the actual entities that ship today.
+        const chargingState = this._val('charging_state') || '—';
+        const calcCurrent = this._valNum('calculated_current', 0).toFixed(0);
         const dailyEv = this._valNum('daily_ev_energy').toFixed(1);
-        const evTarget = this._val('daily_ev_target') || '—';
-        const evPlug = this._val('ev_connected') || '—';
-        const evStr = `Night mode: ${nightMode} · Solar: ${solarMode} · ${calcCurrent}A · ${dailyEv}/${evTarget}kWh · Plug: ${evPlug}`;
+        // daily_ev_target is per-charger (number.sem_charger_<id>_daily_ev_target)
+        // — resolve the primary charger's value; show '—' for setups without one.
+        const targetEntityId = this._pcEntity('number', 'daily_ev_target', '');
+        const evTargetState = targetEntityId
+            ? this._hass?.states[targetEntityId]?.state : '';
+        const evTarget = (evTargetState && evTargetState !== 'unavailable'
+            && evTargetState !== 'unknown') ? Number(evTargetState).toFixed(1) : '—';
+        // ev_connected is a binary_sensor — wrong domain in old code.
+        const evConnState = this._hass?.states['binary_sensor.sem_ev_connected']?.state;
+        const evPlug = evConnState === 'on'
+            ? this._t('connected') || 'connected'
+            : evConnState === 'off'
+                ? this._t('disconnected') || 'disconnected'
+                : '—';
+        const evStr = `${chargingState} · ${calcCurrent}A · ${dailyEv}/${evTarget}kWh · ${evPlug}`;
 
-        const nightStatus = this._val('night_mode_status') || '—';
-        const solarStatus = this._val('solar_mode_status') || '—';
+        // Modes diagnostics — same fix family: sem_night_mode_status and
+        // sem_solar_mode_status do not exist. Use the real ones: charging_state
+        // already covers the overall mode, night_charging_status covers night.
+        const nightStatus = this._val('night_charging_status') || '—';
         const battStatus = this._val('battery_status') || '—';
         const gridStatus = this._val('grid_status') || '—';
-        const modesStr = `Night: ${nightStatus} · Solar: ${solarStatus} · Battery: ${battStatus} · Grid: ${gridStatus}`;
+        const modesStr = `Night: ${nightStatus} · Battery: ${battStatus} · Grid: ${gridStatus}`;
 
         return html`
             ${this._renderDiagBlock('source_sensors', sourceStr)}

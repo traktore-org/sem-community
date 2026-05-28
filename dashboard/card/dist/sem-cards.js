@@ -3591,10 +3591,10 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             </div>
         `}_renderHealthSection(t){return H`
             <div class="health-chips">
-                ${re.map(t=>{const e=`${this._prefix}${t.key}`,i=this._available(e),s=this._hass?.states[e],r=s?s.state:"—";return H`
+                ${re.map(t=>{const e=`${this._prefix}${t.key}`,i=this._available(e),s=this._hass?.states[e],r=s?s.state:"—";let a=t.suffix;if("tariff_current_import_rate"===t.key){const t=s?.attributes?.currency;a=t?` ${t}/kWh`:""}return H`
                         <div class="health-chip" style="background:${i?"rgba(141,200,146,0.12)":"rgba(244,67,54,0.12)"};border:1px solid ${i?"rgba(141,200,146,0.3)":"rgba(244,67,54,0.3)"}">
                             <ha-icon icon="${t.icon}" style="--mdc-icon-size:16px;color:${t.color}"></ha-icon>
-                            <span class="chip-value">${i?`${r}${t.suffix}`:"—"}</span>
+                            <span class="chip-value">${i?`${r}${a}`:"—"}</span>
                         </div>
                     `})}
             </div>
@@ -3618,11 +3618,11 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 <span class="diag-block-label">${this._t(t)}</span>
                 <span class="diag-block-text">${e}</span>
             </div>
-        `}_renderDiagSection(t){const e=`Solar ${this._valNum("solar_power").toFixed(0)}W · Grid ${this._valNum("grid_power").toFixed(0)}W · Battery ${this._valNum("battery_power").toFixed(0)}W · SOC ${this._valNum("battery_soc").toFixed(0)}% · EV ${this._valNum("ev_power").toFixed(0)}W`,i=`Home ${this._valNum("home_consumption_power").toFixed(0)}W · Import ${this._valNum("grid_import_power").toFixed(0)}W · Export ${this._valNum("grid_export_power").toFixed(0)}W · Autarky ${this._valNum("autarky_rate").toFixed(0)}% · Self ${this._valNum("self_consumption_rate").toFixed(0)}%`,s=`Night mode: ${this._val("night_mode")||"—"} · Solar: ${this._val("solar_mode")||"—"} · ${this._val("calculated_current")||"—"}A · ${this._valNum("daily_ev_energy").toFixed(1)}/${this._val("daily_ev_target")||"—"}kWh · Plug: ${this._val("ev_connected")||"—"}`,r=`Night: ${this._val("night_mode_status")||"—"} · Solar: ${this._val("solar_mode_status")||"—"} · Battery: ${this._val("battery_status")||"—"} · Grid: ${this._val("grid_status")||"—"}`;return H`
+        `}_renderDiagSection(t){const e=`Solar ${this._valNum("solar_power").toFixed(0)}W · Grid ${this._valNum("grid_power").toFixed(0)}W · Battery ${this._valNum("battery_power").toFixed(0)}W · SOC ${this._valNum("battery_soc").toFixed(0)}% · EV ${this._valNum("ev_power").toFixed(0)}W`,i=`Home ${this._valNum("home_consumption_power").toFixed(0)}W · Import ${this._valNum("grid_import_power").toFixed(0)}W · Export ${this._valNum("grid_export_power").toFixed(0)}W · Autarky ${this._valNum("autarky_rate").toFixed(0)}% · Self ${this._valNum("self_consumption_rate").toFixed(0)}%`,s=this._val("charging_state")||"—",r=this._valNum("calculated_current",0).toFixed(0),a=this._valNum("daily_ev_energy").toFixed(1),o=this._pcEntity("number","daily_ev_target",""),n=o?this._hass?.states[o]?.state:"",l=n&&"unavailable"!==n&&"unknown"!==n?Number(n).toFixed(1):"—",c=this._hass?.states["binary_sensor.sem_ev_connected"]?.state,d=`${s} · ${r}A · ${a}/${l}kWh · ${"on"===c?this._t("connected")||"connected":"off"===c?this._t("disconnected")||"disconnected":"—"}`,h=`Night: ${this._val("night_charging_status")||"—"} · Battery: ${this._val("battery_status")||"—"} · Grid: ${this._val("grid_status")||"—"}`;return H`
             ${this._renderDiagBlock("source_sensors",e)}
             ${this._renderDiagBlock("derived_values",i)}
-            ${this._renderDiagBlock("ev_charging",s)}
-            ${this._renderDiagBlock("mode_status",r)}
+            ${this._renderDiagBlock("ev_charging",d)}
+            ${this._renderDiagBlock("mode_status",h)}
         `}_renderSection(t,e,i){const s=this._collapsed[t.id];return H`
             <div class="section">
                 ${this._renderSectionHeader(t,i)}
