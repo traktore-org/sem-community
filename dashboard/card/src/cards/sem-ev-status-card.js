@@ -81,6 +81,15 @@ class SEMEVStatusCard extends SEMLitBase {
                 hass.states[`switch.sem_charger_${id}_night_charging`]?.state || ''
             ).join(':');
 
+            // Deadline (#246) + tariff (#247) entities
+            key += '|' + this._chargers.map(id => [
+                hass.states[`time.sem_charger_${id}_target_time`]?.state || '',
+                hass.states[`switch.sem_charger_${id}_tariff_optimized`]?.state || '',
+            ].join(':')).join('|');
+            const _cs = hass.states[`${prefix}charging_state`]?.attributes || {};
+            key += '|' + [_cs.ev_tariff_waiting, _cs.ev_deadline_reachable,
+                _cs.ev_next_cheap_window].join(':');
+
             key += '|' + this._chargers.map(id =>
                 hass.states[`number.sem_charger_${id}_daily_ev_target`]?.state || ''
             ).join(':');
@@ -299,6 +308,26 @@ class SEMEVStatusCard extends SEMLitBase {
             : `number.sem_charger_${id}_daily_ev_target_max`;
         const nightOnLive = this._stateStr(nightEntityId) === 'on';
 
+        // Deadline (#246) + tariff-optimized (#247)
+        const tariffEntityId = `switch.sem_charger_${id}_tariff_optimized`;
+        const tariffOnLive = this._stateStr(tariffEntityId) === 'on';
+        const targetTimeId = `time.sem_charger_${id}_target_time`;
+        const targetTimeRaw = this._stateStr(targetTimeId);  // "HH:MM:SS"
+        const targetTimeLabel = targetTimeRaw ? targetTimeRaw.slice(0, 5) : '—';
+        const setDefaultBtnId = `button.sem_charger_${id}_set_default_target`;
+        // Deadline / cheap-window status live on the charging_state sensor (primary).
+        const csAttrs = this._stateAttrs(`${this._prefix}charging_state`);
+        const deadlineUnreachable = csAttrs.ev_deadline_reachable === false;
+        const ncRaw = csAttrs.ev_next_cheap_window;
+        let nextCheapLabel = '';
+        if (ncRaw) {
+            try {
+                const d = new Date(ncRaw);
+                if (!isNaN(d)) nextCheapLabel = d.toLocaleTimeString([],
+                    { hour: '2-digit', minute: '2-digit' });
+            } catch (e) { /* ignore */ }
+        }
+
         // Range the charge will ADD to reach the Min (guaranteed) target, in km —
         // updates live as the Min handle moves. Solar may add more, up to Max. (#245)
         const minTarget = this._entityVal(minEntityId, isSoc ? 80 : 10);
@@ -378,8 +407,42 @@ class SEMEVStatusCard extends SEMLitBase {
                     </div>
                     ${this._renderRangeSlider(minEntityId, maxEntityId, isSoc)}
                     <div class="ct-row">
-                        <span class="ct-label">${this._t('night_charging')}</span>
+                        <span class="ct-label">${this._t('ev_grid_charging')}</span>
                         <span class="ct-ctl">${ctToggle(nightOnLive, nightEntityId)}</span>
+                    </div>
+                    <!-- Tariff is a refinement OF grid charging (when, not whether): nest it. -->
+                    <div class="ct-row ct-subrow">
+                        <span class="ct-label">${this._t('ev_tariff_mode')}</span>
+                        <span class="ct-ctl">${ctToggle(tariffOnLive, tariffEntityId)}</span>
+                    </div>
+                    ${tariffOnLive ? html`
+                        <div class="ct-subhint">
+                            ${this._t('ev_tariff_hint')}${nextCheapLabel
+                                ? html` · ${this._t('ev_next_cheap')} <b style="color:#8DC892">${nextCheapLabel}</b>`
+                                : nothing}
+                        </div>
+                    ` : nothing}
+                    <div class="ct-row clickable"
+                        @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info',
+                            { bubbles: true, composed: true, detail: { entityId: targetTimeId } }))}>
+                        <span class="ct-label">${this._t('ev_charge_by')}</span>
+                        <span class="ct-ctl ct-time">
+                            <ha-icon icon="mdi:clock-end" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
+                            ${targetTimeLabel}
+                        </span>
+                    </div>
+                    ${deadlineUnreachable ? html`
+                        <div class="ct-warn">
+                            <ha-icon icon="mdi:clock-alert" style="--mdc-icon-size:14px;color:#f06292"></ha-icon>
+                            <span>${this._t('ev_deadline_unreachable_short')}</span>
+                        </div>
+                    ` : nothing}
+                    <div class="ct-row">
+                        <span class="ct-set-default"
+                            @click=${() => this._callService('button', 'press', { entity_id: setDefaultBtnId })}>
+                            <ha-icon icon="mdi:content-save-cog" style="--mdc-icon-size:13px"></ha-icon>
+                            ${this._t('set_as_default')}
+                        </span>
                     </div>
                 </div>
 
@@ -844,8 +907,32 @@ class SEMEVStatusCard extends SEMLitBase {
                 display: flex; align-items: center; min-height: 32px;
             }
             .ct-row + .ct-row { border-top: 1px solid rgba(255,255,255,0.06); }
+            .ct-row.clickable { cursor: pointer; }
+            /* Tariff is nested under "Overnight grid charging" — it refines WHEN
+               grid charging happens, not WHETHER (#247 UX). */
+            .ct-subrow { padding-left: 14px; border-left: 2px solid rgba(141,200,146,0.35); margin-left: 2px; }
+            .ct-subrow .ct-label { color: var(--secondary-text-color, #b5b5b5); }
+            .ct-subhint {
+                padding: 2px 0 4px 16px; margin-left: 2px;
+                border-left: 2px solid rgba(141,200,146,0.18);
+                font-size: 10.5px; line-height: 1.3; color: var(--secondary-text-color, #999);
+            }
             .ct-label { font-size: 12px; color: var(--primary-text-color, #e0e0e0); }
             .ct-ctl { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+            .ct-time {
+                font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+                color: var(--primary-text-color, #e0e0e0);
+            }
+            .ct-warn {
+                display: flex; align-items: center; gap: 6px;
+                font-size: 11.5px; color: #f06292; padding: 5px 0 2px;
+            }
+            .ct-set-default {
+                margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+                font-size: 11px; color: var(--secondary-text-color, #999);
+                cursor: pointer; padding: 2px 0;
+            }
+            .ct-set-default:hover { color: #8DC892; }
             .ct-val {
                 background: rgba(141,200,146,0.14); color: #8DC892;
                 border: 1px solid rgba(141,200,146,0.35);

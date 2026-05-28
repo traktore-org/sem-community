@@ -14,6 +14,7 @@ Complete reference for Solar Energy Management (SEM).
 
 - [Configuration Options](#configuration-options)
 - [Charging Modes](#charging-modes)
+- **[EV Charging Logic — full decision reference](docs/EV_CHARGING_LOGIC.md)** ⭐
 - [SOC Zone Strategy](#soc-zone-strategy)
 - [Night Charging](#night-charging)
 - [EV Intelligence](#ev-intelligence)
@@ -178,6 +179,9 @@ The Legionella prevention cycle is a safety requirement mandated by building cod
 
 SEM supports four EV charging modes, selectable from the **Control tab** on the dashboard:
 
+> **Need the full picture?** [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md) is the canonical reference covering all 6 user controls (mode + Overnight grid + Cheapest hours + Smart night + Charge by + Min/Max), their priority cascade, and every interaction scenario including worked examples.
+
+
 ### Auto (`auto`) — Default
 
 The smart mode. SEM automatically decides the best strategy based on solar forecast and how much charging the EV still needs:
@@ -264,6 +268,8 @@ Once battery-assist mode activates (Zone 3 or 4), it stays active even if SOC dr
 
 ## Night Charging
 
+> **See also:** [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md) — full decision matrix covering night charging, the optional **Charge by HH:MM** deadline, and the optional **Cheapest hours (tariff)** mode, with worked examples for the edge cases (e.g. cheap window shorter than time-to-Min).
+
 > **Night charging is opt-in (off by default).** SEM is a *solar* energy manager, so out of the box it charges your car on solar surplus only and never pulls from the grid overnight unasked. To enable grid-assisted night charging, turn on **`switch.sem_night_charging`** (and, for a multi-charger setup, the per-charger `…_night_charging` switch for each charger you want to top up). Upgrading users keep whatever state they already had — only fresh installs and newly-added chargers start off. *(#256)*
 
 Once enabled, night charging starts automatically when night mode activates (after sunset + 10 minutes, or 20:30, whichever comes first).
@@ -333,6 +339,36 @@ Setting Max below full caps surplus; leaving it at full = charge freely from sun
 All settings are per-charger — different vehicles at different chargers can have different
 ranges. *(Upgrade note: the previous `ev_limit_surplus` switch is folded into Max — if you had
 it on, your Max is set to your old target automatically.)*
+
+**Charge-by deadline ("be ready by HH:MM").** *(#246)* Each charger has a **Charge By**
+time (`time.sem_charger_<id>_target_time`, default 07:00, also editable from the EV card).
+When you set it **earlier than the night-window end**, SEM scales the night-charging current
+up so the **Min** floor is reached by that time:
+
+`required_amps = remaining_to_Min ÷ hours_left ÷ (phases × 230 V)`, clamped to the charger's
+min/max. A tight deadline overrides the gentle ramp **and** the peak limit (you asked for the
+car to be ready, so it may pull grid above the peak). If the target physically can't be met in
+time (`remaining ÷ max_power > hours_left`), SEM sends a **"can't reach target by HH:MM"**
+notification instead of silently missing it.
+
+A deadline at/after the night-window end (the default) changes nothing — night charging stays
+gentle and peak-managed exactly as before. Only an explicit earlier deadline forces current.
+
+**Set as default.** *(#246)* Each charger has a **Set Target As Default** button
+(`button.sem_charger_<id>_set_default_target`) that copies that charger's current Min/Max and
+charge-by time into the global defaults, so newly-added chargers inherit them.
+
+**Tariff-optimized charging.** *(#247)* Turn on **`switch.sem_charger_<id>_tariff_optimized`**
+(opt-in, default off; tap the *Tariff-optimized* toggle on the EV card) to make charging
+price-aware — it needs a [dynamic tariff](#tariff-integration):
+
+- **At night**, SEM defers charging to the cheapest contiguous price window instead of starting
+  immediately. The state shows **`Tariff mode - Waiting for cheap price`**, and the EV card
+  shows the **next cheap window**. The **Min floor is always guaranteed**: if waiting for cheap
+  hours would miss the deadline (or there's no price data), SEM charges anyway regardless of price.
+- **During the day**, the *Min+PV* grid top-up is **paused during expensive price hours** and
+  resumes automatically when the price drops or solar becomes sufficient. Pure solar-surplus
+  charging is never paused (it's free), and the "Maximum" mode override is left untouched.
 
 ---
 

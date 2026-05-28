@@ -1861,6 +1861,13 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "solar_sufficient": self.coordinator.data.get("solar_sufficient"),
                 "charging_strategy": self.coordinator.data.get("charging_strategy"),
                 "strategy_reason": self.coordinator.data.get("charging_strategy_reason"),
+                # EV charge-target deadline (#246) + tariff-optimized status (#247)
+                "ev_target_time": self.coordinator.data.get("ev_target_time"),
+                "ev_tariff_optimized": self.coordinator.data.get("ev_tariff_optimized"),
+                "ev_tariff_waiting": self.coordinator.data.get("ev_tariff_waiting"),
+                "ev_deadline_reachable": self.coordinator.data.get("ev_deadline_reachable"),
+                "ev_deadline_hours": self.coordinator.data.get("ev_deadline_hours"),
+                "ev_next_cheap_window": self.coordinator.data.get("ev_next_cheap_window"),
             })
         elif self.entity_description.key == "charging_strategy":
             attrs.update({

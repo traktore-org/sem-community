@@ -121,6 +121,14 @@ DEFAULT_NIGHT_LATEST_END: Final = 7.0      # 07:00 — ceiling: night mode alway
 DEFAULT_DAILY_RESET: Final = "00:00"
 DEFAULT_DAILY_ENERGY_OFFSET: Final = "07:00"  # Daily energy reset time (handles night charging across midnight)
 
+# EV charge-target deadline (#246, Phase 2) — per-charger "reach Min by HH:MM".
+# Defaults to the night window's latest end (07:00) so behaviour is unchanged
+# until a user sets an earlier deadline.
+DEFAULT_EV_TARGET_TIME: Final = "07:00"
+# How close (hours) to the deadline before night current is scaled up to hit it.
+# Outside this window the gentle ramp / cheap-hour logic still runs.
+EV_DEADLINE_LOOKAHEAD_HOURS: Final = 12.0
+
 # ============================================
 # KEBA SERVICES
 # Services: keba.start, keba.stop, keba.set_curr, keba.set_energy, keba.authorize

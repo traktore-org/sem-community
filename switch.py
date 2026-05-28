@@ -113,6 +113,18 @@ async def async_setup_entry(
             switches.append(SEMPerChargerSwitch(
                 coordinator, smart_desc, entry.entry_id, cid, cname,
             ))
+            # Per-charger tariff-optimized charging (#247) — opt-in, default OFF.
+            # When on: night charging defers to the cheapest price window (Min
+            # still guaranteed by the deadline) and daytime Min+PV grid top-up
+            # pauses during expensive hours.
+            tariff_desc = SwitchEntityDescription(
+                key=f"charger_{cid}_tariff_optimized",
+                entity_category=EntityCategory.CONFIG,
+            )
+            per_charger_keys.add(tariff_desc.key)
+            switches.append(SEMPerChargerSwitch(
+                coordinator, tariff_desc, entry.entry_id, cid, cname,
+            ))
         _LOGGER.info(
             "Created per-charger switches for %d charger(s)",
             len(ev_chargers),
