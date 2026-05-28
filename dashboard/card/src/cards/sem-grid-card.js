@@ -93,16 +93,6 @@ class SEMGridCard extends SEMLitBase {
         return '#888';
     }
 
-    /* ── Section helper ── */
-    _section(titleKey, titleColor, content) {
-        return html`
-            <div class="section">
-                <div class="section-title" style="color:${titleColor}">${this._t(titleKey)}</div>
-                ${content}
-            </div>
-        `;
-    }
-
     _metricRow(labelKey, valueHtml) {
         return html`
             <div class="metric-row">

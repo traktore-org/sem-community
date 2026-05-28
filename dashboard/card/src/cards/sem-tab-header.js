@@ -149,7 +149,7 @@ class SEMTabHeader extends SEMLitBase {
         const tab = this._tab;
         if (tab === 'home') return [g('solar_power'), g('autarky_rate'), g('self_consumption_rate'), g('daily_solar_energy')].join(',');
         if (tab === 'energy') return [g('daily_solar_energy'), g('daily_home_energy'), g('self_consumption_rate')].join(',');
-        if (tab === 'battery') return [g('battery_soc'), g('battery_power'), g('battery_health')].join(',');
+        if (tab === 'battery') return [g('battery_soc'), g('battery_power'), g('battery_health_score')].join(',');
         if (tab === 'ev') return [g('ev_power'), g('daily_ev_energy'), g('charging_state')].join(',');
         if (tab === 'control') return [g('target_peak_limit'), g('controllable_devices_count'), g('surplus_active_devices')].join(',');
         if (tab === 'costs') return [g('daily_costs'), g('daily_savings'), g('daily_net_cost')].join(',');
@@ -212,7 +212,7 @@ class SEMTabHeader extends SEMLitBase {
         ];
         if (tab === 'system') return [
             this._getState('energy_optimization_score', 0).toFixed(0),
-            this._getState('lifetime_savings', 0).toFixed(0) + ' ' + _c,
+            this._getState('lifetime_total_savings', 0).toFixed(0) + ' ' + _c,
             this._getState('lifetime_co2_avoided', 0).toFixed(0) + ' kg',
         ];
         return ['—', '—', '—'];

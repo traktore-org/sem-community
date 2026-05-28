@@ -33,7 +33,7 @@ const WATCHED = [
     'sensor.sem_target_peak_limit',
     'sensor.sem_daily_co2_avoided',
     'sensor.sem_lifetime_co2_avoided',
-    'sensor.sem_diag_forecast_provider',
+    'sensor.sem_forecast_source',
     'switch.sem_observer_mode',
 ];
 
@@ -111,7 +111,7 @@ class SEMHomeStatusCard extends SEMLitBase {
         const targetLimit = this._val('target_peak_limit').toFixed(1);
 
         const observerOn = this._switchOn('switch.sem_observer_mode');
-        const provider = this._valStr('diag_forecast_provider') || '—';
+        const provider = this._valStr('forecast_source') || '—';
 
         const co2Today = this._val('daily_co2_avoided').toFixed(2);
         const co2Life = this._val('lifetime_co2_avoided').toFixed(1);

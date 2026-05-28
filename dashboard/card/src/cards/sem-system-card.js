@@ -37,17 +37,11 @@ const SECTIONS = [
             return `${solar}W solar · SOC ${soc}%`;
         },
     },
-    {
-        id: 'modes',
-        icon: 'mdi:toggle-switch-outline',
-        color: '#96CAEE',
-        titleKey: 'mode_controls',
-        subtitleFn: (c) => {
-            const obs = c._switchOn('observer_mode');
-            const night = c._switchOn('night_charging');
-            return [obs && c._t('observer'), night && c._t('night')].filter(Boolean).join(' · ') || '—';
-        },
-    },
+    // mode_controls section removed in #282 audit: the night/smart night
+    // toggles are per-charger and surface on the EV tab via the EV status
+    // card. Showing them again here under a 'Mode Controls' label that
+    // sounded global was misleading for multi-charger setups and duplicated
+    // primary-charger controls for single-charger ones.
     {
         id: 'diag',
         icon: 'mdi:bug-outline',
@@ -57,13 +51,14 @@ const SECTIONS = [
     },
 ];
 
+// Health-chip palette: a fleet-wide glance. EV chip removed in #282 audit
+// because EV power lives on the EV tab and the chip turned into "0W"
+// noise on no-charger setups; tariff chip retained because price is a
+// whole-house concern.
 const HEALTH_CHIPS = [
-    { key: 'solar_power',                icon: 'mdi:solar-power',       color: '#ff9800', suffix: 'W' },
+    { key: 'solar_power',                icon: 'mdi:solar-power',        color: '#ff9800', suffix: 'W' },
     { key: 'grid_power',                 icon: 'mdi:transmission-tower', color: '#488fc2', suffix: 'W' },
     { key: 'battery_soc',                icon: 'mdi:battery',            color: '#4db6ac', suffix: '%' },
-    { key: 'ev_power',                   icon: 'mdi:ev-station',         color: '#8DC892', suffix: 'W' },
-    // forecast_today_kwh — was previously `forecast_today` which doesn't
-    // exist; chip silently rendered '—' (audit finding from #282).
     { key: 'forecast_today_kwh',         icon: 'mdi:weather-sunny',      color: '#ff9800', suffix: 'kWh' },
     { key: 'tariff_current_import_rate', icon: 'mdi:tag',                color: '#96CAEE', suffix: '' },
 ];
@@ -87,15 +82,9 @@ const WATCHED = [
     'sensor.sem_battery_soc', 'sensor.sem_ev_power',
     'sensor.sem_forecast_today_kwh', 'sensor.sem_tariff_current_import_rate',
     'switch.sem_observer_mode',
-    // Per-charger night switches (#255), default charger id — for reactivity; other
-    // ids refresh on the energy tick.
-    'switch.sem_charger_ev_charger_night_charging',
-    'switch.sem_charger_ev_charger_smart_night_charging',
     'sensor.sem_home_consumption_power', 'sensor.sem_grid_import_power',
     'sensor.sem_grid_export_power', 'sensor.sem_autarky_rate',
     'sensor.sem_self_consumption_rate', 'sensor.sem_battery_power',
-    'binary_sensor.sem_ev_connected',
-    'sensor.sem_calculated_current', 'sensor.sem_daily_ev_energy',
     'sensor.sem_night_charging_status',
     'sensor.sem_battery_status', 'sensor.sem_grid_status',
     'sensor.sem_charging_state',
@@ -107,7 +96,7 @@ class SEMSystemCard extends SEMLitBase {
     constructor() {
         super();
         // Default: info + health expanded, modes + diag collapsed
-        this._collapsed = { info: false, health: false, modes: true, diag: true };
+        this._collapsed = { info: false, health: false, diag: true };
         this._copyFeedback = '';
     }
 
@@ -295,18 +284,6 @@ class SEMSystemCard extends SEMLitBase {
         `;
     }
 
-    _renderModesSection(T) {
-        // #255: night-charging switches are per-charger — resolve the primary (fallback global).
-        const eNight = this._pcEntity('switch', 'night_charging', 'switch.sem_night_charging');
-        const eSmart = this._pcEntity('switch', 'smart_night_charging', 'switch.sem_smart_night_charging');
-        return html`
-            <div class="toggle-group">
-                ${this._renderToggle(eNight, 'night_charging', T)}
-                ${this._renderToggle(eSmart, 'smart_night', T)}
-            </div>
-        `;
-    }
-
     _renderDiagBlock(labelKey, value) {
         return html`
             <div class="diag-block">
@@ -331,42 +308,20 @@ class SEMSystemCard extends SEMLitBase {
         const selfCons = this._valNum('self_consumption_rate').toFixed(0);
         const derivedStr = `Home ${home}W · Import ${imp}W · Export ${exp}W · Autarky ${autarky}% · Self ${selfCons}%`;
 
-        // EV diagnostics — rewritten in #282 audit: the previous version read
-        // sensor.sem_night_mode / .solar_mode / .daily_ev_target / .ev_connected
-        // — entities that don't exist (they were either renamed in the
-        // multi-charger refactor #193 or never existed). Every value rendered
-        // as '—'. Now uses the actual entities that ship today.
+        // Mode status — overall charging_state covers solar mode/night/tariff;
+        // battery_status + grid_status round out the picture. EV-specific
+        // diagnostics removed in #282 audit: that line lived on per-charger
+        // entities and the same info is already on the EV tab's status card,
+        // so duplicating it here under a global heading was misleading.
         const chargingState = this._val('charging_state') || '—';
-        const calcCurrent = this._valNum('calculated_current', 0).toFixed(0);
-        const dailyEv = this._valNum('daily_ev_energy').toFixed(1);
-        // daily_ev_target is per-charger (number.sem_charger_<id>_daily_ev_target)
-        // — resolve the primary charger's value; show '—' for setups without one.
-        const targetEntityId = this._pcEntity('number', 'daily_ev_target', '');
-        const evTargetState = targetEntityId
-            ? this._hass?.states[targetEntityId]?.state : '';
-        const evTarget = (evTargetState && evTargetState !== 'unavailable'
-            && evTargetState !== 'unknown') ? Number(evTargetState).toFixed(1) : '—';
-        // ev_connected is a binary_sensor — wrong domain in old code.
-        const evConnState = this._hass?.states['binary_sensor.sem_ev_connected']?.state;
-        const evPlug = evConnState === 'on'
-            ? this._t('connected') || 'connected'
-            : evConnState === 'off'
-                ? this._t('disconnected') || 'disconnected'
-                : '—';
-        const evStr = `${chargingState} · ${calcCurrent}A · ${dailyEv}/${evTarget}kWh · ${evPlug}`;
-
-        // Modes diagnostics — same fix family: sem_night_mode_status and
-        // sem_solar_mode_status do not exist. Use the real ones: charging_state
-        // already covers the overall mode, night_charging_status covers night.
         const nightStatus = this._val('night_charging_status') || '—';
         const battStatus = this._val('battery_status') || '—';
         const gridStatus = this._val('grid_status') || '—';
-        const modesStr = `Night: ${nightStatus} · Battery: ${battStatus} · Grid: ${gridStatus}`;
+        const modesStr = `${chargingState} · ${this._t('night')}: ${nightStatus} · ${this._t('battery')}: ${battStatus} · ${this._t('grid')}: ${gridStatus}`;
 
         return html`
             ${this._renderDiagBlock('source_sensors', sourceStr)}
             ${this._renderDiagBlock('derived_values', derivedStr)}
-            ${this._renderDiagBlock('ev_charging', evStr)}
             ${this._renderDiagBlock('mode_status', modesStr)}
         `;
     }
@@ -395,7 +350,6 @@ class SEMSystemCard extends SEMLitBase {
         const sectionRenderers = {
             info:   (T) => this._renderInfoSection(T),
             health: (T) => this._renderHealthSection(T),
-            modes:  (T) => this._renderModesSection(T),
             diag:   (T) => this._renderDiagSection(T),
         };
 

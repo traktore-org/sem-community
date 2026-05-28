@@ -388,8 +388,16 @@ class SEMEVStatusCard extends SEMLitBase {
         const session = this._val(`charger_${id}_session_energy`, 0);
         const dailyEnergy = this._val(`charger_${id}_daily_energy`, 0);
         const solar = this._val(`charger_${id}_session_solar_share`, 0);
-        // Prefer real vehicle SOC over estimated (#193)
-        const vehicleSoc = this._val(`charger_${id}_vehicle_soc`, null);
+        // Prefer real vehicle SOC over estimated (#193). The per-charger
+        // `sensor.sem_charger_<id>_vehicle_soc` was never created — the
+        // coordinator publishes a single global `sensor.sem_vehicle_soc`
+        // and context-swaps its value per charger each update. For the
+        // primary charger that's the right value; for secondary chargers
+        // it represents whichever was evaluated last in the cycle (close
+        // enough for display, and the estimated_soc fallback covers
+        // setups without any vehicle_soc_entity at all). (#282 audit)
+        const vehicleSoc = this._val(`charger_${id}_vehicle_soc`, null)
+            ?? this._val('vehicle_soc', null);
         const estimatedSoc = this._val(`charger_${id}_estimated_soc`, null);
         const soc = vehicleSoc != null ? vehicleSoc : estimatedSoc;
         const nights = this._entityVal(`number.sem_charger_${id}_nights_until_charge`, null);
