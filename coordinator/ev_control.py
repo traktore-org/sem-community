@@ -139,6 +139,13 @@ class EVControlMixin:
         # Cheapest contiguous window covering the remaining need (block-wise) (#247).
         # Size the request at the realistic peak-managed rate so we fetch enough
         # cheap hours to actually cover Min (#274/H2 slot length inferred below).
+        #
+        # Cap the lookahead at hours-to-deadline (#281): otherwise a post-deadline
+        # price dip (e.g. 08:00–10:00 cheapest when deadline is 07:00) can be
+        # selected as "the cheap window". The planner then clips it to 0
+        # deliverable kWh and silently falls back to charge-now — ignoring the
+        # real pre-deadline cheap window. Bound the request to the actual window
+        # we can charge in.
         cheap_slots = None
         slot_hours = 1.0
         if tariff_optimized and remaining_to_min_kwh > 0.1:
@@ -146,9 +153,26 @@ class EVControlMixin:
             if tariff is not None and hasattr(tariff, "find_cheapest_hours"):
                 try:
                     hours_needed = max(1, int(remaining_to_min_kwh / peak_rate_kw + 0.999))
+                    # Pre-deadline horizon — fall back to the global lookahead
+                    # only when the deadline can't be resolved (target_time blank).
+                    from .ev_tariff_planner import resolve_deadline, _hours_between
+                    now = dt_util.now()
+                    deadline_dt = (
+                        resolve_deadline(now, target_time)
+                        or resolve_deadline(now, night_end)
+                    )
+                    if deadline_dt is not None:
+                        hours_to_deadline = max(
+                            1, int(_hours_between(now, deadline_dt) + 0.999),
+                        )
+                        lookahead = min(
+                            int(EV_DEADLINE_LOOKAHEAD_HOURS), hours_to_deadline,
+                        )
+                    else:
+                        lookahead = int(EV_DEADLINE_LOOKAHEAD_HOURS)
                     points = tariff.find_cheapest_hours(
                         hours_needed,
-                        within_hours=int(EV_DEADLINE_LOOKAHEAD_HOURS),
+                        within_hours=lookahead,
                         prefer_consecutive=True,
                     )
                     cheap_slots = [p.timestamp for p in points] if points else None

@@ -410,17 +410,21 @@ class SEMEVStatusCard extends SEMLitBase {
                         <span class="ct-label">${this._t('ev_grid_charging')}</span>
                         <span class="ct-ctl">${ctToggle(nightOnLive, nightEntityId)}</span>
                     </div>
-                    <!-- Tariff is a refinement OF grid charging (when, not whether): nest it. -->
-                    <div class="ct-row ct-subrow">
-                        <span class="ct-label">${this._t('ev_tariff_mode')}</span>
-                        <span class="ct-ctl">${ctToggle(tariffOnLive, tariffEntityId)}</span>
-                    </div>
-                    ${tariffOnLive ? html`
-                        <div class="ct-subhint">
-                            ${this._t('ev_tariff_hint')}${nextCheapLabel
-                                ? html` · ${this._t('ev_next_cheap')} <b style="color:#8DC892">${nextCheapLabel}</b>`
-                                : nothing}
+                    <!-- Tariff is a refinement OF grid charging (when, not whether): nest it.
+                         Hidden when overnight grid charging is OFF so the hierarchy is enforced visually -
+                         the switch cannot be toggled in isolation (D2). -->
+                    ${nightOnLive ? html`
+                        <div class="ct-row ct-subrow">
+                            <span class="ct-label">${this._t('ev_tariff_mode')}</span>
+                            <span class="ct-ctl">${ctToggle(tariffOnLive, tariffEntityId)}</span>
                         </div>
+                        ${tariffOnLive ? html`
+                            <div class="ct-subhint">
+                                ${this._t('ev_tariff_hint')}${nextCheapLabel
+                                    ? html` · ${this._t('ev_next_cheap')} <b style="color:#8DC892">${nextCheapLabel}</b>`
+                                    : nothing}
+                            </div>
+                        ` : nothing}
                     ` : nothing}
                     <div class="ct-row clickable"
                         @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info',

@@ -274,3 +274,38 @@ class TestPeakAwareRate:
                   peak_managed_amps=6)
         assert p.deadline_active
         assert p.reachable
+
+
+class TestLookaheadCappedAtDeadline:
+    """#281 / Reviewer D1 — caller must NOT pass cheap slots from past the
+    deadline. Verified at the planner level: when only post-deadline slots
+    arrive, deliverable=0 and the planner correctly falls back to charge-now.
+
+    This pins the *symptom* the caller fix prevents — if anyone re-broadens
+    the lookahead, this test still passes (planner is robust), but the new
+    test_ev_deadline_tariff.py case (`test_cheap_window_capped_pre_deadline`)
+    pins the *caller* behaviour."""
+
+    def test_post_deadline_cheap_slots_dont_block_min(self):
+        # NOW = 22:00 on 2026-05-26, deadline 07:00 on 2026-05-27.
+        # Cheapest hours globally are 08:00–10:00 on 2026-05-27 (post-deadline).
+        # If those leak through, the planner clips them to 0 deliverable kWh
+        # and should_wait_for_cheap must NOT fire — otherwise Min would be missed.
+        tomorrow = NOW.date() + timedelta(days=1)
+        cheap = [
+            datetime.combine(tomorrow, datetime.min.time()).replace(hour=8),
+            datetime.combine(tomorrow, datetime.min.time()).replace(hour=9),
+        ]
+        plan = _plan(
+            remaining_to_min_kwh=8.5,
+            cheap_slots=cheap,
+            tariff_optimized=True,
+        )
+        assert plan.should_wait_for_cheap is False, (
+            "post-deadline-only cheap slots must NOT trigger wait — would "
+            "miss Min entirely"
+        )
+        # Reason should call out the shortage so it's debuggable in logs
+        assert "not enough cheap hours" in plan.reason.lower(), (
+            f"expected shortage reason, got: {plan.reason!r}"
+        )
