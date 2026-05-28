@@ -61,7 +61,7 @@ class SEMEVStatusCard extends SEMLitBase {
         let key = [
             'ev_connected', 'ev_charging', 'ev_power', 'calculated_current',
             'session_energy', 'session_solar_share', 'session_cost',
-            'daily_ev_energy', 'charging_state',
+            'daily_ev_energy', 'energy_ev_solar_percentage', 'charging_state',
         ].map(s => {
             const pfx = (s === 'ev_connected' || s === 'ev_charging')
                 ? 'binary_sensor.sem_' : prefix;
@@ -632,7 +632,13 @@ class SEMEVStatusCard extends SEMLitBase {
         const power = this._val('ev_power', 0);
         const current = this._val('calculated_current', 0);
         const sessionEnergy = this._val('session_energy', 0);
-        const solarShare = this._val('session_solar_share', 0);
+        // Solar Share sits next to 'Today: X kWh' in the status row, so it
+        // must read the DAILY metric, not the per-cycle session. Previously
+        // pointed at session_solar_share — that produced labels like
+        // 'Today 8.7 kWh · Solar Share 25%' where the 25% was just the
+        // current session, not today's. Switched to energy_ev_solar_percentage
+        // (time-integrated daily attribution from the flow accumulator).
+        const solarShare = this._val('energy_ev_solar_percentage', 0);
         const sessionCost = this._val('session_cost', 0);
         const dailyEnergy = this._val('daily_ev_energy', 0);
         const strategy = this._valStr('charging_state');
