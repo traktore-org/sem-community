@@ -52,6 +52,11 @@ views:
           - type: custom:sem-tab-header
             tab: home
 
+          # ── Dynamic price chip (#257) ── self-hides on static tariffs
+          - type: custom:sem-price-card
+            entity: sensor.sem_tariff_current_import_rate
+            compact: true
+
           # ── System Diagram (animated power flow) ──
           - type: custom:sem-system-diagram-card
             entity_prefix: sensor.sem_
@@ -328,7 +333,14 @@ views:
             tab: costs
 
           # ══════════════════════════════════════════════════════
-          # 0. CONSOLIDATED COSTS CARD
+          # 0. DYNAMIC ELECTRICITY PRICE (#257) — full panel with chart
+          #    self-hides on static tariffs (no curve to show)
+          # ══════════════════════════════════════════════════════
+          - type: custom:sem-price-card
+            entity: sensor.sem_tariff_current_import_rate
+
+          # ══════════════════════════════════════════════════════
+          # 1. CONSOLIDATED COSTS CARD
           # ══════════════════════════════════════════════════════
           - type: custom:sem-costs-card
 

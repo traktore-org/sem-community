@@ -284,13 +284,15 @@ For all text to appear in the same language:
 3. Call `solar_energy_management.generate_dashboard` to regenerate the dashboard with the new system language
 4. Hard-refresh the browser (Ctrl+Shift+R)
 
+> **No HA restart needed.** As of v1.5.16, `generate_dashboard` pushes the new config through Home Assistant's own Lovelace store — the running dashboard reloads live as soon as the service call returns. Older muscle memory ("regenerate, then restart HA") no longer applies; a hard-refresh is enough.
+
 ### Which parts translate when?
 
 | Action | What changes |
 |--------|-------------|
-| Change **system language** + regenerate dashboard | Mushroom cards, chart labels, section headers, tab names |
+| Change **system language** + regenerate dashboard | Mushroom cards, chart labels, section headers, tab names (reloads live, no HA restart) |
 | Change **user profile language** | SEM custom cards update immediately (no regeneration needed) |
-| Add new translations to `translations.json` | Must regenerate `sem-localize.js` + redeploy + regenerate dashboard |
+| Add new translations to `translations.json` | Must regenerate `sem-localize.js` + redeploy + regenerate dashboard (hard-refresh after — browser-cached `sem-localize.js`) |
 
 ---
 
@@ -316,4 +318,4 @@ SEM includes `?v={version}` cache busting on all card URLs. If cards still show 
 This is expected if your system language and user profile language differ. See [Multi-Language Support](#multi-language-support) above. To fix: set both to the same language and regenerate the dashboard.
 
 ### Changed system language but dashboard still in old language
-You must regenerate the dashboard after changing the system language. Go to Developer Tools > Services > `solar_energy_management.generate_dashboard` and call the service, then hard-refresh.
+You must regenerate the dashboard after changing the system language. Go to Developer Tools > Services > `solar_energy_management.generate_dashboard` and call the service, then hard-refresh. The regenerated dashboard takes effect immediately — no HA restart needed (v1.5.16+).

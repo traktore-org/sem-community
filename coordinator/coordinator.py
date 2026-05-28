@@ -1401,6 +1401,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
                 result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
 
+            # Dynamic price visibility (#257): surface the upcoming hourly price
+            # curve + today's summary so the price card can render a live chart.
+            try:
+                _td = self._tariff_provider.get_tariff_data()
+                result["tariff_upcoming"] = [
+                    {"t": p.timestamp.isoformat(), "price": round(p.price, 4),
+                     "level": p.level.value}
+                    for p in (_td.upcoming_prices or [])[:48]
+                ]
+                result["tariff_currency"] = _td.currency
+                result["tariff_today_min_price"] = _td.today_min_price
+                result["tariff_today_max_price"] = _td.today_max_price
+                result["tariff_today_avg_price"] = _td.today_avg_price
+                result["tariff_next_cheap_end"] = (
+                    _td.next_cheap_window_end.isoformat()
+                    if _td.next_cheap_window_end else None
+                )
+            except Exception as e:
+                _LOGGER.debug("Tariff price-curve surface failed (#257): %s", e)
+
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()
             today_date = now_time.date()

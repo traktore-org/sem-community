@@ -1885,6 +1885,23 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "safe_discharge_power": self.coordinator.data.get("safe_discharge_power"),
                 "excess_solar": self.coordinator.data.get("excess_solar"),
             })
+        elif self.entity_description.key == "tariff_current_import_rate":
+            # Rich price data for the price card (#257): level, summary, next
+            # cheap window, and the upcoming hourly curve.
+            d = self.coordinator.data
+            attrs.update({
+                "price_level": d.get("tariff_price_level"),
+                "currency": d.get("tariff_currency"),
+                "provider": d.get("tariff_provider"),
+                "is_dynamic": d.get("tariff_is_dynamic"),
+                "today_min": d.get("tariff_today_min_price"),
+                "today_max": d.get("tariff_today_max_price"),
+                "today_avg": d.get("tariff_today_avg_price"),
+                "next_cheap_start": d.get("tariff_next_cheap_start"),
+                "next_cheap_end": d.get("tariff_next_cheap_end"),
+                "upcoming": d.get("tariff_upcoming"),
+                "schedule_today": d.get("tariff_schedule_today"),
+            })
         elif self.entity_description.key == "load_management_status":
             # Add device list details for dashboard table
             devices = self.coordinator.data.get("load_management_devices", {})

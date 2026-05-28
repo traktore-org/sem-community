@@ -786,7 +786,9 @@
     "ev_charge_by_deadline": "Charge target deadline",
     "set_as_default": "Set as default",
     "ev_grid_charging": "Overnight grid charging",
-    "ev_tariff_hint": "In the cheapest hours; grid top-up pauses when expensive"
+    "ev_tariff_hint": "In the cheapest hours; grid top-up pauses when expensive",
+    "price_next_cheap": "Next cheap window",
+    "price_negative": "Negative"
   },
   "de": {
     "charging": "Laden",
@@ -1575,7 +1577,9 @@
     "ev_charge_by_deadline": "Ladeziel-Frist",
     "set_as_default": "Als Standard",
     "ev_grid_charging": "Netzladung über Nacht",
-    "ev_tariff_hint": "In den günstigsten Stunden; Netznachladung pausiert bei hohen Preisen"
+    "ev_tariff_hint": "In den günstigsten Stunden; Netznachladung pausiert bei hohen Preisen",
+    "price_next_cheap": "Nächstes günstiges Fenster",
+    "price_negative": "Negativ"
   },
   "fr": {
     "charging": "En charge",
@@ -2364,7 +2368,9 @@
     "ev_charge_by_deadline": "Échéance objectif",
     "set_as_default": "Par défaut",
     "ev_grid_charging": "Charge réseau de nuit",
-    "ev_tariff_hint": "Aux heures les moins chères ; recharge réseau en pause si cher"
+    "ev_tariff_hint": "Aux heures les moins chères ; recharge réseau en pause si cher",
+    "price_next_cheap": "Prochain créneau bas",
+    "price_negative": "Négatif"
   },
   "es": {
     "charging": "Cargando",
@@ -3153,7 +3159,9 @@
     "ev_charge_by_deadline": "Plazo objetivo",
     "set_as_default": "Predeterminado",
     "ev_grid_charging": "Carga de red nocturna",
-    "ev_tariff_hint": "En las horas más baratas; la recarga de red se pausa si es cara"
+    "ev_tariff_hint": "En las horas más baratas; la recarga de red se pausa si es cara",
+    "price_next_cheap": "Próxima ventana barata",
+    "price_negative": "Negativo"
   },
   "it": {
     "charging": "In carica",
@@ -3942,7 +3950,9 @@
     "ev_charge_by_deadline": "Scadenza obiettivo",
     "set_as_default": "Predefinito",
     "ev_grid_charging": "Carica di rete notturna",
-    "ev_tariff_hint": "Nelle ore più economiche; la ricarica da rete si ferma se cara"
+    "ev_tariff_hint": "Nelle ore più economiche; la ricarica da rete si ferma se cara",
+    "price_next_cheap": "Prossima finestra economica",
+    "price_negative": "Negativo"
   },
   "nl": {
     "charging": "Laden",
@@ -4731,7 +4741,9 @@
     "ev_charge_by_deadline": "Laaddoel-deadline",
     "set_as_default": "Als standaard",
     "ev_grid_charging": "Nachtelijk netladen",
-    "ev_tariff_hint": "In de goedkoopste uren; netbijladen pauzeert bij dure prijzen"
+    "ev_tariff_hint": "In de goedkoopste uren; netbijladen pauzeert bij dure prijzen",
+    "price_next_cheap": "Volgend goedkoop venster",
+    "price_negative": "Negatief"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5520,7 +5532,9 @@
     "ev_charge_by_deadline": "Termín cíle nabití",
     "set_as_default": "Jako výchozí",
     "ev_grid_charging": "Noční nabíjení ze sítě",
-    "ev_tariff_hint": "V nejlevnějších hodinách; dobíjení ze sítě se pozastaví při vysoké ceně"
+    "ev_tariff_hint": "V nejlevnějších hodinách; dobíjení ze sítě se pozastaví při vysoké ceně",
+    "price_next_cheap": "Další levné okno",
+    "price_negative": "Záporná"
   },
   "da": {
     "charging": "Oplader",
@@ -6309,7 +6323,9 @@
     "ev_charge_by_deadline": "Ladningsmålfrist",
     "set_as_default": "Som standard",
     "ev_grid_charging": "Natlading fra nettet",
-    "ev_tariff_hint": "I de billigste timer; netopladning på pause når dyrt"
+    "ev_tariff_hint": "I de billigste timer; netopladning på pause når dyrt",
+    "price_next_cheap": "Næste billige vindue",
+    "price_negative": "Negativ"
   },
   "fi": {
     "charging": "Lataus",
@@ -7098,7 +7114,9 @@
     "ev_charge_by_deadline": "Latauksen määräaika",
     "set_as_default": "Oletukseksi",
     "ev_grid_charging": "Verkkolataus yöllä",
-    "ev_tariff_hint": "Halvimpina tunteina; verkkolataus tauolla kalliilla"
+    "ev_tariff_hint": "Halvimpina tunteina; verkkolataus tauolla kalliilla",
+    "price_next_cheap": "Seuraava halpa ikkuna",
+    "price_negative": "Negatiivinen"
   },
   "hu": {
     "charging": "Töltés",
@@ -7887,7 +7905,9 @@
     "ev_charge_by_deadline": "Töltési cél határidő",
     "set_as_default": "Alapértelmezett",
     "ev_grid_charging": "Éjszakai hálózati töltés",
-    "ev_tariff_hint": "A legolcsóbb órákban; a hálózati töltés szünetel, ha drága"
+    "ev_tariff_hint": "A legolcsóbb órákban; a hálózati töltés szünetel, ha drága",
+    "price_next_cheap": "Következő olcsó ablak",
+    "price_negative": "Negatív"
   },
   "no": {
     "charging": "Lader",
@@ -8676,7 +8696,9 @@
     "ev_charge_by_deadline": "Ladingsmålfrist",
     "set_as_default": "Som standard",
     "ev_grid_charging": "Nattlading fra nettet",
-    "ev_tariff_hint": "I de billigste timene; nettlading pauses når dyrt"
+    "ev_tariff_hint": "I de billigste timene; nettlading pauses når dyrt",
+    "price_next_cheap": "Neste billige vindu",
+    "price_negative": "Negativ"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9465,7 +9487,9 @@
     "ev_charge_by_deadline": "Termin celu",
     "set_as_default": "Jako domyślne",
     "ev_grid_charging": "Nocne ładowanie z sieci",
-    "ev_tariff_hint": "W najtańszych godzinach; doładowanie z sieci wstrzymane przy drogiej cenie"
+    "ev_tariff_hint": "W najtańszych godzinach; doładowanie z sieci wstrzymane przy drogiej cenie",
+    "price_next_cheap": "Następne tanie okno",
+    "price_negative": "Ujemna"
   },
   "pt": {
     "charging": "A carregar",
@@ -10254,7 +10278,9 @@
     "ev_charge_by_deadline": "Prazo do alvo",
     "set_as_default": "Como padrão",
     "ev_grid_charging": "Carga da rede à noite",
-    "ev_tariff_hint": "Nas horas mais baratas; recarga da rede pausa quando caro"
+    "ev_tariff_hint": "Nas horas mais baratas; recarga da rede pausa quando caro",
+    "price_next_cheap": "Próxima janela barata",
+    "price_negative": "Negativo"
   },
   "ro": {
     "charging": "Încărcare",
@@ -11043,7 +11069,9 @@
     "ev_charge_by_deadline": "Termen țintă",
     "set_as_default": "Implicit",
     "ev_grid_charging": "Încărcare de la rețea noaptea",
-    "ev_tariff_hint": "În cele mai ieftine ore; încărcarea de la rețea se oprește când e scump"
+    "ev_tariff_hint": "În cele mai ieftine ore; încărcarea de la rețea se oprește când e scump",
+    "price_next_cheap": "Următoarea fereastră ieftină",
+    "price_negative": "Negativ"
   },
   "sv": {
     "charging": "Laddar",
@@ -11832,6 +11860,8 @@
     "ev_charge_by_deadline": "Laddmålsfrist",
     "set_as_default": "Som standard",
     "ev_grid_charging": "Nattladdning från nätet",
-    "ev_tariff_hint": "Under de billigaste timmarna; nätladdning pausas när dyrt"
+    "ev_tariff_hint": "Under de billigaste timmarna; nätladdning pausas när dyrt",
+    "price_next_cheap": "Nästa billiga fönster",
+    "price_negative": "Negativt"
   }
 }
