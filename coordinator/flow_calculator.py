@@ -90,11 +90,107 @@ class FlowCalculator:
 
         return flows
 
-    def calculate_energy_flows(self, energy: EnergyTotals) -> EnergyFlows:
-        """Calculate daily energy flows from energy totals.
+    # Attributes covered by the running accumulator. Defined as a tuple so
+    # ``integrate_energy_flows`` and the storage hooks share one source of truth.
+    _ACCUMULATED_ATTRS = (
+        "solar_to_home", "solar_to_ev", "solar_to_battery", "solar_to_grid",
+        "grid_to_home", "grid_to_ev", "grid_to_battery",
+        "battery_to_home", "battery_to_ev",
+    )
 
-        Uses the same proportional allocation as power flows,
-        but applied to daily energy totals for Sankey charts.
+    def integrate_energy_flows(
+        self, power_flows: PowerFlows, interval_seconds: float,
+    ) -> EnergyFlows:
+        """Time-integrate per-cycle power flows into daily energy flows (#282).
+
+        Replaces ``calculate_energy_flows`` (proportional allocation across
+        daily totals), which credited solar to the EV even when the EV
+        wasn't drawing — a sunny day with a 30-min EV plug-in showed
+        flow_solar_to_ev_energy ≈ daily_solar × (daily_ev / total_demand),
+        which is fictional. The user's late-afternoon plug-in saw 85 %
+        attributed-daily solar share while the actual session share was 12 %.
+
+        This version integrates the instantaneous ``power_flows`` (already
+        correctly attributed by ``calculate_power_flows`` based on the
+        current cycle's demand) over time, so:
+
+        * Solar that flowed to the GRID at noon while the EV was unplugged
+          stays counted as solar_to_grid — not retroactively re-allocated.
+        * Battery discharge in the afternoon shows up as battery_to_ev, with
+          its origin (charged from morning solar) NOT re-credited as solar.
+
+        The user sees small, honest numbers that match the session
+        attribution. Bills + daily_solar_share now reflect what physically
+        happened, not an aggregate average.
+
+        Args:
+            power_flows: Current cycle's instantaneous PowerFlows (watts).
+            interval_seconds: Time since the last integration step
+                (typically ``self.update_interval.total_seconds()``).
+
+        Returns:
+            EnergyFlows in kWh accumulated since the last day boundary.
+        """
+        # Day rollover — clear at local midnight. Solar-day or sunrise-based
+        # rollover would shift this; keeping calendar-day for consistency with
+        # daily_solar_energy / daily_grid_export_energy.
+        today = dt_util.now().date()
+        if today != self._current_date:
+            self._flow_accumulators.clear()
+            self._current_date = today
+
+        hours = max(0.0, interval_seconds) / 3600.0
+        for attr in self._ACCUMULATED_ATTRS:
+            watts = getattr(power_flows, attr, 0.0) or 0.0
+            self._flow_accumulators[attr] = (
+                self._flow_accumulators.get(attr, 0.0) + watts * hours / 1000.0
+            )
+
+        flows = EnergyFlows()
+        for attr in self._ACCUMULATED_ATTRS:
+            setattr(flows, attr, round(self._flow_accumulators.get(attr, 0.0), 3))
+        return flows
+
+    def get_flow_accumulator_state(self) -> dict:
+        """Snapshot for persistence (#282). Keys + date so restore can
+        detect a stale snapshot from a previous day."""
+        return {
+            "date": self._current_date.isoformat(),
+            "accumulators": dict(self._flow_accumulators),
+        }
+
+    def restore_flow_accumulator_state(self, state: dict) -> None:
+        """Restore on coordinator startup so an HA restart mid-day doesn't
+        reset the daily flow counters back to 0 (#282)."""
+        if not isinstance(state, dict):
+            return
+        try:
+            saved_date = date.fromisoformat(state.get("date", ""))
+        except (TypeError, ValueError):
+            return
+        # If today is a different day, treat as stale — don't carry yesterday's
+        # accumulator into today's counters.
+        if saved_date != self._current_date:
+            return
+        acc = state.get("accumulators")
+        if isinstance(acc, dict):
+            for k in self._ACCUMULATED_ATTRS:
+                v = acc.get(k)
+                if isinstance(v, (int, float)):
+                    self._flow_accumulators[k] = float(v)
+
+    def calculate_energy_flows(self, energy: EnergyTotals) -> EnergyFlows:
+        """Legacy proportional-allocation energy flows (kept for tests).
+
+        ⚠️  Misleading attribution — use ``integrate_energy_flows`` instead.
+        Spreads daily totals proportionally to demand without regard to
+        timing, so a sunny morning with no EV charging still credits solar
+        to a brief afternoon EV plug-in.
+
+        Retained because some tests pin the old behaviour and because the
+        function is mathematically valid as a Sankey-style aggregate when
+        timing doesn't matter (full-day overviews). Not wired into the
+        coordinator update cycle anymore (#282).
         """
         flows = EnergyFlows()
 

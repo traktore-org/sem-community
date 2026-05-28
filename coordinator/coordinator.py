@@ -641,6 +641,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 else:
                     self._daily_ev_per_charger_date = {}
 
+            # Restore daily flow accumulators (#282) — survives HA restart so
+            # the new time-integrated flow_*_to_*_energy sensors don't rewind
+            # mid-day. The flow_calculator checks the saved date against
+            # today's and discards yesterday's snapshot automatically.
+            flow_state = self._storage._daily_data.get("flow_accumulator", {})
+            if isinstance(flow_state, dict):
+                try:
+                    self._flow_calculator.restore_flow_accumulator_state(flow_state)
+                except (AttributeError, ValueError, TypeError) as e:
+                    _LOGGER.debug("Flow accumulator restore skipped: %s", e)
+
             # Seed EV intelligence from recorder history (improves cold starts
             # and upgrades from older versions without EV intelligence data)
             ev_power_entity = (
@@ -873,8 +884,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_intelligence = self._update_ev_intelligence(power, energy)
             self._last_ev_intelligence = ev_intelligence  # For notifications (#106)
 
-            # Step 5: Calculate energy flows (daily totals for Sankey)
-            energy_flows = self._flow_calculator.calculate_energy_flows(energy)
+            # Step 5: Integrate energy flows from this cycle's instantaneous
+            # power_flows (#282). Replaces the legacy daily proportional
+            # allocation (calculate_energy_flows) which credited solar to the
+            # EV even when the EV wasn't drawing. The integrated version
+            # matches the session attribution: small honest numbers that
+            # reflect what physically happened, not a daily average.
+            energy_flows = self._flow_calculator.integrate_energy_flows(
+                power_flows, self.update_interval.total_seconds(),
+            )
 
             # Step 6: Calculate available power for EV
             available_power = self._flow_calculator.calculate_available_power(power)
@@ -1253,6 +1271,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     "date": self._daily_ev_per_charger_date,
                     "values": dict(self._daily_ev_per_charger),
                 }
+                # Persist daily flow accumulators (#282) — without this, an HA
+                # restart mid-day rewinds flow_*_to_*_energy sensors to 0 and
+                # users see broken Sankey totals for the rest of the day.
+                self._storage._daily_data["flow_accumulator"] = (
+                    self._flow_calculator.get_flow_accumulator_state()
+                )
                 await self._storage.async_save_energy_delayed()
 
             self._initial_update_done = True
