@@ -926,13 +926,42 @@ async def _async_register_services(
             if not views:
                 raise ValueError("Dashboard config has no views")
 
-            # Save dashboard to storage
+            # Save dashboard to storage. Prefer HA's running LovelaceStorage
+            # (writes storage AND updates the in-memory cache AND fires
+            # `lovelace_updated`) so the regenerated dashboard reloads live —
+            # no HA restart needed. Falls back to a direct Store write for the
+            # first-install case, where HA hasn't registered the dashboard yet.
             storage_key = f"lovelace.{dashboard_path}"
-            dashboard_store = Store(hass, 1, storage_key)
+            config_payload = {"views": views}
+            reloaded_live = False
+            try:
+                ll_data = hass.data.get("lovelace")
+                dashboards = getattr(ll_data, "dashboards", None)
+                if dashboards is None and isinstance(ll_data, dict):
+                    dashboards = ll_data.get("dashboards")
+                live_dash = dashboards.get(dashboard_path) if isinstance(dashboards, dict) else None
+                if live_dash is not None and hasattr(live_dash, "async_save"):
+                    await live_dash.async_save(config_payload)
+                    reloaded_live = True
+                    _LOGGER.info(
+                        "Dashboard '%s' regenerated and reloaded live (%d views, no restart needed)",
+                        dashboard_path, len(views),
+                    )
+            except Exception as live_err:
+                _LOGGER.warning(
+                    "Live Lovelace reload failed, falling back to direct write: %s",
+                    live_err,
+                )
 
-            storage_data = {"config": {"views": views}}
-            await dashboard_store.async_save(storage_data)
-            _LOGGER.info("Dashboard config saved to .storage/%s with %d views", storage_key, len(views))
+            if not reloaded_live:
+                dashboard_store = Store(hass, 1, storage_key)
+                storage_data = {"config": config_payload}
+                await dashboard_store.async_save(storage_data)
+                _LOGGER.info(
+                    "Dashboard config saved to .storage/%s with %d views "
+                    "(restart HA to apply — first install or HA Lovelace API unavailable)",
+                    storage_key, len(views),
+                )
 
             # Register dashboard in lovelace_dashboards storage
             dashboards_store = Store(hass, 1, "lovelace_dashboards")

@@ -223,6 +223,37 @@ class TestEMSSensors:
         assert attributes["last_update"] == "2024-01-15 12:00:00"
 
     @pytest.mark.asyncio
+    async def test_price_sensor_exposes_curve_attributes(self, mock_coordinator):
+        """#257: tariff_current_import_rate surfaces the rich price data the card reads."""
+        description = create_sensor_description(
+            key="tariff_current_import_rate", name="Current Electricity Price",
+            icon="mdi:cash", unit="CHF/kWh",
+        )
+        sensor = SEMSolarSensor(
+            coordinator=mock_coordinator, description=description, entry_id="test_entry_id",
+        )
+        mock_coordinator.data = {
+            "tariff_current_import_rate": 0.10,
+            "tariff_price_level": "cheap",
+            "tariff_currency": "CHF",
+            "tariff_provider": "generic",
+            "tariff_is_dynamic": True,
+            "tariff_today_min_price": 0.10,
+            "tariff_today_avg_price": 0.22,
+            "tariff_today_max_price": 0.42,
+            "tariff_next_cheap_start": "2026-05-27T23:00:00+02:00",
+            "tariff_next_cheap_end": "2026-05-28T04:00:00+02:00",
+            "tariff_upcoming": [{"t": "2026-05-27T22:00:00+02:00", "price": 0.10, "level": "cheap"}],
+            "tariff_schedule_today": [],
+        }
+        a = sensor.extra_state_attributes
+        assert a["price_level"] == "cheap"
+        assert a["is_dynamic"] is True
+        assert a["today_max"] == 0.42
+        assert a["next_cheap_start"] == "2026-05-27T23:00:00+02:00"
+        assert len(a["upcoming"]) == 1
+
+    @pytest.mark.asyncio
     async def test_async_setup_entry(self, hass, config_entry, mock_coordinator):
         """Test sensor setup from config entry."""
         from custom_components.solar_energy_management.const import DOMAIN

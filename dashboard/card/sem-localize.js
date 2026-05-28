@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-25T21:51:31.668570+00:00
+// Generated: 2026-05-27T22:52:18.343307+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -778,7 +778,9 @@ const _semTranslations = {
     "clear_mapping": "Reset to auto-detect",
     "at_least": "At least",
     "up_to": "Up to",
-    "full": "Full"
+    "full": "Full",
+    "price_next_cheap": "Next cheap window",
+    "price_negative": "Negative"
   },
   "de": {
     "charging": "Laden",
@@ -1557,7 +1559,9 @@ const _semTranslations = {
     "clear_mapping": "Auf Auto-Erkennung zurücksetzen",
     "at_least": "Mindestens",
     "up_to": "Bis zu",
-    "full": "Voll"
+    "full": "Voll",
+    "price_next_cheap": "Nächstes günstiges Fenster",
+    "price_negative": "Negativ"
   },
   "fr": {
     "charging": "En charge",
@@ -2336,7 +2340,9 @@ const _semTranslations = {
     "clear_mapping": "Réinitialiser en auto-détection",
     "at_least": "Au moins",
     "up_to": "Jusqu'à",
-    "full": "Plein"
+    "full": "Plein",
+    "price_next_cheap": "Prochain créneau bas",
+    "price_negative": "Négatif"
   },
   "es": {
     "charging": "Cargando",
@@ -3115,7 +3121,9 @@ const _semTranslations = {
     "clear_mapping": "Restablecer a autodetección",
     "at_least": "Al menos",
     "up_to": "Hasta",
-    "full": "Completo"
+    "full": "Completo",
+    "price_next_cheap": "Próxima ventana barata",
+    "price_negative": "Negativo"
   },
   "it": {
     "charging": "In carica",
@@ -3894,7 +3902,9 @@ const _semTranslations = {
     "clear_mapping": "Ripristina rilevamento automatico",
     "at_least": "Almeno",
     "up_to": "Fino a",
-    "full": "Pieno"
+    "full": "Pieno",
+    "price_next_cheap": "Prossima finestra economica",
+    "price_negative": "Negativo"
   },
   "nl": {
     "charging": "Laden",
@@ -4673,7 +4683,9 @@ const _semTranslations = {
     "clear_mapping": "Terug naar autodetectie",
     "at_least": "Ten minste",
     "up_to": "Tot",
-    "full": "Vol"
+    "full": "Vol",
+    "price_next_cheap": "Volgend goedkoop venster",
+    "price_negative": "Negatief"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5452,7 +5464,9 @@ const _semTranslations = {
     "clear_mapping": "Obnovit automatickou detekci",
     "at_least": "Alespoň",
     "up_to": "Až do",
-    "full": "Plně"
+    "full": "Plně",
+    "price_next_cheap": "Další levné okno",
+    "price_negative": "Záporná"
   },
   "da": {
     "charging": "Oplader",
@@ -6231,7 +6245,9 @@ const _semTranslations = {
     "clear_mapping": "Nulstil til autodetektion",
     "at_least": "Mindst",
     "up_to": "Op til",
-    "full": "Fuld"
+    "full": "Fuld",
+    "price_next_cheap": "Næste billige vindue",
+    "price_negative": "Negativ"
   },
   "fi": {
     "charging": "Lataus",
@@ -7010,7 +7026,9 @@ const _semTranslations = {
     "clear_mapping": "Palauta automaattitunnistus",
     "at_least": "Vähintään",
     "up_to": "Enintään",
-    "full": "Täysi"
+    "full": "Täysi",
+    "price_next_cheap": "Seuraava halpa ikkuna",
+    "price_negative": "Negatiivinen"
   },
   "hu": {
     "charging": "Töltés",
@@ -7789,7 +7807,9 @@ const _semTranslations = {
     "clear_mapping": "Visszaállítás automatikus felismerésre",
     "at_least": "Legalább",
     "up_to": "Legfeljebb",
-    "full": "Tele"
+    "full": "Tele",
+    "price_next_cheap": "Következő olcsó ablak",
+    "price_negative": "Negatív"
   },
   "no": {
     "charging": "Lader",
@@ -8568,7 +8588,9 @@ const _semTranslations = {
     "clear_mapping": "Tilbakestill til autodeteksjon",
     "at_least": "Minst",
     "up_to": "Opptil",
-    "full": "Full"
+    "full": "Full",
+    "price_next_cheap": "Neste billige vindu",
+    "price_negative": "Negativ"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9347,7 +9369,9 @@ const _semTranslations = {
     "clear_mapping": "Przywróć autowykrywanie",
     "at_least": "Co najmniej",
     "up_to": "Do",
-    "full": "Pełny"
+    "full": "Pełny",
+    "price_next_cheap": "Następne tanie okno",
+    "price_negative": "Ujemna"
   },
   "pt": {
     "charging": "A carregar",
@@ -10126,7 +10150,9 @@ const _semTranslations = {
     "clear_mapping": "Repor para deteção automática",
     "at_least": "Pelo menos",
     "up_to": "Até",
-    "full": "Cheio"
+    "full": "Cheio",
+    "price_next_cheap": "Próxima janela barata",
+    "price_negative": "Negativo"
   },
   "ro": {
     "charging": "Încărcare",
@@ -10905,7 +10931,9 @@ const _semTranslations = {
     "clear_mapping": "Resetare la detectare automată",
     "at_least": "Cel puțin",
     "up_to": "Până la",
-    "full": "Plin"
+    "full": "Plin",
+    "price_next_cheap": "Următoarea fereastră ieftină",
+    "price_negative": "Negativ"
   },
   "sv": {
     "charging": "Laddar",
@@ -11684,7 +11712,9 @@ const _semTranslations = {
     "clear_mapping": "Återställ till autodetektering",
     "at_least": "Minst",
     "up_to": "Upp till",
-    "full": "Full"
+    "full": "Full",
+    "price_next_cheap": "Nästa billiga fönster",
+    "price_negative": "Negativt"
   }
 };
 
