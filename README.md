@@ -423,8 +423,9 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ## Recent Improvements (v1.5.x)
 
-### Unreleased — Dynamic price visibility
-- **Price card on the Home tab** (#257) — a `sem-price-card` showing the current import price, price level, today's min/avg/max, the next cheap window, and an hourly price strip for the upcoming ~24h (bars colored green→amber→red by price level, current hour outlined). Reads the existing tariff sensors; the live curve appears for dynamic tariffs (Tibber/Nordpool/aWATTar/…), with a graceful current-rate fallback on static tariffs.
+### Unreleased — Dynamic price visibility + live dashboard reload
+- **Price card** (#257) — `sem-price-card` showing the current import price, price level, today's min/avg/max, the next cheap window, and an hourly price strip for the upcoming ~24h (bars colored green→amber→red by level, current hour outlined). A **compact chip** lives at the top of the Home tab (current price + level glanceable); the **full panel with chart** lives on the Costs tab. **Self-hides on static tariffs** (no curve to show), so static-tariff users don't see a flat noise card.
+- **`generate_dashboard` reloads live — no more HA restart** — the service now pushes the regenerated config through HA's own Lovelace store (updates in-memory cache + fires `lovelace_updated`), so changes from adding a charger, switching language, or any future regen show up immediately. The old "regenerate, then restart HA" muscle memory no longer applies; a browser hard-refresh is enough.
 
 ### v1.5.15 — Cold-start readings fix
 - **Readings start automatically after an HA restart** (#274) — SEM derives its real-time power sensors from the source integration's device. On a cold start it could run that derivation before the source integration (e.g. solax-modbus) had registered its entities, leaving every reading at 0 until you manually reloaded the integration. SEM now re-derives the power sensors each update cycle until they resolve, so the readings come up on their own within a cycle or two of the source loading — no reload needed. Bounded and a complete no-op for setups that already resolve normally.

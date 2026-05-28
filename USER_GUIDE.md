@@ -503,7 +503,8 @@ Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider
 - `sensor.sem_tariff_next_cheap_start` shows next cheap window
 - **Price-responsive surplus**: during cheap/negative price windows, SEM adds virtual surplus to encourage device activation
 - Night charging can be scheduled for cheapest hours
-- **Price card on the Home tab** (#257): the `sem-price-card` shows the current price, level, today's min/avg/max, the next cheap window, and an hourly price strip for the next ~24h (bars colored by level, current hour outlined). On a static tariff it shows the current rate + level instead of a curve.
+- **Price card** (#257): the `sem-price-card` shows the current price, level, today's min/avg/max, the next cheap window, and an hourly price strip for the next ~24h (bars colored by level, current hour outlined). A **compact chip** lives at the top of the **Home tab** (glance), the **full panel with chart** on the **Costs tab**. **Self-hides on static tariffs** (no live curve to show).
+- **`generate_dashboard` reloads live** (v1.5.16+) — adding a charger, changing language, or any other regenerate now reflects immediately on the running dashboard. No HA restart needed; a browser hard-refresh (Ctrl+Shift+R) picks up cached card bundles.
 
 #### Supported providers
 
