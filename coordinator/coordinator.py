@@ -2152,6 +2152,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return EVBudgetStrategy.NOW
         if legacy_strategy == "min_pv":
             return EVBudgetStrategy.MIN_PV
+        if legacy_strategy == "night_grid":
+            # Night charging tops up to the Min floor using grid (#245
+            # semantic). Canonical MIN_PV is the right shape — its formula
+            # is ``max(min_power_floor, surplus + redirect)`` and at night
+            # the surplus term is ~0, leaving the grid floor as the actual
+            # budget. The actuator's NIGHT_CHARGING_ACTIVE branch in
+            # ev_control.py uses its own peak-aware, deadline-aware current
+            # calculation independently — so this mapping affects only
+            # what's published on sem_available_power / sem_calculated_current
+            # (now reflects the canonical floor instead of 0). Pre-fix this
+            # case was missing and raised ValueError on the first real night
+            # charging cycle with remaining_need > 0.1.
+            return EVBudgetStrategy.MIN_PV
         if legacy_strategy == "battery_assist":
             return EVBudgetStrategy.BATTERY_ASSIST
         if legacy_strategy == "solar_only":
@@ -2197,7 +2210,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Night mode → grid charging tops up to the floor (Min) (#245).
         # remaining_need above is already the Min-bound value (default bound="min").
         if self.time_manager.is_night_mode():
-            if remaining_need < 0.5:
+            # Threshold aligned with _night_state_machine (#282 followup): both
+            # paths now agree at 0.1 kWh ≈ one cycle of 6A × 3 × 230 V min
+            # current. Pre-fix the strategy used `< 0.5` while the state machine
+            # used `<= 0.1`, producing the dashboard "Night charging active"
+            # label while the strategy reported "idle, target reached" — same
+            # disagreement class as #282 (display/decision mismatch).
+            # Min is the GUARANTEED floor; deliver to it exactly.
+            if remaining_need <= 0.1:
                 soc_info = f", SOC={vehicle_soc:.0f}%" if vehicle_soc is not None else ""
                 return ("idle", f"night target reached ({energy.daily_ev:.1f}kWh{soc_info})")
 
