@@ -1,0 +1,97 @@
+name: "2026-05-29 budget unification — battery_assist regime (Phase C)"
+description: |
+  Phase C scenario for the #282 EV-budget unification. This is the
+  regime where the legacy paths LATENTLY disagreed but no user
+  reported it: battery_assist (Zone 3/4 with low forecast, battery
+  willing to discharge for the EV).
+
+    - Legacy B2 (state machine input via calculate_ev_budget) included
+      battery_redirect but NOT battery_assist. The state machine saw
+      the smaller "surplus + redirect" number.
+    - Legacy B3 (actuator via _calculate_solar_ev_budget) added
+      battery_assist on top via SOLAR_SUPER_CHARGING branch.
+    - Net: the actuator could draw 4–5 kW from the battery while the
+      state machine was making decisions based on a 0–500 W budget.
+      Never a user-visible disagreement because the state machine
+      doesn't gate on the magnitude (just on `> 0`), but a latent
+      consistency problem that the unification eliminates.
+
+  Canonical BATTERY_ASSIST returns the full picture: ``raw_surplus +
+  battery_redirect + battery_assist``. All three consumers now see
+  the same number.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  # Force pv mode so `_auto_mode_strategy` doesn't intercept. With the
+  # harness defaulting forecast to 25 kWh, auto-mode would take the
+  # ratio>2 path → self_consumption → strategy=solar_only, not
+  # battery_assist. PV mode goes directly to the main zone dispatch
+  # where Zone 4 returns battery_assist.
+  ev_charging_mode: "pv"
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      ev_charging_mode: "pv"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Zone 4 scenario: SOC at 92% (above auto_start=90), solar moderate.
+# Battery is actively discharging to assist the EV.
+timeline:
+  - t: 0
+    solar_power: 1500
+    grid_power: 0
+    battery_power: -3000   # discharging at 3 kW
+    battery_soc: 92        # Zone 4 — full assist territory
+    ev_power: 4500
+    ev_connected: true
+
+  - t: 60
+
+  - t: 120
+
+  - t: 180
+
+  - t: 240
+
+expect:
+  # Strategy must be battery_assist — Z4 with the battery already
+  # discharging.
+  strategy_substring: "battery_assist"
+
+  # The canonical method's BATTERY_ASSIST arithmetic:
+  #   raw_surplus    = max(0, solar - home - batt_charge)
+  #                  = max(0, 1500 - 4500 - 0) = 0
+  #     (home ≈ 4500 W from balance: solar 1500 + batt_discharge 3000 =
+  #      energy_in 4500, equal to ev 4500 → home = 0; but the
+  #      coordinator pipeline computes home from real sensors, and our
+  #      trace puts the actual home + EV draw at 4500. With raw_surplus
+  #      = 0, the assist component is what supplies the EV.)
+  #   battery_redirect = 0 (battery not charging)
+  #   battery_assist = measured discharge = 3000 W
+  #   net_w = 3000 W → current = floor(3000/690) = 4 A
+  #
+  # Pre-Phase B: actuator could see 3000 W (via assist path) while the
+  # state machine saw 0 W (no assist in B2). Decisions still worked
+  # because the state machine only checked > 0 — but the
+  # `sensor.sem_available_power` would have shown 0 while the EV was
+  # drawing 4 A worth of power. Display lied.
+  #
+  # Post-Phase B: everyone sees 3000 W. Sensor honest.
+  #
+  # We're testing the strategy decision here, not pinning the actuator
+  # to an exact value — battery_assist has more degrees of freedom
+  # (the strategy can choose any current up to assist_max_power)
+  # so a strict actuator-amps cap doesn't apply. The strategy_substring
+  # assertion is the key invariant — that the strategy resolves
+  # to battery_assist at all, not to solar_only or self_consumption.

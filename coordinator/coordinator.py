@@ -894,12 +894,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 power_flows, self.update_interval.total_seconds(),
             )
 
-            # Step 6: Calculate available power for EV
-            available_power = self._flow_calculator.calculate_available_power(power)
-            calculated_current = self._flow_calculator.calculate_charging_current(available_power)
-
-            # Step 7: Update charging state machine (mode selection only)
-            charging_context = self._build_charging_context(power, energy, available_power, calculated_current)
+            # Step 6: Build the charging context. The canonical EV budget
+            # is computed inside (#282 unification, Phase B+D) and cached
+            # on the coordinator as ``self._cycle_ev_budget`` for the
+            # actuator to read on the same cycle. The previous step-6
+            # ``calculate_available_power`` + ``calculate_charging_current``
+            # bare-variable pair was dead-code after Phase B (their result
+            # was passed in and ignored) and has been removed.
+            charging_context = self._build_charging_context(power, energy)
             charging_state = self._state_machine.update_state(charging_context)
 
             # Step 7.5a: Unified EV control via CurrentControlDevice
@@ -1197,7 +1199,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             forecast_data, tracker_data, tariff_data, surplus_data, \
                 pv_data, assistant_data, utility_data, heat_pump_data = \
                 await self._update_analytics_phases(
-                    power, energy, energy_flows, performance, available_power,
+                    power, energy, energy_flows, performance,
+                    charging_context.available_power,
                 )
 
             # Step 11: Build complete data structure
@@ -1252,7 +1255,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             await self._send_notifications(
                 charging_state, power, energy, costs, performance,
                 charging_context, forecast_data, discharge_limit,
-                calculated_current, available_power,
+                charging_context.calculated_current,
+                charging_context.available_power,
             )
 
             # Step 13: Persist data
@@ -2554,20 +2558,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self,
         power: PowerReadings,
         energy: Any,
-        available_power: float,
-        calculated_current: float
     ) -> ChargingContext:
         """Build charging context for state machine.
 
-        Assembles all inputs the state machine needs: battery flags, EV budget,
-        charging strategy (from SOC zones), and night-specific fields (NT period,
-        night end time, EV max power, forecast-adjusted night target).
+        Assembles all inputs the state machine needs: battery flags, EV
+        budget, charging strategy (from SOC zones), and night-specific
+        fields (NT period, night end time, EV max power, forecast-adjusted
+        night target). Computes the canonical EV budget once via
+        ``flow_calculator.calculate_canonical_ev_budget`` and caches it
+        on ``self._cycle_ev_budget`` so the actuator can read the
+        same value on the same cycle (#282 Phase B/D unification).
 
         Args:
             power: Current sensor readings.
             energy: Daily/monthly energy totals.
-            available_power: Surplus power for non-EV devices (W).
-            calculated_current: Available current from surplus calculation (A).
 
         Returns:
             Populated ChargingContext for state machine decision.
