@@ -1,0 +1,212 @@
+# Changelog
+
+All notable changes to SEM are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.6.0] — 2026-05-30
+
+The **EV-budget unification** release. SEM historically had three separate
+"how many watts can the EV draw right now" calculations — one for the
+published dashboard sensors, one for the state machine's decision, and one
+for the actuator. Under certain conditions they disagreed: the dashboard
+could read *"Charging active"* while the car drew 0 W, or surplus-only
+mode could let grid backfill the EV's draw without telling the user.
+
+v1.6.0 collapses all three into one canonical `EVBudget` value computed
+once per cycle. Every consumer now reads from the same dataclass — the
+dashboard, the state machine, the actuator, and the multi-charger
+distribution all see the same number, by construction.
+
+### ⚠️ Behavioural change — published sensors
+
+`sensor.sem_available_power` and `sensor.sem_calculated_current` now
+publish the **canonical** EV budget instead of the raw solar surplus.
+The canonical value is strategy-aware (includes battery-redirect on
+`solar_only`, includes the battery-assist contribution on
+`battery_assist`, applies the floor on `min_pv`) — it's the more
+accurate number and matches what the state machine actually decides
+with.
+
+If you have automations or template sensors that read either of these
+two values directly, you may see different numbers than under
+1.5.x. The canonical value is the honest one; the pre-1.6.0 value
+could be misleadingly low when battery redirect was active.
+
+### Added
+
+- **Canonical `EVBudget` dataclass and `EVBudgetStrategy` enum** in
+  `coordinator/flow_calculator.py`. Six strategies are first-class:
+  `IDLE`, `SELF_CONSUMPTION`, `SOLAR_ONLY`, `BATTERY_ASSIST`, `MIN_PV`,
+  `NOW`. Each has a single well-defined formula; the dispatcher raises
+  `ValueError` on unknown strategies (no silent fallthrough, which was
+  the #282 disagreement root). See [ARCHITECTURE.md → EV Budget
+  Calculation](docs/ARCHITECTURE.md#ev-budget-calculation).
+- **Live test layer** under `tests/live/` — seven bash scripts that
+  exercise SEM against a real Home Assistant instance:
+  `test_budget_agreement.sh`, `test_charging_state_consistency.sh`,
+  `test_solar_only_no_grid.sh`, `test_overnight_window.sh`,
+  `test_deadline_reset.sh`, `test_per_charger_slider.sh`,
+  `test_bundle_integrity.sh`, `test_surplus_charging.sh`.
+- **Scenario harness scenarios** locking the canonical math through
+  the coordinator pipeline:
+  `tests/scenarios/2026-05-29_budget_unify_redirect.yaml`,
+  `tests/scenarios/2026-05-29_budget_unify_battery_assist.yaml`,
+  `tests/scenarios/2026-05-29_multi_charger_split.yaml`.
+- 17 unit tests for the canonical method covering every strategy plus
+  the regimes that historically disagreed.
+- 4 unit tests for the multi-charger Phase B.5 distribution path.
+- 4 unit tests for the YAML-mode Lovelace guard.
+- `copy_failed` translation key across all 15 languages.
+
+### Changed
+
+- `coordinator.async_update_config` now mutates `self.config` in place
+  rather than rebinding to a new dict. Multiple components
+  (`TimeManager`, `EnergyCalculator`, `ChargingStateMachine`,
+  `BatteryChargeAdapter`) hold references to the original dict; the
+  pre-fix rebind left them stale, so the next slider change reached
+  `coordinator.config` but never propagated. Caught by
+  `tests/live/test_overnight_window.sh`.
+- The multi-charger distribution at `coordinator.py:966` now reads the
+  canonical `EVBudget.net_w` instead of calling the legacy
+  `_calculate_solar_ev_budget`. Same #282 disagreement mode, just for
+  fleets of 2+ chargers (Phase B.5).
+- The `sem-system-card` "Copy diagnostics" button now uses a
+  cross-context clipboard helper that falls back to
+  `document.execCommand('copy')` on HTTP installs where the modern
+  Clipboard API is blocked. Always shows user feedback — success or
+  failure — so the button is never silent again.
+- Deploy scripts (`~/bin/deploy-test.sh`, `~/bin/deploy-prod.sh`) now
+  strip `__pycache__` before `ha core restart`. `ha core restart` does
+  not clear the bytecode cache, so signature changes in committed
+  code could still execute the cached `.pyc` and produce confusing
+  `NameError`s. (Operational; not in the integration itself.)
+
+### Fixed
+
+- **#279** — Global `daily_ev_energy` counter resets at the configured
+  `Charge by` time, not at sunrise. The summer-sunrise race condition
+  (sunrise earlier than the deadline → counter wiped while night
+  charging still in progress → double-charge) is closed.
+- **#283** — Dashboard no longer fails to register on YAML-mode
+  Lovelace installs. The integration feature-detects the mutating
+  resource-collection methods; when YAML mode is detected, it logs a
+  single actionable warning with the exact `lovelace.resources:` YAML
+  the user has to paste, instead of an unhelpful "Could not register"
+  warning. Storage-mode users see no behavioural change.
+- **#284** — Multi-charger setups (e.g. dual Wallbox Pulsar) no longer
+  pull from grid while strategy reports `solar_only`. The distribution
+  path now reads from the canonical `EVBudget`.
+- **#285** — "Copy diagnostics" button in the System Information card
+  now works on HTTP installs. Reported on macOS Chrome.
+- Display-honesty guard at `sensor.py:_format_charging_state` is now
+  redundant after the unification (canonical is the single source of
+  truth) but kept as defence-in-depth for one release; will be removed
+  in v1.7.0.
+
+### Internal
+
+- `coordinator/coordinator.py` — `_build_charging_context`'s
+  `available_power` and `calculated_current` parameters dropped (dead
+  since Phase B). Step 6's bare-variable computation removed (also dead
+  since Phase B).
+- New `_canonical_strategy_from_legacy` helper in `coordinator.py`
+  maps the legacy strategy-string returns of `_determine_charging_strategy`
+  to canonical `EVBudgetStrategy` constants.
+
+### Community contributions
+
+Thanks to **@RienduPre** for [PR #286](https://github.com/traktore-org/sem-community/pull/286)
+— two native-speaker Dutch translation polishes (`notif_low_forecast`
+grammar; `notif_daily_summary` replaces the loanword "autarkie" with the
+idiomatic "zelfvoorzienend").
+
+---
+
+## [1.5.15] — 2026-05-27
+
+Single hotfix release for a SolaX-pattern cold-start regression.
+
+### Fixed
+
+- **#274** — Inverter / battery / grid readings no longer stay at 0
+  after an HA restart on SolaX-pattern installs (Pattern E: split
+  grid). Forced a sensor-reader reinitialization on coordinator
+  restart instead of relying on the lazy first-cycle path.
+
+---
+
+## [1.5.14] — 2026-05-27
+
+Documentation, sensor-naming hardening, and the #255 per-charger
+config cleanup.
+
+### Added
+
+- Per-charger night charging gate (`switch.sem_charger_<id>_night_charging`,
+  default ON) — multi-charger fleets can now schedule night charging
+  per car.
+
+### Changed
+
+- Removed the redundant global EV configuration entities — per-charger
+  entities are the canonical source of truth after #255. The integration
+  migrates existing setups transparently.
+- Energy Dashboard config summary on the System tab now lists actual
+  entity names instead of the compact "X sources, Y units" string (#250).
+
+### Fixed
+
+- **#245** — Surplus EV charging now stops at the Max ceiling
+  (`daily_ev_target_max`) instead of running until the per-cycle
+  remaining-need flips negative. The Min target gates night charging;
+  Max gates day surplus. Both are honored independently.
+- **#256** — Zero-config installs no longer adopt the global target as
+  the per-charger night floor without the user's explicit consent.
+- **#259** — Vehicle SOC reads that come back as `unknown` or
+  `unavailable` no longer crash the strategy decision.
+
+---
+
+## [1.5.13] — 2026-05-25
+
+Beta-only iterations; release notes consolidated into the next stable.
+
+---
+
+## [1.5.12] — 2026-05-25
+
+### Fixed
+
+- Dashboard regenerate ("Generate Dashboard" service) no longer
+  triggers an HA core restart. Live-reload via the storage API
+  replaces the legacy "write + restart" pattern.
+- Removed a stray top-level `sem-cards.js` left over from a botched
+  manual deploy that was shadowing the real `dist/sem-cards.js`
+  bundle and breaking every dashboard card (#219 regression class).
+
+---
+
+## [1.5.11] — 2026-05-25
+
+### Changed
+
+- All ~23 dashboard cards now ship as a single Lit bundle at
+  `dashboard/card/dist/sem-cards.js`. The legacy top-level vanilla
+  `sem-*-card.js` files were removed.
+- Lovelace resource URLs now include `?v={version}-{sha1[:8]}` for
+  cache busting; plain `rsync + restart` deploys now bust the browser
+  service-worker cache without a manifest bump (#240).
+
+---
+
+For the full pre-1.5.11 history, see the [git tag log](https://github.com/traktore-org/sem-community/tags).
+
+[1.6.0]: https://github.com/traktore-org/sem-community/releases/tag/v1.6.0
+[1.5.15]: https://github.com/traktore-org/sem-community/releases/tag/v1.5.15
+[1.5.14]: https://github.com/traktore-org/sem-community/releases/tag/v1.5.14
+[1.5.13]: https://github.com/traktore-org/sem-community/releases/tag/v1.5.13
+[1.5.12]: https://github.com/traktore-org/sem-community/releases/tag/v1.5.12
+[1.5.11]: https://github.com/traktore-org/sem-community/releases/tag/v1.5.11
