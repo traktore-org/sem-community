@@ -98,22 +98,43 @@ _log "✓ amps/watts agree: floor(${avail_w}/690)=${expected_a} matches ${actual
 # ──────────────────────────────────────────────────────────────────────
 
 case "$strategy" in
-    solar_only|battery_assist)
+    solar_only)
+        # Only solar_only carries the strict grid-floor contract — that
+        # strategy literally promises "what solar can supply right now."
+        # battery_assist is intentionally excluded: by definition it
+        # depends on the home battery ramping discharge in response to
+        # SEM's setpoint, and the battery (LFP, BMS-managed) cannot
+        # always deliver instantly. During the ramp window, grid
+        # backfills the gap; proportional flow attribution then attributes
+        # part of that grid to EV. That's not SEM commanding grid — it's
+        # the physics of a battery with a ramp constant ≫ EV response
+        # time. Observed live on PROD 2026-05-29 (10:00 CEST plug-in):
+        # ~743 W of grid transiently attributed to EV while the Huawei
+        # LUNA2000 ramped from 0 → 2106 W discharge. Tightening
+        # battery_assist's grid floor would produce false-positive
+        # failures on every battery_assist session.
         if [[ -z "$grid_w" || "$grid_w" == "unknown" || "$grid_w" == "unavailable" || "$grid_w" == "?" ]]; then
             _log "SKIP assertion 2: $GRID_TO_EV_W is '$grid_w'"
         else
             grid_int=$(printf '%.0f' "$grid_w" 2>/dev/null || echo 0)
             if (( grid_int >= 200 )); then
-                echo "✗ FAIL: ${strategy} strategy is leaking grid to EV (${grid_w} W)" >&2
+                echo "✗ FAIL: solar_only strategy is leaking grid to EV (${grid_w} W)" >&2
                 echo "        actuator setpoint diverged from the canonical budget" >&2
                 echo "        the state machine signed off on." >&2
                 exit 1
             fi
-            _log "✓ ${strategy} grid floor held: ${grid_w} W < 200 W"
+            _log "✓ solar_only grid floor held: ${grid_w} W < 200 W"
         fi
         ;;
+    battery_assist)
+        # No strict grid assertion — see comment above. The amps/watts
+        # agreement check (assertion 1) is the only canonical-budget
+        # invariant we can hold against battery_assist live.
+        _log "(strategy=battery_assist — grid_to_ev=${grid_w} W is informational only;"
+        _log " battery ramp-rate vs EV response makes a tight grid floor unenforceable)"
+        ;;
     *)
-        _log "(strategy=${strategy} — assertion 2 only applies to surplus strategies)"
+        _log "(strategy=${strategy} — assertion 2 only applies to solar_only)"
         ;;
 esac
 
