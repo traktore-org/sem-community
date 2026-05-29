@@ -34,13 +34,13 @@ baseline_latest_end=$(get_state "$NIGHT_LATEST_END")
 baseline_end_time=$(get_state "$NIGHT_END_TIME_SENSOR")
 _log "baseline latest_end=$baseline_latest_end  derived end_time=$baseline_end_time"
 
-# Sanity: a real number, not 'unknown' / 'unavailable'.
-case "$baseline_latest_end" in
-    ''|unknown|unavailable|?)
-        echo "✗ FAIL: $NIGHT_LATEST_END is '$baseline_latest_end' — can't test" >&2
-        exit 1
-        ;;
-esac
+# Sanity: a real number, not 'unknown' / 'unavailable'. Use string-equality
+# so the '?' fallback isn't interpreted as a single-char glob.
+if [[ -z "$baseline_latest_end" || "$baseline_latest_end" == "unknown" \
+      || "$baseline_latest_end" == "unavailable" || "$baseline_latest_end" == "?" ]]; then
+    echo "✗ FAIL: $NIGHT_LATEST_END is '$baseline_latest_end' — can't test" >&2
+    exit 1
+fi
 
 # ──────────────────────────────────────────────────────────────────────
 # 2. Pick a bump value that we KNOW will be the binding constraint.
