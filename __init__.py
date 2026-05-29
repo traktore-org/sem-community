@@ -38,6 +38,16 @@ from .coordinator import SEMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class _SEMYAMLModeSkip(Exception):
+    """Sentinel: bail out of the Lovelace resource registration block
+    when the user is running YAML-mode Lovelace (#283). YAML-mode
+    resources are read-only; the user has to add SEM's bundle to
+    ``configuration.yaml`` themselves. Logged with the exact URLs above
+    the raise; the outer ``except`` clause swallows this quietly so it
+    doesn't get reported as a generic "could not register" warning."""
+
+
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 PLATFORMS: list[Platform] = [
@@ -1569,10 +1579,32 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         ]
 
         try:
-            from homeassistant.components.lovelace.resources import ResourceStorageCollection
-            resources: ResourceStorageCollection = hass.data["lovelace"].resources
+            resources = hass.data["lovelace"].resources
             if not resources.loaded:
                 await resources.async_load()
+
+            # YAML-mode Lovelace exposes a ``ResourceYAMLCollection`` whose
+            # resource list is sourced from ``configuration.yaml`` and is
+            # read-only — it doesn't implement ``async_create_item`` /
+            # ``async_update_item`` / ``async_delete_item``. We can't
+            # programmatically register the bundle there. Feature-detect via
+            # the methods we'd need, and surface the URLs the user has to
+            # add manually so the dashboard can actually load. Without this
+            # branch the dashboard came up blank with only an unhelpful
+            # warning in the log (#283 — Brkie, YAML-mode Lovelace).
+            yaml_mode = not hasattr(resources, "async_create_item")
+            if yaml_mode:
+                _LOGGER.warning(
+                    "SEM detected YAML-mode Lovelace; SEM card resources cannot be "
+                    "registered automatically. Add the following to "
+                    "configuration.yaml under `lovelace.resources` and restart:\n"
+                    "  - url: %s\n    type: module\n"
+                    "  - url: %s\n    type: module",
+                    cards_bundle_url, f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
+                )
+                # Skip the rest of the registration block — none of the
+                # mutating methods below are callable in YAML mode.
+                raise _SEMYAMLModeSkip()
 
             # Build lookup: base URL (without query) → resource item
             existing_by_base = {}
@@ -1610,6 +1642,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     diagram_item["id"], {"res_type": "module", "url": diagram_url}
                 )
                 _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
+        except _SEMYAMLModeSkip:
+            # Already logged the "manual config needed" warning above.
+            pass
         except Exception as e:
             _LOGGER.warning("Could not register SEM Lovelace resources: %s", e)
 
