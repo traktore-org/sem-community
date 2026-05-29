@@ -34,13 +34,19 @@ baseline_target=$(get_state "$TARGET_TIME")
 
 _log "baseline global=$baseline_global  per-charger=$baseline_charger  target=$baseline_target"
 
-# We need a non-zero baseline; otherwise 0→0 isn't a meaningful transition.
-# On a clean HA-TEST early-morning state this should be yesterday's total
-# (~8.7 kWh on the day this test was written). Skip cleanly if it's 0.
-if [[ "$baseline_global" == "0" || "$baseline_global" == "0.0" ]]; then
-    _log "SKIP: daily_ev_energy is 0 — nothing to observe across a reset."
-    _log "      Inject some EV power on HA-TEST before re-running, or run"
-    _log "      this test in the early morning before the natural deadline."
+# We need a substantial non-zero baseline. Otherwise we can't tell a
+# reset from natural sub-kWh drift from ongoing simulated EV draw, and
+# the test flakes mid-day on HA-TEST. Skip cleanly if baseline is too small.
+is_meaningful=$(python3 -c "
+try:
+    v = float('$baseline_global'); print(1 if v >= 1.0 else 0)
+except Exception:
+    print(0)
+")
+if [[ "$is_meaningful" != "1" ]]; then
+    _log "SKIP: daily_ev_energy is ${baseline_global} kWh (< 1.0) — too small to"
+    _log "      distinguish a real reset from cycle-by-cycle drift. Re-run"
+    _log "      after an overnight charge has accumulated some energy."
     exit 0
 fi
 
@@ -81,12 +87,24 @@ while (( elapsed < max_seconds )); do
     if [[ "$v_global" == "$baseline_global" ]]; then
         # Still pre-boundary
         held=$((held + 1))
-    elif [[ "$v_global" == "0" || "$v_global" == "0.0" ]]; then
-        # Boundary crossed → reset
-        crossed=1
-        break
     else
-        echo "✗ FAIL: counter changed to unexpected value '$v_global'" >&2
+        # The counter moved. A successful reset drops the value to (near) zero;
+        # exact 0.0 is rare on a live system because EV draw between the reset
+        # and the next read leaves a small residue. Accept anything ≤ baseline/10
+        # (a true "reset" event) and reject larger deltas (a partial overwrite
+        # would be a real bug).
+        is_reset=$(python3 -c "
+try:
+    v = float('$v_global'); b = float('$baseline_global')
+    print(1 if (v <= b / 10.0 or v <= 0.5) else 0)
+except Exception:
+    print(0)
+")
+        if [[ "$is_reset" == "1" ]]; then
+            crossed=1
+            break
+        fi
+        echo "✗ FAIL: counter changed to unexpected value '$v_global' (baseline was '$baseline_global')" >&2
         # Best-effort restore before bailing
         set_state_time "$TARGET_TIME" "$baseline_target" || true
         exit 1

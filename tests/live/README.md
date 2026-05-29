@@ -116,6 +116,9 @@ across releases), the test catches it before the next plug-in.
 | [`test_surplus_charging.sh`](test_surplus_charging.sh) | `ev_charging_mode` select exposes auto/minpv/now/off; switching mode propagates to coordinator and the strategy decision flips accordingly (#282 SEMPerChargerSelect class) |
 | [`test_overnight_window.sh`](test_overnight_window.sh) | Moving the `night_latest_end` slider at runtime updates `sensor.sem_night_end_time` on the next cycle. **Caught a real bug live**: `async_update_config` rebound `self.config` to a new dict, leaving `TimeManager._config` pointing at the stale one. Fix: mutate in place. (2026-05-29) |
 | [`test_charging_state_consistency.sh`](test_charging_state_consistency.sh) | When SEM is commanding `0 A` and EV power is below the 500 W idle floor, `sensor.sem_charging_state` must NOT read "Solar mode - Charging active". **Caught a real bug live** (user-reported on PROD): state machine and actuator use *different* budget calculations — the state machine sees `ev_budget` (includes battery redirect) and returned `SOLAR_CHARGING_ACTIVE`, but the actuator's own budget computation gave 0 A. The dashboard label lied. Fix: sensor-level demotion when actuator state contradicts "active". The deeper three-way budget disagreement (`bare available_power` vs `_build_charging_context.ev_budget` vs `_execute_ev_control.budget_w`) is filed for a later unification. (2026-05-29) |
+| [`test_solar_only_no_grid.sh`](test_solar_only_no_grid.sh) | Passive invariant: when `charging_strategy == "solar_only"`, `sensor.sem_flow_grid_to_ev_power` must stay below 200 W. Locks in the surplus-leak fix from commit `591956f` (#282) — historically, `calculate_ev_budget(solar_only=True)` was inheriting the legacy base of `ev_power + grid_export`, so once the car had ramped, SEM never asked it to ramp DOWN when surplus dropped, silently letting grid backfill the gap. (2026-05-29) |
+| [`test_per_charger_slider.sh`](test_per_charger_slider.sh) | Bumping a per-charger Number entity (`number.sem_charger_<id>_daily_ev_target`) must persist on the entity AND the integration must not log any errors during the next cycle. Locks in the per-charger config-update path (analog of `async_update_config` for `ev_chargers[i]`). The same stale-dict-reference bug class that hit globals in commit `bea4ecc` could land on per-charger state. (2026-05-29) |
+| [`test_bundle_integrity.sh`](test_bundle_integrity.sh) | The dashboard card bundle at `dist/sem-cards.js` MUST exist (≥1 kB), MUST register custom elements, and NO stray top-level `sem-cards.js` may shadow it. Locks in the #219 regression family — a shadowing top-level file breaks every dashboard card on every install. Runs over SSH against the deployed copy. (2026-05-29) |
 
 ## Future tests worth adding
 
@@ -124,7 +127,7 @@ caught by unit tests:
 
 - Session counter survives HA restart mid-charge (plug → restart → assert session_energy non-zero after restart)
 - Dashboard regenerate doesn't trigger an HA restart (call `generate_dashboard`, watch HA stays up)
-- Stray top-level `sem-cards.js` doesn't shadow `dist/sem-cards.js` (file inventory pre + post regenerate)
-- Solar-only strategy actually caps the actuator amps (read flow_grid_to_ev_power during a Min+PV window, assert near zero)
+- Strategy reason must be non-empty when strategy is not "idle" (caught empty `strategy_reason` field earlier this session)
+- Sentinel for the three-way budget disagreement — assert `coordinator.data.calculated_current` matches what the actuator would compute (will be retired once the budget unification plan ships)
 
 Each becomes a 30–50 line script when its turn comes up.
