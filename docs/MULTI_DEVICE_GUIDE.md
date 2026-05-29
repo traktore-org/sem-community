@@ -130,7 +130,7 @@ The `sem-ev-status-card` on the EV tab automatically shows per-charger sections 
 
 When multiple chargers are configured, the global status row is hidden to avoid redundancy with per-charger sections.
 
-Regenerate the dashboard after adding a charger: **Developer Tools → Services → solar_energy_management.generate_dashboard**
+Regenerate the dashboard after adding a charger: **Developer Tools → Services → solar_energy_management.generate_dashboard**. The new per-charger sections show up immediately — no HA restart needed (v1.5.16+); hard-refresh the browser if cards look stale.
 
 ![EV Tab Multi-Charger](screenshots/ev-tab-multi-charger.png)
 

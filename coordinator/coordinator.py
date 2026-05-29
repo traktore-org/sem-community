@@ -131,9 +131,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_reenable_attempts_per_charger: Dict[str, int] = {}
         self._ev_charge_refused_per_charger: Dict[str, bool] = {}
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
-        self._daily_ev_per_charger_date: Optional[str] = None
+        # Per-charger "EV day" boundary, keyed by charger id. Each charger's day
+        # ends at its own ``Charge by`` deadline (#246) — NOT at sunrise — so the
+        # counter doesn't wipe between hitting Min and the deadline (which on
+        # short summer nights happened between sunrise ~05:30 and night_end
+        # 07:00, causing SEM to re-fire night charging and double-bill the user).
+        self._daily_ev_per_charger_date: Dict[str, str] = {}
         # Warn-once guards so per-cycle surfacing (#259) doesn't spam the log.
         self._tariff_rate_warned: bool = False
+        self._tariff_pause_warned: bool = False  # #274/L1 one-time provider-error warn
         self._night_global_fallback_logged: set[str] = set()
         self._notification_manager = NotificationManager(hass, config)
 
@@ -241,6 +247,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Per-cycle caches (initialized here, populated in _async_update_data)
         self._cycle_forecast = None
         self._cycle_vehicle_soc: Optional[float] = None
+        # Night charge plan for the (primary) charger this cycle (#246/#247)
+        self._cycle_night_plan = None
+        # Per-charger night plans for surfacing + the "unreachable deadline" notify
+        # (notification dedup itself lives in NotificationManager._notified_flags)
+        self._night_plan_per_charger = {}
+        # Shared night peak budget (#274/H1): watts committed to higher-priority
+        # chargers so far this cycle. Reset before the per-charger loop; each
+        # charger's peak-managed sizing subtracts it so the fleet stays under peak.
+        self._night_committed_w = 0.0
+        # Tariff wait↔charge hysteresis (#274/M4): {cid: (should_wait, ts)} of the
+        # last effective decision, so price hovering at the cheap boundary doesn't
+        # stop/start the charger every cycle.
+        self._tariff_decision_per_charger = {}
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -310,6 +329,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "ev_min_current", "ev_night_initial_current",
             "ev_kwh_per_100km", "ev_target_type",
             "ev_charging_mode", "ev_phases",
+            "ev_target_time",  # #246 charge-by deadline
         ):
             if pc.get(key) is not None:
                 self.config[key] = pc[key]
@@ -606,7 +626,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             pcd = self._storage._daily_data.get("per_charger_daily", {})
             if isinstance(pcd, dict) and isinstance(pcd.get("values"), dict):
                 self._daily_ev_per_charger = dict(pcd["values"])
-                self._daily_ev_per_charger_date = pcd.get("date")
+                # Per-charger date is a dict[cid → iso-date] since #280. Legacy
+                # stores hold a single string (global sunrise reset) — promote
+                # it so every charger inherits the last reset cleanly. First
+                # cycle after restore re-evaluates against each charger's own
+                # deadline, so any drift self-heals within one update tick.
+                raw_date = pcd.get("date")
+                if isinstance(raw_date, dict):
+                    self._daily_ev_per_charger_date = dict(raw_date)
+                elif isinstance(raw_date, str):
+                    self._daily_ev_per_charger_date = {
+                        cid: raw_date for cid in self._daily_ev_per_charger
+                    }
+                else:
+                    self._daily_ev_per_charger_date = {}
+
+            # Restore daily flow accumulators (#282) — survives HA restart so
+            # the new time-integrated flow_*_to_*_energy sensors don't rewind
+            # mid-day. The flow_calculator checks the saved date against
+            # today's and discards yesterday's snapshot automatically.
+            flow_state = self._storage._daily_data.get("flow_accumulator", {})
+            if isinstance(flow_state, dict):
+                try:
+                    self._flow_calculator.restore_flow_accumulator_state(flow_state)
+                except (AttributeError, ValueError, TypeError) as e:
+                    _LOGGER.debug("Flow accumulator restore skipped: %s", e)
 
             # Seed EV intelligence from recorder history (improves cold starts
             # and upgrades from older versions without EV intelligence data)
@@ -840,15 +884,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_intelligence = self._update_ev_intelligence(power, energy)
             self._last_ev_intelligence = ev_intelligence  # For notifications (#106)
 
-            # Step 5: Calculate energy flows (daily totals for Sankey)
-            energy_flows = self._flow_calculator.calculate_energy_flows(energy)
+            # Step 5: Integrate energy flows from this cycle's instantaneous
+            # power_flows (#282). Replaces the legacy daily proportional
+            # allocation (calculate_energy_flows) which credited solar to the
+            # EV even when the EV wasn't drawing. The integrated version
+            # matches the session attribution: small honest numbers that
+            # reflect what physically happened, not a daily average.
+            energy_flows = self._flow_calculator.integrate_energy_flows(
+                power_flows, self.update_interval.total_seconds(),
+            )
 
-            # Step 6: Calculate available power for EV
-            available_power = self._flow_calculator.calculate_available_power(power)
-            calculated_current = self._flow_calculator.calculate_charging_current(available_power)
-
-            # Step 7: Update charging state machine (mode selection only)
-            charging_context = self._build_charging_context(power, energy, available_power, calculated_current)
+            # Step 6: Build the charging context. The canonical EV budget
+            # is computed inside (#282 unification, Phase B+D) and cached
+            # on the coordinator as ``self._cycle_ev_budget`` for the
+            # actuator to read on the same cycle. The previous step-6
+            # ``calculate_available_power`` + ``calculate_charging_current``
+            # bare-variable pair was dead-code after Phase B (their result
+            # was passed in and ignored) and has been removed.
+            charging_context = self._build_charging_context(power, energy)
             charging_state = self._state_machine.update_state(charging_context)
 
             # Step 7.5a: Unified EV control via CurrentControlDevice
@@ -861,9 +914,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ev_budget_per_charger = {}
                 num_chargers = len(self._ev_devices)
 
-                # Night target: use per-charger targets if configured (#193)
+                # Night target: use per-charger targets if configured (#193).
+                # TARIFF_WAITING_FOR_CHEAP is also a night state (#247) — compute
+                # the per-charger targets so a waiting charger can still re-plan.
                 self._night_target_per_charger_map = {}
-                if num_chargers >= 1 and charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                if num_chargers >= 1 and charging_state in (
+                    ChargingState.NIGHT_CHARGING_ACTIVE,
+                    ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                ):
                     ev_chargers_cfg = self.config.get("ev_chargers", [])
                     charger_cfg_by_id = {c.get("id"): c for c in ev_chargers_cfg}
 
@@ -898,16 +956,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     # Backward compat: set the old scalar for single-value reads
                     self._night_target_per_charger = None
 
-                # Solar budget: distribute by priority
+                # Solar budget: distribute by priority. Use the canonical
+                # EVBudget computed in _build_charging_context (#282 Phase B.5).
+                # Before this, multi-charger setups went through
+                # _calculate_solar_ev_budget here, which has the legacy
+                # ev_power + grid_export base — exactly the disagreement
+                # mode Phase B eliminated for single-charger but left in
+                # place for multi-charger distribution. Reported by @RienduPre
+                # in #284 (Growatt + Wallbox Pulsar, 2-charger). The
+                # distribution math (priority-weighted split across
+                # chargers) is unchanged; we only swap the TOTAL the
+                # distributor sees.
                 if num_chargers >= 1 and charging_state in (
                     ChargingState.SOLAR_CHARGING_ACTIVE,
                     ChargingState.SOLAR_SUPER_CHARGING,
                     ChargingState.SOLAR_CHARGING_ALLOWED,
                     ChargingState.SOLAR_MIN_PV,
                 ):
-                    total_budget = self._calculate_solar_ev_budget(
-                        charging_state, power, charging_context
-                    )
+                    cycle_budget = getattr(self, "_cycle_ev_budget", None)
+                    if cycle_budget is not None:
+                        total_budget = cycle_budget.net_w
+                    else:
+                        # Defence-in-depth — partial init / unit tests.
+                        # _calculate_solar_ev_budget is the legacy path; Phase D.2
+                        # will remove this fallback after PROD soak confirms.
+                        total_budget = self._calculate_solar_ev_budget(
+                            charging_state, power, charging_context
+                        )
                     ev_budget_per_charger = self._surplus_controller.distribute_ev_budget(
                         total_budget, self._ev_devices
                     )
@@ -916,9 +991,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_devices.items(),
                     key=lambda x: x[1].priority,
                 )
+                # Shared night peak budget (#274/H1): chargers are sized in
+                # priority order against one peak headroom; reset the running
+                # commitment before the loop.
+                self._night_committed_w = 0.0
                 for cid, ev_dev in sorted_chargers:
                     # Check per-charger night charging switch (#193)
-                    if charging_state == ChargingState.NIGHT_CHARGING_ACTIVE:
+                    if charging_state in (
+                        ChargingState.NIGHT_CHARGING_ACTIVE,
+                        ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                    ):
                         night_switch = self.hass.states.get(
                             f"switch.sem_charger_{cid}_night_charging"
                         )
@@ -974,10 +1056,50 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     charging_context.remaining_ev_energy = per_remaining
                     charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining_floor
 
+                    # Per-charger deadline + tariff plan (#246/#247): recompute
+                    # for THIS charger and pick its effective night state. Each car
+                    # can have its own deadline / tariff toggle, so the displayed
+                    # (primary) state isn't authoritative for the rest.
+                    effective_state = charging_state
+                    charging_context.night_deadline_amps = 0
+                    charging_context.night_deadline_active = False
+                    charging_context.night_tariff_wait = False
+                    charging_context.night_deadline_reachable = True
+                    if charging_state in (
+                        ChargingState.NIGHT_CHARGING_ACTIVE,
+                        ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                    ):
+                        pc_target = charging_context.night_target_kwh
+                        if pc_target <= 0.1:
+                            effective_state = ChargingState.NIGHT_TARGET_REACHED
+                        else:
+                            plan = self._compute_night_plan(charger_cfg, pc_target, energy)
+                            self._night_plan_per_charger[cid] = plan
+                            charging_context.night_deadline_amps = plan.deadline_amps
+                            charging_context.night_deadline_active = plan.deadline_active
+                            charging_context.night_tariff_wait = plan.should_wait_for_cheap
+                            charging_context.night_deadline_reachable = plan.reachable
+                            effective_state = (
+                                ChargingState.TARIFF_WAITING_FOR_CHEAP
+                                if plan.should_wait_for_cheap
+                                else ChargingState.NIGHT_CHARGING_ACTIVE
+                            )
+                            await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
+
                     try:
                         await self._execute_ev_control(
-                            charging_state, power, energy, charging_context
+                            effective_state, power, energy, charging_context
                         )
+                        # Add this charger's just-committed draw to the shared night
+                        # peak budget so lower-priority chargers size against the
+                        # remaining headroom (#274/H1). Estimate from the setpoint
+                        # (the commitment), not the lagging measured power.
+                        try:
+                            self._night_committed_w += max(0.0, (
+                                ev_dev._current_setpoint * ev_dev.phases * ev_dev.voltage
+                            ))
+                        except (AttributeError, TypeError):
+                            pass
                     except (HomeAssistantError, ServiceValidationError) as e:
                         _LOGGER.error("EV control service failed for %s: %s", cid, e)
                     except ValueError as e:
@@ -1094,7 +1216,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             forecast_data, tracker_data, tariff_data, surplus_data, \
                 pv_data, assistant_data, utility_data, heat_pump_data = \
                 await self._update_analytics_phases(
-                    power, energy, energy_flows, performance, available_power,
+                    power, energy, energy_flows, performance,
+                    charging_context.available_power,
                 )
 
             # Step 11: Build complete data structure
@@ -1110,8 +1233,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 charging_state=charging_state,
                 charging_strategy=charging_context.charging_strategy,
                 charging_strategy_reason=charging_context.charging_strategy_reason,
-                available_power=available_power,
-                calculated_current=calculated_current,
+                # Publish canonical budget (#282 unification, Phase B).
+                # The state machine and the actuator now read from the
+                # same EVBudget instance; publishing from it as well
+                # ensures the dashboard shows what those two see, not a
+                # third lower number from calculate_available_power.
+                available_power=charging_context.available_power,
+                calculated_current=charging_context.calculated_current,
                 surplus_control=surplus_data,
                 forecast=forecast_data,
                 tariff=tariff_data,
@@ -1144,7 +1272,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             await self._send_notifications(
                 charging_state, power, energy, costs, performance,
                 charging_context, forecast_data, discharge_limit,
-                calculated_current, available_power,
+                charging_context.calculated_current,
+                charging_context.available_power,
             )
 
             # Step 13: Persist data
@@ -1168,6 +1297,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     "date": self._daily_ev_per_charger_date,
                     "values": dict(self._daily_ev_per_charger),
                 }
+                # Persist daily flow accumulators (#282) — without this, an HA
+                # restart mid-day rewinds flow_*_to_*_energy sensors to 0 and
+                # users see broken Sankey totals for the rest of the day.
+                self._storage._daily_data["flow_accumulator"] = (
+                    self._flow_calculator.get_flow_accumulator_state()
+                )
                 await self._storage.async_save_energy_delayed()
 
             self._initial_update_done = True
@@ -1287,6 +1422,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 if dep_state and dep_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     result["ev_departure_time"] = dep_state.state
 
+            # EV charge-target deadline (#246) + tariff-optimized status (#247) —
+            # surfaced for the EV card / status. target_time + tariff toggle are
+            # always available (config); the deadline/cheap-window fields come from
+            # the per-cycle night plan (primary charger), present only at night.
+            _dl_pcfg = (self.config.get("ev_chargers") or [{}])[0]
+            result["ev_target_time"] = self._charger_target_time(_dl_pcfg)
+            result["ev_tariff_optimized"] = self._tariff_optimized_for(_dl_pcfg)
+            _night_plan = self._cycle_night_plan
+            if _night_plan is not None:
+                result["ev_deadline_reachable"] = _night_plan.reachable
+                result["ev_tariff_waiting"] = _night_plan.should_wait_for_cheap
+                if _night_plan.hours_to_deadline is not None:
+                    result["ev_deadline_hours"] = _night_plan.hours_to_deadline
+                if _night_plan.next_cheap_start is not None:
+                    result["ev_next_cheap_window"] = _night_plan.next_cheap_start.isoformat()
+
             # Diagnostics summary for dashboard System tab
             result["diag_version"] = self._get_version()
             _disc = getattr(self._sensor_reader, "_split_grid_discovery", None) or {}
@@ -1317,6 +1468,127 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Tariff schedule for dashboard card (#25)
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
                 result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
+
+            # Dynamic price visibility (#257): surface the upcoming hourly price
+            # curve + today's summary so the price card can render a live chart.
+            try:
+                _td = self._tariff_provider.get_tariff_data()
+                result["tariff_upcoming"] = [
+                    {"t": p.timestamp.isoformat(), "price": round(p.price, 4),
+                     "level": p.level.value}
+                    for p in (_td.upcoming_prices or [])[:48]
+                ]
+                result["tariff_currency"] = _td.currency
+                result["tariff_today_min_price"] = _td.today_min_price
+                result["tariff_today_max_price"] = _td.today_max_price
+                result["tariff_today_avg_price"] = _td.today_avg_price
+                result["tariff_next_cheap_end"] = (
+                    _td.next_cheap_window_end.isoformat()
+                    if _td.next_cheap_window_end else None
+                )
+            except Exception as e:
+                _LOGGER.debug("Tariff price-curve surface failed (#257): %s", e)
+
+            # Today's plan (#282): compose a forward-looking schedule from the
+            # tariff curve + solar forecast + night window + EV state. Surfaced
+            # on charging_state attributes for sem-today-plan-card. Pure helper
+            # in coordinator/today_plan.py so logic is unit-testable.
+            try:
+                from .today_plan import compose_today_plan
+                _now = dt_util.now()
+                # Solar — read directly from the forecast reader's cached data
+                _peak_t = None
+                _solar_remaining = None
+                try:
+                    _fcd = self._forecast_reader.forecast_data
+                    _peak_t = _fcd.peak_time_today
+                    _solar_remaining = _fcd.forecast_remaining_today_kwh
+                except AttributeError:
+                    pass
+                # Night window — get HH:MM endpoints, resolve to datetime.
+                # If we're past the window's start today, the next window opens
+                # tomorrow (handled by get_offset_time returning today's time
+                # and us adding a day when it's already past).
+                _night_start = None
+                _night_end_dt = None
+                try:
+                    ns_hhmm, ne_hhmm = self.time_manager.get_night_window()
+                    _night_start = self.time_manager.get_offset_time(ns_hhmm)
+                    if _night_start <= _now:
+                        _night_start = _night_start + timedelta(days=1)
+                    _night_end_dt = self.time_manager.get_offset_time(ne_hhmm)
+                    if _night_end_dt <= _now:
+                        _night_end_dt = _night_end_dt + timedelta(days=1)
+                except (AttributeError, ValueError):
+                    pass
+                _np = self._cycle_night_plan
+                _ev_remaining = _np.remaining_kwh if _np else None
+                _ev_deadline_dt = _np.deadline_dt if _np else None
+                _ev_rate_kw = None
+                if _np and _np.hours_to_deadline and _np.hours_to_deadline > 0 and _np.remaining_kwh:
+                    # The planner's reachable=True implies remaining/rate <= hours_left;
+                    # this is the rough effective rate (peak-managed unless forcing).
+                    _ev_rate_kw = _np.remaining_kwh / max(0.1, _np.hours_to_deadline)
+                # Daytime fallback (#282): the night planner only runs inside the
+                # night window, so during the day _np is None and the strip would
+                # have no EV rows. Estimate remaining_to_min from the daily target
+                # vs accumulated, and resolve deadline from the charger config so
+                # the EV card can show "tonight's plan" as a preview.
+                #
+                # Gate on the night_charging switch being ON: when the user has
+                # explicitly disabled overnight grid charging, surfacing a "EV
+                # will charge at 21:22" row is misleading — the charger will
+                # NOT actually charge. Respect their opt-out.
+                if _ev_remaining is None or _ev_remaining <= 0.1:
+                    try:
+                        _pcfg = _dl_pcfg or {}
+                        _cid = _pcfg.get("id")
+                        _night_on = (
+                            _cid and self.hass.states.is_state(
+                                f"switch.sem_charger_{_cid}_night_charging", "on"
+                            )
+                        )
+                        if not _night_on:
+                            raise ValueError("night charging disabled — no EV preview")
+                        _target = (_pcfg.get("daily_ev_target")
+                                   or self.config.get("daily_ev_target", 10))
+                        if _cid and _cid in self._daily_ev_per_charger:
+                            _daily = self._daily_ev_per_charger[_cid]
+                        else:
+                            _daily = getattr(energy, "daily_ev", 0.0) or 0.0
+                        _remain = max(0.0, float(_target) - float(_daily))
+                        if _remain > 0.1:
+                            _ev_remaining = _remain
+                            # Resolve deadline from charger config — same path the
+                            # planner uses, just without the full plan computation.
+                            from .ev_tariff_planner import resolve_deadline
+                            _tt = self._charger_target_time(_pcfg)
+                            _ev_deadline_dt = resolve_deadline(_now, _tt)
+                            # Rate estimate at 3-phase peak floor; the strip is a
+                            # preview, not the truth — close enough for the visual.
+                            _ev_rate_kw = 4.1  # ~6A x 690 W/A
+                    except (ValueError, TypeError, AttributeError):
+                        pass
+                result["today_plan"] = compose_today_plan(
+                    now=_now,
+                    upcoming_prices=result.get("tariff_upcoming"),
+                    solar_peak_time=_peak_t,
+                    solar_remaining_kwh=_solar_remaining,
+                    night_start=_night_start,
+                    night_end=_night_end_dt,
+                    ev_min_remaining_kwh=_ev_remaining,
+                    ev_deadline=_ev_deadline_dt,
+                    ev_tariff_optimized=result.get("ev_tariff_optimized", False),
+                    ev_tariff_waiting=result.get("ev_tariff_waiting", False),
+                    ev_next_cheap_window=(
+                        _np.next_cheap_start if _np and _np.next_cheap_start else None
+                    ),
+                    ev_effective_rate_kw=_ev_rate_kw,
+                    currency=result.get("tariff_currency", ""),
+                )
+            except Exception as e:
+                _LOGGER.debug("today_plan compose failed (#282): %s", e)
+                result["today_plan"] = []
 
             # Hourly activity tracker for schedule card (#63)
             now_time = dt_util.now()
@@ -1861,6 +2133,54 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         _LOGGER.info("EV charger registered via late discovery: service=%s", ev_auto.get("ev_charger_service"))
 
+    def _canonical_strategy_from_legacy(self, legacy_strategy: str, legacy_reason: str) -> str:
+        """Map ``_determine_charging_strategy`` output → :class:`EVBudgetStrategy`.
+
+        The legacy code returns ``"solar_only"`` for both Zone 3
+        surplus-with-redirect AND Zone 2 surplus-only. The actuator
+        distinguished via substring matching on the reason text — the
+        proximate cause of the #282 three-way disagreement. This mapper
+        immortalises that signal while we transition; Phase D promotes
+        ``self_consumption`` to a first-class strategy return and the
+        substring matching goes away.
+        """
+        from .flow_calculator import EVBudgetStrategy
+
+        if legacy_strategy == "idle":
+            return EVBudgetStrategy.IDLE
+        if legacy_strategy == "now":
+            return EVBudgetStrategy.NOW
+        if legacy_strategy == "min_pv":
+            return EVBudgetStrategy.MIN_PV
+        if legacy_strategy == "night_grid":
+            # Night charging tops up to the Min floor using grid (#245
+            # semantic). Canonical MIN_PV is the right shape — its formula
+            # is ``max(min_power_floor, surplus + redirect)`` and at night
+            # the surplus term is ~0, leaving the grid floor as the actual
+            # budget. The actuator's NIGHT_CHARGING_ACTIVE branch in
+            # ev_control.py uses its own peak-aware, deadline-aware current
+            # calculation independently — so this mapping affects only
+            # what's published on sem_available_power / sem_calculated_current
+            # (now reflects the canonical floor instead of 0). Pre-fix this
+            # case was missing and raised ValueError on the first real night
+            # charging cycle with remaining_need > 0.1.
+            return EVBudgetStrategy.MIN_PV
+        if legacy_strategy == "battery_assist":
+            return EVBudgetStrategy.BATTERY_ASSIST
+        if legacy_strategy == "solar_only":
+            # Disambiguate Z2 self_consumption from Z3 solar_only via reason.
+            # Both _self_consumption_strategy and Zone 2 in the zone logic
+            # tag their reason with "self_consumption" or "Zone 2".
+            if "self_consumption" in legacy_reason or "Zone 2" in legacy_reason:
+                return EVBudgetStrategy.SELF_CONSUMPTION
+            return EVBudgetStrategy.SOLAR_ONLY
+        # Be loud about unknown strategies — silent fallthrough was the #282 root.
+        raise ValueError(
+            f"_canonical_strategy_from_legacy: unknown legacy strategy "
+            f"{legacy_strategy!r} (reason: {legacy_reason!r}). Add a case "
+            f"in this mapper if you introduced a new strategy value."
+        )
+
     def _determine_charging_strategy(self, power: PowerReadings, energy: Any,
                                      charger_cfg: dict | None = None) -> tuple:
         """SOC-zone-based charging strategy decision (inspired by evcc).
@@ -1890,7 +2210,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Night mode → grid charging tops up to the floor (Min) (#245).
         # remaining_need above is already the Min-bound value (default bound="min").
         if self.time_manager.is_night_mode():
-            if remaining_need < 0.5:
+            # Threshold aligned with _night_state_machine (#282 followup): both
+            # paths now agree at 0.1 kWh ≈ one cycle of 6A × 3 × 230 V min
+            # current. Pre-fix the strategy used `< 0.5` while the state machine
+            # used `<= 0.1`, producing the dashboard "Night charging active"
+            # label while the strategy reported "idle, target reached" — same
+            # disagreement class as #282 (display/decision mismatch).
+            # Min is the GUARANTEED floor; deliver to it exactly.
+            if remaining_need <= 0.1:
                 soc_info = f", SOC={vehicle_soc:.0f}%" if vehicle_soc is not None else ""
                 return ("idle", f"night target reached ({energy.daily_ev:.1f}kWh{soc_info})")
 
@@ -1901,24 +2228,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             )
             soc_info = f", SOC={vehicle_soc:.0f}%→{_target_soc}%" if vehicle_soc is not None else ""
 
-            # Price-optimized: check if current hour is cheap enough for charging
-            tariff = getattr(self, '_tariff_provider', None)
-            if tariff and hasattr(tariff, 'find_cheapest_hours'):
-                try:
-                    ev_max_power = self.config.get("ev_night_initial_current", 10) * 3 * 230 / 1000  # kW
-                    hours_needed = max(1, int(remaining_need / ev_max_power + 0.5))
-                    cheapest = tariff.find_cheapest_hours(hours_needed, within_hours=12)
-                    if cheapest:
-                        now = dt_util.now()
-                        is_cheap_hour = any(
-                            p.timestamp <= now < p.timestamp + timedelta(hours=1)
-                            for p in cheapest
-                        )
-                        if not is_cheap_hour:
-                            cheap_start = cheapest[0].timestamp.strftime("%H:%M")
-                            return ("idle", f"night: waiting for cheaper hour (next: {cheap_start}){soc_info}")
-                except (ValueError, TypeError, AttributeError) as e:
-                    _LOGGER.debug("Price optimization unavailable, falling back to immediate charging: %s", e)
+            # Tariff-optimized cheap-hour waiting is OPT-IN (#247). The authoritative
+            # decision lives in the night planner (_compute_night_plan →
+            # NightChargePlan.should_wait_for_cheap → TARIFF_WAITING_FOR_CHEAP
+            # state). This branch only sets the strategy reason string; consult
+            # the SAME plan to avoid the two paths disagreeing (#281/D3): the old
+            # code re-ran its own cheap-hour calc with a hardcoded 12h lookahead
+            # and no peak-awareness, so it could report "waiting for cheaper
+            # hour" while the planner had already decided to charge now because
+            # Min would miss — a contradictory state for debugging.
+            if self._tariff_optimized_for(charger_cfg or {}):
+                primary_cid = (charger_cfg or {}).get("id")
+                cached_plan = self._night_plan_per_charger.get(primary_cid)
+                if cached_plan is not None and cached_plan.should_wait_for_cheap:
+                    nxt = cached_plan.next_cheap_start
+                    when = nxt.strftime("%H:%M") if nxt else "?"
+                    return ("idle", f"night: waiting for cheaper hour (next: {when}){soc_info}")
 
             return ("night_grid", f"night mode, remaining={remaining_need:.1f}kWh{soc_info}")
 
@@ -1927,6 +2252,36 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Charging mode selection: pv (default), minpv, now, off
         charging_mode = self.config.get("ev_charging_mode", "pv")
+        _cmode = (charger_cfg or {}).get("ev_charging_mode")
+        if _cmode:
+            charging_mode = _cmode
+
+        # Tariff-optimized daytime pause (#247): during expensive price windows,
+        # drop the Min+PV grid guarantee and fall back to surplus / battery-assist
+        # only (the zone logic below). Resumes automatically when the price drops
+        # or solar is sufficient. The explicit "now" override and pure-surplus
+        # modes are intentionally left untouched.
+        if charging_mode == "minpv" and self._tariff_optimized_for(charger_cfg or {}):
+            try:
+                level = self._tariff_provider.get_price_level()
+                if level in (PriceLevel.EXPENSIVE, PriceLevel.VERY_EXPENSIVE):
+                    _LOGGER.debug(
+                        "Tariff pause: %s price — Min+PV grid guarantee dropped "
+                        "to surplus-only", level.value,
+                    )
+                    charging_mode = "pv"  # fall through to zone-based surplus logic
+                if getattr(self, "_tariff_pause_warned", False):
+                    self._tariff_pause_warned = False  # provider recovered
+            except Exception as e:
+                # Surface once (#274/L1): a persistently broken provider would
+                # otherwise silently drop the Min+PV grid guarantee with no signal.
+                if not getattr(self, "_tariff_pause_warned", False):
+                    _LOGGER.warning(
+                        "Tariff-optimized daytime pause disabled — price provider "
+                        "error (Min+PV grid guarantee unchanged): %s", e,
+                    )
+                    self._tariff_pause_warned = True
+
         if charging_mode == "now":
             return ("now", "Now mode — charge at max immediately")
         if charging_mode == "off":
@@ -2240,20 +2595,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self,
         power: PowerReadings,
         energy: Any,
-        available_power: float,
-        calculated_current: float
     ) -> ChargingContext:
         """Build charging context for state machine.
 
-        Assembles all inputs the state machine needs: battery flags, EV budget,
-        charging strategy (from SOC zones), and night-specific fields (NT period,
-        night end time, EV max power, forecast-adjusted night target).
+        Assembles all inputs the state machine needs: battery flags, EV
+        budget, charging strategy (from SOC zones), and night-specific
+        fields (NT period, night end time, EV max power, forecast-adjusted
+        night target). Computes the canonical EV budget once via
+        ``flow_calculator.calculate_canonical_ev_budget`` and caches it
+        on ``self._cycle_ev_budget`` so the actuator can read the
+        same value on the same cycle (#282 Phase B/D unification).
 
         Args:
             power: Current sensor readings.
             energy: Daily/monthly energy totals.
-            available_power: Surplus power for non-EV devices (W).
-            calculated_current: Available current from surplus calculation (A).
 
         Returns:
             Populated ChargingContext for state machine decision.
@@ -2304,13 +2659,58 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             pass
 
         battery_capacity = self.battery_capacity_kwh
-        ev_budget = self._flow_calculator.calculate_ev_budget(
-            power, forecast_remaining, power.battery_soc, battery_capacity,
-        )
-        ev_current = self._flow_calculator.calculate_charging_current(ev_budget)
 
-        # Forecast-driven charging strategy (per-charger target via _primary_cfg)
+        # Forecast-driven charging strategy (per-charger target via _primary_cfg).
+        # Run the strategy decision BEFORE the budget calc so the diagnostic
+        # ev_current sensor reflects the surplus-aware cap when strategy is
+        # solar_only — otherwise the dashboard shows a "calculated_current"
+        # that disagrees with what the charger is actually told to do (#282).
         strategy, reason = self._determine_charging_strategy(power, energy, _primary_cfg)
+
+        # Canonical EV budget (#282 unification, Phase B). One method,
+        # one number, used by the state machine here, the published
+        # sensors below, and the actuator in ev_control. The strategy
+        # mapper translates the legacy strategy text into the canonical
+        # enum.
+        from .flow_calculator import EVBudgetStrategy
+        canonical_strategy = self._canonical_strategy_from_legacy(strategy, reason)
+        # MIN_PV needs a min_power_floor; NOW needs an override. The
+        # state machine doesn't read either, so leave them at defaults
+        # here (the actuator's own dispatch fills those in when relevant —
+        # see ev_control._cycle_ev_budget consumer in Phase B/C).
+        min_power_floor_w = 0.0
+        override_max_w = None
+        if canonical_strategy == EVBudgetStrategy.MIN_PV:
+            # 6 A * 3 phases * 230 V — KEBA / Wallbox EU minimum.
+            min_power_floor_w = self.config.get(
+                "ev_min_current", 6,
+            ) * 3 * 230
+        elif canonical_strategy == EVBudgetStrategy.NOW:
+            override_max_w = self.config.get(
+                "ev_max_current", 16,
+            ) * 3 * 230
+
+        ev_budget_obj = self._flow_calculator.calculate_canonical_ev_budget(
+            power,
+            strategy=canonical_strategy,
+            battery_soc=power.battery_soc,
+            battery_capacity_kwh=battery_capacity,
+            forecast_remaining_kwh=forecast_remaining,
+            battery_auto_start_soc=self.config.get("battery_auto_start_soc", 90),
+            battery_buffer_soc=self.config.get("battery_buffer_soc", 70),
+            battery_assist_floor_soc=self.config.get("battery_assist_floor_soc", 60),
+            battery_assist_max_power_w=self.config.get(
+                "battery_assist_max_power",
+                self.config.get("super_charger_power", 4500),
+            ),
+            min_power_floor_w=min_power_floor_w,
+            override_max_w=override_max_w,
+        )
+        # Cache for the actuator — ev_control reads self._cycle_ev_budget
+        # instead of recomputing.
+        self._cycle_ev_budget = ev_budget_obj
+        ev_budget = ev_budget_obj.net_w
+        ev_current = ev_budget_obj.current_a
 
         _LOGGER.debug(
             "Charging strategy: %s — %s",
@@ -2324,6 +2724,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             night_target = self._calculate_forecast_night_target(
                 remaining_floor, energy, _primary_cfg,
             )
+
+        # Deadline (#246) + tariff-optimized timing (#247) plan for the (primary)
+        # charger — drives the displayed state and the single-charger control path.
+        # The multi-charger loop recomputes this per charger downstream.
+        night_plan = None
+        deadline_amps = 0
+        deadline_active = False
+        tariff_wait = False
+        deadline_reachable = True
+        if self.time_manager.is_night_mode() and night_target > 0.1:
+            night_plan = self._compute_night_plan(_primary_cfg, night_target, energy)
+            deadline_amps = night_plan.deadline_amps
+            deadline_active = night_plan.deadline_active
+            tariff_wait = night_plan.should_wait_for_cheap
+            deadline_reachable = night_plan.reachable
+        self._cycle_night_plan = night_plan
 
         return ChargingContext(
             ev_connected=power.ev_connected,
@@ -2342,6 +2758,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             charging_strategy_reason=reason,
             night_target_kwh=night_target,
             soc_limit_active=soc_limit_active,
+            night_deadline_amps=deadline_amps,
+            night_deadline_active=deadline_active,
+            night_tariff_wait=tariff_wait,
+            night_deadline_reachable=deadline_reachable,
         )
 
     def _update_battery_session_tracking(
@@ -2439,12 +2859,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 pass
 
     def _restore_ev_session_state(self) -> None:
-        """Restore EV session state from storage on startup."""
+        """Restore EV session state from storage on startup.
+
+        Persists more than the session_active flag now (#282 follow-up): the
+        whole SessionData record (energy, source split, start time, cost) gets
+        round-tripped so an HA restart mid-session no longer wipes the meter
+        and creates a phantom "new session" with 0 kWh. The previous code only
+        persisted the active flag, so on restart _session_data was rebuilt
+        empty and the next cycle started a brand-new SessionData — visible to
+        the user as a session counter that resets to 0 mid-charge.
+        """
         if not self._storage:
             return
         state = self._storage.get_ev_session_state()
         if not state:
             return
+
+        from .types import SessionData
+
+        def _restore_session_data(saved: dict) -> SessionData:
+            return SessionData(
+                active=saved.get("session_active", False),
+                start_time=saved.get("start_time"),
+                duration_minutes=saved.get("duration_minutes", 0.0),
+                energy_kwh=saved.get("energy_kwh", 0.0),
+                solar_energy_kwh=saved.get("solar_energy_kwh", 0.0),
+                grid_energy_kwh=saved.get("grid_energy_kwh", 0.0),
+                battery_energy_kwh=saved.get("battery_energy_kwh", 0.0),
+                solar_share_pct=saved.get("solar_share_pct", 0.0),
+                cost_chf=saved.get("cost_chf", 0.0),
+                avg_power_w=saved.get("avg_power_w", 0.0),
+            )
 
         # Multi-charger (#112): restore all chargers
         if self._ev_devices:
@@ -2453,17 +2898,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 cstate = per_charger.get(cid, state if cid == next(iter(self._ev_devices)) else {})
                 ev_dev._session_active = cstate.get("session_active", False)
                 ev_dev._current_setpoint = cstate.get("current_setpoint", 0.0)
+                # Restore the full SessionData (#282) — energy_kwh, source
+                # split, start_time, cost. Without this the next cycle's
+                # _update_session_tracking sees `not _session_data.active`
+                # and starts a brand-new SessionData mid-charge.
+                self._session_data_per_charger[cid] = _restore_session_data(cstate)
                 _LOGGER.info(
-                    "Restored EV session for %s: active=%s, setpoint=%.0fA",
+                    "Restored EV session for %s: active=%s, setpoint=%.0fA, %.2fkWh",
                     ev_dev.name, ev_dev._session_active, ev_dev._current_setpoint,
+                    self._session_data_per_charger[cid].energy_kwh,
                 )
+            # Seed the primary _session_data so legacy callers reading it
+            # directly see the restored values too.
+            primary_cid = next(iter(self._ev_devices))
+            self._session_data = self._session_data_per_charger[primary_cid]
         elif self._ev_device:
             ev = self._ev_device
             ev._session_active = state.get("session_active", False)
             ev._current_setpoint = state.get("current_setpoint", 0.0)
+            self._session_data = _restore_session_data(state)
             _LOGGER.info(
-                "Restored EV session: active=%s, setpoint=%.0fA",
-                ev._session_active, ev._current_setpoint,
+                "Restored EV session: active=%s, setpoint=%.0fA, %.2fkWh",
+                ev._session_active, ev._current_setpoint, self._session_data.energy_kwh,
             )
         self._ev_last_change_time = None
 
@@ -2476,23 +2932,57 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._ev_devices:
             per_charger = {}
             for cid, ev_dev in self._ev_devices.items():
-                per_charger[cid] = {
-                    "session_active": ev_dev._session_active,
-                    "current_setpoint": ev_dev._current_setpoint,
-                }
-            # Also save primary charger at top level for backward compat
-            primary = next(iter(self._ev_devices.values()))
+                sd = self._session_data_per_charger.get(cid)
+                per_charger[cid] = self._serialize_session_state(
+                    ev_dev._session_active, ev_dev._current_setpoint, sd,
+                )
+            # Also save primary charger at top level for backward compat with
+            # older releases that read the top-level keys without traversing
+            # the "chargers" dict.
+            primary_cid = next(iter(self._ev_devices))
+            primary_dev = self._ev_devices[primary_cid]
+            primary_sd = self._session_data_per_charger.get(primary_cid)
             self._storage.set_ev_session_state({
-                "session_active": primary._session_active,
-                "current_setpoint": primary._current_setpoint,
+                **self._serialize_session_state(
+                    primary_dev._session_active, primary_dev._current_setpoint, primary_sd,
+                ),
                 "chargers": per_charger,
             })
         elif self._ev_device:
             ev = self._ev_device
-            self._storage.set_ev_session_state({
-                "session_active": ev._session_active,
-                "current_setpoint": ev._current_setpoint,
+            self._storage.set_ev_session_state(
+                self._serialize_session_state(
+                    ev._session_active, ev._current_setpoint, self._session_data,
+                ),
+            )
+
+    def _serialize_session_state(
+        self, session_active: bool, current_setpoint: float, sd,
+    ) -> dict:
+        """Build a storage-safe dict for one charger's session state (#282).
+
+        Persists more than session_active/current_setpoint now: the full
+        SessionData record so an HA restart mid-charge doesn't reset the
+        session meter to 0. ``sd`` may be None for chargers that have not
+        had a session yet — emit only the always-on fields in that case.
+        """
+        payload = {
+            "session_active": session_active,
+            "current_setpoint": current_setpoint,
+        }
+        if sd is not None:
+            payload.update({
+                "start_time": sd.start_time,
+                "duration_minutes": sd.duration_minutes,
+                "energy_kwh": sd.energy_kwh,
+                "solar_energy_kwh": sd.solar_energy_kwh,
+                "grid_energy_kwh": sd.grid_energy_kwh,
+                "battery_energy_kwh": sd.battery_energy_kwh,
+                "solar_share_pct": sd.solar_share_pct,
+                "cost_chf": sd.cost_chf,
+                "avg_power_w": sd.avg_power_w,
             })
+        return payload
 
     def _update_ev_intelligence(
         self, power: PowerReadings, energy,
@@ -2542,14 +3032,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 if not charger_connected and ev_dev.power_entity_id:
                     charger_connected = charger_power > 50
 
-                # Accumulate per-charger daily energy (#193)
-                # Use sunrise-based day (offset by 7h) so midnight doesn't
-                # split a night-charging session across two "days".
+                # Accumulate per-charger daily energy (#193).
+                #
+                # Boundary: each charger's "EV day" ends at its own ``Charge by``
+                # deadline (#280) — not sunrise. The legacy sunrise boundary
+                # wiped the counter between hitting Min (~03:00) and the night
+                # window's end (~07:00) on short summer nights, causing SEM to
+                # see ``remaining = daily_target`` again and re-fire night
+                # charging until 07:00 — billing the user twice for the same
+                # daily target. Resetting at the deadline instead means the
+                # counter only rolls over once today's commitment is closed.
+                # Solar charging between sunrise and the deadline accumulates
+                # into yesterday's bucket — harmless, since Min was already hit.
                 if charger_power > 0:
-                    ev_day = self.time_manager.get_current_meter_day_sunrise_based().isoformat()
-                    if self._daily_ev_per_charger_date != ev_day:
-                        self._daily_ev_per_charger = {}
-                        self._daily_ev_per_charger_date = ev_day
+                    cfg_for_cid = (
+                        next((c for c in (self.config.get("ev_chargers") or [])
+                              if c.get("id") == cid), {})
+                    ) or {}
+                    target_time = self._charger_target_time(cfg_for_cid)
+                    ev_day = self.time_manager.get_current_meter_day_offset_based(
+                        target_time
+                    ).isoformat()
+                    if self._daily_ev_per_charger_date.get(cid) != ev_day:
+                        # Per-charger reset (Car A at 07:00, Car B at 08:00 don't
+                        # disturb each other) — only this cid's bucket rolls over.
+                        self._daily_ev_per_charger[cid] = 0.0
+                        self._daily_ev_per_charger_date[cid] = ev_day
                     increment = charger_power * interval_hours / 1000  # W → kWh
                     self._daily_ev_per_charger[cid] = (
                         self._daily_ev_per_charger.get(cid, 0.0) + increment
@@ -2901,8 +3409,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return status
 
     async def async_update_config(self, config_update: Dict[str, Any]) -> None:
-        """Update coordinator configuration."""
-        self.config = {**self.config, **config_update}
+        """Update coordinator configuration.
+
+        Mutate ``self.config`` in place rather than rebinding. Multiple
+        components (TimeManager, EnergyCalculator, ChargingStateMachine,
+        BatteryChargeAdapter, …) hold a reference to the original config
+        dict captured at construction. Rebinding leaves them pointing at
+        the stale dict, so a slider change like ``night_latest_end`` would
+        update ``self.config`` but never reach ``time_manager._config``
+        until the next integration reload. Caught live by
+        tests/live/test_overnight_window.sh — without this, the night-end
+        sensor stayed pinned at the old value after the slider moved.
+        """
+        self.config.update(config_update)
         self._mirror_primary_charger_to_global()  # keep legacy global keys fresh (#255)
         _LOGGER.info("Configuration updated: %s", list(config_update.keys()))
 

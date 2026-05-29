@@ -21,10 +21,14 @@ from custom_components.solar_energy_management.coordinator.types import PowerRea
 
 
 def _amps(home_w, peak_w, wpa, *, min_a=6, max_a=16, ev_w=0.0, grid_w=0.0,
-          batt_w=0.0):
+          batt_w=0.0, committed_w=0.0):
     """Call the helper with a fake self that reports peak_w as the peak limit."""
     obj = Mock()
     obj._get_peak_limit_w = Mock(return_value=peak_w)
+    # Shared night peak budget (#274/H1): watts already committed to
+    # higher-priority chargers. A real Mock would auto-create this as a Mock
+    # object and break the arithmetic, so set it explicitly.
+    obj._night_committed_w = committed_w
     p = PowerReadings()
     p.home_consumption_power = home_w
     p.ev_power = ev_w
@@ -83,3 +87,21 @@ def test_battery_state_never_changes_result():
     charging = _amps(home_w=700.0, peak_w=6000.0, wpa=690.0, batt_w=3000.0,
                      grid_w=8000.0, ev_w=5000.0)
     assert base == discharging == charging
+
+
+def test_shared_peak_budget_shrinks_headroom_for_later_chargers():
+    """#274/H1: a sibling charger's committed draw reduces this charger's headroom.
+
+    Same house load + peak, but with 4 kW already committed to a higher-priority
+    charger the remaining headroom drops, so this charger is sized lower — the
+    fleet stays under the shared peak instead of each grabbing the full headroom.
+    """
+    # 6 kW peak, 0.5 kW home → 5.5 kW headroom → 7A at 690 W/A (no sibling).
+    alone = _amps(home_w=500.0, peak_w=6000.0, wpa=690.0, max_a=32)
+    # 4 kW committed to a sibling → 1.5 kW headroom → ~2A → clamps to min 6.
+    with_sibling = _amps(home_w=500.0, peak_w=6000.0, wpa=690.0, max_a=32,
+                         committed_w=4000.0)
+    assert with_sibling < alone
+    # And two chargers must not each claim the full ~5.5 kW: alone≈8A (5.5kW),
+    # second≈2A clamped to 6A min; combined draw stays bounded by peak intent.
+    assert with_sibling == 6  # min-clamped, not another ~8A

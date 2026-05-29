@@ -1861,6 +1861,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "solar_sufficient": self.coordinator.data.get("solar_sufficient"),
                 "charging_strategy": self.coordinator.data.get("charging_strategy"),
                 "strategy_reason": self.coordinator.data.get("charging_strategy_reason"),
+                # EV charge-target deadline (#246) + tariff-optimized status (#247)
+                "ev_target_time": self.coordinator.data.get("ev_target_time"),
+                "ev_tariff_optimized": self.coordinator.data.get("ev_tariff_optimized"),
+                "ev_tariff_waiting": self.coordinator.data.get("ev_tariff_waiting"),
+                "ev_deadline_reachable": self.coordinator.data.get("ev_deadline_reachable"),
+                "ev_deadline_hours": self.coordinator.data.get("ev_deadline_hours"),
+                "ev_next_cheap_window": self.coordinator.data.get("ev_next_cheap_window"),
+                # Today's plan rows (#282) — list of {when, kind, label, detail, values}.
+                # sem-today-plan-card consumes this directly.
+                "today_plan": self.coordinator.data.get("today_plan") or [],
             })
         elif self.entity_description.key == "charging_strategy":
             attrs.update({
@@ -1877,6 +1887,23 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "home_consumption": self.coordinator.data.get("home_consumption_total"),
                 "safe_discharge_power": self.coordinator.data.get("safe_discharge_power"),
                 "excess_solar": self.coordinator.data.get("excess_solar"),
+            })
+        elif self.entity_description.key == "tariff_current_import_rate":
+            # Rich price data for the price card (#257): level, summary, next
+            # cheap window, and the upcoming hourly curve.
+            d = self.coordinator.data
+            attrs.update({
+                "price_level": d.get("tariff_price_level"),
+                "currency": d.get("tariff_currency"),
+                "provider": d.get("tariff_provider"),
+                "is_dynamic": d.get("tariff_is_dynamic"),
+                "today_min": d.get("tariff_today_min_price"),
+                "today_max": d.get("tariff_today_max_price"),
+                "today_avg": d.get("tariff_today_avg_price"),
+                "next_cheap_start": d.get("tariff_next_cheap_start"),
+                "next_cheap_end": d.get("tariff_next_cheap_end"),
+                "upcoming": d.get("tariff_upcoming"),
+                "schedule_today": d.get("tariff_schedule_today"),
             })
         elif self.entity_description.key == "load_management_status":
             # Add device list details for dashboard table
@@ -2041,8 +2068,40 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         return None
 
     def _format_charging_state(self, state: str) -> str:
-        """Format charging state to human-readable message (#62)."""
+        """Format charging state to human-readable message (#62).
+
+        Display-honesty guard (#282 followup): the state machine can return
+        SOLAR_CHARGING_ACTIVE based on the redirect-inflated ``ev_budget``
+        even when the actuator is at 0 A and the EV is drawing nothing,
+        because ``_build_charging_context`` and ``_execute_ev_control`` use
+        *different* budget formulas. Caught live on PROD 2026-05-29 when
+        the dashboard showed "Solar mode - Charging active" with
+        ``calculated_current=0 A`` and ``ev_power=0 W``. Until the three
+        budget paths are unified, demote the displayed label whenever the
+        published actuator state contradicts "active": this is a
+        last-mile fix at the user-facing string only — the underlying
+        ``charging_state`` value is unchanged, so other consumers
+        (solar_charging_status, notifications, automations) keep their
+        existing behaviour.
+        """
+        from .consts.states import ChargingState, get_status_message
+
         if not state or not self.coordinator.data:
             return "Unknown"
-        from .consts.states import get_status_message
+
+        # Only the "active" labels lie when the actuator is idle. Allowed /
+        # waiting / paused / target_reached / super-charging already match
+        # what the user sees on the dashboard.
+        if state == ChargingState.SOLAR_CHARGING_ACTIVE:
+            try:
+                calc_a = float(self.coordinator.data.get("calculated_current", 0) or 0)
+                ev_w = float(self.coordinator.data.get("ev_charging_power", 0) or 0)
+            except (TypeError, ValueError):
+                calc_a, ev_w = 0.0, 0.0
+            # Idle floor: 6 A * 3-phase * 230 V ≈ 4140 W is the smallest real
+            # session; 500 W is comfortably "definitely not charging" with
+            # headroom for measurement noise and wallbox standby draw.
+            if calc_a == 0 and ev_w < 500:
+                state = ChargingState.SOLAR_CHARGING_ALLOWED
+
         return get_status_message(state, self.hass)

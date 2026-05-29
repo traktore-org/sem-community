@@ -75,11 +75,55 @@ class EnergyCalculator:
         # Auto-detected from recorder statistics (first solar energy entry)
         self._install_year_decimal: Optional[float] = None
 
+    def _ev_reset_day(self, now: datetime):
+        """Return today's EV-day bucket key, deadline-based (#279 follow-up).
+
+        Mirrors the per-charger reset boundary so the GLOBAL daily_ev_energy
+        sensor doesn't wipe at sunrise (~05:30 in summer) and instead rolls
+        at the user's actual ``Charge by`` deadline (default 07:00). For
+        multi-charger setups, uses the LATEST deadline across configured
+        chargers — the global counter survives until ALL chargers have
+        rolled over, otherwise a charger with a later deadline would see
+        a phantom mid-night reset.
+
+        Falls back to the legacy sunrise-based boundary only when no
+        chargers + no global default are configured (transition / pre-setup).
+        """
+        from ..consts.core import DEFAULT_EV_TARGET_TIME
+
+        # Gather all charger target_times + the global default
+        ev_chargers = self.config.get("ev_chargers") or []
+        deadlines = []
+        for c in ev_chargers:
+            tt = c.get("ev_target_time") or self.config.get("ev_target_time")
+            if tt:
+                deadlines.append(str(tt))
+        if not deadlines:
+            global_tt = self.config.get("ev_target_time") or DEFAULT_EV_TARGET_TIME
+            if global_tt:
+                deadlines.append(str(global_tt))
+
+        if not deadlines:
+            # Pure fallback — pre-#279 behaviour.
+            return self._time_manager.get_current_meter_day_sunrise_based()
+
+        # Pick the LATEST deadline so the global counter doesn't roll over
+        # before the slowest-deadline charger has finished its bucket.
+        latest = max(deadlines)
+        return self._time_manager.get_current_meter_day_offset_based(latest)
+
     def calculate_energy(self, power: PowerReadings) -> EnergyTotals:
         """Calculate energy totals by integrating power over time."""
         now = dt_util.now()
         today = now.date()  # Midnight-based reset — matches HA Energy Dashboard
-        ev_day = self._time_manager.get_current_meter_day_sunrise_based()  # Sunrise-based for EV only
+        # EV: deadline-based reset (#279 follow-up). The per-charger counter
+        # already rolls at each charger's Charge-by time; the GLOBAL
+        # daily_ev_energy stayed on sunrise-based reset until now, so users
+        # saw it wipe ~05:30 in summer even though the deadline was 07:00.
+        # User-reported on 2026-05-29 06:28 local: counter showed 0 well
+        # before the 07:00 deadline. Fix: use the same deadline-based
+        # boundary the per-charger counters use.
+        ev_day = self._ev_reset_day(now)
         month_key = f"{today.year}_{today.month}"
         year_key = f"{today.year}"
 
@@ -220,7 +264,7 @@ class EnergyCalculator:
 
         Used when a gap is detected to avoid energy spikes.
         """
-        ev_day = self._time_manager.get_current_meter_day_sunrise_based()
+        ev_day = self._ev_reset_day(dt_util.now())
         energy = EnergyTotals()
         energy.daily_solar = self._get_daily("solar", today)
         energy.monthly_solar = self._get_monthly("solar", month_key)

@@ -10,7 +10,7 @@
  *   entity_prefix: sensor.sem_   # default
  */
 
-import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
+import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semFormatPower, semGetCurrency, semDefineCard } from '../base/sem-shared.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
@@ -61,7 +61,7 @@ class SEMEVStatusCard extends SEMLitBase {
         let key = [
             'ev_connected', 'ev_charging', 'ev_power', 'calculated_current',
             'session_energy', 'session_solar_share', 'session_cost',
-            'daily_ev_energy', 'charging_state',
+            'daily_ev_energy', 'energy_ev_solar_percentage', 'charging_state',
         ].map(s => {
             const pfx = (s === 'ev_connected' || s === 'ev_charging')
                 ? 'binary_sensor.sem_' : prefix;
@@ -80,6 +80,15 @@ class SEMEVStatusCard extends SEMLitBase {
             key += '|' + this._chargers.map(id =>
                 hass.states[`switch.sem_charger_${id}_night_charging`]?.state || ''
             ).join(':');
+
+            // Deadline (#246) + tariff (#247) entities
+            key += '|' + this._chargers.map(id => [
+                hass.states[`time.sem_charger_${id}_target_time`]?.state || '',
+                hass.states[`switch.sem_charger_${id}_tariff_optimized`]?.state || '',
+            ].join(':')).join('|');
+            const _cs = hass.states[`${prefix}charging_state`]?.attributes || {};
+            key += '|' + [_cs.ev_tariff_waiting, _cs.ev_deadline_reachable,
+                _cs.ev_next_cheap_window].join(':');
 
             key += '|' + this._chargers.map(id =>
                 hass.states[`number.sem_charger_${id}_daily_ev_target`]?.state || ''
@@ -176,6 +185,125 @@ class SEMEVStatusCard extends SEMLitBase {
     }
 
     /**
+     * 12h EV plan strip (#282): a thin horizontal timeline rendered from the
+     * today_plan attribute on sem_charging_state. Walks the plan rows and
+     * paints a contiguous bar segment per EV state (idle / wait / charging /
+     * done) plus expensive-window tinting overlay. Self-renders nothing when
+     * there's no plan to show (no charger configured, Min already met, etc.).
+     */
+    _renderPlanStrip() {
+        const cs = this._hass?.states['sensor.sem_charging_state'];
+        const plan = cs?.attributes?.today_plan || [];
+        if (!Array.isArray(plan) || plan.length < 2) return nothing;
+        // Only show when there's at least one EV-specific row — otherwise the
+        // info value is too thin to justify the row.
+        const evKinds = new Set(['ev_charge_start','ev_min_reached','ev_deadline']);
+        if (!plan.some(r => evKinds.has(r.kind))) return nothing;
+
+        const now = Date.now();
+        const horizon = 12 * 3600 * 1000;  // 12h window
+        const end = now + horizon;
+        const w = 100;  // viewBox units (percent-like)
+        const xOf = (ts) => Math.max(0, Math.min(w, ((ts - now) / horizon) * w));
+
+        // Build EV state segments by walking the plan. State machine:
+        //   start         → idle
+        //   night_open    → wait (if tariff_waiting) else charging
+        //   ev_charge_start → charging
+        //   ev_min_reached  → done
+        //   ev_deadline     → end of horizon coverage
+        const evRows = plan.filter(r => ['now','night_open','ev_charge_start',
+            'ev_min_reached','ev_deadline'].includes(r.kind));
+        evRows.sort((a,b) => new Date(a.when) - new Date(b.when));
+        const tariffWait = !!cs?.attributes?.ev_tariff_waiting;
+        const segments = [];
+        let cursor = now;
+        let state = 'idle';
+        for (const r of evRows) {
+            const t = new Date(r.when).getTime();
+            if (t > cursor && t <= end) segments.push({s: cursor, e: t, state});
+            cursor = t;
+            if (r.kind === 'night_open') state = tariffWait ? 'wait' : 'charging';
+            else if (r.kind === 'ev_charge_start') state = 'charging';
+            else if (r.kind === 'ev_min_reached') state = 'done';
+            else if (r.kind === 'ev_deadline') state = 'done';
+        }
+        if (cursor < end) segments.push({s: cursor, e: end, state});
+
+        // Tinting overlay: expensive blocks darken the strip + cheap blocks lighten
+        const overlays = [];
+        for (const r of plan) {
+            const t = new Date(r.when).getTime();
+            if (r.kind === 'expensive_start' && t < end) {
+                // detail string holds end HH:MM — find end time by walking
+                const endHHMM = r.values?.end;
+                if (endHHMM) {
+                    const [hh, mm] = endHHMM.split(':').map(Number);
+                    const endDt = new Date(t); endDt.setHours(hh, mm, 0, 0);
+                    if (endDt.getTime() < t) endDt.setDate(endDt.getDate()+1);
+                    overlays.push({s: t, e: Math.min(endDt.getTime(), end),
+                                   kind: 'expensive'});
+                }
+            } else if (r.kind === 'cheap_start' && t < end) {
+                const endHHMM = r.values?.end;
+                if (endHHMM) {
+                    const [hh, mm] = endHHMM.split(':').map(Number);
+                    const endDt = new Date(t); endDt.setHours(hh, mm, 0, 0);
+                    if (endDt.getTime() < t) endDt.setDate(endDt.getDate()+1);
+                    overlays.push({s: t, e: Math.min(endDt.getTime(), end),
+                                   kind: 'cheap'});
+                }
+            }
+        }
+
+        const stateColor = (s) => ({
+            idle:     '#3a4252',
+            wait:     '#8353d1',
+            charging: '#8DC892',
+            done:     '#4db6ac',
+        })[s] || '#3a4252';
+        const overlayColor = (k) => k === 'cheap' ? '#8DC892' : '#f06292';
+
+        // Hourly ticks for time labels (every 3h)
+        const ticks = [];
+        for (let h = 0; h <= 12; h += 3) {
+            const t = now + h * 3600 * 1000;
+            const label = new Date(t).toLocaleTimeString([],
+                { hour: '2-digit', minute: '2-digit' });
+            ticks.push({x: xOf(t), label});
+        }
+
+        return html`
+            <div class="plan-strip" title="${this._t('today_plan_title')} (12h)">
+                <svg viewBox="0 0 ${w} 14" preserveAspectRatio="none" class="strip-svg">
+                    ${segments.map(s => svg`
+                        <rect x="${xOf(s.s)}" y="3" width="${xOf(s.e)-xOf(s.s)}"
+                              height="6" fill="${stateColor(s.state)}" />
+                    `)}
+                    ${overlays.map(o => svg`
+                        <rect x="${xOf(o.s)}" y="0" width="${xOf(o.e)-xOf(o.s)}"
+                              height="2" fill="${overlayColor(o.kind)}"
+                              opacity="0.75" />
+                    `)}
+                    <line x1="0" y1="9" x2="${w}" y2="9"
+                          stroke="rgba(255,255,255,0.08)" stroke-width="0.3" />
+                </svg>
+                <div class="strip-axis">
+                    ${ticks.map(t => html`
+                        <span class="tick" style="left: ${t.x}%">${t.label}</span>
+                    `)}
+                </div>
+                <div class="strip-legend">
+                    <span><i style="background:#3a4252"></i>${this._t('plan_strip_idle')}</span>
+                    <span><i style="background:#8353d1"></i>${this._t('plan_strip_wait')}</span>
+                    <span><i style="background:#8DC892"></i>${this._t('plan_strip_charging')}</span>
+                    <span><i style="background:#4db6ac"></i>${this._t('plan_strip_done')}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
      * Dual-handle charge-target range slider (#245).
      * Min handle = guaranteed (night/grid) floor; Max handle = solar ceiling.
      * Right edge (Max == scale max) = "full" (charge freely from sun).
@@ -260,8 +388,16 @@ class SEMEVStatusCard extends SEMLitBase {
         const session = this._val(`charger_${id}_session_energy`, 0);
         const dailyEnergy = this._val(`charger_${id}_daily_energy`, 0);
         const solar = this._val(`charger_${id}_session_solar_share`, 0);
-        // Prefer real vehicle SOC over estimated (#193)
-        const vehicleSoc = this._val(`charger_${id}_vehicle_soc`, null);
+        // Prefer real vehicle SOC over estimated (#193). The per-charger
+        // `sensor.sem_charger_<id>_vehicle_soc` was never created — the
+        // coordinator publishes a single global `sensor.sem_vehicle_soc`
+        // and context-swaps its value per charger each update. For the
+        // primary charger that's the right value; for secondary chargers
+        // it represents whichever was evaluated last in the cycle (close
+        // enough for display, and the estimated_soc fallback covers
+        // setups without any vehicle_soc_entity at all). (#282 audit)
+        const vehicleSoc = this._val(`charger_${id}_vehicle_soc`, null)
+            ?? this._val('vehicle_soc', null);
         const estimatedSoc = this._val(`charger_${id}_estimated_soc`, null);
         const soc = vehicleSoc != null ? vehicleSoc : estimatedSoc;
         const nights = this._entityVal(`number.sem_charger_${id}_nights_until_charge`, null);
@@ -298,6 +434,26 @@ class SEMEVStatusCard extends SEMLitBase {
             ? `number.sem_charger_${id}_target_soc_max`
             : `number.sem_charger_${id}_daily_ev_target_max`;
         const nightOnLive = this._stateStr(nightEntityId) === 'on';
+
+        // Deadline (#246) + tariff-optimized (#247)
+        const tariffEntityId = `switch.sem_charger_${id}_tariff_optimized`;
+        const tariffOnLive = this._stateStr(tariffEntityId) === 'on';
+        const targetTimeId = `time.sem_charger_${id}_target_time`;
+        const targetTimeRaw = this._stateStr(targetTimeId);  // "HH:MM:SS"
+        const targetTimeLabel = targetTimeRaw ? targetTimeRaw.slice(0, 5) : '—';
+        const setDefaultBtnId = `button.sem_charger_${id}_set_default_target`;
+        // Deadline / cheap-window status live on the charging_state sensor (primary).
+        const csAttrs = this._stateAttrs(`${this._prefix}charging_state`);
+        const deadlineUnreachable = csAttrs.ev_deadline_reachable === false;
+        const ncRaw = csAttrs.ev_next_cheap_window;
+        let nextCheapLabel = '';
+        if (ncRaw) {
+            try {
+                const d = new Date(ncRaw);
+                if (!isNaN(d)) nextCheapLabel = d.toLocaleTimeString([],
+                    { hour: '2-digit', minute: '2-digit' });
+            } catch (e) { /* ignore */ }
+        }
 
         // Range the charge will ADD to reach the Min (guaranteed) target, in km —
         // updates live as the Min handle moves. Solar may add more, up to Max. (#245)
@@ -378,8 +534,47 @@ class SEMEVStatusCard extends SEMLitBase {
                     </div>
                     ${this._renderRangeSlider(minEntityId, maxEntityId, isSoc)}
                     <div class="ct-row">
-                        <span class="ct-label">${this._t('night_charging')}</span>
+                        <span class="ct-label">${this._t('ev_grid_charging')}</span>
                         <span class="ct-ctl">${ctToggle(nightOnLive, nightEntityId)}</span>
+                    </div>
+                    <!-- Tariff is a refinement OF grid charging (when, not whether): nest it.
+                         Hidden when overnight grid charging is OFF so the hierarchy is enforced visually -
+                         the switch cannot be toggled in isolation (D2). -->
+                    ${nightOnLive ? html`
+                        <div class="ct-row ct-subrow">
+                            <span class="ct-label">${this._t('ev_tariff_mode')}</span>
+                            <span class="ct-ctl">${ctToggle(tariffOnLive, tariffEntityId)}</span>
+                        </div>
+                        ${tariffOnLive ? html`
+                            <div class="ct-subhint">
+                                ${this._t('ev_tariff_hint')}${nextCheapLabel
+                                    ? html` · ${this._t('ev_next_cheap')} <b style="color:#8DC892">${nextCheapLabel}</b>`
+                                    : nothing}
+                            </div>
+                        ` : nothing}
+                    ` : nothing}
+                    <div class="ct-row clickable"
+                        @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info',
+                            { bubbles: true, composed: true, detail: { entityId: targetTimeId } }))}>
+                        <span class="ct-label">${this._t('ev_charge_by')}</span>
+                        <span class="ct-ctl ct-time">
+                            <ha-icon icon="mdi:clock-end" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
+                            ${targetTimeLabel}
+                        </span>
+                    </div>
+                    ${deadlineUnreachable ? html`
+                        <div class="ct-warn">
+                            <ha-icon icon="mdi:clock-alert" style="--mdc-icon-size:14px;color:#f06292"></ha-icon>
+                            <span>${this._t('ev_deadline_unreachable_short')}</span>
+                        </div>
+                    ` : nothing}
+                    ${this._renderPlanStrip()}
+                    <div class="ct-row">
+                        <span class="ct-set-default"
+                            @click=${() => this._callService('button', 'press', { entity_id: setDefaultBtnId })}>
+                            <ha-icon icon="mdi:content-save-cog" style="--mdc-icon-size:13px"></ha-icon>
+                            ${this._t('set_as_default')}
+                        </span>
                     </div>
                 </div>
 
@@ -437,7 +632,13 @@ class SEMEVStatusCard extends SEMLitBase {
         const power = this._val('ev_power', 0);
         const current = this._val('calculated_current', 0);
         const sessionEnergy = this._val('session_energy', 0);
-        const solarShare = this._val('session_solar_share', 0);
+        // Solar Share sits next to 'Today: X kWh' in the status row, so it
+        // must read the DAILY metric, not the per-cycle session. Previously
+        // pointed at session_solar_share — that produced labels like
+        // 'Today 8.7 kWh · Solar Share 25%' where the 25% was just the
+        // current session, not today's. Switched to energy_ev_solar_percentage
+        // (time-integrated daily attribution from the flow accumulator).
+        const solarShare = this._val('energy_ev_solar_percentage', 0);
         const sessionCost = this._val('session_cost', 0);
         const dailyEnergy = this._val('daily_ev_energy', 0);
         const strategy = this._valStr('charging_state');
@@ -844,8 +1045,60 @@ class SEMEVStatusCard extends SEMLitBase {
                 display: flex; align-items: center; min-height: 32px;
             }
             .ct-row + .ct-row { border-top: 1px solid rgba(255,255,255,0.06); }
+            .ct-row.clickable { cursor: pointer; }
+            /* Tariff is nested under "Overnight grid charging" — it refines WHEN
+               grid charging happens, not WHETHER (#247 UX). */
+            .ct-subrow { padding-left: 14px; border-left: 2px solid rgba(141,200,146,0.35); margin-left: 2px; }
+            .ct-subrow .ct-label { color: var(--secondary-text-color, #b5b5b5); }
+            .ct-subhint {
+                padding: 2px 0 4px 16px; margin-left: 2px;
+                border-left: 2px solid rgba(141,200,146,0.18);
+                font-size: 10.5px; line-height: 1.3; color: var(--secondary-text-color, #999);
+            }
             .ct-label { font-size: 12px; color: var(--primary-text-color, #e0e0e0); }
             .ct-ctl { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+            .ct-time {
+                font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+                color: var(--primary-text-color, #e0e0e0);
+            }
+            .ct-warn {
+                display: flex; align-items: center; gap: 6px;
+                font-size: 11.5px; color: #f06292; padding: 5px 0 2px;
+            }
+            /* 12h EV plan strip (#282) */
+            .plan-strip {
+                margin: 8px 0 2px; padding: 4px 0 2px;
+                border-top: 1px dashed rgba(255,255,255,0.06);
+            }
+            .strip-svg {
+                width: 100%; height: 14px; display: block;
+            }
+            .strip-axis {
+                position: relative; height: 12px; margin-top: 2px;
+                font-size: 9.5px; color: var(--secondary-text-color, #888);
+            }
+            .strip-axis .tick {
+                position: absolute; transform: translateX(-50%);
+                font-variant-numeric: tabular-nums; white-space: nowrap;
+            }
+            .strip-legend {
+                display: flex; gap: 8px; flex-wrap: wrap;
+                font-size: 9.5px; color: var(--secondary-text-color, #888);
+                margin-top: 4px;
+            }
+            .strip-legend span {
+                display: inline-flex; align-items: center; gap: 3px;
+            }
+            .strip-legend i {
+                width: 8px; height: 8px; border-radius: 2px;
+                display: inline-block;
+            }
+            .ct-set-default {
+                margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+                font-size: 11px; color: var(--secondary-text-color, #999);
+                cursor: pointer; padding: 2px 0;
+            }
+            .ct-set-default:hover { color: #8DC892; }
             .ct-val {
                 background: rgba(141,200,146,0.14); color: #8DC892;
                 border: 1px solid rgba(141,200,146,0.35);

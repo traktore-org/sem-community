@@ -38,6 +38,16 @@ from .coordinator import SEMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+
+class _SEMYAMLModeSkip(Exception):
+    """Sentinel: bail out of the Lovelace resource registration block
+    when the user is running YAML-mode Lovelace (#283). YAML-mode
+    resources are read-only; the user has to add SEM's bundle to
+    ``configuration.yaml`` themselves. Logged with the exact URLs above
+    the raise; the outer ``except`` clause swallows this quietly so it
+    doesn't get reported as a generic "could not register" warning."""
+
+
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 PLATFORMS: list[Platform] = [
@@ -46,6 +56,8 @@ PLATFORMS: list[Platform] = [
     Platform.NUMBER,
     Platform.BINARY_SENSOR,
     Platform.SELECT,
+    Platform.TIME,
+    Platform.BUTTON,
 ]
 
 
@@ -172,6 +184,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 "ev_kwh_per_100km", "ev_target_type",
                 # #255 Phase 4 — also converted to per-charger
                 "ev_charging_mode", "ev_phases",
+                # #246 Phase 2 — per-charger charge-by deadline
+                "ev_target_time",
             )
             new_data = {**entry.data}
             new_options = {**entry.options}
@@ -788,8 +802,23 @@ async def _async_register_services(
                 "custom_components", DOMAIN, "dashboard", "card",
             )
 
+            # Top-level JS files we install as Lovelace resources. The
+            # canonical card bundle is at dashboard/card/dist/sem-cards.js
+            # (registered by _async_register_frontend_resources via its hashed
+            # URL) — a top-level sem-cards.js is ALWAYS a stale rsync artifact
+            # and would shadow the dist bundle by winning the
+            # customElements.define race (#282 / user-reported regression
+            # where the EV card kept reappearing on the Control tab after
+            # being removed in code).
+            CANONICAL_TOP_LEVEL = {
+                "sem-localize.js",
+                "sem-reactive-base.js",
+                "sem-shared.js",
+                "sem-system-diagram-card.js",
+            }
+
             def _install_assets() -> tuple[bool, list[str]]:
-                """Sync all dashboard assets to /config/www/. Runs in executor."""
+                """Sync top-level dashboard assets to /config/www/. Runs in executor."""
                 os.makedirs(www_target_dir, exist_ok=True)
                 svg_installed = False
                 if os.path.exists(svg_source):
@@ -798,14 +827,38 @@ async def _async_register_services(
 
                 os.makedirs(card_www_dir, exist_ok=True)
                 cards: list[str] = []
+                shadow_removed: list[str] = []
                 if os.path.isdir(card_src_dir):
                     for fname in os.listdir(card_src_dir):
-                        if fname.endswith(".js"):
-                            shutil.copy2(
-                                os.path.join(card_src_dir, fname),
-                                os.path.join(card_www_dir, fname),
-                            )
-                            cards.append(fname)
+                        if not fname.endswith(".js"):
+                            continue
+                        # Hard whitelist: never install a top-level
+                        # sem-cards.js (it shadows the dist bundle) or any
+                        # other unrecognised top-level *.js that isn't part
+                        # of the canonical set.
+                        if fname not in CANONICAL_TOP_LEVEL:
+                            stale_target = os.path.join(card_www_dir, fname)
+                            if os.path.exists(stale_target):
+                                os.remove(stale_target)
+                                shadow_removed.append(fname)
+                            continue
+                        shutil.copy2(
+                            os.path.join(card_src_dir, fname),
+                            os.path.join(card_www_dir, fname),
+                        )
+                        cards.append(fname)
+                # Also nuke any pre-existing /config/www/ shadow of the
+                # bundle from earlier bad installs — the dist bundle is the
+                # only valid sem-cards.js.
+                stale_top_cards = os.path.join(card_www_dir, "sem-cards.js")
+                if os.path.exists(stale_top_cards):
+                    os.remove(stale_top_cards)
+                    shadow_removed.append("sem-cards.js (top-level shadow)")
+                if shadow_removed:
+                    _LOGGER.info(
+                        "Removed %d shadow card file(s) from %s: %s",
+                        len(shadow_removed), card_www_dir, shadow_removed,
+                    )
                 return svg_installed, cards
 
             svg_installed, installed_cards = await hass.async_add_executor_job(_install_assets)
@@ -842,8 +895,14 @@ async def _async_register_services(
             if "items" not in resources_data:
                 resources_data["items"] = []
 
-            # Remove stale standalone resource entries (/local/sem-*.js)
+            # Remove stale standalone resource entries (/local/sem-*.js) AND
+            # any top-level sem-cards.js shadow (the canonical bundle is at
+            # /dist/sem-cards.js — a top-level one is always a stale rsync
+            # artifact and shadows the dist bundle by winning the
+            # customElements.define race, leaving users with the OLD bundle
+            # rendered even after a clean redeploy). See #282 regression.
             component_prefix = f"/local/custom_components/{DOMAIN}/"
+            shadow_url = f"{component_prefix}dashboard/card/sem-cards.js"
             before_count = len(resources_data["items"])
             resources_data["items"] = [
                 item for item in resources_data["items"]
@@ -851,10 +910,14 @@ async def _async_register_services(
                     item.get("url", "").startswith("/local/sem-")
                     and component_prefix not in item.get("url", "")
                 )
+                and item.get("url", "").split("?")[0] != shadow_url
             ]
             stale_count = before_count - len(resources_data["items"])
             if stale_count:
-                _LOGGER.info("Removed %d stale Lovelace resource(s)", stale_count)
+                _LOGGER.info(
+                    "Removed %d stale Lovelace resource(s) (incl. any sem-cards.js shadow)",
+                    stale_count,
+                )
 
             # Cache-busting: use timestamp so every generate_dashboard
             # call forces browsers to reload card JS files.
@@ -926,13 +989,42 @@ async def _async_register_services(
             if not views:
                 raise ValueError("Dashboard config has no views")
 
-            # Save dashboard to storage
+            # Save dashboard to storage. Prefer HA's running LovelaceStorage
+            # (writes storage AND updates the in-memory cache AND fires
+            # `lovelace_updated`) so the regenerated dashboard reloads live —
+            # no HA restart needed. Falls back to a direct Store write for the
+            # first-install case, where HA hasn't registered the dashboard yet.
             storage_key = f"lovelace.{dashboard_path}"
-            dashboard_store = Store(hass, 1, storage_key)
+            config_payload = {"views": views}
+            reloaded_live = False
+            try:
+                ll_data = hass.data.get("lovelace")
+                dashboards = getattr(ll_data, "dashboards", None)
+                if dashboards is None and isinstance(ll_data, dict):
+                    dashboards = ll_data.get("dashboards")
+                live_dash = dashboards.get(dashboard_path) if isinstance(dashboards, dict) else None
+                if live_dash is not None and hasattr(live_dash, "async_save"):
+                    await live_dash.async_save(config_payload)
+                    reloaded_live = True
+                    _LOGGER.info(
+                        "Dashboard '%s' regenerated and reloaded live (%d views, no restart needed)",
+                        dashboard_path, len(views),
+                    )
+            except Exception as live_err:
+                _LOGGER.warning(
+                    "Live Lovelace reload failed, falling back to direct write: %s",
+                    live_err,
+                )
 
-            storage_data = {"config": {"views": views}}
-            await dashboard_store.async_save(storage_data)
-            _LOGGER.info("Dashboard config saved to .storage/%s with %d views", storage_key, len(views))
+            if not reloaded_live:
+                dashboard_store = Store(hass, 1, storage_key)
+                storage_data = {"config": config_payload}
+                await dashboard_store.async_save(storage_data)
+                _LOGGER.info(
+                    "Dashboard config saved to .storage/%s with %d views "
+                    "(restart HA to apply — first install or HA Lovelace API unavailable)",
+                    storage_key, len(views),
+                )
 
             # Register dashboard in lovelace_dashboards storage
             dashboards_store = Store(hass, 1, "lovelace_dashboards")
@@ -964,27 +1056,55 @@ async def _async_register_services(
 
             await dashboards_store.async_save(dashboards_data)
 
-            await hass.services.async_call(
-                "persistent_notification", "create",
-                {
-                    "title": "SEM Dashboard Created",
-                    "message": (
-                        f"Dashboard **{dashboard_title}** created with {len(views)} views.\n\n"
-                        f"Access at: /lovelace/{dashboard_path}\n\n"
-                        f"Home Assistant will restart in 5 seconds to apply changes."
-                    ),
-                    "notification_id": "sem_dashboard_success",
-                },
-            )
-            _LOGGER.info("Dashboard created: %s at /%s — scheduling restart", dashboard_title, dashboard_path)
+            # Restart only when the live-reload path didn't fire — that's the
+            # first-install case where HA hasn't yet registered the dashboard
+            # in its in-memory Lovelace registry, so the on-disk write alone
+            # won't surface the new dashboard until next startup. When live-
+            # reload succeeded (#257 / 1.5.15+), the in-memory cache and the
+            # `lovelace_updated` event already pushed the new config to every
+            # connected client — a browser hard-refresh is enough, and the
+            # forced restart was both unnecessary and surprising (#282/UX).
+            if reloaded_live:
+                await hass.services.async_call(
+                    "persistent_notification", "create",
+                    {
+                        "title": "SEM Dashboard Updated",
+                        "message": (
+                            f"Dashboard **{dashboard_title}** regenerated with {len(views)} views.\n\n"
+                            f"Changes are live now — refresh the browser if cards look stale.\n\n"
+                            f"Access at: /lovelace/{dashboard_path}"
+                        ),
+                        "notification_id": "sem_dashboard_success",
+                    },
+                )
+                _LOGGER.info(
+                    "Dashboard updated live: %s at /%s — no restart needed",
+                    dashboard_title, dashboard_path,
+                )
+            else:
+                await hass.services.async_call(
+                    "persistent_notification", "create",
+                    {
+                        "title": "SEM Dashboard Created",
+                        "message": (
+                            f"Dashboard **{dashboard_title}** created with {len(views)} views.\n\n"
+                            f"Access at: /lovelace/{dashboard_path}\n\n"
+                            f"Home Assistant will restart in 5 seconds to apply the first install."
+                        ),
+                        "notification_id": "sem_dashboard_success",
+                    },
+                )
+                _LOGGER.info(
+                    "Dashboard created: %s at /%s — scheduling first-install restart",
+                    dashboard_title, dashboard_path,
+                )
 
-            # Schedule HA restart so the new dashboard is visible in the browser
-            async def _delayed_restart(_now):
-                _LOGGER.info("Restarting Home Assistant to apply dashboard changes")
-                await hass.services.async_call("homeassistant", "restart")
+                async def _delayed_restart(_now):
+                    _LOGGER.info("Restarting Home Assistant to apply first-install dashboard")
+                    await hass.services.async_call("homeassistant", "restart")
 
-            from homeassistant.helpers.event import async_call_later
-            async_call_later(hass, 5, _delayed_restart)
+                from homeassistant.helpers.event import async_call_later
+                async_call_later(hass, 5, _delayed_restart)
 
         except Exception as e:
             _LOGGER.error("Dashboard generation failed: %s", e, exc_info=True)
@@ -1459,10 +1579,32 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         ]
 
         try:
-            from homeassistant.components.lovelace.resources import ResourceStorageCollection
-            resources: ResourceStorageCollection = hass.data["lovelace"].resources
+            resources = hass.data["lovelace"].resources
             if not resources.loaded:
                 await resources.async_load()
+
+            # YAML-mode Lovelace exposes a ``ResourceYAMLCollection`` whose
+            # resource list is sourced from ``configuration.yaml`` and is
+            # read-only — it doesn't implement ``async_create_item`` /
+            # ``async_update_item`` / ``async_delete_item``. We can't
+            # programmatically register the bundle there. Feature-detect via
+            # the methods we'd need, and surface the URLs the user has to
+            # add manually so the dashboard can actually load. Without this
+            # branch the dashboard came up blank with only an unhelpful
+            # warning in the log (#283 — Brkie, YAML-mode Lovelace).
+            yaml_mode = not hasattr(resources, "async_create_item")
+            if yaml_mode:
+                _LOGGER.warning(
+                    "SEM detected YAML-mode Lovelace; SEM card resources cannot be "
+                    "registered automatically. Add the following to "
+                    "configuration.yaml under `lovelace.resources` and restart:\n"
+                    "  - url: %s\n    type: module\n"
+                    "  - url: %s\n    type: module",
+                    cards_bundle_url, f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
+                )
+                # Skip the rest of the registration block — none of the
+                # mutating methods below are callable in YAML mode.
+                raise _SEMYAMLModeSkip()
 
             # Build lookup: base URL (without query) → resource item
             existing_by_base = {}
@@ -1500,6 +1642,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     diagram_item["id"], {"res_type": "module", "url": diagram_url}
                 )
                 _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
+        except _SEMYAMLModeSkip:
+            # Already logged the "manual config needed" warning above.
+            pass
         except Exception as e:
             _LOGGER.warning("Could not register SEM Lovelace resources: %s", e)
 

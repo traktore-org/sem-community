@@ -1,0 +1,129 @@
+name: "2026-05-29 multi-charger split — Phase B.5 distribution (#284)"
+description: |
+  Phase B.5 scenario for #284 (@RienduPre, two-charger Wallbox Pulsar
+  on Growatt). When SEM has 2+ chargers, the multi-charger distribution
+  branch at coordinator.py:960 reads the canonical EVBudget.net_w
+  (Phase B.5 fix, commit f1869f0) instead of calling the legacy
+  _calculate_solar_ev_budget. This scenario locks the contract:
+
+    1. The canonical EVBudget is computed and exposed as net_w.
+    2. SurplusController.distribute_ev_budget receives that exact
+       net_w (not a different value from the legacy formula).
+    3. The priority cascade splits it sensibly across the two
+       chargers — higher-priority gets first dibs, the rest cascades.
+    4. The sum of per-charger budgets ≤ canonical net_w (no
+       over-allocation, no leakage from a second budget formula).
+
+  Why a synthetic scenario and not a live test: HA-TEST runs a single
+  KEBA. Faking a second charger via template entities is non-trivial
+  (the actuator service call wouldn't have a real backend) — see the
+  Option A / B discussion in tonight's session notes. This harness
+  scenario covers the same decision code at the unit-pipeline level.
+
+  @RienduPre's setup will be the real live verification once v1.6.0
+  ships: if his "Car charged partly from grid" report goes silent
+  post-upgrade, B.5 reached the right code. If it doesn't, we know
+  the distribution branch isn't where his bug lives and we look
+  deeper (e.g. SurplusController itself, or per-charger session
+  state tracking).
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  # Force pv mode so the strategy decision goes through the main zone
+  # logic (Zone 3 → solar_only with redirect, Zone 4 → battery_assist).
+  # Auto mode with the harness's default 25kWh forecast would route
+  # everything through self_consumption — useful elsewhere but not
+  # what this scenario is testing.
+  ev_charging_mode: "pv"
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+
+  # Two chargers — @RienduPre's setup mirror. Priority 1 takes budget
+  # first; priority 2 only gets the cascade remainder. Both 3-phase EU
+  # spec, 6 A min (4140 W threshold) / 16 A max (11040 W ceiling).
+  ev_chargers:
+    - id: charger_left
+      name: "Wallbox Left"
+      priority: 1
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      ev_charging_mode: "pv"
+      daily_ev_target: 7.0
+    - id: charger_right
+      name: "Wallbox Right"
+      priority: 2
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      ev_charging_mode: "pv"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Three steady-state regimes — one per cycle group — to exercise the
+# canonical method across multiple strategies. Sticky timeline carries
+# values forward, so each row only sets what changes.
+timeline:
+  # ─ Cycle 0: SOC=92% (Zone 4) → BATTERY_ASSIST. Canonical net_w
+  #   should include the battery_assist component (~4500 W). With ~6000 W
+  #   net, the distributor gives charger_left its full max (~6900 W
+  #   on 3p/16A) wait, net is 6000 — so charger_left gets 6000 W and
+  #   charger_right gets 0 (below cascade threshold). Tests "priority
+  #   takes all when budget is tight."
+  - t: 0
+    solar_power: 1500
+    grid_power: 0
+    battery_power: -3000   # discharging at 3 kW
+    battery_soc: 92
+    ev_power: 0
+    ev_connected: true
+
+  # ─ Cycle 1+: SOC stays in Z4, conditions stable. Verify the
+  #   distribution is stable across consecutive cycles (no flapping).
+  - t: 30
+  - t: 60
+
+  # ─ Cycle 3+: Big surplus regime. With home consumption derived from
+  #   the energy balance, we must bleed solar OUT (via grid_export) so
+  #   the implied home doesn't absorb everything. Setting
+  #   grid_power=11000 (positive = exporting) leaves only ~3000 W of
+  #   implied home draw, which lets raw_surplus climb to ~11000 W. Plus
+  #   battery_redirect (200) + battery_assist (4500 in Z4) = ~15700 W
+  #   net_w. That comfortably exceeds charger_left's 11040 W max →
+  #   the cascade should fire and charger_right should get ~4660 W.
+  - t: 90
+    solar_power: 14000
+    battery_power: 200     # charging (Z4 redirect kicks in)
+    grid_power: 11000      # +ve = export — bleeds solar to grid
+
+  - t: 120  # hold the big-surplus regime to clear hysteresis
+  - t: 150
+
+expect:
+  # The strategy decision logic is shared with single-charger and
+  # already locked in by 2026-05-29_budget_unify_battery_assist.yaml.
+  # Here we just confirm it lands somewhere sensible.
+  strategy_substring: "battery_assist"
+
+  multi_charger:
+    # The defining Phase B.5 invariant: distribution sums to ≤ canonical
+    # net_w. No silent over-allocation, no leakage from the legacy
+    # formula.
+    total_equals_canonical: true
+    tolerance_w: 1.0
+
+    # When net_w is above the lowest charger threshold (4140 W), at
+    # least ONE charger should get a positive allocation. Catches the
+    # regression where the distributor silently zeros everyone out.
+    at_least_one_charger_gets_positive: true

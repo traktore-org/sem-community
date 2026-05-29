@@ -20,10 +20,14 @@ from homeassistant.util import dt as dt_util
 from ..const import (
     ChargingState,
     DEFAULT_BATTERY_CAPACITY_KWH,
+    DEFAULT_EV_TARGET_TIME,
     DEFAULT_UPDATE_INTERVAL,
+    DEFAULT_VOLTAGE_PER_PHASE,
+    EV_DEADLINE_LOOKAHEAD_HOURS,
 )
 from .types import PowerReadings, PowerFlows, SessionData
 from .charging_control import ChargingContext
+from .ev_tariff_planner import NightChargePlan, plan_night_charge
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,6 +60,226 @@ class EVControlMixin:
             if cfg.get("id") == device_id:
                 return cfg
         return {}
+
+    def _tariff_optimized_for(self, charger_cfg: dict) -> bool:
+        """True when tariff-optimized timing is enabled for this charger (#247).
+
+        Per-charger ``switch.sem_charger_{id}_tariff_optimized`` (opt-in,
+        default OFF) — created in ``switch.py`` for every config-flow charger.
+        Returns False when there is no charger config (``ev_chargers`` empty),
+        which can only happen pre-setup; #281/S2 removed the dead legacy
+        ``switch.sem_tariff_optimized`` fallback (that switch was never created).
+        """
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return False
+        cid = charger_cfg.get("id") if charger_cfg else None
+        if not cid:
+            return False
+        return hass.states.is_state(
+            f"switch.sem_charger_{cid}_tariff_optimized", "on"
+        )
+
+    def _charger_target_time(self, charger_cfg: dict) -> str:
+        """Per-charger ``HH:MM`` charge-by deadline (#246), or global / default."""
+        cfg = charger_cfg or {}
+        val = cfg.get("ev_target_time")
+        if val is None:
+            val = self.config.get("ev_target_time", DEFAULT_EV_TARGET_TIME)
+        return val or DEFAULT_EV_TARGET_TIME
+
+    def _compute_night_plan(
+        self, charger_cfg: dict, remaining_to_min_kwh: float, energy: Any = None,
+    ) -> NightChargePlan:
+        """Build the per-charger night charge plan (deadline + tariff) (#246/#247).
+
+        Gathers the inputs (deadline, charger current limits, tariff price
+        window) and delegates the decision to the pure ``plan_night_charge``.
+        Safe to call every cycle — degrades to a plain "charge now" plan when no
+        deadline / tariff data is available.
+        """
+        cfg = charger_cfg or {}
+
+        def _pc(key, default):
+            v = cfg.get(key)
+            return v if v is not None else self.config.get(key, default)
+
+        min_amps = int(_pc("ev_min_current", 6))
+        max_amps = int(self.config.get("ev_max_current", 32))
+        ev = getattr(self, "_ev_device", None)
+        if ev is not None:
+            max_amps = int(getattr(ev, "max_current", max_amps))
+        phases = int(_pc("ev_phases", 3))
+        watts_per_amp = phases * DEFAULT_VOLTAGE_PER_PHASE
+
+        tariff_optimized = self._tariff_optimized_for(cfg)
+        target_time = self._charger_target_time(cfg)
+        # Split try blocks (#281/D4): a single try around both would let a
+        # later failure overwrite an earlier successful read.
+        try:
+            night_end = self.time_manager.get_night_end_time()
+        except (ValueError, AttributeError):
+            night_end = DEFAULT_EV_TARGET_TIME
+        try:
+            window_h = self.time_manager.get_night_window_hours()
+        except (ValueError, AttributeError):
+            window_h = 8.0
+
+        # Realistic peak-managed rate (#274/C1): night charging is sized from the
+        # house load to keep grid import <= the peak limit, so the rate the car
+        # actually sustains is (peak_limit - expected home consumption) / W-per-A,
+        # NOT the charger max. Using the learned overnight consumption pattern (or
+        # the rolling monthly average) here is what stops the planner waiting for a
+        # cheap window it can't fill at the peak-limited rate and then missing Min.
+        peak_limit_w = self._get_peak_limit_w()
+        expected_home_w = self._expected_night_home_w(energy, window_h)
+        # Subtract draw already committed to higher-priority chargers this cycle
+        # so the fleet shares one peak budget (#274/H1).
+        committed_w = getattr(self, "_night_committed_w", 0.0)
+        peak_managed_amps = max(
+            min_amps,
+            min(max_amps, round((peak_limit_w - expected_home_w - committed_w) / watts_per_amp)),
+        )
+        peak_rate_kw = max(0.1, peak_managed_amps * watts_per_amp / 1000.0)
+
+        # Cheapest contiguous window covering the remaining need (block-wise) (#247).
+        # Size the request at the realistic peak-managed rate so we fetch enough
+        # cheap hours to actually cover Min (#274/H2 slot length inferred below).
+        #
+        # Cap the lookahead at hours-to-deadline (#281): otherwise a post-deadline
+        # price dip (e.g. 08:00–10:00 cheapest when deadline is 07:00) can be
+        # selected as "the cheap window". The planner then clips it to 0
+        # deliverable kWh and silently falls back to charge-now — ignoring the
+        # real pre-deadline cheap window. Bound the request to the actual window
+        # we can charge in.
+        cheap_slots = None
+        slot_hours = 1.0
+        if tariff_optimized and remaining_to_min_kwh > 0.1:
+            tariff = getattr(self, "_tariff_provider", None)
+            if tariff is not None and hasattr(tariff, "find_cheapest_hours"):
+                try:
+                    hours_needed = max(1, int(remaining_to_min_kwh / peak_rate_kw + 0.999))
+                    # Pre-deadline horizon — fall back to the global lookahead
+                    # only when the deadline can't be resolved (target_time blank).
+                    from .ev_tariff_planner import resolve_deadline, _hours_between
+                    now = dt_util.now()
+                    deadline_dt = (
+                        resolve_deadline(now, target_time)
+                        or resolve_deadline(now, night_end)
+                    )
+                    if deadline_dt is not None:
+                        hours_to_deadline = max(
+                            1, int(_hours_between(now, deadline_dt) + 0.999),
+                        )
+                        lookahead = min(
+                            int(EV_DEADLINE_LOOKAHEAD_HOURS), hours_to_deadline,
+                        )
+                    else:
+                        lookahead = int(EV_DEADLINE_LOOKAHEAD_HOURS)
+                    points = tariff.find_cheapest_hours(
+                        hours_needed,
+                        within_hours=lookahead,
+                        prefer_consecutive=True,
+                    )
+                    cheap_slots = [p.timestamp for p in points] if points else None
+                    # Infer slot length from the consecutive block (#274/H2):
+                    # 30/15-min markets must not be counted as full hours.
+                    if cheap_slots and len(cheap_slots) >= 2:
+                        gap = (cheap_slots[1] - cheap_slots[0]).total_seconds() / 3600.0
+                        if 0 < gap <= 1.0:
+                            slot_hours = gap
+                except (ValueError, TypeError, AttributeError) as e:
+                    _LOGGER.debug("Tariff cheap-window lookup failed: %s", e)
+
+        plan = plan_night_charge(
+            now=dt_util.now(),
+            remaining_to_min_kwh=remaining_to_min_kwh,
+            min_amps=min_amps,
+            max_amps=max_amps,
+            watts_per_amp=watts_per_amp,
+            target_time=target_time,
+            night_end=night_end,
+            tariff_optimized=tariff_optimized,
+            cheap_slots=cheap_slots,
+            slot_hours=slot_hours,
+            peak_managed_amps=peak_managed_amps,
+        )
+
+        # Hysteresis (#274/M4): hold the previous wait↔charge decision until the
+        # dwell elapses, so a price hovering at the cheap/expensive boundary
+        # doesn't stop/start the charger (contactor cycling) every cycle.
+        if tariff_optimized:
+            cid = cfg.get("id", "ev_charger")
+            dwell = int(self.config.get("ev_tariff_dwell_seconds", 600))
+            decisions = getattr(self, "_tariff_decision_per_charger", None)
+            if decisions is None:
+                decisions = self._tariff_decision_per_charger = {}
+            now_ts = dt_util.now().timestamp()
+            prev = decisions.get(cid)
+            if (prev is not None
+                    and plan.should_wait_for_cheap != prev[0]
+                    and (now_ts - prev[1]) < dwell):
+                plan.should_wait_for_cheap = prev[0]  # hold within dwell
+            if prev is None or prev[0] != plan.should_wait_for_cheap:
+                decisions[cid] = (plan.should_wait_for_cheap, now_ts)
+
+        return plan
+
+    def _expected_night_home_w(self, energy: Any, window_hours: float = 8.0) -> float:
+        """Expected average home consumption (W) over the upcoming night window.
+
+        Reuses the learned hourly consumption pattern (ConsumptionPredictor) when
+        it's trained — averaging the first ``window_hours`` of its 24h forecast,
+        which are the night hours — then falls back to the rolling monthly-average
+        daily home / 24h, then the config estimate. Same sources
+        ``_calculate_forecast_night_target`` already uses; pulled out so the
+        peak-aware night plan (#274/C1) sizes the charge rate from real data.
+        """
+        now = dt_util.now()
+        predictor = getattr(self, "_predictor", None)
+        if predictor is not None:
+            try:
+                hourly = predictor.predict_consumption_24h(now)  # W per hour
+                n = max(1, min(len(hourly), int(round(window_hours)) or 1))
+                window = [v for v in hourly[:n] if v is not None]
+                if window:
+                    return max(0.0, sum(window) / len(window))
+            except Exception:
+                pass
+        day = now.day
+        if energy is not None and day >= 7 and getattr(energy, "monthly_home", 0) > 0:
+            return max(0.0, energy.monthly_home / day / 24.0 * 1000.0)
+        return max(0.0, self.config.get("daily_home_consumption_estimate", 18.0) / 24.0 * 1000.0)
+
+    async def _maybe_warn_unreachable_deadline(
+        self, cid: str, charger_cfg: dict, plan: NightChargePlan,
+    ) -> None:
+        """Notify (once) when a charge target can't be met by its deadline (#246).
+
+        Clears the warning flag the moment the deadline becomes reachable again,
+        so a forecast that flips reachable/unreachable doesn't spam.
+        """
+        nm = getattr(self, "_notification_manager", None)
+        if nm is None or plan.deadline_dt is None:
+            return
+        name = (charger_cfg or {}).get("name") or "EV"
+        flag_key = cid or (charger_cfg or {}).get("id") or name  # dedup by id (#274/M3)
+        # Only warn when the user opted into deadline/tariff behaviour (#274/C1) —
+        # plan.should_warn_unreachable already encodes (not reachable) AND
+        # (forcing OR tariff). Otherwise clear any prior warning.
+        if not plan.should_warn_unreachable:
+            nm.clear_deadline_warning(charger_name=name, flag_key=flag_key)
+            return
+        try:
+            await nm.notify_ev_deadline_unreachable(
+                remaining_kwh=plan.remaining_kwh,
+                hours_left=plan.hours_to_deadline or 0.0,
+                deadline=plan.deadline_dt.strftime("%H:%M"),
+                charger_name=name,
+                flag_key=flag_key,
+            )
+        except Exception as e:  # notifications must never break the control loop
+            _LOGGER.debug("Deadline-unreachable notify failed: %s", e)
 
     SOLAR_CHARGING_STATES = {
         ChargingState.SOLAR_CHARGING_ACTIVE,
@@ -127,6 +351,14 @@ class EVControlMixin:
             ))
             stall_cooldown = int(self.config.get("ev_stall_cooldown", 120))
 
+            # Deadline floor (#246): the planner's required current to reach Min
+            # by the target time. When active, it overrides both the gentle ramp
+            # and the peak cap (the user opted into "be ready by HH:MM", so the
+            # car may draw grid above the peak limit to make the deadline).
+            deadline_amps = int(getattr(context, "night_deadline_amps", 0) or 0)
+            deadline_active = bool(getattr(context, "night_deadline_active", False))
+            deadline_floor = min(deadline_amps, ev.max_current) if deadline_active else 0
+
             if not ev._session_active:
                 # Fresh start: set_current BEFORE start_session
                 # (KEBA ignores enable at 0A). Cap the kickstart to the peak
@@ -138,10 +370,15 @@ class EVControlMixin:
                 peak_amps = self._night_peak_managed_amps(
                     power, est_wpa, min_amps, ev.max_current)
                 initial_current = min(initial_amps, peak_amps)
+                if deadline_floor > initial_current:
+                    initial_current = deadline_floor  # deadline overrides gentle start
                 await ev._set_current(initial_current)
                 await ev.start_session(energy_target_kwh=0)
                 self._ev_last_change_time = dt_util.now()
-                _LOGGER.info("Night start: %dA, target=%.1fkWh", initial_current, remaining_kwh)
+                _LOGGER.info(
+                    "Night start: %dA, target=%.1fkWh%s", initial_current, remaining_kwh,
+                    f" (deadline floor {deadline_floor}A)" if deadline_floor else "",
+                )
             else:
                 # Stall detection: car stopped drawing despite setpoint
                 last_change = getattr(self, '_ev_last_change_time', None)
@@ -169,9 +406,17 @@ class EVControlMixin:
                     elif target < current:
                         target = max(target, current - ramp_rate)
 
+                    # Deadline floor (#246): raise to the required current,
+                    # jumping past the gentle ramp limit when time is short.
+                    if deadline_floor > target:
+                        target = deadline_floor
+
                     if abs(target - current) >= 1:
-                        _LOGGER.info("Night adjust: %dA->%dA (peak=%.0fW, grid=%.0fW)",
-                                     current, target, peak_limit_w, power.grid_import_power)
+                        _LOGGER.info(
+                            "Night adjust: %dA->%dA (peak=%.0fW, grid=%.0fW%s)",
+                            current, target, peak_limit_w, power.grid_import_power,
+                            f", deadline floor {deadline_floor}A" if deadline_floor else "",
+                        )
                         await ev._set_current(target)
 
             _LOGGER.debug("Night EV: %dA, %.0fW, remaining=%.1fkWh",
@@ -179,8 +424,12 @@ class EVControlMixin:
             return
 
         # === NIGHT WAITING STATES: stop session if running ===
+        # TARIFF_WAITING_FOR_CHEAP (#247) waits for a cheaper price window — the
+        # Min floor is still guaranteed before the deadline (the planner only
+        # parks here when waiting can still meet Min in time).
         if state in (ChargingState.NIGHT_WAITING_FOR_WINDOW,
-                     ChargingState.NIGHT_TIME_EXPIRED):
+                     ChargingState.NIGHT_TIME_EXPIRED,
+                     ChargingState.TARIFF_WAITING_FOR_CHEAP):
             if ev._session_active:
                 await ev.stop_session()
             return
@@ -192,14 +441,27 @@ class EVControlMixin:
             if per_charger_budget is not None:
                 budget_w = per_charger_budget
             else:
-                charging_mode = self.config.get("ev_charging_mode", "pv")
-                if charging_mode in ("self_consumption", "auto") and "self_consumption" in (context.charging_strategy_reason or ""):
-                    auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-                    budget_w = power.solar_power - power.home_consumption_power
-                    if power.battery_soc < auto_start_soc:
-                        budget_w -= power.battery_charge_power
-                    budget_w = max(0, budget_w)
+                # Canonical EV budget (#282 unification, Phase B). The
+                # coordinator caches `self._cycle_ev_budget` per cycle —
+                # it's an EVBudget instance carrying the same value the
+                # state machine just used to decide we should be charging,
+                # so the actuator and the state machine can never
+                # disagree about how much power is available.
+                #
+                # The three legacy ad-hoc paths this replaces:
+                #   - self_consumption-via-reason-text match (the path
+                #     that disagreed with the state machine, root of #282)
+                #   - _calculate_solar_ev_budget (still callable for now;
+                #     removed in Phase D)
+                #   - the inline "solar - home - batt_charge" arithmetic
+                # All three are now in flow_calculator.calculate_canonical_ev_budget.
+                cycle_budget = getattr(self, "_cycle_ev_budget", None)
+                if cycle_budget is not None:
+                    budget_w = cycle_budget.net_w
                 else:
+                    # Fallback for paths where the canonical budget wasn't
+                    # computed (shouldn't happen in normal operation — guard
+                    # for tests or partial init).
                     budget_w = self._calculate_solar_ev_budget(state, power, context)
 
             # Phase switching: auto-switch 1p/3p based on available surplus
@@ -208,11 +470,14 @@ class EVControlMixin:
             enable_delay = self.config.get("ev_enable_delay_seconds", 60)
             disable_delay = self.config.get("ev_disable_delay_seconds", 300)
 
-            # Now mode: charge at max power immediately
+            # Now mode and Min+PV overrides remain HERE (not in the
+            # canonical budget) because they depend on PER-CHARGER
+            # parameters (ev.max_current, ev.min_power_threshold) that
+            # the cycle-level budget doesn't see — multi-charger fleets
+            # have different overrides per charger.
             if context.charging_strategy == "now":
                 budget_w = ev.max_current * ev.phases * ev.voltage
                 enable_delay = 0
-            # Min+PV: guarantee minimum from grid, add surplus on top
             elif state == ChargingState.SOLAR_MIN_PV:
                 budget_w = max(ev.min_power_threshold, budget_w)
                 enable_delay = 0  # No enable delay — guaranteed charge
@@ -324,8 +589,14 @@ class EVControlMixin:
         grid-charge SEM does not command), ``grid = peak + net_batt_charge`` and
         the peak may still be exceeded by that charge. SEM cannot size around
         inverter-managed charging it doesn't control.
+
+        Multi-charger (#274/H1): also subtract the draw already committed to
+        higher-priority chargers this cycle (``_night_committed_w``), so a fleet
+        of chargers shares one peak budget instead of each independently sizing to
+        the full ``peak - home`` headroom and summing past the limit.
         """
-        headroom_w = self._get_peak_limit_w() - power.home_consumption_power
+        committed_w = getattr(self, "_night_committed_w", 0.0)
+        headroom_w = self._get_peak_limit_w() - power.home_consumption_power - committed_w
         target = round(headroom_w / max(1.0, watts_per_amp))
         return min(max_amps, max(min_amps, target))
 
@@ -334,14 +605,18 @@ class EVControlMixin:
     ) -> float:
         """Calculate watts available for EV from solar + optional battery discharge.
 
-        Base budget comes from FlowCalculator.calculate_ev_budget() (grid export +
-        forecast-aware battery redirect). For SOLAR_SUPER_CHARGING, adds proportional
-        battery discharge based on SOC zone (Zone 4: 100%, Zone 3: 50-100% ramp).
+        Base budget comes from FlowCalculator.calculate_ev_budget(). For
+        ``charging_strategy == "solar_only"`` we pass ``solar_only=True``
+        so the budget is hard-capped at ``solar - home`` and the actuator
+        can never silently leak grid into the EV (#282 / Scenario 0).
+        For SOLAR_SUPER_CHARGING (battery-assist mode), the proportional
+        battery discharge branch below still adds on top.
 
         Args:
             state: Current charging state.
             power: Current sensor readings (for battery discharge measurement).
-            context: Charging context (unused directly, reserved for future use).
+            context: Charging context. ``context.charging_strategy`` selects
+                surplus-only vs legacy semantics.
 
         Returns:
             Available power for EV in watts (>= 0).
@@ -357,9 +632,20 @@ class EVControlMixin:
 
         battery_capacity = self.config.get("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH)
 
-        # Base budget: grid export + forecast-aware battery charge redirect
+        # Hard surplus cap when strategy is solar_only. Without this, the
+        # budget falls back to the legacy ``ev_power + grid_export`` baseline
+        # which silently allows the EV to keep drawing whatever the car asks
+        # for, with grid filling any gap.
+        solar_only_active = (
+            getattr(context, "charging_strategy", None) == "solar_only"
+        )
+
+        # Base budget: grid export + forecast-aware battery charge redirect.
+        # When solar_only is active, calculate_ev_budget enforces the
+        # surplus ceiling via max(0, solar - home) instead of ev_power.
         base = self._flow_calculator.calculate_ev_budget(
             power, forecast_remaining, power.battery_soc, battery_capacity,
+            solar_only=solar_only_active,
         )
 
         # Battery-assist mode: ALSO add active battery discharge (proportional to SOC zone)

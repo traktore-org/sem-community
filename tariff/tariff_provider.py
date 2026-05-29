@@ -519,19 +519,40 @@ class DynamicTariffProvider(TariffProvider):
         self,
         hours_needed: int,
         within_hours: int = 24,
+        prefer_consecutive: bool = False,
     ) -> List[PricePoint]:
-        """Find the cheapest consecutive or non-consecutive hours.
+        """Find the cheapest hours for scheduling night charging.
 
-        Useful for scheduling night charging at cheapest times.
+        Args:
+            hours_needed: Number of price slots to select.
+            within_hours: How far ahead to look.
+            prefer_consecutive: When True, return the cheapest *contiguous* block
+                of ``hours_needed`` slots (lowest summed price) instead of the
+                globally-cheapest scattered slots. Block-wise scheduling (#247)
+                avoids fragmenting a charge across the night and reduces
+                start/stop cycling on the charger. Falls back to scattered
+                selection when fewer than ``hours_needed`` slots are available.
         """
         prices = self._read_prices_list()
         now = dt_util.now()
-        future_prices = [p for p in prices if p.timestamp > now][:within_hours]
+        # Include the slot currently in progress (started <= now < start+interval)
+        # so "is now cheap?" works at the top of an hour.
+        future_prices = [p for p in prices if p.timestamp > now - timedelta(hours=1)][:within_hours]
 
         if not future_prices or len(future_prices) < hours_needed:
             return future_prices
 
-        # Find cheapest non-consecutive hours
+        if prefer_consecutive and hours_needed > 0:
+            ordered = sorted(future_prices, key=lambda p: p.timestamp)
+            best_start, best_sum = 0, None
+            for i in range(0, len(ordered) - hours_needed + 1):
+                window = ordered[i:i + hours_needed]
+                total = sum(p.price for p in window)
+                if best_sum is None or total < best_sum:
+                    best_sum, best_start = total, i
+            return ordered[best_start:best_start + hours_needed]
+
+        # Cheapest scattered slots (default, back-compat behaviour).
         sorted_by_price = sorted(future_prices, key=lambda p: p.price)
         return sorted(sorted_by_price[:hours_needed], key=lambda p: p.timestamp)
 
@@ -540,11 +561,17 @@ class DynamicTariffProvider(TariffProvider):
     ) -> List[Dict[str, Any]]:
         """Generate tariff schedule blocks from dynamic price forecast.
 
-        Maps price levels to HT/NT for the schedule card:
-        - cheap/very_cheap/negative → NT (green)
-        - normal/expensive/very_expensive → HT (orange)
+        Returns blocks with both the legacy ``tariff`` field (HT/NT, for the
+        existing schedule card) and the richer ``level`` field (5-tier
+        cheap/normal/expensive classification, for sem-today-plan-card and
+        sem-price-card consumers — #282).
 
-        Returns list of {"start": "HH:MM", "end": "HH:MM", "tariff": "HT"|"NT"}.
+        Each block also carries ``avg_price`` so cards can show "0.10 CHF avg"
+        without re-querying the curve.
+
+        Returns:
+            ``[{"start": "HH:MM", "end": "HH:MM", "tariff": "HT"|"NT",
+                "level": "cheap"|..., "avg_price": float}, ...]``
         """
         prices = self._read_prices_list()
         target_date = (date or dt_util.now()).date()
@@ -556,28 +583,45 @@ class DynamicTariffProvider(TariffProvider):
             return []
 
         _CHEAP = (PriceLevel.NEGATIVE, PriceLevel.VERY_CHEAP, PriceLevel.CHEAP)
+
+        def _coarse_level(level: PriceLevel) -> str:
+            """Collapse the 5-tier scale into 3 user-facing bands.
+
+            cheap-ish → ``cheap``; expensive-ish → ``expensive``; rest → ``normal``.
+            """
+            if level in _CHEAP:
+                return "cheap"
+            if level in (PriceLevel.EXPENSIVE, PriceLevel.VERY_EXPENSIVE):
+                return "expensive"
+            return "normal"
+
         schedule: List[Dict[str, Any]] = []
-        current_tariff: Optional[str] = None
+        current_level: Optional[str] = None
         block_start: Optional[str] = None
+        block_prices: List[float] = []
+
+        def _close_block(end_time_str: str) -> None:
+            if current_level is not None and block_start is not None and block_prices:
+                avg = sum(block_prices) / len(block_prices)
+                schedule.append({
+                    "start": block_start, "end": end_time_str,
+                    "tariff": "NT" if current_level == "cheap" else "HT",
+                    "level": current_level,
+                    "avg_price": round(avg, 4),
+                })
 
         for p in today_prices:
-            tariff = "NT" if p.level in _CHEAP else "HT"
+            lvl = _coarse_level(p.level)
             time_str = f"{p.timestamp.hour:02d}:{p.timestamp.minute:02d}"
-            if tariff != current_tariff:
-                if current_tariff is not None and block_start is not None:
-                    schedule.append({
-                        "start": block_start, "end": time_str,
-                        "tariff": current_tariff,
-                    })
+            if lvl != current_level:
+                _close_block(time_str)
                 block_start = time_str
-                current_tariff = tariff
+                current_level = lvl
+                block_prices = [p.price]
+            else:
+                block_prices.append(p.price)
 
-        if current_tariff is not None and block_start is not None:
-            schedule.append({
-                "start": block_start, "end": "24:00",
-                "tariff": current_tariff,
-            })
-
+        _close_block("24:00")
         return schedule
 
 
@@ -598,7 +642,11 @@ class SpotMarketProvider(DynamicTariffProvider):
         currency: str = "EUR",
     ):
         super().__init__(
-            hass, price_entity, export_rate,
+            hass,
+            price_entity=price_entity,
+            # Keyword args: positional would land export_rate in the
+            # forecast_entity slot and corrupt the price forecast (#274/H4).
+            export_rate=export_rate,
             cheap_threshold=0.05,  # 5 ct/kWh
             expensive_threshold=0.25,  # 25 ct/kWh
             currency=currency,

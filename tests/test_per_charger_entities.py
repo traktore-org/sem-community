@@ -229,6 +229,76 @@ class TestPerChargerSwitches:
 
 
 @pytest.mark.unit
+class TestPerChargerTargetTime:
+    """Per-charger charge-by deadline time entity (#246)."""
+
+    @pytest.mark.asyncio
+    async def test_time_set_persists_hhmm_to_charger(self):
+        from datetime import time as dt_time
+        from custom_components.solar_energy_management.time import (
+            SEMPerChargerTime, _parse_hhmm,
+        )
+        from homeassistant.components.time import TimeEntityDescription
+
+        coord = _mock_coordinator(TWO_CHARGERS)
+        entry = _mock_entry(TWO_CHARGERS)
+        desc = TimeEntityDescription(key="charger_ev_charger_1_target_time")
+        ent = SEMPerChargerTime(coord, desc, entry, "ev_charger_1", "ev_target_time", "07:00")
+        ent.hass = coord.hass
+        ent.async_write_ha_state = MagicMock()
+
+        assert ent.native_value == dt_time(7, 0)
+        await ent.async_set_value(dt_time(6, 30))
+        assert ent.native_value == dt_time(6, 30)
+        call = coord.hass.config_entries.async_update_entry.call_args
+        new_options = call[1]["options"]
+        charger = next(c for c in new_options["ev_chargers"] if c["id"] == "ev_charger_1")
+        assert charger["ev_target_time"] == "06:30"
+
+    def test_parse_hhmm_fallback(self):
+        from datetime import time as dt_time
+        from custom_components.solar_energy_management.time import _parse_hhmm
+        assert _parse_hhmm("08:15") == dt_time(8, 15)
+        assert _parse_hhmm("07:00:00") == dt_time(7, 0)
+        assert _parse_hhmm(None) == dt_time(7, 0)   # default 07:00
+        assert _parse_hhmm("junk") == dt_time(7, 0)
+
+
+@pytest.mark.unit
+class TestSetDefaultButton:
+    """Per-charger 'set target as default' button (#246B)."""
+
+    @pytest.mark.asyncio
+    async def test_press_copies_target_to_global(self):
+        from custom_components.solar_energy_management.button import (
+            SEMPerChargerSetDefaultButton,
+        )
+        from homeassistant.components.button import ButtonEntityDescription
+
+        chargers = [{
+            "id": "ev_charger_1", "name": "Wallbox",
+            "daily_ev_target": 15, "daily_ev_target_max": 40,
+            "ev_target_soc": 70, "ev_target_soc_max": 90,
+            "ev_target_type": "kwh", "ev_target_time": "06:00",
+        }]
+        coord = _mock_coordinator(chargers)
+        coord.config = {"ev_chargers": chargers}
+        entry = _mock_entry(chargers)
+        desc = ButtonEntityDescription(key="charger_ev_charger_1_set_default_target")
+        btn = SEMPerChargerSetDefaultButton(coord, desc, entry, "ev_charger_1")
+        btn.hass = coord.hass
+
+        await btn.async_press()
+
+        call = coord.hass.config_entries.async_update_entry.call_args
+        new_options = call[1]["options"]
+        assert new_options["daily_ev_target"] == 15
+        assert new_options["daily_ev_target_max"] == 40
+        assert new_options["ev_target_soc"] == 70
+        assert new_options["ev_target_time"] == "06:00"
+
+
+@pytest.mark.unit
 class TestPerChargerSensors:
     """Test per-charger sensor descriptions are created correctly."""
 

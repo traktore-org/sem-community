@@ -275,13 +275,180 @@ SEM abstracts charger-specific differences through per-integration service profi
 
 ## EV Budget Calculation
 
-`FlowCalculator.calculate_ev_budget()` provides a forecast-aware EV power budget:
+### One canonical value, six strategies
 
-- **Source 1**: Grid export power (always redirectable)
-- **Source 2**: Redirectable battery charge via forecast-based calculation
-- When EV is already charging, budget includes current EV power + grid export
+Since **v1.6.0**, all "how many watts can the EV draw right now" decisions
+read from a single canonical `EVBudget` value computed once per coordinator
+cycle by `FlowCalculator.calculate_canonical_ev_budget()`.
 
-`SEMCoordinator._calculate_solar_ev_budget()` wraps this and adds proportional battery discharge for super-charging mode based on SOC zones.
+Before v1.6.0, three separate paths each computed their own budget
+independently (`coordinator.py:898` for the published sensors,
+`coordinator.py:2589` for the state machine's input,
+`ev_control.py:440-452` for the actuator). Under certain conditions they
+disagreed — the symptom most users could see was the dashboard reporting
+*"Charging active"* while the car drew 0 W (issue #282). v1.6.0 collapses
+all three into one source of truth; the disagreement is now impossible by
+construction.
+
+### The dataclass
+
+```python
+@dataclass
+class EVBudget:
+    strategy: str           # one of EVBudgetStrategy.*
+    solar_surplus: float    # max(0, solar − home − batt_charge)
+    battery_redirect: float # forecast/SOC-aware battery-charge diversion
+    battery_assist: float   # active battery discharge attributed to EV
+    net_w: float            # solar_surplus + redirect + assist (or override)
+    current_a: int          # floor(net_w / (voltage × phases)), clamped [0,16]
+```
+
+The decomposition exists so the dashboard can publish each component
+as its own diagnostic — answering "where did this watt come from"
+without re-deriving anything.
+
+`current_a` always uses `math.floor` (not round-to-nearest) — round-
+to-nearest could push the actuator 0.5 A over the surplus floor and
+silently leak grid into the EV at the boundary. Locked in by the
+591956f / `tests/scenarios/2026-05-28_surplus_leak.yaml` regression.
+
+### The six strategies and their formulas
+
+```python
+class EVBudgetStrategy:
+    IDLE             = "idle"             # 0
+    SELF_CONSUMPTION = "self_consumption" # Zone 2: raw_surplus only,
+                                          # NO redirect (battery has priority)
+    SOLAR_ONLY       = "solar_only"       # Zone 3: raw_surplus + battery_redirect
+    BATTERY_ASSIST   = "battery_assist"   # Zone 4: raw_surplus + redirect + assist
+    MIN_PV           = "min_pv"           # max(min_power_floor, surplus+redirect)
+                                          # — grid backfill accepted
+    NOW              = "now"              # override_max_w (charger nameplate)
+```
+
+The dispatcher raises `ValueError` on any unknown strategy — silent
+fallthrough was exactly the pre-1.6.0 disagreement root, so the
+unifier is loud.
+
+### Strategy mapping from the legacy decision
+
+`_determine_charging_strategy` (in `coordinator.py`) returns one of six
+legacy strings. The legacy code returned `"solar_only"` for both Zone-3
+solar_only AND for Zone-2 self_consumption under "Auto" mode, and the
+actuator distinguished them via substring matching on the human-readable
+`charging_strategy_reason` text — brittle, and the proximate cause of
+#282.
+
+`_canonical_strategy_from_legacy(legacy_strategy, legacy_reason)` in
+`coordinator.py` is the bridge: it inspects the reason text when
+necessary and maps onto the canonical enum cleanly. The substring
+matching is now contained in that one helper; downstream consumers
+read the canonical enum.
+
+### Per-strategy details
+
+**`SELF_CONSUMPTION`** — Zone 2 surplus-only. When `battery_soc ≥
+auto_start_soc` (default 90 %), the battery doesn't need its share, so
+the formula skips the `batt_charge` subtraction (`Z4-redirect`
+sub-mode). Otherwise: `max(0, solar − home − batt_charge)`. No
+battery_redirect — the battery keeps the charge it's receiving.
+
+**`SOLAR_ONLY`** — Zone 3. Solar surplus PLUS the forecast-aware
+`battery_redirect` from `_calculate_battery_redirect()`. When forecast
+remaining exceeds the battery's remaining capacity-to-100 %, the
+redirect proportionally diverts battery-charge power to the EV; without
+a forecast, falls back to a SOC threshold (redirect-all at
+`SOC ≥ 80 %`). The Phase C scenarios pin both branches.
+
+**`BATTERY_ASSIST`** — Zone 4. Surplus + redirect + active battery
+discharge. The assist component uses the measured discharge if the
+battery is already discharging ≥ 100 W, otherwise estimates a
+proportional ramp `(battery_soc − battery_buffer_soc) / (auto_start_soc
+− battery_buffer_soc) × battery_assist_max_power_w` scaled to 50–100 %
+of max. Below `battery_assist_floor_soc` (default 60 %) the assist is
+zero. **Note**: proportional flow attribution may transiently show a
+small `flow_grid_to_ev_power` during the battery's discharge ramp-up
+window (LFP BMSes take seconds to ramp). That's the physics of the
+proportional split, not SEM commanding grid — see
+`KNOWN_LIMITATIONS.md`.
+
+**`MIN_PV`** — User-asked guaranteed minimum. `max(min_power_floor_w,
+surplus + redirect)`. Grid backfill is intentional in this mode; the
+sentinel test `tests/live/test_solar_only_no_grid.sh` correctly skips
+non-`solar_only` strategies because MIN_PV's whole purpose is to allow
+grid.
+
+**`NOW`** — User-asked maximum. Bypasses the surplus math entirely
+and uses `override_max_w` (typically the charger's nameplate power).
+The decomposition fields (`solar_surplus`, `redirect`, `assist`) stay
+zero — they're honest about "this isn't from solar."
+
+### How the consumers wire up
+
+```
+        ┌──────────────────────────────────────────────────────┐
+        │ calculate_canonical_ev_budget(power, strategy, ...)  │
+        │   → EVBudget(strategy, surplus, redirect, assist,    │
+        │              net_w, current_a)                       │
+        └────────────────┬─────────────────────────────────────┘
+                         │ cached as self._cycle_ev_budget
+                         │
+       ┌─────────────────┼─────────────────────────────────────┐
+       │                 │                                     │
+       ▼                 ▼                                     ▼
+   ChargingContext   SEMData publish              _execute_ev_control
+   .available_power  .available_power             (single-charger)
+   .calculated_      .calculated_current             budget_w =
+   current               ↓                              cycle_budget.net_w
+       ↓             sensor.sem_available_power
+   state_machine     sensor.sem_calculated_       _surplus_controller.
+   decision            current                    distribute_ev_budget
+                                                  (multi-charger, Phase B.5)
+                                                     total_budget =
+                                                       cycle_budget.net_w
+                                                     → per-charger split
+                                                       by priority
+```
+
+### The forever sentinel
+
+`tests/live/test_budget_agreement.sh` asserts the canonical relationship
+`floor(sensor.sem_available_power / (230 × 3)) == sensor.sem_calculated_current`
+on the live system. If a future refactor accidentally re-introduces a
+second budget path that publishes a different number, the sentinel
+fires. It runs in seconds against any HA instance and is the
+operational guarantee that the unification holds.
+
+### `_calculate_battery_redirect` — the forecast-aware diversion
+
+When the home battery is charging and SOC is below the buffer, the
+default behaviour is "all surplus to battery first." But if the
+forecast says there's enough remaining solar today to fill the
+battery anyway, some of that battery-bound power can be redirected
+to the EV without slowing the battery's actual fill. The math:
+
+```python
+battery_need_kwh = max(0, (100 − battery_soc) / 100 × battery_capacity_kwh)
+
+if forecast_remaining_kwh >= battery_need_kwh:
+    ratio = max(0.05, 1 − battery_need_kwh / forecast_remaining_kwh)
+    redirect = battery_charge_w × ratio
+elif battery_need_kwh <= 0.5:  # battery nearly full
+    redirect = battery_charge_w  # redirect all
+else:
+    redirect = 0  # forecast can't cover; keep battery filling
+```
+
+Without a forecast, the SOC threshold fallback gives `redirect =
+battery_charge_w` when `SOC ≥ 80 %`, else `0`.
+
+### Legacy methods (deprecated)
+
+`FlowCalculator.calculate_ev_budget()`, `.calculate_available_power()`
+and `.calculate_charging_current()` are kept callable in v1.6.0 for
+backward compatibility (one fallback site in `ev_control.py` for
+partial-init paths), but are no longer the source of truth. Phase D.2
+removes them in v1.7.0 after additional soak.
 
 ---
 

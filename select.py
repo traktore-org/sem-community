@@ -198,10 +198,20 @@ class SEMSelectEntity(CoordinatorEntity, SelectEntity):
 
 
 class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
-    """Per-charger target-type select, persisted into the charger's config dict (#235).
+    """Per-charger SELECT, persisted into the charger's config dict.
 
-    Offers SOC % only when the charger has a ``vehicle_soc_entity`` configured;
-    otherwise only kWh is selectable. Mirrors ``SEMPerChargerNumber`` persistence.
+    Generalised in #282 to handle BOTH ``ev_target_type`` and
+    ``ev_charging_mode`` (originally only target-type — #235). The class
+    derives its option set and translation key from ``config_key`` so a
+    single class covers every per-charger select:
+
+    * ``ev_target_type``  → ``kwh`` / ``soc``  (#235)
+    * ``ev_charging_mode`` → auto / minpv / now / off  (#255)
+
+    The previous hardcoded-to-target-type behaviour meant the charging-mode
+    select silently inherited the kwh/soc options on every dashboard,
+    locking users to whatever charging mode was in the config dict because
+    they couldn't actually change it from the UI (#282 follow-up).
     """
 
     _attr_has_entity_name = True
@@ -223,10 +233,17 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         self._charger_id = charger_id
         self._config_key = config_key
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
-        self._attr_translation_key = "ev_target_type"
+        self._attr_translation_key = config_key
         self._attr_suggested_object_id = f"sem_{description.key}"
         self.entity_id = f"select.sem_{description.key}"
-        self._value = initial_value if initial_value in EV_TARGET_TYPES else "kwh"
+        valid_set = self._valid_value_set()
+        # Fall back to the description-declared default when initial_value is
+        # garbage. options[0] is a safe choice (kwh for target_type, auto for
+        # charging_mode) — better than the old hardcoded "kwh".
+        if initial_value in valid_set:
+            self._value = initial_value
+        else:
+            self._value = list(description.options or [])[0] if description.options else ""
 
     def _charger_cfg(self) -> dict:
         for c in self.coordinator.config.get("ev_chargers", []):
@@ -234,16 +251,38 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
                 return c
         return {}
 
+    def _valid_value_set(self) -> set[str]:
+        """Authoritative option universe for this select's config_key."""
+        if self._config_key == "ev_target_type":
+            return set(EV_TARGET_TYPES.keys())
+        if self._config_key == "ev_charging_mode":
+            return set(EV_CHARGING_MODES.keys())
+        # Future selects: trust the description's declared options.
+        return set(self.entity_description.options or [])
+
     @property
     def options(self) -> list[str]:
-        """SOC % only when this charger has a vehicle SOC entity (#235)."""
-        has_soc = bool(self._charger_cfg().get("vehicle_soc_entity"))
-        return _target_type_options(has_soc)
+        """Options shown in the UI.
+
+        For ``ev_target_type``: SOC % only when this charger has a
+        vehicle_soc_entity configured (#235). For ``ev_charging_mode``:
+        the full mode set always. For unknown keys: pass through what the
+        description declared.
+        """
+        if self._config_key == "ev_target_type":
+            has_soc = bool(self._charger_cfg().get("vehicle_soc_entity"))
+            return _target_type_options(has_soc)
+        if self._config_key == "ev_charging_mode":
+            return list(EV_CHARGING_MODES.keys())
+        return list(self.entity_description.options or [])
 
     @property
     def current_option(self) -> str | None:
-        """Return the currently selected option, clamped to available options."""
-        return self._value if self._value in self.options else "kwh"
+        """Currently selected option, clamped to available options."""
+        opts = self.options
+        if self._value in opts:
+            return self._value
+        return opts[0] if opts else None
 
     @property
     def available(self) -> bool:
@@ -256,7 +295,7 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         return self.coordinator.device_info
 
     async def async_select_option(self, option: str) -> None:
-        """Persist the selected target type into the charger config."""
+        """Persist the selected value into the charger config."""
         if option not in self.options:
             return
         self._value = option

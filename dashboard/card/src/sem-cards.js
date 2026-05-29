@@ -28,7 +28,9 @@ import './cards/sem-costs-detail-card.js';
 import './cards/sem-charger-status-card.js';
 import './cards/sem-ev-status-card.js';
 import './cards/sem-home-status-card.js';
+import './cards/sem-price-card.js';
 import './cards/sem-system-card.js';
+import './cards/sem-today-plan-card.js';
 
 // Complex cards (observers, animations, external libs)
 import './cards/sem-flow-card.js';

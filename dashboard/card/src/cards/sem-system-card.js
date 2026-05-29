@@ -37,17 +37,11 @@ const SECTIONS = [
             return `${solar}W solar · SOC ${soc}%`;
         },
     },
-    {
-        id: 'modes',
-        icon: 'mdi:toggle-switch-outline',
-        color: '#96CAEE',
-        titleKey: 'mode_controls',
-        subtitleFn: (c) => {
-            const obs = c._switchOn('observer_mode');
-            const night = c._switchOn('night_charging');
-            return [obs && c._t('observer'), night && c._t('night')].filter(Boolean).join(' · ') || '—';
-        },
-    },
+    // mode_controls section removed in #282 audit: the night/smart night
+    // toggles are per-charger and surface on the EV tab via the EV status
+    // card. Showing them again here under a 'Mode Controls' label that
+    // sounded global was misleading for multi-charger setups and duplicated
+    // primary-charger controls for single-charger ones.
     {
         id: 'diag',
         icon: 'mdi:bug-outline',
@@ -57,16 +51,28 @@ const SECTIONS = [
     },
 ];
 
+// Health-chip palette: a fleet-wide glance. EV chip removed in #282 audit
+// because EV power lives on the EV tab and the chip turned into "0W"
+// noise on no-charger setups; tariff chip retained because price is a
+// whole-house concern.
 const HEALTH_CHIPS = [
-    { key: 'solar_power',                icon: 'mdi:solar-power',       color: '#ff9800', suffix: 'W' },
+    { key: 'solar_power',                icon: 'mdi:solar-power',        color: '#ff9800', suffix: 'W' },
     { key: 'grid_power',                 icon: 'mdi:transmission-tower', color: '#488fc2', suffix: 'W' },
     { key: 'battery_soc',                icon: 'mdi:battery',            color: '#4db6ac', suffix: '%' },
-    { key: 'ev_power',                   icon: 'mdi:ev-station',         color: '#8DC892', suffix: 'W' },
-    { key: 'forecast_today',             icon: 'mdi:weather-sunny',      color: '#ff9800', suffix: 'kWh' },
+    { key: 'forecast_today_kwh',         icon: 'mdi:weather-sunny',      color: '#ff9800', suffix: 'kWh' },
     { key: 'tariff_current_import_rate', icon: 'mdi:tag',                color: '#96CAEE', suffix: '' },
 ];
 
-/** Watched entity IDs for shouldUpdate comparison. */
+/** Watched entity IDs for shouldUpdate comparison.
+ *
+ * Cleaned in #282/audit: removed 6 references to entities that don't exist
+ * (sem_forecast_today → sem_forecast_today_kwh; sem_night_mode,
+ * sem_solar_mode, sem_night_mode_status, sem_solar_mode_status had no
+ * corresponding sensor.py keys; sem_ev_connected lives under binary_sensor).
+ * Replaced sem_daily_ev_target (sensor) with the actual number entity
+ * sem_daily_ev_target_global. Added sem_charging_state since the card reads
+ * its today_plan attribute downstream.
+ */
 const WATCHED = [
     'sensor.sem_diag_version', 'sensor.sem_diag_grid_mode',
     'sensor.sem_diag_battery_capacity', 'sensor.sem_diag_update_interval',
@@ -74,20 +80,14 @@ const WATCHED = [
     'sensor.sem_diag_sensors_unavailable', 'sensor.sem_diag_ed_config',
     'sensor.sem_solar_power', 'sensor.sem_grid_power',
     'sensor.sem_battery_soc', 'sensor.sem_ev_power',
-    'sensor.sem_forecast_today', 'sensor.sem_tariff_current_import_rate',
+    'sensor.sem_forecast_today_kwh', 'sensor.sem_tariff_current_import_rate',
     'switch.sem_observer_mode',
-    // Per-charger night switches (#255), default charger id — for reactivity; other
-    // ids refresh on the energy tick.
-    'switch.sem_charger_ev_charger_night_charging',
-    'switch.sem_charger_ev_charger_smart_night_charging',
     'sensor.sem_home_consumption_power', 'sensor.sem_grid_import_power',
     'sensor.sem_grid_export_power', 'sensor.sem_autarky_rate',
     'sensor.sem_self_consumption_rate', 'sensor.sem_battery_power',
-    'sensor.sem_night_mode', 'sensor.sem_solar_mode', 'sensor.sem_ev_connected',
-    'sensor.sem_calculated_current', 'sensor.sem_daily_ev_energy',
-    'sensor.sem_daily_ev_target', 'sensor.sem_night_mode_status',
-    'sensor.sem_solar_mode_status', 'sensor.sem_battery_status',
-    'sensor.sem_grid_status',
+    'sensor.sem_night_charging_status',
+    'sensor.sem_battery_status', 'sensor.sem_grid_status',
+    'sensor.sem_charging_state',
 ];
 
 class SEMSystemCard extends SEMLitBase {
@@ -96,7 +96,7 @@ class SEMSystemCard extends SEMLitBase {
     constructor() {
         super();
         // Default: info + health expanded, modes + diag collapsed
-        this._collapsed = { info: false, health: false, modes: true, diag: true };
+        this._collapsed = { info: false, health: false, diag: true };
         this._copyFeedback = '';
     }
 
@@ -166,17 +166,88 @@ class SEMSystemCard extends SEMLitBase {
         }
 
         const text = `${header}\n${edBlock}`;
+        this._writeClipboard(text);
+    }
 
-        navigator.clipboard.writeText(text).then(() => {
-            this._copyFeedback = this._t('copied');
+    /**
+     * Cross-context clipboard write with a legacy fallback (#285).
+     *
+     * ``navigator.clipboard.writeText()`` is the modern Promise-based
+     * Clipboard API. It works fine on HTTPS pages and on
+     * ``localhost`` / ``127.0.0.1`` — but on **HTTP** pages it's
+     * blocked as an "insecure context" and silently rejects on
+     * Chrome/Safari/Firefox. Most Home Assistant installs are
+     * accessed at ``http://<local-ip>:8123``, which is exactly that
+     * regime, so the modern path fails for the majority of users.
+     *
+     * Pre-#285: the catch handler just logged to console — the
+     * button appeared to do nothing on click. @RienduPre reported
+     * it from his Mac/Chrome setup.
+     *
+     * This helper tries the modern API first; if it isn't available
+     * OR the call rejects, it falls back to the legacy
+     * ``document.execCommand('copy')`` trick (hidden textarea,
+     * select, copy, remove). The legacy API is deprecated but is
+     * still supported in every browser SEM cards on and works in
+     * insecure contexts.
+     *
+     * Either way the user gets feedback — success or failure — so
+     * the button never looks broken again.
+     */
+    async _writeClipboard(text) {
+        const showFeedback = (key) => {
+            this._copyFeedback = this._t(key);
             this.requestUpdate();
             setTimeout(() => {
                 this._copyFeedback = '';
                 this.requestUpdate();
             }, 2000);
-        }).catch(err => {
-            console.error('[SEM System] clipboard copy failed', err);
-        });
+        };
+
+        // Modern path — only works in secure contexts (HTTPS / localhost).
+        if (navigator?.clipboard?.writeText && window.isSecureContext !== false) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showFeedback('copied');
+                return;
+            } catch (err) {
+                console.warn('[SEM System] modern clipboard API failed, '
+                    + 'falling back to execCommand', err);
+                // Fall through to legacy path.
+            }
+        }
+
+        // Legacy path — works on HTTP. The textarea has to be in the
+        // DOM and visible-ish (zero-size off-screen) for the selection
+        // to actually take effect on iOS/Safari.
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '0';
+            ta.style.left = '0';
+            ta.style.width = '1px';
+            ta.style.height = '1px';
+            ta.style.opacity = '0';
+            // Attach to the shadow host's parent (or body) — appending
+            // inside the shadow root works in Chrome but iOS Safari
+            // refuses to select cross-shadow.
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (ok) {
+                showFeedback('copied');
+            } else {
+                showFeedback('copy_failed');
+                console.error('[SEM System] execCommand("copy") returned false');
+            }
+        } catch (err) {
+            showFeedback('copy_failed');
+            console.error('[SEM System] legacy clipboard fallback threw', err);
+        }
     }
 
     // ── Section renderers ──
@@ -248,12 +319,20 @@ class SEMSystemCard extends SEMLitBase {
                     const available = this._available(entityId);
                     const e = this._hass?.states[entityId];
                     const val = e ? e.state : '—';
+                    // Tariff chip: suffix is derived from the currency attribute
+                    // (#282 audit) so it reads e.g. "0.20 CHF/kWh" instead of
+                    // a bare number. Empty when currency is unknown.
+                    let suffix = chip.suffix;
+                    if (chip.key === 'tariff_current_import_rate') {
+                        const cur = e?.attributes?.currency;
+                        suffix = cur ? ` ${cur}/kWh` : '';
+                    }
                     const chipBg = available ? 'rgba(141,200,146,0.12)' : 'rgba(244,67,54,0.12)';
                     const chipBorder = available ? 'rgba(141,200,146,0.3)' : 'rgba(244,67,54,0.3)';
                     return html`
                         <div class="health-chip" style="background:${chipBg};border:1px solid ${chipBorder}">
                             <ha-icon icon="${chip.icon}" style="--mdc-icon-size:16px;color:${chip.color}"></ha-icon>
-                            <span class="chip-value">${available ? `${val}${chip.suffix}` : '—'}</span>
+                            <span class="chip-value">${available ? `${val}${suffix}` : '—'}</span>
                         </div>
                     `;
                 })}
@@ -272,18 +351,6 @@ class SEMSystemCard extends SEMLitBase {
                 >
                     <div class="toggle-thumb"></div>
                 </div>
-            </div>
-        `;
-    }
-
-    _renderModesSection(T) {
-        // #255: night-charging switches are per-charger — resolve the primary (fallback global).
-        const eNight = this._pcEntity('switch', 'night_charging', 'switch.sem_night_charging');
-        const eSmart = this._pcEntity('switch', 'smart_night_charging', 'switch.sem_smart_night_charging');
-        return html`
-            <div class="toggle-group">
-                ${this._renderToggle(eNight, 'night_charging', T)}
-                ${this._renderToggle(eSmart, 'smart_night', T)}
             </div>
         `;
     }
@@ -312,24 +379,20 @@ class SEMSystemCard extends SEMLitBase {
         const selfCons = this._valNum('self_consumption_rate').toFixed(0);
         const derivedStr = `Home ${home}W · Import ${imp}W · Export ${exp}W · Autarky ${autarky}% · Self ${selfCons}%`;
 
-        const nightMode = this._val('night_mode') || '—';
-        const solarMode = this._val('solar_mode') || '—';
-        const calcCurrent = this._val('calculated_current') || '—';
-        const dailyEv = this._valNum('daily_ev_energy').toFixed(1);
-        const evTarget = this._val('daily_ev_target') || '—';
-        const evPlug = this._val('ev_connected') || '—';
-        const evStr = `Night mode: ${nightMode} · Solar: ${solarMode} · ${calcCurrent}A · ${dailyEv}/${evTarget}kWh · Plug: ${evPlug}`;
-
-        const nightStatus = this._val('night_mode_status') || '—';
-        const solarStatus = this._val('solar_mode_status') || '—';
+        // Mode status — overall charging_state covers solar mode/night/tariff;
+        // battery_status + grid_status round out the picture. EV-specific
+        // diagnostics removed in #282 audit: that line lived on per-charger
+        // entities and the same info is already on the EV tab's status card,
+        // so duplicating it here under a global heading was misleading.
+        const chargingState = this._val('charging_state') || '—';
+        const nightStatus = this._val('night_charging_status') || '—';
         const battStatus = this._val('battery_status') || '—';
         const gridStatus = this._val('grid_status') || '—';
-        const modesStr = `Night: ${nightStatus} · Solar: ${solarStatus} · Battery: ${battStatus} · Grid: ${gridStatus}`;
+        const modesStr = `${chargingState} · ${this._t('night')}: ${nightStatus} · ${this._t('battery')}: ${battStatus} · ${this._t('grid')}: ${gridStatus}`;
 
         return html`
             ${this._renderDiagBlock('source_sensors', sourceStr)}
             ${this._renderDiagBlock('derived_values', derivedStr)}
-            ${this._renderDiagBlock('ev_charging', evStr)}
             ${this._renderDiagBlock('mode_status', modesStr)}
         `;
     }
@@ -358,7 +421,6 @@ class SEMSystemCard extends SEMLitBase {
         const sectionRenderers = {
             info:   (T) => this._renderInfoSection(T),
             health: (T) => this._renderHealthSection(T),
-            modes:  (T) => this._renderModesSection(T),
             diag:   (T) => this._renderDiagSection(T),
         };
 

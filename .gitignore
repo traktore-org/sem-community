@@ -63,6 +63,8 @@ sankey_*.yaml
 # Documentation artifacts
 *.zip
 *.sh
+# Exception: live integration tests need their bash scripts tracked (#282).
+!tests/live/*.sh
 
 # IDE
 .vscode/

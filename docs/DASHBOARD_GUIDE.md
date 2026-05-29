@@ -95,9 +95,20 @@ EV charging session tracking and statistics.
 | **Charging Status** | Current mode, power, session energy, solar share |
 | **Session Gauges** | Daily energy vs target, solar share percentage |
 | **Charging Power Chart** | 24h EV power curve |
-| **Charging Settings** | Night charging, smart night charging, target, amps, wait conditions |
+| **Charging Settings** | Charge target range (Min ↔ Max), Overnight grid charging, Cheapest hours (tariff), Charge by deadline picker, Set as default |
 | **EV Intelligence** | Taper trend visualization, virtual SOC estimate, charge skip status & reasoning, battery health indicator |
 | **Lifetime Statistics** | Total energy, cost, sessions, solar share over all time |
+
+#### Charging setup variants (1.5.16+)
+
+The Charge Target panel renders differently based on which controls are enabled. Three common configurations:
+
+| Default — solar-first with grid fallback | Tariff-optimized — defer to cheap hours | Pure solar — overnight grid off |
+|:--:|:--:|:--:|
+| ![Default](images/sem_ev_setup_default.png) | ![Tariff](images/sem_ev_setup_tariff.png) | ![Night off](images/sem_ev_setup_night_off.png) |
+| Overnight grid charging ON, Cheapest hours OFF. Standard peak-managed night top-up to hit Min by 07:00. | Overnight grid charging ON, Cheapest hours ON. Defers night charging to the cheapest contiguous window in the upcoming 24h; Min still guaranteed by the deadline. | Overnight grid charging OFF. Solar-only — never pulls grid for the EV. The Cheapest hours sub-row is hidden because tariff timing is a refinement of grid charging. |
+
+For the full decision matrix (mode × time-of-day × switches × outcomes), see **[EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md)**.
 
 ### Control
 
@@ -284,13 +295,15 @@ For all text to appear in the same language:
 3. Call `solar_energy_management.generate_dashboard` to regenerate the dashboard with the new system language
 4. Hard-refresh the browser (Ctrl+Shift+R)
 
+> **No HA restart needed.** As of v1.5.16, `generate_dashboard` pushes the new config through Home Assistant's own Lovelace store — the running dashboard reloads live as soon as the service call returns. Older muscle memory ("regenerate, then restart HA") no longer applies; a hard-refresh is enough.
+
 ### Which parts translate when?
 
 | Action | What changes |
 |--------|-------------|
-| Change **system language** + regenerate dashboard | Mushroom cards, chart labels, section headers, tab names |
+| Change **system language** + regenerate dashboard | Mushroom cards, chart labels, section headers, tab names (reloads live, no HA restart) |
 | Change **user profile language** | SEM custom cards update immediately (no regeneration needed) |
-| Add new translations to `translations.json` | Must regenerate `sem-localize.js` + redeploy + regenerate dashboard |
+| Add new translations to `translations.json` | Must regenerate `sem-localize.js` + redeploy + regenerate dashboard (hard-refresh after — browser-cached `sem-localize.js`) |
 
 ---
 
@@ -316,4 +329,4 @@ SEM includes `?v={version}` cache busting on all card URLs. If cards still show 
 This is expected if your system language and user profile language differ. See [Multi-Language Support](#multi-language-support) above. To fix: set both to the same language and regenerate the dashboard.
 
 ### Changed system language but dashboard still in old language
-You must regenerate the dashboard after changing the system language. Go to Developer Tools > Services > `solar_energy_management.generate_dashboard` and call the service, then hard-refresh.
+You must regenerate the dashboard after changing the system language. Go to Developer Tools > Services > `solar_energy_management.generate_dashboard` and call the service, then hard-refresh. The regenerated dashboard takes effect immediately — no HA restart needed (v1.5.16+).
