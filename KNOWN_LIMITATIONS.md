@@ -76,3 +76,11 @@ SEM supports multiple solar inverters, battery units, and grid tariff entries fr
 ## Multi-phase EV charging
 
 SEM assumes 3-phase charging at 230V per phase by default. Single-phase or 2-phase configurations must be set via the integration options. Incorrect phase configuration will result in inaccurate current calculations.
+
+## Battery-assist mode may transiently attribute a small grid flow to the EV
+
+When the EV is charging in `battery_assist` mode (Zone 4, home battery ≥ `battery_auto_start_soc`), SEM offers the EV a budget that includes the expected battery discharge contribution (up to `battery_assist_max_power`, default 4500 W). The EV's onboard charger ramps to that current effectively instantly, but the home battery — an LFP pack managed by the inverter's BMS — takes several seconds to ramp its discharge from 0 W to the requested level. During that ramp window, the grid backfills the gap.
+
+SEM's proportional flow attribution (`coordinator/flow_calculator.py: calculate_power_flows`) splits the actual grid flow across EV and home loads by demand share, so during the battery-discharge ramp you may briefly see `sensor.sem_flow_grid_to_ev_power` rise to a few hundred watts even though SEM itself never asked the EV to pull from grid. **This is the physics of the ramp, not a bug**: it lasts a handful of cycles (≤ 30 s typically), and the daily integrated grid-to-EV figure usually stays under 5 % of the session total. The live sentinel `tests/live/test_solar_only_no_grid.sh` correctly only checks the strict grid-floor invariant for `solar_only` (where the canonical promise is "no grid at all"), and treats `battery_assist` grid flow as informational.
+
+If you want strict no-grid-ever behaviour, choose `Self-consumption` or `PV` charging mode instead of `Auto`, or raise `battery_assist_floor_soc` so Zone 4 isn't entered.

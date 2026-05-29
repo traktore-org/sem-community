@@ -75,6 +75,61 @@ list — `card-mod`, `bar-card` and `mushroom` are the most commonly missing.
 
 ---
 
+## Dashboard blank, log says "ResourceYAMLCollection has no attribute async_create_item"
+
+**Symptom:** the dashboard loads with no cards (or only the title), and the
+HA log shows:
+
+```
+WARNING ... solar_energy_management: SEM detected YAML-mode Lovelace; SEM
+card resources cannot be registered automatically. Add the following to
+configuration.yaml under `lovelace.resources` and restart:
+  - url: /local/custom_components/solar_energy_management/dashboard/card/dist/sem-cards.js
+    type: module
+  - url: /local/custom_components/solar_energy_management/dashboard/card/sem-system-diagram-card.js
+    type: module
+```
+
+**Cause:** you're running **YAML-mode Lovelace** (you have `lovelace: mode:
+yaml` in `configuration.yaml`). In YAML mode the resource list is read-only
+— SEM cannot register its bundle programmatically, so the cards aren't
+loaded and the dashboard comes up blank. (Reported as
+[#283](https://github.com/traktore-org/sem-community/issues/283); fixed in
+v1.6.0 to produce the actionable warning above instead of an unhelpful
+"Could not register" error.)
+
+**Two ways to fix:**
+
+### Option A — switch to storage-mode Lovelace (easiest)
+Settings → Dashboards → ⋮ → "Take control" on the main dashboard. This is
+the default for new HA installs and is what SEM is built around. The
+auto-registration will then work on the next restart.
+
+### Option B — stay on YAML mode, register manually
+Add the two resources from the warning to your `configuration.yaml` under
+`lovelace.resources`:
+
+```yaml
+lovelace:
+  mode: yaml
+  resources:
+    - url: /local/custom_components/solar_energy_management/dashboard/card/dist/sem-cards.js
+      type: module
+    - url: /local/custom_components/solar_energy_management/dashboard/card/sem-system-diagram-card.js
+      type: module
+    # plus the HACS cards SEM needs:
+    - url: /hacsfiles/lovelace-card-mod/card-mod.js
+      type: module
+    - url: /hacsfiles/lovelace-mushroom/mushroom.js
+      type: module
+    # ... and apexcharts-card, sankey-chart, fold-entity-row as installed.
+```
+
+Restart HA. The warning will still log once per startup (YAML mode is
+read-only by design — SEM can't suppress it), but the cards will load.
+
+---
+
 ## Grid import/export values are swapped
 
 **Symptom:** SEM shows grid import when the house is actually exporting (or vice versa). The `sensor.sem_grid_power` sign is the opposite of the hardware power meter.

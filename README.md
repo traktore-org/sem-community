@@ -15,6 +15,8 @@
 
 SEM monitors your solar production, battery, grid, EV charger, and household devices every 10 seconds and distributes surplus power by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
 
+> **v1.6.0 note** — `sensor.sem_available_power` and `sensor.sem_calculated_current` now publish the **canonical** EV budget (the same value the state machine and actuator read) instead of the raw solar surplus. If you have automations or templates that read either sensor directly, the numbers may be slightly different than under 1.5.x — the canonical value is the more accurate one. Full details in [CHANGELOG.md](CHANGELOG.md) and [docs/ARCHITECTURE.md → EV Budget Calculation](docs/ARCHITECTURE.md#ev-budget-calculation).
+
 ![SEM Dashboard Overview](docs/images/sem_home_tab.png)
 
 <p align="center">
