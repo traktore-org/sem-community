@@ -956,16 +956,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     # Backward compat: set the old scalar for single-value reads
                     self._night_target_per_charger = None
 
-                # Solar budget: distribute by priority
+                # Solar budget: distribute by priority. Use the canonical
+                # EVBudget computed in _build_charging_context (#282 Phase B.5).
+                # Before this, multi-charger setups went through
+                # _calculate_solar_ev_budget here, which has the legacy
+                # ev_power + grid_export base — exactly the disagreement
+                # mode Phase B eliminated for single-charger but left in
+                # place for multi-charger distribution. Reported by @RienduPre
+                # in #284 (Growatt + Wallbox Pulsar, 2-charger). The
+                # distribution math (priority-weighted split across
+                # chargers) is unchanged; we only swap the TOTAL the
+                # distributor sees.
                 if num_chargers >= 1 and charging_state in (
                     ChargingState.SOLAR_CHARGING_ACTIVE,
                     ChargingState.SOLAR_SUPER_CHARGING,
                     ChargingState.SOLAR_CHARGING_ALLOWED,
                     ChargingState.SOLAR_MIN_PV,
                 ):
-                    total_budget = self._calculate_solar_ev_budget(
-                        charging_state, power, charging_context
-                    )
+                    cycle_budget = getattr(self, "_cycle_ev_budget", None)
+                    if cycle_budget is not None:
+                        total_budget = cycle_budget.net_w
+                    else:
+                        # Defence-in-depth — partial init / unit tests.
+                        # _calculate_solar_ev_budget is the legacy path; Phase D.2
+                        # will remove this fallback after PROD soak confirms.
+                        total_budget = self._calculate_solar_ev_budget(
+                            charging_state, power, charging_context
+                        )
                     ev_budget_per_charger = self._surplus_controller.distribute_ev_budget(
                         total_budget, self._ev_devices
                     )
