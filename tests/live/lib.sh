@@ -145,7 +145,16 @@ restore_state_time() {
 
 call_service() {
     _assert_not_prod
-    local domain="$1" service="$2" data="${3:-{}}"
+    # NB: do NOT write `${3:-{}}` here — bash parameter expansion treats the
+    # `}` inside the default value as terminating the expansion, producing
+    # `<$3>}` (extra trailing brace) when $3 is non-empty. That mangled the
+    # JSON payload (e.g. `..."off"}}`) and silently no-op'd the service call.
+    # Use an explicit default.
+    local domain="$1" service="$2" data
+    data="${3-}"
+    if [[ -z "$data" ]]; then
+        data='{}'
+    fi
     curl -sk -H "Authorization: Bearer $LIVE_TOKEN" -H "Content-Type: application/json" \
         --max-time 30 \
         -X POST "$LIVE_URL/api/services/$domain/$service" \

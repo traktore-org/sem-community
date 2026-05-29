@@ -113,6 +113,8 @@ across releases), the test catches it before the next plug-in.
 | File | What it locks in |
 |---|---|
 | [`test_deadline_reset.sh`](test_deadline_reset.sh) | EV daily counter resets at `Charge by` time, not at sunrise (#279 follow-up; verified live 2026-05-29 06:40) |
+| [`test_surplus_charging.sh`](test_surplus_charging.sh) | `ev_charging_mode` select exposes auto/minpv/now/off; switching mode propagates to coordinator and the strategy decision flips accordingly (#282 SEMPerChargerSelect class) |
+| [`test_overnight_window.sh`](test_overnight_window.sh) | Moving the `night_latest_end` slider at runtime updates `sensor.sem_night_end_time` on the next cycle. **Caught a real bug live**: `async_update_config` rebound `self.config` to a new dict, leaving `TimeManager._config` pointing at the stale one. Fix: mutate in place. (2026-05-29) |
 
 ## Future tests worth adding
 
@@ -122,7 +124,6 @@ caught by unit tests:
 - Session counter survives HA restart mid-charge (plug → restart → assert session_energy non-zero after restart)
 - Dashboard regenerate doesn't trigger an HA restart (call `generate_dashboard`, watch HA stays up)
 - Stray top-level `sem-cards.js` doesn't shadow `dist/sem-cards.js` (file inventory pre + post regenerate)
-- `ev_charging_mode` select exposes the right options (read `attributes.options`, assert `auto/minpv/now/off`)
 - Solar-only strategy actually caps the actuator amps (read flow_grid_to_ev_power during a Min+PV window, assert near zero)
 
 Each becomes a 30–50 line script when its turn comes up.
