@@ -1213,8 +1213,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 charging_state=charging_state,
                 charging_strategy=charging_context.charging_strategy,
                 charging_strategy_reason=charging_context.charging_strategy_reason,
-                available_power=available_power,
-                calculated_current=calculated_current,
+                # Publish canonical budget (#282 unification, Phase B).
+                # The state machine and the actuator now read from the
+                # same EVBudget instance; publishing from it as well
+                # ensures the dashboard shows what those two see, not a
+                # third lower number from calculate_available_power.
+                available_power=charging_context.available_power,
+                calculated_current=charging_context.calculated_current,
                 surplus_control=surplus_data,
                 forecast=forecast_data,
                 tariff=tariff_data,
@@ -2107,6 +2112,41 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         _LOGGER.info("EV charger registered via late discovery: service=%s", ev_auto.get("ev_charger_service"))
 
+    def _canonical_strategy_from_legacy(self, legacy_strategy: str, legacy_reason: str) -> str:
+        """Map ``_determine_charging_strategy`` output → :class:`EVBudgetStrategy`.
+
+        The legacy code returns ``"solar_only"`` for both Zone 3
+        surplus-with-redirect AND Zone 2 surplus-only. The actuator
+        distinguished via substring matching on the reason text — the
+        proximate cause of the #282 three-way disagreement. This mapper
+        immortalises that signal while we transition; Phase D promotes
+        ``self_consumption`` to a first-class strategy return and the
+        substring matching goes away.
+        """
+        from .flow_calculator import EVBudgetStrategy
+
+        if legacy_strategy == "idle":
+            return EVBudgetStrategy.IDLE
+        if legacy_strategy == "now":
+            return EVBudgetStrategy.NOW
+        if legacy_strategy == "min_pv":
+            return EVBudgetStrategy.MIN_PV
+        if legacy_strategy == "battery_assist":
+            return EVBudgetStrategy.BATTERY_ASSIST
+        if legacy_strategy == "solar_only":
+            # Disambiguate Z2 self_consumption from Z3 solar_only via reason.
+            # Both _self_consumption_strategy and Zone 2 in the zone logic
+            # tag their reason with "self_consumption" or "Zone 2".
+            if "self_consumption" in legacy_reason or "Zone 2" in legacy_reason:
+                return EVBudgetStrategy.SELF_CONSUMPTION
+            return EVBudgetStrategy.SOLAR_ONLY
+        # Be loud about unknown strategies — silent fallthrough was the #282 root.
+        raise ValueError(
+            f"_canonical_strategy_from_legacy: unknown legacy strategy "
+            f"{legacy_strategy!r} (reason: {legacy_reason!r}). Add a case "
+            f"in this mapper if you introduced a new strategy value."
+        )
+
     def _determine_charging_strategy(self, power: PowerReadings, energy: Any,
                                      charger_cfg: dict | None = None) -> tuple:
         """SOC-zone-based charging strategy decision (inspired by evcc).
@@ -2586,13 +2626,50 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # that disagrees with what the charger is actually told to do (#282).
         strategy, reason = self._determine_charging_strategy(power, energy, _primary_cfg)
 
-        ev_budget = self._flow_calculator.calculate_ev_budget(
-            power, forecast_remaining, power.battery_soc, battery_capacity,
-            solar_only=(strategy == "solar_only"),
+        # Canonical EV budget (#282 unification, Phase B). One method,
+        # one number, used by the state machine here, the published
+        # sensors below, and the actuator in ev_control. The strategy
+        # mapper translates the legacy strategy text into the canonical
+        # enum.
+        from .flow_calculator import EVBudgetStrategy
+        canonical_strategy = self._canonical_strategy_from_legacy(strategy, reason)
+        # MIN_PV needs a min_power_floor; NOW needs an override. The
+        # state machine doesn't read either, so leave them at defaults
+        # here (the actuator's own dispatch fills those in when relevant —
+        # see ev_control._cycle_ev_budget consumer in Phase B/C).
+        min_power_floor_w = 0.0
+        override_max_w = None
+        if canonical_strategy == EVBudgetStrategy.MIN_PV:
+            # 6 A * 3 phases * 230 V — KEBA / Wallbox EU minimum.
+            min_power_floor_w = self.config.get(
+                "ev_min_current", 6,
+            ) * 3 * 230
+        elif canonical_strategy == EVBudgetStrategy.NOW:
+            override_max_w = self.config.get(
+                "ev_max_current", 16,
+            ) * 3 * 230
+
+        ev_budget_obj = self._flow_calculator.calculate_canonical_ev_budget(
+            power,
+            strategy=canonical_strategy,
+            battery_soc=power.battery_soc,
+            battery_capacity_kwh=battery_capacity,
+            forecast_remaining_kwh=forecast_remaining,
+            battery_auto_start_soc=self.config.get("battery_auto_start_soc", 90),
+            battery_buffer_soc=self.config.get("battery_buffer_soc", 70),
+            battery_assist_floor_soc=self.config.get("battery_assist_floor_soc", 60),
+            battery_assist_max_power_w=self.config.get(
+                "battery_assist_max_power",
+                self.config.get("super_charger_power", 4500),
+            ),
+            min_power_floor_w=min_power_floor_w,
+            override_max_w=override_max_w,
         )
-        ev_current = self._flow_calculator.calculate_charging_current(
-            ev_budget, round_down=(strategy == "solar_only"),
-        )
+        # Cache for the actuator — ev_control reads self._cycle_ev_budget
+        # instead of recomputing.
+        self._cycle_ev_budget = ev_budget_obj
+        ev_budget = ev_budget_obj.net_w
+        ev_current = ev_budget_obj.current_a
 
         _LOGGER.debug(
             "Charging strategy: %s — %s",

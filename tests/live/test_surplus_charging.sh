@@ -39,6 +39,18 @@ baseline_target=$(get_state "$DAILY_TARGET")
 daily=$(get_state "$DAILY_EV")
 _log "baseline mode=$baseline_mode  strategy=$baseline_strategy  target=$baseline_target  daily=$daily"
 
+# Precondition: EV must be connected. Otherwise _determine_charging_strategy
+# short-circuits to ("idle", "ev disconnected") regardless of mode and the
+# strategy assertions below would all read "idle". HA-TEST's simulator can
+# drop the connection across restarts — skip cleanly when that happens.
+ev_connected=$(get_state "binary_sensor.sem_ev_connected")
+if [[ "$ev_connected" != "on" ]]; then
+    _log "SKIP: binary_sensor.sem_ev_connected is '$ev_connected' — strategy"
+    _log "      decisions only fire with EV connected. Plug the simulated EV"
+    _log "      back in (or wait for the simulator to recover) and re-run."
+    exit 0
+fi
+
 # Bump target to current daily + 5 kWh so it's clearly unmet.
 new_target=$(python3 -c "print(round(float('$daily') + 5.0, 1))" 2>/dev/null || echo "20")
 call_service number set_value \

@@ -441,14 +441,27 @@ class EVControlMixin:
             if per_charger_budget is not None:
                 budget_w = per_charger_budget
             else:
-                charging_mode = self.config.get("ev_charging_mode", "pv")
-                if charging_mode in ("self_consumption", "auto") and "self_consumption" in (context.charging_strategy_reason or ""):
-                    auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-                    budget_w = power.solar_power - power.home_consumption_power
-                    if power.battery_soc < auto_start_soc:
-                        budget_w -= power.battery_charge_power
-                    budget_w = max(0, budget_w)
+                # Canonical EV budget (#282 unification, Phase B). The
+                # coordinator caches `self._cycle_ev_budget` per cycle —
+                # it's an EVBudget instance carrying the same value the
+                # state machine just used to decide we should be charging,
+                # so the actuator and the state machine can never
+                # disagree about how much power is available.
+                #
+                # The three legacy ad-hoc paths this replaces:
+                #   - self_consumption-via-reason-text match (the path
+                #     that disagreed with the state machine, root of #282)
+                #   - _calculate_solar_ev_budget (still callable for now;
+                #     removed in Phase D)
+                #   - the inline "solar - home - batt_charge" arithmetic
+                # All three are now in flow_calculator.calculate_canonical_ev_budget.
+                cycle_budget = getattr(self, "_cycle_ev_budget", None)
+                if cycle_budget is not None:
+                    budget_w = cycle_budget.net_w
                 else:
+                    # Fallback for paths where the canonical budget wasn't
+                    # computed (shouldn't happen in normal operation — guard
+                    # for tests or partial init).
                     budget_w = self._calculate_solar_ev_budget(state, power, context)
 
             # Phase switching: auto-switch 1p/3p based on available surplus
@@ -457,11 +470,14 @@ class EVControlMixin:
             enable_delay = self.config.get("ev_enable_delay_seconds", 60)
             disable_delay = self.config.get("ev_disable_delay_seconds", 300)
 
-            # Now mode: charge at max power immediately
+            # Now mode and Min+PV overrides remain HERE (not in the
+            # canonical budget) because they depend on PER-CHARGER
+            # parameters (ev.max_current, ev.min_power_threshold) that
+            # the cycle-level budget doesn't see — multi-charger fleets
+            # have different overrides per charger.
             if context.charging_strategy == "now":
                 budget_w = ev.max_current * ev.phases * ev.voltage
                 enable_delay = 0
-            # Min+PV: guarantee minimum from grid, add surplus on top
             elif state == ChargingState.SOLAR_MIN_PV:
                 budget_w = max(ev.min_power_threshold, budget_w)
                 enable_delay = 0  # No enable delay — guaranteed charge
