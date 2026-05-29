@@ -3201,7 +3201,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 <ha-icon icon="${t}" style="--mdc-icon-size:16px;color:${e}"></ha-icon>
                 <span class="chip-val">${i}</span>
             </div>
-        `}render(){if(!this._config||!this._hass)return K;const t=this._val("solar_power"),e=this._val("battery_soc"),i=this._val("autarky_rate"),s=this._val("ev_power"),r=this._val("energy_optimization_score"),a=this._scoreColor(r),o=this._valStr("energy_tip"),n=this._valStr("best_surplus_window")||"—",l=this._val("forecast_remaining_today_kwh").toFixed(1),c=this._val("current_vs_peak_percentage"),d=this._peakColor(c),h=this._val("consecutive_peak_15min").toFixed(1),p=this._val("target_peak_limit").toFixed(1);this._switchOn("switch.sem_observer_mode");const g=this._valStr("forecast_source")||"—",u=this._val("daily_co2_avoided").toFixed(2),_=this._val("lifetime_co2_avoided").toFixed(1);return H`
+        `}render(){if(!this._config||!this._hass)return K;const t=this._val("solar_power"),e=this._val("battery_soc"),i=this._val("autarky_rate"),s=this._val("ev_power"),r=this._val("energy_optimization_score"),a=this._scoreColor(r),o=this._valStr("energy_tip"),n=this._valStr("best_surplus_window")||"—",l=this._val("forecast_remaining_today_kwh").toFixed(1),c=this._val("current_vs_peak_percentage"),d=this._peakColor(c),h=this._val("consecutive_peak_15min").toFixed(1),p=this._val("target_peak_limit").toFixed(1);this._switchOn("switch.sem_observer_mode");const g=this._valStr("forecast_source"),u={solcast:"Solcast",forecast_solar:"Forecast.Solar",custom:this._t("custom")||"Custom"},_=g?u[g]||g:"—",f=this._val("daily_co2_avoided").toFixed(2),m=this._val("lifetime_co2_avoided").toFixed(1);return H`
             <div class="wrap">
 
                 <!-- 1. Status Chips -->
@@ -3257,7 +3257,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         <ha-icon icon="mdi:weather-partly-cloudy"
                                  style="--mdc-icon-size:16px;color:#96CAEE"></ha-icon>
                         <span class="forecast-label">${this._t("forecast")}</span>
-                        <span class="forecast-val">${g}</span>
+                        <span class="forecast-val">${_}</span>
                     </div>
                 </div>
 
@@ -3270,7 +3270,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         <ha-icon icon="mdi:leaf"
                                  style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                         <div class="env-chip-content">
-                            <span class="env-chip-val">${u} kg</span>
+                            <span class="env-chip-val">${f} kg</span>
                             <span class="env-chip-label">${this._t("co2_today")}</span>
                         </div>
                     </div>
@@ -3278,7 +3278,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         <ha-icon icon="mdi:tree"
                                  style="--mdc-icon-size:18px;color:#8DC892"></ha-icon>
                         <div class="env-chip-content">
-                            <span class="env-chip-val">${_} kg</span>
+                            <span class="env-chip-val">${m} kg</span>
                             <span class="env-chip-label">${this._t("co2_lifetime")}</span>
                         </div>
                     </div>
