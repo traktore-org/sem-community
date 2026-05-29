@@ -3291,8 +3291,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return status
 
     async def async_update_config(self, config_update: Dict[str, Any]) -> None:
-        """Update coordinator configuration."""
-        self.config = {**self.config, **config_update}
+        """Update coordinator configuration.
+
+        Mutate ``self.config`` in place rather than rebinding. Multiple
+        components (TimeManager, EnergyCalculator, ChargingStateMachine,
+        BatteryChargeAdapter, …) hold a reference to the original config
+        dict captured at construction. Rebinding leaves them pointing at
+        the stale dict, so a slider change like ``night_latest_end`` would
+        update ``self.config`` but never reach ``time_manager._config``
+        until the next integration reload. Caught live by
+        tests/live/test_overnight_window.sh — without this, the night-end
+        sensor stayed pinned at the old value after the slider moved.
+        """
+        self.config.update(config_update)
         self._mirror_primary_charger_to_global()  # keep legacy global keys fresh (#255)
         _LOGGER.info("Configuration updated: %s", list(config_update.keys()))
 
