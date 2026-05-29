@@ -77,6 +77,30 @@ SEM supports multiple solar inverters, battery units, and grid tariff entries fr
 
 SEM assumes 3-phase charging at 230V per phase by default. Single-phase or 2-phase configurations must be set via the integration options. Incorrect phase configuration will result in inaccurate current calculations.
 
+## Charger plug-sensor reliability across HA restart (KEBA P30 confirmed)
+
+SEM reads the upstream charger integration's plug sensor (e.g.
+`binary_sensor.keba_p30_plug`) to know when the car is connected.
+On a KEBA P30, that sensor has been observed reporting `off` for
+extended periods (60+ minutes on 2026-05-29 PROD) across an HA
+restart with a car continuously plugged in and actively charging.
+This appears to be an upstream HA-integration / KEBA-firmware
+interaction — the sensor lies; SEM trusts it.
+
+Since v1.6.0, SEM applies a **physics defence**: if `ev_charging`
+is True or `ev_power > 100 W`, SEM infers `ev_connected = True`
+regardless of what the plug sensor says (current cannot flow
+without a connection). A WARNING line in the log records each
+inference so the underlying upstream issue stays visible. The
+defence applies to every charger integration, not just KEBA.
+
+If you see SEM logging `ev_connected inferred from physics: plug
+sensor reported off but ev_power=XW`, the defence is active and
+your charger integration's plug sensor is unreliable. The defence
+is fully safe — if you DO unplug the car, both `ev_power` and
+`ev_charging` will drop and SEM will correctly transition to
+disconnected.
+
 ## Battery-assist mode may transiently attribute a small grid flow to the EV
 
 When the EV is charging in `battery_assist` mode (Zone 4, home battery ≥ `battery_auto_start_soc`), SEM offers the EV a budget that includes the expected battery discharge contribution (up to `battery_assist_max_power`, default 4500 W). The EV's onboard charger ramps to that current effectively instantly, but the home battery — an LFP pack managed by the inverter's BMS — takes several seconds to ramp its discharge from 0 W to the requested level. During that ramp window, the grid backfills the gap.

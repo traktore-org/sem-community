@@ -101,6 +101,21 @@ could be misleadingly low when battery redirect was active.
   path now reads from the canonical `EVBudget`.
 - **#285** — "Copy diagnostics" button in the System Information card
   now works on HTTP installs. Reported on macOS Chrome.
+- **Charger plug-sensor physics defence** — caught live on PROD
+  2026-05-29 with a KEBA P30. Across an HA restart with a connected
+  car, `binary_sensor.keba_p30_plug` reported "off" for 67 minutes
+  while `binary_sensor.keba_p30_charging_state` cycled on/off through
+  15 transitions and `sensor.keba_p30_charging_power` peaked at 8 kW.
+  SEM correctly trusted the lying plug sensor, returned "EV
+  disconnected", and stopped supervising the car. The KEBA kept its
+  last commanded current; the car drew ~6 kWh past the configured
+  Max ceiling because SEM wasn't watching. The root cause is upstream
+  (the charger integration's plug sensor), but SEM now defends
+  against it: if `ev_charging` is True OR `ev_power > 100 W`,
+  `ev_connected` is inferred True regardless of what the plug sensor
+  says. Current cannot flow without a connection. Locked in by
+  `tests/test_ev_connected_physics_defence.py` (5 truth-table corners)
+  and `tests/live/test_ev_connected_physics.sh` (forever sentinel).
 - Display-honesty guard at `sensor.py:_format_charging_state` is now
   redundant after the unification (canonical is the single source of
   truth) but kept as defence-in-depth for one release; will be removed
