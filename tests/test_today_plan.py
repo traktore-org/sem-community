@@ -1,4 +1,4 @@
-"""Unit tests for the today's plan composer (#282)."""
+"""Unit tests for the today's plan composer (#282 + #298)."""
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -10,9 +10,12 @@ from custom_components.solar_energy_management.coordinator.today_plan import (
     KIND_EXPENSIVE_START,
     KIND_EV_CHARGE_START,
     KIND_EV_MIN_REACHED,
+    KIND_EV_TARGET_REACHED,
     KIND_EV_DEADLINE,
     KIND_NIGHT_OPEN,
     KIND_SOLAR_PEAK,
+    KIND_BATTERY_FULL,
+    KIND_BATTERY_EMPTY,
 )
 
 
@@ -175,6 +178,96 @@ class TestComposeTodayPlan:
             ev_effective_rate_kw=4.0,
         )
         assert len(plan) <= 8
+
+
+class TestLiveETARows:
+    """#298 — live ETA rows for the home battery (full / empty) and the
+    EV (target reached). The composer accepts pre-computed ETAs from
+    the caller; this class pins the row-emission contract.
+    """
+
+    def test_battery_full_eta_within_horizon_emits_row(self):
+        eta = NOW + timedelta(hours=2)
+        plan = compose_today_plan(now=NOW, battery_full_eta=eta)
+        rows = [r for r in plan if r["kind"] == KIND_BATTERY_FULL]
+        assert len(rows) == 1
+        assert rows[0]["when"] == eta.isoformat()
+        assert rows[0]["label"] == "plan_battery_full"
+
+    def test_battery_empty_eta_within_horizon_emits_row(self):
+        eta = NOW + timedelta(hours=5)
+        plan = compose_today_plan(now=NOW, battery_empty_eta=eta)
+        rows = [r for r in plan if r["kind"] == KIND_BATTERY_EMPTY]
+        assert len(rows) == 1
+        assert rows[0]["label"] == "plan_battery_empty"
+
+    def test_ev_target_reached_eta_emits_with_kwh_substitution(self):
+        eta = NOW + timedelta(hours=4)
+        plan = compose_today_plan(
+            now=NOW, ev_target_eta=eta, ev_target_kwh=22.5,
+        )
+        rows = [r for r in plan if r["kind"] == KIND_EV_TARGET_REACHED]
+        assert len(rows) == 1
+        assert rows[0]["values"] == {"kwh": "22.5"}
+        assert rows[0]["label"] == "plan_ev_target_reached"
+
+    def test_ev_target_eta_without_kwh_emits_row_without_values(self):
+        """Defensive: composer must not crash when the caller has an ETA
+        but no target value (e.g. SOC-mode charger with a missing kWh
+        translation)."""
+        eta = NOW + timedelta(hours=3)
+        plan = compose_today_plan(now=NOW, ev_target_eta=eta)
+        rows = [r for r in plan if r["kind"] == KIND_EV_TARGET_REACHED]
+        assert len(rows) == 1
+        assert rows[0]["values"] == {}
+
+    def test_battery_eta_outside_horizon_suppressed(self):
+        # 25h ahead — past the default 24h horizon
+        far = NOW + timedelta(hours=25)
+        plan = compose_today_plan(now=NOW, battery_full_eta=far)
+        rows = [r for r in plan if r["kind"] == KIND_BATTERY_FULL]
+        assert rows == []
+
+    def test_eta_in_the_past_suppressed(self):
+        """Defensive: an ETA that has already passed (clock skew, stale
+        compute) must NOT show as a future plan row."""
+        past = NOW - timedelta(minutes=5)
+        plan = compose_today_plan(
+            now=NOW,
+            battery_full_eta=past,
+            battery_empty_eta=past,
+            ev_target_eta=past,
+        )
+        for kind in (KIND_BATTERY_FULL, KIND_BATTERY_EMPTY, KIND_EV_TARGET_REACHED):
+            assert [r for r in plan if r["kind"] == kind] == [], (
+                f"past ETA leaked into plan as {kind}"
+            )
+
+    def test_none_etas_emit_no_battery_rows(self):
+        """Default no-op: no ETAs passed → no live-ETA rows. The plan
+        still has the "now" anchor; nothing else."""
+        plan = compose_today_plan(now=NOW)
+        assert all(r["kind"] not in (
+            KIND_BATTERY_FULL, KIND_BATTERY_EMPTY, KIND_EV_TARGET_REACHED,
+        ) for r in plan)
+
+    def test_all_three_etas_simultaneously(self):
+        """Real-world: battery charging while EV is also charging.
+        Both ETAs should show, ordered chronologically."""
+        full = NOW + timedelta(hours=1, minutes=30)
+        target = NOW + timedelta(hours=4)
+        plan = compose_today_plan(
+            now=NOW,
+            battery_full_eta=full,
+            ev_target_eta=target,
+            ev_target_kwh=18.0,
+        )
+        kinds = [r["kind"] for r in plan]
+        assert KIND_BATTERY_FULL in kinds
+        assert KIND_EV_TARGET_REACHED in kinds
+        # Time-ordered
+        times = [datetime.fromisoformat(r["when"]) for r in plan]
+        assert times == sorted(times)
 
 
 class TestEnrichedScheduleForDay:

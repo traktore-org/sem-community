@@ -1667,6 +1667,69 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             _ev_rate_kw = 4.1  # ~6A x 690 W/A
                     except (ValueError, TypeError, AttributeError):
                         pass
+                # #298 — live ETAs while a battery / EV session is in
+                # progress. Best-guess from the CURRENT power rate;
+                # steady-state at the present rate is a useful
+                # approximation for "when does this finish?" Suppress
+                # when SOC is already at the boundary or the rate is
+                # too small for a sensible estimate.
+                _MIN_USEFUL_RATE_KW = 0.2  # 200 W — below this an ETA is noise
+                _battery_full_eta = None
+                _battery_empty_eta = None
+                _ev_target_eta = None
+                _ev_target_kwh = None
+                try:
+                    _bat_kw = (power.battery_power or 0.0) / 1000.0
+                    _bat_cap = self.config.get("battery_capacity_kwh", 15.0)
+                    _bat_soc = power.battery_soc if power.battery_soc is not None else None
+                    _bat_floor = self.config.get("battery_minimum_soc", 20)
+                    if _bat_soc is not None and _bat_cap > 0:
+                        if _bat_kw > _MIN_USEFUL_RATE_KW and _bat_soc < 99:
+                            remaining_kwh = (100 - _bat_soc) / 100 * _bat_cap
+                            _battery_full_eta = _now + timedelta(
+                                hours=remaining_kwh / _bat_kw,
+                            )
+                        elif _bat_kw < -_MIN_USEFUL_RATE_KW and _bat_soc > _bat_floor:
+                            remaining_kwh = (_bat_soc - _bat_floor) / 100 * _bat_cap
+                            _battery_empty_eta = _now + timedelta(
+                                hours=remaining_kwh / abs(_bat_kw),
+                            )
+                except (AttributeError, TypeError, ValueError, ZeroDivisionError):
+                    pass
+
+                try:
+                    _ev_kw = (power.ev_power or 0.0) / 1000.0
+                    if _ev_kw > _MIN_USEFUL_RATE_KW:
+                        _pcfg_t = _dl_pcfg or {}
+                        # Target preference: explicit Max ceiling > daily
+                        # target. Matches the surplus-stop semantics
+                        # from #245 — Max is where solar charging stops,
+                        # the natural ETA for an active session. Falls
+                        # back to Min if Max isn't set so something is
+                        # still surfaced.
+                        _ev_target = (
+                            _pcfg_t.get("daily_ev_target_max")
+                            or _pcfg_t.get("daily_ev_target")
+                            or self.config.get("daily_ev_target_max")
+                            or self.config.get("daily_ev_target", 10)
+                        )
+                        _cid = _pcfg_t.get("id")
+                        _ev_daily = (
+                            self._daily_ev_per_charger.get(_cid)
+                            if _cid and _cid in self._daily_ev_per_charger
+                            else (getattr(energy, "daily_ev", 0.0) or 0.0)
+                        )
+                        _remaining_to_target = max(
+                            0.0, float(_ev_target) - float(_ev_daily),
+                        )
+                        if _remaining_to_target > 0.1:
+                            _ev_target_eta = _now + timedelta(
+                                hours=_remaining_to_target / _ev_kw,
+                            )
+                            _ev_target_kwh = float(_ev_target)
+                except (AttributeError, TypeError, ValueError, ZeroDivisionError):
+                    pass
+
                 result["today_plan"] = compose_today_plan(
                     now=_now,
                     upcoming_prices=result.get("tariff_upcoming"),
@@ -1682,6 +1745,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         _np.next_cheap_start if _np and _np.next_cheap_start else None
                     ),
                     ev_effective_rate_kw=_ev_rate_kw,
+                    ev_target_eta=_ev_target_eta,
+                    ev_target_kwh=_ev_target_kwh,
+                    battery_full_eta=_battery_full_eta,
+                    battery_empty_eta=_battery_empty_eta,
                     currency=result.get("tariff_currency", ""),
                 )
             except Exception as e:
