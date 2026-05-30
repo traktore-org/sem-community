@@ -25,6 +25,7 @@ from homeassistant.const import (
     PERCENTAGE,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers import entity_registry as er
@@ -1694,6 +1695,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         self._attr_available = False
         self._attr_native_value = None
 
+        # #289 — ``sem_ev_power`` lagged the upstream KEBA charging-power
+        # sensor by up to ~5 kW for several seconds because the coordinator
+        # only re-reads on its 10 s cycle. For the EV-power sensor
+        # specifically we ALSO subscribe to upstream state changes so the
+        # published value matches reality within one HA dispatch instead
+        # of one coordinator cycle. The energy balance
+        # (``home_consumption_power``) stays on cycle granularity and
+        # corrects itself the next tick — already self-healing.
+        self._unsub_ev_power_track = None
+
         # Use HA configured currency for monetary sensors (instead of hardcoded CHF)
         if description.device_class == SensorDeviceClass.MONETARY:
             self._attr_native_unit_of_measurement = coordinator.hass.config.currency
@@ -1751,10 +1762,103 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                         f"Failed to restore state for {self.entity_description.key}: {e}"
                     )
 
+        # #289 — wire the sub-cycle EV-power passthrough for the one
+        # sensor that observably benefits (the dashboard reads it at
+        # 1 s resolution; everything else is happy on the 10 s
+        # coordinator cycle). Resolved here rather than in __init__
+        # because the upstream entity IDs come from the coordinator's
+        # config, which is fully populated by the time the entity is
+        # added to hass.
+        if self.entity_description.key == "ev_power":
+            self._subscribe_ev_power_upstreams()
+
+    @callback
+    def _subscribe_ev_power_upstreams(self) -> None:
+        """Subscribe to every upstream entity that feeds sem_ev_power.
+
+        Resolution mirrors ``SensorReader._read_ev_power``:
+          * multi-charger (``ev_chargers`` config has 2+ entries):
+            sum of each charger's ``ev_charging_power_sensor``
+          * single-charger / legacy: ``ev_power_sensor`` /
+            ``ev_charging_power_sensor`` from the top-level config
+
+        When any tracked upstream changes, re-sum from
+        ``hass.states.get()`` (stateless, matches SensorReader exactly)
+        and push the new value to ``sem_ev_power`` immediately.
+        """
+        config = self.coordinator.config or {}
+        ev_chargers = config.get("ev_chargers") or []
+
+        entity_ids: list[str] = []
+        if len(ev_chargers) > 1:
+            for ch in ev_chargers:
+                cps = ch.get("ev_charging_power_sensor")
+                if cps:
+                    entity_ids.append(cps)
+        else:
+            # Single-charger / legacy: prefer the top-level sensor;
+            # fall back to the per-charger entry if that's where the
+            # config flow stored it.
+            single = (
+                config.get("ev_power_sensor")
+                or config.get("ev_charging_power_sensor")
+            )
+            if not single and ev_chargers:
+                single = ev_chargers[0].get("ev_charging_power_sensor")
+            if single:
+                entity_ids.append(single)
+
+        if not entity_ids:
+            # No upstream wired (config wizard skipped EV power, or
+            # configured an Energy Dashboard derivation only). Cycle-
+            # granularity is the best we can do; nothing to subscribe.
+            return
+
+        # Cache the resolved set so the callback re-sums from the same
+        # entities (stateless re-read; matches SensorReader).
+        self._ev_power_upstream_entities = list(entity_ids)
+        self._unsub_ev_power_track = async_track_state_change_event(
+            self.hass, entity_ids, self._handle_ev_power_change,
+        )
+        _LOGGER.debug(
+            "#289 sem_ev_power tracking %d upstream(s): %s",
+            len(entity_ids), entity_ids,
+        )
+
+    @callback
+    def _handle_ev_power_change(self, event) -> None:
+        """Re-sum upstream EV power on any tracked entity change."""
+        total = 0.0
+        any_valid = False
+        for eid in self._ev_power_upstream_entities:
+            st = self.hass.states.get(eid)
+            if st is None or st.state in ("unavailable", "unknown", None):
+                continue
+            try:
+                total += float(st.state)
+                any_valid = True
+            except (ValueError, TypeError):
+                # Upstream momentarily unparseable — skip; the coordinator
+                # cycle will re-read on its own cadence either way.
+                continue
+
+        if not any_valid:
+            # Don't flip to None mid-session over a transient
+            # upstream-unavailable blip; coordinator will reconcile.
+            return
+
+        self._attr_native_value = round(total, 0)
+        self._attr_available = True
+        self.async_write_ha_state()
+
     async def async_will_remove_from_hass(self) -> None:
         """Remove callbacks when entity is removed from hass."""
         await super().async_will_remove_from_hass()
         # CoordinatorEntity already handles coordinator callbacks, no need to remove extra ones
+        # #289 — clean up the EV-power upstream subscription.
+        if self._unsub_ev_power_track is not None:
+            self._unsub_ev_power_track()
+            self._unsub_ev_power_track = None
 
     def _update_from_coordinator(self) -> None:
         """Update entity state from coordinator data."""
@@ -2087,38 +2191,18 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
     def _format_charging_state(self, state: str) -> str:
         """Format charging state to human-readable message (#62).
 
-        Display-honesty guard (#282 followup): the state machine can return
-        SOLAR_CHARGING_ACTIVE based on the redirect-inflated ``ev_budget``
-        even when the actuator is at 0 A and the EV is drawing nothing,
-        because ``_build_charging_context`` and ``_execute_ev_control`` use
-        *different* budget formulas. Caught live on PROD 2026-05-29 when
-        the dashboard showed "Solar mode - Charging active" with
-        ``calculated_current=0 A`` and ``ev_power=0 W``. Until the three
-        budget paths are unified, demote the displayed label whenever the
-        published actuator state contradicts "active": this is a
-        last-mile fix at the user-facing string only — the underlying
-        ``charging_state`` value is unchanged, so other consumers
-        (solar_charging_status, notifications, automations) keep their
-        existing behaviour.
+        The cosmetic ``1a9b3c9`` demotion guard (SOLAR_CHARGING_ACTIVE →
+        SOLAR_CHARGING_ALLOWED when calc_current=0 and ev_power<500W)
+        was removed in Phase D.2 (#282). Pre-D.2 it papered over the
+        budget-formula disagreement between ``_build_charging_context``
+        and ``_execute_ev_control``; the canonical-EVBudget unification
+        eliminated that disagreement by construction, so the demotion
+        is now dead code — verified across daytime battery_assist and
+        nighttime MIN_PV soak in v1.6.0/1.6.1.
         """
-        from .consts.states import ChargingState, get_status_message
+        from .consts.states import get_status_message
 
         if not state or not self.coordinator.data:
             return "Unknown"
-
-        # Only the "active" labels lie when the actuator is idle. Allowed /
-        # waiting / paused / target_reached / super-charging already match
-        # what the user sees on the dashboard.
-        if state == ChargingState.SOLAR_CHARGING_ACTIVE:
-            try:
-                calc_a = float(self.coordinator.data.get("calculated_current", 0) or 0)
-                ev_w = float(self.coordinator.data.get("ev_charging_power", 0) or 0)
-            except (TypeError, ValueError):
-                calc_a, ev_w = 0.0, 0.0
-            # Idle floor: 6 A * 3-phase * 230 V ≈ 4140 W is the smallest real
-            # session; 500 W is comfortably "definitely not charging" with
-            # headroom for measurement noise and wallbox standby draw.
-            if calc_a == 0 and ev_w < 500:
-                state = ChargingState.SOLAR_CHARGING_ALLOWED
 
         return get_status_message(state, self.hass)

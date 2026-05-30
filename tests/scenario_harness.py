@@ -311,15 +311,22 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
 
       * ``_determine_charging_strategy`` → strategy tuple
       * ``_flow_calculator.calculate_power_flows`` → instantaneous flows
-      * ``_calculate_solar_ev_budget`` (when in solar charging mode) → budget
-      * ``calculate_charging_current`` → setpoint amps
+      * ``_flow_calculator.calculate_canonical_ev_budget`` (with the canonical
+        strategy mapped from the legacy strategy string) → ``EVBudget``
+        with ``net_w`` (setpoint watts) and ``current_a`` (setpoint amps)
+      * For multi-charger scenarios, ``EVBudget.net_w`` flows through
+        ``SurplusController.distribute_ev_budget`` — the exact production
+        path post-Phase B.5
 
     The actuator call is simulated by invoking ``coord.hass.services.async_call``
     with the chosen amps; the capture wrapper records it.
 
-    Future scenarios that need the FULL coordinator update loop can replace
-    this with a direct ``await coord._async_update_data()`` once the harness
-    is widened — for the Scenario 0 leak we don't need that depth.
+    Pre-Phase-D.2 (#282) this harness called the now-deleted
+    ``calculate_ev_budget`` and ``calculate_charging_current`` primitives
+    inside ``try/except: pass`` blocks — when those were removed the
+    scenarios silently passed every assertion because ``calculated_current``
+    fell to 0. The rewrite below uses the canonical EVBudget directly so
+    the harness fails loudly if the canonical path regresses.
     """
     from homeassistant.util import dt as dt_util
 
@@ -382,35 +389,53 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
         except Exception as e:
             strategy_reason = f"strategy_call_failed: {type(e).__name__}: {e}"
 
-        # Budget — what does the EV-budget calc return given these inputs?
-        # When the strategy is solar_only, pass solar_only=True so the
-        # surplus ceiling is enforced (the fix for #282 leak 1). This
-        # mirrors what the real coordinator + ev_control path does.
-        solar_only_active = (
-            strategy is not None
-            and "solar_only" in str(strategy).lower()
+        # Map the legacy strategy string to the canonical enum (same
+        # rules as ``coordinator._canonical_strategy_from_legacy``).
+        # Inline here so the harness doesn't depend on a real coordinator
+        # instance. The reason text is what disambiguates the two flavours
+        # of ``"solar_only"`` (Zone 2 self-consumption vs Zone 3+ surplus).
+        from custom_components.solar_energy_management.coordinator.flow_calculator import (
+            EVBudgetStrategy,
         )
-        budget_w = 0.0
-        try:
-            budget_w = coord._flow_calculator.calculate_ev_budget(
-                readings,
-                forecast_remaining_kwh=0.0,
-                battery_soc=readings.battery_soc,
-                battery_capacity_kwh=coord.config.get("battery_capacity_kwh", 15.0),
-                solar_only=solar_only_active,
-            )
-        except Exception:  # pragma: no cover — defensive
-            pass
+        if strategy is None or strategy == "idle":
+            canonical_strat = EVBudgetStrategy.IDLE
+        elif strategy == "now":
+            canonical_strat = EVBudgetStrategy.NOW
+        elif strategy == "min_pv":
+            canonical_strat = EVBudgetStrategy.MIN_PV
+        elif strategy == "battery_assist":
+            canonical_strat = EVBudgetStrategy.BATTERY_ASSIST
+        elif strategy == "solar_only":
+            reason_text = str(strategy_reason or "")
+            if "self_consumption" in reason_text or "Zone 2" in reason_text:
+                canonical_strat = EVBudgetStrategy.SELF_CONSUMPTION
+            else:
+                canonical_strat = EVBudgetStrategy.SOLAR_ONLY
+        else:
+            canonical_strat = EVBudgetStrategy.IDLE  # unknown → no charge
 
-        # Current setpoint that would actually go to the KEBA service call.
-        # In solar_only mode floor to avoid the rounding-to-grid boundary.
-        amps = 0.0
-        try:
-            amps = coord._flow_calculator.calculate_charging_current(
-                budget_w, round_down=solar_only_active,
-            )
-        except Exception:  # pragma: no cover
-            pass
+        # Canonical EV budget — single source of truth post-Phase-D.2.
+        # Returns an ``EVBudget`` with ``net_w`` (the watts setpoint) and
+        # ``current_a`` (the amps setpoint, already floor'd in surplus
+        # regimes to avoid the rounding-to-grid boundary captured by
+        # Scenario 0 #282). Both values are used directly — no separate
+        # round-trip through ``calculate_charging_current`` like pre-D.2.
+        ev_budget_obj = coord._flow_calculator.calculate_canonical_ev_budget(
+            readings,
+            strategy=canonical_strat,
+            battery_soc=readings.battery_soc,
+            battery_capacity_kwh=coord.config.get("battery_capacity_kwh", 15.0),
+            forecast_remaining_kwh=0.0,
+            battery_auto_start_soc=coord.config.get("battery_auto_start_soc", 90),
+            battery_buffer_soc=coord.config.get("battery_buffer_soc", 70),
+            battery_assist_floor_soc=coord.config.get("battery_assist_floor_soc", 60),
+            battery_assist_max_power_w=coord.config.get(
+                "battery_assist_max_power",
+                coord.config.get("super_charger_power", 4500),
+            ),
+        )
+        budget_w = ev_budget_obj.net_w
+        amps = ev_budget_obj.current_a
 
         # Simulate the actuator: when strategy says "go" and amps > min,
         # SEM would call keba.set_current(<amps>). Capture it.
@@ -430,53 +455,15 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
             "flow_battery_to_ev_power": power_flows.battery_to_ev,
         }
 
-        # Multi-charger distribution (Phase B.5 / #284). When the scenario
-        # has 2+ chargers, compute the canonical EVBudget and pass its
-        # net_w through SurplusController.distribute_ev_budget — the
-        # exact code path coordinator.py:966 runs in production post-B.5.
-        # This verifies (a) the canonical method produces a usable net_w
-        # for distribution, and (b) the priority cascade splits it
-        # sensibly across multiple chargers without leaking the legacy
-        # _calculate_solar_ev_budget pre-Phase-B value.
+        # Multi-charger distribution (Phase B.5 / #284). The canonical
+        # ``ev_budget_obj`` computed above already represents the total
+        # fleet budget; we pass its ``net_w`` through the real
+        # ``SurplusController.distribute_ev_budget`` — the exact code path
+        # ``coordinator.py:966`` runs in production. This verifies the
+        # priority cascade splits the canonical budget sensibly across
+        # multiple chargers, without re-deriving a separate per-charger
+        # value (the divergence the canonical unification eliminated).
         if len(coord._ev_devices) >= 2 and strategy is not None:
-            from custom_components.solar_energy_management.coordinator.flow_calculator import (
-                EVBudgetStrategy,
-            )
-            # Map legacy strategy text → canonical enum, same logic as
-            # coordinator._canonical_strategy_from_legacy. Inline here so
-            # the harness doesn't depend on a real coordinator instance.
-            if strategy == "idle":
-                canonical_strat = EVBudgetStrategy.IDLE
-            elif strategy == "now":
-                canonical_strat = EVBudgetStrategy.NOW
-            elif strategy == "min_pv":
-                canonical_strat = EVBudgetStrategy.MIN_PV
-            elif strategy == "battery_assist":
-                canonical_strat = EVBudgetStrategy.BATTERY_ASSIST
-            elif strategy == "solar_only":
-                reason_text = str(strategy_reason or "")
-                if "self_consumption" in reason_text or "Zone 2" in reason_text:
-                    canonical_strat = EVBudgetStrategy.SELF_CONSUMPTION
-                else:
-                    canonical_strat = EVBudgetStrategy.SOLAR_ONLY
-            else:
-                canonical_strat = EVBudgetStrategy.IDLE  # unknown → no charge
-
-            ev_budget_obj = coord._flow_calculator.calculate_canonical_ev_budget(
-                readings,
-                strategy=canonical_strat,
-                battery_soc=readings.battery_soc,
-                battery_capacity_kwh=coord.config.get("battery_capacity_kwh", 15.0),
-                forecast_remaining_kwh=0.0,
-                battery_auto_start_soc=coord.config.get("battery_auto_start_soc", 90),
-                battery_buffer_soc=coord.config.get("battery_buffer_soc", 70),
-                battery_assist_floor_soc=coord.config.get("battery_assist_floor_soc", 60),
-                battery_assist_max_power_w=coord.config.get(
-                    "battery_assist_max_power",
-                    coord.config.get("super_charger_power", 4500),
-                ),
-            )
-            # Distribute via the real SurplusController.
             try:
                 allocations = coord._surplus_controller.distribute_ev_budget(
                     ev_budget_obj.net_w, coord._ev_devices,

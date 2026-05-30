@@ -441,28 +441,27 @@ class EVControlMixin:
             if per_charger_budget is not None:
                 budget_w = per_charger_budget
             else:
-                # Canonical EV budget (#282 unification, Phase B). The
-                # coordinator caches `self._cycle_ev_budget` per cycle —
-                # it's an EVBudget instance carrying the same value the
-                # state machine just used to decide we should be charging,
-                # so the actuator and the state machine can never
-                # disagree about how much power is available.
-                #
-                # The three legacy ad-hoc paths this replaces:
-                #   - self_consumption-via-reason-text match (the path
-                #     that disagreed with the state machine, root of #282)
-                #   - _calculate_solar_ev_budget (still callable for now;
-                #     removed in Phase D)
-                #   - the inline "solar - home - batt_charge" arithmetic
-                # All three are now in flow_calculator.calculate_canonical_ev_budget.
+                # Canonical EV budget — Phase D.2 cleanup (#282).
+                # ``self._cycle_ev_budget`` is set unconditionally every
+                # cycle by ``_build_charging_context``, so this branch's
+                # only failure mode is "coordinator init incomplete"
+                # (config-flow midway / fixture wrong shape / something
+                # else loud). Fail-safe: log + return 0 W = no charge
+                # this cycle. Was a legacy-formula fallback pre-D.2;
+                # carrying two budget formulas was exactly the
+                # disagreement-class root cause we removed in the
+                # unification arc.
                 cycle_budget = getattr(self, "_cycle_ev_budget", None)
-                if cycle_budget is not None:
-                    budget_w = cycle_budget.net_w
+                if cycle_budget is None:
+                    _LOGGER.error(
+                        "Canonical EV budget not set this cycle — "
+                        "coordinator init bug. Falling through with 0 W "
+                        "budget (no charge this cycle) to fail safe. "
+                        "Investigate _build_charging_context."
+                    )
+                    budget_w = 0.0
                 else:
-                    # Fallback for paths where the canonical budget wasn't
-                    # computed (shouldn't happen in normal operation — guard
-                    # for tests or partial init).
-                    budget_w = self._calculate_solar_ev_budget(state, power, context)
+                    budget_w = cycle_budget.net_w
 
             # Phase switching: auto-switch 1p/3p based on available surplus
             await ev.check_phase_switch(budget_w)
@@ -651,80 +650,19 @@ class EVControlMixin:
         target = round(headroom_w / max(1.0, watts_per_amp))
         return min(max_amps, max(min_amps, target))
 
-    def _calculate_solar_ev_budget(
-        self, state: str, power: PowerReadings, context: ChargingContext,
-    ) -> float:
-        """Calculate watts available for EV from solar + optional battery discharge.
-
-        Base budget comes from FlowCalculator.calculate_ev_budget(). For
-        ``charging_strategy == "solar_only"`` we pass ``solar_only=True``
-        so the budget is hard-capped at ``solar - home`` and the actuator
-        can never silently leak grid into the EV (#282 / Scenario 0).
-        For SOLAR_SUPER_CHARGING (battery-assist mode), the proportional
-        battery discharge branch below still adds on top.
-
-        Args:
-            state: Current charging state.
-            power: Current sensor readings (for battery discharge measurement).
-            context: Charging context. ``context.charging_strategy`` selects
-                surplus-only vs legacy semantics.
-
-        Returns:
-            Available power for EV in watts (>= 0).
-        """
-        # Read forecast for smart battery redirect
-        forecast_remaining = 0
-        try:
-            forecast = self._forecast_reader.read_forecast()
-            if forecast.available:
-                forecast_remaining = forecast.forecast_remaining_today_kwh
-        except Exception:
-            pass
-
-        battery_capacity = self.config.get("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH)
-
-        # Hard surplus cap when strategy is solar_only. Without this, the
-        # budget falls back to the legacy ``ev_power + grid_export`` baseline
-        # which silently allows the EV to keep drawing whatever the car asks
-        # for, with grid filling any gap.
-        solar_only_active = (
-            getattr(context, "charging_strategy", None) == "solar_only"
-        )
-
-        # Base budget: grid export + forecast-aware battery charge redirect.
-        # When solar_only is active, calculate_ev_budget enforces the
-        # surplus ceiling via max(0, solar - home) instead of ev_power.
-        base = self._flow_calculator.calculate_ev_budget(
-            power, forecast_remaining, power.battery_soc, battery_capacity,
-            solar_only=solar_only_active,
-        )
-
-        # Battery-assist mode: ALSO add active battery discharge (proportional to SOC zone)
-        if state == ChargingState.SOLAR_SUPER_CHARGING:
-            floor_soc = self.config.get("battery_assist_floor_soc", 60)
-            buffer_soc = self.config.get("battery_buffer_soc", 70)
-            auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-            max_assist = self.config.get("battery_assist_max_power",
-                                        self.config.get("super_charger_power", 4500))
-
-            if power.battery_soc > floor_soc:
-                battery_discharge = max(0, power.battery_discharge_power)
-                if battery_discharge >= 100:
-                    # Battery already discharging — use actual measured value
-                    base += battery_discharge
-                else:
-                    # Battery not yet discharging — estimate proportional assist by SOC zone
-                    if power.battery_soc >= auto_start_soc:
-                        # Zone 4: full assist
-                        base += max_assist
-                    elif power.battery_soc >= buffer_soc:
-                        # Zone 3: proportional ramp (50% at buffer_soc → 100% at auto_start_soc)
-                        ratio = (power.battery_soc - buffer_soc) / max(1, auto_start_soc - buffer_soc)
-                        base += max_assist * (0.5 + 0.5 * ratio)
-                    # Zone 2 (below buffer_soc): no assist added — shouldn't reach here
-                    # since strategy would be solar_only, but guard anyway
-
-        return max(0, base)
+    # ``_calculate_solar_ev_budget`` removed in Phase D.2 (#282).
+    # Was the legacy actuator-side budget formula that ran alongside the
+    # state machine's own ``calculate_ev_budget`` — exactly the kind of
+    # duplication that produced the original #282 disagreement bugs.
+    # Replaced by the canonical ``EVBudgetStrategy.{SOLAR_ONLY,
+    # BATTERY_ASSIST,...}`` dispatch in ``FlowCalculator.calculate_canonical_ev_budget``,
+    # whose output lives at ``self._cycle_ev_budget`` and is the single
+    # source of truth for every consumer (publish path, state machine,
+    # actuator, multi-charger distribution). Removed Phase D.2 once
+    # v1.6.0/1.6.1 confirmed the canonical path holds through both
+    # daytime battery_assist and nighttime MIN_PV cycles on real
+    # hardware. The corresponding ``flow_calculator.calculate_ev_budget``
+    # primitive went away in the same pass.
 
     def _should_reenable_charger(self, power: PowerReadings) -> bool:
         """Detect if EV charger was externally disabled and needs re-enabling.

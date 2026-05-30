@@ -357,69 +357,11 @@ class TestMidnightRolloverSnapshot:
 # Issue #226 — available_power includes battery discharge when discharging
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestAvailablePowerIncludesBatteryDischarge:
-    """#226 — calculate_available_power must add battery_discharge_power when active.
-
-    Before the fix: available = max(0, solar - home - battery_charge)
-    This ignored active battery discharge — the EV couldn't use battery power.
-    """
-
-    def test_available_power_includes_battery_discharge(self, flow_calc):
-        """should add battery_discharge_power to available power when discharging."""
-        power = _make_power(
-            solar=3000,
-            home=2000,
-            battery_discharge=2000,  # battery discharging
-        )
-        available = flow_calc.calculate_available_power(power)
-        # excess = 3000 - 2000 - 0 = 1000; plus 2000 discharge = 3000; cap = solar+discharge=5000
-        assert available == pytest.approx(3000.0, abs=1.0)
-
-    def test_available_power_zero_when_battery_charging(self, flow_calc):
-        """should not count battery_charge_power as available for EV."""
-        power = _make_power(
-            solar=4000,
-            home=1500,
-            battery_charge=2000,  # charging, not discharging
-            battery_discharge=0,
-        )
-        # excess = 4000 - 1500 - 2000 = 500 — only solar surplus
-        available = flow_calc.calculate_available_power(power)
-        assert available == pytest.approx(500.0, abs=1.0)
-
-    def test_available_power_capped_at_solar_plus_discharge(self, flow_calc):
-        """should cap available_power at solar + battery_discharge."""
-        power = _make_power(
-            solar=2000,
-            home=0,      # no home load
-            battery_discharge=3000,
-        )
-        available = flow_calc.calculate_available_power(power)
-        # Cap = solar + discharge = 5000; excess = 2000 - 0 - 0 = 2000 + 3000 = 5000
-        assert available <= power.solar_power + power.battery_discharge_power
-
-    def test_available_power_no_discharge_no_bonus(self, flow_calc):
-        """should not add discharge bonus when battery_discharge_power is 0."""
-        power = _make_power(
-            solar=5000,
-            home=2000,
-            battery_charge=0,
-            battery_discharge=0,
-        )
-        available = flow_calc.calculate_available_power(power)
-        # excess = 5000 - 2000 - 0 = 3000; no discharge bonus
-        assert available == pytest.approx(3000.0, abs=1.0)
-
-    def test_available_power_pure_battery_no_solar(self, flow_calc):
-        """should report battery discharge power as available even with no solar."""
-        power = _make_power(
-            solar=0,
-            home=0,
-            battery_discharge=2500,
-        )
-        available = flow_calc.calculate_available_power(power)
-        # excess = 0 - 0 - 0 = 0; + discharge = 2500; cap = 0+2500 = 2500
-        assert available == pytest.approx(2500.0, abs=1.0)
+# TestAvailablePowerIncludesBatteryDischarge (#226 regression suite)
+# removed in Phase D.2 (#282): ``calculate_available_power`` was deleted
+# along with the other legacy budget primitives. The battery-discharge
+# inclusion behaviour now lives inside the canonical EVBudget's
+# BATTERY_ASSIST branch — see ``test_canonical_ev_budget.py``.
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -656,82 +598,12 @@ class TestForecastSunriseSunsetFromSunEntity:
 # Issue #229 — EV budget semantics: budget is a SETPOINT, not an increment
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestEVBudgetSemantics:
-    """#229 — calculate_ev_budget returns a SETPOINT (total watts) not a delta.
-
-    When the EV is charging at ev_power W and grid_export_power W is surplus,
-    the new setpoint is ev_power + grid_export_power — this tells the charger
-    to draw all the surplus. Adding this setpoint on top of existing draw
-    would double-count.
-    """
-
-    def test_budget_is_ev_plus_export_when_ev_active(self, flow_calc):
-        """should return ev_power + grid_export as setpoint when EV is charging."""
-        power = _make_power(
-            solar=6000,
-            home=2000,
-            ev=2000,
-            grid_export=2000,
-        )
-        budget = flow_calc.calculate_ev_budget(power, forecast_remaining_kwh=0)
-        # Setpoint = ev_power(2000) + grid_export(2000) = 4000W
-        assert budget == pytest.approx(4000.0, abs=1.0)
-
-    def test_budget_is_export_only_when_ev_inactive(self, flow_calc):
-        """should return grid_export as setpoint when EV is not charging."""
-        power = _make_power(
-            solar=6000,
-            home=2000,
-            ev=0,         # EV not charging
-            grid_export=4000,
-        )
-        budget = flow_calc.calculate_ev_budget(power, forecast_remaining_kwh=0)
-        assert budget == pytest.approx(4000.0, abs=1.0)
-
-    def test_budget_is_ceiling_not_increment(self, flow_calc):
-        """should not add export on top of a previous setpoint — it IS the setpoint."""
-        power_ev_charging = _make_power(
-            solar=5000, home=1500, ev=3000, grid_export=500,
-        )
-        power_ev_off = _make_power(
-            solar=5000, home=1500, ev=0, grid_export=3500,
-        )
-
-        budget_on = flow_calc.calculate_ev_budget(power_ev_charging, forecast_remaining_kwh=0)
-        budget_off = flow_calc.calculate_ev_budget(power_ev_off, forecast_remaining_kwh=0)
-
-        # Both situations represent the same surplus — setpoint should be similar
-        # budget_on = 3000 + 500 = 3500; budget_off = 3500
-        assert budget_on == pytest.approx(budget_off, abs=100.0), (
-            "Budget differs between EV on/off for identical surplus — semantics wrong"
-        )
-
-    def test_budget_zero_when_no_export_no_ev(self, flow_calc):
-        """should return 0 when there is nothing to offer the charger."""
-        power = _make_power(solar=2000, home=2000, ev=0, grid_export=0)
-        budget = flow_calc.calculate_ev_budget(power, forecast_remaining_kwh=0)
-        assert budget == 0.0
-
-    def test_budget_includes_battery_redirect_when_forecast_sufficient(self, flow_calc):
-        """should add redirectable battery charge when forecast can cover battery need."""
-        power = _make_power(
-            solar=6000,
-            home=1000,
-            ev=0,
-            grid_export=2000,
-            battery_charge=3000,
-            battery_soc=50.0,  # need = 5 kWh
-        )
-        battery_capacity_kwh = 10.0
-        # forecast = 8 kWh > battery_need 5 kWh → redirect allowed
-        budget = flow_calc.calculate_ev_budget(
-            power, forecast_remaining_kwh=8.0,
-            battery_soc=50.0, battery_capacity_kwh=battery_capacity_kwh
-        )
-        # Must be > 2000 (export alone) because some battery charge is redirectable
-        assert budget > 2000.0, (
-            "Budget should exceed grid export alone when battery can be redirected"
-        )
+# TestEVBudgetSemantics (#229 setpoint-not-increment regression) removed
+# in Phase D.2 (#282): ``calculate_ev_budget`` was deleted along with
+# the other legacy budget primitives. The setpoint semantic is now
+# carried by ``calculate_canonical_ev_budget`` and exercised end-to-end
+# by the scenario harness (no double-count or ramp-down regression has
+# slipped past it since v1.6.0).
 
 
 # ──────────────────────────────────────────────────────────────────────────────

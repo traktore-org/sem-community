@@ -374,68 +374,13 @@ class FlowCalculator:
 
         return flows
 
-    def calculate_ev_budget(self, power: PowerReadings,
-                           forecast_remaining_kwh: float = 0,
-                           battery_soc: float = 0,
-                           battery_capacity_kwh: float = 15,
-                           solar_only: bool = False) -> float:
-        """Power budget for EV, including forecast-aware battery charge redirect.
-
-        Three sources of power for EV:
-        1. Grid export (power going unused to grid)
-        2. Redirectable battery charge (slow battery charging to free power for EV)
-        3. Active battery discharge (handled separately in coordinator for battery-assist mode)
-
-        Semantics: the returned value is the SETPOINT sent to the charger (total watts
-        the charger is allowed to draw), NOT an increment on top of current consumption.
-        When the EV is already charging at ev_power W and grid_export_power W is going to
-        the grid unused, the new setpoint is ev_power + grid_export_power — this tells the
-        charger to absorb all the surplus. The charger adjusts its draw from ev_power to
-        the new setpoint, naturally consuming the exported surplus without importing. (#229)
-
-        Args:
-            solar_only: When True, enforce a hard surplus ceiling of
-                ``max(0, solar - home)`` — the charger MUST NOT exceed what
-                solar alone can supply. This is the regime the ``solar_only``
-                strategy promises but historically didn't enforce: the base
-                included ``power.ev_power`` (the current draw), so the charger
-                was never asked to ramp DOWN when surplus dropped, silently
-                letting grid backfill the gap. Captured by Scenario 0 (#282).
-                Default False preserves legacy behaviour for the budget-as-
-                informational-display callers.
-        """
-        if solar_only:
-            # Hard surplus ceiling: only what solar can supply right now.
-            # Subtract the home load and ALSO the active battery charge —
-            # solar still "belongs" to the battery in this regime; the
-            # redirect logic below decides whether some can be borrowed.
-            true_surplus = max(
-                0.0,
-                power.solar_power - power.home_consumption_power
-                - power.battery_charge_power,
-            )
-            # Allow the same forecast-aware battery-charge redirect when the
-            # forecast/SOC math says the battery doesn't need this slice.
-            redirect = self._calculate_battery_redirect(
-                power.battery_charge_power, battery_soc,
-                battery_capacity_kwh, forecast_remaining_kwh,
-            )
-            return round(max(0.0, true_surplus + redirect), 0)
-
-        # Legacy path: setpoint = current EV draw + unused grid export + redirect.
-        if power.ev_power > 0:
-            # EV already charging: new setpoint = current draw + unused grid export
-            # This is a SETPOINT (target total watts), not a delta to add to current draw.
-            base = power.ev_power + power.grid_export_power
-        else:
-            base = power.grid_export_power
-
-        # Source 2: Redirectable battery charge (forecast + SOC aware)
-        redirect = self._calculate_battery_redirect(
-            power.battery_charge_power, battery_soc,
-            battery_capacity_kwh, forecast_remaining_kwh,
-        )
-        return round(max(0, base + redirect), 0)
+    # ``calculate_ev_budget`` removed in Phase D.2 (#282). Pre-D.2 it lived
+    # alongside ``calculate_canonical_ev_budget`` and the two diverged on
+    # the surplus floor — exactly the duplication that produced the
+    # 2026-05-28 PROD surplus leak. The canonical primitive is the single
+    # source of truth now; informational/diagnostic callers that need a
+    # budget figure should resolve a strategy first and call
+    # ``calculate_canonical_ev_budget(strategy=…)``.
 
     def _calculate_battery_redirect(self, battery_charge_w: float,
                                      battery_soc: float,
@@ -471,57 +416,17 @@ class FlowCalculator:
                 return battery_charge_w  # Battery full enough, redirect all
             return 0
 
-    def calculate_available_power(self, power: PowerReadings) -> float:
-        """Calculate power available for EV charging.
-
-        Available = Solar - Home - Battery Charge + Battery Discharge (when assisting)
-        Grid export is already a consequence of surplus, not additive.
-        Battery discharge is included when the battery is actively discharging
-        to assist loads — that power is available for the EV as well.
-        """
-        excess = (
-            power.solar_power
-            - power.home_consumption_power
-            - power.battery_charge_power
-        )
-        available = max(0, excess)
-
-        # Include battery discharge as available when battery is actively discharging
-        if power.battery_discharge_power > 0:
-            available += power.battery_discharge_power
-
-        # Cap at solar + battery discharge (can't report more than combined sources)
-        return round(min(available, power.solar_power + power.battery_discharge_power), 0)
-
-    def calculate_charging_current(
-        self, available_power: float, voltage: float = 230, phases: int = 3,
-        round_down: bool = False,
-    ) -> float:
-        """Calculate EV charging current from available power.
-
-        Args:
-            round_down: When True (use this for surplus / solar_only budgets),
-                floor instead of round-to-nearest. Round-to-nearest can push
-                the actuator into grid territory by ~0.5 A at the boundary —
-                e.g. 5200 W surplus → 7.53 A → rounds to 8 A → 5520 W → 320 W
-                of grid backfill. Floor keeps the charger strictly under the
-                budget. Captured by Scenario 0 (#282). Default False preserves
-                legacy round-nearest behaviour for non-surplus paths.
-        """
-        if available_power <= 0:
-            return 0.0
-
-        # I = P / (V * phases)
-        current = available_power / (voltage * phases)
-
-        # Round to integer amps with the requested direction, then clamp.
-        if round_down:
-            current = math.floor(current)
-        else:
-            current = round(current)
-        current = max(0, min(16, current))
-
-        return current
+    # ``calculate_available_power`` removed in Phase D.2 (#282). Zero
+    # production callers as of v1.6.0 — the canonical EVBudget supersedes
+    # it; published sensors derive from the same cached cycle budget the
+    # state machine and actuator use.
+    #
+    # ``calculate_charging_current`` removed in Phase D.2 (#282). Both
+    # production call sites (the night charge sizing and the actuator
+    # ramp) now go through ``EVControlMixin._watts_to_amps`` which carries
+    # the per-charger watts-per-amp + round-down policy directly; carrying
+    # a second copy here just invited the rounding disagreement that the
+    # 2026-05-28 surplus leak exhibited.
 
     # ───────────────────────────────────────────────────────────────────
     # Canonical EV-budget calculation — Phase A of #282 unification

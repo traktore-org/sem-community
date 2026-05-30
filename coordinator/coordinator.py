@@ -974,15 +974,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     ChargingState.SOLAR_MIN_PV,
                 ):
                     cycle_budget = getattr(self, "_cycle_ev_budget", None)
-                    if cycle_budget is not None:
-                        total_budget = cycle_budget.net_w
-                    else:
-                        # Defence-in-depth — partial init / unit tests.
-                        # _calculate_solar_ev_budget is the legacy path; Phase D.2
-                        # will remove this fallback after PROD soak confirms.
-                        total_budget = self._calculate_solar_ev_budget(
-                            charging_state, power, charging_context
+                    if cycle_budget is None:
+                        # Phase D.2 cleanup (#282). ``_cycle_ev_budget`` is set
+                        # unconditionally by ``_build_charging_context`` every
+                        # cycle, so this branch only fires on a coordinator
+                        # init bug. Fail-safe: log + 0 W = no distribution.
+                        _LOGGER.error(
+                            "Canonical EV budget not set in multi-charger "
+                            "distribution — coordinator init bug. Distributing "
+                            "0 W to fail safe. Investigate _build_charging_context."
                         )
+                        total_budget = 0.0
+                    else:
+                        total_budget = cycle_budget.net_w
                     ev_budget_per_charger = self._surplus_controller.distribute_ev_budget(
                         total_budget, self._ev_devices
                     )

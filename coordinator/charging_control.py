@@ -45,7 +45,9 @@ class ChargingContext:
         battery_needs_priority: SOC below priority threshold (surplus → battery first).
         calculated_current: EV budget expressed as current (A), from FlowCalculator.
         excess_solar: Solar minus home minus battery charge (W), can be negative.
-        available_power: EV power budget (W), from FlowCalculator.calculate_ev_budget().
+        available_power: EV power budget (W), from
+            FlowCalculator.calculate_canonical_ev_budget().net_w (the
+            unified per-cycle canonical budget — Phase D.2 / v1.6.2).
         daily_target_reached: Remaining EV need <= 0.1 kWh (SOC-based or kWh-based).
         daily_ev_energy: Today's accumulated EV energy (kWh).
         daily_ev_energy_offset: EV energy from offset utility meter (kWh), 0 if unused.

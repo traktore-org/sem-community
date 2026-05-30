@@ -5,6 +5,109 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] — 2026-05-30
+
+The **Phase D.2 cleanup + EV-power realtime** patch.
+
+Two changes ship together:
+
+1. **Phase D.2 architectural cleanup (#282)** — completes the EV-budget
+   unification arc by removing the legacy fallbacks that the v1.6.0
+   canonical path left side-by-side as a safety net. Carrying two budget
+   formulas alive was exactly the duplication that produced the
+   disagreement bug class in the first place; with three weeks of clean
+   v1.6.0/v1.6.1 PROD soak the fallbacks are dead code, and keeping them
+   invited the next regression.
+
+2. **#289** — `sensor.sem_ev_power` now updates within one HA dispatch
+   of the upstream KEBA / Wallbox sensor instead of waiting up to 10 s
+   for the next coordinator cycle. The dashboard reads at 1 s
+   resolution and observably benefits; the energy-balance derivations
+   (`home_consumption_power`, sankey flows) stay on cycle granularity
+   and self-heal on the next tick.
+
+No behavioural changes outside the named removals + the sub-cycle
+passthrough. Same upgrade path as any 1.6.x.
+
+### Removed
+
+- **`flow_calculator.calculate_ev_budget`** — superseded by
+  `calculate_canonical_ev_budget` since v1.6.0 (Phase A). Zero
+  production callers as of v1.6.1.
+- **`flow_calculator.calculate_available_power`** — superseded by the
+  canonical EVBudget's per-strategy resolution. Zero production
+  callers as of v1.6.1.
+- **`flow_calculator.calculate_charging_current`** — both production
+  call sites (night charge sizing + actuator ramp) now go through
+  `EVControlMixin._watts_to_amps` which carries the per-charger
+  watts-per-amp + round-down policy directly.
+- **`EVControlMixin._calculate_solar_ev_budget`** — 74-line legacy
+  fallback that the actuator used when `_cycle_ev_budget` wasn't
+  populated. Removed; the path now logs an error and emits 0 W
+  (fail-safe = no charge) if the invariant is ever violated. This
+  catches coordinator init bugs loudly instead of silently masking
+  them with a divergent budget formula.
+- **Multi-charger distribution legacy fallback** in
+  `coordinator.py` — same fail-safe pattern applied: missing
+  `_cycle_ev_budget` → log error + distribute 0 W.
+- **`sensor._format_charging_state` demotion guard** — the cosmetic
+  SOLAR_CHARGING_ACTIVE → SOLAR_CHARGING_ALLOWED downgrade (commit
+  `1a9b3c9`) that papered over the pre-D.2 budget disagreement. The
+  canonical unification eliminated the disagreement by construction,
+  so the guard is now dead code — verified across daytime
+  battery_assist and nighttime MIN_PV soak in v1.6.0/v1.6.1.
+
+### Added
+
+- **#289 — sub-cycle `sem_ev_power` passthrough** — the `ev_power`
+  sensor now subscribes to its upstream EV-power entities via
+  `async_track_state_change_event` (single-charger: top-level
+  `ev_power_sensor`; multi-charger: every charger's
+  `ev_charging_power_sensor`). On any upstream change SEM re-sums and
+  pushes the new value immediately. Eliminates the 1-cycle gap that
+  showed up live on PROD 2026-05-29 as a 4.7 kW dashboard
+  discrepancy. 11 unit tests + the resolution / callback / cleanup
+  invariants.
+
+### Internal
+
+- **Test sweep** — removed the unit tests that pinned the deleted
+  primitives directly (`TestAvailablePower`, `TestEvBudget`,
+  `TestAvailablePowerIncludesBatteryDischarge`, `TestEVBudgetSemantics`,
+  `TestAvailablePowerInvariants`, `TestCalculateSolarEvBudget`, the
+  budget/current rows from `TestEVControlInvariants`). Their physical
+  invariants (non-negative budget, 16 A clamp, battery-discharge
+  inclusion, Zone-3 proportional ramp, measured-discharge override)
+  are now exercised against `calculate_canonical_ev_budget` and the
+  scenario harness (`tests/scenarios/2026-05-29_*`).
+- **Scenario harness rewired** — `tests/scenario_harness.py` was
+  calling the deleted `calculate_ev_budget` / `calculate_charging_current`
+  inside a bare `except Exception: pass`. Caught in review before
+  deploy: every scenario was vacuously passing (`calculated_current`
+  fell silently to 0). Rewrote to compute the canonical EVBudget
+  directly and read `EVBudget.net_w` + `EVBudget.current_a`, so
+  scenario regressions now fail loudly. 4 / 4 scenarios still pass
+  with real values.
+- **`test_multi_charger_canonical_budget.py` rewrite** — the test
+  mirrored the pre-D.2 production branch with the legacy fallback;
+  post-D.2 the branch logs an error and distributes 0 W instead.
+  New `test_missing_cycle_budget_fails_safe_to_zero` pins the fail-
+  safe; `test_legacy_method_attribute_does_not_exist_post_d2`
+  prevents accidental re-introduction.
+- **16 A clamp coverage gap closed** —
+  `TestEVControlInvariants.test_canonical_budget_current_a_clamped_to_16`
+  sweeps extreme solar / battery inputs across every non-IDLE
+  strategy (including `BATTERY_ASSIST` which can blow past the
+  surplus ceiling by design) and verifies `EVBudget.current_a`
+  stays in [0, 16].
+- **Docstring rot** — `ChargingContext.available_power` docstring
+  was still referencing `FlowCalculator.calculate_ev_budget()`;
+  updated to point at `calculate_canonical_ev_budget().net_w`.
+
+**Suite is 2054 / 2054 green** (was 2042 in v1.6.1 — 12 new tests).
+
+---
+
 ## [1.6.1] — 2026-05-30
 
 Patch release with fixes driven by the v1.6.0 PROD soak. No behavioural
