@@ -30,20 +30,44 @@ def _build_state_machine(switch_returns):
     controllable list. Each call to ``_read_night_enabled_raw`` consumes
     the next value from ``switch_returns``; if exhausted, repeats the
     last one.
+
+    Post-#277 Phase B the resolver makes multiple ``is_state`` calls
+    per cycle (night switch + tariff switch as part of the mode
+    derivation). The cycle-vs-call ratio is decoupled by filtering on
+    the entity_id: only the per-charger night-charging switch advances
+    the iterator; tariff (and any unrelated) lookups are answered with
+    the pre-Phase-B factory default (off) without consuming a value.
+
+    Coverage note: a regression where the night-vs-tariff signal got
+    swapped (i.e. ``_read_night_enabled_raw`` returned ``True`` based
+    on a tariff state alone) would NOT be caught here — this scaffold
+    pins the debounce logic, not the mode→predicate mapping. The
+    mapping is exercised by ``TestNightGateFromMode`` in
+    ``test_277_charge_mode_phase_b.py``.
     """
     hass = MagicMock()
-    # Per-charger switch lookup: we make `hass.states.is_state(...)` return
-    # the next value from switch_returns each call.
     seq = iter(switch_returns)
     last = [switch_returns[0]]
+
     def is_state(eid, state):
+        # Only the night-charging switch participates in the test's
+        # cycle simulation. Tariff / unrelated lookups answer with the
+        # factory default (off) so they don't pollute the sequence.
+        if not eid.endswith("_night_charging"):
+            return False
         try:
             v = next(seq)
             last[0] = v
         except StopIteration:
             v = last[0]
         return v
+
     hass.states.is_state = is_state
+    # The mode resolver also calls ``hass.states.get(eid)`` to check
+    # whether each switch entity exists. Return a non-None MagicMock so
+    # the resolver takes the ``is_state`` branch (and ``is_state``
+    # above handles the filtering).
+    hass.states.get = MagicMock(return_value=MagicMock())
 
     sm = ChargingStateMachine(
         hass=hass,

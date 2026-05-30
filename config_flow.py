@@ -140,7 +140,9 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     # v4 (#255): per-charger settings seeded from globals (async_migrate_entry).
     # v5 (#277 Phase A): per-charger charge_mode derived from legacy toggles.
-    VERSION = 5
+    # v6 (#277 Phase B): re-derive charge_mode for the pv+tariff combinations
+    #     Phase A's derivation silently dropped.
+    VERSION = 6
 
     @staticmethod
     @callback
