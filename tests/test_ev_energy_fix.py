@@ -9,6 +9,8 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from datetime import date
 
+from freezegun import freeze_time
+
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
     SensorConfig,
@@ -238,16 +240,35 @@ class TestLayer3HardwareReconciliation:
         # 0.3 < threshold (0.5), should stay at integrated value (0.0)
         assert energy.daily_ev < 0.3
 
+    @freeze_time("2026-05-15 12:00:00")
     def test_reconciliation_when_integrated_close_to_hardware(self, calc):
-        """Integrated 14.8, hardware 15.0 → delta 0.2 < threshold, no override."""
+        """Integrated 14.8, hardware 15.0 → delta 0.2 < threshold, no override.
+
+        Pinned to a fixed datetime (#294 fix): pre-fix the test depended
+        on wall-clock and broke on two fronts whenever a CI run crossed
+        a meter-day boundary:
+          - The test seeded the accumulator with one ``today`` and
+            ``calculate_energy`` looked it up with another.
+          - ``_check_rollover`` pruned EV accumulators not matching
+            today or yesterday from the *real* clock, so a seeded key
+            for a different date got silently deleted.
+        Freezing the whole test at noon eliminates both — no boundary
+        crossings, no key-drift, no flake. Verified against PR #295 CI
+        run that failed at 06:24 UTC.
+        """
         sensors = {"sensor.keba_p30_charging_daily": (15.0, {})}
         hw_hass = _make_hass(sensors)
         calc.set_ev_daily_energy_sensor(hw_hass, "sensor.keba_p30_charging_daily")
 
-        # Manually seed the accumulator to simulate prior integration
-        today = calc._time_manager.get_current_meter_day_sunrise_based()
+        # Manually seed the accumulator to simulate prior integration.
+        # Use the same method ``calculate_energy`` uses internally so the
+        # key matches by construction regardless of which path
+        # ``_ev_reset_day`` takes (sunrise vs offset).
+        today = calc._ev_reset_day(None)
         calc._daily_accumulators[f"ev_daily_sun_{today}"] = 14.8
-        calc._monthly_accumulators[f"ev_daily_sun_{today.year}_{today.month}"] = 14.8
+        calc._monthly_accumulators[
+            f"ev_daily_sun_{today.year}_{today.month}"
+        ] = 14.8
 
         power = PowerReadings(ev_power=0.0)
         power.calculate_derived()
