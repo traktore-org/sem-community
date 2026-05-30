@@ -808,7 +808,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Commanded current"
+    "commanded_current": "Commanded current",
+    "charge_mode": "Charge mode",
+    "charge_mode_solar_only": "Solar only",
+    "charge_mode_solar_plus_cheap": "Solar + cheapest hours",
+    "charge_mode_min_plus_solar": "Min + Solar",
+    "charge_mode_always_max": "Always (max)",
+    "charge_mode_off": "Off",
+    "charge_mode_hint_solar_only": "Surplus only — never imports from grid",
+    "charge_mode_hint_solar_plus_cheap": "Surplus by day, grid only in the cheapest hours",
+    "charge_mode_hint_min_plus_solar": "Guarantee Min from grid + solar up to Max",
+    "charge_mode_hint_always_max": "Charge at max regardless of source",
+    "charge_mode_hint_off": "No charging"
   },
   "de": {
     "charging": "Laden",
@@ -1619,7 +1630,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Befohlener Strom"
+    "commanded_current": "Befohlener Strom",
+    "charge_mode": "Lademodus",
+    "charge_mode_solar_only": "Nur Solar",
+    "charge_mode_solar_plus_cheap": "Solar + günstigste Stunden",
+    "charge_mode_min_plus_solar": "Min + Solar",
+    "charge_mode_always_max": "Immer (max)",
+    "charge_mode_off": "Aus",
+    "charge_mode_hint_solar_only": "Nur Überschuss — bezieht nie aus dem Netz",
+    "charge_mode_hint_solar_plus_cheap": "Tags Überschuss, nachts Netz nur zur günstigsten Stunde",
+    "charge_mode_hint_min_plus_solar": "Min aus dem Netz garantiert + Solar bis Max",
+    "charge_mode_hint_always_max": "Lädt mit max. Strom, unabhängig von der Quelle",
+    "charge_mode_hint_off": "Kein Laden"
   },
   "fr": {
     "charging": "En charge",
@@ -2430,7 +2452,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Courant commandé"
+    "commanded_current": "Courant commandé",
+    "charge_mode": "Mode de charge",
+    "charge_mode_solar_only": "Solaire seulement",
+    "charge_mode_solar_plus_cheap": "Solaire + heures les moins chères",
+    "charge_mode_min_plus_solar": "Min + Solaire",
+    "charge_mode_always_max": "Toujours (max)",
+    "charge_mode_off": "Arrêt",
+    "charge_mode_hint_solar_only": "Surplus seulement — jamais d'import du réseau",
+    "charge_mode_hint_solar_plus_cheap": "Surplus de jour, réseau uniquement aux heures les moins chères",
+    "charge_mode_hint_min_plus_solar": "Min garanti depuis le réseau + solaire jusqu'à Max",
+    "charge_mode_hint_always_max": "Charge au maximum, peu importe la source",
+    "charge_mode_hint_off": "Pas de charge"
   },
   "es": {
     "charging": "Cargando",
@@ -3241,7 +3274,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Corriente solicitada"
+    "commanded_current": "Corriente solicitada",
+    "charge_mode": "Modo de carga",
+    "charge_mode_solar_only": "Solo solar",
+    "charge_mode_solar_plus_cheap": "Solar + horas más baratas",
+    "charge_mode_min_plus_solar": "Mín + Solar",
+    "charge_mode_always_max": "Siempre (máx)",
+    "charge_mode_off": "Apagado",
+    "charge_mode_hint_solar_only": "Solo excedente — nunca importa de la red",
+    "charge_mode_hint_solar_plus_cheap": "Excedente de día, red solo en las horas más baratas",
+    "charge_mode_hint_min_plus_solar": "Mín garantizado de la red + solar hasta Máx",
+    "charge_mode_hint_always_max": "Carga al máximo, sin importar la fuente",
+    "charge_mode_hint_off": "Sin carga"
   },
   "it": {
     "charging": "In carica",
@@ -4052,7 +4096,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Corrente richiesta"
+    "commanded_current": "Corrente richiesta",
+    "charge_mode": "Modalità di ricarica",
+    "charge_mode_solar_only": "Solo solare",
+    "charge_mode_solar_plus_cheap": "Solare + ore più economiche",
+    "charge_mode_min_plus_solar": "Min + Solare",
+    "charge_mode_always_max": "Sempre (max)",
+    "charge_mode_off": "Spento",
+    "charge_mode_hint_solar_only": "Solo surplus — mai dalla rete",
+    "charge_mode_hint_solar_plus_cheap": "Surplus di giorno, rete solo nelle ore più economiche",
+    "charge_mode_hint_min_plus_solar": "Min garantito dalla rete + solare fino al Max",
+    "charge_mode_hint_always_max": "Carica al massimo, indipendentemente dalla fonte",
+    "charge_mode_hint_off": "Nessuna ricarica"
   },
   "nl": {
     "charging": "Laden",
@@ -4863,7 +4918,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Aangevraagde stroom"
+    "commanded_current": "Aangevraagde stroom",
+    "charge_mode": "Laadmodus",
+    "charge_mode_solar_only": "Alleen zon",
+    "charge_mode_solar_plus_cheap": "Zon + goedkoopste uren",
+    "charge_mode_min_plus_solar": "Min + Zon",
+    "charge_mode_always_max": "Altijd (max)",
+    "charge_mode_off": "Uit",
+    "charge_mode_hint_solar_only": "Alleen overschot — nooit van het net",
+    "charge_mode_hint_solar_plus_cheap": "Overdag overschot, 's nachts net alleen in de goedkoopste uren",
+    "charge_mode_hint_min_plus_solar": "Min van het net gegarandeerd + zon tot Max",
+    "charge_mode_hint_always_max": "Laadt op max, ongeacht de bron",
+    "charge_mode_hint_off": "Niet laden"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5674,7 +5740,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Požadovaný proud"
+    "commanded_current": "Požadovaný proud",
+    "charge_mode": "Režim nabíjení",
+    "charge_mode_solar_only": "Pouze solární",
+    "charge_mode_solar_plus_cheap": "Solární + nejlevnější hodiny",
+    "charge_mode_min_plus_solar": "Min + Solární",
+    "charge_mode_always_max": "Vždy (max)",
+    "charge_mode_off": "Vypnuto",
+    "charge_mode_hint_solar_only": "Pouze přebytek — nikdy ze sítě",
+    "charge_mode_hint_solar_plus_cheap": "Přes den přebytek, v noci síť jen v nejlevnějších hodinách",
+    "charge_mode_hint_min_plus_solar": "Min garantováno ze sítě + solární do Max",
+    "charge_mode_hint_always_max": "Nabíjí na max bez ohledu na zdroj",
+    "charge_mode_hint_off": "Bez nabíjení"
   },
   "da": {
     "charging": "Oplader",
@@ -6485,7 +6562,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Anmodet strøm"
+    "commanded_current": "Anmodet strøm",
+    "charge_mode": "Opladningstilstand",
+    "charge_mode_solar_only": "Kun sol",
+    "charge_mode_solar_plus_cheap": "Sol + billigste timer",
+    "charge_mode_min_plus_solar": "Min + Sol",
+    "charge_mode_always_max": "Altid (max)",
+    "charge_mode_off": "Fra",
+    "charge_mode_hint_solar_only": "Kun overskud — aldrig fra nettet",
+    "charge_mode_hint_solar_plus_cheap": "Overskud om dagen, net kun i de billigste timer",
+    "charge_mode_hint_min_plus_solar": "Min garanteret fra nettet + sol op til Max",
+    "charge_mode_hint_always_max": "Oplader max uanset kilde",
+    "charge_mode_hint_off": "Ingen opladning"
   },
   "fi": {
     "charging": "Lataus",
@@ -7296,7 +7384,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Pyydetty virta"
+    "commanded_current": "Pyydetty virta",
+    "charge_mode": "Lataustila",
+    "charge_mode_solar_only": "Vain aurinko",
+    "charge_mode_solar_plus_cheap": "Aurinko + halvimmat tunnit",
+    "charge_mode_min_plus_solar": "Min + Aurinko",
+    "charge_mode_always_max": "Aina (max)",
+    "charge_mode_off": "Pois",
+    "charge_mode_hint_solar_only": "Vain ylijäämä — ei koskaan verkosta",
+    "charge_mode_hint_solar_plus_cheap": "Päivällä ylijäämä, yöllä verkko vain halvimpina tunteina",
+    "charge_mode_hint_min_plus_solar": "Min taataan verkosta + aurinko Max-asti",
+    "charge_mode_hint_always_max": "Lataa täydellä teholla lähteestä riippumatta",
+    "charge_mode_hint_off": "Ei latausta"
   },
   "hu": {
     "charging": "Töltés",
@@ -8107,7 +8206,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Kért áram"
+    "commanded_current": "Kért áram",
+    "charge_mode": "Töltési mód",
+    "charge_mode_solar_only": "Csak nap",
+    "charge_mode_solar_plus_cheap": "Nap + legolcsóbb órák",
+    "charge_mode_min_plus_solar": "Min + Nap",
+    "charge_mode_always_max": "Mindig (max)",
+    "charge_mode_off": "Ki",
+    "charge_mode_hint_solar_only": "Csak többlet — soha nem a hálózatról",
+    "charge_mode_hint_solar_plus_cheap": "Napközben többlet, éjjel hálózat csak a legolcsóbb órákban",
+    "charge_mode_hint_min_plus_solar": "Min garantált a hálózatról + nap Max-ig",
+    "charge_mode_hint_always_max": "Maximum tölt, forrástól függetlenül",
+    "charge_mode_hint_off": "Nincs töltés"
   },
   "no": {
     "charging": "Lader",
@@ -8918,7 +9028,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Forespurt strøm"
+    "commanded_current": "Forespurt strøm",
+    "charge_mode": "Lademodus",
+    "charge_mode_solar_only": "Kun sol",
+    "charge_mode_solar_plus_cheap": "Sol + billigste timer",
+    "charge_mode_min_plus_solar": "Min + Sol",
+    "charge_mode_always_max": "Alltid (maks)",
+    "charge_mode_off": "Av",
+    "charge_mode_hint_solar_only": "Bare overskudd — aldri fra nettet",
+    "charge_mode_hint_solar_plus_cheap": "Overskudd på dagen, nett kun i de billigste timene",
+    "charge_mode_hint_min_plus_solar": "Min garantert fra nettet + sol opp til Maks",
+    "charge_mode_hint_always_max": "Lader maks uansett kilde",
+    "charge_mode_hint_off": "Ingen lading"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9729,7 +9850,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Zadany prąd"
+    "commanded_current": "Zadany prąd",
+    "charge_mode": "Tryb ładowania",
+    "charge_mode_solar_only": "Tylko słońce",
+    "charge_mode_solar_plus_cheap": "Słońce + najtańsze godziny",
+    "charge_mode_min_plus_solar": "Min + Słońce",
+    "charge_mode_always_max": "Zawsze (max)",
+    "charge_mode_off": "Wył",
+    "charge_mode_hint_solar_only": "Tylko nadwyżka — nigdy z sieci",
+    "charge_mode_hint_solar_plus_cheap": "W dzień nadwyżka, w nocy sieć tylko w najtańszych godzinach",
+    "charge_mode_hint_min_plus_solar": "Min gwarantowane z sieci + słońce do Max",
+    "charge_mode_hint_always_max": "Ładuje na max, niezależnie od źródła",
+    "charge_mode_hint_off": "Brak ładowania"
   },
   "pt": {
     "charging": "A carregar",
@@ -10540,7 +10672,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Corrente solicitada"
+    "commanded_current": "Corrente solicitada",
+    "charge_mode": "Modo de carga",
+    "charge_mode_solar_only": "Apenas solar",
+    "charge_mode_solar_plus_cheap": "Solar + horas mais baratas",
+    "charge_mode_min_plus_solar": "Mín + Solar",
+    "charge_mode_always_max": "Sempre (máx)",
+    "charge_mode_off": "Desligado",
+    "charge_mode_hint_solar_only": "Apenas excedente — nunca importa da rede",
+    "charge_mode_hint_solar_plus_cheap": "Excedente de dia, rede só nas horas mais baratas",
+    "charge_mode_hint_min_plus_solar": "Mín garantido da rede + solar até o Máx",
+    "charge_mode_hint_always_max": "Carrega no máximo, independente da fonte",
+    "charge_mode_hint_off": "Sem carga"
   },
   "ro": {
     "charging": "Încărcare",
@@ -11351,7 +11494,18 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Curent solicitat"
+    "commanded_current": "Curent solicitat",
+    "charge_mode": "Mod de încărcare",
+    "charge_mode_solar_only": "Doar solar",
+    "charge_mode_solar_plus_cheap": "Solar + cele mai ieftine ore",
+    "charge_mode_min_plus_solar": "Min + Solar",
+    "charge_mode_always_max": "Întotdeauna (max)",
+    "charge_mode_off": "Oprit",
+    "charge_mode_hint_solar_only": "Doar surplus — niciodată din rețea",
+    "charge_mode_hint_solar_plus_cheap": "Surplus ziua, rețea doar în orele cele mai ieftine",
+    "charge_mode_hint_min_plus_solar": "Min garantat din rețea + solar până la Max",
+    "charge_mode_hint_always_max": "Încarcă la maxim, indiferent de sursă",
+    "charge_mode_hint_off": "Fără încărcare"
   },
   "sv": {
     "charging": "Laddar",
@@ -12162,6 +12316,17 @@
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
     "plan_strip_done": "done",
-    "commanded_current": "Begärd ström"
+    "commanded_current": "Begärd ström",
+    "charge_mode": "Laddningsläge",
+    "charge_mode_solar_only": "Endast sol",
+    "charge_mode_solar_plus_cheap": "Sol + billigaste timmar",
+    "charge_mode_min_plus_solar": "Min + Sol",
+    "charge_mode_always_max": "Alltid (max)",
+    "charge_mode_off": "Av",
+    "charge_mode_hint_solar_only": "Endast överskott — aldrig från elnätet",
+    "charge_mode_hint_solar_plus_cheap": "Överskott dagtid, elnät endast under de billigaste timmarna",
+    "charge_mode_hint_min_plus_solar": "Min garanterat från elnätet + sol upp till Max",
+    "charge_mode_hint_always_max": "Laddar max, oavsett källa",
+    "charge_mode_hint_off": "Ingen laddning"
   }
 }
