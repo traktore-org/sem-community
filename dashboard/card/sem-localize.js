@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-30T08:50:44.153139+00:00
+// Generated: 2026-05-30T09:33:39.486525+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -821,7 +821,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Surplus by day, grid only in the cheapest hours",
     "charge_mode_hint_min_plus_solar": "Guarantee Min from grid + solar up to Max",
     "charge_mode_hint_always_max": "Charge at max regardless of source",
-    "charge_mode_hint_off": "No charging"
+    "charge_mode_hint_off": "No charging",
+    "plan_battery_full": "Battery full",
+    "plan_battery_empty": "Battery reaches floor",
+    "plan_ev_target_reached": "EV reaches target ({kwh} kWh)"
   },
   "de": {
     "charging": "Laden",
@@ -1643,7 +1646,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Tags Überschuss, nachts Netz nur zur günstigsten Stunde",
     "charge_mode_hint_min_plus_solar": "Min aus dem Netz garantiert + Solar bis Max",
     "charge_mode_hint_always_max": "Lädt mit max. Strom, unabhängig von der Quelle",
-    "charge_mode_hint_off": "Kein Laden"
+    "charge_mode_hint_off": "Kein Laden",
+    "plan_battery_full": "Batterie voll",
+    "plan_battery_empty": "Batterie erreicht Mindestgrenze",
+    "plan_ev_target_reached": "EV erreicht Ziel ({kwh} kWh)"
   },
   "fr": {
     "charging": "En charge",
@@ -2465,7 +2471,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Surplus de jour, réseau uniquement aux heures les moins chères",
     "charge_mode_hint_min_plus_solar": "Min garanti depuis le réseau + solaire jusqu'à Max",
     "charge_mode_hint_always_max": "Charge au maximum, peu importe la source",
-    "charge_mode_hint_off": "Pas de charge"
+    "charge_mode_hint_off": "Pas de charge",
+    "plan_battery_full": "Batterie pleine",
+    "plan_battery_empty": "Batterie atteint le minimum",
+    "plan_ev_target_reached": "VE atteint la cible ({kwh} kWh)"
   },
   "es": {
     "charging": "Cargando",
@@ -3287,7 +3296,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Excedente de día, red solo en las horas más baratas",
     "charge_mode_hint_min_plus_solar": "Mín garantizado de la red + solar hasta Máx",
     "charge_mode_hint_always_max": "Carga al máximo, sin importar la fuente",
-    "charge_mode_hint_off": "Sin carga"
+    "charge_mode_hint_off": "Sin carga",
+    "plan_battery_full": "Batería llena",
+    "plan_battery_empty": "Batería llega al mínimo",
+    "plan_ev_target_reached": "VE alcanza objetivo ({kwh} kWh)"
   },
   "it": {
     "charging": "In carica",
@@ -4109,7 +4121,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Surplus di giorno, rete solo nelle ore più economiche",
     "charge_mode_hint_min_plus_solar": "Min garantito dalla rete + solare fino al Max",
     "charge_mode_hint_always_max": "Carica al massimo, indipendentemente dalla fonte",
-    "charge_mode_hint_off": "Nessuna ricarica"
+    "charge_mode_hint_off": "Nessuna ricarica",
+    "plan_battery_full": "Batteria piena",
+    "plan_battery_empty": "Batteria raggiunge il minimo",
+    "plan_ev_target_reached": "EV raggiunge obiettivo ({kwh} kWh)"
   },
   "nl": {
     "charging": "Laden",
@@ -4931,7 +4946,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Overdag overschot, 's nachts net alleen in de goedkoopste uren",
     "charge_mode_hint_min_plus_solar": "Min van het net gegarandeerd + zon tot Max",
     "charge_mode_hint_always_max": "Laadt op max, ongeacht de bron",
-    "charge_mode_hint_off": "Niet laden"
+    "charge_mode_hint_off": "Niet laden",
+    "plan_battery_full": "Batterij vol",
+    "plan_battery_empty": "Batterij bereikt ondergrens",
+    "plan_ev_target_reached": "EV bereikt doel ({kwh} kWh)"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5753,7 +5771,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Přes den přebytek, v noci síť jen v nejlevnějších hodinách",
     "charge_mode_hint_min_plus_solar": "Min garantováno ze sítě + solární do Max",
     "charge_mode_hint_always_max": "Nabíjí na max bez ohledu na zdroj",
-    "charge_mode_hint_off": "Bez nabíjení"
+    "charge_mode_hint_off": "Bez nabíjení",
+    "plan_battery_full": "Baterie plná",
+    "plan_battery_empty": "Baterie dosáhne minima",
+    "plan_ev_target_reached": "EV dosáhne cíle ({kwh} kWh)"
   },
   "da": {
     "charging": "Oplader",
@@ -6575,7 +6596,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Overskud om dagen, net kun i de billigste timer",
     "charge_mode_hint_min_plus_solar": "Min garanteret fra nettet + sol op til Max",
     "charge_mode_hint_always_max": "Oplader max uanset kilde",
-    "charge_mode_hint_off": "Ingen opladning"
+    "charge_mode_hint_off": "Ingen opladning",
+    "plan_battery_full": "Batteri fuldt",
+    "plan_battery_empty": "Batteri når minimum",
+    "plan_ev_target_reached": "Elbilen når målet ({kwh} kWh)"
   },
   "fi": {
     "charging": "Lataus",
@@ -7397,7 +7421,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Päivällä ylijäämä, yöllä verkko vain halvimpina tunteina",
     "charge_mode_hint_min_plus_solar": "Min taataan verkosta + aurinko Max-asti",
     "charge_mode_hint_always_max": "Lataa täydellä teholla lähteestä riippumatta",
-    "charge_mode_hint_off": "Ei latausta"
+    "charge_mode_hint_off": "Ei latausta",
+    "plan_battery_full": "Akku täynnä",
+    "plan_battery_empty": "Akku saavuttaa minimitason",
+    "plan_ev_target_reached": "Sähköauto saavuttaa tavoitteen ({kwh} kWh)"
   },
   "hu": {
     "charging": "Töltés",
@@ -8219,7 +8246,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Napközben többlet, éjjel hálózat csak a legolcsóbb órákban",
     "charge_mode_hint_min_plus_solar": "Min garantált a hálózatról + nap Max-ig",
     "charge_mode_hint_always_max": "Maximum tölt, forrástól függetlenül",
-    "charge_mode_hint_off": "Nincs töltés"
+    "charge_mode_hint_off": "Nincs töltés",
+    "plan_battery_full": "Akkumulátor megtelt",
+    "plan_battery_empty": "Akkumulátor eléri a minimumot",
+    "plan_ev_target_reached": "EV eléri a célt ({kwh} kWh)"
   },
   "no": {
     "charging": "Lader",
@@ -9041,7 +9071,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Overskudd på dagen, nett kun i de billigste timene",
     "charge_mode_hint_min_plus_solar": "Min garantert fra nettet + sol opp til Maks",
     "charge_mode_hint_always_max": "Lader maks uansett kilde",
-    "charge_mode_hint_off": "Ingen lading"
+    "charge_mode_hint_off": "Ingen lading",
+    "plan_battery_full": "Batteri fullt",
+    "plan_battery_empty": "Batteri når minimumsgrense",
+    "plan_ev_target_reached": "Elbilen når målet ({kwh} kWh)"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9863,7 +9896,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "W dzień nadwyżka, w nocy sieć tylko w najtańszych godzinach",
     "charge_mode_hint_min_plus_solar": "Min gwarantowane z sieci + słońce do Max",
     "charge_mode_hint_always_max": "Ładuje na max, niezależnie od źródła",
-    "charge_mode_hint_off": "Brak ładowania"
+    "charge_mode_hint_off": "Brak ładowania",
+    "plan_battery_full": "Bateria pełna",
+    "plan_battery_empty": "Bateria osiąga minimum",
+    "plan_ev_target_reached": "EV osiąga cel ({kwh} kWh)"
   },
   "pt": {
     "charging": "A carregar",
@@ -10685,7 +10721,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Excedente de dia, rede só nas horas mais baratas",
     "charge_mode_hint_min_plus_solar": "Mín garantido da rede + solar até o Máx",
     "charge_mode_hint_always_max": "Carrega no máximo, independente da fonte",
-    "charge_mode_hint_off": "Sem carga"
+    "charge_mode_hint_off": "Sem carga",
+    "plan_battery_full": "Bateria cheia",
+    "plan_battery_empty": "Bateria atinge o mínimo",
+    "plan_ev_target_reached": "VE atinge o alvo ({kwh} kWh)"
   },
   "ro": {
     "charging": "Încărcare",
@@ -11507,7 +11546,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Surplus ziua, rețea doar în orele cele mai ieftine",
     "charge_mode_hint_min_plus_solar": "Min garantat din rețea + solar până la Max",
     "charge_mode_hint_always_max": "Încarcă la maxim, indiferent de sursă",
-    "charge_mode_hint_off": "Fără încărcare"
+    "charge_mode_hint_off": "Fără încărcare",
+    "plan_battery_full": "Bateria plină",
+    "plan_battery_empty": "Bateria atinge minimul",
+    "plan_ev_target_reached": "EV atinge ținta ({kwh} kWh)"
   },
   "sv": {
     "charging": "Laddar",
@@ -12329,7 +12371,10 @@ const _semTranslations = {
     "charge_mode_hint_solar_plus_cheap": "Överskott dagtid, elnät endast under de billigaste timmarna",
     "charge_mode_hint_min_plus_solar": "Min garanterat från elnätet + sol upp till Max",
     "charge_mode_hint_always_max": "Laddar max, oavsett källa",
-    "charge_mode_hint_off": "Ingen laddning"
+    "charge_mode_hint_off": "Ingen laddning",
+    "plan_battery_full": "Batteriet fullt",
+    "plan_battery_empty": "Batteriet når lägstanivå",
+    "plan_ev_target_reached": "Elbilen når målet ({kwh} kWh)"
   }
 };
 

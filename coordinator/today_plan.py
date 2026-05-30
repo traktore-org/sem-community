@@ -37,8 +37,11 @@ KIND_NIGHT_OPEN = "night_open"
 KIND_NIGHT_END = "night_end"
 KIND_EV_CHARGE_START = "ev_charge_start"
 KIND_EV_MIN_REACHED = "ev_min_reached"
+KIND_EV_TARGET_REACHED = "ev_target_reached"  # #298: live "reach Max/SOC target" ETA
 KIND_EV_DEADLINE = "ev_deadline"
 KIND_EV_WAIT = "ev_wait"
+KIND_BATTERY_FULL = "battery_full"   # #298: home battery charging → full ETA
+KIND_BATTERY_EMPTY = "battery_empty"  # #298: home battery discharging → floor ETA
 
 
 @dataclass
@@ -114,6 +117,13 @@ def compose_today_plan(
     ev_tariff_waiting: bool = False,
     ev_next_cheap_window: Optional[datetime] = None,
     ev_effective_rate_kw: Optional[float] = None,
+    # #298 — live ETAs while a session is actually charging / discharging.
+    # Pass ``None`` to suppress the row (e.g. when SOC is already at the
+    # boundary or the rate is too small to make a useful estimate).
+    ev_target_eta: Optional[datetime] = None,
+    ev_target_kwh: Optional[float] = None,
+    battery_full_eta: Optional[datetime] = None,
+    battery_empty_eta: Optional[datetime] = None,
     currency: str = "",
 ) -> List[Dict[str, Any]]:
     """Build the forward-looking plan as a list of row dicts.
@@ -248,6 +258,41 @@ def compose_today_plan(
                 when=ev_deadline, kind=KIND_EV_DEADLINE,
                 label="plan_ev_deadline",
             ))
+
+    # === Live ETAs (#298) — only emitted when an actual session is in
+    # progress. The caller computes them from current power + remaining
+    # capacity; this module just renders them as plan rows.
+
+    # EV target reached — when the car is actively charging right now and
+    # an ETA to the Max/SOC target is within the horizon. Distinct from
+    # ``plan_ev_min_reached`` above which is a NIGHT planner estimate
+    # (when will the deadline-floor be hit). This row tracks the LIVE
+    # session's projected completion.
+    if ev_target_eta and now < ev_target_eta < horizon:
+        rows.append(PlanRow(
+            when=ev_target_eta, kind=KIND_EV_TARGET_REACHED,
+            label="plan_ev_target_reached",
+            values=(
+                {"kwh": f"{ev_target_kwh:.1f}"}
+                if ev_target_kwh is not None else {}
+            ),
+        ))
+
+    # Home battery — full or empty ETA. Mutually exclusive in practice
+    # (a battery is either charging or discharging), so the caller
+    # passes one or the other based on the current ``battery_power``
+    # sign. We accept both for defensive clarity; if both are passed
+    # we emit both rows.
+    if battery_full_eta and now < battery_full_eta < horizon:
+        rows.append(PlanRow(
+            when=battery_full_eta, kind=KIND_BATTERY_FULL,
+            label="plan_battery_full",
+        ))
+    if battery_empty_eta and now < battery_empty_eta < horizon:
+        rows.append(PlanRow(
+            when=battery_empty_eta, kind=KIND_BATTERY_EMPTY,
+            label="plan_battery_empty",
+        ))
 
     # Sort + return as dicts. Cap at 8 rows so the card stays glanceable.
     rows.sort(key=lambda r: r.when)

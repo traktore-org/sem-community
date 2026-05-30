@@ -33,8 +33,15 @@ const KINDS = {
     night_end:          { icon: 'mdi:weather-sunset-up', color: '#ff9800' },
     ev_charge_start:    { icon: 'mdi:ev-station',        color: '#8DC892' },
     ev_min_reached:     { icon: 'mdi:battery-charging-80', color: '#4db6ac' },
+    ev_target_reached:  { icon: 'mdi:car-electric',      color: '#8DC892' },
     ev_deadline:        { icon: 'mdi:clock-end',         color: '#f06292' },
     ev_wait:            { icon: 'mdi:pause-circle',      color: '#8353d1' },
+    // #298 — home battery live ETAs. Pink = charge (matches the SEM
+    // colour palette for Battery-In on the diagrams); teal = discharge
+    // (Battery-Out). Empty icon is "battery-low" to signal "approaching
+    // the floor", not "literally zero".
+    battery_full:       { icon: 'mdi:battery-charging-100', color: '#f06292' },
+    battery_empty:      { icon: 'mdi:battery-low',       color: '#4db6ac' },
 };
 
 class SEMTodayPlanCard extends SEMLitBase {
