@@ -1325,6 +1325,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 result[f"charger_{cid}_power"] = round(charger_power, 0)
                 result[f"charger_{cid}_name"] = ev_dev.name
                 result[f"charger_{cid}_connected"] = self._last_ev_connected_per_charger.get(cid, False)
+                # Per-charger SEM-commanded current (#291). Authoritative
+                # "what did SEM ask the charger to do" — diagnostic counterpart
+                # to the upstream max_current sensor which can read stale.
+                result[f"charger_{cid}_commanded_current"] = round(
+                    float(getattr(ev_dev, "_current_setpoint", 0.0) or 0.0), 1,
+                )
                 # Per-charger session data
                 session = self._session_data_per_charger.get(cid)
                 if session:

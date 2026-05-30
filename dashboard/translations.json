@@ -807,7 +807,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Commanded current"
   },
   "de": {
     "charging": "Laden",
@@ -1617,7 +1618,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Befohlener Strom"
   },
   "fr": {
     "charging": "En charge",
@@ -2427,7 +2429,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Courant commandé"
   },
   "es": {
     "charging": "Cargando",
@@ -3237,7 +3240,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Corriente solicitada"
   },
   "it": {
     "charging": "In carica",
@@ -4047,7 +4051,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Corrente richiesta"
   },
   "nl": {
     "charging": "Laden",
@@ -4857,7 +4862,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Aangevraagde stroom"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5667,7 +5673,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Požadovaný proud"
   },
   "da": {
     "charging": "Oplader",
@@ -6477,7 +6484,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Anmodet strøm"
   },
   "fi": {
     "charging": "Lataus",
@@ -7287,7 +7295,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Pyydetty virta"
   },
   "hu": {
     "charging": "Töltés",
@@ -8097,7 +8106,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Kért áram"
   },
   "no": {
     "charging": "Lader",
@@ -8907,7 +8917,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Forespurt strøm"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9717,7 +9728,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Zadany prąd"
   },
   "pt": {
     "charging": "A carregar",
@@ -10527,7 +10539,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Corrente solicitada"
   },
   "ro": {
     "charging": "Încărcare",
@@ -11337,7 +11350,8 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Curent solicitat"
   },
   "sv": {
     "charging": "Laddar",
@@ -12147,6 +12161,7 @@
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Begärd ström"
   }
 }

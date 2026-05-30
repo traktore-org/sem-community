@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-05-29T18:08:29.855157+00:00
+// Generated: 2026-05-30T03:29:22.219613+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -809,7 +809,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Commanded current"
   },
   "de": {
     "charging": "Laden",
@@ -1619,7 +1620,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Befohlener Strom"
   },
   "fr": {
     "charging": "En charge",
@@ -2429,7 +2431,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Courant commandé"
   },
   "es": {
     "charging": "Cargando",
@@ -3239,7 +3242,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Corriente solicitada"
   },
   "it": {
     "charging": "In carica",
@@ -4049,7 +4053,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Corrente richiesta"
   },
   "nl": {
     "charging": "Laden",
@@ -4859,7 +4864,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Aangevraagde stroom"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5669,7 +5675,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Požadovaný proud"
   },
   "da": {
     "charging": "Oplader",
@@ -6479,7 +6486,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Anmodet strøm"
   },
   "fi": {
     "charging": "Lataus",
@@ -7289,7 +7297,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Pyydetty virta"
   },
   "hu": {
     "charging": "Töltés",
@@ -8099,7 +8108,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Kért áram"
   },
   "no": {
     "charging": "Lader",
@@ -8909,7 +8919,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Forespurt strøm"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -9719,7 +9730,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Zadany prąd"
   },
   "pt": {
     "charging": "A carregar",
@@ -10529,7 +10541,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Corrente solicitada"
   },
   "ro": {
     "charging": "Încărcare",
@@ -11339,7 +11352,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Curent solicitat"
   },
   "sv": {
     "charging": "Laddar",
@@ -12149,7 +12163,8 @@ const _semTranslations = {
     "plan_strip_idle": "idle",
     "plan_strip_wait": "waiting",
     "plan_strip_charging": "charging",
-    "plan_strip_done": "done"
+    "plan_strip_done": "done",
+    "commanded_current": "Begärd ström"
   }
 };
 

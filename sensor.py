@@ -1552,6 +1552,23 @@ async def async_setup_entry(
                 native_unit_of_measurement=UnitOfPower.WATT,
                 suggested_display_precision=0,
             ),
+            # Per-charger commanded current (#291): SEM's own authoritative
+            # ``_current_setpoint`` — what SEM ASKED the charger to do, in amps.
+            # Diagnostic counterweight to the upstream
+            # ``sensor.keba_p30_max_current`` (and analogous KEBA/Wallbox/Easee
+            # sensors) which can read stale after SEM sends ``set_current`` —
+            # see #291 for the 2026-05-29 PROD observation. Trust this sensor
+            # when you want "what is SEM trying to do"; trust the upstream
+            # sensor for "what does the charger think it can do."
+            SensorEntityDescription(
+                key=f"charger_{cid}_commanded_current",
+                name=f"{cname} Commanded Current",
+                device_class=SensorDeviceClass.CURRENT,
+                state_class=SensorStateClass.MEASUREMENT,
+                native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+                suggested_display_precision=1,
+                entity_category=EntityCategory.DIAGNOSTIC,
+            ),
             SensorEntityDescription(
                 key=f"charger_{cid}_session_energy",
                 name=f"{cname} Session Energy",
