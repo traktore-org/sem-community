@@ -39,6 +39,31 @@ from .coordinator import SEMCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
+def _content_hash_cache_bust(card_root: str, base_url: str, version: str) -> str:
+    """Compute ``{version}-{sha1(content)[:8]}`` for a dashboard card asset.
+
+    Used by every Lovelace-resource registration path so the ``?v=`` query
+    follows file content. A bare timestamp (the previous behaviour) stayed
+    constant across rsync deploys and let browsers serve a stale cached
+    ``sem-localize.js`` even after the on-disk file was updated — surfacing
+    as raw translation keys on the EV charge-mode selector (#301).
+
+    ``base_url`` is the ``/local/custom_components/.../card/<path>`` URL;
+    the trailing relative path is resolved against ``card_root`` (the
+    deployed copy under ``/config/www/...``). Falls back to a bare
+    ``version`` if the file can't be read so a transient disk error still
+    busts the cache once and never deregisters a resource.
+    """
+    import hashlib
+
+    rel = base_url.split("/dashboard/card/", 1)[-1]
+    try:
+        with open(os.path.join(card_root, rel), "rb") as f:
+            return f"{version}-{hashlib.sha1(f.read()).hexdigest()[:8]}"
+    except OSError:
+        return version
+
+
 class _SEMYAMLModeSkip(Exception):
     """Sentinel: bail out of the Lovelace resource registration block
     when the user is running YAML-mode Lovelace (#283). YAML-mode
@@ -1162,10 +1187,19 @@ async def _async_register_services(
                     stale_count,
                 )
 
-            # Cache-busting: use timestamp so every generate_dashboard
-            # call forces browsers to reload card JS files.
-            import time as _time
-            cache_bust = str(int(_time.time()))
+            # Cache-busting: per-file content hash + manifest version (#301).
+            # See _content_hash_cache_bust at module level. Inlined into a
+            # closure here so the resolved card_www_dir + manifest version
+            # are captured once per service call.
+            manifest_path_l = os.path.join(component_dir, "manifest.json")
+            try:
+                with open(manifest_path_l) as f:
+                    _mver = json.load(f).get("version", "0")
+            except Exception:
+                _mver = "0"
+
+            def _cache_bust_for(base_url: str) -> str:
+                return _content_hash_cache_bust(card_www_dir, base_url, _mver)
 
             existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
             added_resources = []
@@ -1176,7 +1210,7 @@ async def _async_register_services(
                     import uuid as _uuid
                     resources_data["items"].append({
                         "id": _uuid.uuid4().hex,
-                        "url": f"{base_url}?v={cache_bust}",
+                        "url": f"{base_url}?v={_cache_bust_for(base_url)}",
                         "type": "module",
                     })
                     added_resources.append(base_url)
@@ -1202,7 +1236,7 @@ async def _async_register_services(
                         # Card file no longer exists — remove orphaned resource
                         cleaned.append(base)
                         continue
-                    new_url = f"{base}?v={cache_bust}"
+                    new_url = f"{base}?v={_cache_bust_for(base)}"
                     if item["url"] != new_url:
                         item["url"] = new_url
                         updated_resources += 1
@@ -1216,7 +1250,7 @@ async def _async_register_services(
                 if added_resources:
                     _LOGGER.info("Registered %d new Lovelace resource(s): %s", len(added_resources), added_resources)
                 if updated_resources:
-                    _LOGGER.info("Updated cache-bust on %d Lovelace resource(s) to v=%s", updated_resources, cache_bust)
+                    _LOGGER.info("Updated cache-bust on %d Lovelace resource(s) (content-hash)", updated_resources)
 
             # Step 2: Generate dashboard config
             generator = DashboardGenerator(hass)
