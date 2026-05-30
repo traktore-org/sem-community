@@ -109,6 +109,113 @@ class TestDashboardTemplate:
             assert os.path.exists(os.path.join(card_dir, card)), f"Missing: {card}"
 
 
+class TestContentHashCacheBust:
+    """Regression tests for the Lovelace cache-bust helper (#301).
+
+    The legacy cache-bust used ``int(time.time())`` which stayed constant
+    between ``generate_dashboard`` service calls — so an rsync deploy that
+    rewrote ``sem-localize.js`` left the registered URL's ``?v=`` unchanged
+    and browsers happily served the old cached copy. Newly-added translation
+    keys (e.g. ``charge_mode_*``) then rendered as raw key text on the EV
+    card. The fix is to hash the file content so any real change flips the
+    URL automatically.
+    """
+
+    def _bust(self, *args, **kwargs):
+        # Imported lazily so the test module remains importable when the
+        # parent package's optional deps are missing in some test envs.
+        from custom_components.solar_energy_management import (
+            _content_hash_cache_bust,
+        )
+        return _content_hash_cache_bust(*args, **kwargs)
+
+    def test_url_includes_version_and_short_hash(self, tmp_path):
+        card_root = tmp_path
+        (card_root / "sem-localize.js").write_bytes(b"const x = 1;")
+        base = "/local/custom_components/solar_energy_management/dashboard/card/sem-localize.js"
+
+        bust = self._bust(str(card_root), base, "1.7.0")
+
+        # Format must be ``{version}-{8-hex-char hash}`` — matches the
+        # _async_register_frontend_resources bundle path so both registration
+        # paths produce identical URLs for the same file content.
+        assert "-" in bust
+        version, short = bust.split("-", 1)
+        assert version == "1.7.0"
+        assert len(short) == 8
+        assert all(c in "0123456789abcdef" for c in short)
+
+    def test_url_changes_when_content_changes(self, tmp_path):
+        """A file edit must flip the URL — the property the bug violated."""
+        card_root = tmp_path
+        f = card_root / "sem-localize.js"
+        base = "/local/custom_components/solar_energy_management/dashboard/card/sem-localize.js"
+
+        f.write_bytes(b'{"charge_mode": "Charge mode"}')
+        before = self._bust(str(card_root), base, "1.7.0")
+
+        f.write_bytes(b'{"charge_mode": "Charge mode", "charge_mode_min_plus_solar": "Min + Solar"}')
+        after = self._bust(str(card_root), base, "1.7.0")
+
+        assert before != after, (
+            "cache-bust must track file content — adding a new translation key "
+            "must change the ?v= URL or the browser will serve the stale cached "
+            "file (the #301 regression)."
+        )
+
+    def test_url_stable_across_calls_when_content_unchanged(self, tmp_path):
+        """No URL churn on each restart — only file content drives changes."""
+        card_root = tmp_path
+        (card_root / "sem-localize.js").write_bytes(b"const x = 1;")
+        base = "/local/custom_components/solar_energy_management/dashboard/card/sem-localize.js"
+
+        first = self._bust(str(card_root), base, "1.7.0")
+        second = self._bust(str(card_root), base, "1.7.0")
+
+        assert first == second
+
+    def test_url_for_nested_bundle_path(self, tmp_path):
+        """Bundle lives under ``dist/`` — the URL splitter must handle it."""
+        card_root = tmp_path
+        (card_root / "dist").mkdir()
+        (card_root / "dist" / "sem-cards.js").write_bytes(b"// bundle")
+        base = "/local/custom_components/solar_energy_management/dashboard/card/dist/sem-cards.js"
+
+        bust = self._bust(str(card_root), base, "1.7.0")
+
+        version, short = bust.split("-", 1)
+        assert version == "1.7.0"
+        assert len(short) == 8
+
+    def test_missing_file_falls_back_to_bare_version(self, tmp_path):
+        """If the asset can't be read, return bare version — don't crash or
+        return an empty bust that could collide with another resource."""
+        card_root = tmp_path
+        base = "/local/custom_components/solar_energy_management/dashboard/card/sem-localize.js"
+
+        bust = self._bust(str(card_root), base, "1.7.0")
+
+        assert bust == "1.7.0"
+
+    def test_no_timestamp_anti_pattern_in_service_path(self):
+        """Guard the regression: the legacy ``int(time.time())`` cache-bust
+        must not reappear in the generate_dashboard service path. If a future
+        edit reverts to a timestamp, the symptom returns silently — no test
+        catches it because the URL is still ``valid``, just stale."""
+        init_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "__init__.py",
+        )
+        src = open(init_path).read()
+        # The legacy pattern. We pick the exact construction that produced
+        # the bug so this test stays sharp and doesn't false-positive on
+        # unrelated timestamp usage elsewhere in the file.
+        assert 'cache_bust = str(int(_time.time()))' not in src, (
+            "Reintroduced the time-based cache-bust that caused #301. Use "
+            "_content_hash_cache_bust so ?v= follows file content."
+        )
+
+
 class TestWeatherSubstitution:
     """Test weather entity substitution in the dashboard generator."""
 
