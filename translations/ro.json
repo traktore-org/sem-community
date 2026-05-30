@@ -1148,6 +1148,16 @@
           "kwh": "Țintă kWh",
           "soc": "Țintă SoC %"
         }
+      },
+      "charge_mode": {
+        "name": "Mod de încărcare",
+        "state": {
+          "solar_only": "Doar solar",
+          "solar_plus_cheap": "Solar + cele mai ieftine ore",
+          "min_plus_solar": "Min + Solar",
+          "always_max": "Întotdeauna (max)",
+          "off": "Oprit"
+        }
       }
     }
   },

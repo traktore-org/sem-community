@@ -1148,6 +1148,16 @@
           "kwh": "Meta kWh",
           "soc": "Meta SoC %"
         }
+      },
+      "charge_mode": {
+        "name": "Modo de carga",
+        "state": {
+          "solar_only": "Apenas solar",
+          "solar_plus_cheap": "Solar + horas mais baratas",
+          "min_plus_solar": "Mín + Solar",
+          "always_max": "Sempre (máx)",
+          "off": "Desligado"
+        }
       }
     }
   },

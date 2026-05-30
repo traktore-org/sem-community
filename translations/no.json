@@ -1148,6 +1148,16 @@
           "kwh": "kWh-mål",
           "soc": "SoC-%-mål"
         }
+      },
+      "charge_mode": {
+        "name": "Lademodus",
+        "state": {
+          "solar_only": "Kun sol",
+          "solar_plus_cheap": "Sol + billigste timer",
+          "min_plus_solar": "Min + Sol",
+          "always_max": "Alltid (maks)",
+          "off": "Av"
+        }
       }
     }
   },

@@ -1148,6 +1148,16 @@
           "kwh": "kWh cél",
           "soc": "SoC % cél"
         }
+      },
+      "charge_mode": {
+        "name": "Töltési mód",
+        "state": {
+          "solar_only": "Csak nap",
+          "solar_plus_cheap": "Nap + legolcsóbb órák",
+          "min_plus_solar": "Min + Nap",
+          "always_max": "Mindig (max)",
+          "off": "Ki"
+        }
       }
     }
   },

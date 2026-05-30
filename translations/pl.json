@@ -1148,6 +1148,16 @@
           "kwh": "Cel kWh",
           "soc": "Cel SoC %"
         }
+      },
+      "charge_mode": {
+        "name": "Tryb ładowania",
+        "state": {
+          "solar_only": "Tylko słońce",
+          "solar_plus_cheap": "Słońce + najtańsze godziny",
+          "min_plus_solar": "Min + Słońce",
+          "always_max": "Zawsze (max)",
+          "off": "Wył"
+        }
       }
     }
   },

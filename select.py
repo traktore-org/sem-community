@@ -35,6 +35,24 @@ EV_TARGET_TYPES = {
     "soc": "SOC % target",
 }
 
+# #277 Phase A — consolidated Charge mode selector. Replaces the
+# four-toggle combinatorial UX (``ev_charging_mode`` ×
+# ``night_charging`` × ``tariff_optimized`` × ``smart_night_charging``)
+# with one named intent per charger. See
+# ``docs/plans/2026-05-30_ev_charge_mode_consolidation.md`` for the
+# full mapping, migration rules, and resolved design questions.
+#
+# ``solar_plus_cheap`` is conditionally hidden when no dynamic tariff
+# is configured — the option appears automatically when the user adds
+# a tariff. Maintainer decision Q1, 2026-05-30. Constant lives in
+# ``consts/ev_charge_modes.py`` so the coordinator's read-side helper
+# imports the same source of truth (no duplicated tuple in
+# ``coordinator/coordinator.py``).
+from .consts.ev_charge_modes import (
+    DEFAULT_EV_CHARGE_MODE,
+    EV_CHARGE_MODES,
+)
+
 SELECT_TYPES = [
     # ev_charging_mode and ev_target_type are PER-CHARGER only (#255) — the global
     # duplicates were removed (seeded per-charger by the v3→v4 migration). The old
@@ -104,6 +122,24 @@ async def async_setup_entry(
                 entry, cid, "ev_charging_mode",
                 charger_cfg.get("ev_charging_mode")
                 or full_config.get("ev_charging_mode") or "pv",
+            ))
+            # Per-charger Charge mode selector (#277 Phase A) — the
+            # consolidated user-intent selector that will replace the
+            # toggle-soup in Phase B. Phase A is additive only: the
+            # entity persists user intent but the coordinator strategy
+            # machine still reads the legacy toggles. The migration in
+            # ``async_migrate_entry`` (v4 → v5) seeds the field from
+            # existing toggle state so the value the user sees matches
+            # the behaviour they already have.
+            entities.append(SEMPerChargerSelect(
+                coordinator,
+                SelectEntityDescription(
+                    key=f"charger_{cid}_charge_mode",
+                    options=list(EV_CHARGE_MODES.keys()),
+                    entity_category=EntityCategory.CONFIG,
+                ),
+                entry, cid, "charge_mode",
+                charger_cfg.get("charge_mode") or DEFAULT_EV_CHARGE_MODE,
             ))
 
     async_add_entities(entities)
@@ -257,6 +293,8 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             return set(EV_TARGET_TYPES.keys())
         if self._config_key == "ev_charging_mode":
             return set(EV_CHARGING_MODES.keys())
+        if self._config_key == "charge_mode":
+            return set(EV_CHARGE_MODES.keys())
         # Future selects: trust the description's declared options.
         return set(self.entity_description.options or [])
 
@@ -266,7 +304,10 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
 
         For ``ev_target_type``: SOC % only when this charger has a
         vehicle_soc_entity configured (#235). For ``ev_charging_mode``:
-        the full mode set always. For unknown keys: pass through what the
+        the full mode set always. For ``charge_mode`` (#277): hide
+        ``solar_plus_cheap`` when no dynamic tariff is configured —
+        users without a tariff should not see a ghost option that
+        silently degrades. For unknown keys: pass through what the
         description declared.
         """
         if self._config_key == "ev_target_type":
@@ -274,6 +315,14 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
             return _target_type_options(has_soc)
         if self._config_key == "ev_charging_mode":
             return list(EV_CHARGING_MODES.keys())
+        if self._config_key == "charge_mode":
+            has_dyn_tariff = (
+                self.coordinator.config.get("tariff_mode") == "dynamic"
+            )
+            return [
+                m for m in EV_CHARGE_MODES.keys()
+                if has_dyn_tariff or m != "solar_plus_cheap"
+            ]
         return list(self.entity_description.options or [])
 
     @property

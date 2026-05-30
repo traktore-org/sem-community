@@ -1148,6 +1148,16 @@
           "kwh": "Obiettivo kWh",
           "soc": "Obiettivo SoC %"
         }
+      },
+      "charge_mode": {
+        "name": "Modalità di ricarica",
+        "state": {
+          "solar_only": "Solo solare",
+          "solar_plus_cheap": "Solare + ore più economiche",
+          "min_plus_solar": "Min + Solare",
+          "always_max": "Sempre (max)",
+          "off": "Spento"
+        }
       }
     }
   },

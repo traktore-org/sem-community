@@ -1148,6 +1148,16 @@
           "kwh": "kWh-doel",
           "soc": "SoC-%-doel"
         }
+      },
+      "charge_mode": {
+        "name": "Laadmodus",
+        "state": {
+          "solar_only": "Alleen zon",
+          "solar_plus_cheap": "Zon + goedkoopste uren",
+          "min_plus_solar": "Min + Zon",
+          "always_max": "Altijd (max)",
+          "off": "Uit"
+        }
       }
     }
   },
