@@ -5,6 +5,61 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] — 2026-05-30
+
+The **Phase D.2 cleanup** patch — completes the EV-budget unification arc
+(#282) by removing the legacy fallbacks that the v1.6.0 canonical path
+left side-by-side as a safety net. Carrying two budget formulas alive
+was exactly the duplication that produced the disagreement bug class in
+the first place; with three weeks of clean v1.6.0/v1.6.1 PROD soak the
+fallbacks are dead code, and keeping them invited the next regression.
+
+No behavioural changes outside the named removals. Same upgrade path as
+any 1.6.x.
+
+### Removed
+
+- **`flow_calculator.calculate_ev_budget`** — superseded by
+  `calculate_canonical_ev_budget` since v1.6.0 (Phase A). Zero
+  production callers as of v1.6.1.
+- **`flow_calculator.calculate_available_power`** — superseded by the
+  canonical EVBudget's per-strategy resolution. Zero production
+  callers as of v1.6.1.
+- **`flow_calculator.calculate_charging_current`** — both production
+  call sites (night charge sizing + actuator ramp) now go through
+  `EVControlMixin._watts_to_amps` which carries the per-charger
+  watts-per-amp + round-down policy directly.
+- **`EVControlMixin._calculate_solar_ev_budget`** — 74-line legacy
+  fallback that the actuator used when `_cycle_ev_budget` wasn't
+  populated. Removed; the path now logs an error and emits 0 W
+  (fail-safe = no charge) if the invariant is ever violated. This
+  catches coordinator init bugs loudly instead of silently masking
+  them with a divergent budget formula.
+- **Multi-charger distribution legacy fallback** in
+  `coordinator.py` — same fail-safe pattern applied: missing
+  `_cycle_ev_budget` → log error + distribute 0 W.
+- **`sensor._format_charging_state` demotion guard** — the cosmetic
+  SOLAR_CHARGING_ACTIVE → SOLAR_CHARGING_ALLOWED downgrade (commit
+  `1a9b3c9`) that papered over the pre-D.2 budget disagreement. The
+  canonical unification eliminated the disagreement by construction,
+  so the guard is now dead code — verified across daytime
+  battery_assist and nighttime MIN_PV soak in v1.6.0/v1.6.1.
+
+### Internal
+
+- **Test sweep** — removed the unit tests that pinned the deleted
+  primitives directly (`TestAvailablePower`, `TestEvBudget`,
+  `TestAvailablePowerIncludesBatteryDischarge`, `TestEVBudgetSemantics`,
+  `TestAvailablePowerInvariants`, `TestCalculateSolarEvBudget`, the
+  budget/current rows from `TestEVControlInvariants`). Their physical
+  invariants (non-negative budget, 16 A clamp, battery-discharge
+  inclusion, Zone-3 proportional ramp, measured-discharge override)
+  are now exercised against `calculate_canonical_ev_budget` and the
+  scenario harness (`tests/scenarios/2026-05-29_*`). 2042 / 2042
+  green.
+
+---
+
 ## [1.6.1] — 2026-05-30
 
 Patch release with fixes driven by the v1.6.0 PROD soak. No behavioural

@@ -519,97 +519,55 @@ class TestFlowInvariants:
 # ──────────────────────────────────────────────────────────────────────────────
 
 class TestEVControlInvariants:
-    """Invariants 13–14: EV current and power relationships."""
+    """Invariants 13–14: EV current and power relationships.
 
-    def test_charging_current_never_below_zero(self):
-        """should never return negative EV charging current."""
+    Pre-D.2 these invariants were pinned against the now-deleted
+    ``calculate_charging_current`` / ``calculate_ev_budget`` primitives.
+    Post-D.2 we pin them against the canonical EVBudget — same physical
+    invariants (non-negative, ≤ 16 A clamp, etc.), exercised end-to-end
+    through the unified path.
+    """
+
+    def test_canonical_budget_never_negative(self):
+        """Canonical EVBudget.net_w must never be negative regardless of inputs."""
         calc = FlowCalculator()
-        rng = random.Random(SEED + 20)
-        for _ in range(NUM_SCENARIOS):
-            available = rng.uniform(-10_000.0, 15_000.0)
-            current = calc.calculate_charging_current(available)
-            assert current >= 0.0, (
-                f"Negative current {current} A for available_power={available:.1f} W"
-            )
-
-    def test_charging_current_never_exceeds_max_16a(self):
-        """should cap EV charging current at 16 A regardless of available power."""
-        calc = FlowCalculator()
-        rng = random.Random(SEED + 21)
-        for _ in range(NUM_SCENARIOS):
-            available = rng.uniform(0.0, 100_000.0)
-            current = calc.calculate_charging_current(available)
-            assert current <= 16.0, (
-                f"Current {current} A exceeds 16 A max for available={available:.1f} W"
-            )
-
-    def test_charging_current_zero_when_no_available_power(self):
-        """should return 0 A when available_power is 0 or negative."""
-        calc = FlowCalculator()
-        rng = random.Random(SEED + 22)
-        for _ in range(500):
-            available = rng.uniform(-5_000.0, 0.0)
-            current = calc.calculate_charging_current(available)
-            assert current == 0.0, (
-                f"Non-zero current {current} A when available_power={available:.1f} W"
-            )
-
-    def test_charging_current_monotonically_increases_with_power(self):
-        """should not decrease current as available power increases."""
-        calc = FlowCalculator()
-        powers = [0, 500, 1000, 2000, 3000, 5000, 7000, 10000, 15000]
-        currents = [calc.calculate_charging_current(p) for p in powers]
-        for i in range(len(currents) - 1):
-            assert currents[i] <= currents[i + 1], (
-                f"Current decreased from {currents[i]} A to {currents[i+1]} A "
-                f"as power increased from {powers[i]} W to {powers[i+1]} W"
-            )
-
-    def test_ev_power_approximately_matches_current_times_watts_per_amp(self):
-        """EV power should match I × V × phases for current setpoints in [6, 16] A."""
-        calc = FlowCalculator()
-        # Standard 3-phase KEBA setup: 230V × 3 phases = 690 W/A
-        volts = 230
-        phases = 3
-        watts_per_amp = volts * phases  # 690 W/A
-
-        for current_a in range(6, 17):  # 6 A to 16 A (KEBA range)
-            expected_power = current_a * watts_per_amp
-            # calculate_charging_current should round-trip within ±1 A
-            recovered_current = calc.calculate_charging_current(
-                available_power=float(expected_power),
-                voltage=float(volts),
-                phases=phases,
-            )
-            # Tolerance: ±1 A due to rounding in calculate_charging_current
-            assert abs(recovered_current - current_a) <= 1, (
-                f"Round-trip failed for {current_a} A: "
-                f"power={expected_power} W → current={recovered_current} A"
-            )
-
-    def test_ev_budget_never_negative(self):
-        """should never return negative EV budget regardless of inputs."""
-        calc = FlowCalculator()
+        from custom_components.solar_energy_management.coordinator.flow_calculator import (
+            EVBudgetStrategy,
+        )
         for p in _ALL_SCENARIOS[:NUM_SCENARIOS]:
-            budget = calc.calculate_ev_budget(p, forecast_remaining_kwh=0.0)
-            assert budget >= 0.0, (
-                f"Negative EV budget {budget:.1f} W for solar={p.solar_power:.0f} W, "
-                f"grid_export={p.grid_export_power:.0f} W"
-            )
+            for strategy in (
+                EVBudgetStrategy.SELF_CONSUMPTION,
+                EVBudgetStrategy.SOLAR_ONLY,
+                EVBudgetStrategy.MIN_PV,
+            ):
+                b = calc.calculate_canonical_ev_budget(
+                    power=p, strategy=strategy,
+                    forecast_remaining_kwh=0.0,
+                    battery_soc=50.0, battery_capacity_kwh=15.0,
+                )
+                assert b.net_w >= 0.0, (
+                    f"Negative canonical budget {b.net_w:.1f} W "
+                    f"strategy={strategy} solar={p.solar_power:.0f} W"
+                )
 
-    def test_ev_budget_never_negative_with_forecast(self):
-        """should never return negative EV budget even with non-zero forecast remaining."""
+    def test_canonical_budget_never_negative_with_forecast(self):
+        """Same invariant across random forecast / SOC combinations."""
         calc = FlowCalculator()
+        from custom_components.solar_energy_management.coordinator.flow_calculator import (
+            EVBudgetStrategy,
+        )
         rng = random.Random(SEED + 23)
         for p in _ALL_SCENARIOS[:NUM_SCENARIOS]:
             forecast = rng.uniform(0.0, 50.0)
             soc = rng.uniform(0.0, 100.0)
-            budget = calc.calculate_ev_budget(
-                p, forecast_remaining_kwh=forecast,
+            b = calc.calculate_canonical_ev_budget(
+                power=p, strategy=EVBudgetStrategy.SOLAR_ONLY,
+                forecast_remaining_kwh=forecast,
                 battery_soc=soc, battery_capacity_kwh=15.0,
             )
-            assert budget >= 0.0, (
-                f"Negative EV budget {budget:.1f} W with forecast={forecast:.1f} kWh"
+            assert b.net_w >= 0.0, (
+                f"Negative canonical budget {b.net_w:.1f} W "
+                f"forecast={forecast:.1f} kWh"
             )
 
 
@@ -1005,44 +963,10 @@ class TestEnergyCalculator24hSimulation:
 # Available power invariants
 # ──────────────────────────────────────────────────────────────────────────────
 
-class TestAvailablePowerInvariants:
-    """calculate_available_power must always be in [0, solar + discharge]."""
-
-    def test_available_power_non_negative_all_scenarios(self):
-        """should never return negative available_power."""
-        calc = FlowCalculator()
-        violations = []
-        for i, p in enumerate(_ALL_SCENARIOS[:NUM_SCENARIOS]):
-            avail = calc.calculate_available_power(p)
-            if avail < 0.0:
-                violations.append((i, avail))
-        assert not violations, (
-            f"{len(violations)} negative available_power(s): "
-            f"first at index={violations[0][0]}, value={violations[0][1]:.1f} W"
-        )
-
-    def test_available_power_capped_at_solar_plus_discharge(self):
-        """should never exceed solar_power + battery_discharge_power."""
-        calc = FlowCalculator()
-        violations = []
-        for i, p in enumerate(_ALL_SCENARIOS[:NUM_SCENARIOS]):
-            avail = calc.calculate_available_power(p)
-            cap = p.solar_power + p.battery_discharge_power
-            # Allow 1 W floating-point tolerance
-            if avail > cap + 1.0:
-                violations.append((i, avail, cap))
-        assert not violations, (
-            f"{len(violations)} available_power(s) exceeded solar + discharge cap: "
-            f"first at index={violations[0][0]}, avail={violations[0][1]:.1f} W, "
-            f"cap={violations[0][2]:.1f} W"
-        )
-
-    def test_available_power_zero_when_all_inputs_zero(self):
-        """should return 0 when no solar, no battery discharge, no grid."""
-        calc = FlowCalculator()
-        p = PowerReadings()
-        p.calculate_derived()
-        assert calc.calculate_available_power(p) == 0.0
+# TestAvailablePowerInvariants removed in Phase D.2 (#282):
+# ``calculate_available_power`` was deleted. The non-negative + capped-at-
+# (solar + discharge) invariants now ride on the canonical EVBudget
+# property tests above (``TestEVControlInvariants``).
 
 
 # ──────────────────────────────────────────────────────────────────────────────
