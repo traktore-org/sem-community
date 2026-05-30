@@ -77,6 +77,23 @@ than forced grid pull.
   longer consulted anywhere; ``_tariff_optimized_for`` derives from
   the named mode.
 
+### Fixed
+
+- **Stale Lovelace cache-bust on sem-localize.js (#301)** — the legacy
+  ``generate_dashboard`` service path used ``int(time.time())`` as the
+  ``?v=`` for card resources, so a plain rsync deploy that rewrote
+  ``sem-localize.js`` left the registered URL unchanged and browsers
+  served the cached pre-Phase-B.2 file. Symptom on first install of
+  this release: the new charge-mode selector renders raw translation
+  keys (``charge_mode``, ``charge_mode_min_plus_so…``,
+  ``charge_mode_hint_min_plus_solar``) instead of localized labels.
+  Fix: per-file ``{version}-{sha1(content)[:8]}`` cache-bust, matching
+  the format ``_async_register_frontend_resources`` already uses for
+  the Lit bundle. Both paths now produce identical URLs for the same
+  file content; any deploy that changes content auto-flips the URL on
+  the next ``generate_dashboard`` call and the browser cache-misses
+  through to the fresh copy.
+
 ### Internal
 
 - New ``consts/ev_charge_modes.py`` — shared constants
@@ -91,14 +108,20 @@ than forced grid pull.
   accumulators. Fixes a pre-existing bug exposed by chaining 4
   migration steps (each was re-reading the original entry options on
   test harnesses).
+- New module-level ``_content_hash_cache_bust`` helper — extracted
+  from the legacy ``generate_dashboard`` registration path so the
+  cache-bust behaviour is directly unit-testable. Replaces a closure
+  buried inside ``async_generate_dashboard_service``.
 - 15-language translations updated; legacy entries cleaned from
   ``strings.json`` + 15 per-language files.
-- Suite: 2130 / 2130 tests passing.
+- Suite: 2136 / 2136 tests passing (6 new regression tests guard
+  the #301 cache-bust contract).
 
 ### Issues addressed
 
 - Closes #277 (EV charge UX consolidation arc)
 - Closes #298 (Today's plan battery / EV ETA rows)
+- Closes #301 (Stale Lovelace cache-bust on sem-localize.js)
 
 ---
 
