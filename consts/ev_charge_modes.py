@@ -65,61 +65,28 @@ def effective_charge_mode_for(
     """Resolve the user-intent Charge mode for one charger.
 
     Reads ``charger_cfg["charge_mode"]`` when present (post-v5
-    migration or after a user picks one in the selector). When absent,
-    derives the equivalent named mode from the legacy four-toggle
-    state — same decision tree as ``_derive_charge_mode`` in
-    ``__init__.py`` so migration and runtime agree.
+    migration or after a user picks one in the selector). When absent
+    — corrupted config, hand-edited storage — fall back to the
+    new-install default.
 
-    Stateless / hass-state-only — takes ``hass`` only to read switch
-    states for the legacy fallback. Used both by ``SEMCoordinator``
-    (whole-cycle reads) and ``ChargingStateMachine`` (per-tick night
-    enablement vote) so there is one shared resolver and no
-    duplicated derivation logic between coordinator and state
-    machine.
+    Pre-#277 Phase C this had a long legacy-derivation fallback that
+    read ``switch.sem_charger_<id>_night_charging`` /
+    ``..._tariff_optimized`` for installs that somehow skipped the
+    Phase A migration. Phase C removed those switches, and the
+    migration is mandatory on every config-entry load, so the
+    derivation was dead code by the time it would have fired.
+
+    The ``hass`` and ``full_config`` parameters are kept for call-site
+    compatibility — they're no longer read but the four current
+    callers ([SEMCoordinator], [ChargingStateMachine],
+    [_tariff_optimized_for], [today_plan]) pass them as part of a
+    stable signature.
 
     Returns one of ``EV_CHARGE_MODES`` keys; never raises.
     """
     if not isinstance(charger_cfg, dict):
         return DEFAULT_EV_CHARGE_MODE
-
     stored = charger_cfg.get("charge_mode")
     if stored in EV_CHARGE_MODES:
         return stored
-
-    # No stored mode (pre-migration / partially-configured install) —
-    # derive it on the fly from the same legacy toggles the migration
-    # reads. The decision tree mirrors ``__init__._derive_charge_mode``
-    # exactly so a user who never migrates sees the same effective
-    # behaviour as one who did.
-    cid = charger_cfg.get("id", "ev_charger")
-    mode = (
-        charger_cfg.get("ev_charging_mode")
-        or full_config.get("ev_charging_mode")
-        or "pv"
-    )
-    night_eid = f"switch.sem_charger_{cid}_night_charging"
-    if hass.states.get(night_eid) is not None:
-        night = hass.states.is_state(night_eid, "on")
-    elif hass.states.get("switch.sem_night_charging") is not None:
-        night = hass.states.is_state("switch.sem_night_charging", "on")
-    else:
-        night = True  # factory default
-    tariff_eid = f"switch.sem_charger_{cid}_tariff_optimized"
-    tariff = hass.states.is_state(tariff_eid, "on") if (
-        hass.states.get(tariff_eid) is not None
-    ) else False
-
-    if mode == "now":
-        return "always_max"
-    if mode == "off":
-        return "off"
-    # Tariff-on expresses an explicit "use cheap windows" intent that
-    # applies regardless of whether the user picked "auto" or "pv" in
-    # the legacy mode field — both groups exist in PROD setups.
-    # Capturing both was the equivalence the Phase B test sweep flagged
-    # (test_tariff_wait_when_cheap_window_ahead).
-    if mode in ("pv", "auto", "self_consumption") and tariff:
-        return "solar_plus_cheap"
-    if mode in ("pv", "auto", "self_consumption") and not night:
-        return "solar_only"
     return DEFAULT_EV_CHARGE_MODE

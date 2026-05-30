@@ -25,15 +25,7 @@ PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
 SWITCH_TYPES = [
     SwitchEntityDescription(
-        key="night_charging",
-        entity_category=EntityCategory.CONFIG,
-    ),
-    SwitchEntityDescription(
         key="observer_mode",
-        entity_category=EntityCategory.CONFIG,
-    ),
-    SwitchEntityDescription(
-        key="smart_night_charging",
         entity_category=EntityCategory.CONFIG,
     ),
 ]
@@ -41,6 +33,16 @@ SWITCH_TYPES = [
 # (ev_limit_surplus (#235) was folded into the optional Max ceiling (#245); its
 # global config-switch mechanism + entity are gone. Old entities are auto-removed
 # by the stale-entity cleanup below since they're no longer in valid_keys.)
+#
+# Removed in #277 Phase C:
+#   - global ``night_charging`` + ``smart_night_charging`` switches
+#   - per-charger ``charger_<id>_night_charging`` switches
+#   - per-charger ``charger_<id>_smart_night_charging`` switches
+#   - per-charger ``charger_<id>_tariff_optimized`` switches
+# All four intents are now carried by the per-charger
+# ``select.sem_charger_<id>_charge_mode`` selector — picking a Charge
+# mode is the only knob. The stale-entity cleanup below removes the
+# orphaned entries from the registry on the next setup.
 
 
 async def async_setup_entry(
@@ -49,86 +51,15 @@ async def async_setup_entry(
     """Set up SEM Solar Energy Management switches."""
     coordinator: SEMCoordinator = entry.runtime_data
 
-    full_config = {**entry.data, **entry.options}
-    ev_chargers = full_config.get("ev_chargers", [])
-    has_chargers = len(ev_chargers) >= 1
-
-    # #255: night charging is PER-CHARGER when chargers exist — drop the duplicate
-    # GLOBAL master switch. Keep it only for legacy / no-charger installs, where the
-    # night gate falls back to it.
-    active_global = [
-        d for d in SWITCH_TYPES
-        if not (d.key in ("night_charging", "smart_night_charging") and has_chargers)
-    ]
+    # #277 Phase C: all four legacy per-charger switches were removed.
+    # The remaining global switch (``observer_mode``) is the only one
+    # left in SWITCH_TYPES. The stale-entity cleanup at the bottom of
+    # this function purges the removed entries from the registry.
     switches = [
         SEMSolarSwitch(coordinator, description, entry.entry_id)
-        for description in active_global
+        for description in SWITCH_TYPES
     ]
-
-    # One-time reconciliation (#255): a user who disabled night charging via the GLOBAL
-    # switch (leaving a per-charger switch on) must NOT be silently re-enabled now that
-    # the gate moves to per-charger. If the (removed) global switch was last OFF, force
-    # the per-charger night switches OFF this once. Marker lives in entry.data; the
-    # snapshot guard keeps async_update_options from reloading (options are unchanged).
-    night_force_off = False
-    if has_chargers and not entry.data.get("_night_gate_reconciled"):
-        try:
-            from homeassistant.helpers.restore_state import async_get as _restore_get
-            # last_states maps entity_id → StoredState; .state is a State, .state.state a str.
-            stored = _restore_get(hass).last_states.get("switch.sem_night_charging")
-            if stored is not None and getattr(stored.state, "state", None) == "off":
-                night_force_off = True
-                _LOGGER.info(
-                    "#255 reconciliation: global night charging was OFF — forcing "
-                    "per-charger night switches OFF (one-time)"
-                )
-            coordinator._skip_options_reload = dict(entry.options)
-            hass.config_entries.async_update_entry(
-                entry, data={**entry.data, "_night_gate_reconciled": True}
-            )
-        except Exception as e:
-            _LOGGER.debug("Night-gate reconciliation skipped: %s", e)
-
-    # Per-charger night charging switches (#193)
-    per_charger_keys = set()
-    if has_chargers:
-        for charger_cfg in ev_chargers:
-            cid = charger_cfg.get("id", "ev_charger")
-            cname = charger_cfg.get("name", "EV Charger")
-            desc = SwitchEntityDescription(
-                key=f"charger_{cid}_night_charging",
-                entity_category=EntityCategory.CONFIG,
-            )
-            per_charger_keys.add(desc.key)
-            switches.append(SEMPerChargerSwitch(
-                coordinator, desc, entry.entry_id, cid, cname,
-                force_off=night_force_off,
-            ))
-            # Per-charger smart (forecast-aware) night charging (#255) — was global.
-            smart_desc = SwitchEntityDescription(
-                key=f"charger_{cid}_smart_night_charging",
-                entity_category=EntityCategory.CONFIG,
-            )
-            per_charger_keys.add(smart_desc.key)
-            switches.append(SEMPerChargerSwitch(
-                coordinator, smart_desc, entry.entry_id, cid, cname,
-            ))
-            # Per-charger tariff-optimized charging (#247) — opt-in, default OFF.
-            # When on: night charging defers to the cheapest price window (Min
-            # still guaranteed by the deadline) and daytime Min+PV grid top-up
-            # pauses during expensive hours.
-            tariff_desc = SwitchEntityDescription(
-                key=f"charger_{cid}_tariff_optimized",
-                entity_category=EntityCategory.CONFIG,
-            )
-            per_charger_keys.add(tariff_desc.key)
-            switches.append(SEMPerChargerSwitch(
-                coordinator, tariff_desc, entry.entry_id, cid, cname,
-            ))
-        _LOGGER.info(
-            "Created per-charger switches for %d charger(s)",
-            len(ev_chargers),
-        )
+    per_charger_keys: set[str] = set()
 
     async_add_entities(switches)
 
@@ -150,7 +81,7 @@ async def async_setup_entry(
     # Clean up stale switch entities from previous versions
     try:
         registry = er.async_get(hass)
-        valid_keys = {d.key for d in active_global} | per_charger_keys
+        valid_keys = {d.key for d in SWITCH_TYPES} | per_charger_keys
         for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
             if entity_entry.domain != "switch":
                 continue
@@ -202,12 +133,7 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         # Force stable entity ID regardless of HA language
         self.entity_id = f"switch.sem_{description.key}"
 
-        if description.key == "night_charging":
-            # Opt-in (#256): default OFF so a fresh install charges on solar surplus only
-            # and never grid-charges the car overnight unasked. RestoreEntity below
-            # preserves existing users — they keep whatever state they already had.
-            self._is_on = False
-        elif description.key == "observer_mode":
+        if description.key == "observer_mode":
             self._is_on = coordinator.config_entry.options.get("observer_mode", False)
         else:
             self._is_on = False

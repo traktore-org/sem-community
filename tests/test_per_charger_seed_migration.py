@@ -38,7 +38,7 @@ async def test_seeds_all_eight_from_global():
     )
     assert await async_migrate_entry(hass, entry) is True
     c, kwargs = _seeded_charger(hass)
-    assert kwargs["version"] == 6  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
+    assert kwargs["version"] == 7  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
     assert c["daily_ev_target"] == 8
     assert c["daily_ev_target_max"] == 50
     assert c["ev_target_soc"] == 70
@@ -90,7 +90,7 @@ async def test_no_chargers_is_safe_and_bumps_version():
     hass = MagicMock()
     entry = _entry(options={}, data={"daily_ev_target": 8})
     assert await async_migrate_entry(hass, entry) is True
-    assert hass.config_entries.async_update_entry.call_args.kwargs["version"] == 6  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
+    assert hass.config_entries.async_update_entry.call_args.kwargs["version"] == 7  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
 
 
 @pytest.mark.asyncio
@@ -104,8 +104,10 @@ async def test_unset_global_not_seeded():
 
 
 @pytest.mark.asyncio
-async def test_phase4_charging_mode_and_phases_seeded():
-    """#255 Phase 4: ev_charging_mode + ev_phases are also seeded per-charger."""
+async def test_phase4_phases_seeded_charging_mode_dropped():
+    """#255 Phase 4 seeded ev_charging_mode + ev_phases per-charger.
+    #277 Phase C's v6→v7 migration drops ev_charging_mode (the named
+    ``charge_mode`` is authoritative); ev_phases is unchanged."""
     hass = MagicMock()
     entry = _entry(
         options={"ev_chargers": [{"id": "c1"}]},
@@ -113,8 +115,12 @@ async def test_phase4_charging_mode_and_phases_seeded():
     )
     await async_migrate_entry(hass, entry)
     c, _ = _seeded_charger(hass)
-    assert c["ev_charging_mode"] == "minpv"
     assert c["ev_phases"] == 1
+    # Phase C: dropped by the v6→v7 step.
+    assert "ev_charging_mode" not in c
+    # Phase A/B/C derivation chain: minpv + factory-default-ish state
+    # → catch-all min_plus_solar.
+    assert c["charge_mode"] == "min_plus_solar"
 
 
 def test_phase4_globals_removed_from_descriptions():

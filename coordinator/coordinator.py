@@ -327,7 +327,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "ev_target_soc", "ev_target_soc_max",
             "ev_min_current", "ev_night_initial_current",
             "ev_kwh_per_100km", "ev_target_type",
-            "ev_charging_mode", "ev_phases",
+            # ``ev_charging_mode`` removed in #277 Phase C — the v6→v7
+            # migration drops the field; there's nothing to mirror.
+            "ev_phases",
             "ev_target_time",  # #246 charge-by deadline
         ):
             if pc.get(key) is not None:
@@ -336,20 +338,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     def _effective_charge_mode_for(self, charger_cfg: dict) -> str:
         """Resolve the user-intent Charge mode for one charger (#277).
 
-        Phase A introduced this as the read-point Phase B switches
-        authority on; Phase B (v1.7.0) wires it into the strategy
-        machine, night gate, EV control loop, and tariff path. Phase C
-        will drop the legacy-toggle fallback inside the resolver after
-        v1.7.x soak proves migration covered every install.
+        Phase A introduced this as the read-point Phase B switched
+        authority on. Phase C wires it into the strategy machine
+        directly + makes ``_tariff_optimized_for`` mode-driven, so
+        ``charge_mode`` is now the only intent input anywhere.
 
         Delegates to the shared free function so ``ChargingStateMachine``
-        (which is a separate class, not a coordinator mixin) can use the
-        same resolver — one source of truth.
+        (which is a separate class, not a coordinator mixin) can use
+        the same resolver — one source of truth.
 
         Returns one of ``EV_CHARGE_MODES`` keys; never raises.
+        Defensive against test stubs that build a coordinator via
+        ``__new__`` without ``hass`` — the free function ignores
+        ``hass`` post-Phase-C anyway.
         """
         from ..consts.ev_charge_modes import effective_charge_mode_for
-        return effective_charge_mode_for(self.hass, self.config, charger_cfg)
+        return effective_charge_mode_for(
+            getattr(self, "hass", None),
+            getattr(self, "config", {}) or {},
+            charger_cfg,
+        )
 
     # ─────────────────────────────────────────────────────────────────
     # Mode-driven adapters — #277 Phase B
@@ -2415,62 +2423,85 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Solar mode: keep charging even past target (free surplus)
         # Target check only applies to night (grid) charging above
 
-        # Charging mode selection: pv (default), minpv, now, off.
+        # Strategy dispatch on the named Charge mode (#277 Phase C).
+        # Pre-Phase-C this read the legacy ``ev_charging_mode`` string
+        # (auto / pv / minpv / now / off) — see #277 Phase B PR for the
+        # reason that split was held. Phase C completes the unification:
+        # the strategy machine reads the named mode directly, ``ev_
+        # charging_mode`` is no longer authoritative anywhere. The v6→v7
+        # migration drops the legacy key from the per-charger config.
         #
-        # Deliberately still reads the legacy ``ev_charging_mode`` field
-        # in Phase B (#277). The new ``charge_mode`` selector controls
-        # the night / smart / tariff dimensions but ``ev_charging_mode``
-        # remains the daytime strategy authority — the existing zone
-        # decisions on "pv" vs "minpv" carry intent that would be lossy
-        # to flatten into the 5-mode taxonomy this release. Phase C
-        # reconciles: the strategy machine gets rewritten against the
-        # named modes directly, the legacy field goes away. Holding the
-        # split here keeps Phase B strictly additive on the day side.
-        charging_mode = self.config.get("ev_charging_mode", "pv")
-        _cmode = (charger_cfg or {}).get("ev_charging_mode")
-        if _cmode:
-            charging_mode = _cmode
+        # Mode → strategy mapping (decided by maintainer for Phase C):
+        #   always_max       → ("now", …)                explicit Max regardless of source
+        #   off              → ("idle", …)               no charging
+        #   solar_only       → _self_consumption_strategy strict surplus, never grid import
+        #   solar_plus_cheap → zone logic + tariff pause day; tariff-windowed night
+        #   min_plus_solar   → zone logic + night top-up to Min (no day grid pull —
+        #                      the Min in "Min + Solar" comes from NIGHT charging,
+        #                      day stays zone-adaptive like legacy ``pv``)
+        mode = self._effective_charge_mode_for(charger_cfg or {})
 
-        # Tariff-optimized daytime pause (#247): during expensive price windows,
-        # drop the Min+PV grid guarantee and fall back to surplus / battery-assist
-        # only (the zone logic below). Resumes automatically when the price drops
-        # or solar is sufficient. The explicit "now" override and pure-surplus
-        # modes are intentionally left untouched.
-        if charging_mode == "minpv" and self._tariff_optimized_for(charger_cfg or {}):
+        if mode == "always_max":
+            return ("now", "Always (max) mode — charge at max immediately")
+        if mode == "off":
+            return ("idle", "Charging disabled (mode=off)")
+        if mode == "solar_only":
+            # Strict surplus, never grid import. Self-consumption strategy
+            # subtracts battery_charge below auto_start_soc so the home
+            # battery still gets priority; only true above-everything
+            # surplus reaches the EV. Identical to the legacy
+            # ``self_consumption`` mode (#67).
+            return self._self_consumption_strategy(power, energy)
+
+        # Tariff-aware daytime behaviour for ``solar_plus_cheap`` (#247).
+        # During EXPENSIVE / VERY_EXPENSIVE windows we want to pause the
+        # surplus-from-grid behaviour and stay strictly on solar. Pre-
+        # Phase-C this gated on ``charging_mode == "minpv"`` (the only
+        # legacy mode that could import grid from the daytime strategy);
+        # post-C the only mode that imports from grid during the day is
+        # the auto-mode forecast path, and only if the user picked
+        # ``solar_plus_cheap``.
+        if mode == "solar_plus_cheap":
             try:
                 level = self._tariff_provider.get_price_level()
                 if level in (PriceLevel.EXPENSIVE, PriceLevel.VERY_EXPENSIVE):
                     _LOGGER.debug(
-                        "Tariff pause: %s price — Min+PV grid guarantee dropped "
-                        "to surplus-only", level.value,
+                        "Tariff pause: %s price — solar_plus_cheap "
+                        "falling through to pure surplus", level.value,
                     )
-                    charging_mode = "pv"  # fall through to zone-based surplus logic
+                    # Falls through to self_consumption to enforce
+                    # surplus-only during expensive windows.
+                    if getattr(self, "_tariff_pause_warned", False):
+                        self._tariff_pause_warned = False
+                    return self._self_consumption_strategy(power, energy)
                 if getattr(self, "_tariff_pause_warned", False):
                     self._tariff_pause_warned = False  # provider recovered
             except Exception as e:
-                # Surface once (#274/L1): a persistently broken provider would
-                # otherwise silently drop the Min+PV grid guarantee with no signal.
+                # Surface once (#274/L1) — a persistently broken provider
+                # would otherwise silently keep the surplus-from-grid
+                # behaviour on through expensive windows.
                 if not getattr(self, "_tariff_pause_warned", False):
                     _LOGGER.warning(
-                        "Tariff-optimized daytime pause disabled — price provider "
-                        "error (Min+PV grid guarantee unchanged): %s", e,
+                        "Tariff-optimized daytime pause disabled — "
+                        "price provider error: %s", e,
                     )
                     self._tariff_pause_warned = True
 
-        if charging_mode == "now":
-            return ("now", "Now mode — charge at max immediately")
-        if charging_mode == "off":
-            return ("idle", "Solar charging disabled by user")
-        if charging_mode == "minpv":
-            return ("min_pv", f"Min+PV mode, remaining={remaining_need:.1f}kWh, solar={power.solar_power:.0f}W")
-        if charging_mode == "self_consumption":
-            return self._self_consumption_strategy(power, energy)
-
-        if charging_mode == "auto":
-            auto_result = self._auto_mode_strategy(power, energy, remaining_need)
-            if auto_result is not None:
-                return auto_result
-            # None = fall through to normal zone-based pv logic below
+        # ``min_plus_solar`` and ``solar_plus_cheap`` fall through to
+        # the pure zone-based pv logic below — matches the legacy
+        # ``pv + night=on`` factory default that the majority of PROD
+        # installs were running pre-Phase-C. The night/tariff/smart
+        # dimensions are already gated separately (mode-driven via
+        # ``_mode_allows_night_charging`` etc), so the daytime strategy
+        # just runs the zone decision tree unchanged.
+        #
+        # (Pre-Phase-C the legacy ``auto`` mode wrapped this branch in
+        # ``_auto_mode_strategy`` — forecast-aware self_consumption
+        # when ratio>2. That wrapper is still callable via
+        # ``_auto_mode_strategy`` but no charge mode dispatches to it
+        # in Phase C. v1.7.x or later can opt-in users who actually
+        # want forecast-aware switching, but it's not the default.)
+        # No-op — explicit fall-through.
 
         # No meaningful solar → wait
         if power.solar_power < 200:

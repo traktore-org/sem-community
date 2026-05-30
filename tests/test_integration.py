@@ -38,15 +38,18 @@ class TestPlatformEntityCounts:
 
     @pytest.mark.asyncio
     async def test_switch_count(self, hass, config_entry, mock_coordinator):
-        """Should create the 3 base switches (ev_limit_surplus folded into Max, #245)."""
+        """Post-#277 Phase C: only ``observer_mode`` remains as a
+        global switch (the legacy ``night_charging`` +
+        ``smart_night_charging`` were removed when the named
+        ``charge_mode`` selector took over)."""
         config_entry.runtime_data = mock_coordinator
         hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
         await switch_setup(hass, config_entry, add_entities)
         switches = add_entities.call_args[0][0]
-        assert len(switches) == 3
+        assert len(switches) == 1
         keys = {s.entity_description.key for s in switches}
-        assert keys == {"night_charging", "observer_mode", "smart_night_charging"}
+        assert keys == {"observer_mode"}
 
     @pytest.mark.asyncio
     async def test_number_count(self, hass, config_entry, mock_coordinator):
@@ -124,20 +127,16 @@ class TestCurrencyConfiguration:
 class TestSwitchDefaults:
     """Verify switch default states."""
 
-    def test_night_charging_default_off(self, mock_coordinator):
-        # Opt-in (#256): surplus-only by default; existing users preserved via RestoreEntity.
-        desc = SWITCH_TYPES[0]  # night_charging
-        switch = SEMSolarSwitch(mock_coordinator, desc, "test")
-        assert switch._is_on is False
+    # ``test_night_charging_default_off`` and
+    # ``test_forecast_reduction_default_off`` removed in #277 Phase C
+    # along with the underlying switch entities. The default-OFF
+    # property they pinned is now expressed by the new-install
+    # ``charge_mode`` default (``min_plus_solar`` permits night;
+    # users opting out pick ``solar_only`` / ``off`` in the selector).
 
     def test_observer_mode_default_off(self, mock_coordinator):
         mock_coordinator.config_entry.options = {}
-        desc = SWITCH_TYPES[1]  # observer_mode
-        switch = SEMSolarSwitch(mock_coordinator, desc, "test")
-        assert switch._is_on is False
-
-    def test_forecast_reduction_default_off(self, mock_coordinator):
-        desc = SWITCH_TYPES[2]  # smart_night_charging
+        desc = SWITCH_TYPES[0]  # observer_mode (only remaining global switch)
         switch = SEMSolarSwitch(mock_coordinator, desc, "test")
         assert switch._is_on is False
 

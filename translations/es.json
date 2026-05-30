@@ -1000,14 +1000,8 @@
       }
     },
     "switch": {
-      "night_charging": {
-        "name": "Carga Nocturna"
-      },
       "observer_mode": {
         "name": "Modo Observador"
-      },
-      "smart_night_charging": {
-        "name": "Reducción Nocturna Previsión"
       }
     },
     "number": {
@@ -1139,9 +1133,6 @@
       }
     },
     "select": {
-      "ev_charging_mode": {
-        "name": "EV Charging Mode"
-      },
       "ev_target_type": {
         "name": "Tipo de objetivo VE",
         "state": {

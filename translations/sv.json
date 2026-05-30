@@ -1000,14 +1000,8 @@
       }
     },
     "switch": {
-      "night_charging": {
-        "name": "Night Charging"
-      },
       "observer_mode": {
         "name": "Observer Mode"
-      },
-      "smart_night_charging": {
-        "name": "Forecast Night Reduction"
       }
     },
     "number": {
@@ -1139,9 +1133,6 @@
       }
     },
     "select": {
-      "ev_charging_mode": {
-        "name": "EV Laddningsläge"
-      },
       "ev_target_type": {
         "name": "EV-måltyp",
         "state": {

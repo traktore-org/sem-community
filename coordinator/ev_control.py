@@ -62,33 +62,31 @@ class EVControlMixin:
         return {}
 
     def _tariff_optimized_for(self, charger_cfg: dict) -> bool:
-        """True when tariff-optimized timing is enabled for this charger (#247).
+        """True when this charger's mode defers to cheap tariff windows.
 
-        Per-charger ``switch.sem_charger_{id}_tariff_optimized`` (opt-in,
-        default OFF) — created in ``switch.py`` for every config-flow charger.
-        Returns False when there is no charger config (``ev_chargers`` empty),
-        which can only happen pre-setup; #281/S2 removed the dead legacy
-        ``switch.sem_tariff_optimized`` fallback (that switch was never created).
+        Post-#277 Phase C: derived from the named ``charge_mode``
+        (only ``solar_plus_cheap`` defers — every other mode either
+        always charges, never charges, or follows zone/surplus rules
+        without tariff awareness). The legacy
+        ``switch.sem_charger_{id}_tariff_optimized`` was removed in
+        Phase C; this helper kept the same name so the existing
+        callers (``ev_control`` planner, today_plan composer, EV card
+        attributes) didn't have to change.
 
-        Note (#277 Phase B): the named ``charge_mode`` selector also
-        carries this intent (only ``solar_plus_cheap`` defers to tariff
-        windows). Phase B chose to keep this helper reading the switch
-        directly to preserve behaviour for legacy users with
-        ``minpv + tariff_optimized=on`` — that combination has no clean
-        mapping in the 5-mode taxonomy and migrating it to
-        ``solar_plus_cheap`` would change daytime semantics. Phase C
-        will reconcile when the strategy machine is rewritten against
-        the named modes directly.
+        Returns False on missing config or hass — defensive only;
+        every supported install has ``charge_mode`` set post-v5
+        migration so the resolver always answers.
         """
         hass = getattr(self, "hass", None)
-        if hass is None:
+        if hass is None or not isinstance(charger_cfg, dict):
             return False
-        cid = charger_cfg.get("id") if charger_cfg else None
-        if not cid:
-            return False
-        return hass.states.is_state(
-            f"switch.sem_charger_{cid}_tariff_optimized", "on"
+        from ..consts.ev_charge_modes import (
+            MODE_USES_TARIFF,
+            effective_charge_mode_for,
         )
+        return effective_charge_mode_for(
+            hass, self.config, charger_cfg,
+        ) in MODE_USES_TARIFF
 
     def _charger_target_time(self, charger_cfg: dict) -> str:
         """Per-charger ``HH:MM`` charge-by deadline (#246), or global / default."""

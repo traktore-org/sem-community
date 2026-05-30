@@ -327,9 +327,10 @@ class ChargingStateMachine:
 
         chargers = self.config.get("ev_chargers") or []
         if not chargers:
-            # Pre-EV / no-chargers fallback — keep reading the legacy
-            # global switch for backward-compat. Phase C removes this.
-            return self.hass.states.is_state("switch.sem_night_charging", "on")
+            # Pre-EV / no-chargers install: nothing to enable. The
+            # legacy global ``switch.sem_night_charging`` was removed
+            # in #277 Phase C, so there is no fallback to consult.
+            return False
         return any(
             effective_charge_mode_for(self.hass, self.config, c)
             in MODE_NIGHT_ALLOWED

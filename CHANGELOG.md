@@ -5,6 +5,103 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — v1.7.0 candidate
+
+The **EV charge UX consolidation** release (#277). Replaces the
+four-toggle soup (``ev_charging_mode`` × ``night_charging`` ×
+``smart_night_charging`` × ``tariff_optimized``) with one named
+per-charger ``Charge mode`` selector. Three-phase arc shipped across
+five PRs (A + B + B.2 + C + #298 today-plan ETAs).
+
+### New
+
+- **Per-charger ``Charge mode`` selector** with five modes:
+  ``Solar only`` / ``Solar + cheapest hours`` / ``Min + Solar``
+  (default) / ``Always (max)`` / ``Off``. ``Solar + cheapest hours``
+  is dynamically hidden when no dynamic tariff is configured.
+- **Per-mode help line** in the EV card explains what each mode
+  actually does — cuts the toggle-soup mystery the #247 review
+  flagged.
+- **Today's plan timeline** gains three ETA rows (#298): "Battery
+  full at HH:MM" while charging, "Battery reaches floor at HH:MM"
+  while discharging, "EV reaches target at HH:MM" while a charging
+  session is in progress.
+
+### ⚠️ Behavioural change — explicit-``minpv`` legacy users
+
+A small population of users explicitly set the legacy
+``ev_charging_mode`` to ``minpv`` (the "force Min from grid + solar
+to Max" mode). The Phase A migration mapped them to
+``min_plus_solar``, which in v1.6.x kept their daytime behaviour
+unchanged (the strategy machine still read the legacy field). v1.7.0
+Phase C makes ``min_plus_solar`` **zone-adaptive during the day** —
+the Min guarantee now comes from NIGHT charging top-up only, not
+from forced grid pull at noon. The Min target itself is unchanged;
+the daytime path now matches what most installs (``pv + night=on``)
+were always doing.
+
+If you want strict "Min from grid at all times" behaviour, pick
+``always_max`` from the new selector — it charges at maximum
+regardless of source. Otherwise the new ``min_plus_solar`` default
+adapts to your battery SOC zone (battery priority when low, surplus
+when high, battery-assist in Zone 4) — generally more efficient
+than forced grid pull.
+
+### Migrations (automatic on first load post-upgrade)
+
+- **v4 → v5** (Phase A): Each charger gets a ``charge_mode`` derived
+  from its existing toggle state. The legacy fields stay in place.
+- **v5 → v6** (Phase B fix-up): Re-derives ``charge_mode`` for
+  installs whose Phase A derivation silently lost the
+  ``tariff_optimized`` signal (``pv/auto/self_consumption + tariff_on``
+  → ``solar_plus_cheap``).
+- **v6 → v7** (Phase C): Drops the now-dead ``ev_charging_mode`` per-
+  charger config key. The legacy ``select.sem_charger_<id>_ev_charging_mode``
+  entity is removed from the registry automatically.
+
+### Removed
+
+- **Per-charger switches** ``switch.sem_charger_<id>_night_charging``,
+  ``...smart_night_charging``, ``...tariff_optimized`` — the named
+  ``charge_mode`` selector carries all three intents now. Existing
+  automations that read these switches will need to read the
+  ``charge_mode`` select state instead.
+- **Per-charger select** ``select.sem_charger_<id>_ev_charging_mode``
+  — superseded by the new ``charge_mode`` selector.
+- **Global switches** ``switch.sem_night_charging`` and
+  ``switch.sem_smart_night_charging`` — same; ``observer_mode`` is
+  the only remaining global switch.
+- **Config-flow toggle** ``smart_night_charging`` — the named modes
+  carry the intent.
+- **Strategy machine legacy reads**: ``ev_charging_mode`` is no
+  longer consulted anywhere; ``_tariff_optimized_for`` derives from
+  the named mode.
+
+### Internal
+
+- New ``consts/ev_charge_modes.py`` — shared constants
+  (``EV_CHARGE_MODES``, ``MODE_NIGHT_ALLOWED``, ``MODE_USES_TARIFF``,
+  ``MODE_USES_SMART_NIGHT``, ``MODE_TO_LEGACY_CHARGING_MODE``,
+  ``DEFAULT_EV_CHARGE_MODE``) and the ``effective_charge_mode_for``
+  resolver. Single source of truth for the mode taxonomy across
+  ``SEMCoordinator``, ``ChargingStateMachine``, ``EVControlMixin``,
+  the dashboard cards.
+- ``async_migrate_entry`` accumulator refactor — each step reads
+  from / writes back to threaded ``accumulated_{data,options}``
+  accumulators. Fixes a pre-existing bug exposed by chaining 4
+  migration steps (each was re-reading the original entry options on
+  test harnesses).
+- 15-language translations updated; legacy entries cleaned from
+  ``strings.json`` + 15 per-language files.
+- Suite: 2130 / 2130 tests passing.
+
+### Issues addressed
+
+- Closes #277 (EV charge UX consolidation arc)
+- Closes #298 (Today's plan battery / EV ETA rows)
+
+---
+
 ## [1.6.2] — 2026-05-30
 
 The **Phase D.2 cleanup + EV-power realtime** patch.
