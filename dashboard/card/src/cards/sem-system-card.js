@@ -166,17 +166,88 @@ class SEMSystemCard extends SEMLitBase {
         }
 
         const text = `${header}\n${edBlock}`;
+        this._writeClipboard(text);
+    }
 
-        navigator.clipboard.writeText(text).then(() => {
-            this._copyFeedback = this._t('copied');
+    /**
+     * Cross-context clipboard write with a legacy fallback (#285).
+     *
+     * ``navigator.clipboard.writeText()`` is the modern Promise-based
+     * Clipboard API. It works fine on HTTPS pages and on
+     * ``localhost`` / ``127.0.0.1`` — but on **HTTP** pages it's
+     * blocked as an "insecure context" and silently rejects on
+     * Chrome/Safari/Firefox. Most Home Assistant installs are
+     * accessed at ``http://<local-ip>:8123``, which is exactly that
+     * regime, so the modern path fails for the majority of users.
+     *
+     * Pre-#285: the catch handler just logged to console — the
+     * button appeared to do nothing on click. @RienduPre reported
+     * it from his Mac/Chrome setup.
+     *
+     * This helper tries the modern API first; if it isn't available
+     * OR the call rejects, it falls back to the legacy
+     * ``document.execCommand('copy')`` trick (hidden textarea,
+     * select, copy, remove). The legacy API is deprecated but is
+     * still supported in every browser SEM cards on and works in
+     * insecure contexts.
+     *
+     * Either way the user gets feedback — success or failure — so
+     * the button never looks broken again.
+     */
+    async _writeClipboard(text) {
+        const showFeedback = (key) => {
+            this._copyFeedback = this._t(key);
             this.requestUpdate();
             setTimeout(() => {
                 this._copyFeedback = '';
                 this.requestUpdate();
             }, 2000);
-        }).catch(err => {
-            console.error('[SEM System] clipboard copy failed', err);
-        });
+        };
+
+        // Modern path — only works in secure contexts (HTTPS / localhost).
+        if (navigator?.clipboard?.writeText && window.isSecureContext !== false) {
+            try {
+                await navigator.clipboard.writeText(text);
+                showFeedback('copied');
+                return;
+            } catch (err) {
+                console.warn('[SEM System] modern clipboard API failed, '
+                    + 'falling back to execCommand', err);
+                // Fall through to legacy path.
+            }
+        }
+
+        // Legacy path — works on HTTP. The textarea has to be in the
+        // DOM and visible-ish (zero-size off-screen) for the selection
+        // to actually take effect on iOS/Safari.
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.top = '0';
+            ta.style.left = '0';
+            ta.style.width = '1px';
+            ta.style.height = '1px';
+            ta.style.opacity = '0';
+            // Attach to the shadow host's parent (or body) — appending
+            // inside the shadow root works in Chrome but iOS Safari
+            // refuses to select cross-shadow.
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (ok) {
+                showFeedback('copied');
+            } else {
+                showFeedback('copy_failed');
+                console.error('[SEM System] execCommand("copy") returned false');
+            }
+        } catch (err) {
+            showFeedback('copy_failed');
+            console.error('[SEM System] legacy clipboard fallback threw', err);
+        }
     }
 
     // ── Section renderers ──

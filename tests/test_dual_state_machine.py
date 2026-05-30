@@ -26,7 +26,16 @@ def mock_hass():
 
 @pytest.fixture
 def config():
-    """Create a test configuration."""
+    """Create a test configuration.
+
+    Post-#277 Phase C the night gate reads ``charge_mode`` not the
+    per-charger night switch. Tests that set
+    ``mock_hass.states.is_state = True`` (to enable night via the
+    old switch-mock pattern) need an ``ev_chargers`` entry with
+    ``min_plus_solar`` so the named-mode resolver returns True. Tests
+    that want the gate OFF can pass a charger with ``solar_only``
+    in their setup override.
+    """
     return {
         "daily_ev_target": 7.0,
         "battery_priority_soc": 90,
@@ -34,6 +43,9 @@ def config():
         "minimum_solar_power": 2400,
         "maximum_grid_import": 300,
         "current_delta": 1,
+        "ev_chargers": [
+            {"id": "ev_charger", "charge_mode": "min_plus_solar"},
+        ],
     }
 
 
@@ -143,15 +155,21 @@ class TestDualStateMachine:
         state = state_machine._night_state_machine(ctx)
         assert state == ChargingState.NIGHT_TARGET_REACHED
 
-    def test_night_charging_disabled(self, state_machine, mock_hass, mock_time_night):
-        """Test night charging when switch is off."""
+    def test_night_charging_disabled(self, state_machine, mock_time_night):
+        """Test night charging when no charger's mode permits it.
+
+        Post-#277 Phase C the night gate reads ``charge_mode``. Flip
+        the per-charger mode in the fixture's config to ``solar_only``
+        (not in MODE_NIGHT_ALLOWED) — that disables the gate."""
         ctx = ChargingContext(
             ev_connected=True,
             daily_ev_energy=4.0,
         )
 
-        # Mock night switch OFF
-        mock_hass.states.is_state = Mock(return_value=False)
+        state_machine.config["ev_chargers"][0]["charge_mode"] = "solar_only"
+        state_machine._night_enabled_cached = None
+        state_machine._night_enabled_pending = None
+        state_machine._night_enabled_pending_cycles = 0
 
         state = state_machine._night_state_machine(ctx)
         assert state == ChargingState.NIGHT_DISABLED

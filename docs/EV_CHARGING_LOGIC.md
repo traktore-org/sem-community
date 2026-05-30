@@ -1,5 +1,32 @@
 # EV Charging Logic — How SEM decides
 
+![New EV card (v1.6.3) — single Charge mode selector replaces the legacy night/smart-night/tariff switches](images/sem_ev_tab.png)
+
+> **⚠️ Updated for v1.6.3 — the toggle-soup is gone.**
+>
+> v1.6.3 (#277) replaces the four-switch architecture this guide
+> describes (``ev_charging_mode`` × ``night_charging`` ×
+> ``smart_night_charging`` × ``tariff_optimized``) with one named
+> per-charger ``Charge mode`` selector. The five modes are:
+>
+> | Mode | What it does | When to pick |
+> |---|---|---|
+> | **Solar only** | Pure surplus, never grid | Solar maximalist |
+> | **Solar + cheapest hours** | Surplus by day, grid only in the cheapest tariff windows (hidden if no dynamic tariff configured) | Dynamic-tariff users |
+> | **Min + Solar** (default) | Guarantee Min from grid/night top-up, solar adds up to Max. Zone-adaptive during the day — Min comes from night charging, not forced grid pull at noon. | Daily commuter needing a baseline |
+> | **Always (max)** | Charge at maximum regardless of source | "Just charge the car" / strict legacy-``minpv`` behaviour |
+> | **Off** | No charging | Disabled |
+>
+> Plus the existing **Charge Target range** (Min / Max), **Charge by HH:MM** deadline, and **Set as default** button as the per-mode detail. The old standalone switches (``night_charging``, ``smart_night_charging``, ``tariff_optimized``, ``ev_charging_mode``) are **removed** — automations that read them must read the new ``select.sem_charger_<id>_charge_mode`` instead.
+>
+> The behavioural-priority cascade below (Min ▷ Charge by ▷ Cheapest hours ▷ Smart night ▷ Mode ▷ Surplus) still applies — the **intent** moved into the mode selector. A full rewrite of this guide tracking the new model is tracked separately; the historical detail below remains accurate for the pre-v1.6.3 toggle layout but the entity names have changed.
+
+---
+
+## Legacy reference (pre-v1.6.3)
+
+The sections below describe the toggle architecture that v1.6.3 consolidated. Kept for now so existing dashboards and automations migrating off the old switches have a reference; will be rewritten in a follow-up release to describe only the new mode selector.
+
 SEM's EV controller takes input from up to **6 user controls** plus solar, battery, grid, and (optionally) tariff prices. This guide is the canonical reference for how those inputs interact.
 
 > **TL;DR — the priority cascade:**

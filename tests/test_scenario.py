@@ -254,13 +254,17 @@ class TestChargingStrategyScenarios:
         )
         assert strategy != "idle"  # Solar always charges
 
-    def test_now_mode_overrides(self):
-        """Now mode — charge at max regardless."""
+    def test_always_max_mode_overrides(self):
+        """``always_max`` mode (successor of legacy ``now``) charges
+        at max regardless of solar / SOC. Post-#277 Phase C the
+        named ``charge_mode`` is the dispatch authority."""
         from .test_soc_zone_strategy import _build_coordinator, _make_power as _mp, _MockEnergy
-        coord = _build_coordinator()
-        coord.config["ev_charging_mode"] = "now"
+        coord = _build_coordinator(config_overrides={
+            "ev_chargers": [{"id": "ev_charger", "charge_mode": "always_max"}],
+        })
         strategy, _ = coord._determine_charging_strategy(
-            _mp(solar_power=100, battery_soc=30), _MockEnergy()
+            _mp(solar_power=100, battery_soc=30), _MockEnergy(),
+            charger_cfg={"id": "ev_charger", "charge_mode": "always_max"},
         )
         assert strategy == "now"
 

@@ -150,13 +150,12 @@ Once installed, SEM runs without manual intervention:
 - **Night charging** — *opt-in (off by default)*; when enabled, grid-charges the EV to your daily-target floor
 - **Smart forecast** — if tomorrow is sunny, tonight's grid charging is reduced or skipped
 
-The three switches that matter most:
+The controls that matter most (v1.6.3 — `night_charging` and `smart_night_charging` switches replaced by the per-charger `Charge mode` selector):
 
-| Switch | Default | Purpose |
+| Entity | Default | Purpose |
 |--------|---------|---------|
-| `switch.sem_night_charging` | OFF | Opt-in: grid-charges EV overnight to the daily-target floor (off by default → solar surplus only) |
+| `select.sem_charger_<id>_charge_mode` | `Min + Solar` | Per-charger intent: Solar only / Solar + cheapest hours / Min + Solar / Always (max) / Off. The named mode carries the night-charging and tariff-window intent that used to live on separate switches. |
 | `switch.sem_observer_mode` | OFF | Monitor-only, no hardware control |
-| `switch.sem_smart_night_charging` | OFF | Reduces overnight charging when a good solar forecast exists |
 
 Everything else is automatic.
 

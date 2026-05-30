@@ -15,6 +15,8 @@
 
 SEM monitors your solar production, battery, grid, EV charger, and household devices every 10 seconds and distributes surplus power by priority. No cloud, no subscription — everything runs locally inside Home Assistant.
 
+> **v1.6.0 note** — `sensor.sem_available_power` and `sensor.sem_calculated_current` now publish the **canonical** EV budget (the same value the state machine and actuator read) instead of the raw solar surplus. If you have automations or templates that read either sensor directly, the numbers may be slightly different than under 1.5.x — the canonical value is the more accurate one. Full details in [CHANGELOG.md](CHANGELOG.md) and [docs/ARCHITECTURE.md → EV Budget Calculation](docs/ARCHITECTURE.md#ev-budget-calculation).
+
 ![SEM Dashboard Overview](docs/images/sem_home_tab.png)
 
 <p align="center">
@@ -190,33 +192,42 @@ Enable peak load management if your utility bills based on peak demand:
 
 ## User Controls
 
-SEM is designed to be mostly automatic. The switches that matter:
+SEM is designed to be mostly automatic. The controls that matter (v1.6.3 — toggle-soup replaced by a single named selector, #277):
 
-| Switch | Default | What it does |
+| Entity | Default | What it does |
 |--------|---------|-------------|
 | `switch.sem_observer_mode` | OFF | Read-only mode — SEM monitors but doesn't control hardware (global) |
-| `switch.sem_charger_<id>_night_charging` | OFF | **Per-charger** (#255). Enable/disable overnight grid charging for that charger (opt-in — solar surplus only until you turn it on; #256) |
-| `switch.sem_charger_<id>_smart_night_charging` | OFF | **Per-charger** (#255). Intelligently skip/reduce that charger's night charge based on EV SOC, solar forecast, temperature, and learned patterns |
+| `select.sem_charger_<id>_charge_mode` | `Min + Solar` | **Per-charger.** One named selector carries the night-charging, smart-night, and tariff-window intent that used to live on three separate switches. Options: *Solar only* / *Solar + cheapest hours* / *Min + Solar* / *Always (max)* / *Off*. |
 
-EV charge targets, charging mode, currents, phases and consumption are all **per-charger** entities too (`number.sem_charger_<id>_…`, `select.sem_charger_<id>_…`) — the global EV settings were removed in #255 (per-charger is the source of truth; globals are read-only summaries). Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.
+EV charge targets, currents, phases and consumption are all **per-charger** entities too (`number.sem_charger_<id>_…`, `select.sem_charger_<id>_…`) — the global EV settings were removed in #255 (per-charger is the source of truth; globals are read-only summaries). Everything else — solar charging, surplus distribution, battery protection, peak management — is fully automatic.
 
 ---
 
-## Charging Modes
+## Charging Modes (v1.6.3)
 
-### Solar Charging (default)
+The per-charger `Charge mode` selector replaces the four-toggle soup with five named modes. Each mode composes with the existing Charge Target range (Min / Max) and the Charge by HH:MM deadline.
 
-During the day, SEM dynamically adjusts the EV charging current (6-32A) to match real-time solar surplus. If surplus drops below the minimum threshold, charging pauses until surplus returns. The battery's SOC determines how aggressively SEM uses stored energy to help the EV (see [Setup Guide — SOC Zones](docs/SETUP_GUIDE.md#soc-zone-strategy)).
+### Solar only
 
-### Min+PV (Minimum + Solar)
+Pure surplus, never grid. Equivalent to the legacy `self_consumption` + `night_charging=OFF`. Pick this if you only ever want to charge from sun.
 
-Guarantees a minimum charging current (6A) from the grid and adds solar surplus on top. Use this when you need the car charged by a deadline but still want to maximize solar usage.
+### Solar + cheapest hours
 
-Set via integration options: `ev_charging_mode = "minpv"`.
+Surplus by day, grid only in the cheapest contiguous tariff window at night (Min still guaranteed by the deadline). Hidden if no dynamic tariff is configured. Equivalent to `auto` + `tariff_optimized=ON`.
 
-### Night Charging
+### Min + Solar (default)
 
-**Opt-in (off by default).** SEM charges on solar surplus only until you enable overnight grid charging — so a fresh install never pulls from the grid unasked. Once enabled with `switch.sem_night_charging` (and the per-charger switch in a multi-charger setup), overnight grid charging starts automatically after sunset, runs at a peak-managed rate to avoid demand spikes, and stops when the daily EV target is reached. Battery discharge protection prevents the home battery from powering the EV overnight. Upgrading users keep their existing setting.
+Guarantees Min by deadline, solar adds up to Max. **Zone-adaptive during the day** — the Min guarantee comes from NIGHT charging top-up, not forced grid pull at noon. During the day the strategy machine still consults the SOC zone (battery priority when low, surplus when high, battery-assist in Zone 4). Most users want this.
+
+### Always (max)
+
+Charge at maximum regardless of source. Strict "Min from grid at all times" behaviour — equivalent to the legacy `minpv` mode.
+
+### Off
+
+No charging. SEM monitors but issues no commands to the charger.
+
+Battery discharge protection prevents the home battery from powering the EV overnight regardless of mode.
 
 ### Battery-Assisted Charging
 
@@ -308,7 +319,7 @@ SEM creates 70+ sensors organized by category:
 
 ## EV Intelligence
 
-SEM learns your EV's charging behavior and makes smart decisions about when to charge. Enable via `switch.sem_smart_night_charging`.
+SEM learns your EV's charging behavior and makes smart decisions about when to charge. Implicit in the `Min + Solar` and `Solar + cheapest hours` Charge modes (v1.6.3); was the standalone `smart_night_charging` switch in v1.6.x.
 
 **How it works:**
 
@@ -348,7 +359,7 @@ automation:
             ({{ states('sensor.sem_daily_solar_energy') }} kWh)
 ```
 
-### Force charge EV when electricity is cheap
+### Force charge EV when electricity is cheap (v1.6.3)
 
 ```yaml
 automation:
@@ -362,10 +373,14 @@ automation:
         entity_id: binary_sensor.sem_ev_connected
         state: "on"
     action:
-      - service: switch.turn_on
+      - service: select.select_option
         target:
-          entity_id: switch.sem_night_charging
+          entity_id: select.sem_charger_ev_charger_charge_mode
+        data:
+          option: always_max
 ```
+
+Switch the mode back to `min_plus_solar` when the price level leaves "cheap" to return to normal solar-prioritized behaviour.
 
 ### Alert when grid peak approaches limit
 

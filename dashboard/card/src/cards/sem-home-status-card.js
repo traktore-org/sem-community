@@ -111,7 +111,21 @@ class SEMHomeStatusCard extends SEMLitBase {
         const targetLimit = this._val('target_peak_limit').toFixed(1);
 
         const observerOn = this._switchOn('switch.sem_observer_mode');
-        const provider = this._valStr('forecast_source') || '—';
+        // Friendly label for the forecast provider. The coordinator emits
+        // raw source-IDs ("solcast", "forecast_solar", "custom") via
+        // sensor.sem_forecast_source — they're brand names mostly, so we
+        // map directly to their canonical product spelling instead of
+        // showing the raw id with an underscore. Falls back to the raw
+        // string for any future source we haven't mapped yet.
+        const rawProvider = this._valStr('forecast_source');
+        const PROVIDER_LABELS = {
+            'solcast': 'Solcast',
+            'forecast_solar': 'Forecast.Solar',
+            'custom': this._t('custom') || 'Custom',
+        };
+        const provider = rawProvider
+            ? (PROVIDER_LABELS[rawProvider] || rawProvider)
+            : '—';
 
         const co2Today = this._val('daily_co2_avoided').toFixed(2);
         const co2Life = this._val('lifetime_co2_avoided').toFixed(1);

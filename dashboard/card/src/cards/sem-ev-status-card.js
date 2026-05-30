@@ -61,7 +61,7 @@ class SEMEVStatusCard extends SEMLitBase {
         let key = [
             'ev_connected', 'ev_charging', 'ev_power', 'calculated_current',
             'session_energy', 'session_solar_share', 'session_cost',
-            'daily_ev_energy', 'charging_state',
+            'daily_ev_energy', 'energy_ev_solar_percentage', 'charging_state',
         ].map(s => {
             const pfx = (s === 'ev_connected' || s === 'ev_charging')
                 ? 'binary_sensor.sem_' : prefix;
@@ -420,7 +420,33 @@ class SEMEVStatusCard extends SEMLitBase {
         const chargeColor = needsCharge ? '#f06292' : '#8DC892';
         const chargeText = needsCharge ? this._t('yes') : this._t('no');
 
-        const nightEntityId = `switch.sem_charger_${id}_night_charging`;
+        // Charge mode selector (#277 Phase B.2). Replaces the legacy
+        // four-toggle stack (ev_charging_mode select + night_charging +
+        // smart_night_charging + tariff_optimized switches) with one
+        // named per-charger select. Options + label come from the HA
+        // select entity itself — solar_plus_cheap is conditionally
+        // hidden by the entity's ``options`` property when no dynamic
+        // tariff is configured (Q1 resolution).
+        const chargeModeEntityId = `select.sem_charger_${id}_charge_mode`;
+        const chargeModeAttrs = this._stateAttrs(chargeModeEntityId);
+        const chargeMode = this._stateStr(chargeModeEntityId) || 'min_plus_solar';
+        const chargeModeOptions = chargeModeAttrs.options || [
+            'solar_only', 'min_plus_solar', 'always_max', 'off',
+        ];
+        const chargeModeLabels = {
+            solar_only:       this._t('charge_mode_solar_only'),
+            solar_plus_cheap: this._t('charge_mode_solar_plus_cheap'),
+            min_plus_solar:   this._t('charge_mode_min_plus_solar'),
+            always_max:       this._t('charge_mode_always_max'),
+            off:              this._t('charge_mode_off'),
+        };
+        const chargeModeHints = {
+            solar_only:       this._t('charge_mode_hint_solar_only'),
+            solar_plus_cheap: this._t('charge_mode_hint_solar_plus_cheap'),
+            min_plus_solar:   this._t('charge_mode_hint_min_plus_solar'),
+            always_max:       this._t('charge_mode_hint_always_max'),
+            off:              this._t('charge_mode_hint_off'),
+        };
 
         // Charge Target range (#245): Min (floor/night) + Max (solar ceiling) handles
         const targetTypeId = `select.sem_charger_${id}_ev_target_type`;
@@ -433,11 +459,9 @@ class SEMEVStatusCard extends SEMLitBase {
         const maxEntityId = isSoc
             ? `number.sem_charger_${id}_target_soc_max`
             : `number.sem_charger_${id}_daily_ev_target_max`;
-        const nightOnLive = this._stateStr(nightEntityId) === 'on';
 
-        // Deadline (#246) + tariff-optimized (#247)
-        const tariffEntityId = `switch.sem_charger_${id}_tariff_optimized`;
-        const tariffOnLive = this._stateStr(tariffEntityId) === 'on';
+        // Deadline (#246) — the tariff/grid toggles moved into the
+        // Charge mode selector above, but the deadline knob remains.
         const targetTimeId = `time.sem_charger_${id}_target_time`;
         const targetTimeRaw = this._stateStr(targetTimeId);  // "HH:MM:SS"
         const targetTimeLabel = targetTimeRaw ? targetTimeRaw.slice(0, 5) : '—';
@@ -454,6 +478,12 @@ class SEMEVStatusCard extends SEMLitBase {
                     { hour: '2-digit', minute: '2-digit' });
             } catch (e) { /* ignore */ }
         }
+        // Next cheap window only relevant when the mode actually uses
+        // tariff windows. Phase B.2 hides it for the other modes so
+        // users don't see a confusing "next cheap at HH:MM" line on a
+        // mode that ignores tariff entirely.
+        const showCheapHint = chargeMode === 'solar_plus_cheap'
+            && nextCheapLabel;
 
         // Range the charge will ADD to reach the Min (guaranteed) target, in km —
         // updates live as the Min handle moves. Solar may add more, up to Max. (#245)
@@ -462,12 +492,6 @@ class SEMEVStatusCard extends SEMLitBase {
             ? Math.max(0, (minTarget - soc) / 100 * capacityKwh)
             : Math.max(0, minTarget - dailyEnergy);
         const chargeKm = consumption > 0 ? Math.round(gapKwh / consumption * 100) : null;
-
-        const ctToggle = (on, entityId) => html`
-            <span class="ct-sw ${on ? 'on' : 'off'}"
-                @click=${(e) => { e.stopPropagation(); this._toggleSwitch(entityId); }}>
-                <span class="ct-knob"></span>
-            </span>`;
 
         const unitControl = ttOptions.length > 1
             ? html`<select class="ct-unit" .value=${targetType}
@@ -533,26 +557,34 @@ class SEMEVStatusCard extends SEMLitBase {
                         ${unitControl}
                     </div>
                     ${this._renderRangeSlider(minEntityId, maxEntityId, isSoc)}
+                    <!-- #277 Phase B.2: one named Charge mode selector
+                         replaces the legacy ev_grid_charging + nested
+                         ev_tariff_mode toggles. Options come from the HA
+                         entity itself (solar_plus_cheap is hidden when no
+                         dynamic tariff is configured, per Q1). The hint
+                         line under it explains what the selected mode
+                         actually does — cuts the toggle-soup mystery the
+                         #247 review flagged. -->
                     <div class="ct-row">
-                        <span class="ct-label">${this._t('ev_grid_charging')}</span>
-                        <span class="ct-ctl">${ctToggle(nightOnLive, nightEntityId)}</span>
+                        <span class="ct-label">${this._t('charge_mode')}</span>
+                        <span class="ct-ctl">
+                            <select class="ct-mode-select"
+                                    .value=${chargeMode}
+                                    @click=${(e) => e.stopPropagation()}
+                                    @change=${(e) => this._selectOption(chargeModeEntityId, e.target.value)}>
+                                ${chargeModeOptions.map(o => html`
+                                    <option value=${o} ?selected=${o === chargeMode}>
+                                        ${chargeModeLabels[o] || o}
+                                    </option>`)}
+                            </select>
+                        </span>
                     </div>
-                    <!-- Tariff is a refinement OF grid charging (when, not whether): nest it.
-                         Hidden when overnight grid charging is OFF so the hierarchy is enforced visually -
-                         the switch cannot be toggled in isolation (D2). -->
-                    ${nightOnLive ? html`
-                        <div class="ct-row ct-subrow">
-                            <span class="ct-label">${this._t('ev_tariff_mode')}</span>
-                            <span class="ct-ctl">${ctToggle(tariffOnLive, tariffEntityId)}</span>
-                        </div>
-                        ${tariffOnLive ? html`
-                            <div class="ct-subhint">
-                                ${this._t('ev_tariff_hint')}${nextCheapLabel
-                                    ? html` · ${this._t('ev_next_cheap')} <b style="color:#8DC892">${nextCheapLabel}</b>`
-                                    : nothing}
-                            </div>
+                    <div class="ct-subhint">
+                        ${chargeModeHints[chargeMode] || ''}
+                        ${showCheapHint ? html`
+                            · ${this._t('ev_next_cheap')} <b style="color:#8DC892">${nextCheapLabel}</b>
                         ` : nothing}
-                    ` : nothing}
+                    </div>
                     <div class="ct-row clickable"
                         @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info',
                             { bubbles: true, composed: true, detail: { entityId: targetTimeId } }))}>
@@ -632,22 +664,22 @@ class SEMEVStatusCard extends SEMLitBase {
         const power = this._val('ev_power', 0);
         const current = this._val('calculated_current', 0);
         const sessionEnergy = this._val('session_energy', 0);
-        const solarShare = this._val('session_solar_share', 0);
+        // Solar Share sits next to 'Today: X kWh' in the status row, so it
+        // must read the DAILY metric, not the per-cycle session. Previously
+        // pointed at session_solar_share — that produced labels like
+        // 'Today 8.7 kWh · Solar Share 25%' where the 25% was just the
+        // current session, not today's. Switched to energy_ev_solar_percentage
+        // (time-integrated daily attribution from the flow accumulator).
+        const solarShare = this._val('energy_ev_solar_percentage', 0);
         const sessionCost = this._val('session_cost', 0);
         const dailyEnergy = this._val('daily_ev_energy', 0);
         const strategy = this._valStr('charging_state');
         const curr = semGetCurrency(this._hass);
 
-        // #255: charging mode is per-charger — resolve primary (fallback global).
-        const modeEntity = this._hass?.states[
-            this._pcEntity('select', 'ev_charging_mode', 'select.sem_ev_charging_mode')];
-        const mode = modeEntity?.state || 'auto';
-        const modeLabels = {
-            auto: this._t('mode_auto'),
-            minpv: this._t('mode_minpv'),
-            now: this._t('maximum'),
-            off: this._t('off'),
-        };
+        // (Dead ``modeLabels`` / ``modeEntity`` lookup of the legacy
+        // ``ev_charging_mode`` select removed in #277 Phase B.2 — the
+        // per-charger Charge mode selector lives inside
+        // ``_renderChargerSection`` now and consumes its own entity.)
 
         const wrapClass = charging ? 'wrap state-charging'
             : connected ? 'wrap state-connected'
@@ -1117,6 +1149,25 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-unit-static {
                 font-size: 12px; font-weight: 600;
                 color: var(--secondary-text-color, #999); padding: 4px 2px;
+            }
+            /* #277 Phase B.2 — Charge mode selector. Wider than ct-unit
+               (multi-word labels) and aligned right inside the row's
+               .ct-ctl cell. Same caret + chrome as ct-unit so the two
+               selectors visually rhyme. */
+            .ct-mode-select {
+                appearance: none; -webkit-appearance: none;
+                background-color: var(--secondary-background-color, rgba(255,255,255,0.07));
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bbbbbb' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 6px center;
+                background-size: 14px;
+                color: var(--primary-text-color, #e0e0e0);
+                border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius: 8px;
+                padding: 4px 24px 4px 10px;
+                font-size: 12px; font-weight: 600;
+                cursor: pointer;
+                max-width: 200px;
             }
             .ct-sw {
                 width: 38px; height: 22px; border-radius: 12px;

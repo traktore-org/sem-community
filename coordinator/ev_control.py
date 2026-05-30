@@ -62,23 +62,31 @@ class EVControlMixin:
         return {}
 
     def _tariff_optimized_for(self, charger_cfg: dict) -> bool:
-        """True when tariff-optimized timing is enabled for this charger (#247).
+        """True when this charger's mode defers to cheap tariff windows.
 
-        Per-charger ``switch.sem_charger_{id}_tariff_optimized`` (opt-in,
-        default OFF) — created in ``switch.py`` for every config-flow charger.
-        Returns False when there is no charger config (``ev_chargers`` empty),
-        which can only happen pre-setup; #281/S2 removed the dead legacy
-        ``switch.sem_tariff_optimized`` fallback (that switch was never created).
+        Post-#277 Phase C: derived from the named ``charge_mode``
+        (only ``solar_plus_cheap`` defers — every other mode either
+        always charges, never charges, or follows zone/surplus rules
+        without tariff awareness). The legacy
+        ``switch.sem_charger_{id}_tariff_optimized`` was removed in
+        Phase C; this helper kept the same name so the existing
+        callers (``ev_control`` planner, today_plan composer, EV card
+        attributes) didn't have to change.
+
+        Returns False on missing config or hass — defensive only;
+        every supported install has ``charge_mode`` set post-v5
+        migration so the resolver always answers.
         """
         hass = getattr(self, "hass", None)
-        if hass is None:
+        if hass is None or not isinstance(charger_cfg, dict):
             return False
-        cid = charger_cfg.get("id") if charger_cfg else None
-        if not cid:
-            return False
-        return hass.states.is_state(
-            f"switch.sem_charger_{cid}_tariff_optimized", "on"
+        from ..consts.ev_charge_modes import (
+            MODE_USES_TARIFF,
+            effective_charge_mode_for,
         )
+        return effective_charge_mode_for(
+            hass, self.config, charger_cfg,
+        ) in MODE_USES_TARIFF
 
     def _charger_target_time(self, charger_cfg: dict) -> str:
         """Per-charger ``HH:MM`` charge-by deadline (#246), or global / default."""
@@ -441,15 +449,27 @@ class EVControlMixin:
             if per_charger_budget is not None:
                 budget_w = per_charger_budget
             else:
-                charging_mode = self.config.get("ev_charging_mode", "pv")
-                if charging_mode in ("self_consumption", "auto") and "self_consumption" in (context.charging_strategy_reason or ""):
-                    auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-                    budget_w = power.solar_power - power.home_consumption_power
-                    if power.battery_soc < auto_start_soc:
-                        budget_w -= power.battery_charge_power
-                    budget_w = max(0, budget_w)
+                # Canonical EV budget — Phase D.2 cleanup (#282).
+                # ``self._cycle_ev_budget`` is set unconditionally every
+                # cycle by ``_build_charging_context``, so this branch's
+                # only failure mode is "coordinator init incomplete"
+                # (config-flow midway / fixture wrong shape / something
+                # else loud). Fail-safe: log + return 0 W = no charge
+                # this cycle. Was a legacy-formula fallback pre-D.2;
+                # carrying two budget formulas was exactly the
+                # disagreement-class root cause we removed in the
+                # unification arc.
+                cycle_budget = getattr(self, "_cycle_ev_budget", None)
+                if cycle_budget is None:
+                    _LOGGER.error(
+                        "Canonical EV budget not set this cycle — "
+                        "coordinator init bug. Falling through with 0 W "
+                        "budget (no charge this cycle) to fail safe. "
+                        "Investigate _build_charging_context."
+                    )
+                    budget_w = 0.0
                 else:
-                    budget_w = self._calculate_solar_ev_budget(state, power, context)
+                    budget_w = cycle_budget.net_w
 
             # Phase switching: auto-switch 1p/3p based on available surplus
             await ev.check_phase_switch(budget_w)
@@ -457,11 +477,14 @@ class EVControlMixin:
             enable_delay = self.config.get("ev_enable_delay_seconds", 60)
             disable_delay = self.config.get("ev_disable_delay_seconds", 300)
 
-            # Now mode: charge at max power immediately
+            # Now mode and Min+PV overrides remain HERE (not in the
+            # canonical budget) because they depend on PER-CHARGER
+            # parameters (ev.max_current, ev.min_power_threshold) that
+            # the cycle-level budget doesn't see — multi-charger fleets
+            # have different overrides per charger.
             if context.charging_strategy == "now":
                 budget_w = ev.max_current * ev.phases * ev.voltage
                 enable_delay = 0
-            # Min+PV: guarantee minimum from grid, add surplus on top
             elif state == ChargingState.SOLAR_MIN_PV:
                 budget_w = max(ev.min_power_threshold, budget_w)
                 enable_delay = 0  # No enable delay — guaranteed charge
@@ -547,6 +570,32 @@ class EVControlMixin:
                 pass
         return self.config.get("target_peak_limit", 5.0) * 1000
 
+    def _get_peak_15min_w(self) -> Optional[float]:
+        """Read the rolling 15-min consecutive peak (#288), in watts.
+
+        Returns ``None`` when the load manager hasn't been initialized or
+        hasn't accumulated enough samples yet — the caller should fall back
+        to the legacy ``home_consumption_power`` formula in that case.
+
+        Why this metric: most demand-charge tariffs bill on a 15-min rolling
+        average of grid import. Sizing EV current against this same metric
+        means the per-cycle throttle decision agrees with the billing
+        decision and naturally tolerates short stepovers (a one-cycle
+        spike barely moves the rolling average). It also sidesteps the
+        sensor-lag class of bugs in the derived ``home_consumption_power``
+        — the rolling already smooths out individual sensor glitches.
+        """
+        if not self._load_manager:
+            return None
+        try:
+            lm_info = self._load_manager.get_load_management_data()
+            kw = lm_info.get("consecutive_peak_15min")
+            if kw is None or kw < 0:
+                return None
+            return float(kw) * 1000.0
+        except Exception:
+            return None
+
     def _night_peak_managed_amps(
         self,
         power: PowerReadings,
@@ -556,93 +605,72 @@ class EVControlMixin:
     ) -> int:
         """Charging current that keeps grid import <= the peak limit at night.
 
-        Sized from the pure house load (``home_consumption_power``), NOT from
-        ``grid_import - ev_power``. The latter equals ``home + batt_charge -
-        batt_discharge`` (see ``PowerReadings.calculate_derived``), so battery
-        discharge drives it negative and inflates the apparent headroom — the EV
-        ramps up while the battery is discharging, then grid import overshoots
-        the peak the instant the battery backs off (observed on PROD: EV 10kW /
-        grid 10kW against a 6kW limit). ``home_consumption_power`` excludes both
-        EV and battery, so ``grid = home + ev`` stays <= peak regardless of what
-        the battery does — night charging must not lean on the home battery
-        (the battery may still reduce grid below peak, it is just never relied
-        upon). Result is clamped to ``[min_amps, max_amps]``.
+        Sizing uses the **rolling 15-min consecutive grid-import peak**
+        (#288) when available — the same metric most demand-charge
+        tariffs bill on. This makes the per-cycle throttle decision
+        agree with the billing decision, naturally tolerates short
+        stepovers (a one-cycle spike barely moves a 15-min rolling
+        average), and sidesteps the sensor-lag bugs in the derived
+        ``home_consumption_power`` (observed on PROD 2026-05-29: brief
+        7.9 kW grid spike during EV ramp-up because the EV-power sensor
+        lagged by 5 kW for several seconds, deflating
+        ``home_consumption_power`` toward 0 and giving the EV the full
+        peak_limit as headroom).
 
-        Residual limitation: if the inverter autonomously charges the battery
-        from the grid during the night window (e.g. a dynamic-tariff or timed
-        grid-charge SEM does not command), ``grid = peak + net_batt_charge`` and
-        the peak may still be exceeded by that charge. SEM cannot size around
+        Self-balancing semantics: the rolling already INCLUDES the EV's
+        current draw, so as EV ramps the rolling rises and the headroom
+        shrinks — EV settles at the equilibrium where rolling ≈ peak
+        limit. That's exactly what the user wants when paying on
+        15-min demand charges.
+
+        Fallback: when the load manager hasn't accumulated samples yet
+        (first ~15 minutes after a restart), uses the legacy formula
+        ``peak_limit - home_consumption_power - committed_w`` so we
+        never end up with no peak protection at all.
+
+        Multi-charger (#274/H1): also subtract the draw already
+        committed to higher-priority chargers this cycle
+        (``_night_committed_w``), so a fleet of chargers shares one
+        peak budget instead of each independently sizing to the full
+        headroom and summing past the limit.
+
+        Residual limitation: if the inverter autonomously charges the
+        battery from the grid during the night window (e.g. a
+        dynamic-tariff or timed grid-charge SEM does not command),
+        ``grid = peak + net_batt_charge`` and the peak may still be
+        exceeded by that charge. SEM cannot size around
         inverter-managed charging it doesn't control.
-
-        Multi-charger (#274/H1): also subtract the draw already committed to
-        higher-priority chargers this cycle (``_night_committed_w``), so a fleet
-        of chargers shares one peak budget instead of each independently sizing to
-        the full ``peak - home`` headroom and summing past the limit.
         """
         committed_w = getattr(self, "_night_committed_w", 0.0)
-        headroom_w = self._get_peak_limit_w() - power.home_consumption_power - committed_w
+        peak_15min_w = self._get_peak_15min_w()
+        if peak_15min_w is not None:
+            # Production path: bill-aligned 15-min rolling. Self-balancing —
+            # rolling already includes EV's current draw.
+            headroom_w = self._get_peak_limit_w() - peak_15min_w - committed_w
+        else:
+            # Fallback: legacy home_consumption_power formula. Pre-#288 the
+            # only path. Kept for the cold-start window where rolling has
+            # no samples yet, so we never end up entirely without a peak
+            # protection.
+            headroom_w = (
+                self._get_peak_limit_w() - power.home_consumption_power - committed_w
+            )
         target = round(headroom_w / max(1.0, watts_per_amp))
         return min(max_amps, max(min_amps, target))
 
-    def _calculate_solar_ev_budget(
-        self, state: str, power: PowerReadings, context: ChargingContext,
-    ) -> float:
-        """Calculate watts available for EV from solar + optional battery discharge.
-
-        Base budget comes from FlowCalculator.calculate_ev_budget() (grid export +
-        forecast-aware battery redirect). For SOLAR_SUPER_CHARGING, adds proportional
-        battery discharge based on SOC zone (Zone 4: 100%, Zone 3: 50-100% ramp).
-
-        Args:
-            state: Current charging state.
-            power: Current sensor readings (for battery discharge measurement).
-            context: Charging context (unused directly, reserved for future use).
-
-        Returns:
-            Available power for EV in watts (>= 0).
-        """
-        # Read forecast for smart battery redirect
-        forecast_remaining = 0
-        try:
-            forecast = self._forecast_reader.read_forecast()
-            if forecast.available:
-                forecast_remaining = forecast.forecast_remaining_today_kwh
-        except Exception:
-            pass
-
-        battery_capacity = self.config.get("battery_capacity_kwh", DEFAULT_BATTERY_CAPACITY_KWH)
-
-        # Base budget: grid export + forecast-aware battery charge redirect
-        base = self._flow_calculator.calculate_ev_budget(
-            power, forecast_remaining, power.battery_soc, battery_capacity,
-        )
-
-        # Battery-assist mode: ALSO add active battery discharge (proportional to SOC zone)
-        if state == ChargingState.SOLAR_SUPER_CHARGING:
-            floor_soc = self.config.get("battery_assist_floor_soc", 60)
-            buffer_soc = self.config.get("battery_buffer_soc", 70)
-            auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-            max_assist = self.config.get("battery_assist_max_power",
-                                        self.config.get("super_charger_power", 4500))
-
-            if power.battery_soc > floor_soc:
-                battery_discharge = max(0, power.battery_discharge_power)
-                if battery_discharge >= 100:
-                    # Battery already discharging — use actual measured value
-                    base += battery_discharge
-                else:
-                    # Battery not yet discharging — estimate proportional assist by SOC zone
-                    if power.battery_soc >= auto_start_soc:
-                        # Zone 4: full assist
-                        base += max_assist
-                    elif power.battery_soc >= buffer_soc:
-                        # Zone 3: proportional ramp (50% at buffer_soc → 100% at auto_start_soc)
-                        ratio = (power.battery_soc - buffer_soc) / max(1, auto_start_soc - buffer_soc)
-                        base += max_assist * (0.5 + 0.5 * ratio)
-                    # Zone 2 (below buffer_soc): no assist added — shouldn't reach here
-                    # since strategy would be solar_only, but guard anyway
-
-        return max(0, base)
+    # ``_calculate_solar_ev_budget`` removed in Phase D.2 (#282).
+    # Was the legacy actuator-side budget formula that ran alongside the
+    # state machine's own ``calculate_ev_budget`` — exactly the kind of
+    # duplication that produced the original #282 disagreement bugs.
+    # Replaced by the canonical ``EVBudgetStrategy.{SOLAR_ONLY,
+    # BATTERY_ASSIST,...}`` dispatch in ``FlowCalculator.calculate_canonical_ev_budget``,
+    # whose output lives at ``self._cycle_ev_budget`` and is the single
+    # source of truth for every consumer (publish path, state machine,
+    # actuator, multi-charger distribution). Removed Phase D.2 once
+    # v1.6.0/1.6.1 confirmed the canonical path holds through both
+    # daytime battery_assist and nighttime MIN_PV cycles on real
+    # hardware. The corresponding ``flow_calculator.calculate_ev_budget``
+    # primitive went away in the same pass.
 
     def _should_reenable_charger(self, power: PowerReadings) -> bool:
         """Detect if EV charger was externally disabled and needs re-enabling.

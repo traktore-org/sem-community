@@ -459,6 +459,31 @@ class SensorReader:
                 self.config.ev_charging_sensor, "ev_charging"
             )
 
+        # Physics-based defence against upstream plug-sensor quirks.
+        # Reported 2026-05-29 on PROD: across an HA restart with a car
+        # actively charging, ``binary_sensor.keba_p30_plug`` reported
+        # "off" for 67 minutes while ``binary_sensor.keba_p30_charging_state``
+        # cycled on/off through 15 transitions and the charging-power
+        # sensor peaked at 8 kW. SEM correctly read the lying plug
+        # sensor, returned "EV disconnected", and stopped supervising.
+        # The KEBA kept its last commanded current and the car drew
+        # ~6 kWh past the Max ceiling because SEM wasn't even watching.
+        #
+        # Current cannot flow without a connection. If we see active
+        # charging power (>100 W rules out KEBA's own standby draw) or
+        # the charging_state sensor reports True, infer connection — the
+        # plug sensor is wrong.
+        if not readings.ev_connected and (
+            readings.ev_charging or readings.ev_power > 100
+        ):
+            _LOGGER.warning(
+                "ev_connected inferred from physics: plug sensor reported off but "
+                "ev_power=%.0fW / ev_charging=%s. Treating as connected. (Upstream "
+                "charger-integration bug protection — see #285+1 in CHANGELOG.)",
+                readings.ev_power, readings.ev_charging,
+            )
+            readings.ev_connected = True
+
         # Battery temperature (from legacy config if available)
         if self.config.battery_temperature_sensor:
             readings.battery_temperature = self._read_sensor(
@@ -680,6 +705,19 @@ class SensorReader:
             readings.ev_charging = self._read_binary_sensor(
                 self.config.ev_charging_sensor, "ev_charging"
             )
+
+        # Physics-based defence against upstream plug-sensor quirks.
+        # Same logic as the energy-dashboard path — see comment there for
+        # the full PROD repro (#285+1).
+        if not readings.ev_connected and (
+            readings.ev_charging or readings.ev_power > 100
+        ):
+            _LOGGER.warning(
+                "ev_connected inferred from physics: plug sensor reported off but "
+                "ev_power=%.0fW / ev_charging=%s. Treating as connected.",
+                readings.ev_power, readings.ev_charging,
+            )
+            readings.ev_connected = True
 
         return readings
 

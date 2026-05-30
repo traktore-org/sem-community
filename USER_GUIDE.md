@@ -10,6 +10,19 @@ Complete reference for Solar Energy Management (SEM).
 
 ---
 
+## v1.6.0 — important note for users with custom automations or templates
+
+In v1.6.0, SEM unified its internal EV-budget calculation so that the dashboard, the state machine, and the EV charger all read from the same value (see [docs/ARCHITECTURE.md → EV Budget Calculation](docs/ARCHITECTURE.md#ev-budget-calculation) for the deep dive). As a result, **two published sensors now report a different number than they did in 1.5.x**:
+
+| Sensor | Pre-1.6.0 | Post-1.6.0 |
+|---|---|---|
+| `sensor.sem_available_power` | Raw solar surplus `max(0, solar − home − batt_charge) + batt_discharge` | Strategy-aware canonical budget (includes battery redirect when `solar_only`, includes battery-assist when `battery_assist`, applies grid floor when `min_pv`) |
+| `sensor.sem_calculated_current` | `round(available_power / (230 × 3))` | `floor(canonical_net_w / (230 × 3))`, clamped `[0, 16]` |
+
+The canonical value is the **more honest** number — it matches what the state machine actually decides with and what SEM commands on the charger. If your automation depended on the pre-1.6.0 raw-surplus formula, you'll see different (usually higher when the home battery is charging) numbers. The behavioural change is documented in [CHANGELOG.md](CHANGELOG.md) under the v1.6.0 entry; no migration steps are needed beyond updating any thresholds you may have hard-coded in your automations.
+
+---
+
 ## Table of Contents
 
 - [Configuration Options](#configuration-options)

@@ -379,9 +379,11 @@ class TestPerChargerTargetPropagation:
         return coord
 
     def test_night_idle_uses_per_charger_target(self):
-        # Global target 10 (not met at 7.8), but the charger's target is 8 → met.
+        # Global target 10 (not met at 8.0), but the charger's target is 8 → met
+        # (remaining 0.0 — unambiguously below the 0.1 strict threshold the
+        # strategy and state-machine now share, post-#282 followup).
         coord = self._night_coord(10)
-        energy = _make_energy(daily_ev=7.8)
+        energy = _make_energy(daily_ev=8.0)
         power = MagicMock(); power.ev_connected = True
         strat, reason = coord._determine_charging_strategy(
             power, energy, {"daily_ev_target": 8},

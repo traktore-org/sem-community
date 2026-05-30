@@ -45,7 +45,9 @@ class ChargingContext:
         battery_needs_priority: SOC below priority threshold (surplus → battery first).
         calculated_current: EV budget expressed as current (A), from FlowCalculator.
         excess_solar: Solar minus home minus battery charge (W), can be negative.
-        available_power: EV power budget (W), from FlowCalculator.calculate_ev_budget().
+        available_power: EV power budget (W), from
+            FlowCalculator.calculate_canonical_ev_budget().net_w (the
+            unified per-cycle canonical budget — Phase D.2 / v1.6.2).
         daily_target_reached: Remaining EV need <= 0.1 kWh (SOC-based or kWh-based).
         daily_ev_energy: Today's accumulated EV energy (kWh).
         daily_ev_energy_offset: EV energy from offset utility meter (kWh), 0 if unused.
@@ -120,6 +122,19 @@ class ChargingStateMachine:
 
         # Delta for current changes (avoid flapping)
         self.current_delta = config.get("current_delta", 1)
+
+        # Night-charging-enabled debounce state (#290). The raw vote (sum-of-
+        # per-charger-switches) can transiently flip during HA-internal races
+        # right after a config entry update — observed live on PROD 2026-05-29
+        # 21:47 UTC as a one-cycle ``NIGHT_CHARGING_ACTIVE → NIGHT_DISABLED →
+        # NIGHT_CHARGING_ACTIVE`` blip immediately after a slider write. Require
+        # 2 consecutive cycles of the new value before flipping the cached
+        # state we actually return. Trades 10 s of responsiveness for race
+        # immunity — well worth it; this gate is checked once per 10 s cycle
+        # anyway, so 10 s of extra latency is one cycle.
+        self._night_enabled_cached: Optional[bool] = None  # last committed value
+        self._night_enabled_pending: Optional[bool] = None  # value awaiting confirm
+        self._night_enabled_pending_cycles: int = 0
 
     @property
     def current_state(self) -> str:
@@ -242,17 +257,86 @@ class ChargingStateMachine:
     def _any_night_charging_enabled(self) -> bool:
         """True if night charging is enabled for at least one charger (#255).
 
-        Per-charger switches are canonical. With no chargers configured (legacy), fall
-        back to the removed-elsewhere global ``switch.sem_night_charging``.
+        Per-charger switches are canonical. With no chargers configured
+        (legacy), fall back to the removed-elsewhere global
+        ``switch.sem_night_charging``.
+
+        Debounced (#290): the raw vote can transiently flip during
+        HA-internal races right after a config entry update — observed
+        live on PROD 2026-05-29 21:47 UTC as a one-cycle
+        ``NIGHT_CHARGING_ACTIVE → NIGHT_DISABLED → NIGHT_CHARGING_ACTIVE``
+        blip immediately after a slider write. Require 2 consecutive
+        cycles of the new value before flipping the cached state.
         """
+        raw = self._read_night_enabled_raw()
+
+        # First call after init — commit immediately, no debounce needed.
+        if self._night_enabled_cached is None:
+            self._night_enabled_cached = raw
+            self._night_enabled_pending = None
+            self._night_enabled_pending_cycles = 0
+            return raw
+
+        # Vote agrees with cached — reset any pending counter and return.
+        if raw == self._night_enabled_cached:
+            self._night_enabled_pending = None
+            self._night_enabled_pending_cycles = 0
+            return self._night_enabled_cached
+
+        # Vote disagrees with cached. Start (or continue) the confirm window.
+        if raw == self._night_enabled_pending:
+            self._night_enabled_pending_cycles += 1
+        else:
+            self._night_enabled_pending = raw
+            self._night_enabled_pending_cycles = 1
+
+        # 2 consecutive cycles of disagreement → flip.
+        if self._night_enabled_pending_cycles >= 2:
+            _LOGGER.info(
+                "Night charging enabled state flipped: %s → %s (after 2-cycle debounce)",
+                self._night_enabled_cached, raw,
+            )
+            self._night_enabled_cached = raw
+            self._night_enabled_pending = None
+            self._night_enabled_pending_cycles = 0
+
+        # Until confirmed, keep returning the cached value.
+        return self._night_enabled_cached
+
+    def _read_night_enabled_raw(self) -> bool:
+        """The raw per-cycle vote: True if any per-charger ``charge_mode``
+        permits night/grid charging (``solar_plus_cheap`` / ``min_plus_solar``
+        / ``always_max``). Pre-#277 Phase B this read the per-charger
+        ``switch.sem_charger_<id>_night_charging`` directly; post-B, mode
+        authority — the switch is a deprecated read-only mirror.
+
+        Pre-EV / no-chargers installs (no ``ev_chargers`` in config) still
+        consult the legacy global ``switch.sem_night_charging`` — those
+        installs never went through the v4→v5 migration so they have no
+        ``charge_mode`` to read. Removed in Phase C when the migration
+        becomes mandatory.
+
+        Separated from ``_any_night_charging_enabled`` so the debounce
+        logic in the latter can call this without recursion, and so unit
+        tests can drive each path independently.
+        """
+        from ..consts.ev_charge_modes import (
+            MODE_NIGHT_ALLOWED,
+            effective_charge_mode_for,
+        )
+
         chargers = self.config.get("ev_chargers") or []
         if not chargers:
-            return self.hass.states.is_state("switch.sem_night_charging", "on")
-        for c in chargers:
-            cid = c.get("id", "ev_charger") if isinstance(c, dict) else "ev_charger"
-            if self.hass.states.is_state(f"switch.sem_charger_{cid}_night_charging", "on"):
-                return True
-        return False
+            # Pre-EV / no-chargers install: nothing to enable. The
+            # legacy global ``switch.sem_night_charging`` was removed
+            # in #277 Phase C, so there is no fallback to consult.
+            return False
+        return any(
+            effective_charge_mode_for(self.hass, self.config, c)
+            in MODE_NIGHT_ALLOWED
+            for c in chargers
+            if isinstance(c, dict)
+        )
 
     def _night_state_machine(self, ctx: ChargingContext) -> str:
         """Night charging state machine.

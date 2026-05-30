@@ -38,6 +38,41 @@ from .coordinator import SEMCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+
+def _content_hash_cache_bust(card_root: str, base_url: str, version: str) -> str:
+    """Compute ``{version}-{sha1(content)[:8]}`` for a dashboard card asset.
+
+    Used by every Lovelace-resource registration path so the ``?v=`` query
+    follows file content. A bare timestamp (the previous behaviour) stayed
+    constant across rsync deploys and let browsers serve a stale cached
+    ``sem-localize.js`` even after the on-disk file was updated — surfacing
+    as raw translation keys on the EV charge-mode selector (#301).
+
+    ``base_url`` is the ``/local/custom_components/.../card/<path>`` URL;
+    the trailing relative path is resolved against ``card_root`` (the
+    deployed copy under ``/config/www/...``). Falls back to a bare
+    ``version`` if the file can't be read so a transient disk error still
+    busts the cache once and never deregisters a resource.
+    """
+    import hashlib
+
+    rel = base_url.split("/dashboard/card/", 1)[-1]
+    try:
+        with open(os.path.join(card_root, rel), "rb") as f:
+            return f"{version}-{hashlib.sha1(f.read()).hexdigest()[:8]}"
+    except OSError:
+        return version
+
+
+class _SEMYAMLModeSkip(Exception):
+    """Sentinel: bail out of the Lovelace resource registration block
+    when the user is running YAML-mode Lovelace (#283). YAML-mode
+    resources are read-only; the user has to add SEM's bundle to
+    ``configuration.yaml`` themselves. Logged with the exact URLs above
+    the raise; the outer ``except`` clause swallows this quietly so it
+    doesn't get reported as a generic "could not register" warning."""
+
+
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
 PLATFORMS: list[Platform] = [
@@ -67,6 +102,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
         entry.version, entry.minor_version
     )
 
+    # Accumulators threaded across all migration steps. Each step starts
+    # from these (not from ``entry.options`` / ``entry.data``) so a
+    # multi-version upgrade (e.g. v3 → v5 in one call) doesn't lose the
+    # earlier step's mutations. Pre-#277 each step read ``entry.options``
+    # afresh; in real HA ``async_update_entry`` mutates the entry and the
+    # next read picks up the change, but in tests (and in any harness
+    # mocking the entry) the second step then overwrote the first. The
+    # explicit accumulator makes the chain deterministic on both paths.
+    accumulated_data = {**entry.data}
+    accumulated_options = {**entry.options}
+
     if entry.version < 2:
         try:
             from .consts.core import (
@@ -75,8 +121,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
             )
 
-            new_data = {**entry.data}
-            new_options = {**entry.options}
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
             legacy_priority = max(
                 new_options.get("battery_priority_soc") if new_options.get("battery_priority_soc") is not None else 0,
                 new_data.get("battery_priority_soc") if new_data.get("battery_priority_soc") is not None else 0,
@@ -107,6 +153,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 version=2,
                 minor_version=1,
             )
+            accumulated_data, accumulated_options = new_data, new_options
         except Exception as e:
             _LOGGER.error(
                 "Migration from v%s failed — keeping original config: %s",
@@ -117,8 +164,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
     if entry.version < 3:
         try:
             # v2 → v3: Wrap flat ev_* keys into ev_chargers list for multi-charger support
-            new_data = {**entry.data}
-            new_options = {**entry.options}
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
             full = {**new_data, **new_options}
 
             # Only migrate if flat EV keys exist and ev_chargers doesn't
@@ -153,6 +200,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 version=3,
                 minor_version=1,
             )
+            accumulated_data, accumulated_options = new_data, new_options
         except Exception as e:
             _LOGGER.error(
                 "Migration from v%s to v3 failed — keeping original config: %s",
@@ -177,8 +225,8 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 # #246 Phase 2 — per-charger charge-by deadline
                 "ev_target_time",
             )
-            new_data = {**entry.data}
-            new_options = {**entry.options}
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
             full = {**new_data, **new_options}
             chargers = new_options.get("ev_chargers", new_data.get("ev_chargers"))
             if isinstance(chargers, list):
@@ -199,6 +247,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
                 entry, data=new_data, options=new_options,
                 version=4, minor_version=1,
             )
+            accumulated_data, accumulated_options = new_data, new_options
         except Exception as e:
             _LOGGER.error(
                 "Migration from v%s to v4 failed — keeping original config: %s",
@@ -206,8 +255,237 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 5:
+        try:
+            # v4 → v5 (#277 Phase A): seed per-charger ``charge_mode`` from
+            # the existing toggle state. The new selector is the consolidated
+            # user-intent layer that will replace the four-toggle UX in
+            # Phase B; here we just derive the equivalent named mode so the
+            # selector reflects the user's actual current behaviour on first
+            # boot post-upgrade. Legacy toggles are kept unchanged — they
+            # remain authoritative for the strategy machine until Phase B
+            # makes ``charge_mode`` the source of truth.
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            full = {**new_data, **new_options}
+            chargers = new_options.get("ev_chargers", new_data.get("ev_chargers"))
+            if isinstance(chargers, list):
+                seeded = []
+                for c in chargers:
+                    c = dict(c) if isinstance(c, dict) else c
+                    if isinstance(c, dict) and c.get("charge_mode") is None:
+                        c["charge_mode"] = _derive_charge_mode(
+                            c, full, hass,
+                        )
+                        _LOGGER.info(
+                            "Charger %s: derived charge_mode=%s from legacy toggles",
+                            c.get("id", "ev_charger"), c["charge_mode"],
+                        )
+                    seeded.append(c)
+                new_options["ev_chargers"] = seeded
+
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=5, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v5 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
+    if entry.version < 6:
+        try:
+            # v5 → v6 (#277 Phase B fix-up): narrow re-derivation for the
+            # pv/auto + tariff_on combinations that Phase A's derivation
+            # silently dropped (was: ``if mode == "auto" and tariff``,
+            # which missed the legacy ``mode=pv`` group).  Phase B fixed
+            # the derivation in both ``_derive_charge_mode`` and
+            # ``effective_charge_mode_for`` to also map
+            # ``pv/self_consumption + tariff_on`` → ``solar_plus_cheap``;
+            # this step propagates that fix to chargers that already
+            # ran through Phase A's v4→v5 with the buggy derivation.
+            #
+            # Condition is unambiguous: stored mode is the catch-all
+            # ``min_plus_solar``, legacy mode is one of the pv-family,
+            # and the per-charger tariff switch is currently ON. That
+            # combination can only be produced by Phase A's missing
+            # tariff branch — a user who explicitly picked
+            # ``min_plus_solar`` from the new selector AFTER Phase A
+            # would also satisfy the condition, but their UI experience
+            # is improved by the fix: the selector label finally matches
+            # the tariff intent they expressed.
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            full = {**new_data, **new_options}
+            chargers = new_options.get("ev_chargers", new_data.get("ev_chargers"))
+            if isinstance(chargers, list):
+                fixed = []
+                for c in chargers:
+                    c = dict(c) if isinstance(c, dict) else c
+                    if (
+                        isinstance(c, dict)
+                        and c.get("charge_mode") == "min_plus_solar"
+                    ):
+                        legacy_mode = (
+                            c.get("ev_charging_mode")
+                            or full.get("ev_charging_mode")
+                            or "pv"
+                        )
+                        cid = c.get("id", "ev_charger")
+                        tariff_on = hass.states.is_state(
+                            f"switch.sem_charger_{cid}_tariff_optimized", "on",
+                        )
+                        if (
+                            tariff_on
+                            and legacy_mode in ("pv", "auto", "self_consumption")
+                        ):
+                            c["charge_mode"] = "solar_plus_cheap"
+                            _LOGGER.info(
+                                "Charger %s: corrected charge_mode "
+                                "min_plus_solar → solar_plus_cheap "
+                                "(tariff intent preserved)",
+                                cid,
+                            )
+                    fixed.append(c)
+                new_options["ev_chargers"] = fixed
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=6, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v6 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
+    if entry.version < 7:
+        try:
+            # v6 → v7 (#277 Phase C): drop the now-dead legacy
+            # ``ev_charging_mode`` per-charger key. Phase C made the
+            # named ``charge_mode`` the authoritative input to both
+            # the strategy machine and ``_tariff_optimized_for``; the
+            # legacy mode string is no longer read anywhere. Removing
+            # it from the persisted config prevents stale values from
+            # leaking back into the UI (the ``select.sem_charger_<id>
+            # _ev_charging_mode`` entity is also retired in Phase C —
+            # the entity registry's stale-cleanup in ``select.py``
+            # purges the orphans).
+            #
+            # The corresponding legacy switches were removed from
+            # ``switch.py`` in Phase C; the registry's stale-cleanup
+            # in that file removes the per-charger night/smart/tariff
+            # switch entries the same way.
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            chargers = new_options.get("ev_chargers", new_data.get("ev_chargers"))
+            if isinstance(chargers, list):
+                cleaned = []
+                for c in chargers:
+                    c = dict(c) if isinstance(c, dict) else c
+                    if isinstance(c, dict) and "ev_charging_mode" in c:
+                        removed_value = c.pop("ev_charging_mode")
+                        _LOGGER.info(
+                            "Charger %s: dropped dead config key "
+                            "ev_charging_mode=%s (Phase C — charge_mode "
+                            "is authoritative)",
+                            c.get("id", "ev_charger"), removed_value,
+                        )
+                    cleaned.append(c)
+                new_options["ev_chargers"] = cleaned
+            # Top-level ``ev_charging_mode`` (legacy global default) is
+            # also gone now — nothing reads it. Same removal logic; the
+            # top level only had it via #255 seeding, never the source
+            # of truth post-v4.
+            if "ev_charging_mode" in new_options:
+                new_options.pop("ev_charging_mode")
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=7, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v7 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
+
+
+def _derive_charge_mode(
+    charger_cfg: dict,
+    full_config: dict,
+    hass: HomeAssistant,
+) -> str:
+    """Derive a Charge mode (#277) from the legacy four-toggle state.
+
+    Decision tree (matches ``docs/plans/2026-05-30_ev_charge_mode_consolidation.md``):
+        ev_charging_mode == "now"             → always_max
+        ev_charging_mode == "off"             → off
+        ev_charging_mode == "auto" + tariff   → solar_plus_cheap
+        ev_charging_mode in (pv, auto) + no night → solar_only
+        otherwise                              → min_plus_solar  (catch-all default)
+
+    Reads the per-charger switch state where available (the canonical
+    location since #255) and falls back to the global / config dict
+    for legacy installs. The two switches we consult are
+    ``switch.sem_charger_<id>_night_charging`` and
+    ``switch.sem_charger_<id>_tariff_optimized``. If a switch hasn't
+    been created yet (cold migration before the platform sets up),
+    we default to ON for night (the factory default) and OFF for
+    tariff (the factory default).
+    """
+    cid = charger_cfg.get("id", "ev_charger")
+
+    # ev_charging_mode is canonical per-charger as of v4 (#255).
+    mode = (
+        charger_cfg.get("ev_charging_mode")
+        or full_config.get("ev_charging_mode")
+        or "pv"
+    )
+
+    # Night switch — per-charger canonical, fall back to global, then
+    # to the factory default (ON).
+    night_eid = f"switch.sem_charger_{cid}_night_charging"
+    if hass.states.get(night_eid) is not None:
+        night = hass.states.is_state(night_eid, "on")
+    elif hass.states.get("switch.sem_night_charging") is not None:
+        night = hass.states.is_state("switch.sem_night_charging", "on")
+    else:
+        night = True  # factory default
+
+    # Tariff switch — per-charger only; the global was never created.
+    # Default OFF when missing (the factory default).
+    tariff_eid = f"switch.sem_charger_{cid}_tariff_optimized"
+    if hass.states.get(tariff_eid) is not None:
+        tariff = hass.states.is_state(tariff_eid, "on")
+    else:
+        tariff = False
+
+    if mode == "now":
+        return "always_max"
+    if mode == "off":
+        return "off"
+    # Tariff-on expresses cheap-hour intent regardless of which legacy
+    # mode the user picked (auto / pv / self_consumption all preserve
+    # it). Migrating those users to solar_only would silently lose
+    # their tariff preference.
+    if mode in ("pv", "auto", "self_consumption") and tariff:
+        return "solar_plus_cheap"
+    if mode in ("pv", "auto", "self_consumption") and not night:
+        return "solar_only"
+    # Catch-all — covers minpv (which always pulls Min from grid, so
+    # never maps to solar_only regardless of night flag) and any
+    # unrecognised mode value.
+    from .consts.ev_charge_modes import DEFAULT_EV_CHARGE_MODE
+    return DEFAULT_EV_CHARGE_MODE
 
 
 def _migrate_limit_surplus_to_max(hass: HomeAssistant, entry: SEMConfigEntry) -> None:
@@ -909,10 +1187,19 @@ async def _async_register_services(
                     stale_count,
                 )
 
-            # Cache-busting: use timestamp so every generate_dashboard
-            # call forces browsers to reload card JS files.
-            import time as _time
-            cache_bust = str(int(_time.time()))
+            # Cache-busting: per-file content hash + manifest version (#301).
+            # See _content_hash_cache_bust at module level. Inlined into a
+            # closure here so the resolved card_www_dir + manifest version
+            # are captured once per service call.
+            manifest_path_l = os.path.join(component_dir, "manifest.json")
+            try:
+                with open(manifest_path_l) as f:
+                    _mver = json.load(f).get("version", "0")
+            except Exception:
+                _mver = "0"
+
+            def _cache_bust_for(base_url: str) -> str:
+                return _content_hash_cache_bust(card_www_dir, base_url, _mver)
 
             existing_bases = {item.get("url", "").split("?")[0] for item in resources_data["items"]}
             added_resources = []
@@ -923,7 +1210,7 @@ async def _async_register_services(
                     import uuid as _uuid
                     resources_data["items"].append({
                         "id": _uuid.uuid4().hex,
-                        "url": f"{base_url}?v={cache_bust}",
+                        "url": f"{base_url}?v={_cache_bust_for(base_url)}",
                         "type": "module",
                     })
                     added_resources.append(base_url)
@@ -949,7 +1236,7 @@ async def _async_register_services(
                         # Card file no longer exists — remove orphaned resource
                         cleaned.append(base)
                         continue
-                    new_url = f"{base}?v={cache_bust}"
+                    new_url = f"{base}?v={_cache_bust_for(base)}"
                     if item["url"] != new_url:
                         item["url"] = new_url
                         updated_resources += 1
@@ -963,7 +1250,7 @@ async def _async_register_services(
                 if added_resources:
                     _LOGGER.info("Registered %d new Lovelace resource(s): %s", len(added_resources), added_resources)
                 if updated_resources:
-                    _LOGGER.info("Updated cache-bust on %d Lovelace resource(s) to v=%s", updated_resources, cache_bust)
+                    _LOGGER.info("Updated cache-bust on %d Lovelace resource(s) (content-hash)", updated_resources)
 
             # Step 2: Generate dashboard config
             generator = DashboardGenerator(hass)
@@ -1569,10 +1856,32 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         ]
 
         try:
-            from homeassistant.components.lovelace.resources import ResourceStorageCollection
-            resources: ResourceStorageCollection = hass.data["lovelace"].resources
+            resources = hass.data["lovelace"].resources
             if not resources.loaded:
                 await resources.async_load()
+
+            # YAML-mode Lovelace exposes a ``ResourceYAMLCollection`` whose
+            # resource list is sourced from ``configuration.yaml`` and is
+            # read-only — it doesn't implement ``async_create_item`` /
+            # ``async_update_item`` / ``async_delete_item``. We can't
+            # programmatically register the bundle there. Feature-detect via
+            # the methods we'd need, and surface the URLs the user has to
+            # add manually so the dashboard can actually load. Without this
+            # branch the dashboard came up blank with only an unhelpful
+            # warning in the log (#283 — Brkie, YAML-mode Lovelace).
+            yaml_mode = not hasattr(resources, "async_create_item")
+            if yaml_mode:
+                _LOGGER.warning(
+                    "SEM detected YAML-mode Lovelace; SEM card resources cannot be "
+                    "registered automatically. Add the following to "
+                    "configuration.yaml under `lovelace.resources` and restart:\n"
+                    "  - url: %s\n    type: module\n"
+                    "  - url: %s\n    type: module",
+                    cards_bundle_url, f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
+                )
+                # Skip the rest of the registration block — none of the
+                # mutating methods below are callable in YAML mode.
+                raise _SEMYAMLModeSkip()
 
             # Build lookup: base URL (without query) → resource item
             existing_by_base = {}
@@ -1610,6 +1919,9 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     diagram_item["id"], {"res_type": "module", "url": diagram_url}
                 )
                 _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
+        except _SEMYAMLModeSkip:
+            # Already logged the "manual config needed" warning above.
+            pass
         except Exception as e:
             _LOGGER.warning("Could not register SEM Lovelace resources: %s", e)
 
