@@ -2464,6 +2464,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if mode == "solar_plus_cheap":
             try:
                 level = self._tariff_provider.get_price_level()
+                # A successful call means the provider is healthy — drop
+                # the one-shot ``provider error'' warning flag regardless
+                # of the returned price level. The next exception will
+                # re-arm it. Cleared *before* the branch on ``level`` so
+                # the EXPENSIVE and CHEAP paths share identical recovery
+                # semantics (#301 review pushed back on a duplicated
+                # clear that read like a price-level bug; the canonical
+                # invariant is ``successful read ⇒ no pending warning'').
+                if getattr(self, "_tariff_pause_warned", False):
+                    self._tariff_pause_warned = False
                 if level in (PriceLevel.EXPENSIVE, PriceLevel.VERY_EXPENSIVE):
                     _LOGGER.debug(
                         "Tariff pause: %s price — solar_plus_cheap "
@@ -2471,11 +2481,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     )
                     # Falls through to self_consumption to enforce
                     # surplus-only during expensive windows.
-                    if getattr(self, "_tariff_pause_warned", False):
-                        self._tariff_pause_warned = False
                     return self._self_consumption_strategy(power, energy)
-                if getattr(self, "_tariff_pause_warned", False):
-                    self._tariff_pause_warned = False  # provider recovered
             except Exception as e:
                 # Surface once (#274/L1) — a persistently broken provider
                 # would otherwise silently keep the surplus-from-grid
