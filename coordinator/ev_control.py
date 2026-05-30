@@ -563,6 +563,32 @@ class EVControlMixin:
                 pass
         return self.config.get("target_peak_limit", 5.0) * 1000
 
+    def _get_peak_15min_w(self) -> Optional[float]:
+        """Read the rolling 15-min consecutive peak (#288), in watts.
+
+        Returns ``None`` when the load manager hasn't been initialized or
+        hasn't accumulated enough samples yet — the caller should fall back
+        to the legacy ``home_consumption_power`` formula in that case.
+
+        Why this metric: most demand-charge tariffs bill on a 15-min rolling
+        average of grid import. Sizing EV current against this same metric
+        means the per-cycle throttle decision agrees with the billing
+        decision and naturally tolerates short stepovers (a one-cycle
+        spike barely moves the rolling average). It also sidesteps the
+        sensor-lag class of bugs in the derived ``home_consumption_power``
+        — the rolling already smooths out individual sensor glitches.
+        """
+        if not self._load_manager:
+            return None
+        try:
+            lm_info = self._load_manager.get_load_management_data()
+            kw = lm_info.get("consecutive_peak_15min")
+            if kw is None or kw < 0:
+                return None
+            return float(kw) * 1000.0
+        except Exception:
+            return None
+
     def _night_peak_managed_amps(
         self,
         power: PowerReadings,
@@ -572,31 +598,56 @@ class EVControlMixin:
     ) -> int:
         """Charging current that keeps grid import <= the peak limit at night.
 
-        Sized from the pure house load (``home_consumption_power``), NOT from
-        ``grid_import - ev_power``. The latter equals ``home + batt_charge -
-        batt_discharge`` (see ``PowerReadings.calculate_derived``), so battery
-        discharge drives it negative and inflates the apparent headroom — the EV
-        ramps up while the battery is discharging, then grid import overshoots
-        the peak the instant the battery backs off (observed on PROD: EV 10kW /
-        grid 10kW against a 6kW limit). ``home_consumption_power`` excludes both
-        EV and battery, so ``grid = home + ev`` stays <= peak regardless of what
-        the battery does — night charging must not lean on the home battery
-        (the battery may still reduce grid below peak, it is just never relied
-        upon). Result is clamped to ``[min_amps, max_amps]``.
+        Sizing uses the **rolling 15-min consecutive grid-import peak**
+        (#288) when available — the same metric most demand-charge
+        tariffs bill on. This makes the per-cycle throttle decision
+        agree with the billing decision, naturally tolerates short
+        stepovers (a one-cycle spike barely moves a 15-min rolling
+        average), and sidesteps the sensor-lag bugs in the derived
+        ``home_consumption_power`` (observed on PROD 2026-05-29: brief
+        7.9 kW grid spike during EV ramp-up because the EV-power sensor
+        lagged by 5 kW for several seconds, deflating
+        ``home_consumption_power`` toward 0 and giving the EV the full
+        peak_limit as headroom).
 
-        Residual limitation: if the inverter autonomously charges the battery
-        from the grid during the night window (e.g. a dynamic-tariff or timed
-        grid-charge SEM does not command), ``grid = peak + net_batt_charge`` and
-        the peak may still be exceeded by that charge. SEM cannot size around
+        Self-balancing semantics: the rolling already INCLUDES the EV's
+        current draw, so as EV ramps the rolling rises and the headroom
+        shrinks — EV settles at the equilibrium where rolling ≈ peak
+        limit. That's exactly what the user wants when paying on
+        15-min demand charges.
+
+        Fallback: when the load manager hasn't accumulated samples yet
+        (first ~15 minutes after a restart), uses the legacy formula
+        ``peak_limit - home_consumption_power - committed_w`` so we
+        never end up with no peak protection at all.
+
+        Multi-charger (#274/H1): also subtract the draw already
+        committed to higher-priority chargers this cycle
+        (``_night_committed_w``), so a fleet of chargers shares one
+        peak budget instead of each independently sizing to the full
+        headroom and summing past the limit.
+
+        Residual limitation: if the inverter autonomously charges the
+        battery from the grid during the night window (e.g. a
+        dynamic-tariff or timed grid-charge SEM does not command),
+        ``grid = peak + net_batt_charge`` and the peak may still be
+        exceeded by that charge. SEM cannot size around
         inverter-managed charging it doesn't control.
-
-        Multi-charger (#274/H1): also subtract the draw already committed to
-        higher-priority chargers this cycle (``_night_committed_w``), so a fleet
-        of chargers shares one peak budget instead of each independently sizing to
-        the full ``peak - home`` headroom and summing past the limit.
         """
         committed_w = getattr(self, "_night_committed_w", 0.0)
-        headroom_w = self._get_peak_limit_w() - power.home_consumption_power - committed_w
+        peak_15min_w = self._get_peak_15min_w()
+        if peak_15min_w is not None:
+            # Production path: bill-aligned 15-min rolling. Self-balancing —
+            # rolling already includes EV's current draw.
+            headroom_w = self._get_peak_limit_w() - peak_15min_w - committed_w
+        else:
+            # Fallback: legacy home_consumption_power formula. Pre-#288 the
+            # only path. Kept for the cold-start window where rolling has
+            # no samples yet, so we never end up entirely without a peak
+            # protection.
+            headroom_w = (
+                self._get_peak_limit_w() - power.home_consumption_power - committed_w
+            )
         target = round(headroom_w / max(1.0, watts_per_amp))
         return min(max_amps, max(min_amps, target))
 

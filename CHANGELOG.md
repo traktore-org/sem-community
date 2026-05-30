@@ -5,6 +5,54 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] — 2026-05-30
+
+Patch release with fixes driven by the v1.6.0 PROD soak. No behavioural
+changes outside the named fixes — same upgrade path as any 1.6.x.
+
+### Fixed
+
+- **#288** — Night peak management formula switched from the
+  sensor-lag-sensitive derived `home_consumption_power` to
+  `sensor.sem_consecutive_peak_15min` (the same 15-min rolling
+  grid-import average most demand-charge tariffs bill on).
+  Self-balancing: as EV ramps the rolling rises and headroom shrinks
+  naturally; settles at the equilibrium where rolling ≈ peak limit.
+  Falls back to the legacy formula during the cold-start window when
+  the load manager hasn't accumulated samples yet, so peak protection
+  is never absent. Caught live on PROD 2026-05-29 with a 7.9 kW grid
+  spike during EV ramp because `sem_ev_power` lagged by ~5 kW for
+  several seconds, deflating the derived home value toward 0 and
+  giving the EV the full peak limit as headroom. 6 unit tests +
+  forever live sentinel.
+- **#290** — Night state machine no longer blips through
+  `NIGHT_DISABLED` for one cycle during config slider writes.
+  Observed live on PROD 2026-05-29: a per-charger Number slider
+  write triggered a race in `hass.states.is_state` for the per-charger
+  night switch, returning False for one ~10 s cycle before
+  recovering. SEM now requires 2 consecutive cycles of disagreement
+  before flipping the cached state — trades 10 s of responsiveness
+  for race immunity. 7 unit tests covering first-call commit, blip
+  suppression, sustained change, and pending-counter reset.
+
+### Internal
+
+- **Test infra** — fixed the pre-existing flaky
+  `test_lookahead_uncapped_when_no_deadline_resolvable` that had been
+  intermittently red since the defensive `night_end` fallback at
+  `ev_control.py:119-122` was added. The test now patches
+  `DEFAULT_EV_TARGET_TIME` to None so the original "no deadline
+  resolvable" path it was written to guard is actually exercised.
+  Suite is now 2091 / 2091 fully green — first time this release.
+- **Live test layer** — new sentinel `tests/live/test_night_peak_rolling.sh`
+  pins the #288 fix as a regression guard.
+- **Documentation** — design plan for #277 (EV Charge mode
+  consolidation) committed at `docs/plans/2026-05-30_ev_charge_mode_consolidation.md`.
+  No code yet; awaiting maintainer decisions on the four design
+  questions listed there before any implementation. Tracked for v1.7.0.
+
+---
+
 ## [1.6.0] — 2026-05-30
 
 The **EV-budget unification** release. SEM historically had three separate

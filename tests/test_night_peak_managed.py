@@ -22,9 +22,24 @@ from custom_components.solar_energy_management.coordinator.types import PowerRea
 
 def _amps(home_w, peak_w, wpa, *, min_a=6, max_a=16, ev_w=0.0, grid_w=0.0,
           batt_w=0.0, committed_w=0.0):
-    """Call the helper with a fake self that reports peak_w as the peak limit."""
+    """Call the helper with a fake self that reports peak_w as the peak limit.
+
+    These regression tests focus on the **legacy** ``home_consumption_power``
+    formula (the pre-#288 path that becomes the fallback). To force that
+    branch, explicitly stub ``_get_peak_15min_w`` to return None — a bare
+    ``Mock`` would auto-generate it as a method returning another Mock,
+    which would take the #288 rolling branch and fail the arithmetic.
+
+    The #288 rolling formula has its own dedicated tests in
+    ``test_night_peak_rolling.py`` — keep these focused on the legacy
+    semantics so the original 2026-05-26 PROD regression is locked in
+    even when the rolling sensor isn't available (cold-start window).
+    """
     obj = Mock()
     obj._get_peak_limit_w = Mock(return_value=peak_w)
+    # #288: pin the legacy fallback path so this test file keeps
+    # asserting the home_consumption formula it was written to pin.
+    obj._get_peak_15min_w = Mock(return_value=None)
     # Shared night peak budget (#274/H1): watts already committed to
     # higher-priority chargers. A real Mock would auto-create this as a Mock
     # object and break the arithmetic, so set it explicitly.

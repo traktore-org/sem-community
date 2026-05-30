@@ -224,11 +224,24 @@ class TestComputeNightPlan:
     def test_lookahead_uncapped_when_no_deadline_resolvable(self):
         # Fallback path: when target_time / night_end are both unresolvable,
         # the global EV_DEADLINE_LOOKAHEAD_HOURS still bounds the query.
+        #
+        # The defensive fallback at ev_control.py:119-122 makes ``night_end``
+        # default to ``DEFAULT_EV_TARGET_TIME`` ("07:00") when
+        # ``get_night_end_time`` raises — so in practice the "truly
+        # unresolvable" path is unreachable from production code. To exercise
+        # this fallback path's regression guard, we patch the default to
+        # None so ``resolve_deadline(now, night_end=None)`` correctly returns
+        # None and the code falls through to the bare ``EV_DEADLINE_LOOKAHEAD_HOURS``.
         coord = _build_coordinator(tariff_on=True)
         coord.time_manager.get_night_end_time = MagicMock(side_effect=ValueError("bust"))
         coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=[])
         cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": None}
-        coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
+        with patch(
+            "custom_components.solar_energy_management.coordinator.ev_control."
+            "DEFAULT_EV_TARGET_TIME",
+            None,
+        ):
+            coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
         call = coord._tariff_provider.find_cheapest_hours.call_args
         # Falls back to EV_DEADLINE_LOOKAHEAD_HOURS (12) — both deadlines unresolvable
         within_hours = call.kwargs.get("within_hours")
