@@ -338,6 +338,58 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 7:
+        try:
+            # v6 → v7 (#277 Phase C): drop the now-dead legacy
+            # ``ev_charging_mode`` per-charger key. Phase C made the
+            # named ``charge_mode`` the authoritative input to both
+            # the strategy machine and ``_tariff_optimized_for``; the
+            # legacy mode string is no longer read anywhere. Removing
+            # it from the persisted config prevents stale values from
+            # leaking back into the UI (the ``select.sem_charger_<id>
+            # _ev_charging_mode`` entity is also retired in Phase C —
+            # the entity registry's stale-cleanup in ``select.py``
+            # purges the orphans).
+            #
+            # The corresponding legacy switches were removed from
+            # ``switch.py`` in Phase C; the registry's stale-cleanup
+            # in that file removes the per-charger night/smart/tariff
+            # switch entries the same way.
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            chargers = new_options.get("ev_chargers", new_data.get("ev_chargers"))
+            if isinstance(chargers, list):
+                cleaned = []
+                for c in chargers:
+                    c = dict(c) if isinstance(c, dict) else c
+                    if isinstance(c, dict) and "ev_charging_mode" in c:
+                        removed_value = c.pop("ev_charging_mode")
+                        _LOGGER.info(
+                            "Charger %s: dropped dead config key "
+                            "ev_charging_mode=%s (Phase C — charge_mode "
+                            "is authoritative)",
+                            c.get("id", "ev_charger"), removed_value,
+                        )
+                    cleaned.append(c)
+                new_options["ev_chargers"] = cleaned
+            # Top-level ``ev_charging_mode`` (legacy global default) is
+            # also gone now — nothing reads it. Same removal logic; the
+            # top level only had it via #255 seeding, never the source
+            # of truth post-v4.
+            if "ev_charging_mode" in new_options:
+                new_options.pop("ev_charging_mode")
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=7, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v7 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 

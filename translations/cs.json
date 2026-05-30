@@ -1000,14 +1000,8 @@
       }
     },
     "switch": {
-      "night_charging": {
-        "name": "Night Charging"
-      },
       "observer_mode": {
         "name": "Režim pozorovatele"
-      },
-      "smart_night_charging": {
-        "name": "Forecast Night Reduction"
       }
     },
     "number": {
@@ -1139,9 +1133,6 @@
       }
     },
     "select": {
-      "ev_charging_mode": {
-        "name": "Režim nabíjení EV"
-      },
       "ev_target_type": {
         "name": "Typ cíle EV",
         "state": {

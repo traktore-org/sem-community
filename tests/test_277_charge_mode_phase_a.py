@@ -267,29 +267,23 @@ class TestMigrateEntryV5:
         })
         assert captured["options"]["ev_chargers"][0]["charge_mode"] == "solar_only"
 
-    async def test_legacy_toggle_state_unchanged(self):
-        """Phase A guarantee: legacy fields stay authoritative for the
-        strategy machine until Phase B."""
-        captured = await self._run_migration_at_v4(options={
-            "ev_chargers": [
-                {"id": "ev_charger", "ev_charging_mode": "minpv"},
-            ],
-        })
-        ch = captured["options"]["ev_chargers"][0]
-        assert ch["ev_charging_mode"] == "minpv", (
-            "Phase A must not mutate legacy fields"
-        )
+    # ``test_legacy_toggle_state_unchanged`` removed in #277 Phase C —
+    # the property it pinned ("Phase A migration must not mutate
+    # legacy fields") was a Phase-A-only invariant. Phase C's v6→v7
+    # migration explicitly removes the ``ev_charging_mode`` legacy
+    # field; preserving it would be a regression on Phase C's
+    # contract, so the test is no longer meaningful.
 
     async def test_bumps_version_to_5(self):
         captured = await self._run_migration_at_v4(options={
             "ev_chargers": [{"id": "ev_charger", "ev_charging_mode": "pv"}],
         })
-        assert captured["version"] == 6  # bumped in v5→v6 (#277 Phase B)
+        assert captured["version"] == 7  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)
 
     async def test_no_chargers_no_crash(self):
         """Pre-EV setups (no ev_chargers list) must still migrate."""
         captured = await self._run_migration_at_v4(options={})
-        assert captured["version"] == 6  # bumped in v5→v6 (#277 Phase B)
+        assert captured["version"] == 7  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)
         # No ev_chargers to seed, so the key may or may not be present —
         # the migration must not invent one.
         assert "ev_chargers" not in captured["options"] or \
@@ -318,24 +312,25 @@ class TestEffectiveChargeMode:
                "ev_charging_mode": "minpv"}  # legacy says different
         assert coord._effective_charge_mode_for(cfg) == "solar_only"
 
-    def test_derives_when_stored_missing(self):
-        """Pre-migration / partial install: fall back to legacy
-        derivation. Result must match _derive_charge_mode for the same
-        inputs (equivalence guarantee)."""
-        hass = _hass_with_switches(night=False, tariff=False)
-        coord = self._build_coord(hass=hass)
-        cfg = {"id": "ev_charger", "ev_charging_mode": "auto"}  # no charge_mode
-        # No night, no tariff → solar_only per derivation
-        assert coord._effective_charge_mode_for(cfg) == "solar_only"
+    def test_missing_stored_returns_default(self):
+        """Post-#277 Phase C the legacy-toggle derivation fallback was
+        removed (the legacy switches are gone). When ``charge_mode`` is
+        missing the resolver returns the new-install default —
+        previously it derived from the legacy toggles. Migration is
+        mandatory on every config-entry load, so in real installs the
+        field is always present.
+        """
+        coord = self._build_coord()
+        cfg = {"id": "ev_charger"}  # no charge_mode, no legacy toggles
+        assert coord._effective_charge_mode_for(cfg) == "min_plus_solar"
 
-    def test_unknown_stored_value_falls_through_to_derivation(self):
+    def test_unknown_stored_value_falls_back_to_default(self):
         """Defensive: a stored value outside the 5 known modes (someone
-        edited storage by hand) must not be returned. Fall back to the
-        derivation path so the runtime sees a known mode."""
-        hass = _hass_with_switches(night=True, tariff=False)
-        coord = self._build_coord(hass=hass)
-        cfg = {"id": "ev_charger", "charge_mode": "garbage_value",
-               "ev_charging_mode": "pv"}
+        edited storage by hand) returns the new-install default. Pre-
+        Phase-C this fell back to the legacy derivation; post-C the
+        derivation is gone."""
+        coord = self._build_coord()
+        cfg = {"id": "ev_charger", "charge_mode": "garbage_value"}
         assert coord._effective_charge_mode_for(cfg) == "min_plus_solar"
 
     def test_non_dict_charger_cfg_returns_default(self):
@@ -345,42 +340,14 @@ class TestEffectiveChargeMode:
         assert coord._effective_charge_mode_for(None) == "min_plus_solar"
         assert coord._effective_charge_mode_for("nope") == "min_plus_solar"
 
-    def test_equivalence_across_all_legacy_combinations(self):
-        """The migration and the runtime fallback must produce IDENTICAL
-        modes for every legacy combination — otherwise a user who
-        somehow skips migration sees different behaviour than one who
-        migrates."""
-        combos = [
-            # (ev_charging_mode, night, tariff, expected_mode)
-            ("now",   True,  False, "always_max"),
-            ("now",   False, True,  "always_max"),    # tariff irrelevant for now
-            ("off",   True,  False, "off"),
-            ("auto",  True,  True,  "solar_plus_cheap"),
-            ("auto",  True,  False, "min_plus_solar"),
-            ("auto",  False, False, "solar_only"),
-            ("pv",    True,  False, "min_plus_solar"),
-            ("pv",    False, False, "solar_only"),
-            ("minpv", True,  False, "min_plus_solar"),
-            ("minpv", False, False, "min_plus_solar"),  # minpv defaults to catch-all
-        ]
-        for cmode, night, tariff, expected in combos:
-            hass = _hass_with_switches(night=night, tariff=tariff)
-            coord = self._build_coord(hass=hass)
-            cfg = {"id": "ev_charger", "ev_charging_mode": cmode}
-            via_runtime = coord._effective_charge_mode_for(cfg)
-            via_migration = _derive_charge_mode(cfg, {}, hass)
-            assert via_runtime == expected, (
-                f"runtime: ({cmode}, night={night}, tariff={tariff}) "
-                f"got {via_runtime}, expected {expected}"
-            )
-            assert via_migration == expected, (
-                f"migration: ({cmode}, night={night}, tariff={tariff}) "
-                f"got {via_migration}, expected {expected}"
-            )
-            assert via_runtime == via_migration, (
-                f"runtime ↔ migration divergence at "
-                f"({cmode}, night={night}, tariff={tariff})"
-            )
+    # ``test_equivalence_across_all_legacy_combinations`` was removed in
+    # #277 Phase C — the legacy-toggle derivation fallback no longer
+    # exists at runtime (the resolver returns the new-install default
+    # when ``charge_mode`` is missing). The migration's own derivation
+    # (``_derive_charge_mode``) still exists and is covered by
+    # ``TestDeriveChargeMode`` above; the runtime-vs-migration
+    # equivalence property is no longer meaningful because they don't
+    # share a runtime path anymore.
 
 
 # ──────────────────────────────────────────────────────────────────────

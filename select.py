@@ -90,6 +90,31 @@ async def async_setup_entry(
     except Exception as e:
         _LOGGER.debug("Global select removal skipped: %s", e)
 
+    # #277 Phase C — drop the per-charger ``ev_charging_mode`` selects
+    # the new ``charge_mode`` selector replaces. The v6→v7 migration
+    # already cleared the underlying config key; this purges the
+    # orphaned entity rows from the registry so the dashboard doesn't
+    # leak stale "EV Charging Mode" labels.
+    try:
+        registry = er.async_get(hass)
+        full_config_legacy = {**entry.data, **entry.options}
+        for charger_cfg in full_config_legacy.get("ev_chargers") or []:
+            cid = (
+                charger_cfg.get("id", "ev_charger")
+                if isinstance(charger_cfg, dict) else "ev_charger"
+            )
+            legacy_uid = f"{entry.entry_id}_charger_{cid}_ev_charging_mode"
+            legacy_eid = registry.async_get_entity_id("select", DOMAIN, legacy_uid)
+            if legacy_eid:
+                registry.async_remove(legacy_eid)
+                _LOGGER.info(
+                    "Removed legacy per-charger select %s "
+                    "(replaced by charge_mode selector, #277 Phase C)",
+                    legacy_eid,
+                )
+    except Exception as e:
+        _LOGGER.debug("Per-charger legacy select cleanup skipped: %s", e)
+
     entities = [
         SEMSelectEntity(coordinator, entry, description)
         for description in SELECT_TYPES
@@ -111,26 +136,12 @@ async def async_setup_entry(
                 entry, cid, "ev_target_type",
                 charger_cfg.get("ev_target_type") or charger_cfg.get("ev_target_mode") or "kwh",
             ))
-            # Per-charger charging mode (#255) — each car can have its own mode.
-            entities.append(SEMPerChargerSelect(
-                coordinator,
-                SelectEntityDescription(
-                    key=f"charger_{cid}_ev_charging_mode",
-                    options=list(EV_CHARGING_MODES.keys()),
-                    entity_category=EntityCategory.CONFIG,
-                ),
-                entry, cid, "ev_charging_mode",
-                charger_cfg.get("ev_charging_mode")
-                or full_config.get("ev_charging_mode") or "pv",
-            ))
-            # Per-charger Charge mode selector (#277 Phase A) — the
-            # consolidated user-intent selector that will replace the
-            # toggle-soup in Phase B. Phase A is additive only: the
-            # entity persists user intent but the coordinator strategy
-            # machine still reads the legacy toggles. The migration in
-            # ``async_migrate_entry`` (v4 → v5) seeds the field from
-            # existing toggle state so the value the user sees matches
-            # the behaviour they already have.
+            # The legacy ``ev_charging_mode`` per-charger select was
+            # retired in #277 Phase C — the new ``charge_mode``
+            # selector (registered below) is the only intent knob now.
+            # The entity registry's stale-cleanup at the top of this
+            # function removes orphaned ``charger_<id>_ev_charging_mode``
+            # entries on the next setup.
             entities.append(SEMPerChargerSelect(
                 coordinator,
                 SelectEntityDescription(

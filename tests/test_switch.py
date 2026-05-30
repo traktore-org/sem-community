@@ -26,32 +26,21 @@ class TestSEMSwitches:
     """Test SEM switch entities."""
 
     def test_switch_types(self):
-        """Verify switch types."""
+        """Verify switch types. Post-#277 Phase C the legacy global
+        ``night_charging`` and ``smart_night_charging`` switches are
+        gone (the named ``charge_mode`` selector carries the same
+        intent); ``observer_mode`` is the only remaining one."""
         keys = [s.key for s in SWITCH_TYPES]
-        assert keys == ["night_charging", "observer_mode", "smart_night_charging"]
+        assert keys == ["observer_mode"]
 
-    @pytest.mark.asyncio
-    async def test_night_charging_default_off(self, mock_coordinator):
-        """night_charging defaults to OFF — opt-in (#256). A fresh install charges on
-        solar surplus only; existing users keep their state via RestoreEntity."""
-        description = create_switch_description("night_charging")
-        switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
-        assert switch._is_on is False
-
-    @pytest.mark.asyncio
-    async def test_night_charging_existing_state_preserved(self, mock_coordinator):
-        """Existing users are preserved: a restored 'on' state wins over the new
-        default-OFF, so upgrading doesn't silently stop anyone's night charging (#256)."""
-        from unittest.mock import patch
-        from homeassistant.helpers.update_coordinator import CoordinatorEntity
-
-        description = create_switch_description("night_charging")
-        switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
-        assert switch._is_on is False  # new default
-        switch.async_get_last_state = AsyncMock(return_value=MagicMock(state="on"))
-        with patch.object(CoordinatorEntity, "async_added_to_hass", AsyncMock()):
-            await switch.async_added_to_hass()
-        assert switch._is_on is True  # prior state restored, not overwritten by the default
+    # ``test_night_charging_default_off`` and
+    # ``test_night_charging_existing_state_preserved`` removed in
+    # #277 Phase C — the ``night_charging`` global switch is gone
+    # (the named ``charge_mode`` selector carries the intent now).
+    # The default-OFF guarantee (#256) is implicit in the new
+    # default mode ``min_plus_solar`` which permits night charging;
+    # the per-user opt-out is "pick ``solar_only`` or ``off``" in the
+    # selector instead of "flip night_charging off".
 
     @pytest.mark.asyncio
     async def test_observer_mode_default_from_config(self, mock_coordinator):
@@ -68,7 +57,11 @@ class TestSEMSwitches:
     @pytest.mark.asyncio
     async def test_switch_is_on(self, mock_coordinator):
         """Test is_on returns internal state."""
-        description = create_switch_description("night_charging")
+        # #277 Phase C: ``night_charging`` global switch removed.
+        # Reuse ``observer_mode`` (a generic CONFIG-category switch
+        # with the same SEMSolarSwitch behaviour) as the placeholder
+        # for these generic switch-interface tests.
+        description = create_switch_description("observer_mode")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
 
         switch._is_on = True
@@ -80,7 +73,11 @@ class TestSEMSwitches:
     @pytest.mark.asyncio
     async def test_switch_turn_on(self, mock_coordinator):
         """Test turning switch on."""
-        description = create_switch_description("night_charging")
+        # #277 Phase C: ``night_charging`` global switch removed.
+        # Reuse ``observer_mode`` (a generic CONFIG-category switch
+        # with the same SEMSolarSwitch behaviour) as the placeholder
+        # for these generic switch-interface tests.
+        description = create_switch_description("observer_mode")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
         switch._is_on = False
         switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
@@ -94,7 +91,11 @@ class TestSEMSwitches:
     @pytest.mark.asyncio
     async def test_switch_turn_off(self, mock_coordinator):
         """Test turning switch off."""
-        description = create_switch_description("night_charging")
+        # #277 Phase C: ``night_charging`` global switch removed.
+        # Reuse ``observer_mode`` (a generic CONFIG-category switch
+        # with the same SEMSolarSwitch behaviour) as the placeholder
+        # for these generic switch-interface tests.
+        description = create_switch_description("observer_mode")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
         switch._is_on = True
         switch.async_write_ha_state = MagicMock()  # not added to hass in isolation
@@ -126,7 +127,11 @@ class TestSEMSwitches:
     @pytest.mark.asyncio
     async def test_switch_availability(self, mock_coordinator):
         """Test switch availability logic."""
-        description = create_switch_description("night_charging")
+        # #277 Phase C: ``night_charging`` global switch removed.
+        # Reuse ``observer_mode`` (a generic CONFIG-category switch
+        # with the same SEMSolarSwitch behaviour) as the placeholder
+        # for these generic switch-interface tests.
+        description = create_switch_description("observer_mode")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
 
         mock_coordinator.last_update_success = True
@@ -138,7 +143,11 @@ class TestSEMSwitches:
     @pytest.mark.asyncio
     async def test_switch_error_handling(self, mock_coordinator):
         """Test switch handles coordinator refresh errors gracefully."""
-        description = create_switch_description("night_charging")
+        # #277 Phase C: ``night_charging`` global switch removed.
+        # Reuse ``observer_mode`` (a generic CONFIG-category switch
+        # with the same SEMSolarSwitch behaviour) as the placeholder
+        # for these generic switch-interface tests.
+        description = create_switch_description("observer_mode")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
 
         mock_coordinator.async_request_refresh = AsyncMock(side_effect=Exception("Refresh error"))
@@ -173,7 +182,11 @@ class TestSEMSwitches:
     @pytest.mark.asyncio
     async def test_switch_device_info(self, mock_coordinator, config_entry):
         """Test switch device info."""
-        description = create_switch_description("night_charging")
+        # #277 Phase C: ``night_charging`` global switch removed.
+        # Reuse ``observer_mode`` (a generic CONFIG-category switch
+        # with the same SEMSolarSwitch behaviour) as the placeholder
+        # for these generic switch-interface tests.
+        description = create_switch_description("observer_mode")
         switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
 
         mock_coordinator.config_entry = config_entry

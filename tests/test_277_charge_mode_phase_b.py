@@ -218,31 +218,40 @@ class TestNightGateFromMode:
         )
         assert sm._read_night_enabled_raw() is True
 
-    def test_pre_migration_legacy_falls_back_via_derivation(self):
-        """No ``charge_mode`` stored (pre-v5 install): the resolver
-        falls back to the legacy toggle derivation. Equivalent to
-        v1.6.2 behaviour."""
+    def test_no_charge_mode_falls_back_to_default(self):
+        """No ``charge_mode`` stored (corrupted config, hand-edited
+        storage, etc.): Phase C resolver returns
+        ``DEFAULT_EV_CHARGE_MODE`` (``min_plus_solar``) directly. The
+        switch state in the fixture is irrelevant post-Phase-C — the
+        legacy derivation fallback was removed. ``min_plus_solar`` is
+        in ``MODE_NIGHT_ALLOWED`` so the gate returns True.
+
+        Pre-Phase-C this test was named
+        ``test_pre_migration_legacy_falls_back_via_derivation`` and
+        asserted that the resolver derived a mode from the night /
+        tariff switch states. Phase C removed that fallback because
+        the switches are gone — the resolver now treats "missing
+        stored mode" as "use the new-install default" instead.
+        """
         sm = _build_state_machine(
             [{"id": "ev_charger"}],  # no charge_mode
-            night=True, tariff=False,  # legacy: pv + night=on + tariff=off
+            night=True, tariff=False,  # switch state irrelevant post-Phase-C
         )
-        # Derivation: pv + night=on + tariff=off → min_plus_solar → night ON
         assert sm._read_night_enabled_raw() is True
 
-    def test_no_chargers_falls_back_to_global_switch(self):
-        """Pre-EV setup with no ``ev_chargers`` list: keep reading
-        the legacy global ``switch.sem_night_charging``. Phase C
-        removes this once the migration is mandatory."""
+    def test_no_chargers_returns_false_no_fallback(self):
+        """Pre-EV setup with no ``ev_chargers`` list: nothing to
+        enable. Phase B kept the legacy global
+        ``switch.sem_night_charging`` fallback for backward-compat;
+        Phase C removed it (the switch entity is gone from
+        ``switch.py`` too). Result: unambiguous False."""
         hass = MagicMock()
-        hass.states.is_state = MagicMock(side_effect=lambda eid, st: (
-            eid == "switch.sem_night_charging" and st == "on"
-        ))
         sm = ChargingStateMachine(
             hass=hass,
             config={"ev_chargers": [], "current_delta": 1},
             time_manager=MagicMock(),
         )
-        assert sm._read_night_enabled_raw() is True
+        assert sm._read_night_enabled_raw() is False
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -303,16 +312,16 @@ class TestSmartNightFromMode:
 # Runtime ↔ migration equivalence — re-asserted after the pv+tariff fix
 # ──────────────────────────────────────────────────────────────────────
 
-class TestRuntimeMigrationEquivalence:
-    """The runtime resolver (``effective_charge_mode_for``) and the
-    migration (``_derive_charge_mode``) must produce IDENTICAL modes
-    for every legacy combination — otherwise a user who somehow
-    skips migration sees different behaviour than one who migrates.
+class TestDeriveChargeModeAllLegacyCombinations:
+    """The migration's ``_derive_charge_mode`` must produce the
+    documented mode for every legacy combination.
 
-    Phase A asserted this; Phase B's derivation fix (mapping
-    ``pv/auto/self_consumption + tariff_on`` to ``solar_plus_cheap``
-    rather than dropping the tariff signal) added a new case that
-    must satisfy the same property.
+    Pre-#277 Phase C this test ALSO asserted that the runtime resolver
+    (``effective_charge_mode_for``) produced the same answer — the
+    equivalence property. Phase C removed the runtime derivation
+    fallback (the legacy switches are gone, so it couldn't read them
+    anyway), so the property is no longer meaningful for runtime; it
+    still matters for the migration's one-shot pass.
     """
 
     COMBOS = [
@@ -334,37 +343,22 @@ class TestRuntimeMigrationEquivalence:
         ("pv",                True,  True,  "solar_plus_cheap"),
         ("pv",                False, True,  "solar_plus_cheap"),
         ("self_consumption",  True,  True,  "solar_plus_cheap"),
-        # Deferred to Phase C: ``minpv + tariff_on`` has no clean home
-        # in the 5-mode taxonomy. ``minpv`` always pulls Min from grid
-        # during the day; mapping it to ``solar_plus_cheap`` would shift
-        # daytime behaviour. Both stay on the catch-all
-        # ``min_plus_solar`` until Phase C rewrites the strategy
-        # machine against the named modes — the legacy
-        # ``_tariff_optimized_for`` keeps reading the switch directly
-        # so the daytime Min-PV tariff pause still works for these
-        # users in Phase B. Pinned here so any Phase C refactor that
-        # accidentally changes the derivation gets caught.
+        # ``minpv + tariff_on`` has no clean home in the 5-mode
+        # taxonomy. Stays on the catch-all ``min_plus_solar``; the
+        # v5→v6 fix-up specifically does NOT correct these (see
+        # TestMigrateEntryV6.test_preserves_minpv_plus_tariff_users).
         ("minpv", True,  True,  "min_plus_solar"),
         ("minpv", False, True,  "min_plus_solar"),
     ]
 
     @pytest.mark.parametrize("cmode,night,tariff,expected", COMBOS)
-    def test_resolver_matches_migration(self, cmode, night, tariff, expected):
+    def test_migration_derivation(self, cmode, night, tariff, expected):
         hass = _hass_with_switches(night=night, tariff=tariff)
         cfg = {"id": "ev_charger", "ev_charging_mode": cmode}
-        via_runtime = effective_charge_mode_for(hass, {}, cfg)
         via_migration = _derive_charge_mode(cfg, {}, hass)
-        assert via_runtime == expected, (
-            f"runtime: ({cmode}, night={night}, tariff={tariff}) "
-            f"got {via_runtime}, expected {expected}"
-        )
         assert via_migration == expected, (
             f"migration: ({cmode}, night={night}, tariff={tariff}) "
             f"got {via_migration}, expected {expected}"
-        )
-        assert via_runtime == via_migration, (
-            f"runtime ↔ migration divergence at "
-            f"({cmode}, night={night}, tariff={tariff})"
         )
 
 
@@ -417,7 +411,7 @@ class TestMigrateEntryV6:
             ],
         }, hass=hass)
         assert captured["options"]["ev_chargers"][0]["charge_mode"] == "solar_plus_cheap"
-        assert captured["version"] == 6
+        assert captured["version"] == 7  # bumped in v6→v7 (#277 Phase C)
 
     async def test_preserves_explicit_min_plus_solar_without_tariff(self):
         """User explicitly picked min_plus_solar in the new selector
@@ -488,7 +482,7 @@ class TestMigrateEntryV6:
 
     async def test_no_chargers_safe_bumps_version(self):
         captured = await self._run(options={})
-        assert captured["version"] == 6
+        assert captured["version"] == 7  # bumped in v6→v7 (#277 Phase C)
 
 
 # ──────────────────────────────────────────────────────────────────────

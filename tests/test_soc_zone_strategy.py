@@ -229,21 +229,27 @@ class TestDetermineChargingStrategy:
         )
         assert strategy == "night_grid"
 
-    def test_charging_mode_off_returns_idle(self):
-        """Charging mode = 'off' → idle."""
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "off"})
+    def test_charge_mode_off_returns_idle(self):
+        """Charge mode = 'off' → idle. Post-#277 Phase C the named
+        ``charge_mode`` is the dispatch authority; pre-C this was
+        ``ev_charging_mode=off``."""
+        coord = _build_coordinator(config_overrides={
+            "ev_chargers": [{"id": "ev_charger", "charge_mode": "off"}],
+        })
         strategy, _ = coord._determine_charging_strategy(
-            _make_power(battery_soc=95), _MockEnergy()
+            _make_power(battery_soc=95), _MockEnergy(),
+            charger_cfg={"id": "ev_charger", "charge_mode": "off"},
         )
         assert strategy == "idle"
 
-    def test_charging_mode_minpv_returns_min_pv(self):
-        """Charging mode = 'minpv' → min_pv."""
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "minpv"})
-        strategy, _ = coord._determine_charging_strategy(
-            _make_power(battery_soc=50), _MockEnergy()
-        )
-        assert strategy == "min_pv"
+    # ``test_charging_mode_minpv_returns_min_pv`` removed in #277 Phase C:
+    # the ``minpv`` legacy mode no longer dispatches to ``("min_pv", …)``
+    # from ``_determine_charging_strategy``. Per the maintainer's
+    # Phase C decision (Q1: zone-adaptive), legacy ``minpv`` users
+    # migrated to ``min_plus_solar`` get zone-adaptive day behaviour;
+    # the ``min_pv`` strategy value is now only reachable via the
+    # night-grid → MIN_PV canonical-budget mapping in
+    # ``_canonical_strategy_from_legacy``.
 
     def test_low_solar_returns_idle(self):
         """Solar < 200W → idle (not enough sun)."""
@@ -415,21 +421,17 @@ class TestZoneDebounce:
 
 
 class TestAutoMode:
-    """Tests for auto mode — forecast-aware self_consumption vs pv switching."""
+    """Tests for auto mode — forecast-aware self_consumption vs pv switching.
 
-    def test_auto_high_ratio_uses_self_consumption(self):
-        """Plenty of solar → self_consumption strategy."""
-        from custom_components.solar_energy_management.coordinator.forecast_reader import ForecastData
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
-        forecast = _MockForecast(available=True, remaining=25.0)
-        coord._cycle_forecast = forecast
-        coord._forecast_tracker.apply_dampening = MagicMock(return_value=25.0)
-
-        strategy, reason = coord._determine_charging_strategy(
-            _make_power(solar=8000, home=500, battery_soc=50), _MockEnergy(daily_ev=2)
-        )
-        assert "self_consumption" in reason
-        assert strategy == "solar_only"
+    Post-#277 Phase C ``_auto_mode_strategy`` is no longer dispatched
+    to from any charge_mode (the maintainer chose pure zone logic for
+    ``min_plus_solar`` / ``solar_plus_cheap`` to preserve the legacy
+    ``pv + night=on`` factory default's behaviour). The helper is
+    still exercised here in case a future ``auto`` charge mode reuses
+    it; the previous ``test_auto_high_ratio_uses_self_consumption``
+    that drove the helper through ``_determine_charging_strategy``
+    was deleted in Phase C because the dispatch path is gone.
+    """
 
     def test_auto_low_ratio_uses_pv(self):
         """Not enough solar → fall through to pv/zone logic."""
