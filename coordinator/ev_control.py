@@ -455,8 +455,9 @@ class EVControlMixin:
                 if cycle_budget is None:
                     _LOGGER.error(
                         "Canonical EV budget not set this cycle — "
-                        "coordinator init bug. Returning 0 W (no charge) "
-                        "to fail safe. Investigate _build_charging_context."
+                        "coordinator init bug. Falling through with 0 W "
+                        "budget (no charge this cycle) to fail safe. "
+                        "Investigate _build_charging_context."
                     )
                     budget_w = 0.0
                 else:

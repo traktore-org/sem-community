@@ -570,6 +570,52 @@ class TestEVControlInvariants:
                 f"forecast={forecast:.1f} kWh"
             )
 
+    def test_canonical_budget_current_a_clamped_to_16(self):
+        """``EVBudget.current_a`` must never exceed the 16 A KEBA ceiling
+        regardless of how much surplus the canonical math computes.
+
+        Sweep extreme solar / battery inputs across every non-IDLE
+        strategy — including BATTERY_ASSIST which can blow past the
+        surplus ceiling by design — and verify the clamp holds.
+        """
+        calc = FlowCalculator()
+        from custom_components.solar_energy_management.coordinator.flow_calculator import (
+            EVBudgetStrategy,
+        )
+        rng = random.Random(SEED + 24)
+        for _ in range(NUM_SCENARIOS):
+            # Build a power-rich scenario likely to push above 16 A
+            # (16 A × 3 × 230 V = 11 040 W).
+            p = PowerReadings(
+                solar_power=rng.uniform(8_000.0, 40_000.0),
+                home_consumption_power=rng.uniform(0.0, 1_000.0),
+                battery_power=rng.uniform(-10_000.0, 0.0),  # discharging
+                battery_soc=rng.uniform(50.0, 100.0),
+                ev_power=0.0,
+                ev_connected=True,
+                grid_power=0.0,
+            )
+            p.calculate_derived()
+            for strategy in (
+                EVBudgetStrategy.SELF_CONSUMPTION,
+                EVBudgetStrategy.SOLAR_ONLY,
+                EVBudgetStrategy.MIN_PV,
+                EVBudgetStrategy.BATTERY_ASSIST,
+                EVBudgetStrategy.NOW,
+            ):
+                b = calc.calculate_canonical_ev_budget(
+                    power=p, strategy=strategy,
+                    forecast_remaining_kwh=20.0,
+                    battery_soc=p.battery_soc,
+                    battery_capacity_kwh=15.0,
+                    battery_assist_max_power_w=8000.0,
+                )
+                assert 0 <= b.current_a <= 16, (
+                    f"current_a={b.current_a} A out of [0, 16] range "
+                    f"strategy={strategy} solar={p.solar_power:.0f} W "
+                    f"net_w={b.net_w:.0f} W"
+                )
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Performance metrics invariants (9, 10)
