@@ -121,6 +121,19 @@ class ChargingStateMachine:
         # Delta for current changes (avoid flapping)
         self.current_delta = config.get("current_delta", 1)
 
+        # Night-charging-enabled debounce state (#290). The raw vote (sum-of-
+        # per-charger-switches) can transiently flip during HA-internal races
+        # right after a config entry update — observed live on PROD 2026-05-29
+        # 21:47 UTC as a one-cycle ``NIGHT_CHARGING_ACTIVE → NIGHT_DISABLED →
+        # NIGHT_CHARGING_ACTIVE`` blip immediately after a slider write. Require
+        # 2 consecutive cycles of the new value before flipping the cached
+        # state we actually return. Trades 10 s of responsiveness for race
+        # immunity — well worth it; this gate is checked once per 10 s cycle
+        # anyway, so 10 s of extra latency is one cycle.
+        self._night_enabled_cached: Optional[bool] = None  # last committed value
+        self._night_enabled_pending: Optional[bool] = None  # value awaiting confirm
+        self._night_enabled_pending_cycles: int = 0
+
     @property
     def current_state(self) -> str:
         """Get current charging state."""
@@ -242,8 +255,58 @@ class ChargingStateMachine:
     def _any_night_charging_enabled(self) -> bool:
         """True if night charging is enabled for at least one charger (#255).
 
-        Per-charger switches are canonical. With no chargers configured (legacy), fall
-        back to the removed-elsewhere global ``switch.sem_night_charging``.
+        Per-charger switches are canonical. With no chargers configured
+        (legacy), fall back to the removed-elsewhere global
+        ``switch.sem_night_charging``.
+
+        Debounced (#290): the raw vote can transiently flip during
+        HA-internal races right after a config entry update — observed
+        live on PROD 2026-05-29 21:47 UTC as a one-cycle
+        ``NIGHT_CHARGING_ACTIVE → NIGHT_DISABLED → NIGHT_CHARGING_ACTIVE``
+        blip immediately after a slider write. Require 2 consecutive
+        cycles of the new value before flipping the cached state.
+        """
+        raw = self._read_night_enabled_raw()
+
+        # First call after init — commit immediately, no debounce needed.
+        if self._night_enabled_cached is None:
+            self._night_enabled_cached = raw
+            self._night_enabled_pending = None
+            self._night_enabled_pending_cycles = 0
+            return raw
+
+        # Vote agrees with cached — reset any pending counter and return.
+        if raw == self._night_enabled_cached:
+            self._night_enabled_pending = None
+            self._night_enabled_pending_cycles = 0
+            return self._night_enabled_cached
+
+        # Vote disagrees with cached. Start (or continue) the confirm window.
+        if raw == self._night_enabled_pending:
+            self._night_enabled_pending_cycles += 1
+        else:
+            self._night_enabled_pending = raw
+            self._night_enabled_pending_cycles = 1
+
+        # 2 consecutive cycles of disagreement → flip.
+        if self._night_enabled_pending_cycles >= 2:
+            _LOGGER.info(
+                "Night charging enabled state flipped: %s → %s (after 2-cycle debounce)",
+                self._night_enabled_cached, raw,
+            )
+            self._night_enabled_cached = raw
+            self._night_enabled_pending = None
+            self._night_enabled_pending_cycles = 0
+
+        # Until confirmed, keep returning the cached value.
+        return self._night_enabled_cached
+
+    def _read_night_enabled_raw(self) -> bool:
+        """The raw per-cycle vote: True if any per-charger night switch is
+        on (or, with no chargers configured, the legacy global switch).
+        Separated from ``_any_night_charging_enabled`` so the debounce
+        logic in the latter can call this without recursion, and so unit
+        tests can drive each path independently.
         """
         chargers = self.config.get("ev_chargers") or []
         if not chargers:
