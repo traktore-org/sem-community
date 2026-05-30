@@ -69,6 +69,16 @@ class EVControlMixin:
         Returns False when there is no charger config (``ev_chargers`` empty),
         which can only happen pre-setup; #281/S2 removed the dead legacy
         ``switch.sem_tariff_optimized`` fallback (that switch was never created).
+
+        Note (#277 Phase B): the named ``charge_mode`` selector also
+        carries this intent (only ``solar_plus_cheap`` defers to tariff
+        windows). Phase B chose to keep this helper reading the switch
+        directly to preserve behaviour for legacy users with
+        ``minpv + tariff_optimized=on`` — that combination has no clean
+        mapping in the 5-mode taxonomy and migrating it to
+        ``solar_plus_cheap`` would change daytime semantics. Phase C
+        will reconcile when the strategy machine is rewritten against
+        the named modes directly.
         """
         hass = getattr(self, "hass", None)
         if hass is None:

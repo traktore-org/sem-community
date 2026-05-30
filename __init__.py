@@ -271,6 +271,73 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 6:
+        try:
+            # v5 → v6 (#277 Phase B fix-up): narrow re-derivation for the
+            # pv/auto + tariff_on combinations that Phase A's derivation
+            # silently dropped (was: ``if mode == "auto" and tariff``,
+            # which missed the legacy ``mode=pv`` group).  Phase B fixed
+            # the derivation in both ``_derive_charge_mode`` and
+            # ``effective_charge_mode_for`` to also map
+            # ``pv/self_consumption + tariff_on`` → ``solar_plus_cheap``;
+            # this step propagates that fix to chargers that already
+            # ran through Phase A's v4→v5 with the buggy derivation.
+            #
+            # Condition is unambiguous: stored mode is the catch-all
+            # ``min_plus_solar``, legacy mode is one of the pv-family,
+            # and the per-charger tariff switch is currently ON. That
+            # combination can only be produced by Phase A's missing
+            # tariff branch — a user who explicitly picked
+            # ``min_plus_solar`` from the new selector AFTER Phase A
+            # would also satisfy the condition, but their UI experience
+            # is improved by the fix: the selector label finally matches
+            # the tariff intent they expressed.
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            full = {**new_data, **new_options}
+            chargers = new_options.get("ev_chargers", new_data.get("ev_chargers"))
+            if isinstance(chargers, list):
+                fixed = []
+                for c in chargers:
+                    c = dict(c) if isinstance(c, dict) else c
+                    if (
+                        isinstance(c, dict)
+                        and c.get("charge_mode") == "min_plus_solar"
+                    ):
+                        legacy_mode = (
+                            c.get("ev_charging_mode")
+                            or full.get("ev_charging_mode")
+                            or "pv"
+                        )
+                        cid = c.get("id", "ev_charger")
+                        tariff_on = hass.states.is_state(
+                            f"switch.sem_charger_{cid}_tariff_optimized", "on",
+                        )
+                        if (
+                            tariff_on
+                            and legacy_mode in ("pv", "auto", "self_consumption")
+                        ):
+                            c["charge_mode"] = "solar_plus_cheap"
+                            _LOGGER.info(
+                                "Charger %s: corrected charge_mode "
+                                "min_plus_solar → solar_plus_cheap "
+                                "(tariff intent preserved)",
+                                cid,
+                            )
+                    fixed.append(c)
+                new_options["ev_chargers"] = fixed
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=6, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v6 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -329,7 +396,11 @@ def _derive_charge_mode(
         return "always_max"
     if mode == "off":
         return "off"
-    if mode == "auto" and tariff:
+    # Tariff-on expresses cheap-hour intent regardless of which legacy
+    # mode the user picked (auto / pv / self_consumption all preserve
+    # it). Migrating those users to solar_only would silently lose
+    # their tariff preference.
+    if mode in ("pv", "auto", "self_consumption") and tariff:
         return "solar_plus_cheap"
     if mode in ("pv", "auto", "self_consumption") and not night:
         return "solar_only"

@@ -32,7 +32,6 @@ from ..const import (
     ChargingState,
     ENTITY_OBSERVER_MODE_SWITCH,
     ENTITY_SOLAR_POWER,
-    ENTITY_SMART_NIGHT_CHARGING,
     STATE_UNKNOWN,
     STATE_UNAVAILABLE,
 )
@@ -335,81 +334,97 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self.config[key] = pc[key]
 
     def _effective_charge_mode_for(self, charger_cfg: dict) -> str:
-        """Resolve the user-intent Charge mode for one charger (#277 Phase A).
+        """Resolve the user-intent Charge mode for one charger (#277).
 
-        Reads ``charger_cfg["charge_mode"]`` when present (post-v5 migration
-        or after a user picks one in the new selector). When absent, derives
-        the equivalent named mode from the legacy four-toggle state so the
-        coordinator's strategy machine always sees a single canonical name.
+        Phase A introduced this as the read-point Phase B switches
+        authority on; Phase B (v1.7.0) wires it into the strategy
+        machine, night gate, EV control loop, and tariff path. Phase C
+        will drop the legacy-toggle fallback inside the resolver after
+        v1.7.x soak proves migration covered every install.
 
-        **Phase A is read-only.** This helper is exposed for tests and for
-        Phase B to switch authority on — no caller in production reads it
-        yet, so behaviour is identical to v1.6.2. Phase B will route
-        ``_determine_charging_strategy`` through this helper and gate the
-        legacy field reads behind a "mode is missing" fallback. Phase C
-        deletes the fallback once the v1.7.0 soak proves the new path.
+        Delegates to the shared free function so ``ChargingStateMachine``
+        (which is a separate class, not a coordinator mixin) can use the
+        same resolver — one source of truth.
 
         Returns one of ``EV_CHARGE_MODES`` keys; never raises.
         """
-        from ..consts.ev_charge_modes import (
-            DEFAULT_EV_CHARGE_MODE,
-            EV_CHARGE_MODES,
-        )
+        from ..consts.ev_charge_modes import effective_charge_mode_for
+        return effective_charge_mode_for(self.hass, self.config, charger_cfg)
 
-        if not isinstance(charger_cfg, dict):
-            return DEFAULT_EV_CHARGE_MODE
+    # ─────────────────────────────────────────────────────────────────
+    # Mode-driven adapters — #277 Phase B
+    #
+    # Phase A introduced ``_effective_charge_mode_for`` as the single
+    # read-point for user intent. Phase B routes EVERY consumer of the
+    # legacy four-toggle state through that mode. The strategy machine,
+    # the night state machine, the EV-control loop, the dashboard sensor
+    # — all derive their effective state from the per-charger mode, no
+    # longer from individual switch reads.
+    #
+    # The mapping (see ``consts/ev_charge_modes.py`` for the source-of-
+    # truth constants):
+    #   solar_only        → no night, no tariff, smart N/A, mode≈auto
+    #   solar_plus_cheap  → night ON, tariff ON, smart ON, mode≈auto
+    #   min_plus_solar    → night ON, tariff OFF, smart ON, mode≈minpv
+    #   always_max        → night ON (irrelevant, mode is now), tariff OFF, smart OFF, mode≈now
+    #   off               → all OFF, mode≈off
+    #
+    # The legacy switch entities (`switch.sem_charger_<id>_night_charging`,
+    # `_smart_night_charging`, `_tariff_optimized`) stay registered for
+    # automation backward-compatibility but no longer drive behaviour.
+    # Phase C removes them entirely after a v1.7.x soak.
+    # ─────────────────────────────────────────────────────────────────
 
-        stored = charger_cfg.get("charge_mode")
-        if stored in EV_CHARGE_MODES:
-            return stored
+    def _mode_allows_night_charging(self, charger_cfg: dict) -> bool:
+        """Does this charger's mode permit night/grid charging at all?"""
+        from ..consts.ev_charge_modes import MODE_NIGHT_ALLOWED
+        return self._effective_charge_mode_for(charger_cfg) in MODE_NIGHT_ALLOWED
 
-        # No stored mode (pre-migration / partially-configured install) —
-        # derive it on the fly from the same legacy toggles
-        # ``_derive_charge_mode`` reads at migration time. Inline rather
-        # than importing __init__._derive_charge_mode to avoid circulars.
-        cid = charger_cfg.get("id", "ev_charger")
-        mode = (
-            charger_cfg.get("ev_charging_mode")
-            or self.config.get("ev_charging_mode")
-            or "pv"
-        )
-        night_eid = f"switch.sem_charger_{cid}_night_charging"
-        if self.hass.states.get(night_eid) is not None:
-            night = self.hass.states.is_state(night_eid, "on")
-        elif self.hass.states.get("switch.sem_night_charging") is not None:
-            night = self.hass.states.is_state("switch.sem_night_charging", "on")
-        else:
-            night = True
-        tariff_eid = f"switch.sem_charger_{cid}_tariff_optimized"
-        tariff = self.hass.states.is_state(tariff_eid, "on") if (
-            self.hass.states.get(tariff_eid) is not None
-        ) else False
+    def _mode_uses_tariff(self, charger_cfg: dict) -> bool:
+        """Does this charger's mode defer to tariff-cheap windows?
 
-        if mode == "now":
-            return "always_max"
-        if mode == "off":
-            return "off"
-        if mode == "auto" and tariff:
-            return "solar_plus_cheap"
-        if mode in ("pv", "auto", "self_consumption") and not night:
-            return "solar_only"
-        return DEFAULT_EV_CHARGE_MODE
+        Only ``solar_plus_cheap`` defers — all other night-charging modes
+        run straight through. Replaces the legacy
+        ``switch.sem_charger_<id>_tariff_optimized``.
+        """
+        from ..consts.ev_charge_modes import MODE_USES_TARIFF
+        return self._effective_charge_mode_for(charger_cfg) in MODE_USES_TARIFF
+
+    def _mode_uses_smart_night(self, charger_cfg: dict) -> bool:
+        """Does this charger's mode use forecast-aware night sizing?
+
+        ON implicitly for ``solar_plus_cheap`` and ``min_plus_solar``
+        (Q3 decision: forecast-aware is strictly better than dumb; no
+        value in user disablement). N/A elsewhere. Replaces the legacy
+        ``switch.sem_charger_<id>_smart_night_charging``.
+        """
+        from ..consts.ev_charge_modes import MODE_USES_SMART_NIGHT
+        return self._effective_charge_mode_for(charger_cfg) in MODE_USES_SMART_NIGHT
+
+    # ``_legacy_charging_mode_for`` belongs to Phase C — it's the helper
+    # that the strategy-machine rewrite will introduce alongside the
+    # call site that uses it. Adding it here in Phase B as orphaned
+    # infrastructure would confuse the Phase C author about whether
+    # Phase B forgot to wire it. The mapping constants
+    # (``MODE_TO_LEGACY_CHARGING_MODE``) live in
+    # ``consts/ev_charge_modes.py`` so Phase C just imports them.
 
     def _smart_night_charging_enabled(self) -> bool:
-        """True if smart (forecast-aware) night charging is on for any charger (#255).
+        """True if smart (forecast-aware) night charging is on for any charger.
 
-        Per-charger is canonical; falls back to the global switch for legacy installs.
-        (Also fixes the previously-malformed global entity reference — the feature was
-        effectively dead before this.)
+        Post-#277 Phase B: derives from ``charge_mode`` per charger, not
+        from the legacy ``switch.sem_charger_<id>_smart_night_charging``.
+        The switch entity stays registered for automation backward-compat
+        but no longer drives this answer.
         """
         chargers = self.config.get("ev_chargers") or []
         if not chargers:
-            return self.hass.states.is_state("switch.sem_smart_night_charging", "on")
-        for c in chargers:
-            cid = c.get("id", "ev_charger") if isinstance(c, dict) else "ev_charger"
-            if self.hass.states.is_state(f"switch.sem_charger_{cid}_smart_night_charging", "on"):
-                return True
-        return False
+            # Pre-EV installs: no chargers, nothing to enable.
+            return False
+        return any(
+            self._mode_uses_smart_night(c) for c in chargers
+            if isinstance(c, dict)
+        )
 
     def _per_charger_daily_report(self, energy) -> Dict[str, float]:
         """Per-charger daily EV energy for the sensors.
@@ -1060,17 +1075,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # priority order against one peak headroom; reset the running
                 # commitment before the loop.
                 self._night_committed_w = 0.0
+                # Pre-cache the per-charger configs once for the night
+                # gate below — inline lookup is the same pattern other
+                # branches use here. (#277 Phase B)
+                _chargers_by_id = {
+                    (c.get("id") or "ev_charger"): c
+                    for c in (self.config.get("ev_chargers") or [])
+                    if isinstance(c, dict)
+                }
                 for cid, ev_dev in sorted_chargers:
-                    # Check per-charger night charging switch (#193)
+                    # Per-charger gate (#193): skip chargers whose mode
+                    # opts out of night/grid charging. Pre-#277 Phase B
+                    # this read ``switch.sem_charger_<cid>_night_charging``
+                    # directly; post-B the named mode is authoritative —
+                    # ``solar_only`` and ``off`` skip; the other three
+                    # modes participate.
                     if charging_state in (
                         ChargingState.NIGHT_CHARGING_ACTIVE,
                         ChargingState.TARIFF_WAITING_FOR_CHEAP,
                     ):
-                        night_switch = self.hass.states.get(
-                            f"switch.sem_charger_{cid}_night_charging"
-                        )
-                        if night_switch and night_switch.state == "off":
-                            continue  # Skip this charger for night charging
+                        per_cfg = _chargers_by_id.get(cid, {})
+                        if not self._mode_allows_night_charging(per_cfg):
+                            continue  # mode opts this charger out of night
 
                     # Save coordinator-level state, swap in per-charger state
                     saved = {
@@ -1614,13 +1640,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     try:
                         _pcfg = _dl_pcfg or {}
                         _cid = _pcfg.get("id")
-                        _night_on = (
-                            _cid and self.hass.states.is_state(
-                                f"switch.sem_charger_{_cid}_night_charging", "on"
-                            )
-                        )
+                        # #277 Phase B: gate on the charge mode permitting
+                        # night charging rather than the legacy
+                        # ``switch.sem_charger_<cid>_night_charging`` state.
+                        # Mode is the authoritative answer post-B; the legacy
+                        # switch is a deprecated read-only mirror.
+                        _night_on = _cid and self._mode_allows_night_charging(_pcfg)
                         if not _night_on:
-                            raise ValueError("night charging disabled — no EV preview")
+                            raise ValueError("charge mode disables night charging — no EV preview")
                         _target = (_pcfg.get("daily_ev_target")
                                    or self.config.get("daily_ev_target", 10))
                         if _cid and _cid in self._daily_ev_per_charger:
@@ -2321,7 +2348,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Solar mode: keep charging even past target (free surplus)
         # Target check only applies to night (grid) charging above
 
-        # Charging mode selection: pv (default), minpv, now, off
+        # Charging mode selection: pv (default), minpv, now, off.
+        #
+        # Deliberately still reads the legacy ``ev_charging_mode`` field
+        # in Phase B (#277). The new ``charge_mode`` selector controls
+        # the night / smart / tariff dimensions but ``ev_charging_mode``
+        # remains the daytime strategy authority — the existing zone
+        # decisions on "pv" vs "minpv" carry intent that would be lossy
+        # to flatten into the 5-mode taxonomy this release. Phase C
+        # reconciles: the strategy machine gets rewritten against the
+        # named modes directly, the legacy field goes away. Holding the
+        # split here keeps Phase B strictly additive on the day side.
         charging_mode = self.config.get("ev_charging_mode", "pv")
         _cmode = (charger_cfg or {}).get("ev_charging_mode")
         if _cmode:
