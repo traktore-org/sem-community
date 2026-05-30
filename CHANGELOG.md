@@ -5,7 +5,7 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.7.0] — 2026-05-30
+## [1.6.3] — 2026-05-30
 
 The **EV charge UX consolidation** release (#277). Replaces the
 four-toggle soup (``ev_charging_mode`` × ``night_charging`` ×
@@ -33,7 +33,7 @@ A small population of users explicitly set the legacy
 ``ev_charging_mode`` to ``minpv`` (the "force Min from grid + solar
 to Max" mode). The Phase A migration mapped them to
 ``min_plus_solar``, which in v1.6.x kept their daytime behaviour
-unchanged (the strategy machine still read the legacy field). v1.7.0
+unchanged (the strategy machine still read the legacy field). v1.6.3
 Phase C makes ``min_plus_solar`` **zone-adaptive during the day** —
 the Min guarantee now comes from NIGHT charging top-up only, not
 from forced grid pull at noon. The Min target itself is unchanged;

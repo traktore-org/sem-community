@@ -134,14 +134,14 @@ class TestContentHashCacheBust:
         (card_root / "sem-localize.js").write_bytes(b"const x = 1;")
         base = "/local/custom_components/solar_energy_management/dashboard/card/sem-localize.js"
 
-        bust = self._bust(str(card_root), base, "1.7.0")
+        bust = self._bust(str(card_root), base, "1.6.3")
 
         # Format must be ``{version}-{8-hex-char hash}`` — matches the
         # _async_register_frontend_resources bundle path so both registration
         # paths produce identical URLs for the same file content.
         assert "-" in bust
         version, short = bust.split("-", 1)
-        assert version == "1.7.0"
+        assert version == "1.6.3"
         assert len(short) == 8
         assert all(c in "0123456789abcdef" for c in short)
 
@@ -152,10 +152,10 @@ class TestContentHashCacheBust:
         base = "/local/custom_components/solar_energy_management/dashboard/card/sem-localize.js"
 
         f.write_bytes(b'{"charge_mode": "Charge mode"}')
-        before = self._bust(str(card_root), base, "1.7.0")
+        before = self._bust(str(card_root), base, "1.6.3")
 
         f.write_bytes(b'{"charge_mode": "Charge mode", "charge_mode_min_plus_solar": "Min + Solar"}')
-        after = self._bust(str(card_root), base, "1.7.0")
+        after = self._bust(str(card_root), base, "1.6.3")
 
         assert before != after, (
             "cache-bust must track file content — adding a new translation key "
@@ -169,8 +169,8 @@ class TestContentHashCacheBust:
         (card_root / "sem-localize.js").write_bytes(b"const x = 1;")
         base = "/local/custom_components/solar_energy_management/dashboard/card/sem-localize.js"
 
-        first = self._bust(str(card_root), base, "1.7.0")
-        second = self._bust(str(card_root), base, "1.7.0")
+        first = self._bust(str(card_root), base, "1.6.3")
+        second = self._bust(str(card_root), base, "1.6.3")
 
         assert first == second
 
@@ -181,10 +181,10 @@ class TestContentHashCacheBust:
         (card_root / "dist" / "sem-cards.js").write_bytes(b"// bundle")
         base = "/local/custom_components/solar_energy_management/dashboard/card/dist/sem-cards.js"
 
-        bust = self._bust(str(card_root), base, "1.7.0")
+        bust = self._bust(str(card_root), base, "1.6.3")
 
         version, short = bust.split("-", 1)
-        assert version == "1.7.0"
+        assert version == "1.6.3"
         assert len(short) == 8
 
     def test_missing_file_falls_back_to_bare_version(self, tmp_path):
@@ -193,9 +193,9 @@ class TestContentHashCacheBust:
         card_root = tmp_path
         base = "/local/custom_components/solar_energy_management/dashboard/card/sem-localize.js"
 
-        bust = self._bust(str(card_root), base, "1.7.0")
+        bust = self._bust(str(card_root), base, "1.6.3")
 
-        assert bust == "1.7.0"
+        assert bust == "1.6.3"
 
     def test_no_timestamp_anti_pattern_in_service_path(self):
         """Guard the regression: the legacy ``int(time.time())`` cache-bust
