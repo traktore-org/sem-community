@@ -658,15 +658,10 @@ class TestDivisionByZero:
         assert flows.solar_to_home == 0.0
         assert flows.solar_to_grid == 0.0
 
-    def test_calculate_charging_current_zero_available_power_returns_zero(self, flow_calc):
-        """should return 0 amps (not raise) when available_power=0."""
-        current = flow_calc.calculate_charging_current(available_power=0.0)
-        assert current == 0.0
-
-    def test_calculate_charging_current_negative_power_returns_zero(self, flow_calc):
-        """should return 0 amps (not raise) when available_power is negative."""
-        current = flow_calc.calculate_charging_current(available_power=-500.0)
-        assert current == 0.0
+    # ``calculate_charging_current`` zero/negative boundary tests removed
+    # in Phase D.2 (#282): the method was deleted. The watts→amps path now
+    # lives in ``EVControlMixin._watts_to_amps`` whose own zero/negative
+    # boundary is exercised by the canonical-budget tests.
 
     def test_battery_redirect_zero_charge_power_returns_zero(self, flow_calc):
         """should return 0 redirect (not raise) when battery_charge_w=0."""
@@ -706,27 +701,13 @@ class TestFlowCalculatorBoundaries:
         flows = flow_calc.calculate_power_flows(power)
         assert flows.solar_to_grid == pytest.approx(5000.0, abs=1.0)
 
-    def test_ev_budget_no_export_no_ev_returns_zero(self, flow_calc):
-        """should return 0 EV budget when no surplus and EV not charging."""
-        power = _split_readings(solar=2000, home=2000, ev=0, grid_export=0)
-        budget = flow_calc.calculate_ev_budget(power)
-        assert budget == 0.0
-
-    def test_available_power_zero_when_all_solar_used_by_home(self, flow_calc):
-        """should return 0 available power when solar exactly covers home with no surplus."""
-        power = _split_readings(solar=3000, home=3000, battery_charge=0, battery_discharge=0)
-        available = flow_calc.calculate_available_power(power)
-        assert available == 0.0
-
-    def test_charging_current_clamped_to_16a_maximum(self, flow_calc):
-        """should clamp calculated current to 16A even with very high available power."""
-        current = flow_calc.calculate_charging_current(available_power=50000.0)
-        assert current <= 16.0
-
-    def test_charging_current_minimum_is_zero_not_negative(self, flow_calc):
-        """should never return negative current."""
-        current = flow_calc.calculate_charging_current(available_power=0.0)
-        assert current >= 0.0
+    # ``test_ev_budget_no_export_no_ev_returns_zero``,
+    # ``test_available_power_zero_when_all_solar_used_by_home``,
+    # ``test_charging_current_clamped_to_16a_maximum``, and
+    # ``test_charging_current_minimum_is_zero_not_negative`` removed in
+    # Phase D.2 (#282). The three primitives they exercised were deleted;
+    # the equivalent zero/clamp invariants now ride on the canonical
+    # EVBudget tests and ``EVControlMixin._watts_to_amps``.
 
     def test_power_flows_proportional_with_equal_home_ev(self, flow_calc):
         """should distribute solar equally to home and EV when both demand is equal."""

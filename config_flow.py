@@ -139,8 +139,12 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Solar Energy Management."""
 
     # v4 (#255): per-charger settings seeded from globals (async_migrate_entry).
-    # (Was 2 while async_migrate_entry already emitted v3 — corrected to match.)
-    VERSION = 4
+    # v5 (#277 Phase A): per-charger charge_mode derived from legacy toggles.
+    # v6 (#277 Phase B): re-derive charge_mode for the pv+tariff combinations
+    #     Phase A's derivation silently dropped.
+    # v7 (#277 Phase C): drop the dead ev_charging_mode key (charge_mode is
+    #     authoritative now; the legacy select + 3 legacy switches are gone).
+    VERSION = 7
 
     @staticmethod
     @callback
@@ -463,8 +467,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Energy source selection
             "prefer_hardware_energy": DEFAULT_PREFER_HARDWARE_ENERGY,
             "energy_source_auto": DEFAULT_ENERGY_SOURCE_AUTO,
-            # Optional / opt-in feature
-            "smart_night_charging": False,
+            # ``smart_night_charging`` removed in #277 Phase C — the
+            # named ``charge_mode`` carries that intent now.
             # Notifications — sensible defaults; tune in OptionsFlow
             "enable_charger_notifications": True,
             "enable_mobile_notifications": False,
@@ -1370,10 +1374,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     "observer_mode",
                     default=_c("observer_mode", DEFAULT_OBSERVER_MODE),
                 ): selector.BooleanSelector(),
-                vol.Optional(
-                    "smart_night_charging",
-                    default=_c("smart_night_charging", False),
-                ): selector.BooleanSelector(),
+                # ``smart_night_charging`` removed in #277 Phase C — the
+                # named ``charge_mode`` carries that intent (implicit ON
+                # for ``min_plus_solar`` / ``solar_plus_cheap``). Phase B
+                # already routed ``_smart_night_charging_enabled()``
+                # through the mode resolver, so this options-flow field
+                # has been inert for a release; Phase C removes it from
+                # the UI to match.
             }),
         )
 

@@ -5,6 +5,229 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] — 2026-05-30
+
+The **EV charge UX consolidation** release (#277). Replaces the
+four-toggle soup (``ev_charging_mode`` × ``night_charging`` ×
+``smart_night_charging`` × ``tariff_optimized``) with one named
+per-charger ``Charge mode`` selector. Three-phase arc shipped across
+five PRs (A + B + B.2 + C + #298 today-plan ETAs).
+
+### New
+
+- **Per-charger ``Charge mode`` selector** with five modes:
+  ``Solar only`` / ``Solar + cheapest hours`` / ``Min + Solar``
+  (default) / ``Always (max)`` / ``Off``. ``Solar + cheapest hours``
+  is dynamically hidden when no dynamic tariff is configured.
+- **Per-mode help line** in the EV card explains what each mode
+  actually does — cuts the toggle-soup mystery the #247 review
+  flagged.
+- **Today's plan timeline** gains three ETA rows (#298): "Battery
+  full at HH:MM" while charging, "Battery reaches floor at HH:MM"
+  while discharging, "EV reaches target at HH:MM" while a charging
+  session is in progress.
+
+### ⚠️ Behavioural change — explicit-``minpv`` legacy users
+
+A small population of users explicitly set the legacy
+``ev_charging_mode`` to ``minpv`` (the "force Min from grid + solar
+to Max" mode). The Phase A migration mapped them to
+``min_plus_solar``, which in v1.6.x kept their daytime behaviour
+unchanged (the strategy machine still read the legacy field). v1.6.3
+Phase C makes ``min_plus_solar`` **zone-adaptive during the day** —
+the Min guarantee now comes from NIGHT charging top-up only, not
+from forced grid pull at noon. The Min target itself is unchanged;
+the daytime path now matches what most installs (``pv + night=on``)
+were always doing.
+
+If you want strict "Min from grid at all times" behaviour, pick
+``always_max`` from the new selector — it charges at maximum
+regardless of source. Otherwise the new ``min_plus_solar`` default
+adapts to your battery SOC zone (battery priority when low, surplus
+when high, battery-assist in Zone 4) — generally more efficient
+than forced grid pull.
+
+### Migrations (automatic on first load post-upgrade)
+
+- **v4 → v5** (Phase A): Each charger gets a ``charge_mode`` derived
+  from its existing toggle state. The legacy fields stay in place.
+- **v5 → v6** (Phase B fix-up): Re-derives ``charge_mode`` for
+  installs whose Phase A derivation silently lost the
+  ``tariff_optimized`` signal (``pv/auto/self_consumption + tariff_on``
+  → ``solar_plus_cheap``).
+- **v6 → v7** (Phase C): Drops the now-dead ``ev_charging_mode`` per-
+  charger config key. The legacy ``select.sem_charger_<id>_ev_charging_mode``
+  entity is removed from the registry automatically.
+
+### Removed
+
+- **Per-charger switches** ``switch.sem_charger_<id>_night_charging``,
+  ``...smart_night_charging``, ``...tariff_optimized`` — the named
+  ``charge_mode`` selector carries all three intents now. Existing
+  automations that read these switches will need to read the
+  ``charge_mode`` select state instead.
+- **Per-charger select** ``select.sem_charger_<id>_ev_charging_mode``
+  — superseded by the new ``charge_mode`` selector.
+- **Global switches** ``switch.sem_night_charging`` and
+  ``switch.sem_smart_night_charging`` — same; ``observer_mode`` is
+  the only remaining global switch.
+- **Config-flow toggle** ``smart_night_charging`` — the named modes
+  carry the intent.
+- **Strategy machine legacy reads**: ``ev_charging_mode`` is no
+  longer consulted anywhere; ``_tariff_optimized_for`` derives from
+  the named mode.
+
+### Fixed
+
+- **Stale Lovelace cache-bust on sem-localize.js (#301)** — the legacy
+  ``generate_dashboard`` service path used ``int(time.time())`` as the
+  ``?v=`` for card resources, so a plain rsync deploy that rewrote
+  ``sem-localize.js`` left the registered URL unchanged and browsers
+  served the cached pre-Phase-B.2 file. Symptom on first install of
+  this release: the new charge-mode selector renders raw translation
+  keys (``charge_mode``, ``charge_mode_min_plus_so…``,
+  ``charge_mode_hint_min_plus_solar``) instead of localized labels.
+  Fix: per-file ``{version}-{sha1(content)[:8]}`` cache-bust, matching
+  the format ``_async_register_frontend_resources`` already uses for
+  the Lit bundle. Both paths now produce identical URLs for the same
+  file content; any deploy that changes content auto-flips the URL on
+  the next ``generate_dashboard`` call and the browser cache-misses
+  through to the fresh copy.
+
+### Internal
+
+- New ``consts/ev_charge_modes.py`` — shared constants
+  (``EV_CHARGE_MODES``, ``MODE_NIGHT_ALLOWED``, ``MODE_USES_TARIFF``,
+  ``MODE_USES_SMART_NIGHT``, ``MODE_TO_LEGACY_CHARGING_MODE``,
+  ``DEFAULT_EV_CHARGE_MODE``) and the ``effective_charge_mode_for``
+  resolver. Single source of truth for the mode taxonomy across
+  ``SEMCoordinator``, ``ChargingStateMachine``, ``EVControlMixin``,
+  the dashboard cards.
+- ``async_migrate_entry`` accumulator refactor — each step reads
+  from / writes back to threaded ``accumulated_{data,options}``
+  accumulators. Fixes a pre-existing bug exposed by chaining 4
+  migration steps (each was re-reading the original entry options on
+  test harnesses).
+- New module-level ``_content_hash_cache_bust`` helper — extracted
+  from the legacy ``generate_dashboard`` registration path so the
+  cache-bust behaviour is directly unit-testable. Replaces a closure
+  buried inside ``async_generate_dashboard_service``.
+- 15-language translations updated; legacy entries cleaned from
+  ``strings.json`` + 15 per-language files.
+- Suite: 2136 / 2136 tests passing (6 new regression tests guard
+  the #301 cache-bust contract).
+
+### Issues addressed
+
+- Closes #277 (EV charge UX consolidation arc)
+- Closes #298 (Today's plan battery / EV ETA rows)
+- Closes #301 (Stale Lovelace cache-bust on sem-localize.js)
+
+---
+
+## [1.6.2] — 2026-05-30
+
+The **Phase D.2 cleanup + EV-power realtime** patch.
+
+Two changes ship together:
+
+1. **Phase D.2 architectural cleanup (#282)** — completes the EV-budget
+   unification arc by removing the legacy fallbacks that the v1.6.0
+   canonical path left side-by-side as a safety net. Carrying two budget
+   formulas alive was exactly the duplication that produced the
+   disagreement bug class in the first place; with three weeks of clean
+   v1.6.0/v1.6.1 PROD soak the fallbacks are dead code, and keeping them
+   invited the next regression.
+
+2. **#289** — `sensor.sem_ev_power` now updates within one HA dispatch
+   of the upstream KEBA / Wallbox sensor instead of waiting up to 10 s
+   for the next coordinator cycle. The dashboard reads at 1 s
+   resolution and observably benefits; the energy-balance derivations
+   (`home_consumption_power`, sankey flows) stay on cycle granularity
+   and self-heal on the next tick.
+
+No behavioural changes outside the named removals + the sub-cycle
+passthrough. Same upgrade path as any 1.6.x.
+
+### Removed
+
+- **`flow_calculator.calculate_ev_budget`** — superseded by
+  `calculate_canonical_ev_budget` since v1.6.0 (Phase A). Zero
+  production callers as of v1.6.1.
+- **`flow_calculator.calculate_available_power`** — superseded by the
+  canonical EVBudget's per-strategy resolution. Zero production
+  callers as of v1.6.1.
+- **`flow_calculator.calculate_charging_current`** — both production
+  call sites (night charge sizing + actuator ramp) now go through
+  `EVControlMixin._watts_to_amps` which carries the per-charger
+  watts-per-amp + round-down policy directly.
+- **`EVControlMixin._calculate_solar_ev_budget`** — 74-line legacy
+  fallback that the actuator used when `_cycle_ev_budget` wasn't
+  populated. Removed; the path now logs an error and emits 0 W
+  (fail-safe = no charge) if the invariant is ever violated. This
+  catches coordinator init bugs loudly instead of silently masking
+  them with a divergent budget formula.
+- **Multi-charger distribution legacy fallback** in
+  `coordinator.py` — same fail-safe pattern applied: missing
+  `_cycle_ev_budget` → log error + distribute 0 W.
+- **`sensor._format_charging_state` demotion guard** — the cosmetic
+  SOLAR_CHARGING_ACTIVE → SOLAR_CHARGING_ALLOWED downgrade (commit
+  `1a9b3c9`) that papered over the pre-D.2 budget disagreement. The
+  canonical unification eliminated the disagreement by construction,
+  so the guard is now dead code — verified across daytime
+  battery_assist and nighttime MIN_PV soak in v1.6.0/v1.6.1.
+
+### Added
+
+- **#289 — sub-cycle `sem_ev_power` passthrough** — the `ev_power`
+  sensor now subscribes to its upstream EV-power entities via
+  `async_track_state_change_event` (single-charger: top-level
+  `ev_power_sensor`; multi-charger: every charger's
+  `ev_charging_power_sensor`). On any upstream change SEM re-sums and
+  pushes the new value immediately. Eliminates the 1-cycle gap that
+  showed up live on PROD 2026-05-29 as a 4.7 kW dashboard
+  discrepancy. 11 unit tests + the resolution / callback / cleanup
+  invariants.
+
+### Internal
+
+- **Test sweep** — removed the unit tests that pinned the deleted
+  primitives directly (`TestAvailablePower`, `TestEvBudget`,
+  `TestAvailablePowerIncludesBatteryDischarge`, `TestEVBudgetSemantics`,
+  `TestAvailablePowerInvariants`, `TestCalculateSolarEvBudget`, the
+  budget/current rows from `TestEVControlInvariants`). Their physical
+  invariants (non-negative budget, 16 A clamp, battery-discharge
+  inclusion, Zone-3 proportional ramp, measured-discharge override)
+  are now exercised against `calculate_canonical_ev_budget` and the
+  scenario harness (`tests/scenarios/2026-05-29_*`).
+- **Scenario harness rewired** — `tests/scenario_harness.py` was
+  calling the deleted `calculate_ev_budget` / `calculate_charging_current`
+  inside a bare `except Exception: pass`. Caught in review before
+  deploy: every scenario was vacuously passing (`calculated_current`
+  fell silently to 0). Rewrote to compute the canonical EVBudget
+  directly and read `EVBudget.net_w` + `EVBudget.current_a`, so
+  scenario regressions now fail loudly. 4 / 4 scenarios still pass
+  with real values.
+- **`test_multi_charger_canonical_budget.py` rewrite** — the test
+  mirrored the pre-D.2 production branch with the legacy fallback;
+  post-D.2 the branch logs an error and distributes 0 W instead.
+  New `test_missing_cycle_budget_fails_safe_to_zero` pins the fail-
+  safe; `test_legacy_method_attribute_does_not_exist_post_d2`
+  prevents accidental re-introduction.
+- **16 A clamp coverage gap closed** —
+  `TestEVControlInvariants.test_canonical_budget_current_a_clamped_to_16`
+  sweeps extreme solar / battery inputs across every non-IDLE
+  strategy (including `BATTERY_ASSIST` which can blow past the
+  surplus ceiling by design) and verifies `EVBudget.current_a`
+  stays in [0, 16].
+- **Docstring rot** — `ChargingContext.available_power` docstring
+  was still referencing `FlowCalculator.calculate_ev_budget()`;
+  updated to point at `calculate_canonical_ev_budget().net_w`.
+
+**Suite is 2054 / 2054 green** (was 2042 in v1.6.1 — 12 new tests).
+
+---
+
 ## [1.6.1] — 2026-05-30
 
 Patch release with fixes driven by the v1.6.0 PROD soak. No behavioural

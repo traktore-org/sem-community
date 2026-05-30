@@ -2587,15 +2587,11 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     <div class="range-handle range-handle-max" style="left:${g}%"
                         @pointerdown=${i=>this._rangeHandleStart(i,"max",t,e,n,l)}></div>
                 </div>
-            </div>`}_rangeHandleStart(t,e,i,s,r,a){t.stopPropagation(),t.preventDefault();const o=t.currentTarget.closest(".range-track");if(!o)return;const n="min"===e?i:s,l="min"===e?s:i,c=this._hass?.states[n],d=parseFloat(c?.attributes?.step)||(a>50?1:.5),h=a-r||1,p=t=>{const i=o.getBoundingClientRect();let s=(t-i.left)/(i.width||1);s=Math.max(0,Math.min(1,s));let n=Math.round((r+s*h)/d)*d;const c=this._entityVal(l,"min"===e?a:r);return n="min"===e?Math.min(n,c):Math.max(n,c),Math.max(r,Math.min(a,n))},g=t=>{this._freezeEntity(n,p(t.clientX)),this.requestUpdate()},u=t=>{window.removeEventListener("pointermove",g),window.removeEventListener("pointerup",u),window.removeEventListener("pointercancel",u),this._setNumber(n,p(t.clientX))};window.addEventListener("pointermove",g),window.addEventListener("pointerup",u),window.addEventListener("pointercancel",u)}_renderChargerSection(t,e){const i=Qt[e%Qt.length],s=this._val(`charger_${t}_power`,0),r=this._val(`charger_${t}_session_energy`,0),a=this._val(`charger_${t}_daily_energy`,0),o=this._val(`charger_${t}_session_solar_share`,0),n=this._val(`charger_${t}_vehicle_soc`,null)??this._val("vehicle_soc",null),l=this._val(`charger_${t}_estimated_soc`,null),c=null!=n?n:l,d=this._entityVal(`number.sem_charger_${t}_nights_until_charge`,null),h=this._valStr(`charger_${t}_charge_needed`),p=this._chargerName(t),g=this._hass?.states[`binary_sensor.sem_charger_${t}_connected`],u="on"===g?.state,_=s>50,f=_?this._t("charging"):u?this._t("connected"):this._t("idle"),m=this._entityVal(`number.sem_charger_${t}_night_initial_current`,10),v=this._entityVal(`number.sem_charger_${t}_minimum_current`,6),y=this._entityVal(`number.sem_charger_${t}_ev_battery_capacity_kwh`,40),x=this._entityVal(`number.sem_charger_${t}_ev_kwh_per_100km`,18),b="True"===h||"true"===h,$=b?"mdi:battery-alert":"mdi:battery-check",w=b?"#f06292":"#8DC892",k=b?this._t("yes"):this._t("no"),S=`switch.sem_charger_${t}_night_charging`,C=`select.sem_charger_${t}_ev_target_type`,E=this._stateStr(C)||"kwh",M=this._stateAttrs(C).options||["kwh"],z="soc"===E,D=z?`number.sem_charger_${t}_target_soc`:`number.sem_charger_${t}_daily_ev_target`,F=z?`number.sem_charger_${t}_target_soc_max`:`number.sem_charger_${t}_daily_ev_target_max`,A="on"===this._stateStr(S),T=`switch.sem_charger_${t}_tariff_optimized`,I="on"===this._stateStr(T),R=`time.sem_charger_${t}_target_time`,N=this._stateStr(R),L=N?N.slice(0,5):"—",O=`button.sem_charger_${t}_set_default_target`,B=this._stateAttrs(`${this._prefix}charging_state`),P=!1===B.ev_deadline_reachable,U=B.ev_next_cheap_window;let W="";if(U)try{const t=new Date(U);isNaN(t)||(W=t.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}))}catch(t){}const G=this._entityVal(D,z?80:10),j=z?Math.max(0,(G-c)/100*y):Math.max(0,G-a),Y=x>0?Math.round(j/x*100):null,q=(t,e)=>H`
-            <span class="ct-sw ${t?"on":"off"}"
-                @click=${t=>{t.stopPropagation(),this._toggleSwitch(e)}}>
-                <span class="ct-knob"></span>
-            </span>`,V=M.length>1?H`<select class="ct-unit" .value=${E}
+            </div>`}_rangeHandleStart(t,e,i,s,r,a){t.stopPropagation(),t.preventDefault();const o=t.currentTarget.closest(".range-track");if(!o)return;const n="min"===e?i:s,l="min"===e?s:i,c=this._hass?.states[n],d=parseFloat(c?.attributes?.step)||(a>50?1:.5),h=a-r||1,p=t=>{const i=o.getBoundingClientRect();let s=(t-i.left)/(i.width||1);s=Math.max(0,Math.min(1,s));let n=Math.round((r+s*h)/d)*d;const c=this._entityVal(l,"min"===e?a:r);return n="min"===e?Math.min(n,c):Math.max(n,c),Math.max(r,Math.min(a,n))},g=t=>{this._freezeEntity(n,p(t.clientX)),this.requestUpdate()},u=t=>{window.removeEventListener("pointermove",g),window.removeEventListener("pointerup",u),window.removeEventListener("pointercancel",u),this._setNumber(n,p(t.clientX))};window.addEventListener("pointermove",g),window.addEventListener("pointerup",u),window.addEventListener("pointercancel",u)}_renderChargerSection(t,e){const i=Qt[e%Qt.length],s=this._val(`charger_${t}_power`,0),r=this._val(`charger_${t}_session_energy`,0),a=this._val(`charger_${t}_daily_energy`,0),o=this._val(`charger_${t}_session_solar_share`,0),n=this._val(`charger_${t}_vehicle_soc`,null)??this._val("vehicle_soc",null),l=this._val(`charger_${t}_estimated_soc`,null),c=null!=n?n:l,d=this._entityVal(`number.sem_charger_${t}_nights_until_charge`,null),h=this._valStr(`charger_${t}_charge_needed`),p=this._chargerName(t),g=this._hass?.states[`binary_sensor.sem_charger_${t}_connected`],u="on"===g?.state,_=s>50,f=_?this._t("charging"):u?this._t("connected"):this._t("idle"),m=this._entityVal(`number.sem_charger_${t}_night_initial_current`,10),v=this._entityVal(`number.sem_charger_${t}_minimum_current`,6),y=this._entityVal(`number.sem_charger_${t}_ev_battery_capacity_kwh`,40),x=this._entityVal(`number.sem_charger_${t}_ev_kwh_per_100km`,18),b="True"===h||"true"===h,$=b?"mdi:battery-alert":"mdi:battery-check",w=b?"#f06292":"#8DC892",k=b?this._t("yes"):this._t("no"),S=`select.sem_charger_${t}_charge_mode`,C=this._stateAttrs(S),E=this._stateStr(S)||"min_plus_solar",M=C.options||["solar_only","min_plus_solar","always_max","off"],z={solar_only:this._t("charge_mode_solar_only"),solar_plus_cheap:this._t("charge_mode_solar_plus_cheap"),min_plus_solar:this._t("charge_mode_min_plus_solar"),always_max:this._t("charge_mode_always_max"),off:this._t("charge_mode_off")},D={solar_only:this._t("charge_mode_hint_solar_only"),solar_plus_cheap:this._t("charge_mode_hint_solar_plus_cheap"),min_plus_solar:this._t("charge_mode_hint_min_plus_solar"),always_max:this._t("charge_mode_hint_always_max"),off:this._t("charge_mode_hint_off")},F=`select.sem_charger_${t}_ev_target_type`,A=this._stateStr(F)||"kwh",T=this._stateAttrs(F).options||["kwh"],I="soc"===A,R=I?`number.sem_charger_${t}_target_soc`:`number.sem_charger_${t}_daily_ev_target`,N=I?`number.sem_charger_${t}_target_soc_max`:`number.sem_charger_${t}_daily_ev_target_max`,L=`time.sem_charger_${t}_target_time`,O=this._stateStr(L),B=O?O.slice(0,5):"—",P=`button.sem_charger_${t}_set_default_target`,U=this._stateAttrs(`${this._prefix}charging_state`),W=!1===U.ev_deadline_reachable,G=U.ev_next_cheap_window;let j="";if(G)try{const t=new Date(G);isNaN(t)||(j=t.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}))}catch(t){}const Y="solar_plus_cheap"===E&&j,q=this._entityVal(R,I?80:10),V=I?Math.max(0,(q-c)/100*y):Math.max(0,q-a),X=x>0?Math.round(V/x*100):null,Z=T.length>1?H`<select class="ct-unit" .value=${A}
                     @click=${t=>t.stopPropagation()}
-                    @change=${t=>this._selectOption(C,t.target.value)}>
-                    ${M.map(t=>H`<option value=${t} ?selected=${t===E}>${"soc"===t?"%":"kWh"}</option>`)}
-                </select>`:H`<span class="ct-unit-static">${z?"%":"kWh"}</span>`;return H`
+                    @change=${t=>this._selectOption(F,t.target.value)}>
+                    ${T.map(t=>H`<option value=${t} ?selected=${t===A}>${"soc"===t?"%":"kWh"}</option>`)}
+                </select>`:H`<span class="ct-unit-static">${I?"%":"kWh"}</span>`;return H`
             <div class="charger-section">
                 <div class="charger-header">
                     <div class="charger-dot" style="background:${i}"></div>
@@ -2646,38 +2642,48 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     <div class="ct-title">
                         <ha-icon icon="mdi:target" style="--mdc-icon-size:14px;color:#8DC892"></ha-icon>
                         ${this._t("charge_target")}
-                        ${null!=Y&&Y>0?H`<span class="ct-range">· +${Y} km</span>`:K}
+                        ${null!=X&&X>0?H`<span class="ct-range">· +${X} km</span>`:K}
                         <span class="ct-spacer"></span>
-                        ${V}
+                        ${Z}
                     </div>
-                    ${this._renderRangeSlider(D,F,z)}
+                    ${this._renderRangeSlider(R,N,I)}
+                    <!-- #277 Phase B.2: one named Charge mode selector
+                         replaces the legacy ev_grid_charging + nested
+                         ev_tariff_mode toggles. Options come from the HA
+                         entity itself (solar_plus_cheap is hidden when no
+                         dynamic tariff is configured, per Q1). The hint
+                         line under it explains what the selected mode
+                         actually does — cuts the toggle-soup mystery the
+                         #247 review flagged. -->
                     <div class="ct-row">
-                        <span class="ct-label">${this._t("ev_grid_charging")}</span>
-                        <span class="ct-ctl">${q(A,S)}</span>
+                        <span class="ct-label">${this._t("charge_mode")}</span>
+                        <span class="ct-ctl">
+                            <select class="ct-mode-select"
+                                    .value=${E}
+                                    @click=${t=>t.stopPropagation()}
+                                    @change=${t=>this._selectOption(S,t.target.value)}>
+                                ${M.map(t=>H`
+                                    <option value=${t} ?selected=${t===E}>
+                                        ${z[t]||t}
+                                    </option>`)}
+                            </select>
+                        </span>
                     </div>
-                    <!-- Tariff is a refinement OF grid charging (when, not whether): nest it.
-                         Hidden when overnight grid charging is OFF so the hierarchy is enforced visually -
-                         the switch cannot be toggled in isolation (D2). -->
-                    ${A?H`
-                        <div class="ct-row ct-subrow">
-                            <span class="ct-label">${this._t("ev_tariff_mode")}</span>
-                            <span class="ct-ctl">${q(I,T)}</span>
-                        </div>
-                        ${I?H`
-                            <div class="ct-subhint">
-                                ${this._t("ev_tariff_hint")}${W?H` · ${this._t("ev_next_cheap")} <b style="color:#8DC892">${W}</b>`:K}
-                            </div>
+                    <div class="ct-subhint">
+                        ${D[E]||""}
+                        ${Y?H`
+                            · ${this._t("ev_next_cheap")} <b style="color:#8DC892">${j}</b>
                         `:K}
-                    `:K}
+                    </div>
                     <div class="ct-row clickable"
-                        @click=${()=>this.dispatchEvent(new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:R}}))}>
+                        @click=${()=>this.dispatchEvent(new CustomEvent("hass-more-info",{bubbles:!0,composed:!0,detail:{entityId:L}}))}>
                         <span class="ct-label">${this._t("ev_charge_by")}</span>
                         <span class="ct-ctl ct-time">
                             <ha-icon icon="mdi:clock-end" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
-                            ${L}
+                            ${B}
                         </span>
                     </div>
-                    ${P?H`
+                    ${W?H`
                         <div class="ct-warn">
                             <ha-icon icon="mdi:clock-alert" style="--mdc-icon-size:14px;color:#f06292"></ha-icon>
                             <span>${this._t("ev_deadline_unreachable_short")}</span>
@@ -2686,7 +2692,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     ${this._renderPlanStrip()}
                     <div class="ct-row">
                         <span class="ct-set-default"
-                            @click=${()=>this._callService("button","press",{entity_id:O})}>
+                            @click=${()=>this._callService("button","press",{entity_id:P})}>
                             <ha-icon icon="mdi:content-save-cog" style="--mdc-icon-size:13px"></ha-icon>
                             ${this._t("set_as_default")}
                         </span>
@@ -2724,7 +2730,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     </div>
                 </div>
             </div>
-        `}render(){if(!this._config||!this._hass)return K;const t=this._binaryState("ev_connected"),e=this._binaryState("ev_charging"),i=this._val("ev_power",0);this._val("calculated_current",0),this._val("session_energy",0);const s=this._val("energy_ev_solar_percentage",0),r=this._val("session_cost",0),a=this._val("daily_ev_energy",0);this._valStr("charging_state");const o=ut(this._hass);this._hass?.states[this._pcEntity("select","ev_charging_mode","select.sem_ev_charging_mode")];this._t("mode_auto"),this._t("mode_minpv"),this._t("maximum"),this._t("off");const n=e?"wrap state-charging":t?"wrap state-connected":"wrap state-disconnected",l=e?this._t("charging"):t?this._t("connected"):this._t("disconnected"),c=e?"status-value charging":t?"status-value connected":"status-value disconnected";return H`
+        `}render(){if(!this._config||!this._hass)return K;const t=this._binaryState("ev_connected"),e=this._binaryState("ev_charging"),i=this._val("ev_power",0);this._val("calculated_current",0),this._val("session_energy",0);const s=this._val("energy_ev_solar_percentage",0),r=this._val("session_cost",0),a=this._val("daily_ev_energy",0);this._valStr("charging_state");const o=ut(this._hass),n=e?"wrap state-charging":t?"wrap state-connected":"wrap state-disconnected",l=e?this._t("charging"):t?this._t("connected"):this._t("disconnected"),c=e?"status-value charging":t?"status-value connected":"status-value disconnected";return H`
             <svg class="glow-svg">
                 <defs>
                     <filter id="ev-glow" x="-50%" y="-50%" width="200%" height="200%">
@@ -3173,6 +3179,25 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             .ct-unit-static {
                 font-size: 12px; font-weight: 600;
                 color: var(--secondary-text-color, #999); padding: 4px 2px;
+            }
+            /* #277 Phase B.2 — Charge mode selector. Wider than ct-unit
+               (multi-word labels) and aligned right inside the row's
+               .ct-ctl cell. Same caret + chrome as ct-unit so the two
+               selectors visually rhyme. */
+            .ct-mode-select {
+                appearance: none; -webkit-appearance: none;
+                background-color: var(--secondary-background-color, rgba(255,255,255,0.07));
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23bbbbbb' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 6px center;
+                background-size: 14px;
+                color: var(--primary-text-color, #e0e0e0);
+                border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+                border-radius: 8px;
+                padding: 4px 24px 4px 10px;
+                font-size: 12px; font-weight: 600;
+                cursor: pointer;
+                max-width: 200px;
             }
             .ct-sw {
                 width: 38px; height: 22px; border-radius: 12px;
@@ -3814,7 +3839,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     <span class="copy-feedback">${this._copyFeedback}</span>
                 </div>
             </div>
-        `}getCardSize(){return 8}static getStubConfig(){return{entity_prefix:"sensor.sem_"}}},{type:"custom:sem-system-card",name:"SEM System Card",description:"Consolidated system panel for Solar Energy Management",preview:!1});const oe={now:{icon:"mdi:clock-outline",color:"#5BC8D8"},solar_peak:{icon:"mdi:weather-sunny",color:"#ff9800"},solar_end:{icon:"mdi:weather-sunset",color:"#ff9800"},cheap_start:{icon:"mdi:arrow-down-bold",color:"#8DC892"},cheap_end:{icon:"mdi:arrow-up-bold",color:"#ff9800"},expensive_start:{icon:"mdi:flash-alert",color:"#f06292"},expensive_end:{icon:"mdi:flash-off",color:"#8DC892"},night_open:{icon:"mdi:weather-night",color:"#8353d1"},night_end:{icon:"mdi:weather-sunset-up",color:"#ff9800"},ev_charge_start:{icon:"mdi:ev-station",color:"#8DC892"},ev_min_reached:{icon:"mdi:battery-charging-80",color:"#4db6ac"},ev_deadline:{icon:"mdi:clock-end",color:"#f06292"},ev_wait:{icon:"mdi:pause-circle",color:"#8353d1"}};ft("sem-today-plan-card",class extends mt{setConfig(t){super.setConfig(t),this._entity=t.entity||"sensor.sem_charging_state"}set hass(t){this._hass=t;const e=(t?.states[this._entity]?.attributes||{}).today_plan||[],i=[e.length,e[0]?.when,e.at(-1)?.when,this._lang].join("|"),s="function"==typeof semLocalize;(i!==this._lastKey||s&&!this._localizeReady)&&(this._lastKey=i,this._lang=t?.language,this._localizeReady=s,this.requestUpdate())}get hass(){return this._hass}_hm(t){if(!t)return"—";try{return new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}catch(t){return"—"}}_format(t,e){let i=this._t(t);if(!i||i===t)return null;for(const[t,s]of Object.entries(e||{}))i=i.replace(new RegExp(`\\{${t}\\}`,"g"),s);return i}render(){if(!this._hass||!this._config)return K;const t=this._hass.states[this._entity],e=t?.attributes?.today_plan||[];return!Array.isArray(e)||e.length<=1?(this.style.display="none",K):(this.style.display="",H`
+        `}getCardSize(){return 8}static getStubConfig(){return{entity_prefix:"sensor.sem_"}}},{type:"custom:sem-system-card",name:"SEM System Card",description:"Consolidated system panel for Solar Energy Management",preview:!1});const oe={now:{icon:"mdi:clock-outline",color:"#5BC8D8"},solar_peak:{icon:"mdi:weather-sunny",color:"#ff9800"},solar_end:{icon:"mdi:weather-sunset",color:"#ff9800"},cheap_start:{icon:"mdi:arrow-down-bold",color:"#8DC892"},cheap_end:{icon:"mdi:arrow-up-bold",color:"#ff9800"},expensive_start:{icon:"mdi:flash-alert",color:"#f06292"},expensive_end:{icon:"mdi:flash-off",color:"#8DC892"},night_open:{icon:"mdi:weather-night",color:"#8353d1"},night_end:{icon:"mdi:weather-sunset-up",color:"#ff9800"},ev_charge_start:{icon:"mdi:ev-station",color:"#8DC892"},ev_min_reached:{icon:"mdi:battery-charging-80",color:"#4db6ac"},ev_target_reached:{icon:"mdi:car-electric",color:"#8DC892"},ev_deadline:{icon:"mdi:clock-end",color:"#f06292"},ev_wait:{icon:"mdi:pause-circle",color:"#8353d1"},battery_full:{icon:"mdi:battery-charging-100",color:"#f06292"},battery_empty:{icon:"mdi:battery-low",color:"#4db6ac"}};ft("sem-today-plan-card",class extends mt{setConfig(t){super.setConfig(t),this._entity=t.entity||"sensor.sem_charging_state"}set hass(t){this._hass=t;const e=(t?.states[this._entity]?.attributes||{}).today_plan||[],i=[e.length,e[0]?.when,e.at(-1)?.when,this._lang].join("|"),s="function"==typeof semLocalize;(i!==this._lastKey||s&&!this._localizeReady)&&(this._lastKey=i,this._lang=t?.language,this._localizeReady=s,this.requestUpdate())}get hass(){return this._hass}_hm(t){if(!t)return"—";try{return new Date(t).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}catch(t){return"—"}}_format(t,e){let i=this._t(t);if(!i||i===t)return null;for(const[t,s]of Object.entries(e||{}))i=i.replace(new RegExp(`\\{${t}\\}`,"g"),s);return i}render(){if(!this._hass||!this._config)return K;const t=this._hass.states[this._entity],e=t?.attributes?.today_plan||[];return!Array.isArray(e)||e.length<=1?(this.style.display="none",K):(this.style.display="",H`
             <ha-card>
                 <div class="wrap">
                     <div class="head">

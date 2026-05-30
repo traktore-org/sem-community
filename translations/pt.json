@@ -1000,14 +1000,8 @@
       }
     },
     "switch": {
-      "night_charging": {
-        "name": "Night Charging"
-      },
       "observer_mode": {
         "name": "Observer Mode"
-      },
-      "smart_night_charging": {
-        "name": "Forecast Night Reduction"
       }
     },
     "number": {
@@ -1139,14 +1133,21 @@
       }
     },
     "select": {
-      "ev_charging_mode": {
-        "name": "Modo de carregamento VE"
-      },
       "ev_target_type": {
         "name": "Tipo de meta do VE",
         "state": {
           "kwh": "Meta kWh",
           "soc": "Meta SoC %"
+        }
+      },
+      "charge_mode": {
+        "name": "Modo de carga",
+        "state": {
+          "solar_only": "Apenas solar",
+          "solar_plus_cheap": "Solar + horas mais baratas",
+          "min_plus_solar": "Mín + Solar",
+          "always_max": "Sempre (máx)",
+          "off": "Desligado"
         }
       }
     }

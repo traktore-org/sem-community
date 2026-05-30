@@ -32,10 +32,19 @@ def time_manager():
 
 @pytest.fixture
 def config():
-    """Return a default charging config."""
+    """Return a default charging config.
+
+    Post-#277 Phase C the night gate reads ``charge_mode`` not the
+    legacy ``switch.sem_charger_<id>_night_charging``. Add an
+    ``ev_chargers`` entry with ``min_plus_solar`` so the gate is
+    open by default (matches the pre-Phase-C ``is_state=True`` stub).
+    """
     return {
         "battery_priority_soc": 30,
         "current_delta": 1,
+        "ev_chargers": [
+            {"id": "ev_charger", "charge_mode": "min_plus_solar"},
+        ],
     }
 
 
@@ -201,10 +210,21 @@ def test_night_idle_ev_disconnected(sm, time_manager):
     assert state == ChargingState.NIGHT_IDLE
 
 
-def test_night_disabled(sm, time_manager, hass):
-    """Test night disabled when night charging switch is off."""
+def test_night_disabled(sm, time_manager):
+    """Test night disabled when no charger mode permits night charging.
+
+    Post-#277 Phase C the night gate reads ``charge_mode`` not the
+    legacy night-charging switch. Flip the per-charger mode to
+    ``solar_only`` (in the config the ``sm`` fixture already wired)
+    — that mode is not in MODE_NIGHT_ALLOWED, so the gate goes off.
+    """
     time_manager.is_night_mode.return_value = True
-    hass.states.is_state.return_value = False  # Night charging disabled
+    sm.config["ev_chargers"][0]["charge_mode"] = "solar_only"
+    # Bust the 2-cycle debounce cache so the new mode commits this
+    # cycle (the gate has a 2-cycle confirmation window from #290).
+    sm._night_enabled_cached = None
+    sm._night_enabled_pending = None
+    sm._night_enabled_pending_cycles = 0
 
     ctx = _ctx(
         ev_connected=True,

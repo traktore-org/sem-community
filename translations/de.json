@@ -1000,14 +1000,8 @@
       }
     },
     "switch": {
-      "night_charging": {
-        "name": "Nachtladen"
-      },
       "observer_mode": {
         "name": "Beobachtermodus"
-      },
-      "smart_night_charging": {
-        "name": "Prognose Nachtabsenkung"
       }
     },
     "number": {
@@ -1139,14 +1133,21 @@
       }
     },
     "select": {
-      "ev_charging_mode": {
-        "name": "EV-Lademodus"
-      },
       "ev_target_type": {
         "name": "EV-Zieltyp",
         "state": {
           "kwh": "kWh-Ziel",
           "soc": "SoC-%-Ziel"
+        }
+      },
+      "charge_mode": {
+        "name": "Lademodus",
+        "state": {
+          "solar_only": "Nur Solar",
+          "solar_plus_cheap": "Solar + günstigste Stunden",
+          "min_plus_solar": "Min + Solar",
+          "always_max": "Immer (max)",
+          "off": "Aus"
         }
       }
     }

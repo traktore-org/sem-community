@@ -26,33 +26,59 @@ from custom_components.solar_energy_management.coordinator.charging_control impo
 
 
 def _build_state_machine(switch_returns):
-    """Build a state machine whose night-enabled switch reads from a
-    controllable list. Each call to ``_read_night_enabled_raw`` consumes
-    the next value from ``switch_returns``; if exhausted, repeats the
-    last one.
+    """Build a state machine whose ``_read_night_enabled_raw`` returns
+    a controllable sequence of bool values, one per call.
+
+    Post-#277 Phase C the resolver reads ``charger_cfg["charge_mode"]``
+    directly — no switch reads, no derivation. The cycle-vs-call ratio
+    is no longer a concern (one read per call). We drive the boolean
+    by mutating the charger's ``charge_mode`` per cycle:
+      - True  → ``min_plus_solar`` (in MODE_NIGHT_ALLOWED)
+      - False → ``solar_only``     (not in MODE_NIGHT_ALLOWED)
+
+    The scaffold uses a closure that advances the iterator each call;
+    if exhausted, repeats the last value (matches the pre-Phase-C
+    semantic).
+
+    Pre-Phase-C scaffold history: this stubbed
+    ``hass.states.is_state`` and filtered by entity_id to handle the
+    Phase B resolver's multi-call pattern (night + tariff). That whole
+    layer is gone in Phase C — the resolver is a pure
+    ``charger_cfg["charge_mode"]`` lookup.
     """
-    hass = MagicMock()
-    # Per-charger switch lookup: we make `hass.states.is_state(...)` return
-    # the next value from switch_returns each call.
     seq = iter(switch_returns)
     last = [switch_returns[0]]
-    def is_state(eid, state):
+    charger = {"id": "ev_charger", "charge_mode": (
+        "min_plus_solar" if switch_returns[0] else "solar_only"
+    )}
+
+    # Subclass ChargingStateMachine to flip the charger's mode each
+    # call to _read_night_enabled_raw (one read per "cycle"). Keeps
+    # the production resolver path untouched; only the test's notion
+    # of "what does the charger look like this cycle?" is the variable.
+    sm = ChargingStateMachine(
+        hass=MagicMock(),
+        config={
+            "ev_chargers": [charger],
+            "current_delta": 1,
+        },
+        time_manager=MagicMock(),
+    )
+
+    original_read = sm._read_night_enabled_raw
+
+    def _advance_then_read():
         try:
             v = next(seq)
             last[0] = v
         except StopIteration:
             v = last[0]
-        return v
-    hass.states.is_state = is_state
+        charger["charge_mode"] = (
+            "min_plus_solar" if v else "solar_only"
+        )
+        return original_read()
 
-    sm = ChargingStateMachine(
-        hass=hass,
-        config={
-            "ev_chargers": [{"id": "ev_charger"}],
-            "current_delta": 1,
-        },
-        time_manager=MagicMock(),
-    )
+    sm._read_night_enabled_raw = _advance_then_read
     return sm
 
 

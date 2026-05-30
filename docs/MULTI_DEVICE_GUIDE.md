@@ -77,18 +77,19 @@ This guide covers setting up SEM with different hardware combinations. SEM auto-
 
 > **Important**: Use EITHER the number entity OR the service. Leave the other blank.
 
-### Per-Charger Settings (v1.5.2+)
+### Per-Charger Settings (v1.5.2+; consolidated in v1.6.3)
 
-Each charger gets its own night charging configuration:
+Each charger gets its own EV charging configuration:
 
 | Entity | Description |
 |--------|-------------|
 | `number.sem_charger_{id}_daily_ev_target` | Night charging target (kWh) per charger |
+| `number.sem_charger_{id}_daily_ev_target_max` | Solar-surplus ceiling (kWh) per charger |
 | `number.sem_charger_{id}_night_initial_current` | Start amps for night charging |
 | `number.sem_charger_{id}_minimum_current` | Minimum charging current (A) |
-| `switch.sem_charger_{id}_night_charging` | Enable/disable night charging per charger |
+| `select.sem_charger_{id}_charge_mode` | Per-charger Charge mode (Solar only / Solar + cheapest hours / Min + Solar / Always (max) / Off). v1.6.3 replacement for the legacy `night_charging`, `smart_night_charging`, `tariff_optimized` switches. |
 
-You can set different targets per car — e.g., 15 kWh for a large EV, 8 kWh for a plug-in hybrid. These settings are also editable in the config flow (Settings → Integrations → SEM → Configure → Edit charger).
+You can set different modes and targets per car — e.g., *Min + Solar* with 15 kWh Min for a daily commuter, *Solar only* with 8 kWh Max for a plug-in hybrid. These settings are also editable in the config flow (Settings → Integrations → SEM → Configure → Edit charger).
 
 ### Per-Charger Sensors
 

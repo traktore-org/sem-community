@@ -6,6 +6,7 @@ Covers the pieces around the pure planner (tested in test_ev_tariff_planner):
 - the daytime tariff pause in _determine_charging_strategy
 - the deadline current-floor applied in _execute_ev_control's night branch
 """
+import logging
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -89,9 +90,15 @@ def _make_device(device_id="keba", max_current=32, session_active=False,
 def _build_coordinator(config_overrides=None, tariff_on=False, price_level=PriceLevel.NORMAL):
     with patch.object(SEMCoordinator, "__init__", return_value=None):
         coord = SEMCoordinator.__new__(SEMCoordinator)
+    # Post-#277 Phase C: tariff intent is carried by the named
+    # ``charge_mode`` (``solar_plus_cheap`` ↔ tariff_on). The legacy
+    # ``switch.sem_charger_<id>_tariff_optimized`` was removed.
+    charger = {
+        "id": "keba", "ev_min_current": 6, "ev_night_initial_current": 10,
+        "charge_mode": "solar_plus_cheap" if tariff_on else "min_plus_solar",
+    }
     coord.config = {
-        "ev_chargers": [{"id": "keba", "ev_min_current": 6,
-                         "ev_night_initial_current": 10}],
+        "ev_chargers": [charger],
         "ev_max_current": 32,
         "target_peak_limit": 6.0,
         "ev_ramp_rate_amps": 2,
@@ -105,11 +112,11 @@ def _build_coordinator(config_overrides=None, tariff_on=False, price_level=Price
     coord.time_manager.is_night_mode = MagicMock(return_value=True)
     coord.time_manager.get_night_end_time = MagicMock(return_value="07:00")
 
-    # hass.states.is_state for the tariff switch
+    # hass is unused by ``_tariff_optimized_for`` post-Phase-C (the
+    # resolver is a pure ``charge_mode`` lookup), but provide a stub
+    # for the few other code paths the strategy machine touches.
     coord.hass = MagicMock()
-    coord.hass.states.is_state = MagicMock(
-        side_effect=lambda eid, state: tariff_on and eid.endswith("_tariff_optimized")
-    )
+    coord.hass.states.is_state = MagicMock(return_value=False)
 
     # tariff provider
     coord._tariff_provider = MagicMock()
@@ -154,7 +161,9 @@ class TestComputeNightPlan:
             PricePoint(timestamp=base.replace(hour=2) + timedelta(days=1), price=0.1, level=PriceLevel.CHEAP),
         ]
         coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=cheap)
-        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+        # #277 Phase C: tariff intent now carried by charge_mode.
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00",
+               "charge_mode": "solar_plus_cheap"}
         with patch.object(dt_util, "now", return_value=base):
             plan = coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
         assert plan.should_wait_for_cheap
@@ -168,7 +177,9 @@ class TestComputeNightPlan:
         cheap = [PricePoint(timestamp=base.replace(hour=1) + timedelta(days=1),
                             price=0.1, level=PriceLevel.CHEAP)]
         coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=cheap)
-        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+        # #277 Phase C: tariff intent now carried by charge_mode.
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00",
+               "charge_mode": "solar_plus_cheap"}
         with patch.object(dt_util, "now", return_value=base):
             plan = coord._compute_night_plan(cfg, remaining_to_min_kwh=10.0)
         assert not plan.should_wait_for_cheap
@@ -186,7 +197,9 @@ class TestComputeNightPlan:
         cheap = [PricePoint(timestamp=base.replace(hour=h) + timedelta(days=1),
                             price=0.1, level=PriceLevel.CHEAP) for h in (1, 2)]
         coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=cheap)
-        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+        # #277 Phase C: tariff intent now carried by charge_mode.
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00",
+               "charge_mode": "solar_plus_cheap"}
         with patch.object(dt_util, "now", return_value=base):
             plan = coord._compute_night_plan(cfg, remaining_to_min_kwh=12.0)
         # 2 cheap h at min-clamped ~4.1 kW ≈ 8.3 kWh < 12 → must not wait
@@ -207,7 +220,9 @@ class TestComputeNightPlan:
         # global lookahead down to 9.
         base = dt_util.now().replace(hour=22, minute=0, second=0, microsecond=0)
         coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=[])
-        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+        # #277 Phase C: tariff intent now carried by charge_mode.
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00",
+               "charge_mode": "solar_plus_cheap"}
         with patch.object(dt_util, "now", return_value=base):
             coord._compute_night_plan(cfg, remaining_to_min_kwh=8.0)
         # The provider was queried — assert the lookahead is the deadline horizon.
@@ -235,7 +250,9 @@ class TestComputeNightPlan:
         coord = _build_coordinator(tariff_on=True)
         coord.time_manager.get_night_end_time = MagicMock(side_effect=ValueError("bust"))
         coord._tariff_provider.find_cheapest_hours = MagicMock(return_value=[])
-        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": None}
+        # #277 Phase C: tariff intent now carried by charge_mode.
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": None,
+               "charge_mode": "solar_plus_cheap"}
         with patch(
             "custom_components.solar_energy_management.coordinator.ev_control."
             "DEFAULT_EV_TARGET_TIME",
@@ -253,7 +270,9 @@ class TestComputeNightPlan:
         coord = _build_coordinator(tariff_on=True)
         coord.config["ev_tariff_dwell_seconds"] = 600
         base = dt_util.now().replace(hour=22, minute=0, second=0, microsecond=0)
-        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00"}
+        # #277 Phase C: tariff intent now carried by charge_mode.
+        cfg = {"id": "keba", "ev_min_current": 6, "ev_target_time": "07:00",
+               "charge_mode": "solar_plus_cheap"}
 
         # Call 1: now IS cheap → charge now (should_wait False), records the decision.
         coord._tariff_provider.find_cheapest_hours = MagicMock(
@@ -293,30 +312,175 @@ class TestDaytimeTariffPause:
         return PowerReadings(solar_power=3000.0, battery_soc=battery_soc,
                              ev_connected=True, **kw)
 
-    def test_minpv_pauses_grid_when_expensive(self):
+    def test_solar_plus_cheap_pauses_when_expensive(self):
+        """Post-#277 Phase C: ``solar_plus_cheap`` mode (the consolidated
+        successor of legacy ``minpv + tariff_on``) falls back to pure
+        self-consumption during EXPENSIVE windows. Previously this was
+        ``minpv → pv fallthrough``; now it's ``solar_plus_cheap →
+        self_consumption``."""
         coord = _build_coordinator(tariff_on=True, price_level=PriceLevel.EXPENSIVE)
         coord.time_manager.is_night_mode = MagicMock(return_value=False)
-        cfg = {"id": "keba", "ev_charging_mode": "minpv"}
+        cfg = {"id": "keba", "charge_mode": "solar_plus_cheap"}
         strategy, reason = coord._determine_charging_strategy(
             self._power(battery_soc=50), MagicMock(daily_ev=0.0), cfg)
-        # Min+PV grid guarantee dropped → no longer min_pv (falls to surplus zone)
+        # solar_plus_cheap + EXPENSIVE → self_consumption strategy
+        # (returns "solar_only" as the strategy string)
         assert strategy != "min_pv"
+        assert strategy == "solar_only"
 
-    def test_minpv_kept_when_price_normal(self):
+    def test_solar_plus_cheap_continues_when_price_normal(self):
+        """At NORMAL price, ``solar_plus_cheap`` doesn't pause — falls
+        through to zone logic. Pre-Phase-C this returned ``min_pv``
+        for ``minpv + tariff_on + NORMAL``; Phase C's ``min_plus_solar``
+        successor goes through zone logic instead.
+        """
         coord = _build_coordinator(tariff_on=True, price_level=PriceLevel.NORMAL)
         coord.time_manager.is_night_mode = MagicMock(return_value=False)
-        cfg = {"id": "keba", "ev_charging_mode": "minpv"}
+        cfg = {"id": "keba", "charge_mode": "solar_plus_cheap"}
         strategy, reason = coord._determine_charging_strategy(
             self._power(battery_soc=50), MagicMock(daily_ev=0.0), cfg)
-        assert strategy == "min_pv"
+        # Zone-based with battery_soc=50 → Zone 2 (priority..buffer)
+        # → solar_only strategy.
+        assert strategy == "solar_only"
 
-    def test_minpv_kept_when_tariff_off(self):
+    def test_min_plus_solar_ignores_tariff_signal(self):
+        """``min_plus_solar`` doesn't consult tariff — the tariff
+        gate only fires for ``solar_plus_cheap`` post-Phase-C. The
+        legacy ``minpv + tariff_off`` setup migrates to
+        ``min_plus_solar``; daytime behaviour is now zone-based
+        (per the maintainer's Phase C decision), so an EXPENSIVE
+        price label doesn't pause anything."""
         coord = _build_coordinator(tariff_on=False, price_level=PriceLevel.EXPENSIVE)
         coord.time_manager.is_night_mode = MagicMock(return_value=False)
-        cfg = {"id": "keba", "ev_charging_mode": "minpv"}
+        cfg = {"id": "keba", "charge_mode": "min_plus_solar"}
         strategy, reason = coord._determine_charging_strategy(
             self._power(battery_soc=50), MagicMock(daily_ev=0.0), cfg)
-        assert strategy == "min_pv"
+        # Zone-based: SOC 50 → Zone 2 → solar_only
+        assert strategy == "solar_only"
+
+
+class TestTariffPauseWarningFlap:
+    """``_tariff_pause_warned`` rate-limits the one-shot ``provider error''
+    warning when the tariff provider raises while ``solar_plus_cheap`` is
+    active. v1.6.3 review surfaced an unguarded code path: the original
+    factoring cleared the flag in two places (the EXPENSIVE branch and the
+    cheap-or-normal branch). The duplicated clear looked like a bug
+    (reviewer flagged it), but the actual invariant is
+    ``successful get_price_level() ⇒ flag cleared`` regardless of price.
+    The refactor pulled the clear above the price-level branch so the
+    invariant is local to one line. These tests pin that contract so a
+    future split-by-branch doesn't silently restore the multi-warn loop.
+    """
+
+    def _power(self, battery_soc=50):
+        return PowerReadings(
+            solar_power=2000.0, grid_power=-500.0, home_consumption_power=1500.0,
+            battery_power=0.0, battery_soc=battery_soc, ev_power=0.0,
+            ev_connected=True, ev_charging=False,
+        )
+
+    def _drive(self, coord, n=1):
+        """Run the daytime strategy ``n`` times for ``solar_plus_cheap``."""
+        cfg = {"id": "keba", "charge_mode": "solar_plus_cheap"}
+        coord.time_manager.is_night_mode = MagicMock(return_value=False)
+        for _ in range(n):
+            coord._determine_charging_strategy(
+                self._power(battery_soc=50), MagicMock(daily_ev=0.0), cfg,
+            )
+
+    def test_warning_emitted_once_per_provider_outage(self, caplog):
+        """A first provider error logs the warning; subsequent ticks
+        during the same outage do not re-fire it."""
+        coord = _build_coordinator(tariff_on=True)
+        coord._tariff_provider.get_price_level = MagicMock(
+            side_effect=RuntimeError("provider down"),
+        )
+
+        with caplog.at_level(logging.WARNING,
+                             logger="custom_components.solar_energy_management.coordinator.coordinator"):
+            self._drive(coord, n=5)
+
+        msgs = [r.message for r in caplog.records
+                if "Tariff-optimized daytime pause disabled" in r.message]
+        assert len(msgs) == 1, (
+            f"expected one warning across 5 ticks of a single outage; got {len(msgs)}"
+        )
+        assert coord._tariff_pause_warned is True
+
+    def test_flag_cleared_on_successful_call_even_when_price_expensive(self):
+        """Successful ``get_price_level()`` is the recovery signal — the
+        flag must clear regardless of whether the returned price is
+        CHEAP or EXPENSIVE. Pinning the v1.6.3 invariant: a provider
+        recovery during an expensive window still re-arms the next
+        warning rather than letting it silently re-fire."""
+        coord = _build_coordinator(tariff_on=True)
+        # Tick 1: provider errors → flag set
+        coord._tariff_provider.get_price_level = MagicMock(
+            side_effect=RuntimeError("provider down"),
+        )
+        self._drive(coord, n=1)
+        assert coord._tariff_pause_warned is True
+
+        # Tick 2: provider recovers but happens to return EXPENSIVE
+        # → flag MUST clear (EXPENSIVE return is still a successful call).
+        coord._tariff_provider.get_price_level = MagicMock(
+            return_value=PriceLevel.EXPENSIVE,
+        )
+        self._drive(coord, n=1)
+        assert coord._tariff_pause_warned is False, (
+            "successful read with EXPENSIVE price must clear the flag; "
+            "otherwise the next outage silently fails the rate-limit "
+            "because the flag is already True"
+        )
+
+    def test_flag_cleared_on_successful_call_with_cheap_price(self):
+        """Same invariant via the other branch — successful CHEAP read
+        also clears the flag."""
+        coord = _build_coordinator(tariff_on=True)
+        coord._tariff_provider.get_price_level = MagicMock(
+            side_effect=RuntimeError("provider down"),
+        )
+        self._drive(coord, n=1)
+        assert coord._tariff_pause_warned is True
+
+        coord._tariff_provider.get_price_level = MagicMock(
+            return_value=PriceLevel.CHEAP,
+        )
+        self._drive(coord, n=1)
+        assert coord._tariff_pause_warned is False
+
+    def test_warning_re_fires_after_recovery_then_new_outage(self, caplog):
+        """Recovery resets the rate-limit, so a fresh outage warns
+        again. This is the user-visible behaviour the suppression
+        wants: notify on transitions, not every tick of a continuous
+        outage."""
+        coord = _build_coordinator(tariff_on=True)
+
+        # Outage 1
+        coord._tariff_provider.get_price_level = MagicMock(
+            side_effect=RuntimeError("provider down"),
+        )
+        with caplog.at_level(logging.WARNING,
+                             logger="custom_components.solar_energy_management.coordinator.coordinator"):
+            self._drive(coord, n=3)
+
+            # Recovery
+            coord._tariff_provider.get_price_level = MagicMock(
+                return_value=PriceLevel.CHEAP,
+            )
+            self._drive(coord, n=2)
+
+            # Outage 2
+            coord._tariff_provider.get_price_level = MagicMock(
+                side_effect=RuntimeError("provider down again"),
+            )
+            self._drive(coord, n=3)
+
+        msgs = [r.message for r in caplog.records
+                if "Tariff-optimized daytime pause disabled" in r.message]
+        assert len(msgs) == 2, (
+            f"expected one warning per outage across 2 outages; got {len(msgs)}"
+        )
 
 
 # ---------------------------------------------------------------------------

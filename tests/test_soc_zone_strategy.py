@@ -1,4 +1,4 @@
-"""Tests for SOC zone strategy: _determine_charging_strategy() and _calculate_solar_ev_budget().
+"""Tests for SOC zone strategy: _determine_charging_strategy() (and historically also _calculate_solar_ev_budget, removed in Phase D.2 #282 — coverage moved to canonical EVBudget tests and scenario harness).
 
 Codified from real-world scenario on 2026-03-22 where battery drained to 20% SOC.
 Investigation confirmed zones held correctly: battery assist stopped at 70% (Zone 2 boundary),
@@ -97,9 +97,11 @@ def _build_coordinator(config_overrides=None, current_state=ChargingState.SOLAR_
     coord._cycle_forecast = _MockForecast(available=False)
     coord._cycle_vehicle_soc = None
 
-    # flow calculator (for _calculate_solar_ev_budget)
+    # flow calculator — only ``calculate_canonical_ev_budget`` is wired
+    # after Phase D.2 (#282). The other zone tests don't read its return
+    # value (they only assert on the strategy decision), so the MagicMock
+    # default is enough.
     coord._flow_calculator = MagicMock()
-    coord._flow_calculator.calculate_ev_budget = MagicMock(return_value=2000)
 
     # forecast tracker (dampening defaults to 1.0)
     coord._forecast_tracker = MagicMock()
@@ -227,21 +229,27 @@ class TestDetermineChargingStrategy:
         )
         assert strategy == "night_grid"
 
-    def test_charging_mode_off_returns_idle(self):
-        """Charging mode = 'off' → idle."""
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "off"})
+    def test_charge_mode_off_returns_idle(self):
+        """Charge mode = 'off' → idle. Post-#277 Phase C the named
+        ``charge_mode`` is the dispatch authority; pre-C this was
+        ``ev_charging_mode=off``."""
+        coord = _build_coordinator(config_overrides={
+            "ev_chargers": [{"id": "ev_charger", "charge_mode": "off"}],
+        })
         strategy, _ = coord._determine_charging_strategy(
-            _make_power(battery_soc=95), _MockEnergy()
+            _make_power(battery_soc=95), _MockEnergy(),
+            charger_cfg={"id": "ev_charger", "charge_mode": "off"},
         )
         assert strategy == "idle"
 
-    def test_charging_mode_minpv_returns_min_pv(self):
-        """Charging mode = 'minpv' → min_pv."""
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "minpv"})
-        strategy, _ = coord._determine_charging_strategy(
-            _make_power(battery_soc=50), _MockEnergy()
-        )
-        assert strategy == "min_pv"
+    # ``test_charging_mode_minpv_returns_min_pv`` removed in #277 Phase C:
+    # the ``minpv`` legacy mode no longer dispatches to ``("min_pv", …)``
+    # from ``_determine_charging_strategy``. Per the maintainer's
+    # Phase C decision (Q1: zone-adaptive), legacy ``minpv`` users
+    # migrated to ``min_plus_solar`` get zone-adaptive day behaviour;
+    # the ``min_pv`` strategy value is now only reachable via the
+    # night-grid → MIN_PV canonical-budget mapping in
+    # ``_canonical_strategy_from_legacy``.
 
     def test_low_solar_returns_idle(self):
         """Solar < 200W → idle (not enough sun)."""
@@ -402,160 +410,28 @@ class TestZoneDebounce:
 
 
 # ===========================================================================
-# Tests for _calculate_solar_ev_budget
-# ===========================================================================
-
-
-class TestCalculateSolarEvBudget:
-    """Budget calculation by zone."""
-
-    def _make_context(self):
-        """Create a minimal ChargingContext."""
-        return ChargingContext()
-
-    # --- Budget by zone (tests 16-20) ---
-
-    def test_super_charging_zone4_full_assist(self):
-        """SOLAR_SUPER_CHARGING, SOC 95% (Zone 4) → base + full max_assist (4500W)."""
-        coord = _build_coordinator()
-        coord._flow_calculator.calculate_ev_budget.return_value = 2000
-        power = _make_power(battery_soc=95, battery_discharge_power=0)
-
-        budget = coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_SUPER_CHARGING, power, self._make_context()
-        )
-
-        assert budget == 2000 + 4500  # base + full Zone 4 assist
-
-    def test_super_charging_zone3_proportional_ramp(self):
-        """SOLAR_SUPER_CHARGING, SOC 80% (Zone 3) → base + proportional ramp.
-
-        ratio = (80 - 70) / (90 - 70) = 0.5
-        assist = 4500 * (0.5 + 0.5 * 0.5) = 4500 * 0.75 = 3375
-        """
-        coord = _build_coordinator()
-        coord._flow_calculator.calculate_ev_budget.return_value = 2000
-        power = _make_power(battery_soc=80, battery_discharge_power=0)
-
-        budget = coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_SUPER_CHARGING, power, self._make_context()
-        )
-
-        assert budget == 2000 + 3375  # base + proportional assist
-
-    def test_super_charging_below_floor_no_assist(self):
-        """SOLAR_SUPER_CHARGING, SOC 55% (< floor_soc 60%) → base only, no assist."""
-        coord = _build_coordinator()
-        coord._flow_calculator.calculate_ev_budget.return_value = 2000
-        power = _make_power(battery_soc=55, battery_discharge_power=0)
-
-        budget = coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_SUPER_CHARGING, power, self._make_context()
-        )
-
-        assert budget == 2000  # base only
-
-    def test_non_super_charging_no_assist(self):
-        """SOLAR_CHARGING_ACTIVE (not super) → base only, no battery assist added."""
-        coord = _build_coordinator()
-        coord._flow_calculator.calculate_ev_budget.return_value = 2000
-        power = _make_power(battery_soc=95, battery_discharge_power=0)
-
-        budget = coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_CHARGING_ACTIVE, power, self._make_context()
-        )
-
-        assert budget == 2000  # base only — not in super charging state
-
-    def test_super_charging_measured_discharge(self):
-        """SOLAR_SUPER_CHARGING, battery discharging 2000W → base + measured value."""
-        coord = _build_coordinator()
-        coord._flow_calculator.calculate_ev_budget.return_value = 1500
-        power = _make_power(battery_soc=80, battery_discharge_power=2000)
-
-        budget = coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_SUPER_CHARGING, power, self._make_context()
-        )
-
-        # Measured discharge (2000W) >= 100W threshold, so use it instead of estimate
-        assert budget == 1500 + 2000
-
-    # --- Additional edge cases ---
-
-    def test_super_charging_zone3_bottom_boundary(self):
-        """SOLAR_SUPER_CHARGING, SOC exactly at buffer_soc (70%) → minimum ramp.
-
-        ratio = (70 - 70) / (90 - 70) = 0
-        assist = 4500 * (0.5 + 0.5 * 0) = 4500 * 0.5 = 2250
-        """
-        coord = _build_coordinator()
-        coord._flow_calculator.calculate_ev_budget.return_value = 1000
-        power = _make_power(battery_soc=70, battery_discharge_power=0)
-
-        budget = coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_SUPER_CHARGING, power, self._make_context()
-        )
-
-        assert budget == 1000 + 2250
-
-    def test_super_charging_zone4_boundary(self):
-        """SOLAR_SUPER_CHARGING, SOC exactly at auto_start_soc (90%) → full assist."""
-        coord = _build_coordinator()
-        coord._flow_calculator.calculate_ev_budget.return_value = 1000
-        power = _make_power(battery_soc=90, battery_discharge_power=0)
-
-        budget = coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_SUPER_CHARGING, power, self._make_context()
-        )
-
-        assert budget == 1000 + 4500
-
-    def test_negative_base_clamped_to_zero(self):
-        """Negative base budget is clamped to 0."""
-        coord = _build_coordinator()
-        coord._flow_calculator.calculate_ev_budget.return_value = -500
-        power = _make_power(battery_soc=50, battery_discharge_power=0)
-
-        budget = coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_CHARGING_ACTIVE, power, self._make_context()
-        )
-
-        assert budget == 0
-
-    def test_forecast_passed_to_flow_calculator(self):
-        """Forecast remaining is read and passed to flow_calculator.calculate_ev_budget."""
-        coord = _build_coordinator()
-        coord._forecast_reader.read_forecast.return_value = _MockForecast(
-            available=True, remaining=12.5
-        )
-        coord._flow_calculator.calculate_ev_budget.return_value = 3000
-        power = _make_power(battery_soc=50)
-
-        coord._calculate_solar_ev_budget(
-            ChargingState.SOLAR_CHARGING_ACTIVE, power, self._make_context()
-        )
-
-        # Verify forecast_remaining was passed through
-        call_args = coord._flow_calculator.calculate_ev_budget.call_args
-        assert call_args[0][1] == 12.5  # forecast_remaining positional arg
+# TestCalculateSolarEvBudget removed in Phase D.2 (#282): the
+# ``_calculate_solar_ev_budget`` mixin method was deleted along with
+# the other legacy budget primitives. The Zone 3/4 proportional ramp +
+# measured-discharge semantics now live in
+# ``flow_calculator.calculate_canonical_ev_budget`` (BATTERY_ASSIST
+# branch) and are exercised by ``tests/scenarios/2026-05-29_budget_
+# unify_battery_assist.yaml`` end-to-end and by the canonical-budget
+# unit tests for the per-zone shape.
 
 
 class TestAutoMode:
-    """Tests for auto mode — forecast-aware self_consumption vs pv switching."""
+    """Tests for auto mode — forecast-aware self_consumption vs pv switching.
 
-    def test_auto_high_ratio_uses_self_consumption(self):
-        """Plenty of solar → self_consumption strategy."""
-        from custom_components.solar_energy_management.coordinator.forecast_reader import ForecastData
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
-        forecast = _MockForecast(available=True, remaining=25.0)
-        coord._cycle_forecast = forecast
-        coord._forecast_tracker.apply_dampening = MagicMock(return_value=25.0)
-
-        strategy, reason = coord._determine_charging_strategy(
-            _make_power(solar=8000, home=500, battery_soc=50), _MockEnergy(daily_ev=2)
-        )
-        assert "self_consumption" in reason
-        assert strategy == "solar_only"
+    Post-#277 Phase C ``_auto_mode_strategy`` is no longer dispatched
+    to from any charge_mode (the maintainer chose pure zone logic for
+    ``min_plus_solar`` / ``solar_plus_cheap`` to preserve the legacy
+    ``pv + night=on`` factory default's behaviour). The helper is
+    still exercised here in case a future ``auto`` charge mode reuses
+    it; the previous ``test_auto_high_ratio_uses_self_consumption``
+    that drove the helper through ``_determine_charging_strategy``
+    was deleted in Phase C because the dispatch path is gone.
+    """
 
     def test_auto_low_ratio_uses_pv(self):
         """Not enough solar → fall through to pv/zone logic."""

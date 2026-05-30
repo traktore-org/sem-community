@@ -341,13 +341,12 @@ must be stable for 60 seconds before a notification fires).
 | Update interval (s) | 10 | How often SEM reads sensors and adjusts devices. Lower values are more responsive but use more CPU. Values below 5 are not recommended. Raise it to 30 if you are on low-powered hardware and SEM is using too much CPU. |
 | Power delta (W) | 50 | Minimum power change before SEM updates a device. Prevents constant small adjustments. Raise it if you see too many small current adjustments to the EV charger. |
 
-### Switches for use in automations
+### Controls for use in automations
 
-| Switch | Purpose |
+| Entity | Purpose |
 |--------|---------|
-| `switch.sem_night_charging` | Enable or disable overnight EV charging |
+| `select.sem_charger_<id>_charge_mode` | Per-charger EV intent (v1.6.3) — Solar only / Solar + cheapest hours / Min + Solar / Always (max) / Off. Replaces the legacy `night_charging`, `smart_night_charging`, `tariff_optimized` switches and `ev_charging_mode` select. |
 | `switch.sem_observer_mode` | Toggle read-only mode without reinstalling |
-| `switch.sem_smart_night_charging` | Toggle forecast-aware night charge evaluation |
 
 ### Dashboard settings
 
@@ -477,13 +476,16 @@ EV charger card — one place, per charger, no config-flow round-trips:
   Max handle of the range slider — solar-surplus charging stops once this ceiling is
   reached. Defaults to full (charge freely from sun); lower it to cap surplus. (Replaces
   the former *Limit surplus* switch.)
-- **Night charging** (`switch.sem_charger_<id>_night_charging`): when on, off-peak/night
-  charging tops the car up to the target.
+- **Charge mode** (`select.sem_charger_<id>_charge_mode`, v1.6.3): the per-charger
+  intent that carries the night-charging + tariff-window decision. Picking
+  *Min + Solar* (the default) or *Solar + cheapest hours* implicitly enables
+  the night-window top-up to the Min target; picking *Solar only* skips it.
 
-These three controls are independent, so all eight combinations of
-target type × surplus-limit × night-charging are supported. (The old `surplus_target`
-device mode and scattered config-flow toggles have been removed; existing
-`ev_target_mode` settings are migrated to `ev_target_type` automatically.)
+These controls compose freely (Target type × Solar-max × Charge mode). The legacy
+`switch.sem_charger_<id>_night_charging`, `..._smart_night_charging`,
+`..._tariff_optimized`, and `select.sem_charger_<id>_ev_charging_mode` have been
+removed in v1.6.3 — their intent now lives in the single Charge mode selector.
+Existing `ev_target_mode` settings are migrated to `ev_target_type` automatically.
 
 ### Controllable and Critical toggles
 

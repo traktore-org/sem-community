@@ -45,7 +45,9 @@ class ChargingContext:
         battery_needs_priority: SOC below priority threshold (surplus → battery first).
         calculated_current: EV budget expressed as current (A), from FlowCalculator.
         excess_solar: Solar minus home minus battery charge (W), can be negative.
-        available_power: EV power budget (W), from FlowCalculator.calculate_ev_budget().
+        available_power: EV power budget (W), from
+            FlowCalculator.calculate_canonical_ev_budget().net_w (the
+            unified per-cycle canonical budget — Phase D.2 / v1.6.2).
         daily_target_reached: Remaining EV need <= 0.1 kWh (SOC-based or kWh-based).
         daily_ev_energy: Today's accumulated EV energy (kWh).
         daily_ev_energy_offset: EV energy from offset utility meter (kWh), 0 if unused.
@@ -302,20 +304,39 @@ class ChargingStateMachine:
         return self._night_enabled_cached
 
     def _read_night_enabled_raw(self) -> bool:
-        """The raw per-cycle vote: True if any per-charger night switch is
-        on (or, with no chargers configured, the legacy global switch).
+        """The raw per-cycle vote: True if any per-charger ``charge_mode``
+        permits night/grid charging (``solar_plus_cheap`` / ``min_plus_solar``
+        / ``always_max``). Pre-#277 Phase B this read the per-charger
+        ``switch.sem_charger_<id>_night_charging`` directly; post-B, mode
+        authority — the switch is a deprecated read-only mirror.
+
+        Pre-EV / no-chargers installs (no ``ev_chargers`` in config) still
+        consult the legacy global ``switch.sem_night_charging`` — those
+        installs never went through the v4→v5 migration so they have no
+        ``charge_mode`` to read. Removed in Phase C when the migration
+        becomes mandatory.
+
         Separated from ``_any_night_charging_enabled`` so the debounce
         logic in the latter can call this without recursion, and so unit
         tests can drive each path independently.
         """
+        from ..consts.ev_charge_modes import (
+            MODE_NIGHT_ALLOWED,
+            effective_charge_mode_for,
+        )
+
         chargers = self.config.get("ev_chargers") or []
         if not chargers:
-            return self.hass.states.is_state("switch.sem_night_charging", "on")
-        for c in chargers:
-            cid = c.get("id", "ev_charger") if isinstance(c, dict) else "ev_charger"
-            if self.hass.states.is_state(f"switch.sem_charger_{cid}_night_charging", "on"):
-                return True
-        return False
+            # Pre-EV / no-chargers install: nothing to enable. The
+            # legacy global ``switch.sem_night_charging`` was removed
+            # in #277 Phase C, so there is no fallback to consult.
+            return False
+        return any(
+            effective_charge_mode_for(self.hass, self.config, c)
+            in MODE_NIGHT_ALLOWED
+            for c in chargers
+            if isinstance(c, dict)
+        )
 
     def _night_state_machine(self, ctx: ChargingContext) -> str:
         """Night charging state machine.
