@@ -1148,6 +1148,16 @@
           "kwh": "kWh-tavoite",
           "soc": "SoC-%-tavoite"
         }
+      },
+      "charge_mode": {
+        "name": "Lataustila",
+        "state": {
+          "solar_only": "Vain aurinko",
+          "solar_plus_cheap": "Aurinko + halvimmat tunnit",
+          "min_plus_solar": "Min + Aurinko",
+          "always_max": "Aina (max)",
+          "off": "Pois"
+        }
       }
     }
   },

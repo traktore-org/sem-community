@@ -1148,6 +1148,16 @@
           "kwh": "kWh-Ziel",
           "soc": "SoC-%-Ziel"
         }
+      },
+      "charge_mode": {
+        "name": "Lademodus",
+        "state": {
+          "solar_only": "Nur Solar",
+          "solar_plus_cheap": "Solar + günstigste Stunden",
+          "min_plus_solar": "Min + Solar",
+          "always_max": "Immer (max)",
+          "off": "Aus"
+        }
       }
     }
   },

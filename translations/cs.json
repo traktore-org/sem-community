@@ -1148,6 +1148,16 @@
           "kwh": "Cíl kWh",
           "soc": "Cíl SoC %"
         }
+      },
+      "charge_mode": {
+        "name": "Režim nabíjení",
+        "state": {
+          "solar_only": "Pouze solární",
+          "solar_plus_cheap": "Solární + nejlevnější hodiny",
+          "min_plus_solar": "Min + Solární",
+          "always_max": "Vždy (max)",
+          "off": "Vypnuto"
+        }
       }
     }
   },

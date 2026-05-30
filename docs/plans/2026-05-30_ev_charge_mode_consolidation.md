@@ -24,9 +24,9 @@ Charge-by deadline:
 
 | Mode | Daytime behaviour | Night behaviour | Replaces toggle combo |
 |---|---|---|---|
-| **`solar_only`** | Surplus only (no grid backfill) | No charging | `mode=auto/minpv` + night=off + tariff=off |
+| **`solar_only`** | Surplus only (no grid backfill) | No charging | `mode=auto/pv/self_consumption` + night=off + tariff=off |
 | **`solar_plus_cheap`** | Surplus by day, grid in cheapest tariff windows | Charge in cheapest windows up to Min | `mode=auto` + tariff=on + night=on |
-| **`min_plus_solar`** (default) | Min from grid + solar to Max | Top up to Min from grid | `mode=minpv` + night=on |
+| **`min_plus_solar`** (default) | Min from grid + solar to Max | Top up to Min from grid | `mode=minpv` (any night state — minpv always pulls Min from grid) |
 | **`always_max`** | Charge at max regardless | Charge at max regardless | `mode=now` |
 | **`off`** | No charging | No charging | `mode=off` (or night=off + mode=off) |
 
@@ -67,9 +67,9 @@ def _derive_charge_mode(charger_cfg) -> str:
         return "off"
     if mode == "auto" and tariff:
         return "solar_plus_cheap"
-    if mode in ("pv", "self_consumption") and not night:
+    if mode in ("pv", "auto", "self_consumption") and not night:
         return "solar_only"
-    return "min_plus_solar"  # the catch-all default
+    return "min_plus_solar"  # the catch-all default — covers minpv (always grid-Min)
 ```
 
 For HACS upgrade users, the migration:
@@ -109,21 +109,28 @@ they become read-only mirrors of the new mode.
   rollback chance), drop the legacy switches from `switch.py`.
 - The fallback path in the coordinator goes away.
 
-## Open questions before coding
+## Resolved design questions (2026-05-30)
 
-1. **`solar_plus_cheap` semantics for non-tariff users:** if the user
-   has no dynamic-tariff configured, this mode degrades to
-   `solar_only`. Acceptable? Or should we hide the option entirely?
-2. **Battery assist in `min_plus_solar`:** should Z4 battery_assist
-   always be available, or gated by a separate "use battery for EV"
-   toggle? Current proposal: always available; this matches today's
-   behaviour where Auto+Z4 → battery_assist.
-3. **Smart night being implicit:** users who actively want to disable
-   forecast-aware skipping have no way to do so in the new UX. Keep
-   the existing `smart_night_charging` toggle visible? Hide it but
-   keep functional?
-4. **Default for new installs:** `min_plus_solar` matches the current
-   factory defaults (`pv` + night=on + smart=on + tariff=off). Agreed?
+Maintainer answered before Phase A started:
+
+1. **`solar_plus_cheap` semantics for non-tariff users:** **Hide the
+   option entirely** when no dynamic tariff is configured. The mode
+   appears in the selector only when a tariff is present. Cleanest
+   UX — no ghost modes; "why isn't it charging at night?" cannot
+   arise. Selector population is dynamic (recomputed on tariff add /
+   remove).
+2. **Battery assist in `min_plus_solar`:** **Always available** when
+   SOC ≥ floor. No new toggle. Matches today's Auto+Z4 behaviour;
+   no re-introduction of the toggle-soup.
+3. **Smart night being implicit:** **Hide the toggle.** Forecast-
+   aware skip / size-down is strictly better than dumb-on-at-
+   midnight; no value in user disablement. Smart is implicitly ON
+   for `min_plus_solar` and `solar_plus_cheap`, N/A for the others.
+   The existing `smart_night_charging` switch becomes hidden + dead
+   (kept registered for automation backward-compat, but read-only).
+4. **Default for new installs:** **`min_plus_solar`** — matches the
+   current factory defaults (`pv` + night=on + smart=on + tariff=
+   off). Zero behaviour change for new installs.
 
 ## Why this lands cleanly on top of v1.6.0
 
@@ -155,10 +162,10 @@ they become read-only mirrors of the new mode.
 Realistic ship target: **v1.7.0** in a focused 2–3 day window after
 v1.6.0 has soaked.
 
-## Decision needed from maintainer
+## Decisions confirmed
 
-Before I write any code for Phase A:
+- Five-mode taxonomy: confirmed.
+- Open questions 1–4: resolved (see "Resolved design questions" above).
+- `v1.7.0` ship target: confirmed.
 
-1. Confirm the five-mode taxonomy.
-2. Resolve open questions 1–4 above.
-3. Confirm `v1.7.0` ship target (vs deferred indefinitely).
+Phase A in progress on branch `feature/277-charge-mode-phase-a`.
