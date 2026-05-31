@@ -5,6 +5,35 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.6] — 2026-05-31
+
+Same-day hotfix for v1.6.5 — the per-charger power read at
+``_this_charger_power`` did a unit-naive ``float(state.state)`` and
+compared a kW value to a 500 W threshold. KEBA's native
+``sensor.keba_p30_charging_power`` reports in kW; the comparison
+``4.14 < 500`` was always False so the v1.6.5 off-mode stop never
+fired on KEBA, even when the firmware self-resumed. Confirmed live
+on PROD 2026-05-31 15:26 — KEBA self-resumed and ran uncontrolled
+for ~2 min until a manual ``keba.disable`` stopped it.
+
+### Fixed
+
+- **Unit-aware per-charger power reading** — ``_this_charger_power``
+  now reads the sensor's ``unit_of_measurement`` attribute and
+  converts kW → W before the 500 W threshold check. Tests pin both
+  KEBA-style (kW) and Wallbox-style (W) sensors so the next charger
+  integration doesn't introduce the same trap.
+
+- **Per-charger SOC isolation in multi-charger setups** (#318) —
+  ``_update_ev_intelligence`` was only calling ``update_energy()`` on
+  the PRIMARY taper detector at line ~3326; every per-charger detector
+  in ``_ev_taper_detectors`` stayed at ``_energy_since_full=0``,
+  giving every charger the same default SOC. Confirmed by @RienduPre
+  on a multi-charger Wallbox Pulsar + Growatt setup. Fix: also call
+  ``update_energy(per_increment, per_hw_total)`` inside the
+  per-charger loop, using each charger's own ``ev_total_energy_sensor``
+  hardware counter for drift-free tracking when configured.
+
 ## [1.6.5] — 2026-05-31
 
 Same-day follow-up to v1.6.4. Closes the second half of the off-mode

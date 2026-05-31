@@ -654,6 +654,69 @@ class TestOffModeTerminatesActiveCharge:
         dev.stop_session.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_kw_unit_conversion_from_native_charger_sensor(self):
+        """KEBA's native ``sensor.keba_p30_charging_power`` reports in
+        kW. The first cut of ``_this_charger_power`` did a raw
+        ``float(state.state)`` and compared 4.14 (kW) to the 500 W
+        threshold — silently failed every cycle. Confirmed on PROD
+        2026-05-31 15:26 during the v1.6.5 soak.
+
+        This test pins unit-aware reading: a state value of "4.14" with
+        ``unit_of_measurement="kW"`` is converted to 4140 W BEFORE the
+        threshold check, so the override fires correctly.
+        """
+        coord = _build_coordinator()
+        coord.config["ev_chargers"] = [{
+            "id": "keba", "charge_mode": "off",
+            "ev_charging_power_sensor": "sensor.keba_p30_charging_power",
+        }]
+        dev = _make_device(device_id="keba", session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+
+        def states_get(eid):
+            if eid == "sensor.keba_p30_charging_power":
+                s = MagicMock()
+                s.state = "4.14"  # KEBA reports kW
+                s.attributes = {"unit_of_measurement": "kW"}
+                return s
+            return None
+        coord.hass.states.get = states_get
+
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled")
+        # ``power.ev_power`` is the fallback (already in W); doesn't matter
+        # here because the per-charger sensor read takes precedence.
+        power = PowerReadings(ev_connected=True, ev_power=0.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_w_unit_passes_through(self):
+        """A charger that reports in W (most non-KEBA) is read raw."""
+        coord = _build_coordinator()
+        coord.config["ev_chargers"] = [{
+            "id": "wallbox", "charge_mode": "off",
+            "ev_charging_power_sensor": "sensor.wallbox_charging_power",
+        }]
+        dev = _make_device(device_id="wallbox", session_active=False)
+        coord._ev_device = dev
+
+        def states_get(eid):
+            if eid == "sensor.wallbox_charging_power":
+                s = MagicMock()
+                s.state = "4140"  # Wallbox reports W
+                s.attributes = {"unit_of_measurement": "W"}
+                return s
+            return None
+        coord.hass.states.get = states_get
+
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled")
+        power = PowerReadings(ev_connected=True, ev_power=0.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
     async def test_log_suppression_then_reset(self):
         """Per-charger ``_off_mode_stop_logged_for`` debounces the WARNING.
 
