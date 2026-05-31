@@ -160,6 +160,24 @@ class EnergyTotals:
 
 
 @dataclass
+class ChargerEnergyFlows:
+    """Per-charger slice of the daily EV energy flow attribution (v1.6.15).
+
+    Mirrors :class:`ChargerFlows` (power, W) at the kWh level, integrated
+    over time by ``FlowCalculator.integrate_energy_flows``. The fleet
+    ``EnergyFlows.solar_to_ev`` (etc.) is the sum across all chargers'
+    values here — invariant pinned in
+    ``tests/test_per_charger_energy_flows.py``.
+
+    Empty / not-populated in single-charger setups; the fleet-level
+    ``EnergyFlows`` fields are authoritative there.
+    """
+    solar_to_ev: float = 0.0
+    grid_to_ev: float = 0.0
+    battery_to_ev: float = 0.0
+
+
+@dataclass
 class EnergyFlows:
     """Daily energy flow distribution (kWh)."""
     # Solar flows
@@ -176,6 +194,15 @@ class EnergyFlows:
     # Battery flows
     battery_to_home: float = 0.0
     battery_to_ev: float = 0.0
+
+    # Per-charger EV energy split (v1.6.15). Populated by
+    # ``FlowCalculator.integrate_energy_flows`` when
+    # ``PowerFlows.per_charger`` is non-empty (multi-charger setups).
+    # Empty dict in single-charger setups — readers fall back to the
+    # fleet fields above. Invariant:
+    # ``sum(c.solar_to_ev for c in per_charger.values()) == solar_to_ev``
+    # within rounding tolerance.
+    per_charger: "Dict[str, ChargerEnergyFlows]" = field(default_factory=dict)
 
 
 @dataclass
@@ -542,6 +569,35 @@ class SEMData:
             "flow_grid_to_battery_energy": self.energy_flows.grid_to_battery,
             "flow_battery_to_home_energy": self.energy_flows.battery_to_home,
             "flow_battery_to_ev_energy": self.energy_flows.battery_to_ev,
+
+            # Per-charger flow surface (v1.6.15). Emit only when the
+            # multi-charger pipeline has populated these maps; in
+            # single-charger setups the dicts are empty and the keys
+            # are skipped, so the fleet sensors stay authoritative.
+            **{
+                f"charger_{cid}_flow_solar_to_ev_power": cf.solar_to_ev
+                for cid, cf in (self.power_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_grid_to_ev_power": cf.grid_to_ev
+                for cid, cf in (self.power_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_battery_to_ev_power": cf.battery_to_ev
+                for cid, cf in (self.power_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_solar_to_ev_energy": cef.solar_to_ev
+                for cid, cef in (self.energy_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_grid_to_ev_energy": cef.grid_to_ev
+                for cid, cef in (self.energy_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_battery_to_ev_energy": cef.battery_to_ev
+                for cid, cef in (self.energy_flows.per_charger or {}).items()
+            },
 
             # Costs
             "daily_costs": self.costs.daily_costs,

@@ -17,7 +17,14 @@ from typing import Dict, Optional
 
 from homeassistant.util import dt as dt_util
 
-from .types import ChargerFlows, PowerReadings, PowerFlows, EnergyTotals, EnergyFlows
+from .types import (
+    ChargerEnergyFlows,
+    ChargerFlows,
+    EnergyFlows,
+    EnergyTotals,
+    PowerFlows,
+    PowerReadings,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -143,6 +150,12 @@ class FlowCalculator:
         """Initialize flow calculator."""
         # Accumulators for energy flows (reset daily)
         self._flow_accumulators: Dict[str, float] = {}
+        # v1.6.15: per-charger EV flow accumulators (kWh), reset daily
+        # alongside ``_flow_accumulators``. Outer key is the charger id,
+        # inner key is one of ``_PER_CHARGER_ACCUMULATED_ATTRS``. Empty
+        # in single-charger setups (no per-charger PowerFlows entries
+        # arrive at ``integrate_energy_flows``).
+        self._per_charger_accumulators: Dict[str, Dict[str, float]] = {}
         self._current_date: date = dt_util.now().date()
 
     def calculate_power_flows(self, power: PowerReadings) -> PowerFlows:
@@ -245,6 +258,12 @@ class FlowCalculator:
         "battery_to_home", "battery_to_ev",
     )
 
+    # v1.6.15: per-charger EV slice. Only the three EV-side flows
+    # have a per-charger attribution surface — the rest stay fleet-level.
+    _PER_CHARGER_ACCUMULATED_ATTRS = (
+        "solar_to_ev", "grid_to_ev", "battery_to_ev",
+    )
+
     def integrate_energy_flows(
         self, power_flows: PowerFlows, interval_seconds: float,
     ) -> EnergyFlows:
@@ -284,6 +303,7 @@ class FlowCalculator:
         today = dt_util.now().date()
         if today != self._current_date:
             self._flow_accumulators.clear()
+            self._per_charger_accumulators.clear()
             self._current_date = today
 
         hours = max(0.0, interval_seconds) / 3600.0
@@ -296,15 +316,50 @@ class FlowCalculator:
         flows = EnergyFlows()
         for attr in self._ACCUMULATED_ATTRS:
             setattr(flows, attr, round(self._flow_accumulators.get(attr, 0.0), 3))
+
+        # v1.6.15: per-charger EV slice. Integrate ``power_flows.per_charger``
+        # into a parallel dict-of-dicts so each charger has its own kWh
+        # counter. Sum invariant: per_charger totals match the fleet
+        # ``flows.solar_to_ev`` (etc.) modulo rounding (pinned in
+        # ``tests/test_per_charger_energy_flows.py``).
+        if power_flows.per_charger:
+            for cid, cflow in power_flows.per_charger.items():
+                acc = self._per_charger_accumulators.setdefault(cid, {})
+                for attr in self._PER_CHARGER_ACCUMULATED_ATTRS:
+                    watts = getattr(cflow, attr, 0.0) or 0.0
+                    acc[attr] = acc.get(attr, 0.0) + watts * hours / 1000.0
+
+        # Emit every charger ever seen in the accumulator — even those
+        # the current cycle's ``power_flows`` doesn't mention (e.g. car
+        # unplugged mid-day). The user-visible counter must not regress
+        # to 0 just because the charger went idle.
+        for cid, acc in self._per_charger_accumulators.items():
+            flows.per_charger[cid] = ChargerEnergyFlows(
+                solar_to_ev=round(acc.get("solar_to_ev", 0.0), 3),
+                grid_to_ev=round(acc.get("grid_to_ev", 0.0), 3),
+                battery_to_ev=round(acc.get("battery_to_ev", 0.0), 3),
+            )
+
         return flows
 
     def get_flow_accumulator_state(self) -> dict:
         """Snapshot for persistence (#282). Keys + date so restore can
-        detect a stale snapshot from a previous day."""
-        return {
+        detect a stale snapshot from a previous day.
+
+        v1.6.15 adds ``per_charger`` — restored only if non-empty so
+        single-charger storage stays bit-for-bit compatible with the
+        pre-v1.6.15 snapshot format.
+        """
+        snap = {
             "date": self._current_date.isoformat(),
             "accumulators": dict(self._flow_accumulators),
         }
+        if self._per_charger_accumulators:
+            snap["per_charger"] = {
+                cid: dict(acc)
+                for cid, acc in self._per_charger_accumulators.items()
+            }
+        return snap
 
     def restore_flow_accumulator_state(self, state: dict) -> None:
         """Restore on coordinator startup so an HA restart mid-day doesn't
@@ -325,6 +380,19 @@ class FlowCalculator:
                 v = acc.get(k)
                 if isinstance(v, (int, float)):
                     self._flow_accumulators[k] = float(v)
+
+        # v1.6.15: restore per-charger slice if present. Missing key is
+        # the expected case for pre-v1.6.15 snapshots — silently skip.
+        pc = state.get("per_charger")
+        if isinstance(pc, dict):
+            for cid, acc in pc.items():
+                if not isinstance(acc, dict):
+                    continue
+                target = self._per_charger_accumulators.setdefault(str(cid), {})
+                for k in self._PER_CHARGER_ACCUMULATED_ATTRS:
+                    v = acc.get(k)
+                    if isinstance(v, (int, float)):
+                        target[k] = float(v)
 
     def calculate_energy_flows(self, energy: EnergyTotals) -> EnergyFlows:
         """Legacy proportional-allocation energy flows (kept for tests).
