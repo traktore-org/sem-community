@@ -267,9 +267,10 @@ def _build_coordinator(scenario: Dict[str, Any]):
     # config — we already populated config above, so no extra set needed.
     coord._forecast_tracker = MagicMock()
     coord._forecast_tracker.dampening_factor = 1.0
-    # apply_dampening is called by _auto_mode_strategy; default MagicMock
-    # would return a MagicMock that doesn't compare cleanly with floats →
-    # `ratio > 2.0` crashes. Make it a pass-through.
+    # apply_dampening is called from the night-charging top-up path
+    # (coordinator.py:2830). Default MagicMock returns something that
+    # doesn't compare cleanly with floats — make it a pass-through so
+    # downstream arithmetic doesn't crash inside the harness.
     coord._forecast_tracker.apply_dampening = lambda x: x
     # state machine + time manager — strategy doesn't need their behaviour,
     # only their presence. Mock at the attribute level so attr lookups succeed.
@@ -401,8 +402,9 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
             canonical_strat = EVBudgetStrategy.IDLE
         elif strategy == "now":
             canonical_strat = EVBudgetStrategy.NOW
-        elif strategy == "min_pv":
-            canonical_strat = EVBudgetStrategy.MIN_PV
+        # ``min_pv`` mapping removed in #305 — production mapper no
+        # longer accepts the tuple either; the night_grid path is the
+        # only producer of canonical MIN_PV.
         elif strategy == "battery_assist":
             canonical_strat = EVBudgetStrategy.BATTERY_ASSIST
         elif strategy == "solar_only":

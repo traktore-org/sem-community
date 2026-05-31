@@ -53,7 +53,9 @@ class ChargingContext:
         daily_ev_energy_offset: EV energy from offset utility meter (kWh), 0 if unused.
         remaining_ev_energy: Remaining EV need (kWh), from vehicle SOC or daily target.
         charging_strategy: Strategy from SOC zone logic — one of:
-            "solar_only", "battery_assist", "night_grid", "min_pv", "idle".
+            "solar_only", "battery_assist", "night_grid", "idle". (The
+            legacy ``"min_pv"`` value was retired in #305 — no producer
+            remains and the consuming branch at line 208 is inert.)
         charging_strategy_reason: Human-readable explanation of strategy choice.
         night_target_kwh: Night charging target (kWh), may be forecast-adjusted if enabled.
             For night mode, remaining is derived from this field directly.
