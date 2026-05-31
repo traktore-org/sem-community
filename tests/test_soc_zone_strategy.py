@@ -229,10 +229,17 @@ class TestDetermineChargingStrategy:
         )
         assert strategy == "night_grid"
 
-    def test_charge_mode_off_returns_idle(self):
-        """Charge mode = 'off' → idle. Post-#277 Phase C the named
-        ``charge_mode`` is the dispatch authority; pre-C this was
-        ``ev_charging_mode=off``."""
+    def test_charge_mode_off_returns_disabled(self):
+        """Charge mode = 'off' → "disabled" (not generic "idle").
+
+        Post-v1.6.3 hotfix: explicit-off is a distinct strategy from
+        the transient "idle" producers (Zone 1, solar<200W, target met).
+        The state machine routes "disabled" to SOLAR_IDLE (terminal stop)
+        while "idle" stays in CHARGING_ALLOWED (warm, waiting). Same
+        canonical EVBudgetStrategy.IDLE downstream, distinct upstream.
+        Pre-C this was ``ev_charging_mode=off``; post-#277 Phase C the
+        named ``charge_mode`` is the dispatch authority.
+        """
         coord = _build_coordinator(config_overrides={
             "ev_chargers": [{"id": "ev_charger", "charge_mode": "off"}],
         })
@@ -240,7 +247,7 @@ class TestDetermineChargingStrategy:
             _make_power(battery_soc=95), _MockEnergy(),
             charger_cfg={"id": "ev_charger", "charge_mode": "off"},
         )
-        assert strategy == "idle"
+        assert strategy == "disabled"
 
     # ``test_charging_mode_minpv_returns_min_pv`` removed in #277 Phase C:
     # the ``minpv`` legacy mode no longer dispatches to ``("min_pv", …)``

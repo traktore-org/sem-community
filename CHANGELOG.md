@@ -5,6 +5,42 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.4] — 2026-05-31
+
+Hotfix on top of v1.6.3 plus the cleanup follow-ups #304/#305 that
+shipped to develop the same day.
+
+### Fixed
+
+- **`charge_mode=off` did not stop EV charging** — surfaced during the
+  v1.6.3 PROD soak. Setting the per-charger Charge mode to ``Off`` while
+  the EV was actively charging left the KEBA contactor closed; SEM
+  reported "Charging allowed" with budget 0 but the charger kept drawing
+  power, requiring a manual ``keba.disable`` call to stop. The state
+  machine fell through to ``SOLAR_CHARGING_ALLOWED`` instead of a
+  terminal stop, so ``stop_session()`` was never invoked.
+
+  Fix: introduce a distinct ``"disabled"`` strategy string for explicit-off
+  (separate from transient ``"idle"``). The state machine routes it to
+  ``SOLAR_IDLE``, which the actuator treats as terminal → calls
+  ``stop_session()`` → ``keba.disable``. The canonical EV budget enum
+  collapses ``"disabled"`` back to ``IDLE`` (same 0 W shape, distinct
+  upstream).
+
+  Multi-charger correctness: a static helper
+  ``_apply_per_charger_off_override`` runs in the dispatch loop so a
+  primary charger's ``off`` cannot bleed its terminate into siblings
+  with active ``solar_only``/``min_plus_solar`` modes.
+
+### Cleanup (from develop merge)
+
+- **#304** — ``select.py`` orphan removal now uses a registry-key sweep
+  matching ``switch.py``. Catches stale entries from previously-removed
+  chargers (rather than only those currently in the config).
+- **#305** — drop dead ``_auto_mode_strategy`` and the unreachable
+  ``min_pv`` branch in ``_canonical_strategy_from_legacy``. Both were
+  Phase C leftovers documented as deferred.
+
 ## [1.6.3] — 2026-05-30
 
 The **EV charge UX consolidation** release (#277). Replaces the

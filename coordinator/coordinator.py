@@ -335,6 +335,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if pc.get(key) is not None:
                 self.config[key] = pc[key]
 
+    @staticmethod
+    def _apply_per_charger_off_override(global_state: str, per_mode: str) -> str:
+        """Per-charger override of the global solar charging state (v1.6.3 hotfix).
+
+        The global ``charging_state`` is derived from the primary
+        charger's config only. Two correctness gaps in the multi-charger
+        loop need to be closed:
+
+        1. **This charger is off**: force ``SOLAR_IDLE`` so the actuator's
+           TERMINAL branch calls ``stop_session()`` regardless of what
+           the primary charger is doing. Without this, charger[1]=off
+           would never be stopped.
+        2. **Primary is off but this charger isn't**: don't propagate
+           the primary's terminate. Fall back to ``SOLAR_CHARGING_ALLOWED``
+           (warm-waiting) so this charger keeps participating in surplus
+           distribution.
+
+        Pure function — no side effects, no coordinator state read.
+        Directly unit-testable.
+        """
+        if per_mode == "off":
+            return ChargingState.SOLAR_IDLE
+        if global_state == ChargingState.SOLAR_IDLE:
+            return ChargingState.SOLAR_CHARGING_ALLOWED
+        return global_state
+
     def _effective_charge_mode_for(self, charger_cfg: dict) -> str:
         """Resolve the user-intent Charge mode for one charger (#277).
 
@@ -1164,6 +1190,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     charging_context.night_deadline_active = False
                     charging_context.night_tariff_wait = False
                     charging_context.night_deadline_reachable = True
+
+                    # Per-charger off-mode override (v1.6.3 hotfix follow-up).
+                    # The global ``charging_state`` is derived from the primary
+                    # charger only — the multi-charger loop needs to correct it
+                    # per charger so an OFF primary doesn't bleed its terminate
+                    # into the other chargers. See the helper for details.
+                    per_mode = self._effective_charge_mode_for(charger_cfg)
+                    effective_state = self._apply_per_charger_off_override(
+                        charging_state, per_mode
+                    )
                     if charging_state in (
                         ChargingState.NIGHT_CHARGING_ACTIVE,
                         ChargingState.TARIFF_WAITING_FOR_CHEAP,
@@ -2321,6 +2357,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         if legacy_strategy == "idle":
             return EVBudgetStrategy.IDLE
+        if legacy_strategy == "disabled":
+            # User-disabled (charge_mode=off). Same budget shape as IDLE
+            # (zero watts). Distinct upstream so the state machine can
+            # route this to SOLAR_IDLE instead of CHARGING_ALLOWED.
+            return EVBudgetStrategy.IDLE
         if legacy_strategy == "now":
             return EVBudgetStrategy.NOW
         # ``min_pv`` removed in #305: post-#277 Phase C no charge mode
@@ -2447,7 +2488,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if mode == "always_max":
             return ("now", "Always (max) mode — charge at max immediately")
         if mode == "off":
-            return ("idle", "Charging disabled (mode=off)")
+            # Distinct from generic "idle" (which can be transient — Zone 1
+            # battery priority, solar<200W, target met). "disabled" is the
+            # user's explicit OFF intent and routes the state machine to
+            # SOLAR_IDLE → actuator stop_session() → keba.disable. The
+            # canonical-budget mapper (`_canonical_strategy_from_legacy`)
+            # collapses it back to EVBudgetStrategy.IDLE so the budget is 0.
+            return ("disabled", "Charging disabled (mode=off)")
         if mode == "solar_only":
             # Strict surplus, never grid import. Self-consumption strategy
             # subtracts battery_charge below auto_start_soc so the home
