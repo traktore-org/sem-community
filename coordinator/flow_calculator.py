@@ -236,12 +236,14 @@ class FlowCalculator:
         # construction (sum of shares == 1.0 modulo float rounding;
         # final ``round(..., 1)`` may leak ≤ 0.1 W which is well below
         # any user-visible threshold).
-        if power.ev_power_per_charger and ev > 0:
+        if power.ev_power_per_charger:
             for cid, charger_ev_w in power.ev_power_per_charger.items():
-                if charger_ev_w <= 0:
-                    # An idle charger gets a zero-filled ChargerFlows so
-                    # downstream readers can safely dict-lookup any
-                    # configured charger id without KeyError.
+                if charger_ev_w <= 0 or ev <= 0:
+                    # An idle charger (or the whole fleet idle) gets a
+                    # zero-filled ChargerFlows so the per-charger
+                    # sensors stay AVAILABLE at 0 W instead of going
+                    # ``unavailable`` whenever no charger is drawing
+                    # (HA-TEST 2026-05-31 noise after first deploy).
                     flows.per_charger[cid] = ChargerFlows()
                     continue
                 share = charger_ev_w / ev

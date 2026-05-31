@@ -199,14 +199,25 @@ class TestRegressionForIssue316:
 
 class TestNoEvDraw:
     """Edge case: ``ev_power_per_charger`` populated but total EV draw is 0.
-    The guard ``and ev > 0`` skips the per-charger loop entirely (avoids
-    divide-by-zero); ``flows.per_charger`` stays empty."""
+    Pre-v1.6.14 behaviour skipped the loop entirely so ``per_charger`` stayed
+    ``{}`` — this caused the per-charger flow SENSORS (added in v1.6.15)
+    to go ``unavailable`` whenever no charger was drawing.
 
-    def test_zero_ev_total_skips_split(self):
+    Updated for v1.6.14: zero-fill each configured charger so the sensors
+    stay AVAILABLE at 0 W. Avoids divide-by-zero via the ``ev <= 0``
+    early-return in the inner loop."""
+
+    def test_zero_ev_total_zero_fills_each_charger(self):
         fc = FlowCalculator()
         flows = fc.calculate_power_flows(_power(
             solar=2000, grid=2000, battery=0, ev=0, home=2000,
             ev_per_charger={"left": 0.0, "right": 0.0},
         ))
         assert flows.solar_to_ev == 0.0
-        assert flows.per_charger == {}
+        # Both chargers present with zero-filled entries.
+        assert set(flows.per_charger.keys()) == {"left", "right"}
+        for cid in ("left", "right"):
+            cf = flows.per_charger[cid]
+            assert cf.solar_to_ev == 0.0
+            assert cf.grid_to_ev == 0.0
+            assert cf.battery_to_ev == 0.0
