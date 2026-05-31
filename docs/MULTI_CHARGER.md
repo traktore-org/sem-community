@@ -142,6 +142,7 @@ the structural invariant.
 | **v1.6.10** | Code-quality cleanup (#308 / #309 / #310) | ✓ shipped |
 | **v1.6.11** | Recent-logs in diagnostics + doc polish | ✓ shipped |
 | **v1.6.12** | Multi-charger off + solar_only scenario test + harness `per_charger_effective_states` / `per_charger_flow_max` assertions | ✓ shipped |
+| **v1.6.13** | Surplus tracker jump-from-0 spike fix (#8) — cold start hands KEBA `min_current` first, not direct-jump to target | ✓ shipped |
 
 ### What landed under the abstraction
 

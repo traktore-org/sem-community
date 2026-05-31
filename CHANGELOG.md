@@ -5,6 +5,36 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.13] — 2026-05-31
+
+Closes the long-standing surplus-tracker spike on KEBA (#8). First of
+a four-release closeout pulling deferred ``v1.7+`` items back into
+v1.6.x — per the maintainer's "no v1.7 until multi-charger is properly
+fixed AND every deferred follow-up is closed" rule.
+
+### Fixed
+
+- **Surplus tracker jump-from-0 spike (#8)** — ``_apply_ramp_limit``
+  used to short-circuit on ``current < 1`` and return ``target_current``
+  directly, so a cold-start cycle handed KEBA a 14 A command from 0 A.
+  KEBA's ~30 s physical actuator lag then caused a ~4.4 kW grid-import
+  overshoot during the ramp (confirmed live on PROD 2026-05-31 at
+  10:43). Cold start now hands KEBA ``min_current`` (typically 6 A ≈
+  4140 W on 3-phase EU); subsequent cycles climb via the existing
+  ``±ramp_rate`` clamp at the user-configured ``ev_ramp_rate_amps``
+  (default 2 A/cycle, so target reached in ~4 cycles for a 14 A
+  request).
+
+  The stop-fast branch is preserved: ``target_current < 1`` still
+  returns 0 immediately (no gentle ramp-down) so the explicit-off /
+  disable path stays snappy.
+
+  13 new unit tests in ``tests/test_ramp_limit_8.py`` pin: cold
+  start → ``min_current``, near-zero current → cold-start treatment,
+  steady-state ``±ramp_rate`` unchanged, stop-fast preserved, custom
+  ``min_current`` per charger honoured, end-to-end multi-cycle climb
+  to target.
+
 ## [1.6.12] — 2026-05-31
 
 Closes the last open senior-reviewer item on the v1.6.7 → v1.6.11
