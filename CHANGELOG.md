@@ -5,6 +5,41 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.10] — 2026-05-31
+
+Code-quality cleanup release. Closes the three follow-up issues filed
+during the v1.6.4 → v1.6.6 review cycle (#308, #309, #310). **Zero
+behaviour change** for any user.
+
+### Refactored
+
+- **#308 — dead ``now`` / ``min_pv`` consumer branches dropped from
+  ``coordinator/charging_control.py``.** Post-#305 the strategy
+  producer ``_determine_charging_strategy`` only emits ``solar_only`` /
+  ``battery_assist`` / ``night_grid`` / ``idle`` / ``disabled`` —
+  neither ``"now"`` nor ``"min_pv"`` was reachable in production. The
+  unreachable branches are gone; ``ChargingState.SOLAR_MIN_PV`` is
+  still alive via the ``night_grid`` → ``EVBudgetStrategy.MIN_PV``
+  producer mapping. The two synthetic-context tests
+  (``test_min_pv_mode``, ``test_now_mode``) that exercised the dead
+  branches are removed.
+
+- **#309 — global-select cleanup block in ``select.py`` folded into
+  the registry-key sweep added by #304.** The 12-line explicit
+  ``async_remove`` block for ``{entry_id}_ev_target_type``,
+  ``{entry_id}_ev_target_mode``, ``{entry_id}_ev_charging_mode`` was
+  redundant with the sweep at the bottom of ``async_setup_entry``:
+  each of those unique IDs has the ``{entry_id}_`` prefix and a key
+  that's not in ``valid_keys``, so the sweep removes them just as
+  cleanly. Per-charger values were seeded from the globals by the
+  v3→v4 migration; no data is lost.
+
+- **#310 — gravestone comments in ``tests/test_soc_zone_strategy.py``
+  consolidated** into a single ``Removed tests`` block at the top of
+  the module. Three multi-line tombstones (one each from #277 Phase C,
+  Phase D.2 / #282, and #305) collapsed to a three-bullet list with
+  ``git log -S`` as the pointer for full history.
+
 ## [1.6.9] — 2026-05-31
 
 Third and final of the multi-charger cleanup arc (v1.6.7 → v1.6.9).
