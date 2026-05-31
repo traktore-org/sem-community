@@ -27,11 +27,12 @@ config:
   battery_priority_soc: 30
   battery_assist_floor_soc: 60
   battery_assist_max_power: 4500
-  # Force pv mode so `_auto_mode_strategy` doesn't intercept. With the
-  # harness defaulting forecast to 25 kWh, auto-mode would take the
-  # ratio>2 path → self_consumption → strategy=solar_only, not
-  # battery_assist. PV mode goes directly to the main zone dispatch
-  # where Zone 4 returns battery_assist.
+  # Force pv mode so the zone dispatch picks battery_assist directly.
+  # (Pre-#305 the legacy ``auto`` mode wrapped this in
+  # ``_auto_mode_strategy`` and took the ratio>2 → self_consumption
+  # path under the harness's 25 kWh default forecast — that wrapper
+  # is now gone but the scenario still wants the deterministic
+  # Zone 4 → battery_assist outcome.)
   ev_charging_mode: "pv"
   ev_min_current: 6
   ev_max_current: 16

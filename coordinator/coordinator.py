@@ -2323,8 +2323,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return EVBudgetStrategy.IDLE
         if legacy_strategy == "now":
             return EVBudgetStrategy.NOW
-        if legacy_strategy == "min_pv":
-            return EVBudgetStrategy.MIN_PV
+        # ``min_pv`` removed in #305: post-#277 Phase C no charge mode
+        # produces this tuple. ``_determine_charging_strategy`` only
+        # returns solar_only / battery_assist / night_grid / idle; the
+        # canonical ``MIN_PV`` is still reachable via the night_grid
+        # mapping below and is not retired.
         if legacy_strategy == "night_grid":
             # Night charging tops up to the Min floor using grid (#245
             # semantic). Canonical MIN_PV is the right shape — its formula
@@ -2501,12 +2504,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``_mode_allows_night_charging`` etc), so the daytime strategy
         # just runs the zone decision tree unchanged.
         #
-        # (Pre-Phase-C the legacy ``auto`` mode wrapped this branch in
-        # ``_auto_mode_strategy`` — forecast-aware self_consumption
-        # when ratio>2. That wrapper is still callable via
-        # ``_auto_mode_strategy`` but no charge mode dispatches to it
-        # in Phase C. v1.7.x or later can opt-in users who actually
-        # want forecast-aware switching, but it's not the default.)
+        # The legacy ``_auto_mode_strategy`` forecast-aware wrapper
+        # (self_consumption when ratio>2) was removed in #305 — no
+        # charge mode dispatched to it post-Phase-C. A future opt-in
+        # ``auto`` mode can re-introduce a forecast switcher; resurrect
+        # via git history rather than carrying dead code.
         # No-op — explicit fall-through.
 
         # No meaningful solar → wait
@@ -2608,45 +2610,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         available = max(0, available)
         zone = "Z4-redirect" if power.battery_soc >= auto_start_soc else f"Z{self._get_zone(power.battery_soc)}"
         return ("solar_only", f"self_consumption ({zone}): surplus={available:.0f}W, solar={power.solar_power:.0f}W")
-
-    def _auto_mode_strategy(self, power, energy, remaining_need: float) -> tuple:
-        """Auto mode: forecast-aware switching between self_consumption and pv (#67).
-
-        ratio = remaining_solar / remaining_ev_need
-        ratio > 2.0 → self_consumption (plenty of sun, no rush)
-        1.0-2.0     → pv with cap (tight, charge when available)
-        < 1.0       → pv aggressive (not enough, battery assist)
-        """
-        forecast = self._cycle_forecast
-        remaining_solar = 0
-        if forecast and forecast.available:
-            remaining_solar = forecast.forecast_remaining_today_kwh
-            try:
-                remaining_solar = self._forecast_tracker.apply_dampening(remaining_solar)
-            except (ValueError, AttributeError):
-                pass
-
-        if remaining_need < 0.5:
-            # Floor (Min) met — no forecast-based pacing needed. Solar surplus
-            # still continues up to the Max ceiling via the surplus path (#245).
-            return ("idle", "auto: min target met, solar continues to ceiling")
-
-        ratio = remaining_solar / remaining_need if remaining_need > 0 else 99
-
-        if ratio > 2.0:
-            # Plenty of sun → self_consumption
-            result = self._self_consumption_strategy(power, energy)
-            return (result[0], f"auto (ratio={ratio:.1f}→self_consumption): {result[1]}")
-        elif not forecast or not forecast.available:
-            # No forecast → default pv behavior (fall through to zone logic below)
-            pass
-        else:
-            # Tight or insufficient → pv with zones (fall through)
-            _LOGGER.debug("auto: ratio=%.1f → pv mode (zones active)", ratio)
-
-        # Fall through to normal zone-based pv logic
-        # (return None so caller continues to zone logic)
-        return None  # Signal: continue to zone logic
 
     def _raw_zone(self, soc: float, auto_start: float, buffer: float, priority: float) -> int:
         """Map SOC to a zone number using raw (un-debounced) thresholds."""

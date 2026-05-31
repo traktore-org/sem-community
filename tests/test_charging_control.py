@@ -143,7 +143,16 @@ def test_solar_target_reached(sm):
 
 
 def test_min_pv_mode(sm):
-    """Test Min+PV mode returns SOLAR_MIN_PV state."""
+    """Pin the state-machine mapping for ``charging_strategy="min_pv"``.
+
+    Post-#305 the producer side (`_determine_charging_strategy` and
+    `_canonical_strategy_from_legacy`) no longer emits the legacy
+    ``"min_pv"`` string, so `charging_control.py:208` is unreachable
+    in production. This test still exercises that branch directly
+    via a synthetic context to keep the SOLAR_MIN_PV mapping pinned
+    in case a future producer is reintroduced. If both the producer
+    and the consumer are dropped together, delete this test too.
+    """
     ctx = _ctx(
         ev_connected=True,
         charging_strategy="min_pv",

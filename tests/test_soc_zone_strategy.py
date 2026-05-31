@@ -420,54 +420,11 @@ class TestZoneDebounce:
 # unit tests for the per-zone shape.
 
 
-class TestAutoMode:
-    """Tests for auto mode — forecast-aware self_consumption vs pv switching.
-
-    Post-#277 Phase C ``_auto_mode_strategy`` is no longer dispatched
-    to from any charge_mode (the maintainer chose pure zone logic for
-    ``min_plus_solar`` / ``solar_plus_cheap`` to preserve the legacy
-    ``pv + night=on`` factory default's behaviour). The helper is
-    still exercised here in case a future ``auto`` charge mode reuses
-    it; the previous ``test_auto_high_ratio_uses_self_consumption``
-    that drove the helper through ``_determine_charging_strategy``
-    was deleted in Phase C because the dispatch path is gone.
-    """
-
-    def test_auto_low_ratio_uses_pv(self):
-        """Not enough solar → fall through to pv/zone logic."""
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
-        forecast = _MockForecast(available=True, remaining=5.0)
-        coord._cycle_forecast = forecast
-        coord._forecast_tracker.apply_dampening = MagicMock(return_value=5.0)
-
-        result = coord._auto_mode_strategy(
-            _make_power(solar=5000, battery_soc=50), _MockEnergy(daily_ev=0), 10
-        )
-        # ratio = 5/10 = 0.5 → None (fall through to zones)
-        assert result is None
-
-    def test_auto_no_forecast_uses_pv(self):
-        """No forecast → fall through to pv."""
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
-        coord._cycle_forecast = _MockForecast(available=False)
-
-        result = coord._auto_mode_strategy(
-            _make_power(solar=5000, battery_soc=80), _MockEnergy(daily_ev=0), 10
-        )
-        assert result is None
-
-    def test_auto_target_reached_idle(self):
-        """Min floor met → auto returns idle (solar still continues to Max via surplus)."""
-        coord = _build_coordinator(config_overrides={"ev_charging_mode": "auto"})
-        coord._cycle_forecast = _MockForecast(available=True, remaining=20.0)
-        coord._forecast_tracker = MagicMock()
-        coord._forecast_tracker.apply_correction = MagicMock(return_value=20.0)
-
-        result = coord._auto_mode_strategy(
-            _make_power(solar=5000, battery_soc=80), _MockEnergy(daily_ev=10), 0.1
-        )
-        assert result[0] == "idle"
-        assert "min target met" in result[1]
+# TestAutoMode removed in #305: ``_auto_mode_strategy`` was deleted
+# as dead code (no charge mode dispatched to it post-#277 Phase C).
+# The previous 3 tests exercised the helper directly; if a future
+# opt-in ``auto`` mode resurrects the forecast-aware switcher, restore
+# both the method and its tests together from the #305 commit.
 
 
 class TestSelfConsumptionStrategy:
