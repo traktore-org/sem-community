@@ -5,6 +5,44 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.8] — 2026-05-31
+
+Second of the three-release multi-charger cleanup arc (v1.6.7 → v1.6.9).
+**Zero behaviour change** for single-charger users; multi-charger users
+get correctness fixes for 12 fleet-power-sum reads that were silently
+returning the wrong value inside per-charger code paths. Sets up the
+structural enforcement that makes the bug class impossible to
+re-introduce.
+
+See [`docs/MULTI_CHARGER.md`](docs/MULTI_CHARGER.md) for the full
+developer-facing invariant.
+
+### Fixed
+
+- **12 fleet-power-sum reads swept in
+  [`coordinator/ev_control.py`](coordinator/ev_control.py)** — every
+  ``power.ev_power`` read inside the per-charger code path (8 in
+  ``_execute_ev_control``, 3 in ``_should_reenable_charger``, 1 in
+  ``_update_session_tracking``) now uses
+  ``self._this_charger_power(ev, power)`` cached as
+  ``this_power_w`` at the top of the method. In multi-charger setups
+  these reads were returning the fleet sum — exactly the bug class
+  that caused #284, #289, #315 (terminator) and #318 (SOC isolation).
+  Each fix was reactive; this sweep closes them all.
+
+### Added
+
+- **AST lint test** ([`tests/test_ev_control_fleet_reads.py`](tests/test_ev_control_fleet_reads.py))
+  — walks the AST of ``ev_control.py`` on every CI run and fails if
+  any ``power.ev_power`` read is missing a ``# FLEET-READ:`` annotation
+  (outside the sanctioned ``_this_charger_power`` helper). Catches the
+  bug class on PR review, not after release.
+
+- **``# FLEET-READ: <reason>`` annotation convention** — documented in
+  ``docs/MULTI_CHARGER.md``. Same-line or previous-line comment opts
+  a deliberate fleet-level read out of the lint with a required
+  human-readable reason.
+
 ## [1.6.7] — 2026-05-31
 
 First of a three-release multi-charger cleanup arc dedicated to v1.6.x.
