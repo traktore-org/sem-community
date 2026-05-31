@@ -5,6 +5,242 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.12] — 2026-05-31
+
+Closes the last open senior-reviewer item on the v1.6.7 → v1.6.11
+multi-charger cleanup arc — the missing end-to-end scenario covering
+``charger A = off + charger B = solar_only`` mixed-mode. No
+behaviour change for any user.
+
+### Added
+
+- **New scenario test** ``tests/scenarios/2026-05-31_off_plus_solar_only.yaml``
+  exercises the senior-reviewer-flagged hole in coverage:
+  - **Per-charger effective state isolation** (v1.6.4
+    ``_apply_per_charger_off_override``). Charger ``off`` mode →
+    ``SOLAR_IDLE`` (terminate); sibling ``solar_only`` →
+    ``SOLAR_CHARGING_ACTIVE`` (untouched). Pins the #315 mitigation
+    at the unit-pipeline level — would have mechanically caught the
+    v1.6.3 regression at PR-review time.
+  - **Per-charger flow attribution** (v1.6.9
+    ``PowerFlows.per_charger``). With per-charger draw set to
+    ``{left: 4000, right: 0}``, the per-charger split must give
+    ``right`` zero EV-side flow — the user-visible attribution
+    @RienduPre asked for in #316.
+  - **Distribution sum invariant** (Phase B.5 / #284) re-asserted on
+    top of the mixed-mode case.
+
+- **Scenario harness extensions** in ``tests/scenario_harness.py``:
+  - ``TIMELINE_FIELDS`` accepts ``ev_power_per_charger: {cid: watts}``
+    so multi-charger flow attribution can be driven from YAML.
+  - Cycle results now include ``per_charger_effective_states`` and
+    ``per_charger_flows`` when the scenario has 2+ chargers.
+  - Two new ``expect.multi_charger`` assertion blocks:
+    ``per_charger_effective_states`` (exact match or
+    ``{cid}_contains: substring``) and ``per_charger_flow_max`` for
+    per-charger upper-bound caps.
+
+### Docs
+
+- ``docs/MULTI_CHARGER.md`` roadmap updated: the off + solar_only
+  scenario gap is now closed (was a senior-reviewer FIX-BEFORE-MERGE
+  on the v1.6.7-v1.6.10 arc).
+- CHANGELOG entry per the
+  ``feedback_docs_per_release`` rule — docs are part of every
+  release, not a follow-up.
+
+## [1.6.11] — 2026-05-31
+
+Diagnostics improvement + doc polish closing the senior-engineer
+review NITs on the v1.6.7 → v1.6.10 multi-charger cleanup arc. No
+behaviour change.
+
+### Added
+
+- **Recent SEM log lines in the Copy diagnostics dump** —
+  ``diagnostics.py::_get_recent_sem_logs`` reads the last 2 MB of
+  ``home-assistant.log``, filters for
+  ``solar_energy_management`` mentions, and includes up to 80 matching
+  lines as ``recent_logs`` in the diagnostics output. Bug reports now
+  come pre-loaded with the surrounding log context so we don't have
+  to ask reporters for a separate ``ha core logs`` dump. Supervisor
+  installs (no flat log file, journald-based) get a one-line
+  placeholder explaining how to attach logs manually.
+
+### Docs
+
+- ``CLAUDE.md`` — new "Multi-charger correctness" pointer to
+  [``docs/MULTI_CHARGER.md``](docs/MULTI_CHARGER.md) so future AI
+  sessions can find the invariant doc without needing to grep.
+- ``docs/MULTI_CHARGER.md`` — updated the roadmap to reflect what
+  **actually shipped** vs what was planned. Specifically: the original
+  v1.6.7 design proposed migrating ``effective_state``,
+  ``this_power_w``, ``night_plan`` onto ``PerChargerContext`` in
+  v1.6.8/v1.6.9 — none of those landed. The current dataclass has
+  ``cid`` / ``ev_dev`` / ``charger_cfg`` / ``budget_w`` /
+  ``skipped_for_night`` only. Per-charger flow **sensors** (data is on
+  ``PowerFlows.per_charger`` but no top-level HA entities yet) were
+  also descoped. Both are deferred to v1.7+ in the roadmap so the doc
+  no longer oversells the abstraction.
+
+## [1.6.10] — 2026-05-31
+
+Code-quality cleanup release. Closes the three follow-up issues filed
+during the v1.6.4 → v1.6.6 review cycle (#308, #309, #310). **Zero
+behaviour change** for any user.
+
+### Refactored
+
+- **#308 — dead ``now`` / ``min_pv`` consumer branches dropped from
+  ``coordinator/charging_control.py``.** Post-#305 the strategy
+  producer ``_determine_charging_strategy`` only emits ``solar_only`` /
+  ``battery_assist`` / ``night_grid`` / ``idle`` / ``disabled`` —
+  neither ``"now"`` nor ``"min_pv"`` was reachable in production. The
+  unreachable branches are gone; ``ChargingState.SOLAR_MIN_PV`` is
+  still alive via the ``night_grid`` → ``EVBudgetStrategy.MIN_PV``
+  producer mapping. The two synthetic-context tests
+  (``test_min_pv_mode``, ``test_now_mode``) that exercised the dead
+  branches are removed.
+
+- **#309 — global-select cleanup block in ``select.py`` folded into
+  the registry-key sweep added by #304.** The 12-line explicit
+  ``async_remove`` block for ``{entry_id}_ev_target_type``,
+  ``{entry_id}_ev_target_mode``, ``{entry_id}_ev_charging_mode`` was
+  redundant with the sweep at the bottom of ``async_setup_entry``:
+  each of those unique IDs has the ``{entry_id}_`` prefix and a key
+  that's not in ``valid_keys``, so the sweep removes them just as
+  cleanly. Per-charger values were seeded from the globals by the
+  v3→v4 migration; no data is lost.
+
+- **#310 — gravestone comments in ``tests/test_soc_zone_strategy.py``
+  consolidated** into a single ``Removed tests`` block at the top of
+  the module. Three multi-line tombstones (one each from #277 Phase C,
+  Phase D.2 / #282, and #305) collapsed to a three-bullet list with
+  ``git log -S`` as the pointer for full history.
+
+## [1.6.9] — 2026-05-31
+
+Third and final of the multi-charger cleanup arc (v1.6.7 → v1.6.9).
+Adds per-charger flow attribution and per-charger notification flap
+suppression so multi-charger users finally get correct downstream
+visibility — closes the @RienduPre #316 family of complaints. **Zero
+behaviour change** for single-charger users.
+
+See [`docs/MULTI_CHARGER.md`](docs/MULTI_CHARGER.md).
+
+### Added
+
+- **Per-charger flow attribution** in
+  [`coordinator/flow_calculator.py`](coordinator/flow_calculator.py).
+  When ``PowerReadings.ev_power_per_charger`` is populated (multi-charger
+  installs), ``calculate_power_flows`` now also produces
+  ``PowerFlows.per_charger[cid] = ChargerFlows(solar_to_ev, grid_to_ev,
+  battery_to_ev)``. Sum invariant: ``sum(per_charger[c].solar_to_ev) ==
+  solar_to_ev`` (within < 0.1 W from float rounding). Closes the
+  long-standing @RienduPre #284 / #316 complaint family — the dashboard
+  can now show which charger drank from grid vs solar instead of the
+  fleet-aggregated proportional split.
+
+- **``PowerReadings.ev_power_per_charger``** populated by
+  ``sensor_reader`` for multi-charger installs (each charger's
+  ``ev_charging_power_sensor`` value, keyed by charger id).
+  Single-charger installs leave the dict empty.
+
+- **Per-charger notification flap suppression** in
+  [`coordinator/notifications.py`](coordinator/notifications.py).
+  ``notify_state_change`` accepts new ``charger_id`` + ``charger_name``
+  kwargs; the flap-suppression ``_last_notified_state`` /
+  ``_pending_state`` / ``_pending_state_since`` storage is now
+  per-charger, keyed by ``charger_id`` (or the ``"_fleet"`` sentinel
+  for back-compat). A state change on charger A no longer suppresses
+  one on charger B. Mobile messages get a ``[Charger Name]`` prefix
+  when ``charger_name`` is provided. The HA event payload now carries
+  ``charger_id`` and ``charger_name`` keys so automations can route
+  per charger.
+
+### Back-compat
+
+- v1.6.8 callers that read ``_last_notified_state``,
+  ``_pending_state``, or ``_pending_state_since`` as scalars continue
+  to work via property shims that target the ``"_fleet"`` sentinel
+  slot.
+- Single-charger setups behave identically to v1.6.8 — the
+  per-charger split skips when no per-charger data is provided.
+
+## [1.6.8] — 2026-05-31
+
+Second of the three-release multi-charger cleanup arc (v1.6.7 → v1.6.9).
+**Zero behaviour change** for single-charger users; multi-charger users
+get correctness fixes for 12 fleet-power-sum reads that were silently
+returning the wrong value inside per-charger code paths. Sets up the
+structural enforcement that makes the bug class impossible to
+re-introduce.
+
+See [`docs/MULTI_CHARGER.md`](docs/MULTI_CHARGER.md) for the full
+developer-facing invariant.
+
+### Fixed
+
+- **12 fleet-power-sum reads swept in
+  [`coordinator/ev_control.py`](coordinator/ev_control.py)** — every
+  ``power.ev_power`` read inside the per-charger code path (8 in
+  ``_execute_ev_control``, 3 in ``_should_reenable_charger``, 1 in
+  ``_update_session_tracking``) now uses
+  ``self._this_charger_power(ev, power)`` cached as
+  ``this_power_w`` at the top of the method. In multi-charger setups
+  these reads were returning the fleet sum — exactly the bug class
+  that caused #284, #289, #315 (terminator) and #318 (SOC isolation).
+  Each fix was reactive; this sweep closes them all.
+
+### Added
+
+- **AST lint test** ([`tests/test_ev_control_fleet_reads.py`](tests/test_ev_control_fleet_reads.py))
+  — walks the AST of ``ev_control.py`` on every CI run and fails if
+  any ``power.ev_power`` read is missing a ``# FLEET-READ:`` annotation
+  (outside the sanctioned ``_this_charger_power`` helper). Catches the
+  bug class on PR review, not after release.
+
+- **``# FLEET-READ: <reason>`` annotation convention** — documented in
+  ``docs/MULTI_CHARGER.md``. Same-line or previous-line comment opts
+  a deliberate fleet-level read out of the lint with a required
+  human-readable reason.
+
+## [1.6.7] — 2026-05-31
+
+First of a three-release multi-charger cleanup arc dedicated to v1.6.x.
+**Zero user-visible behaviour change** for single-charger users; multi-charger
+users see the same outputs but with the underlying swap mechanism now
+typed and unit-tested.
+
+The cleanup arc addresses a recurring bug class found in v1.6.0–v1.6.6
+(#284, #289, #315, #318): per-charger context swaps with fleet-level
+reads leaking through. This release lifts the swap mechanism; v1.6.8
+sweeps the fleet-power reads in `ev_control.py` and adds per-charger
+strategy; v1.6.9 adds per-charger flow attribution + notifications
+(closes the #316 family).
+
+See [`docs/MULTI_CHARGER.md`](docs/MULTI_CHARGER.md) for the full
+developer-facing invariant.
+
+### Refactored
+
+- **`PerChargerContext`** — new
+  [`coordinator/per_charger_context.py`](coordinator/per_charger_context.py)
+  module that owns the per-charger swap lifecycle. The ad-hoc
+  ``saved = {...}`` dict at `coordinator.py:1136-1258` that swapped
+  eight coordinator attributes per iteration (and was easy to miss
+  when adding new per-charger fields) is now a typed context manager
+  with unit tests pinning every swap invariant. Adding a new
+  per-charger field is now one place to edit instead of three.
+
+### Docs
+
+- **New `docs/MULTI_CHARGER.md`** — developer-facing invariant doc
+  covering the bug class, the `PerChargerContext` contract, how to
+  add new per-charger fields, and the v1.6.7-v1.6.9 roadmap.
+- **`CONTRIBUTING.md`** — new "Multi-charger correctness" section
+  pointing future contributors at the invariant.
+
 ## [1.6.6] — 2026-05-31
 
 Same-day hotfix for v1.6.5 — the per-charger power read at

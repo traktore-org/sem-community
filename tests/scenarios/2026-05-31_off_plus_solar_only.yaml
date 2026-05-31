@@ -1,0 +1,153 @@
+name: "2026-05-31 multi-charger off + solar_only — v1.6.9 dispatch + #315 regression"
+description: |
+  Built in v1.6.12 to close the senior-engineer review gap on the
+  v1.6.7→v1.6.10 multi-charger cleanup arc — no scenario covered the
+  case where one charger is in ``off`` mode while a sibling is in
+  ``solar_only``. The gap is exactly where #315 (v1.6.4 / v1.6.5
+  off-mode self-resume) and the @RienduPre #284 / #316 flow-attribution
+  family hit production.
+
+  What this scenario pins, step by step:
+
+  1. **Per-charger effective state isolation** (v1.6.4
+     ``_apply_per_charger_off_override``). Fleet ``charging_state =
+     SOLAR_CHARGING_ACTIVE`` is the primary charger's view. The override
+     must turn charger_right's ``off`` mode into ``SOLAR_IDLE`` (which
+     in production routes through the actuator's terminal-state branch
+     → ``stop_session()`` → ``keba.disable``). Charger_left's
+     ``solar_only`` mode must stay untouched.
+
+  2. **Per-charger flow attribution** (v1.6.9 ``PowerFlows.per_charger``).
+     With ``ev_power_per_charger = {charger_left: 4000, charger_right:
+     0}``, the per-charger split must give all the EV-side flow to
+     ``charger_left`` and zero to ``charger_right``. This is the
+     visible attribution that @RienduPre asked for in #316.
+
+  3. **Budget distribution still sums to ≤ canonical** (Phase B.5 /
+     #284 invariant). Re-uses the contract from
+     ``2026-05-29_multi_charger_split.yaml`` so the cleanup didn't
+     regress the existing distribution math.
+
+  Why this is a YAML scenario and not a live test: HA-TEST has one
+  real KEBA. Faking a second charger with a deterministic state we
+  can assert on is exactly what this harness is for — see
+  ``tests/scenario_harness.py``.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  # Solar_only on the primary so the fleet strategy is solar_only; that
+  # in turn makes the harness lift fleet ``charging_state`` to
+  # SOLAR_CHARGING_ACTIVE which gives the off-mode override branch a
+  # non-trivial input.
+  ev_charging_mode: "pv"
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+
+  ev_chargers:
+    - id: charger_left
+      name: "Wallbox Left"
+      priority: 1
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      # Solar-only mode: must not get terminated by the per-charger
+      # override; should keep participating in the budget split.
+      charge_mode: "solar_only"
+      ev_charging_mode: "pv"
+      daily_ev_target: 7.0
+    - id: charger_right
+      name: "Wallbox Right"
+      priority: 2
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      # Off: per-charger override should produce SOLAR_IDLE for THIS
+      # charger so the actuator's TERMINAL branch fires. This is the
+      # #315 regression class.
+      charge_mode: "off"
+      ev_charging_mode: "pv"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Steady-state regime: enough surplus to keep charger_left active, no
+# battery assist (SOC 75% = Zone 3, surplus only). charger_right is in
+# off mode, so even though it could physically draw, SEM must terminate
+# it via the override. We model that here by setting its per-charger
+# ev_power to 0 and giving charger_left the full draw.
+timeline:
+  # Solar 6000 W, EV 4000 W, grid_export 500 W → derived home ≈ 1500 W.
+  # No battery in play (SOC 75 = Zone 3 surplus-only). All flow into the
+  # EV comes from solar — no grid_to_ev. This is the canonical
+  # ``solar_only`` regime the assertion targets.
+  - t: 0
+    solar_power: 6000
+    grid_power: 500            # positive = exporting 500 W
+    battery_power: 0
+    battery_soc: 75
+    ev_power: 4000             # fleet sum — all of it is charger_left
+    ev_connected: true
+    # Per-charger draw mapping — only charger_left is actually pulling.
+    # The flow calculator splits the fleet flows by these shares.
+    ev_power_per_charger:
+      charger_left: 4000
+      charger_right: 0
+
+  - t: 30  # sticky-inherited steady state
+  - t: 60
+  - t: 90
+
+expect:
+  # The strategy decision logic is locked in by
+  # 2026-05-29_budget_unify_battery_assist.yaml. Here we just need a
+  # solar regime so the fleet state lifts to SOLAR_CHARGING_ACTIVE
+  # (the input the override branch needs to reveal itself).
+  strategy_substring: "solar_only"
+
+  multi_charger:
+    # Phase B.5 / #284 invariant re-asserted on top of the new mixed-mode
+    # case. Distribution math must not regress.
+    total_equals_canonical: true
+    tolerance_w: 1.0
+
+    # The headline v1.6.12 assertion: per-charger effective state
+    # follows per-charger ``charge_mode``, not the fleet view.
+    per_charger_effective_states:
+      # charger_left is solar_only → fleet SOLAR_CHARGING_ACTIVE
+      # passes through untouched. Match the substring rather than the
+      # exact ChargingState enum value so the test survives an enum
+      # rename / reorganisation.
+      charger_left_contains: "charging_active"
+      # charger_right is off → override forces SOLAR_IDLE which the
+      # actuator's terminal branch turns into ``stop_session()``.
+      # This is the #315 mitigation pinned at the unit-pipeline level.
+      charger_right_contains: "idle"
+
+    # The headline v1.6.12 flow assertion: with no actual EV draw on
+    # charger_right, the per-charger flow split must show zero EV
+    # attribution to charger_right. Pre-v1.6.9 the dashboard would
+    # have shown the fleet-proportional split which gave charger_right
+    # part of charger_left's solar — exactly @RienduPre's #316
+    # complaint.
+    per_charger_flow_max:
+      charger_right:
+        solar_to_ev: 0
+        grid_to_ev: 0
+        battery_to_ev: 0
+      # charger_left should NOT exceed the fleet solar_to_ev. The
+      # exact value depends on the home-consumption derivation, so we
+      # only cap the upper bound at a generous ceiling — the sum
+      # invariant (per-charger sums == fleet) is unit-tested
+      # separately in test_per_charger_flows_319.py.
+      charger_left:
+        grid_to_ev: 100  # solar_only must not drink grid

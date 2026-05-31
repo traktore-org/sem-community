@@ -59,9 +59,8 @@ class ChargingContext:
             SOLAR_IDLE → actuator stop_session(); ``"idle"`` is the
             transient pause (Zone 1, solar<200W, target met) which
             stays in CHARGING_ALLOWED (warm, waiting for surplus).
-            (The legacy ``"min_pv"`` value was retired in #305 — no
-            producer remains and the consuming branch at line 208 is
-            inert.)
+            The legacy ``"min_pv"`` + ``"now"`` values were retired
+            in #305 (producer) and #308 (consumer).
         charging_strategy_reason: Human-readable explanation of strategy choice.
         night_target_kwh: Night charging target (kWh), may be forecast-adjusted if enabled.
             For night mode, remaining is derived from this field directly.
@@ -224,13 +223,14 @@ class ChargingStateMachine:
         if ctx.soc_limit_active:
             return ChargingState.SOLAR_TARGET_REACHED
 
-        # Now mode: charge at max immediately
-        if ctx.charging_strategy == "now":
-            return ChargingState.SOLAR_MIN_PV  # Reuse Min+PV path (grid + surplus)
-
-        # Min+PV mode: guarantee minimum from grid, add solar surplus on top
-        if ctx.charging_strategy == "min_pv":
-            return ChargingState.SOLAR_MIN_PV
+        # The ``"now"`` and ``"min_pv"`` consumer branches were dropped in
+        # v1.6.10 (#308). Post-#305 the strategy producer
+        # ``_determine_charging_strategy`` only emits ``solar_only`` /
+        # ``battery_assist`` / ``night_grid`` / ``idle`` / ``disabled`` —
+        # neither ``"now"`` nor ``"min_pv"`` is reachable in production.
+        # ``ChargingState.SOLAR_MIN_PV`` is still alive via the
+        # ``night_grid`` → ``EVBudgetStrategy.MIN_PV`` mapping in the
+        # canonical-budget producer.
 
         # Daily target only limits night (grid) charging, not solar.
         # Solar surplus is free — always charge if available.

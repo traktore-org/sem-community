@@ -49,6 +49,7 @@ from .sensor_reader import SensorReader
 from .energy_calculator import EnergyCalculator
 from .flow_calculator import FlowCalculator
 from .charging_control import ChargingStateMachine, ChargingContext
+from .per_charger_context import PerChargerContext
 from .storage import SEMStorage
 from .notifications import NotificationManager
 from .surplus_controller import SurplusController
@@ -259,6 +260,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # last effective decision, so price hovering at the cheap boundary doesn't
         # stop/start the charger every cycle.
         self._tariff_decision_per_charger = {}
+        # v1.6.9: per-charger effective state captured during the
+        # multi-charger loop so ``_send_notifications`` can dispatch
+        # ``notify_state_change`` per charger with its own
+        # ``charger_id`` and flap-suppression key. Cleared at the top of
+        # each loop pass; empty in single-charger setups (notification
+        # falls back to the fleet-level call).
+        # Shape: ``{cid: (effective_state, charger_name)}``.
+        self._effective_states_per_charger: Dict[str, tuple] = {}
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -1109,6 +1118,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # priority order against one peak headroom; reset the running
                 # commitment before the loop.
                 self._night_committed_w = 0.0
+                # v1.6.9: per-charger effective states are captured below
+                # so the notification dispatch can fire per charger.
+                # Reset before the loop so a removed charger's stale
+                # state doesn't fire on the next cycle.
+                self._effective_states_per_charger = {}
                 # Pre-cache the per-charger configs once for the night
                 # gate below — inline lookup is the same pattern other
                 # branches use here. (#277 Phase B)
@@ -1132,130 +1146,123 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         if not self._mode_allows_night_charging(per_cfg):
                             continue  # mode opts this charger out of night
 
-                    # Save coordinator-level state, swap in per-charger state
-                    saved = {
-                        "dev": self._ev_device,
-                        "stalled": self._ev_stalled_since,
-                        "enable": self._ev_enable_surplus_since,
-                        "started": self._ev_charge_started_at,
-                        "change": self._ev_last_change_time,
-                        "reenable_attempts": self._ev_reenable_attempts,
-                        "charge_refused": self._ev_charge_refused,
-                    }
-                    self._ev_device = ev_dev
-                    self._ev_stalled_since = self._ev_stalled_since_per_charger.get(cid)
-                    self._ev_enable_surplus_since = self._ev_enable_surplus_per_charger.get(cid)
-                    self._ev_charge_started_at = self._ev_charge_started_per_charger.get(cid)
-                    self._ev_last_change_time = self._ev_last_change_per_charger.get(cid)
-                    self._ev_reenable_attempts = self._ev_reenable_attempts_per_charger.get(cid, 0)
-                    self._ev_charge_refused = self._ev_charge_refused_per_charger.get(cid, False)
-                    self._current_charger_budget = ev_budget_per_charger.get(cid)
-                    # Set per-charger night target (#193)
-                    per_charger_target = getattr(self, '_night_target_per_charger_map', {}).get(cid)
-                    if per_charger_target is not None:
-                        self._night_target_per_charger = per_charger_target
-
-                    # Per-charger SOC target and surplus limit (#215)
-                    saved_vehicle_soc_ctrl = self._cycle_vehicle_soc
-                    ev_chargers_cfg = self.config.get("ev_chargers", [])
-                    charger_cfg = next((c for c in ev_chargers_cfg if c.get("id") == cid), {})
-                    per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
-                    if per_soc_entity:
-                        soc_st = self.hass.states.get(per_soc_entity)
-                        if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-                            try:
-                                self._cycle_vehicle_soc = float(soc_st.state)
-                            except (ValueError, TypeError):
-                                _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
-                    # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245)
-                    per_remaining = self._calculate_remaining_need(
-                        energy, self._cycle_vehicle_soc, charger_cfg, bound="max"
+                    # v1.6.7: the swap/restore dance that used to live
+                    # inline here as ``saved = {...}`` + a final
+                    # ``finally`` block is now owned by
+                    # ``PerChargerContext``. Everything in this block is
+                    # the per-charger computation that was already
+                    # specific to this iteration (SOC entity read, Min/Max
+                    # remaining, night plan, etc.) — it stays inline for
+                    # v1.6.7 and migrates onto the context object in
+                    # v1.6.8/v1.6.9.
+                    pcc = PerChargerContext.for_charger(
+                        self, cid, ev_dev, ev_budget_per_charger,
+                        chargers_by_id=_chargers_by_id,
                     )
-                    per_remaining_floor = self._calculate_remaining_need(
-                        energy, self._cycle_vehicle_soc, charger_cfg, bound="min"
-                    )
-                    # Surplus stops at this charger's Max ceiling (default full) (#245)
-                    per_target_reached = per_remaining <= 0.1
-                    charging_context.soc_limit_active = per_target_reached
-                    charging_context.daily_target_reached = per_target_reached
-                    charging_context.remaining_ev_energy = per_remaining
-                    charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining_floor
+                    with pcc:
+                        # Set per-charger night target (#193). The
+                        # scalar ``_night_target_per_charger`` is read by
+                        # downstream methods that still expect it; the
+                        # per-charger map drives the in-loop math.
+                        per_charger_target = getattr(
+                            self, '_night_target_per_charger_map', {},
+                        ).get(cid)
+                        if per_charger_target is not None:
+                            self._night_target_per_charger = per_charger_target
 
-                    # Per-charger deadline + tariff plan (#246/#247): recompute
-                    # for THIS charger and pick its effective night state. Each car
-                    # can have its own deadline / tariff toggle, so the displayed
-                    # (primary) state isn't authoritative for the rest.
-                    effective_state = charging_state
-                    charging_context.night_deadline_amps = 0
-                    charging_context.night_deadline_active = False
-                    charging_context.night_tariff_wait = False
-                    charging_context.night_deadline_reachable = True
-
-                    # Per-charger off-mode override (v1.6.3 hotfix follow-up).
-                    # The global ``charging_state`` is derived from the primary
-                    # charger only — the multi-charger loop needs to correct it
-                    # per charger so an OFF primary doesn't bleed its terminate
-                    # into the other chargers. See the helper for details.
-                    per_mode = self._effective_charge_mode_for(charger_cfg)
-                    effective_state = self._apply_per_charger_off_override(
-                        charging_state, per_mode
-                    )
-                    if charging_state in (
-                        ChargingState.NIGHT_CHARGING_ACTIVE,
-                        ChargingState.TARIFF_WAITING_FOR_CHEAP,
-                    ):
-                        pc_target = charging_context.night_target_kwh
-                        if pc_target <= 0.1:
-                            effective_state = ChargingState.NIGHT_TARGET_REACHED
-                        else:
-                            plan = self._compute_night_plan(charger_cfg, pc_target, energy)
-                            self._night_plan_per_charger[cid] = plan
-                            charging_context.night_deadline_amps = plan.deadline_amps
-                            charging_context.night_deadline_active = plan.deadline_active
-                            charging_context.night_tariff_wait = plan.should_wait_for_cheap
-                            charging_context.night_deadline_reachable = plan.reachable
-                            effective_state = (
-                                ChargingState.TARIFF_WAITING_FOR_CHEAP
-                                if plan.should_wait_for_cheap
-                                else ChargingState.NIGHT_CHARGING_ACTIVE
-                            )
-                            await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
-
-                    try:
-                        await self._execute_ev_control(
-                            effective_state, power, energy, charging_context
+                        # Per-charger SOC target and surplus limit (#215).
+                        # ``_cycle_vehicle_soc`` is one of the swap fields
+                        # PerChargerContext restores in ``__exit__``.
+                        charger_cfg = pcc.charger_cfg
+                        per_soc_entity = charger_cfg.get("vehicle_soc_entity", "")
+                        if per_soc_entity:
+                            soc_st = self.hass.states.get(per_soc_entity)
+                            if soc_st and soc_st.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
+                                try:
+                                    self._cycle_vehicle_soc = float(soc_st.state)
+                                except (ValueError, TypeError):
+                                    _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
+                        # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245)
+                        per_remaining = self._calculate_remaining_need(
+                            energy, self._cycle_vehicle_soc, charger_cfg, bound="max"
                         )
-                        # Add this charger's just-committed draw to the shared night
-                        # peak budget so lower-priority chargers size against the
-                        # remaining headroom (#274/H1). Estimate from the setpoint
-                        # (the commitment), not the lagging measured power.
+                        per_remaining_floor = self._calculate_remaining_need(
+                            energy, self._cycle_vehicle_soc, charger_cfg, bound="min"
+                        )
+                        # Surplus stops at this charger's Max ceiling (default full) (#245)
+                        per_target_reached = per_remaining <= 0.1
+                        charging_context.soc_limit_active = per_target_reached
+                        charging_context.daily_target_reached = per_target_reached
+                        charging_context.remaining_ev_energy = per_remaining
+                        charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining_floor
+
+                        # Per-charger deadline + tariff plan (#246/#247): recompute
+                        # for THIS charger and pick its effective night state. Each car
+                        # can have its own deadline / tariff toggle, so the displayed
+                        # (primary) state isn't authoritative for the rest.
+                        effective_state = charging_state
+                        charging_context.night_deadline_amps = 0
+                        charging_context.night_deadline_active = False
+                        charging_context.night_tariff_wait = False
+                        charging_context.night_deadline_reachable = True
+
+                        # Per-charger off-mode override (v1.6.3 hotfix follow-up).
+                        # The global ``charging_state`` is derived from the primary
+                        # charger only — the multi-charger loop needs to correct it
+                        # per charger so an OFF primary doesn't bleed its terminate
+                        # into the other chargers. See the helper for details.
+                        per_mode = self._effective_charge_mode_for(charger_cfg)
+                        effective_state = self._apply_per_charger_off_override(
+                            charging_state, per_mode
+                        )
+                        if charging_state in (
+                            ChargingState.NIGHT_CHARGING_ACTIVE,
+                            ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                        ):
+                            pc_target = charging_context.night_target_kwh
+                            if pc_target <= 0.1:
+                                effective_state = ChargingState.NIGHT_TARGET_REACHED
+                            else:
+                                plan = self._compute_night_plan(charger_cfg, pc_target, energy)
+                                self._night_plan_per_charger[cid] = plan
+                                charging_context.night_deadline_amps = plan.deadline_amps
+                                charging_context.night_deadline_active = plan.deadline_active
+                                charging_context.night_tariff_wait = plan.should_wait_for_cheap
+                                charging_context.night_deadline_reachable = plan.reachable
+                                effective_state = (
+                                    ChargingState.TARIFF_WAITING_FOR_CHEAP
+                                    if plan.should_wait_for_cheap
+                                    else ChargingState.NIGHT_CHARGING_ACTIVE
+                                )
+                                await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
+
+                        # v1.6.9: capture per-charger effective state so
+                        # the notification dispatch in ``_send_notifications``
+                        # can fire ``notify_state_change`` per charger with
+                        # its own flap-suppression key.
+                        self._effective_states_per_charger[cid] = (
+                            effective_state,
+                            charger_cfg.get("name") or cid,
+                        )
+
                         try:
-                            self._night_committed_w += max(0.0, (
-                                ev_dev._current_setpoint * ev_dev.phases * ev_dev.voltage
-                            ))
-                        except (AttributeError, TypeError):
-                            pass
-                    except (HomeAssistantError, ServiceValidationError) as e:
-                        _LOGGER.error("EV control service failed for %s: %s", cid, e)
-                    except ValueError as e:
-                        _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
-                    finally:
-                        # Save back per-charger state, restore coordinator state
-                        self._ev_stalled_since_per_charger[cid] = self._ev_stalled_since
-                        self._ev_enable_surplus_per_charger[cid] = self._ev_enable_surplus_since
-                        self._ev_charge_started_per_charger[cid] = self._ev_charge_started_at
-                        self._ev_last_change_per_charger[cid] = self._ev_last_change_time
-                        self._ev_reenable_attempts_per_charger[cid] = self._ev_reenable_attempts
-                        self._ev_charge_refused_per_charger[cid] = self._ev_charge_refused
-                        self._ev_device = saved["dev"]
-                        self._ev_stalled_since = saved["stalled"]
-                        self._ev_enable_surplus_since = saved["enable"]
-                        self._ev_charge_started_at = saved["started"]
-                        self._ev_last_change_time = saved["change"]
-                        self._ev_reenable_attempts = saved["reenable_attempts"]
-                        self._ev_charge_refused = saved["charge_refused"]
-                        self._current_charger_budget = None
-                        self._cycle_vehicle_soc = saved_vehicle_soc_ctrl
+                            await self._execute_ev_control(
+                                effective_state, power, energy, charging_context
+                            )
+                            # Add this charger's just-committed draw to the shared night
+                            # peak budget so lower-priority chargers size against the
+                            # remaining headroom (#274/H1). Estimate from the setpoint
+                            # (the commitment), not the lagging measured power.
+                            try:
+                                self._night_committed_w += max(0.0, (
+                                    ev_dev._current_setpoint * ev_dev.phases * ev_dev.voltage
+                                ))
+                            except (AttributeError, TypeError):
+                                pass
+                        except (HomeAssistantError, ServiceValidationError) as e:
+                            _LOGGER.error("EV control service failed for %s: %s", cid, e)
+                        except ValueError as e:
+                            _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
                 self._save_ev_session_state()
             elif self._ev_device and not self._observer_mode:
                 try:
@@ -2159,19 +2166,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """Send state-change and event-based notifications (#29).
 
         Extracted from _async_update_data to reduce cyclomatic complexity.
+
+        v1.6.9 multi-charger: when ``_effective_states_per_charger`` was
+        populated by the per-charger loop, dispatch one
+        ``notify_state_change`` per charger with its own ``charger_id``
+        and flap-suppression key so a state change on charger A doesn't
+        suppress one on charger B. Single-charger setups (empty dict)
+        fall back to the fleet-level call — identical behaviour to
+        v1.6.8.
         """
-        await self._notification_manager.notify_state_change(
-            charging_state,
-            {
-                "battery_soc": power.battery_soc,
-                "calculated_current": calculated_current,
-                "available_power": available_power,
-                "daily_ev_energy": energy.daily_ev,
-                "charging_strategy": charging_context.charging_strategy,
-                "charging_strategy_reason": charging_context.charging_strategy_reason,
-                "discharge_limit": discharge_limit,
-            }
-        )
+        common_data = {
+            "battery_soc": power.battery_soc,
+            "calculated_current": calculated_current,
+            "available_power": available_power,
+            "daily_ev_energy": energy.daily_ev,
+            "charging_strategy": charging_context.charging_strategy,
+            "charging_strategy_reason": charging_context.charging_strategy_reason,
+            "discharge_limit": discharge_limit,
+        }
+        per_charger_states = getattr(self, "_effective_states_per_charger", None) or {}
+        if per_charger_states:
+            for cid, (eff_state, name) in per_charger_states.items():
+                await self._notification_manager.notify_state_change(
+                    eff_state, common_data, charger_id=cid, charger_name=name,
+                )
+        else:
+            await self._notification_manager.notify_state_change(
+                charging_state, common_data,
+            )
 
         try:
             if power.battery_soc >= 99.5:

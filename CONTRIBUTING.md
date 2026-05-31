@@ -40,6 +40,28 @@ Open an issue with the `enhancement` label. Describe the use case, not just the 
 - Add tests for new features
 - Update translations (15 languages: de, en, es, fr, it, nl, pt, pl, sv, cs, da, fi, hu, ro, no) for user-facing text
 
+### Multi-charger correctness
+
+SEM was originally single-charger; multi-charger support was added
+incrementally. Between v1.6.0 and v1.6.6 we shipped four hotfixes for
+variants of the same bug class: **per-charger context swaps with
+fleet-level reads leaking through**. The structural fix landed in
+v1.6.7 as `PerChargerContext` (see
+[`docs/MULTI_CHARGER.md`](docs/MULTI_CHARGER.md) for the full invariant).
+
+**Two rules of thumb when working on the coordinator:**
+
+1. Inside a `with PerChargerContext.for_charger(...)` block (the
+   multi-charger loop in `coordinator/coordinator.py`), never read
+   `power.ev_power` directly — use the per-charger helper or annotate
+   the read with `# FLEET-READ: <reason>`.
+2. To add new per-charger state, edit
+   [`coordinator/per_charger_context.py`](coordinator/per_charger_context.py)
+   — don't add new ad-hoc `saved = {...}` swap dicts.
+
+If you're not sure whether a code path runs inside the per-charger loop,
+read the doc — the answer is there.
+
 ## Development Setup
 
 ```bash

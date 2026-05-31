@@ -52,13 +52,25 @@ class NotificationManager:
         """Initialize notification manager."""
         self.hass = hass
         self.config = config
-        self._last_notified_state: Optional[str] = None
+        # v1.6.9: per-charger flap suppression. The fleet sentinel
+        # ``"_fleet"`` is the back-compat slot for callers that don't
+        # pass a ``charger_id`` (single-charger setups + the existing
+        # global state-change call site at coordinator.py:2148).
+        # Multi-charger callers pass each charger's id so a state
+        # change on charger A doesn't suppress one on charger B
+        # (separate ``_last_notified_state`` per key).
+        #
+        # Internal dicts are private. The ``_last_notified_state``,
+        # ``_pending_state``, and ``_pending_state_since`` properties
+        # below provide the legacy scalar API (targeting the fleet
+        # slot) so existing tests and any external consumers continue
+        # to work unchanged.
+        self._last_notified_state_per_charger: Dict[str, Optional[str]] = {}
+        self._pending_state_per_charger: Dict[str, Optional[str]] = {}
+        self._pending_state_since_per_charger: Dict[str, float] = {}
         self._last_mobile_time: float = -(2 * _MOBILE_COOLDOWN_SECONDS)
         self._daily_summary_sent: Optional[str] = None
         self._notified_flags: set = set()
-        # Flap suppression (#35)
-        self._pending_state: Optional[str] = None
-        self._pending_state_since: float = 0.0
         # Service validation caching (#47)
         self._charger_notify_checked: bool = False
         self._charger_notify_available: bool = True
@@ -69,32 +81,84 @@ class NotificationManager:
         self._mobile_service_domain: str = "notify"
         self._mobile_service_is_companion: bool = False
 
+    # ──────────────────────────────────────────────────────────────────
+    # v1.6.8-compat shims for flap-suppression fields. Reads/writes
+    # target the fleet sentinel key; multi-charger callers should use
+    # the per-charger dicts directly.
+    # ──────────────────────────────────────────────────────────────────
+
+    @property
+    def _last_notified_state(self) -> Optional[str]:
+        return self._last_notified_state_per_charger.get("_fleet")
+
+    @_last_notified_state.setter
+    def _last_notified_state(self, value: Optional[str]) -> None:
+        if value is None:
+            self._last_notified_state_per_charger.pop("_fleet", None)
+        else:
+            self._last_notified_state_per_charger["_fleet"] = value
+
+    @property
+    def _pending_state(self) -> Optional[str]:
+        return self._pending_state_per_charger.get("_fleet")
+
+    @_pending_state.setter
+    def _pending_state(self, value: Optional[str]) -> None:
+        if value is None:
+            self._pending_state_per_charger.pop("_fleet", None)
+        else:
+            self._pending_state_per_charger["_fleet"] = value
+
+    @property
+    def _pending_state_since(self) -> float:
+        return self._pending_state_since_per_charger.get("_fleet", 0.0)
+
+    @_pending_state_since.setter
+    def _pending_state_since(self, value: float) -> None:
+        self._pending_state_since_per_charger["_fleet"] = value
+
     async def notify_state_change(
         self,
         new_state: str,
-        data: Dict[str, Any]
+        data: Dict[str, Any],
+        *,
+        charger_id: Optional[str] = None,
+        charger_name: Optional[str] = None,
     ) -> None:
         """Send notifications based on charging state changes.
 
         Uses flap suppression (#35): for cooldown states (solar charging),
         the state must be stable for 60s before a notification is sent.
+
+        v1.6.9 multi-charger: ``charger_id`` (when set) keys the flap
+        suppression state per-charger so a state change on one charger
+        doesn't suppress one on another. ``charger_name`` is used as the
+        label in mobile notifications (e.g. ``[Wallbox Left] Solar
+        charging active``). Single-charger callers omit both and the
+        fleet sentinel key is used — identical behaviour to v1.6.8.
         """
-        if new_state == self._last_notified_state:
-            self._pending_state = None
+        key = charger_id or "_fleet"
+
+        if new_state == self._last_notified_state_per_charger.get(key):
+            # Drop the pending-state entry rather than writing ``None`` —
+            # keeps the dict free of orphan ``None`` slots so future
+            # ``in`` checks are meaningful (reviewer NIT, v1.6.9).
+            self._pending_state_per_charger.pop(key, None)
             return
 
         # Flap suppression for cooldown states
         if new_state in _COOLDOWN_STATES:
             now = time.monotonic()
-            if self._pending_state != new_state:
-                self._pending_state = new_state
-                self._pending_state_since = now
+            if self._pending_state_per_charger.get(key) != new_state:
+                self._pending_state_per_charger[key] = new_state
+                self._pending_state_since_per_charger[key] = now
                 return
-            if now - self._pending_state_since < _FLAP_STABILITY_SECONDS:
+            if now - self._pending_state_since_per_charger.get(key, 0.0) < _FLAP_STABILITY_SECONDS:
                 return
 
-        self._pending_state = None
-        self._last_notified_state = new_state
+        # Same drop-not-write convention as above.
+        self._pending_state_per_charger.pop(key, None)
+        self._last_notified_state_per_charger[key] = new_state
 
         # Accept enable_charger_notifications (new) or enable_keba_notifications (legacy)
         keba_enabled = self.config.get("enable_charger_notifications",
@@ -106,12 +170,26 @@ class NotificationManager:
 
         messages = self._get_notification_messages(new_state, data)
 
+        # v1.6.9 multi-charger: prefix mobile messages with the charger
+        # name in square brackets so the user knows which charger fired
+        # the event. The charger-display message stays bare — the
+        # charger already knows it's itself.
+        #
+        # Note: ``_last_mobile_time`` stays fleet-wide (not per-charger)
+        # by design. Users want a quiet phone, not one push per charger
+        # per state change. The KEBA notification IS per-charger though
+        # — that one fires for every state change on every charger.
+        if charger_name and messages.get("mobile"):
+            messages["mobile"] = f"[{charger_name}] {messages['mobile']}"
+
         # Fire HA event for automation triggers (#47)
         if messages.get("mobile") or messages.get("charger"):
             self.hass.bus.async_fire(f"{DOMAIN}_notification", {
                 "state": new_state,
                 "message": messages.get("mobile") or messages.get("keba", ""),
                 "category": "charging",
+                "charger_id": charger_id,
+                "charger_name": charger_name,
             })
 
         if keba_enabled and messages.get("charger"):
