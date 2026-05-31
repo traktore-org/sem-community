@@ -1701,11 +1701,55 @@ async def async_setup_entry(
         _LOGGER.info("Created %d per-charger sensors for %d charger(s)",
                       len(per_charger_descriptions), len(ev_chargers))
 
+    # v1.7.0 / #312: per-PV-string sensor surface. Auto-discovered at
+    # config-flow time (``hardware_detection.discover_pv_strings_from_registry``)
+    # and stashed on the coordinator's sensor reader via
+    # ``set_pv_strings``. Gated on ≥ 2 strings to keep single-string
+    # installs identical to today (no entity-registry clutter).
+    #
+    # Defensive getattr on the coordinator's reader handle — keeps test
+    # mocks (``MagicMock``-only coordinators in ``test_integration.py``)
+    # working when the reader isn't wired through.
+    per_string_descriptions = []
+    _sr = getattr(coordinator, "_sensor_reader", None)
+    pv_strings = getattr(_sr, "_pv_strings", {}) if _sr is not None else {}
+    pv_strings = pv_strings or {}
+    if len(pv_strings) >= 2:
+        for slot in sorted(pv_strings.keys()):
+            # ``slot`` is the normalised label ``pv1`` / ``pv2`` / ...
+            n = slot.replace("pv", "")
+            per_string_descriptions.extend([
+                SensorEntityDescription(
+                    key=f"pv_string_{slot}_power",
+                    name=f"PV String {n} Power",
+                    device_class=SensorDeviceClass.POWER,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=UnitOfPower.WATT,
+                    suggested_display_precision=0,
+                ),
+                SensorEntityDescription(
+                    key=f"pv_string_{slot}_daily_energy",
+                    name=f"PV String {n} Daily Energy",
+                    device_class=SensorDeviceClass.ENERGY,
+                    state_class=SensorStateClass.TOTAL,
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    suggested_display_precision=2,
+                ),
+            ])
+        for desc in per_string_descriptions:
+            sensors.append(SEMSolarSensor(coordinator, desc, entry.entry_id))
+        _LOGGER.info(
+            "Created %d per-PV-string sensors for %d string(s) (#312)",
+            len(per_string_descriptions), len(pv_strings),
+        )
+
     _LOGGER.info("Adding %d sensors to Home Assistant", len(sensors))
     async_add_entities(sensors)
 
     # Fix entity_ids from pre-translation installs and clean up stale entities
-    all_descriptions = list(SENSOR_TYPES) + per_charger_descriptions
+    all_descriptions = (
+        list(SENSOR_TYPES) + per_charger_descriptions + per_string_descriptions
+    )
     _fix_entity_ids(hass, entry, all_descriptions, "sensor")
     _cleanup_stale_entities(hass, entry, all_descriptions, "sensor")
 

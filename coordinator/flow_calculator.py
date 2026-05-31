@@ -24,6 +24,7 @@ from .types import (
     EnergyTotals,
     PowerFlows,
     PowerReadings,
+    StringEnergy,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -156,6 +157,12 @@ class FlowCalculator:
         # in single-charger setups (no per-charger PowerFlows entries
         # arrive at ``integrate_energy_flows``).
         self._per_charger_accumulators: Dict[str, Dict[str, float]] = {}
+        # v1.7.0 / #312: per-PV-string daily kWh accumulators, reset
+        # daily alongside the fleet + per-charger ones. Outer key is
+        # the string slot label (``"pv1"``, ``"pv2"``, …), inner key
+        # is ``"energy_kwh"`` (kept as a dict for symmetry with the
+        # per-charger schema). Empty in single-string setups.
+        self._per_string_accumulators: Dict[str, Dict[str, float]] = {}
         self._current_date: date = dt_util.now().date()
 
     def calculate_power_flows(self, power: PowerReadings) -> PowerFlows:
@@ -233,6 +240,13 @@ class FlowCalculator:
         # available, split the fleet-level EV flows by each charger's
         # share of the total EV draw. Math: ``charger_share = c_draw /
         # ev_total`` × fleet ``flows.*_to_ev``. Sum invariant holds by
+        # v1.7.0 / #312: carry per-string raw power onto the flows
+        # object so ``integrate_energy_flows`` can accumulate kWh per
+        # string without an API change. Strings are SOURCES so there's
+        # no destination attribution to compute — just pass-through.
+        if power.solar_power_per_string:
+            flows.solar_per_string = dict(power.solar_power_per_string)
+
         # construction (sum of shares == 1.0 modulo float rounding;
         # final ``round(..., 1)`` may leak ≤ 0.1 W which is well below
         # any user-visible threshold).
@@ -267,6 +281,14 @@ class FlowCalculator:
     # have a per-charger attribution surface — the rest stay fleet-level.
     _PER_CHARGER_ACCUMULATED_ATTRS = (
         "solar_to_ev", "grid_to_ev", "battery_to_ev",
+    )
+
+    # v1.7.0 / #312: per-string slot label form. Just one quantity
+    # per string (kWh contribution this day). Kept as a tuple-of-one
+    # for symmetry with the per-charger pattern and to make a future
+    # second per-string scalar (e.g. peak watts) a one-line add.
+    _PER_STRING_ACCUMULATED_ATTRS = (
+        "energy_kwh",
     )
 
     def integrate_energy_flows(
@@ -309,6 +331,7 @@ class FlowCalculator:
         if today != self._current_date:
             self._flow_accumulators.clear()
             self._per_charger_accumulators.clear()
+            self._per_string_accumulators.clear()
             self._current_date = today
 
         hours = max(0.0, interval_seconds) / 3600.0
@@ -345,6 +368,28 @@ class FlowCalculator:
                 battery_to_ev=round(acc.get("battery_to_ev", 0.0), 3),
             )
 
+        # v1.7.0 / #312: per-PV-string slice. Integrate the raw
+        # per-string power carried on ``power_flows.solar_per_string``
+        # into a parallel dict-of-dicts so each string has its own
+        # kWh counter. Sum invariant pinned in tests:
+        # ``sum(per_string.energy_kwh) ≈ fleet solar integration``
+        # within rounding.
+        if power_flows.solar_per_string:
+            for sid, watts in power_flows.solar_per_string.items():
+                acc = self._per_string_accumulators.setdefault(sid, {})
+                w = watts or 0.0
+                acc["energy_kwh"] = (
+                    acc.get("energy_kwh", 0.0) + w * hours / 1000.0
+                )
+
+        # Emit every string ever seen — clouds shading one panel
+        # array mid-day shouldn't regress the user-visible counter to 0
+        # (same semantic as the per-charger emit above).
+        for sid, acc in self._per_string_accumulators.items():
+            flows.per_string[sid] = StringEnergy(
+                energy_kwh=round(acc.get("energy_kwh", 0.0), 3),
+            )
+
         return flows
 
     def get_flow_accumulator_state(self) -> dict:
@@ -363,6 +408,11 @@ class FlowCalculator:
             snap["per_charger"] = {
                 cid: dict(acc)
                 for cid, acc in self._per_charger_accumulators.items()
+            }
+        if self._per_string_accumulators:
+            snap["per_string"] = {
+                sid: dict(acc)
+                for sid, acc in self._per_string_accumulators.items()
             }
         return snap
 
@@ -395,6 +445,19 @@ class FlowCalculator:
                     continue
                 target = self._per_charger_accumulators.setdefault(str(cid), {})
                 for k in self._PER_CHARGER_ACCUMULATED_ATTRS:
+                    v = acc.get(k)
+                    if isinstance(v, (int, float)):
+                        target[k] = float(v)
+
+        # v1.7.0: restore per-string slice if present. Missing key is
+        # the expected case for pre-v1.7.0 snapshots — silently skip.
+        ps = state.get("per_string")
+        if isinstance(ps, dict):
+            for sid, acc in ps.items():
+                if not isinstance(acc, dict):
+                    continue
+                target = self._per_string_accumulators.setdefault(str(sid), {})
+                for k in self._PER_STRING_ACCUMULATED_ATTRS:
                     v = acc.get(k)
                     if isinstance(v, (int, float)):
                         target[k] = float(v)
