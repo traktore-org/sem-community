@@ -260,6 +260,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # last effective decision, so price hovering at the cheap boundary doesn't
         # stop/start the charger every cycle.
         self._tariff_decision_per_charger = {}
+        # v1.6.9: per-charger effective state captured during the
+        # multi-charger loop so ``_send_notifications`` can dispatch
+        # ``notify_state_change`` per charger with its own
+        # ``charger_id`` and flap-suppression key. Cleared at the top of
+        # each loop pass; empty in single-charger setups (notification
+        # falls back to the fleet-level call).
+        # Shape: ``{cid: (effective_state, charger_name)}``.
+        self._effective_states_per_charger: Dict[str, tuple] = {}
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -1110,6 +1118,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # priority order against one peak headroom; reset the running
                 # commitment before the loop.
                 self._night_committed_w = 0.0
+                # v1.6.9: per-charger effective states are captured below
+                # so the notification dispatch can fire per charger.
+                # Reset before the loop so a removed charger's stale
+                # state doesn't fire on the next cycle.
+                self._effective_states_per_charger = {}
                 # Pre-cache the per-charger configs once for the night
                 # gate below — inline lookup is the same pattern other
                 # branches use here. (#277 Phase B)
@@ -1222,6 +1235,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                     else ChargingState.NIGHT_CHARGING_ACTIVE
                                 )
                                 await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
+
+                        # v1.6.9: capture per-charger effective state so
+                        # the notification dispatch in ``_send_notifications``
+                        # can fire ``notify_state_change`` per charger with
+                        # its own flap-suppression key.
+                        self._effective_states_per_charger[cid] = (
+                            effective_state,
+                            charger_cfg.get("name") or cid,
+                        )
 
                         try:
                             await self._execute_ev_control(
@@ -2144,19 +2166,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """Send state-change and event-based notifications (#29).
 
         Extracted from _async_update_data to reduce cyclomatic complexity.
+
+        v1.6.9 multi-charger: when ``_effective_states_per_charger`` was
+        populated by the per-charger loop, dispatch one
+        ``notify_state_change`` per charger with its own ``charger_id``
+        and flap-suppression key so a state change on charger A doesn't
+        suppress one on charger B. Single-charger setups (empty dict)
+        fall back to the fleet-level call — identical behaviour to
+        v1.6.8.
         """
-        await self._notification_manager.notify_state_change(
-            charging_state,
-            {
-                "battery_soc": power.battery_soc,
-                "calculated_current": calculated_current,
-                "available_power": available_power,
-                "daily_ev_energy": energy.daily_ev,
-                "charging_strategy": charging_context.charging_strategy,
-                "charging_strategy_reason": charging_context.charging_strategy_reason,
-                "discharge_limit": discharge_limit,
-            }
-        )
+        common_data = {
+            "battery_soc": power.battery_soc,
+            "calculated_current": calculated_current,
+            "available_power": available_power,
+            "daily_ev_energy": energy.daily_ev,
+            "charging_strategy": charging_context.charging_strategy,
+            "charging_strategy_reason": charging_context.charging_strategy_reason,
+            "discharge_limit": discharge_limit,
+        }
+        per_charger_states = getattr(self, "_effective_states_per_charger", None) or {}
+        if per_charger_states:
+            for cid, (eff_state, name) in per_charger_states.items():
+                await self._notification_manager.notify_state_change(
+                    eff_state, common_data, charger_id=cid, charger_name=name,
+                )
+        else:
+            await self._notification_manager.notify_state_change(
+                charging_state, common_data,
+            )
 
         try:
             if power.battery_soc >= 99.5:

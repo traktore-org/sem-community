@@ -17,7 +17,7 @@ from typing import Dict, Optional
 
 from homeassistant.util import dt as dt_util
 
-from .types import PowerReadings, PowerFlows, EnergyTotals, EnergyFlows
+from .types import ChargerFlows, PowerReadings, PowerFlows, EnergyTotals, EnergyFlows
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -150,6 +150,15 @@ class FlowCalculator:
 
         Each source flows to ALL destinations based on demand percentages.
         This matches how electricity physically distributes in a system.
+
+        v1.6.9: when ``power.ev_power_per_charger`` is populated
+        (multi-charger setups, ``len(ev_chargers) > 1`` in
+        ``sensor_reader``), the EV-side flow attribution is also split
+        per charger and stored on ``flows.per_charger``. The fleet-level
+        ``flows.solar_to_ev`` (etc.) remains the sum across all chargers
+        — invariant pinned in the scenario tests. Single-charger setups
+        leave ``per_charger`` empty, preserving identical behaviour for
+        every downstream reader.
         """
         flows = PowerFlows()
 
@@ -203,6 +212,28 @@ class FlowCalculator:
 
             flows.battery_to_home = round(battery_discharge * home_pct_battery, 1)
             flows.battery_to_ev = round(battery_discharge * ev_pct_battery, 1)
+
+        # v1.6.9 per-charger attribution. When per-charger draws are
+        # available, split the fleet-level EV flows by each charger's
+        # share of the total EV draw. Math: ``charger_share = c_draw /
+        # ev_total`` × fleet ``flows.*_to_ev``. Sum invariant holds by
+        # construction (sum of shares == 1.0 modulo float rounding;
+        # final ``round(..., 1)`` may leak ≤ 0.1 W which is well below
+        # any user-visible threshold).
+        if power.ev_power_per_charger and ev > 0:
+            for cid, charger_ev_w in power.ev_power_per_charger.items():
+                if charger_ev_w <= 0:
+                    # An idle charger gets a zero-filled ChargerFlows so
+                    # downstream readers can safely dict-lookup any
+                    # configured charger id without KeyError.
+                    flows.per_charger[cid] = ChargerFlows()
+                    continue
+                share = charger_ev_w / ev
+                flows.per_charger[cid] = ChargerFlows(
+                    solar_to_ev=round(flows.solar_to_ev * share, 1),
+                    grid_to_ev=round(flows.grid_to_ev * share, 1),
+                    battery_to_ev=round(flows.battery_to_ev * share, 1),
+                )
 
         return flows
 

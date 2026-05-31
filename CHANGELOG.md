@@ -5,6 +5,55 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.9] — 2026-05-31
+
+Third and final of the multi-charger cleanup arc (v1.6.7 → v1.6.9).
+Adds per-charger flow attribution and per-charger notification flap
+suppression so multi-charger users finally get correct downstream
+visibility — closes the @RienduPre #316 family of complaints. **Zero
+behaviour change** for single-charger users.
+
+See [`docs/MULTI_CHARGER.md`](docs/MULTI_CHARGER.md).
+
+### Added
+
+- **Per-charger flow attribution** in
+  [`coordinator/flow_calculator.py`](coordinator/flow_calculator.py).
+  When ``PowerReadings.ev_power_per_charger`` is populated (multi-charger
+  installs), ``calculate_power_flows`` now also produces
+  ``PowerFlows.per_charger[cid] = ChargerFlows(solar_to_ev, grid_to_ev,
+  battery_to_ev)``. Sum invariant: ``sum(per_charger[c].solar_to_ev) ==
+  solar_to_ev`` (within < 0.1 W from float rounding). Closes the
+  long-standing @RienduPre #284 / #316 complaint family — the dashboard
+  can now show which charger drank from grid vs solar instead of the
+  fleet-aggregated proportional split.
+
+- **``PowerReadings.ev_power_per_charger``** populated by
+  ``sensor_reader`` for multi-charger installs (each charger's
+  ``ev_charging_power_sensor`` value, keyed by charger id).
+  Single-charger installs leave the dict empty.
+
+- **Per-charger notification flap suppression** in
+  [`coordinator/notifications.py`](coordinator/notifications.py).
+  ``notify_state_change`` accepts new ``charger_id`` + ``charger_name``
+  kwargs; the flap-suppression ``_last_notified_state`` /
+  ``_pending_state`` / ``_pending_state_since`` storage is now
+  per-charger, keyed by ``charger_id`` (or the ``"_fleet"`` sentinel
+  for back-compat). A state change on charger A no longer suppresses
+  one on charger B. Mobile messages get a ``[Charger Name]`` prefix
+  when ``charger_name`` is provided. The HA event payload now carries
+  ``charger_id`` and ``charger_name`` keys so automations can route
+  per charger.
+
+### Back-compat
+
+- v1.6.8 callers that read ``_last_notified_state``,
+  ``_pending_state``, or ``_pending_state_since`` as scalars continue
+  to work via property shims that target the ``"_fleet"`` sentinel
+  slot.
+- Single-charger setups behave identically to v1.6.8 — the
+  per-charger split skips when no per-charger data is provided.
+
 ## [1.6.8] — 2026-05-31
 
 Second of the three-release multi-charger cleanup arc (v1.6.7 → v1.6.9).

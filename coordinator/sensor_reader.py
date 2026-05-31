@@ -423,14 +423,29 @@ class SensorReader:
             readings.battery_soc = self._last_valid_soc
             readings.battery_soc_unavailable = True
 
-        # EV power — sum all chargers if multi-charger (#193), else single sensor
+        # EV power — sum all chargers if multi-charger (#193), else single sensor.
+        # v1.6.9 also populates ``ev_power_per_charger`` so the flow calculator
+        # can produce per-charger flow attribution (closes #316 family).
+        #
+        # Note: chargers without a configured ``ev_charging_power_sensor``
+        # (misconfig) are excluded from both ``ev_power_per_charger``
+        # AND the fleet sum. Downstream consumers that iterate
+        # ``config['ev_chargers']`` and look up the dict must guard
+        # ``.get(cid)`` rather than ``[cid]`` — a charger that's
+        # configured but has no power sensor will be silently absent.
         ev_chargers = self._raw_config.get("ev_chargers", [])
         if len(ev_chargers) > 1:
             total_ev = 0.0
             for charger_cfg in ev_chargers:
+                cid = charger_cfg.get("id")
                 cps = charger_cfg.get("ev_charging_power_sensor")
                 if cps:
-                    total_ev += self._read_sensor(cps, "ev")
+                    cw = self._read_sensor(cps, "ev")
+                    total_ev += cw
+                    if cid:
+                        # Per-charger draw in watts, exposed for
+                        # ``flow_calculator`` per-charger split.
+                        readings.ev_power_per_charger[cid] = cw
             readings.ev_power = total_ev
         elif ed.ev_power:
             readings.ev_power = self._read_sensor(ed.ev_power, "ev")
