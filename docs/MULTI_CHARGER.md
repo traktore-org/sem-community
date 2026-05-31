@@ -141,6 +141,7 @@ the structural invariant.
 | **v1.6.9** | Per-charger flow attribution + per-charger notification flap suppression | ✓ shipped |
 | **v1.6.10** | Code-quality cleanup (#308 / #309 / #310) | ✓ shipped |
 | **v1.6.11** | Recent-logs in diagnostics + doc polish | ✓ shipped |
+| **v1.6.12** | Multi-charger off + solar_only scenario test + harness `per_charger_effective_states` / `per_charger_flow_max` assertions | ✓ shipped |
 
 ### What landed under the abstraction
 
