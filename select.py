@@ -73,22 +73,15 @@ async def async_setup_entry(
     """Set up SEM select entities."""
     coordinator: SEMCoordinator = entry.runtime_data
 
-    # Remove the now-removed GLOBAL target-type select (#255): ev_target_type is
-    # per-charger only. Drop both the renamed global entity and its legacy
-    # ev_target_mode predecessor (#235) from the registry. Per-charger values were
-    # seeded from the global by the v3→v4 migration, so no data is lost.
-    try:
-        registry = er.async_get(hass)
-        for uid in (
-            f"{entry.entry_id}_ev_target_type", f"{entry.entry_id}_ev_target_mode",
-            f"{entry.entry_id}_ev_charging_mode",
-        ):
-            eid = registry.async_get_entity_id("select", DOMAIN, uid)
-            if eid:
-                registry.async_remove(eid)
-                _LOGGER.info("Removed global select %s (now per-charger, #255)", eid)
-    except Exception as e:
-        _LOGGER.debug("Global select removal skipped: %s", e)
+    # v1.6.10 (#309): the explicit removal block for the now-removed
+    # GLOBAL selects (``{entry_id}_ev_target_type``,
+    # ``{entry_id}_ev_target_mode``, ``{entry_id}_ev_charging_mode``)
+    # was folded into the registry-key sweep below. Each of those
+    # unique_ids has the prefix ``{entry_id}_`` and a key that is NOT
+    # in ``valid_keys = {SELECT_TYPES keys} | per_charger_keys``, so
+    # the sweep removes them just as cleanly. Per-charger values were
+    # seeded from the globals by the v3→v4 migration (#255), so no
+    # data is lost.
 
     entities = [
         SEMSelectEntity(coordinator, entry, description)

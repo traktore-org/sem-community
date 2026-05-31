@@ -1,13 +1,21 @@
-"""Tests for SOC zone strategy: _determine_charging_strategy() (and historically also _calculate_solar_ev_budget, removed in Phase D.2 #282 — coverage moved to canonical EVBudget tests and scenario harness).
+"""Tests for SOC zone strategy: ``_determine_charging_strategy()``.
 
-Codified from real-world scenario on 2026-03-22 where battery drained to 20% SOC.
-Investigation confirmed zones held correctly: battery assist stopped at 70% (Zone 2 boundary),
-remaining drain was evening home consumption.
+Codified from a real-world scenario on 2026-03-22 where the battery
+drained to 20 % SOC. Investigation confirmed the zones held correctly:
+battery assist stopped at 70 % (Zone 2 boundary), remaining drain was
+evening home consumption.
 
 Real-world data:
   Solar: 36.65 kWh, Home: 29.98 kWh, EV: 15.52 kWh
   Battery charge: 13.55 kWh, discharge: 9.54 kWh → SOC ended at 20%
   PROD config: battery_priority_soc=90, buffer/auto_start/floor at defaults (70/90/60)
+
+Removed tests — for archaeology, see ``git log -S <name>`` in this file:
+  * ``test_charging_mode_minpv_returns_min_pv`` — #277 Phase C
+  * ``TestCalculateSolarEvBudget`` — Phase D.2 (#282), coverage moved
+    to canonical EVBudget tests + the scenario harness.
+  * ``TestAutoMode`` — #305 (``_auto_mode_strategy`` deleted as dead
+    code after Phase C).
 """
 import pytest
 from unittest.mock import MagicMock, patch
@@ -249,14 +257,6 @@ class TestDetermineChargingStrategy:
         )
         assert strategy == "disabled"
 
-    # ``test_charging_mode_minpv_returns_min_pv`` removed in #277 Phase C:
-    # the ``minpv`` legacy mode no longer dispatches to ``("min_pv", …)``
-    # from ``_determine_charging_strategy``. Per the maintainer's
-    # Phase C decision (Q1: zone-adaptive), legacy ``minpv`` users
-    # migrated to ``min_plus_solar`` get zone-adaptive day behaviour;
-    # the ``min_pv`` strategy value is now only reachable via the
-    # night-grid → MIN_PV canonical-budget mapping in
-    # ``_canonical_strategy_from_legacy``.
 
     def test_low_solar_returns_idle(self):
         """Solar < 200W → idle (not enough sun)."""
@@ -414,24 +414,6 @@ class TestZoneDebounce:
         # Held at Zone 2 — no Charging→Idle blip
         assert strategy == "solar_only"
         assert "Zone 2" in reason
-
-
-# ===========================================================================
-# TestCalculateSolarEvBudget removed in Phase D.2 (#282): the
-# ``_calculate_solar_ev_budget`` mixin method was deleted along with
-# the other legacy budget primitives. The Zone 3/4 proportional ramp +
-# measured-discharge semantics now live in
-# ``flow_calculator.calculate_canonical_ev_budget`` (BATTERY_ASSIST
-# branch) and are exercised by ``tests/scenarios/2026-05-29_budget_
-# unify_battery_assist.yaml`` end-to-end and by the canonical-budget
-# unit tests for the per-zone shape.
-
-
-# TestAutoMode removed in #305: ``_auto_mode_strategy`` was deleted
-# as dead code (no charge mode dispatched to it post-#277 Phase C).
-# The previous 3 tests exercised the helper directly; if a future
-# opt-in ``auto`` mode resurrects the forecast-aware switcher, restore
-# both the method and its tests together from the #305 commit.
 
 
 class TestSelfConsumptionStrategy:
