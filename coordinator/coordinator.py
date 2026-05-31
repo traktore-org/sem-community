@@ -2264,10 +2264,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             for cid, intel in per_charger_intel.items():
                 charger_name = self._ev_devices[cid].name if cid in self._ev_devices else cid
                 charger_connected = self._last_ev_connected_per_charger.get(cid, False)
-                mins_to_full = intel.get("minutes_to_full", 0)
-                est_soc = intel.get("estimated_soc", 0)
-                charge_needed = intel.get("charge_needed", False)
-                nights = intel.get("nights_until_charge", 0)
+                # ``or 0`` covers both missing key AND None value — the
+                # latter arises for chargers whose per-charger intel
+                # builder hasn't populated the field yet (e.g. mock
+                # chargers without a real upstream sensor). Without the
+                # coercion the subsequent ``> 0`` comparison raised
+                # ``TypeError`` every cycle (DEBUG log spam observed on
+                # HA-TEST 2026-05-31 after the v1.6.14 deploy).
+                mins_to_full = intel.get("minutes_to_full") or 0
+                est_soc = intel.get("estimated_soc") or 0
+                charge_needed = intel.get("charge_needed") or False
+                nights = intel.get("nights_until_charge") or 0
 
                 # 1. Nearly full: taper detector shows < 5 minutes remaining
                 if mins_to_full > 0 and mins_to_full < 5 and power.ev_charging:
