@@ -5,6 +5,42 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.7] — 2026-05-31
+
+First of a three-release multi-charger cleanup arc dedicated to v1.6.x.
+**Zero user-visible behaviour change** for single-charger users; multi-charger
+users see the same outputs but with the underlying swap mechanism now
+typed and unit-tested.
+
+The cleanup arc addresses a recurring bug class found in v1.6.0–v1.6.6
+(#284, #289, #315, #318): per-charger context swaps with fleet-level
+reads leaking through. This release lifts the swap mechanism; v1.6.8
+sweeps the fleet-power reads in `ev_control.py` and adds per-charger
+strategy; v1.6.9 adds per-charger flow attribution + notifications
+(closes the #316 family).
+
+See [`docs/MULTI_CHARGER.md`](docs/MULTI_CHARGER.md) for the full
+developer-facing invariant.
+
+### Refactored
+
+- **`PerChargerContext`** — new
+  [`coordinator/per_charger_context.py`](coordinator/per_charger_context.py)
+  module that owns the per-charger swap lifecycle. The ad-hoc
+  ``saved = {...}`` dict at `coordinator.py:1136-1258` that swapped
+  eight coordinator attributes per iteration (and was easy to miss
+  when adding new per-charger fields) is now a typed context manager
+  with unit tests pinning every swap invariant. Adding a new
+  per-charger field is now one place to edit instead of three.
+
+### Docs
+
+- **New `docs/MULTI_CHARGER.md`** — developer-facing invariant doc
+  covering the bug class, the `PerChargerContext` contract, how to
+  add new per-charger fields, and the v1.6.7-v1.6.9 roadmap.
+- **`CONTRIBUTING.md`** — new "Multi-charger correctness" section
+  pointing future contributors at the invariant.
+
 ## [1.6.6] — 2026-05-31
 
 Same-day hotfix for v1.6.5 — the per-charger power read at
