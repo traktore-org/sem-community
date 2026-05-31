@@ -173,8 +173,11 @@ class EnergyCalculator:
 
         # EV charging (sunrise-based reset — night charging must stay in one bucket)
         # Category "ev_daily_sun" survives midnight rollover (excluded from cleanup)
+        # FLEET-READ: ``ev_daily_sun`` is the fleet daily total — matches
+        # ``sensor.sem_daily_ev_energy``. Per-charger daily energy lives
+        # on ``charger_<id>_daily_energy`` populated separately.
         if power.ev_power >= MIN_POWER_THRESHOLD:
-            ev_increment = (power.ev_power * interval_hours) / 1000
+            ev_increment = (power.ev_power * interval_hours) / 1000  # FLEET-READ: same fleet integration as the gate above.
             self._accumulate("ev_daily_sun", ev_day, month_key, year_key, ev_increment)
 
         energy.daily_ev = self._get_daily("ev_daily_sun", ev_day)
@@ -219,6 +222,8 @@ class EnergyCalculator:
         # Only tracks savings from solar — battery discharge savings are in cost_batt_savings.
         # Subtracting discharge_incr prevents double-counting: battery discharge is not solar.
         home_incr = (power.home_consumption_power * interval_hours) / 1000 if power.home_consumption_power >= MIN_POWER_THRESHOLD else 0.0
+        # FLEET-READ: same fleet-energy integration as ``ev_daily_sun``
+        # above, applied here to the cost-savings accumulator.
         ev_incr = (power.ev_power * interval_hours) / 1000 if power.ev_power >= MIN_POWER_THRESHOLD else 0.0
         import_incr = (power.grid_import_power * interval_hours) / 1000 if power.grid_import_power >= MIN_POWER_THRESHOLD else 0.0
         discharge_incr = (power.battery_discharge_power * interval_hours) / 1000 if power.battery_discharge_power >= MIN_POWER_THRESHOLD else 0.0

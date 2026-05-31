@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from .types import PowerReadings
+from .types import FleetEvPower, PowerReadings
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -446,11 +446,13 @@ class SensorReader:
                         # Per-charger draw in watts, exposed for
                         # ``flow_calculator`` per-charger split.
                         readings.ev_power_per_charger[cid] = cw
-            readings.ev_power = total_ev
+            readings.ev_power = FleetEvPower(total_ev)
         elif ed.ev_power:
-            readings.ev_power = self._read_sensor(ed.ev_power, "ev")
+            readings.ev_power = FleetEvPower(self._read_sensor(ed.ev_power, "ev"))
         elif self.config.ev_power_sensor:
-            readings.ev_power = self._read_sensor(self.config.ev_power_sensor, "ev")
+            readings.ev_power = FleetEvPower(
+                self._read_sensor(self.config.ev_power_sensor, "ev")
+            )
 
         # EV connection status — per-charger OR'd for global (#193)
         ev_chargers = self._raw_config.get("ev_chargers", [])
@@ -693,10 +695,10 @@ class SensorReader:
                 cps = charger_cfg.get("ev_charging_power_sensor")
                 if cps:
                     total_ev += self._read_sensor(cps, "ev")
-            readings.ev_power = total_ev
+            readings.ev_power = FleetEvPower(total_ev)
         elif self.config.ev_power_sensor:
-            readings.ev_power = self._read_sensor(
-                self.config.ev_power_sensor, "ev"
+            readings.ev_power = FleetEvPower(
+                self._read_sensor(self.config.ev_power_sensor, "ev")
             )
 
         # EV connection status — per-charger OR'd for global (#193)

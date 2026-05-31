@@ -19,6 +19,8 @@ class HealthCheck:
         supply = power.solar_power + power.grid_import_power + power.battery_discharge_power
         demand = (
             power.home_consumption_power
+            # FLEET-READ: whole-house energy balance check — needs the
+            # fleet EV total to validate supply ≈ demand.
             + power.ev_power
             + power.grid_export_power
             + power.battery_charge_power
@@ -37,6 +39,8 @@ class HealthCheck:
             ("grid_export", power.grid_export_power),
             ("battery_charge", power.battery_charge_power),
             ("battery_discharge", power.battery_discharge_power),
+            # FLEET-READ: health check iterates fleet-level fields; the
+            # non-negative invariant applies to the whole-house EV total.
             ("ev_power", power.ev_power),
             ("solar_power", power.solar_power),
         ]

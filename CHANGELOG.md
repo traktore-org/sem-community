@@ -5,7 +5,7 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — v1.6.14 candidate
+## [1.6.14] — 2026-05-31
 
 Multi-charger debt closeout. Bundles four pieces of work into one
 release (the maintainer-set rule "no v1.7 until every multi-charger
@@ -100,6 +100,40 @@ separate HACS bumps).
     charger is idle (the user-visible counter must not regress
     to 0 just because the car unplugs).
 
+- **``FleetEvPower`` newtype + global AST lint (v1.6.16 work)**.
+  ``PowerReadings.ev_power`` is now typed as ``FleetEvPower`` — a
+  ``float`` subclass that exposes ``.as_fleet_total(reason: str)``.
+  Two equivalent ways to acknowledge a fleet read:
+  - Comment form (v1.6.8 idiom, still valid):
+    ``# FLEET-READ: <reason>`` on the same line or up to 5 lines
+    above (walking back through ``#``-comment lines only).
+  - Method form (preferred for new code):
+    ``power.ev_power.as_fleet_total("<reason>")`` — the reason
+    rides in the bytecode (mypy / IDE hover / ``git blame``)
+    instead of an adjacent comment.
+
+  Lint expanded to every module under ``coordinator/`` (was
+  ``ev_control.py`` only). Exempt files: ``types.py`` (defines the
+  field) and ``per_charger_context.py`` (docstrings only). The
+  ~15 legitimate fleet reads got explicit ``# FLEET-READ:``
+  reasons; one ``coordinator.py:3459`` stall-detection site
+  migrated to the new method form as the in-tree demo.
+
+  Sensor reader (the only writer) constructs ``FleetEvPower``
+  instances at the assignment sites. Single-charger setups
+  unchanged — ``FleetEvPower(value)`` reduces to a tagged float.
+
+  12 new tests in ``tests/test_fleet_ev_power_reads_global.py``:
+  - ``TestGlobalFleetEvPowerLint`` (6): every read acknowledged
+    across coordinator/; exempt-list minimality; synthetic-code
+    sanity (method form detected, bare read flagged, comment
+    form still accepted).
+  - ``TestFleetEvPowerNewtype`` (6): is float subclass,
+    arithmetic works (no migration cost), ``.as_fleet_total``
+    returns plain float, reason arg is documentation-only,
+    default ``PowerReadings.ev_power`` is the newtype, repr
+    includes class name.
+
 ### Why
 
 Senior reviewer on the v1.6.7→v1.6.10 arc flagged ``effective_state``
@@ -119,9 +153,9 @@ flow-sensor work. v1.6.9 fixed the underlying data (proportional
 W-level split was honest); v1.6.15 ships the entity surface so the
 dashboard + Energy dashboard actually render the per-charger split.
 
-2244 tests pass on Python 3.12 (2210 v1.6.13 baseline + 14 v1.6.14
-field migration + 20 v1.6.15 flow sensors). Manifest will bump to
-1.6.14 in the consolidation PR (after v1.6.16 FleetEvPower newtype).
+2256 tests pass on Python 3.12 (2210 v1.6.12 baseline + 13 #8 +
+14 v1.6.14 + 20 v1.6.15 + 12 v1.6.16 = 59 new tests in this
+release). Manifest bumped to 1.6.14.
 
 ## [1.6.12] — 2026-05-31
 

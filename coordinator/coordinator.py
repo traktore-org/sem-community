@@ -529,6 +529,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         (~9 min) to give late-loading integrations time to register (issue #166).
         """
         energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+        # FLEET-READ: energy balance — needs fleet total EV draw because
+        # home_consumption is computed from the whole-house energy in/out.
         energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
         raw_balance = energy_in - energy_out
         if raw_balance < -500:
@@ -1320,6 +1322,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         monthly_peak,
                         ev_is_charging=False,
                         grid_import_w=power.grid_import_power,
+                        # FLEET-READ: load manager peak budget is a
+                        # whole-house concept; fleet EV total is correct.
                         ev_power_w=power.ev_power,
                     )
                 except (HomeAssistantError, ServiceValidationError) as e:
@@ -1761,6 +1765,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     pass
 
                 try:
+                    # FLEET-READ: cycle-level kW display for the cost
+                    # tracker — fleet total is the correct unit for the
+                    # whole-system view shown to the user.
                     _ev_kw = (power.ev_power or 0.0) / 1000.0
                     if _ev_kw > _MIN_USEFUL_RATE_KW:
                         _pcfg_t = _dl_pcfg or {}
@@ -1838,6 +1845,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             hour = now_time.hour
             if surplus_data.surplus_total_w > 100:
                 self._today_surplus_hours[hour] = True
+            # FLEET-READ: "is the fleet drawing at all" gate for the
+            # consumption hour-bucket — any charger counts.
             if power.ev_power > 10:
                 self._today_ev_hours[hour] = True
             result["schedule_surplus_hours"] = list(self._today_surplus_hours)
@@ -2163,6 +2172,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Execute the decision (start/stop/adjust charge)
         await scheduler.update(
             current_soc=power.battery_soc,
+            # FLEET-READ: battery scheduler needs whole-house EV draw to
+            # decide whether the night charge is competing with EV load.
             ev_charging_power_w=power.ev_power,
         )
 
@@ -3388,9 +3399,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._ev_device:
             ev_setpoint = getattr(self._ev_device, "_current_setpoint", 0.0)
 
-        # Run taper detection (primary / single charger)
+        # Run taper detection (primary / single charger). Multi-charger
+        # taper is handled per-charger by
+        # ``_update_per_charger_detector_energy`` (v1.6.6 #318); this
+        # call only runs when no per-charger detectors are configured.
+        # FLEET-READ: legacy single-detector path.
         if power.ev_power > 0 or power.ev_connected:
             taper_data = self._ev_taper_detector.update(
+                # FLEET-READ: single-detector input — see comment above.
                 power.ev_power, ev_setpoint, power.ev_connected, now,
             )
         else:
@@ -3398,6 +3414,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Track energy since last full charge (hardware counter preferred)
         if hasattr(energy, "daily_ev"):
+            # FLEET-READ: ``daily_ev`` is the fleet daily total; matches
+            # the fleet-level ``sensor.sem_daily_ev_energy``. Per-charger
+            # daily energy is on ``charger_<id>_daily_energy`` populated
+            # separately by ``_update_per_charger_detector_energy``.
             ev_increment = power.ev_power * interval_hours / 1000
             # Read hardware total energy counter for drift-free tracking
             hw_total = None
@@ -3431,9 +3451,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             self._ev_taper_detector.reset_session()
 
         # Stall detection → full charge: if car is connected, SEM is sending current,
-        # but power stays 0W for extended period, the car is full (BMS refusing)
+        # but power stays 0W for extended period, the car is full (BMS refusing).
+        # Legacy single-detector stall path; runs only when multi-charger
+        # isn't configured (per-charger stall lives on
+        # ``_ev_stalled_since_per_charger``). Demo of the v1.6.16
+        # ``.as_fleet_total(reason)`` form — the reason rides in the
+        # bytecode rather than a comment line above the read.
         if (power.ev_connected and not power.ev_charging
-                and power.ev_power < 50
+                and power.ev_power.as_fleet_total("legacy single-detector stall path") < 50
                 and not self._ev_taper_detector._full_detected):
             stall_count = getattr(self, '_full_stall_count', 0) + 1
             self._full_stall_count = stall_count

@@ -182,6 +182,9 @@ class FlowCalculator:
 
         # Get destination powers
         home = power.home_consumption_power
+        # FLEET-READ: fleet EV demand is the input to proportional
+        # attribution; per-charger split happens below via
+        # ``power.ev_power_per_charger``.
         ev = power.ev_power
         battery_charge = power.battery_charge_power
         grid_export = power.grid_export_power
