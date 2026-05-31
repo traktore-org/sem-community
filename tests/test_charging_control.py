@@ -113,6 +113,123 @@ def test_solar_idle_when_ev_disconnected(sm):
     assert state == ChargingState.SOLAR_IDLE
 
 
+def test_off_mode_terminates_session(sm):
+    """charge_mode=off (strategy="disabled") with EV connected → SOLAR_IDLE.
+
+    Regression test for the v1.6.3 PROD soak bug: when the user sets
+    charge_mode=off mid-session, the strategy producer emits
+    ``("disabled", "Charging disabled (mode=off)")``. Pre-fix the state
+    machine fell through to SOLAR_CHARGING_ALLOWED with budget=0,
+    leaving the KEBA contactor closed because the actuator's
+    CHARGING_ALLOWED branch never calls stop_session(). The guard
+    routes the disabled strategy to SOLAR_IDLE which ev_control.py
+    treats as terminal → stop_session() → keba.disable.
+
+    Distinct from generic ``"idle"`` (Zone 1 battery priority,
+    solar<200W, target-met) which must still flow through the
+    surplus-tracking paths so charging resumes when conditions return.
+    """
+    # Pretend the session was active before the off-flip.
+    sm._battery_initial_check_done = True
+    sm._ev_session_allowed = True
+
+    ctx = _ctx(
+        ev_connected=True,
+        charging_strategy="disabled",
+        battery_soc=80.0,
+    )
+    state = sm.update_state(ctx)
+    assert state == ChargingState.SOLAR_IDLE
+    # Gates reset so a later mode flip back to a charging mode
+    # replays the normal enable-delay warmup (same as a fresh plug-in).
+    assert sm._ev_session_allowed is False
+    assert sm._battery_initial_check_done is False
+
+
+def test_off_mode_takes_priority_over_battery_too_low(sm):
+    """Explicit off intent beats battery-too-low pause — confirms guard ordering."""
+    sm._battery_initial_check_done = True
+    sm._ev_session_allowed = True
+
+    ctx = _ctx(
+        ev_connected=True,
+        charging_strategy="disabled",
+        battery_too_low=True,
+        battery_soc=20.0,
+    )
+    state = sm.update_state(ctx)
+    assert state == ChargingState.SOLAR_IDLE
+
+
+class TestPerChargerOffOverride:
+    """Multi-charger off-mode override (v1.6.3 hotfix).
+
+    The single-charger fix works because the strategy producer + state
+    machine see only one mode. In multi-charger setups the global state
+    is derived from the PRIMARY charger only, so an off primary would
+    bleed its SOLAR_IDLE into the other chargers and terminate them
+    too. The static helper ``_apply_per_charger_off_override`` fixes
+    this in the per-charger dispatch loop.
+    """
+
+    @staticmethod
+    def _override(global_state, per_mode):
+        from custom_components.solar_energy_management.coordinator import SEMCoordinator
+        return SEMCoordinator._apply_per_charger_off_override(global_state, per_mode)
+
+    def test_off_charger_forces_solar_idle(self):
+        """When this charger's mode is "off", force SOLAR_IDLE regardless of global."""
+        # Primary is normal-charging, this charger is off → terminate THIS.
+        assert self._override(ChargingState.SOLAR_CHARGING_ACTIVE, "off") == ChargingState.SOLAR_IDLE
+        assert self._override(ChargingState.SOLAR_CHARGING_ALLOWED, "off") == ChargingState.SOLAR_IDLE
+        assert self._override(ChargingState.SOLAR_MIN_PV, "off") == ChargingState.SOLAR_IDLE
+
+    def test_solar_charger_does_not_inherit_primary_off(self):
+        """When primary=off (global SOLAR_IDLE) but this charger=solar_only,
+        don't propagate the terminate — fall back to CHARGING_ALLOWED."""
+        assert self._override(ChargingState.SOLAR_IDLE, "solar_only") == ChargingState.SOLAR_CHARGING_ALLOWED
+        assert self._override(ChargingState.SOLAR_IDLE, "min_plus_solar") == ChargingState.SOLAR_CHARGING_ALLOWED
+        assert self._override(ChargingState.SOLAR_IDLE, "always_max") == ChargingState.SOLAR_CHARGING_ALLOWED
+
+    def test_normal_state_passes_through(self):
+        """When both global and per_mode are normal, no override."""
+        for state in (ChargingState.SOLAR_CHARGING_ACTIVE,
+                      ChargingState.SOLAR_CHARGING_ALLOWED,
+                      ChargingState.SOLAR_PAUSE_LOW_BATTERY,
+                      ChargingState.NIGHT_CHARGING_ACTIVE):
+            assert self._override(state, "solar_only") == state
+            assert self._override(state, "min_plus_solar") == state
+
+    def test_off_takes_priority_over_global_idle(self):
+        """Both global SOLAR_IDLE and per_mode=off → still SOLAR_IDLE
+        (the off-branch fires first; the result is the same either way
+        but the branch ordering matters for the next case)."""
+        assert self._override(ChargingState.SOLAR_IDLE, "off") == ChargingState.SOLAR_IDLE
+
+
+def test_generic_idle_strategy_does_not_terminate(sm):
+    """``"idle"`` is transient (Zone 1, solar<200W, target met) — NOT terminal.
+
+    Distinct from ``"disabled"`` (explicit user off). Generic idle should
+    keep the session warm so charging resumes when surplus reappears.
+    Pre-refinement my off-mode guard caught both; this test pins the
+    distinction so a future regression doesn't re-conflate them.
+    """
+    sm._battery_initial_check_done = True
+    sm._ev_session_allowed = True
+
+    ctx = _ctx(
+        ev_connected=True,
+        charging_strategy="idle",
+        battery_soc=80.0,
+    )
+    state = sm.update_state(ctx)
+    # Falls through to CHARGING_ALLOWED (session warm, waiting for surplus).
+    assert state == ChargingState.SOLAR_CHARGING_ALLOWED
+    # Gates kept — session remains allowed.
+    assert sm._ev_session_allowed is True
+
+
 def test_solar_waiting_battery_priority(sm):
     """Test waiting for battery priority when SOC is below threshold."""
     ctx = _ctx(

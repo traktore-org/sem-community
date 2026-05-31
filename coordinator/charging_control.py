@@ -53,9 +53,15 @@ class ChargingContext:
         daily_ev_energy_offset: EV energy from offset utility meter (kWh), 0 if unused.
         remaining_ev_energy: Remaining EV need (kWh), from vehicle SOC or daily target.
         charging_strategy: Strategy from SOC zone logic — one of:
-            "solar_only", "battery_assist", "night_grid", "idle". (The
-            legacy ``"min_pv"`` value was retired in #305 — no producer
-            remains and the consuming branch at line 208 is inert.)
+            "solar_only", "battery_assist", "night_grid", "idle",
+            "disabled". ``"disabled"`` is the explicit-off intent
+            (charge_mode=off) and routes the state machine to
+            SOLAR_IDLE → actuator stop_session(); ``"idle"`` is the
+            transient pause (Zone 1, solar<200W, target met) which
+            stays in CHARGING_ALLOWED (warm, waiting for surplus).
+            (The legacy ``"min_pv"`` value was retired in #305 — no
+            producer remains and the consuming branch at line 208 is
+            inert.)
         charging_strategy_reason: Human-readable explanation of strategy choice.
         night_target_kwh: Night charging target (kWh), may be forecast-adjusted if enabled.
             For night mode, remaining is derived from this field directly.
@@ -187,6 +193,22 @@ class ChargingStateMachine:
         """
         # Check EV connection first
         if not ctx.ev_connected:
+            self._battery_initial_check_done = False
+            self._ev_session_allowed = False
+            return ChargingState.SOLAR_IDLE
+
+        # Explicit-off intent (charge_mode=off → strategy="disabled")
+        # terminates the session rather than holding in CHARGING_ALLOWED
+        # with budget=0. Distinct from generic "idle" (which can be
+        # transient — Zone 1 battery priority, solar<200W, target met).
+        # Observed during the v1.6.3 PROD soak: KEBA's contactor stayed
+        # closed when only the setpoint was zeroed, because the actuator's
+        # CHARGING_ALLOWED path never calls stop_session(). SOLAR_IDLE
+        # routes through ev_control.py's TERMINAL STATES branch which
+        # invokes stop_session() → keba.disable. Matches the not-connected
+        # reset above so a later mode flip back to a charging mode replays
+        # the normal enable-delay warmup.
+        if ctx.charging_strategy == "disabled":
             self._battery_initial_check_done = False
             self._ev_session_allowed = False
             return ChargingState.SOLAR_IDLE
