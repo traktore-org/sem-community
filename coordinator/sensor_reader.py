@@ -62,6 +62,11 @@ class SensorReader:
         self.config = self._parse_config(config)
         self._raw_config = config
         self._energy_dashboard_config = None
+        # v1.7.0 / #312: per-PV-string sensors discovered at config-
+        # flow time. Empty dict in single-string setups (no discovery
+        # hit), populated by ``set_pv_strings`` from
+        # ``hardware_detection.discover_pv_strings_from_registry``.
+        self._pv_strings: Dict[str, str] = {}
         self._grid_sign_inverted = False
         self._grid_sign_detected = False  # True once sign is reliably determined
         self._grid_sign_votes: int = 0  # Consecutive same-sign detections needed
@@ -109,6 +114,32 @@ class SensorReader:
             ev_plug_sensor=config.get("ev_connected_sensor") or config.get("ev_plug_sensor", ""),
             ev_charging_sensor=config.get("ev_charging_sensor", ""),
         )
+
+    def set_pv_strings(self, pv_strings_map: Dict[str, str]) -> None:
+        """Register the discovered per-PV-string sensors (v1.7.0 / #312).
+
+        ``pv_strings_map`` is the return value of
+        ``hardware_detection.discover_pv_strings_from_registry`` —
+        ``{"pv1_power": "sensor.inverter_pv1_power", ...}`` with up to
+        4 entries. We strip the trailing ``_power`` to get the stable
+        slot label (``"pv1"``, ``"pv2"``, …) used as the dict key on
+        ``PowerReadings.solar_power_per_string`` and the suffix on
+        the published sensors (``sensor.sem_pv_string_1_power`` etc.).
+
+        Single-string installs pass an empty dict; sensor reads stay
+        identical to today.
+
+        Called once from ``SEMCoordinator.async_initialize_energy_dashboard``
+        after Energy Dashboard config is read — discovery is a config-
+        flow operation, not something to repeat every cycle.
+        """
+        self._pv_strings: Dict[str, str] = {}
+        for slot_key, entity_id in (pv_strings_map or {}).items():
+            # Slot keys arrive as ``pv1_power``, ``mppt1_power`` etc.
+            # Normalise to ``pv1`` for stable downstream labelling.
+            label = slot_key.replace("_power", "").replace("mppt", "pv")
+            if entity_id:
+                self._pv_strings[label] = entity_id
 
     def set_energy_dashboard_config(self, ed_config) -> None:
         """Set energy dashboard configuration for alternative sensor reading."""
@@ -345,6 +376,16 @@ class SensorReader:
             readings.solar_power = self._read_sensors_sum(ed.solar_power_list, "solar")
         elif ed.solar_power:
             readings.solar_power = self._read_sensor(ed.solar_power, "solar")
+
+        # v1.7.0 / #312: per-PV-string power. Gated on len ≥ 2 — single-
+        # string setups get nothing here and downstream readers fall
+        # back to ``readings.solar_power``. The discovery already
+        # capped the slot count at 4, so the loop is O(≤4).
+        if len(self._pv_strings) >= 2:
+            for slot, entity_id in self._pv_strings.items():
+                readings.solar_power_per_string[slot] = self._read_sensor(
+                    entity_id, f"pv_{slot}",
+                )
 
         # Grid power from Energy Dashboard.
         # Three modes:
@@ -656,6 +697,14 @@ class SensorReader:
             readings.solar_power = self._read_sensor(
                 self.config.solar_power_sensor, "solar"
             )
+
+        # v1.7.0 / #312: per-PV-string power on the legacy path too.
+        # Same len ≥ 2 gate as the Energy Dashboard path.
+        if len(self._pv_strings) >= 2:
+            for slot, entity_id in self._pv_strings.items():
+                readings.solar_power_per_string[slot] = self._read_sensor(
+                    entity_id, f"pv_{slot}",
+                )
 
         # Grid power (hardware convention: negative=import, positive=export)
         if self.config.grid_power_sensor:

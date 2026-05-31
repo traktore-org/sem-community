@@ -647,6 +647,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     f"grid={dashboard_config.grid_import_power}, "
                     f"battery={dashboard_config.battery_power}"
                 )
+
+                # v1.7.0 / #312: auto-discover per-PV-string sensors and
+                # plumb them to the sensor reader so every cycle populates
+                # ``readings.solar_power_per_string``. Discovery is a
+                # config-flow-time operation — done once here, not per
+                # cycle. ``discover_pv_strings_from_registry`` was already
+                # used by ``dashboard_generator`` for the K-Flow card; we
+                # now also feed SEM's own sensors + cards.
+                try:
+                    from ..hardware_detection import (
+                        discover_pv_strings_from_registry,
+                    )
+                    pv_strings = discover_pv_strings_from_registry(
+                        self.hass, dashboard_config,
+                    )
+                    self._sensor_reader.set_pv_strings(pv_strings or {})
+                    if pv_strings:
+                        _info(
+                            "Per-PV-string discovery found %d strings: %s",
+                            len(pv_strings), list(pv_strings.keys()),
+                        )
+                except Exception as err:  # noqa: BLE001 — discovery never fatal
+                    _LOGGER.debug(
+                        "PV string discovery skipped (non-fatal): %s", err,
+                    )
             else:
                 _info("Energy Dashboard not configured or incomplete")
 

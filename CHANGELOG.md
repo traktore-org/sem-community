@@ -5,6 +5,89 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] — 2026-05-31
+
+First feature release after the v1.6.14 multi-charger closeout. Adds
+per-PV-string data layer + sensor surface (#312). Cards rendering
+ships separately in v1.7.1 (the maintainer-set rule for the v1.7.x
+arc: each phase is its own published release — labels in commits
+match the tag users see in HACS).
+
+### Added
+
+- **Per-PV-string power + daily-energy sensors** (gated on `len(strings) >= 2`):
+  - `sensor.sem_pv_string_<slot>_power` (W, MEASUREMENT)
+  - `sensor.sem_pv_string_<slot>_daily_energy` (kWh, TOTAL, daily-reset)
+  where `<slot>` is the normalised label `pv1`, `pv2`, … (max 4
+  per discovery's slot cap). Single-string installs see no change.
+- `PowerReadings.solar_power_per_string: Dict[str, float]` — the
+  source-side mirror of v1.6.9's `ev_power_per_charger`. Sum
+  invariant: `sum(values) ≈ solar_power` within rounding.
+- `EnergyFlows.per_string: Dict[str, StringEnergy]` — daily kWh
+  per string, integrated by `FlowCalculator.integrate_energy_flows`
+  alongside the fleet and per-charger accumulators.
+- `PowerFlows.solar_per_string: Dict[str, float]` — pass-through
+  carrier from readings to the integrator (strings are sources,
+  no destination attribution math required).
+- `StringEnergy` dataclass (1 field: `energy_kwh`).
+- `SensorReader.set_pv_strings(...)` registers the discovered
+  per-string sensors; the per-cycle read loops in both the
+  Energy-Dashboard and legacy paths populate
+  `readings.solar_power_per_string` when the gate trips.
+- Auto-discovery wired through coordinator: the existing
+  `hardware_detection.discover_pv_strings_from_registry`
+  (Huawei / GoodWe / Growatt / Kostal / Sungrow / Fronius /
+  SolarEdge / Victron — already used by the K-Flow card since
+  v1.5.x) now also feeds SEM's own sensors.
+
+### Changed
+
+- Day rollover in `FlowCalculator.integrate_energy_flows` now
+  also clears `_per_string_accumulators` alongside fleet and
+  per-charger.
+- Snapshot persistence (`get_flow_accumulator_state` /
+  `restore_flow_accumulator_state`) gains a `per_string` key,
+  emitted only when non-empty. Pre-v1.7.0 snapshots restore
+  bit-for-bit identical (no `per_string` key → no per-string
+  state).
+
+### Why
+
+@MRAK96 (#312) asked for per-string visibility similar to the
+Sunsynk Power Flow Card. SEM had the discovery for K-Flow since
+v1.5.x but didn't promote per-string to its own entity surface.
+v1.7.0 closes that gap so users can plot strings independently
+in Lovelace and the HA Energy dashboard immediately, regardless
+of whether they install K-Flow.
+
+### Tests (18 new)
+
+`tests/test_per_string_energy.py`:
+- Back-compat: empty per_string dict in single-string setups.
+- Sum invariant: 2-string and 4-string splits.
+- Multi-cycle accumulation.
+- Day rollover clears per-string accumulator.
+- Persistence round-trip (4 tests, incl. legacy snapshot back-
+  compat).
+- Bad-snapshot defence (3 tests: non-dict per_string, non-dict
+  per-slot entry, non-numeric values).
+- Idle-string preservation (clouded string keeps its surfaced
+  kWh — no regression to 0 on the user-visible counter).
+- `SEMData.to_dict` emission (key present when populated,
+  omitted when empty).
+- `SensorReader` gate (1 string → no pollution; ≥2 → populated).
+
+Full suite 2281 green on Python 3.12 (2263 v1.6.14 baseline + 18 new).
+Manifest bumped to 1.7.0.
+
+### Roadmap
+
+- **v1.7.1**: SEM-side cards render per-string visually
+  (`sem-flow-card` auto-split, `sem-solar-card` per-string
+  section, `sem-system-diagram-card` HUD overlay).
+- **v1.7.2**: `dashboard_generator` feeds string entities to SEM
+  cards (not just K-Flow); docs (`PV_STRINGS.md`); release polish.
+
 ## [1.6.14] — 2026-05-31
 
 Multi-charger debt closeout. Bundles four pieces of work into one

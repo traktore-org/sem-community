@@ -111,6 +111,20 @@ class PowerReadings:
     # per-charger flow attribution that closes the #316 family.
     ev_power_per_charger: "Dict[str, float]" = field(default_factory=dict)
 
+    # Per-PV-string solar power (v1.7.0 / #312). Populated by
+    # ``sensor_reader`` when the entity registry auto-discovery (see
+    # ``hardware_detection.discover_pv_strings_from_registry``) found
+    # ≥ 2 string sensors. Each key is a stable slot label (``"pv1"``,
+    # ``"pv2"``, …) and the value is that string's instantaneous power
+    # in watts. The structural mirror of ``ev_power_per_charger`` —
+    # strings are SOURCES so the sum invariant is
+    # ``sum(solar_power_per_string.values()) ≈ solar_power`` (within
+    # rounding); chargers are DESTINATIONS so the per-charger sum
+    # equals ``ev_power``. Empty dict in single-string / single-
+    # inverter setups; downstream readers must fall back to
+    # ``solar_power``.
+    solar_power_per_string: "Dict[str, float]" = field(default_factory=dict)
+
     # Derived values
     grid_import_power: float = 0.0
     grid_export_power: float = 0.0
@@ -195,6 +209,16 @@ class PowerFlows:
     # that only know about the fleet-level fields.
     per_charger: "Dict[str, ChargerFlows]" = field(default_factory=dict)
 
+    # Per-PV-string raw power carrier (v1.7.0 / #312). NOT a flow —
+    # strings don't have destination attribution; this just carries
+    # the per-string power from ``PowerReadings`` to
+    # ``integrate_energy_flows`` without expanding the integrator's
+    # signature. Populated by ``calculate_power_flows`` when the
+    # readings include ``solar_power_per_string``. Sum invariant
+    # holds at the read level (sum ≈ ``solar_power``); the integrator
+    # owns the persistence of per-string kWh.
+    solar_per_string: "Dict[str, float]" = field(default_factory=dict)
+
 
 @dataclass
 class EnergyTotals:
@@ -224,6 +248,23 @@ class EnergyTotals:
     yearly_battery_charge: float = 0.0
     yearly_battery_discharge: float = 0.0
     yearly_ev: float = 0.0
+
+
+@dataclass
+class StringEnergy:
+    """Per-PV-string daily energy total (v1.7.0 / #312).
+
+    Mirror of :class:`ChargerEnergyFlows` for the source side. Each
+    PV string accumulates its own daily kWh, integrated over time by
+    ``FlowCalculator.integrate_energy_flows`` from
+    ``PowerReadings.solar_power_per_string``. Sum invariant:
+    ``sum(per_string.values()) ≈ energy_flows.solar_to_*`` total
+    (the per-string aggregate equals the fleet solar contribution).
+
+    Empty dict in single-string setups; the fleet
+    ``EnergyTotals.daily_solar`` is authoritative there.
+    """
+    energy_kwh: float = 0.0
 
 
 @dataclass
@@ -270,6 +311,13 @@ class EnergyFlows:
     # ``sum(c.solar_to_ev for c in per_charger.values()) == solar_to_ev``
     # within rounding tolerance.
     per_charger: "Dict[str, ChargerEnergyFlows]" = field(default_factory=dict)
+
+    # Per-PV-string daily energy contribution (v1.7.0 / #312).
+    # Integrated by ``FlowCalculator.integrate_energy_flows`` from
+    # ``PowerReadings.solar_power_per_string`` over time. Empty dict
+    # in single-string setups. Sum invariant within rounding:
+    # ``sum(s.energy_kwh) ≈ aggregate solar integration this day``.
+    per_string: "Dict[str, StringEnergy]" = field(default_factory=dict)
 
 
 @dataclass
@@ -664,6 +712,19 @@ class SEMData:
             **{
                 f"charger_{cid}_flow_battery_to_ev_energy": cef.battery_to_ev
                 for cid, cef in (self.energy_flows.per_charger or {}).items()
+            },
+
+            # Per-PV-string surface (v1.7.0 / #312). Emit only when
+            # multi-string discovery populated these. Single-string
+            # / single-inverter setups skip the keys and the fleet
+            # ``sensor.sem_solar_power`` stays authoritative.
+            **{
+                f"pv_string_{sid}_power": w
+                for sid, w in (self.power.solar_power_per_string or {}).items()
+            },
+            **{
+                f"pv_string_{sid}_daily_energy": se.energy_kwh
+                for sid, se in (self.energy_flows.per_string or {}).items()
             },
 
             # Costs
