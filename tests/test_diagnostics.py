@@ -1,4 +1,5 @@
 """Tests for diagnostics support."""
+import asyncio
 import pytest
 from unittest.mock import MagicMock, patch
 from datetime import timedelta
@@ -10,8 +11,18 @@ from custom_components.solar_energy_management.diagnostics import (
 
 
 @pytest.fixture
-def hass():
+def hass(tmp_path):
     hass = MagicMock()
+    # v1.6.11 ``_get_recent_sem_logs`` reads
+    # ``hass.config.config_dir / home-assistant.log``. Point it at a
+    # temp dir so each test gets isolated log content rather than the
+    # absent /config path.
+    hass.config = MagicMock()
+    hass.config.config_dir = str(tmp_path)
+
+    async def _executor(func, *args, **kwargs):
+        return func(*args, **kwargs)
+    hass.async_add_executor_job = _executor
     return hass
 
 
@@ -134,3 +145,95 @@ def test_redact_keys_defined():
     # Non-sensitive keys should NOT be in redact list
     assert "battery_capacity_kwh" not in REDACT_CONFIG_KEYS
     assert "target_peak_limit" not in REDACT_CONFIG_KEYS
+
+
+# ──────────────────────────────────────────────────────────────────────
+# v1.6.11: recent SEM log tail bundled into the Copy-diagnostics output
+# ──────────────────────────────────────────────────────────────────────
+
+from pathlib import Path
+
+from custom_components.solar_energy_management.diagnostics import (
+    _get_recent_sem_logs,
+    _LOG_MAX_LINES,
+    _LOG_TAIL_KB,
+)
+
+
+def _write_log(hass, lines: list[str]) -> Path:
+    """Write a synthetic ``home-assistant.log`` into the temp config_dir."""
+    p = Path(hass.config.config_dir) / "home-assistant.log"
+    p.write_text("\n".join(lines) + "\n")
+    return p
+
+
+@pytest.mark.asyncio
+async def test_recent_logs_returns_only_sem_lines(hass):
+    """Filter must select only lines that mention
+    ``solar_energy_management`` — other integrations' chatter is
+    excluded."""
+    _write_log(hass, [
+        "2026-05-31 17:42:01.000 INFO (MainThread) [homeassistant.core] starting",
+        "2026-05-31 17:42:02.000 DEBUG (MainThread) [custom_components.solar_energy_management.coordinator] cycle ok",
+        "2026-05-31 17:42:03.000 WARNING (MainThread) [homeassistant.components.wled] WLED unreachable",
+        "2026-05-31 17:42:04.000 INFO (MainThread) [custom_components.solar_energy_management.devices.base] Charging session stopped via keba.disable",
+    ])
+    out = await _get_recent_sem_logs(hass)
+    assert len(out) == 2
+    assert all("solar_energy_management" in line for line in out)
+
+
+@pytest.mark.asyncio
+async def test_recent_logs_caps_lines(hass):
+    """Even if the log has thousands of SEM lines, only the last
+    ``_LOG_MAX_LINES`` (80) are returned."""
+    many = [
+        f"2026-05-31 17:42:00.{i:03d} INFO (MainThread) [custom_components.solar_energy_management] msg {i}"
+        for i in range(_LOG_MAX_LINES * 3)
+    ]
+    _write_log(hass, many)
+    out = await _get_recent_sem_logs(hass)
+    assert len(out) == _LOG_MAX_LINES
+    # Last line returned is the actual last matching line.
+    assert f"msg {_LOG_MAX_LINES * 3 - 1}" in out[-1]
+
+
+@pytest.mark.asyncio
+async def test_recent_logs_missing_file_returns_placeholder(hass):
+    """Supervisor installs and other no-file setups must not crash
+    and must explain themselves to the bug reporter."""
+    # No log file written → ``_get_recent_sem_logs`` returns a single
+    # explanatory line instead of raising.
+    out = await _get_recent_sem_logs(hass)
+    assert len(out) == 1
+    assert "no flat log file" in out[0]
+    assert "ha core logs" in out[0]
+
+
+@pytest.mark.asyncio
+async def test_recent_logs_truncates_huge_file(hass):
+    """Files bigger than ``_LOG_TAIL_KB`` are only tailed — we must
+    not OOM on multi-GB logs. The leading partial line gets discarded
+    so we never emit a half-line."""
+    # Write a > 2 MB log: padding non-SEM lines + SEM lines at the end.
+    padding = "x" * (_LOG_TAIL_KB * 1024 + 50_000)  # bigger than the tail
+    sem_marker = "2026-05-31 17:42:00.999 INFO [custom_components.solar_energy_management] late"
+    _write_log(hass, [padding, sem_marker])
+    out = await _get_recent_sem_logs(hass)
+    # The SEM line near the end MUST be returned.
+    assert any("late" in line for line in out)
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_includes_recent_logs(hass, entry, coordinator):
+    """End-to-end: the diagnostics dump now carries a ``recent_logs``
+    key. Bug reports come pre-loaded with surrounding context."""
+    _write_log(hass, [
+        "2026-05-31 17:42:00.000 INFO [custom_components.solar_energy_management.coordinator] success: True",
+    ])
+    entry.runtime_data = coordinator
+    hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
+    result = await async_get_config_entry_diagnostics(hass, entry)
+    assert "recent_logs" in result
+    assert isinstance(result["recent_logs"], list)
+    assert any("success: True" in line for line in result["recent_logs"])

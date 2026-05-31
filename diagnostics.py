@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -10,6 +12,64 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 from .coordinator import SEMCoordinator
+
+_LOGGER = logging.getLogger(__name__)
+
+# Recent-log surface (v1.6.11). When users report a bug via "Copy
+# diagnostics", the dump now also includes the last few SEM-related
+# log lines so we can see what was actually happening at the time
+# without asking the reporter for a separate ``ha core logs`` dump.
+#
+# Defensive caps — the diagnostics dump is shown in the user's
+# clipboard / a GitHub issue, so we don't want it to balloon and we
+# don't want to crash on log files that have grown unbounded.
+_LOG_TAIL_KB = 2048           # only read the last 2 MB of the log
+_LOG_MAX_LINES = 80           # return up to 80 matching lines
+_LOG_NEEDLE = "solar_energy_management"
+
+
+async def _get_recent_sem_logs(hass: HomeAssistant) -> list[str]:
+    """Return the most recent SEM-related lines from ``home-assistant.log``.
+
+    Tails the file (up to ``_LOG_TAIL_KB``), filters for
+    ``solar_energy_management`` mentions, and returns the last
+    ``_LOG_MAX_LINES`` matches in order.
+
+    Returns a one-line placeholder explaining why if the file isn't
+    accessible — most commonly that's a Home Assistant Supervisor
+    install where logs go to journald rather than a flat file (the
+    user can still attach ``ha core logs`` output separately). Never
+    raises: a failure here must not break the rest of the diagnostics
+    dump.
+    """
+    try:
+        log_path = Path(hass.config.config_dir) / "home-assistant.log"
+        if not log_path.exists():
+            return [
+                "<no flat log file at .storage parent — Supervisor "
+                "installs use journald; please paste output of "
+                "`ha core logs | grep solar_energy_management | tail -80`>"
+            ]
+
+        def _read_tail() -> list[str]:
+            with open(log_path, "rb") as f:
+                f.seek(0, 2)
+                size = f.tell()
+                start = max(0, size - _LOG_TAIL_KB * 1024)
+                f.seek(start)
+                if start > 0:
+                    f.readline()  # discard the partial first line
+                payload = f.read().decode("utf-8", errors="replace")
+            sem_lines = [
+                line for line in payload.splitlines()
+                if _LOG_NEEDLE in line
+            ]
+            return sem_lines[-_LOG_MAX_LINES:]
+
+        return await hass.async_add_executor_job(_read_tail)
+    except Exception as e:  # pragma: no cover - defensive only
+        _LOGGER.debug("Failed to read recent SEM logs for diagnostics: %s", e)
+        return [f"<failed to read logs: {e!r}>"]
 
 type SEMConfigEntry = ConfigEntry[SEMCoordinator]
 
@@ -118,6 +178,12 @@ async def async_get_config_entry_diagnostics(
             "grid_energy_device_resolved": grid_device_resolved,
         }
 
+    # v1.6.11: bundle the last ~80 SEM-related log lines into the
+    # diagnostics dump so bug reports come pre-loaded with the
+    # surrounding log context. See ``_get_recent_sem_logs`` for the
+    # defensive caps and the Supervisor-install fallback.
+    recent_logs = await _get_recent_sem_logs(hass)
+
     return {
         "config_entry": {
             "entry_id": entry.entry_id,
@@ -198,4 +264,5 @@ async def async_get_config_entry_diagnostics(
             "price_level": data.get("tariff_price_level"),
             "provider": data.get("tariff_provider"),
         },
+        "recent_logs": recent_logs,
     }
