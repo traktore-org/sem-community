@@ -329,6 +329,13 @@ class EVControlMixin:
         ev = self._ev_device
         ev.managed_externally = True  # ALWAYS — coordinator owns EV
 
+        # v1.6.8: cache this charger's power once per call. Avoids reading
+        # the global fleet sum (``power.ev_power``) when we mean THIS
+        # charger's draw — exactly the bug class that caused the v1.6.5
+        # KEBA self-resume regression and the broader sweep this release
+        # ships. See ``docs/MULTI_CHARGER.md`` for the invariant.
+        this_power_w = self._this_charger_power(ev, power)
+
         # === NIGHT CHARGING (peak-managed, ramp-limited) ===
         # Design: evcc-style ramp, configurable min current, IEC 61851 compliant
         if state == ChargingState.NIGHT_CHARGING_ACTIVE:
@@ -343,9 +350,9 @@ class EVControlMixin:
                 return
 
             # Detect already-charging after SEM reload (don't interrupt)
-            if not ev._session_active and power.ev_power > 50:
+            if not ev._session_active and this_power_w > 50:
                 ev._session_active = True
-                _LOGGER.info("Night: KEBA already active (%.0fW), resuming", power.ev_power)
+                _LOGGER.info("Night: KEBA already active (%.0fW), resuming", this_power_w)
 
             # Read configurable EV parameters — per-charger overrides (#193)
             charger_cfg = self._get_active_charger_config()
@@ -399,9 +406,9 @@ class EVControlMixin:
                     self._ev_last_change_time = dt_util.now()
 
                 # Dynamic peak-managed current (only when car is actually drawing)
-                if power.ev_power > 100:
+                if this_power_w > 100:
                     # W/A from actual charger readings (adapts to any car)
-                    watts_per_amp = power.ev_power / max(1, ev._current_setpoint)
+                    watts_per_amp = this_power_w / max(1, ev._current_setpoint)
                     target = self._night_peak_managed_amps(
                         power, watts_per_amp, min_amps, ev.max_current)
                     peak_limit_w = self._get_peak_limit_w()  # for the log line
@@ -428,7 +435,7 @@ class EVControlMixin:
                         await ev._set_current(target)
 
             _LOGGER.debug("Night EV: %dA, %.0fW, remaining=%.1fkWh",
-                          ev._current_setpoint, power.ev_power, remaining_kwh)
+                          ev._current_setpoint, this_power_w, remaining_kwh)
             return
 
         # === NIGHT WAITING STATES: stop session if running ===
@@ -493,7 +500,7 @@ class EVControlMixin:
                 # Surplus is sufficient — track how long it's been sufficient
                 self._ev_enable_surplus_since = self._ev_enable_surplus_since or now_ts
 
-                if ev._session_active and power.ev_power > 100:
+                if ev._session_active and this_power_w > 100:
                     # Already charging — update current immediately, reset disable timer
                     target_current = min(ev.max_current,
                                          max(ev.min_current, ev.watts_to_current(budget_w)))
@@ -525,7 +532,7 @@ class EVControlMixin:
 
                 if (self._ev_charge_started_at
                         and (now_ts - self._ev_charge_started_at) < disable_delay
-                        and power.ev_power > 100):
+                        and this_power_w > 100):
                     # Within disable delay and actually charging — hold at minimum current
                     if ev._current_setpoint != ev.min_current:
                         await ev._set_current(ev.min_current)
@@ -542,7 +549,7 @@ class EVControlMixin:
 
             _LOGGER.debug(
                 "Solar EV: budget=%.0fW (%s), current=%.0fA, ev_power=%.0fW, session=%s",
-                budget_w, state, ev._current_setpoint, power.ev_power,
+                budget_w, state, ev._current_setpoint, this_power_w,
                 "active" if ev._session_active else "inactive",
             )
             return
@@ -732,9 +739,11 @@ class EVControlMixin:
         ev = self._ev_device
         if not ev._session_active:
             return False
+        # v1.6.8: per-charger power (not fleet sum). See ``docs/MULTI_CHARGER.md``.
+        this_power_w = self._this_charger_power(ev, power)
         # SEM set current >= min but charger reports no power → stalled
         if (ev._current_setpoint >= ev.min_current
-                and power.ev_power < 50
+                and this_power_w < 50
                 and power.ev_connected):
             # Car already deemed not-accepting this session — stay quiet
             if getattr(self, "_ev_charge_refused", False):
@@ -753,13 +762,13 @@ class EVControlMixin:
                         "EV not accepting charge after %d re-enable attempts "
                         "(setpoint=%.0fA, power=%.0fW) — car likely full; "
                         "pausing re-enable until power resumes or car unplugged",
-                        max_attempts, ev._current_setpoint, power.ev_power,
+                        max_attempts, ev._current_setpoint, this_power_w,
                     )
                     return False
                 _LOGGER.warning(
                     "EV charger stalled (setpoint=%.0fA, power=%.0fW) — "
                     "re-enabling (attempt %d/%d)",
-                    ev._current_setpoint, power.ev_power,
+                    ev._current_setpoint, this_power_w,
                     self._ev_reenable_attempts, max_attempts,
                 )
                 return True
@@ -988,8 +997,14 @@ class EVControlMixin:
 
         self._last_ev_connected = power.ev_connected
 
-        # Detect session start: EV charging and no active session
-        if power.ev_power > 50 and not self._session_data.active:
+        # Detect session start: EV charging and no active session.
+        # v1.6.8: per-charger power. ``_update_session_tracking`` is called
+        # from inside the per-charger loop in ``coordinator.py:970``, after
+        # ``self._session_data`` has been swapped to this charger's
+        # ``SessionData`` instance — so the start-detection threshold must
+        # also key off THIS charger's draw, not the fleet sum.
+        this_power_w = self._this_charger_power(self._ev_device, power)
+        if this_power_w > 50 and not self._session_data.active:
             self._session_data = SessionData(
                 active=True,
                 start_time=dt_util.now().isoformat(),

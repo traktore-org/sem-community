@@ -29,9 +29,11 @@ fleet's" — can be enforced structurally rather than by memory.
 
 ## The invariant
 
-> **Inside a `with PerChargerContext.for_charger(...)` block, never read
-> `power.ev_power` directly. Use `pcc.this_power_w` (added in v1.6.8) or
-> tag the read explicitly with `# FLEET-READ: <reason>`.**
+> **Inside a `with PerChargerContext.for_charger(...)` block — including
+> any method called from inside that block, transitively — never read
+> `power.ev_power` directly. Use `self._this_charger_power(ev, power)`
+> (cached as `this_power_w` at the top of the method) or tag the read
+> explicitly with `# FLEET-READ: <reason>`.**
 
 Likewise: never read `self._ev_*` directly; the context owns them and
 they reflect THIS charger only during the block. Reading them from
@@ -40,6 +42,36 @@ outside the block returns the primary charger's view (the legacy
 
 To add a new per-charger field, edit `PerChargerContext` only —
 don't add new ad-hoc swap dicts.
+
+### `# FLEET-READ:` annotation
+
+The lint test at `tests/test_ev_control_fleet_reads.py` parses
+`coordinator/ev_control.py` and fails CI on any `power.ev_power` read
+that is **not** either (a) inside the sanctioned `_this_charger_power`
+helper or (b) annotated with `# FLEET-READ: <reason>` on the same line
+or the immediately preceding line. The reason text is required and
+shows up in code review — keep it short and concrete:
+
+```python
+# Bad — would fail the lint
+if power.ev_power > 100:
+    ...
+
+# Good (per-charger; the right answer 99% of the time)
+this_power_w = self._this_charger_power(ev, power)
+if this_power_w > 100:
+    ...
+
+# Good (rare: genuinely fleet-level, e.g. a fleet-aggregating sensor)
+# FLEET-READ: aggregating total EV draw for the dashboard fleet card
+fleet_ev_w = power.ev_power
+```
+
+The lint is intentionally cheap (AST walk, no runtime) so it runs on
+every PR. If you find yourself reaching for the annotation, ask
+yourself: is this code actually inside the per-charger loop? If yes,
+you almost certainly want `this_power_w`. If no, you don't need the
+annotation at all — the lint only flags reads inside `ev_control.py`.
 
 ---
 
