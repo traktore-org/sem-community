@@ -64,6 +64,90 @@ def _content_hash_cache_bust(card_root: str, base_url: str, version: str) -> str
         return version
 
 
+_VERSION_STORE_VERSION = 1
+_VERSION_STORE_KEY_PREFIX = "sem_seen_version_"
+
+
+async def _maybe_emit_upgrade_notification(hass, entry) -> None:
+    """Fire a one-shot persistent notification when SEM has upgraded.
+
+    Compares the integration's current ``manifest.json`` version to a
+    locally-stored "last seen" version from ``hass.helpers.storage.Store``
+    (per config entry). On version change — and only on change — emits
+    a persistent notification telling the user to hard-refresh the
+    browser. First install is silent (stored=None → record current,
+    skip notify) so the user doesn't see an upgrade banner on day one.
+
+    The notification message names the specific cache-bust failure
+    mode (raw translation keys like ``today_plan_title`` showing in
+    the dashboard) so the user can correlate what they see with the
+    advice to hard-refresh.
+
+    Failure of any sub-step (Store read/write, ``async_get_integration``,
+    notification service call) is non-fatal — the caller wraps this in
+    a ``try/except`` because a transient frontend issue should never
+    block coordinator setup. We log at DEBUG so a healthy install
+    stays quiet.
+    """
+    from homeassistant.helpers.storage import Store
+    from homeassistant.loader import async_get_integration
+
+    integration = await async_get_integration(hass, DOMAIN)
+    current_version = str(integration.version or "unknown")
+
+    store = Store(
+        hass,
+        _VERSION_STORE_VERSION,
+        f"{_VERSION_STORE_KEY_PREFIX}{entry.entry_id}",
+    )
+    stored = await store.async_load() or {}
+    previous_version = stored.get("version")
+
+    if previous_version == current_version:
+        return  # No change.
+
+    # Record the new version regardless of whether we notify, so the
+    # next setup compares against today's version.
+    await store.async_save({"version": current_version})
+
+    if not previous_version:
+        # First install — silent record.
+        return
+
+    # Upgrade path — fire the one-shot notification.
+    await hass.services.async_call(
+        "persistent_notification",
+        "create",
+        {
+            "title": f"SEM updated to v{current_version}",
+            "message": (
+                f"Solar Energy Management was upgraded from "
+                f"v{previous_version} to v{current_version}.\n\n"
+                "**Please hard-refresh your browser** "
+                "(Ctrl+Shift+R on Windows/Linux, Cmd+Shift+R on Mac, "
+                "or Shift+reload on the HA companion app) so the "
+                "updated dashboard cards and translations load.\n\n"
+                "Without a hard refresh you may see raw translation "
+                "keys (e.g. `today_plan_title`, `charge_mode_off`) "
+                "in some cards — that's HA's frontend bootstrap "
+                "loading from cache and not picking up the new "
+                "asset URLs.\n\n"
+                "[CHANGELOG]"
+                "(https://github.com/traktore-org/sem-community/"
+                "blob/main/CHANGELOG.md)"
+            ),
+            "notification_id": (
+                f"sem_upgrade_{current_version.replace('.', '_')}"
+            ),
+        },
+        blocking=False,
+    )
+    _LOGGER.info(
+        "SEM upgraded from v%s to v%s — emitted hard-refresh notification.",
+        previous_version, current_version,
+    )
+
+
 class _SEMYAMLModeSkip(Exception):
     """Sentinel: bail out of the Lovelace resource registration block
     when the user is running YAML-mode Lovelace (#283). YAML-mode
@@ -609,6 +693,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     entry.runtime_data = coordinator
     # Also store in hass.data for backward compatibility with platform setup
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    # Version-change detection (v1.6.14): on first setup after an upgrade
+    # — HACS pulled new code, HA restarted with it — fire a one-shot
+    # persistent notification telling the user to hard-refresh.
+    # Background. ``add_extra_js_url`` URLs include a content-hash
+    # cache-bust (``?v={version}-{sha1}``) but the browser's loaded
+    # frontend bootstrap still references the OLD URL until the page
+    # is hard-reloaded. Soft reload (F5) hits cached bootstrap → loads
+    # old sem-localize.js → raw translation keys appear in cards.
+    # HA-TEST 2026-05-31 repro: after v1.6.14 deploy the user saw
+    # ``TODAY_PLAN_TITLE`` / ``plan_strip_idle`` etc. until Ctrl+Shift+R.
+    # Failure here is non-fatal — fire-and-forget the version check.
+    try:
+        await _maybe_emit_upgrade_notification(hass, entry)
+    except Exception as err:  # noqa: BLE001 — defensive: never fail setup over this
+        _LOGGER.debug("Version-change notification skipped: %s", err)
 
     # Create repair issue if EV charger is not configured (quality scale: repair-issues)
     if not full_config.get("ev_connected_sensor") and not full_config.get("ev_charging_power_sensor"):
