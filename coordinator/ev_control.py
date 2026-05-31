@@ -556,6 +556,46 @@ class EVControlMixin:
         # === TERMINAL STATES: full stop (EV disconnected, target reached, etc.) ===
         if ev._session_active:
             await ev.stop_session()
+        elif (
+            context.charging_strategy == "disabled"
+            and self._this_charger_drawing_power(ev, power)
+        ):
+            # User intent is mode=off but the charger is physically drawing
+            # real power that SEM doesn't own (#315). KEBA P30 is the
+            # canonical example: its firmware self-resumes on plug-in or
+            # after certain internal events using a stored setpoint,
+            # completely independent of SEM. Since SEM never started a
+            # session here, `_session_active` is False and the branch
+            # above is skipped, but the charger keeps drawing. Force-call
+            # stop_session to invoke the per-brand disable (e.g.
+            # ``keba.disable``) every cycle until ev_power drops below
+            # the 500 W threshold (handshake idle is 100–200 W; real
+            # charging starts at 4140 W). Idempotent — safe to call on
+            # an already-disabled charger.
+            await ev.stop_session()
+            # Suppress the per-cycle INFO log from stop_session() once
+            # we've logged it for this self-resume episode. The
+            # device's stop_session() emits an INFO line every call;
+            # without throttling, a stuck-resuming KEBA would print
+            # "Charging session stopped via keba.disable" every 10 s
+            # for hours. Re-enable the log when ev_power finally
+            # drops below threshold so the next episode is loud again.
+            if getattr(self, "_off_mode_stop_logged_for", None) != ev.device_id:
+                _LOGGER.warning(
+                    "Charger %s self-resumed while mode=off (drawing %.0fW). "
+                    "Calling stop_session() — will re-assert every cycle "
+                    "until ev_power drops below 500W. (#315)",
+                    ev.name, self._this_charger_power(ev, power),
+                )
+                self._off_mode_stop_logged_for = ev.device_id
+        elif (
+            context.charging_strategy == "disabled"
+            and getattr(self, "_off_mode_stop_logged_for", None) == ev.device_id
+        ):
+            # Charger settled below threshold — clear the log-suppression
+            # flag so the next self-resume episode logs loudly again.
+            self._off_mode_stop_logged_for = None
+
         self._ev_stalled_since = None
         self._ev_reenable_attempts = 0
         self._ev_charge_refused = False
@@ -834,6 +874,44 @@ class EVControlMixin:
         adjusted = max(0, remaining_kwh - reduction)
 
         return adjusted
+
+    def _this_charger_power(self, ev, power) -> float:
+        """Return the per-charger power reading in watts (#315 multi-charger fix).
+
+        ``power.ev_power`` is the global SUM across all chargers in
+        multi-charger setups (see ``sensor_reader.py:426-434``). Using it
+        directly would falsely trigger the off-mode stop on charger[0]
+        whenever charger[1] is actively charging. Read the THIS-charger
+        ``ev_charging_power_sensor`` directly from HA state instead.
+
+        Single-charger setups: ``power.ev_power`` is already the single
+        sensor reading, so the fallback path matches what the original
+        code path was doing.
+        """
+        try:
+            charger_cfg = self._get_active_charger_config()
+            cps = charger_cfg.get("ev_charging_power_sensor") if charger_cfg else None
+            if cps and self.hass is not None:
+                state = self.hass.states.get(cps)
+                if state is not None and state.state not in (None, "unknown", "unavailable"):
+                    return float(state.state)
+        except (AttributeError, ValueError, TypeError):
+            pass
+        # Fallback: ``power.ev_power`` is correct for single-charger; for
+        # multi-charger it's the sum (over-counts but only matters when
+        # no per-charger sensor is configured — rare).
+        return float(getattr(power, "ev_power", 0.0) or 0.0)
+
+    def _this_charger_drawing_power(self, ev, power) -> bool:
+        """True iff THIS charger is drawing more than the 500 W threshold.
+
+        Threshold rationale: KEBA's handshake idle draws 100–200 W
+        continuously while plugged in (control-pilot duty cycle). Real
+        charging starts at ev.min_current × phases × voltage (3 phases ×
+        6 A × 230 V ≈ 4140 W). 500 W safely separates "actually pulling
+        current" from "plugged in, not charging".
+        """
+        return self._this_charger_power(ev, power) > 500
 
     def _apply_ramp_limit(self, target_current: float) -> float:
         """Limit current changes to ±ramp_rate per cycle during solar charging.
