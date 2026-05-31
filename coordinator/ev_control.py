@@ -884,9 +884,17 @@ class EVControlMixin:
         whenever charger[1] is actively charging. Read the THIS-charger
         ``ev_charging_power_sensor`` directly from HA state instead.
 
+        **Unit-aware**: KEBA's native ``sensor.keba_p30_charging_power``
+        reports in kW. Other charger integrations may report in W. Read
+        the sensor's ``unit_of_measurement`` attribute and convert to W
+        when needed. The first cut of this helper compared a raw 4.14
+        (kW) to a 500 W threshold and silently failed every cycle —
+        confirmed on PROD 2026-05-31, KEBA self-resumed at 15:26 and
+        the v1.6.5 fix did not trigger for ~2 minutes until corrected.
+
         Single-charger setups: ``power.ev_power`` is already the single
-        sensor reading, so the fallback path matches what the original
-        code path was doing.
+        sensor reading (normalized to W by ``sensor_reader``), so the
+        fallback path matches what the original code path was doing.
         """
         try:
             charger_cfg = self._get_active_charger_config()
@@ -894,12 +902,17 @@ class EVControlMixin:
             if cps and self.hass is not None:
                 state = self.hass.states.get(cps)
                 if state is not None and state.state not in (None, "unknown", "unavailable"):
-                    return float(state.state)
+                    value = float(state.state)
+                    unit = (state.attributes or {}).get("unit_of_measurement", "W")
+                    if unit == "kW":
+                        value *= 1000
+                    return value
         except (AttributeError, ValueError, TypeError):
             pass
-        # Fallback: ``power.ev_power`` is correct for single-charger; for
-        # multi-charger it's the sum (over-counts but only matters when
-        # no per-charger sensor is configured — rare).
+        # Fallback: ``power.ev_power`` is already in watts (normalized by
+        # sensor_reader). Correct for single-charger; for multi-charger
+        # it's the sum (over-counts but only matters when no per-charger
+        # sensor is configured — rare).
         return float(getattr(power, "ev_power", 0.0) or 0.0)
 
     def _this_charger_drawing_power(self, ev, power) -> bool:

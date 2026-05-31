@@ -3206,6 +3206,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             })
         return payload
 
+    def _update_per_charger_detector_energy(
+        self, cid: str, charger_power: float, interval_hours: float,
+    ) -> None:
+        """Feed the per-charger taper detector its own energy increment (#318).
+
+        Mirrors what ``self._ev_taper_detector.update_energy(...)`` does
+        for the primary detector — but per-charger, so each charger's
+        ``_energy_since_full`` tracks its own session. Without this,
+        every per-charger detector stays at 0 → ``get_virtual_soc()``
+        returns the same default (100 %) for every charger → dashboard
+        shows identical SOC across the fleet.
+
+        Uses each charger's own ``ev_total_energy_sensor`` HW counter
+        when configured (drift-free); falls back to incremental-only
+        tracking when not (same behaviour the primary detector had for
+        installs without a hardware counter).
+
+        No-op when ``charger_power <= 0`` (idle) — matches the legacy
+        per-charger ``update()`` gating at the call site.
+        """
+        if charger_power <= 0:
+            return
+        detector = self._ev_taper_detectors.get(cid)
+        if detector is None:
+            return
+        per_charger_cfg = next(
+            (c for c in (self.config.get("ev_chargers") or [])
+             if c.get("id") == cid), {}
+        ) or {}
+        per_increment = charger_power * interval_hours / 1000
+        per_hw_total = None
+        per_hw_entity = per_charger_cfg.get("ev_total_energy_sensor")
+        if per_hw_entity:
+            hw_state = self.hass.states.get(per_hw_entity)
+            if hw_state and hw_state.state not in ("unknown", "unavailable"):
+                try:
+                    per_hw_total = float(hw_state.state)
+                except (ValueError, TypeError):
+                    pass
+        detector.update_energy(per_increment, per_hw_total)
+
     def _update_ev_intelligence(
         self, power: PowerReadings, energy,
     ) -> "EVIntelligenceData":
@@ -3289,6 +3330,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_taper_detectors[cid].update(
                         charger_power, charger_setpoint, charger_connected, now,
                     )
+
+                # Per-charger energy update (#318). Without this every
+                # per-charger detector keeps ``_energy_since_full=0`` so
+                # the SOC estimator falls through to the same default for
+                # every charger — symptom: "Charger 1 and Charger 2 show
+                # identical SOC, both rise when only one is charging"
+                # (RienduPre, 2026-05-31 multi-charger Wallbox + Growatt).
+                # The primary detector's update_energy below at line ~3326
+                # was only feeding the global ``self._ev_taper_detector``,
+                # not the per-charger detectors in ``self._ev_taper_detectors``.
+                self._update_per_charger_detector_energy(
+                    cid, charger_power, interval_hours,
+                )
 
             # Primary charger's detector drives SOC/skip (sync with main detector)
             primary_id = next(iter(self._ev_devices))
