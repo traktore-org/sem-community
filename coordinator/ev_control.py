@@ -904,7 +904,19 @@ class EVControlMixin:
         Single-charger setups: ``power.ev_power`` is already the single
         sensor reading (normalized to W by ``sensor_reader``), so the
         fallback path matches what the original code path was doing.
+
+        v1.6.14: when called from inside a ``PerChargerContext`` for
+        the same ``ev``, returns the cached value
+        ``self._current_pcc.this_power_w`` computed once at
+        ``__enter__``. Outside the loop (single-charger path, post-loop
+        helpers) the direct-compute branch below runs. The lint enforces
+        that no callsite reads ``power.ev_power`` directly — they all
+        funnel through here.
         """
+        pcc = getattr(self, "_current_pcc", None)
+        if (pcc is not None and pcc.ev_dev is ev
+                and pcc.this_power_w is not None):
+            return pcc.this_power_w
         try:
             charger_cfg = self._get_active_charger_config()
             cps = charger_cfg.get("ev_charging_power_sensor") if charger_cfg else None
@@ -922,6 +934,10 @@ class EVControlMixin:
         # sensor_reader). Correct for single-charger; for multi-charger
         # it's the sum (over-counts but only matters when no per-charger
         # sensor is configured — rare).
+        # FLEET-READ: documented fallback when no per-charger sensor is
+        # configured; in multi-charger setups this code path is only
+        # reached when ``_get_active_charger_config`` lacks a
+        # ``ev_charging_power_sensor`` entry (rare).
         return float(getattr(power, "ev_power", 0.0) or 0.0)
 
     def _this_charger_drawing_power(self, ev, power) -> bool:
@@ -938,12 +954,30 @@ class EVControlMixin:
     def _apply_ramp_limit(self, target_current: float) -> float:
         """Limit current changes to ±ramp_rate per cycle during solar charging.
 
-        Prevents sudden jumps that stress inverter/grid. Starting from 0A jumps
-        directly (can't ramp below min_current). Stopping drops immediately.
-        Config: ev_ramp_rate_amps (default 2).
+        Prevents sudden jumps that stress inverter/grid. Stopping drops
+        immediately. Config: ``ev_ramp_rate_amps`` (default 2).
+
+        v1.6.13 / #8: cold start (current < 1) now climbs from
+        ``min_current`` rather than jumping directly to target.
+        Pre-fix the "starting from 0" branch returned ``target_current``
+        unchanged — KEBA's ~30 s physical actuator lag then caused the
+        observed grid-import overshoot. Confirmed on PROD 2026-05-31
+        at 10:43: SEM commanded 14 A from a cold 0 A, KEBA's ramp
+        overshot, ~4.4 kW of grid was imported for the duration of the
+        ramp. With this fix the first command is ``min_current``
+        (typically 6 A ≈ 4140 W on 3-phase EU); subsequent cycles
+        climb via the existing ``±ramp_rate`` clamp below.
+
+        ``target_current`` arriving here is already clamped to
+        ``[min_current, max_current]`` at the call site (see
+        ``ev_control.py:495-501``), so we don't need to bound
+        ``min_current`` to it. The ``target_current < 1`` stop-fast
+        branch stays — that path is for the explicit-off / disable
+        case where we want an immediate drop, not a gentle decline.
 
         Args:
-            target_current: Desired current in amps.
+            target_current: Desired current in amps (≥ ``ev.min_current``
+                or 0 when stopping).
 
         Returns:
             Ramp-limited current in amps.
@@ -952,10 +986,14 @@ class EVControlMixin:
         current = ev._current_setpoint
         ramp = self.config.get("ev_ramp_rate_amps", 2)
 
-        if current < 1.0:       # Starting from 0 → jump directly
-            return target_current
         if target_current < 1.0:  # Stopping → drop immediately
             return 0
+        if current < 1.0:
+            # Cold start: hand KEBA the gentle ``min_current`` first.
+            # Next cycle's ``current`` will be non-zero and the
+            # standard clamp below will climb toward target at
+            # ``ramp_rate``.
+            return ev.min_current
 
         return max(current - ramp, min(current + ramp, target_current))
 

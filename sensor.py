@@ -1630,6 +1630,70 @@ async def async_setup_entry(
             ),
         ])
 
+    # v1.6.15: per-charger flow attribution sensors. Gated on
+    # ``len(ev_chargers) > 1`` — for single-charger setups the fleet
+    # ``sensor.sem_flow_*_to_ev_*`` entities are authoritative (each
+    # fleet sensor IS the single charger's flow) and adding duplicates
+    # would just clutter the entity registry. The dashboard generator's
+    # Sankey card per-charger split (also v1.6.15) reads these entities.
+    if len(ev_chargers) > 1:
+        for charger_cfg in ev_chargers:
+            cid = charger_cfg.get("id", "ev_charger")
+            cname = charger_cfg.get("name", "EV Charger")
+            per_charger_descriptions.extend([
+                SensorEntityDescription(
+                    key=f"charger_{cid}_flow_solar_to_ev_power",
+                    name=f"{cname} Solar → EV Power",
+                    device_class=SensorDeviceClass.POWER,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=UnitOfPower.WATT,
+                    suggested_display_precision=0,
+                ),
+                SensorEntityDescription(
+                    key=f"charger_{cid}_flow_grid_to_ev_power",
+                    name=f"{cname} Grid → EV Power",
+                    device_class=SensorDeviceClass.POWER,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=UnitOfPower.WATT,
+                    suggested_display_precision=0,
+                ),
+                SensorEntityDescription(
+                    key=f"charger_{cid}_flow_battery_to_ev_power",
+                    name=f"{cname} Battery → EV Power",
+                    device_class=SensorDeviceClass.POWER,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=UnitOfPower.WATT,
+                    suggested_display_precision=0,
+                ),
+                # Energy counters — integrated by ``FlowCalculator.integrate_energy_flows``
+                # daily-resetting, surfaced as TOTAL so HA Energy
+                # dashboard can use them in the EV-source breakdown.
+                SensorEntityDescription(
+                    key=f"charger_{cid}_flow_solar_to_ev_energy",
+                    name=f"{cname} Solar → EV Energy",
+                    device_class=SensorDeviceClass.ENERGY,
+                    state_class=SensorStateClass.TOTAL,
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    suggested_display_precision=2,
+                ),
+                SensorEntityDescription(
+                    key=f"charger_{cid}_flow_grid_to_ev_energy",
+                    name=f"{cname} Grid → EV Energy",
+                    device_class=SensorDeviceClass.ENERGY,
+                    state_class=SensorStateClass.TOTAL,
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    suggested_display_precision=2,
+                ),
+                SensorEntityDescription(
+                    key=f"charger_{cid}_flow_battery_to_ev_energy",
+                    name=f"{cname} Battery → EV Energy",
+                    device_class=SensorDeviceClass.ENERGY,
+                    state_class=SensorStateClass.TOTAL,
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    suggested_display_precision=2,
+                ),
+            ])
+
     for desc in per_charger_descriptions:
         sensors.append(SEMSolarSensor(coordinator, desc, entry.entry_id))
 

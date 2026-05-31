@@ -266,8 +266,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``charger_id`` and flap-suppression key. Cleared at the top of
         # each loop pass; empty in single-charger setups (notification
         # falls back to the fleet-level call).
-        # Shape: ``{cid: (effective_state, charger_name)}``.
+        # Shape: ``{cid: (effective_state, charger_name)}``. v1.6.14:
+        # populated by ``PerChargerContext.__exit__`` (not by the loop
+        # body directly) — pcc owns the write path now.
         self._effective_states_per_charger: Dict[str, tuple] = {}
+
+        # v1.6.14: short-lived pointer to the currently active
+        # ``PerChargerContext`` so ``ev_control._this_charger_power``
+        # can serve the cached value computed once at ``__enter__``
+        # instead of re-reading the HA state every call. Set in
+        # ``PerChargerContext.__enter__`` / cleared in ``__exit__``.
+        # ``None`` outside any per-charger iteration.
+        self._current_pcc = None
+
+        # Per-charger surplus budget for the active iteration.
+        # ``None`` outside any per-charger iteration; set by
+        # ``PerChargerContext.__enter__`` from the per-charger
+        # distribution map and cleared on ``__exit__``.
+        #
+        # Loadbearing: ``PerChargerContext.__enter__`` snapshots this
+        # field into ``_saved`` before pushing this charger's value —
+        # if it's missing on the coordinator the very first cycle
+        # raises ``AttributeError`` and the integration stops updating
+        # (HA-TEST 2026-05-31 PROD repro: shipped v1.6.7 → v1.6.14
+        # always crashed multi-charger first cycle; single-charger
+        # never entered this code path and so didn't surface the bug).
+        self._current_charger_budget: Optional[float] = None
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -519,6 +543,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         (~9 min) to give late-loading integrations time to register (issue #166).
         """
         energy_in = power.solar_power + power.grid_import_power + power.battery_discharge_power
+        # FLEET-READ: energy balance — needs fleet total EV draw because
+        # home_consumption is computed from the whole-house energy in/out.
         energy_out = power.ev_power + power.grid_export_power + power.battery_charge_power
         raw_balance = energy_in - energy_out
         if raw_balance < -500:
@@ -1158,6 +1184,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     pcc = PerChargerContext.for_charger(
                         self, cid, ev_dev, ev_budget_per_charger,
                         chargers_by_id=_chargers_by_id,
+                        power=power,
                     )
                     with pcc:
                         # Set per-charger night target (#193). The
@@ -1236,14 +1263,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 )
                                 await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
 
-                        # v1.6.9: capture per-charger effective state so
-                        # the notification dispatch in ``_send_notifications``
-                        # can fire ``notify_state_change`` per charger with
-                        # its own flap-suppression key.
-                        self._effective_states_per_charger[cid] = (
-                            effective_state,
-                            charger_cfg.get("name") or cid,
-                        )
+                        # v1.6.14: write the effective state to ``pcc``;
+                        # ``__exit__`` persists it into
+                        # ``self._effective_states_per_charger`` so the
+                        # post-loop ``_send_notifications`` dispatch sees
+                        # the per-charger state. Writing through pcc
+                        # makes the AST lint enforceable: no callsite
+                        # outside the loop touches the parallel dict
+                        # directly.
+                        pcc.effective_state = effective_state
 
                         try:
                             await self._execute_ev_control(
@@ -1308,6 +1336,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         monthly_peak,
                         ev_is_charging=False,
                         grid_import_w=power.grid_import_power,
+                        # FLEET-READ: load manager peak budget is a
+                        # whole-house concept; fleet EV total is correct.
                         ev_power_w=power.ev_power,
                     )
                 except (HomeAssistantError, ServiceValidationError) as e:
@@ -1749,6 +1779,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     pass
 
                 try:
+                    # FLEET-READ: cycle-level kW display for the cost
+                    # tracker — fleet total is the correct unit for the
+                    # whole-system view shown to the user.
                     _ev_kw = (power.ev_power or 0.0) / 1000.0
                     if _ev_kw > _MIN_USEFUL_RATE_KW:
                         _pcfg_t = _dl_pcfg or {}
@@ -1826,6 +1859,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             hour = now_time.hour
             if surplus_data.surplus_total_w > 100:
                 self._today_surplus_hours[hour] = True
+            # FLEET-READ: "is the fleet drawing at all" gate for the
+            # consumption hour-bucket — any charger counts.
             if power.ev_power > 10:
                 self._today_ev_hours[hour] = True
             result["schedule_surplus_hours"] = list(self._today_surplus_hours)
@@ -2151,6 +2186,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Execute the decision (start/stop/adjust charge)
         await scheduler.update(
             current_soc=power.battery_soc,
+            # FLEET-READ: battery scheduler needs whole-house EV draw to
+            # decide whether the night charge is competing with EV load.
             ev_charging_power_w=power.ev_power,
         )
 
@@ -2227,10 +2264,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             for cid, intel in per_charger_intel.items():
                 charger_name = self._ev_devices[cid].name if cid in self._ev_devices else cid
                 charger_connected = self._last_ev_connected_per_charger.get(cid, False)
-                mins_to_full = intel.get("minutes_to_full", 0)
-                est_soc = intel.get("estimated_soc", 0)
-                charge_needed = intel.get("charge_needed", False)
-                nights = intel.get("nights_until_charge", 0)
+                # ``or 0`` covers both missing key AND None value — the
+                # latter arises for chargers whose per-charger intel
+                # builder hasn't populated the field yet (e.g. mock
+                # chargers without a real upstream sensor). Without the
+                # coercion the subsequent ``> 0`` comparison raised
+                # ``TypeError`` every cycle (DEBUG log spam observed on
+                # HA-TEST 2026-05-31 after the v1.6.14 deploy).
+                mins_to_full = intel.get("minutes_to_full") or 0
+                est_soc = intel.get("estimated_soc") or 0
+                charge_needed = intel.get("charge_needed") or False
+                nights = intel.get("nights_until_charge") or 0
 
                 # 1. Nearly full: taper detector shows < 5 minutes remaining
                 if mins_to_full > 0 and mins_to_full < 5 and power.ev_charging:
@@ -3376,9 +3420,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if self._ev_device:
             ev_setpoint = getattr(self._ev_device, "_current_setpoint", 0.0)
 
-        # Run taper detection (primary / single charger)
+        # Run taper detection (primary / single charger). Multi-charger
+        # taper is handled per-charger by
+        # ``_update_per_charger_detector_energy`` (v1.6.6 #318); this
+        # call only runs when no per-charger detectors are configured.
+        # FLEET-READ: legacy single-detector path.
         if power.ev_power > 0 or power.ev_connected:
             taper_data = self._ev_taper_detector.update(
+                # FLEET-READ: single-detector input — see comment above.
                 power.ev_power, ev_setpoint, power.ev_connected, now,
             )
         else:
@@ -3386,6 +3435,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         # Track energy since last full charge (hardware counter preferred)
         if hasattr(energy, "daily_ev"):
+            # FLEET-READ: ``daily_ev`` is the fleet daily total; matches
+            # the fleet-level ``sensor.sem_daily_ev_energy``. Per-charger
+            # daily energy is on ``charger_<id>_daily_energy`` populated
+            # separately by ``_update_per_charger_detector_energy``.
             ev_increment = power.ev_power * interval_hours / 1000
             # Read hardware total energy counter for drift-free tracking
             hw_total = None
@@ -3419,9 +3472,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             self._ev_taper_detector.reset_session()
 
         # Stall detection → full charge: if car is connected, SEM is sending current,
-        # but power stays 0W for extended period, the car is full (BMS refusing)
+        # but power stays 0W for extended period, the car is full (BMS refusing).
+        # Legacy single-detector stall path; runs only when multi-charger
+        # isn't configured (per-charger stall lives on
+        # ``_ev_stalled_since_per_charger``). Demo of the v1.6.16
+        # ``.as_fleet_total(reason)`` form — the reason rides in the
+        # bytecode rather than a comment line above the read.
         if (power.ev_connected and not power.ev_charging
-                and power.ev_power < 50
+                and power.ev_power.as_fleet_total("legacy single-detector stall path") < 50
                 and not self._ev_taper_detector._full_detected):
             stall_count = getattr(self, '_full_stall_count', 0) + 1
             self._full_stall_count = stall_count

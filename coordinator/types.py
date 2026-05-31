@@ -26,13 +26,80 @@ class EnergySource(Enum):
     MIXED = "mixed"
 
 
+class FleetEvPower(float):
+    """Newtype for the fleet-aggregated EV power sum (v1.6.16).
+
+    Background. In multi-charger setups (``len(ev_chargers) > 1``)
+    ``PowerReadings.ev_power`` is the SUM across every charger's draw,
+    populated by ``sensor_reader`` from per-charger power sensors. Code
+    paths that loop per-charger and read the fleet sum directly produce
+    the recurring bug class that filled the v1.6.4 → v1.6.6 hotfix
+    sequence (#284, #289, #315, #318).
+
+    Goal. Make "I deliberately want the fleet sum" structurally
+    explicit — every read carries a written reason at the call site.
+
+    Mechanism. ``FleetEvPower`` subclasses ``float`` so arithmetic and
+    comparisons still work (no migration cost for the ~15 legitimate
+    fleet reads across ``coordinator/``). Layered on top:
+
+    1. The ``.as_fleet_total(reason: str)`` accessor returns the
+       underlying watts and documents intent in the code (not a
+       comment). The ``reason`` arg has no runtime effect but appears
+       in code review and ``git blame`` — the structural improvement
+       over the v1.6.8 ``# FLEET-READ:`` comment.
+
+    2. The expanded AST lint
+       (``tests/test_fleet_ev_power_reads_global.py``) treats
+       ``power.ev_power.as_fleet_total(...)`` as equivalent to the
+       comment annotation. Reads that are neither acknowledged form
+       fail CI across every ``coordinator/`` module — not just
+       ``ev_control.py`` like the v1.6.8 lint.
+
+    Mostly the v1.6.8 ``# FLEET-READ:`` comment idiom continues to
+    work — there is no flag-day. New code is encouraged to use the
+    method form because it appears in the bytecode (mypy, IDE hover,
+    even ``ast.dump``).
+    """
+
+    __slots__ = ()
+
+    def as_fleet_total(self, reason: str) -> float:
+        """Return the underlying watts; ``reason`` documents intent.
+
+        Args:
+            reason: short string explaining WHY this call site wants
+                the fleet sum rather than a per-charger draw. Required
+                positional argument — by convention the lint at
+                ``tests/test_fleet_ev_power_reads_global.py`` accepts
+                any non-empty string. Keep it concrete: "energy
+                balance computation" beats "fleet read".
+
+        Returns:
+            The wrapped watts as a plain ``float``. Identical to
+            ``float(self)``; the layer exists for documentation, not
+            for unit conversion.
+        """
+        return float(self)
+
+    def __repr__(self) -> str:  # noqa: D401
+        return f"FleetEvPower({float(self):.1f})"
+
+
 @dataclass
 class PowerReadings:
     """Current power readings from sensors."""
     solar_power: float = 0.0
     grid_power: float = 0.0  # Negative = import, Positive = export
     battery_power: float = 0.0  # Positive = charge, Negative = discharge
-    ev_power: float = 0.0
+    # v1.6.16: typed as ``FleetEvPower`` — a ``float`` subclass marking
+    # the fleet-aggregated EV power sum. Reads that want the sum
+    # acknowledge it via ``.as_fleet_total(reason)`` (preferred) or
+    # ``# FLEET-READ:`` comment (legacy v1.6.8 idiom). The AST lint at
+    # ``tests/test_fleet_ev_power_reads_global.py`` covers every
+    # ``coordinator/`` module — not just ``ev_control.py``. See
+    # ``docs/MULTI_CHARGER.md`` for the full invariant.
+    ev_power: "FleetEvPower" = field(default_factory=lambda: FleetEvPower(0.0))
     home_consumption_power: float = 0.0
 
     # Per-charger EV power (v1.6.9). Populated by ``sensor_reader`` for
@@ -160,6 +227,24 @@ class EnergyTotals:
 
 
 @dataclass
+class ChargerEnergyFlows:
+    """Per-charger slice of the daily EV energy flow attribution (v1.6.15).
+
+    Mirrors :class:`ChargerFlows` (power, W) at the kWh level, integrated
+    over time by ``FlowCalculator.integrate_energy_flows``. The fleet
+    ``EnergyFlows.solar_to_ev`` (etc.) is the sum across all chargers'
+    values here — invariant pinned in
+    ``tests/test_per_charger_energy_flows.py``.
+
+    Empty / not-populated in single-charger setups; the fleet-level
+    ``EnergyFlows`` fields are authoritative there.
+    """
+    solar_to_ev: float = 0.0
+    grid_to_ev: float = 0.0
+    battery_to_ev: float = 0.0
+
+
+@dataclass
 class EnergyFlows:
     """Daily energy flow distribution (kWh)."""
     # Solar flows
@@ -176,6 +261,15 @@ class EnergyFlows:
     # Battery flows
     battery_to_home: float = 0.0
     battery_to_ev: float = 0.0
+
+    # Per-charger EV energy split (v1.6.15). Populated by
+    # ``FlowCalculator.integrate_energy_flows`` when
+    # ``PowerFlows.per_charger`` is non-empty (multi-charger setups).
+    # Empty dict in single-charger setups — readers fall back to the
+    # fleet fields above. Invariant:
+    # ``sum(c.solar_to_ev for c in per_charger.values()) == solar_to_ev``
+    # within rounding tolerance.
+    per_charger: "Dict[str, ChargerEnergyFlows]" = field(default_factory=dict)
 
 
 @dataclass
@@ -542,6 +636,35 @@ class SEMData:
             "flow_grid_to_battery_energy": self.energy_flows.grid_to_battery,
             "flow_battery_to_home_energy": self.energy_flows.battery_to_home,
             "flow_battery_to_ev_energy": self.energy_flows.battery_to_ev,
+
+            # Per-charger flow surface (v1.6.15). Emit only when the
+            # multi-charger pipeline has populated these maps; in
+            # single-charger setups the dicts are empty and the keys
+            # are skipped, so the fleet sensors stay authoritative.
+            **{
+                f"charger_{cid}_flow_solar_to_ev_power": cf.solar_to_ev
+                for cid, cf in (self.power_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_grid_to_ev_power": cf.grid_to_ev
+                for cid, cf in (self.power_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_battery_to_ev_power": cf.battery_to_ev
+                for cid, cf in (self.power_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_solar_to_ev_energy": cef.solar_to_ev
+                for cid, cef in (self.energy_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_grid_to_ev_energy": cef.grid_to_ev
+                for cid, cef in (self.energy_flows.per_charger or {}).items()
+            },
+            **{
+                f"charger_{cid}_flow_battery_to_ev_energy": cef.battery_to_ev
+                for cid, cef in (self.energy_flows.per_charger or {}).items()
+            },
 
             # Costs
             "daily_costs": self.costs.daily_costs,

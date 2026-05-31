@@ -90,6 +90,7 @@ annotation at all — the lint only flags reads inside `ev_control.py`.
 | `_ev_charge_refused` | Per-charger "charger refused" flag |
 | `_current_charger_budget` | This charger's slice of `EVBudget.net_w` |
 | `_cycle_vehicle_soc` | This charger's vehicle SOC (per `vehicle_soc_entity`) |
+| `_current_pcc` | (v1.6.14) Pointer to the active `PerChargerContext` so `_this_charger_power` can return the cached `this_power_w` |
 
 The corresponding `_per_charger` dicts (e.g.
 `_ev_stalled_since_per_charger: Dict[str, datetime]`) are the **storage**;
@@ -142,48 +143,49 @@ the structural invariant.
 | **v1.6.10** | Code-quality cleanup (#308 / #309 / #310) | ✓ shipped |
 | **v1.6.11** | Recent-logs in diagnostics + doc polish | ✓ shipped |
 | **v1.6.12** | Multi-charger off + solar_only scenario test + harness `per_charger_effective_states` / `per_charger_flow_max` assertions | ✓ shipped |
+| **v1.6.14 (bundled closeout)** | (a) ✓ Surplus tracker jump-from-0 fix (#8); (b) ✓ `effective_state` + `this_power_w` migrated onto `PerChargerContext` fields; (c) ✓ per-charger flow sensors (`sensor.sem_charger_<id>_flow_*_to_ev_*` gated on `len(ev_chargers) > 1`); (d) ✓ `FleetEvPower` newtype + AST lint expanded to every `coordinator/` module. Shipped as one release rather than four per-PR HACS bumps. | ✓ shipped |
 
 ### What landed under the abstraction
 
 `PerChargerContext` owns the **swap surface** for nine coordinator
-attributes (8 in `_saved` + `_cycle_vehicle_soc`). The fields
-currently on the dataclass are: `cid`, `ev_dev`, `charger_cfg`,
-`budget_w`, `skipped_for_night`.
+attributes (8 in `_saved` + `_cycle_vehicle_soc`). As of v1.6.14 the
+dataclass also carries the computed per-charger fields:
 
-### What was planned-but-not-yet-on the context (deferred to v1.7+)
+| Field | Set by | Read by | Purpose |
+|---|---|---|---|
+| `cid`, `ev_dev`, `charger_cfg` | `for_charger` | loop body | identity |
+| `budget_w` | `for_charger` from `distribute_ev_budget` | `_ev_control` cascade | per-charger surplus slice |
+| `skipped_for_night` | `for_charger` from `_mode_allows_night_charging` | loop body | night gate |
+| `power` | `for_charger` (caller passes `power`) | `__enter__` | cycle-level `PowerReadings` for the precompute |
+| `this_power_w` | `__enter__` via `coord._this_charger_power(ev_dev, power)` | `_this_charger_power` cache shim | this charger's draw (W) |
+| `effective_state` | loop body assignment | `__exit__` → `_effective_states_per_charger` → `_send_notifications` | post-loop per-charger notification dispatch |
+| `charger_name` | `for_charger` from `charger_cfg["name"]` (fallback `cid`) | `__exit__` | display name in notifications |
 
-The original v1.6.7 design proposed migrating these onto `pcc` as
-fields in v1.6.8/v1.6.9:
+### Still deferred to v1.7+
 
-- `effective_state` — currently stored in the parallel coordinator
-  dict `_effective_states_per_charger` and dispatched in
-  `_send_notifications`. Works correctly; not on the context object.
-- `this_power_w` — currently cached as a local variable per method
-  inside `coordinator/ev_control.py`. Works correctly; not on the
-  context object.
-- `night_plan`, `per_charger_flows` — likewise local / parallel.
+- `night_plan` — currently stored in the parallel dict
+  `_night_plan_per_charger`. Mechanically similar to the
+  `effective_state` migration; defer until a consumer (e.g. the
+  per-charger night-progress sensors) actually needs it on `pcc`.
 
-These are real abstraction leaks the v1.6.7 → v1.6.10 arc did not
-close. Plan for v1.7+: migrate at least `effective_state` and
-`this_power_w` onto `PerChargerContext` so the lint can enforce field
-access at type level.
+### v1.6.15 — Per-charger flow sensors
 
-### What was descoped from v1.6.9 (also deferred to v1.7+)
+The data is on `PowerFlows.per_charger` (since v1.6.9) but no
+top-level HA entities expose it yet. v1.6.15 adds
+`sensor.sem_charger_{cid}_solar_to_ev_power`,
+`_grid_to_ev_power`, `_battery_to_ev_power` + matching energy
+accumulators, gated on `len(ev_chargers) > 1`. The Sankey card then
+gains a per-charger split.
 
-The plan listed per-charger flow **sensors**
-(`sensor.sem_charger_<id>_flow_solar_to_ev_power` etc.) as part of
-v1.6.9. The data is on `PowerFlows.per_charger` but no top-level HA
-entities expose it yet — the Sankey card needs the entity surface
-before it can render the per-charger split. Track as a v1.7+ feature
-once a consumer needs it.
-
-### Structural enforcement long-term
+### v1.6.16 — `FleetEvPower` newtype
 
 The `# FLEET-READ:` AST lint catches the bug class but is, by
 construction, a stopgap: a contributor can write
-`# FLEET-READ: idk` and pass. A `FleetEvPower` newtype that requires
-explicit unwrap with a reason argument would be structurally
-stronger. Track for v1.7+.
+`# FLEET-READ: idk` and pass. v1.6.16 replaces
+`PowerReadings.ev_power: float` with a `FleetEvPower` newtype
+requiring explicit unwrap via `.as_fleet_total(reason: str)`. The
+lint then enforces the unwrap call instead of a comment annotation —
+structurally stronger.
 
 See [`/home/sem/.claude/plans/greedy-whistling-nebula.md`](../../.claude/plans/greedy-whistling-nebula.md)
 for the original plan.

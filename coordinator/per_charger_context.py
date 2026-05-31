@@ -53,14 +53,18 @@ class PerChargerContext:
     charger's values; ``__exit__`` persists any updates back into the
     per-charger storage dicts and restores the primary's fleet view.
 
-    Fields are populated incrementally across v1.6.7 — v1.6.9:
+    Fields populated incrementally across v1.6.7 — v1.6.14:
 
     - v1.6.7: identity (``cid``, ``ev_dev``, ``charger_cfg``) + the swap
-      mechanism (no new computed fields; the existing inline maths in
-      ``coordinator.py`` continue to run inside the ``with`` block).
-    - v1.6.8: ``effective_strategy``, ``this_power_w`` migrated from
-      ``ev_control._this_charger_power``.
-    - v1.6.9: ``per_charger_flows`` from the per-charger flow calculator.
+      mechanism. No computed fields; the inline maths in
+      ``coordinator.py`` ran inside the ``with`` block.
+    - v1.6.9: ``per_charger_flows`` lives on ``PowerFlows.per_charger``
+      (not on the context; the calculator produces it before the loop).
+    - v1.6.14: ``effective_state`` + ``charger_name`` + ``this_power_w``
+      migrated onto the dataclass (issue: the parallel
+      ``_effective_states_per_charger`` dict + per-method local-var
+      caching of ``this_power_w`` were abstraction leaks; both now
+      flow through ``pcc``).
     """
 
     # ------------------------------------------------------------------
@@ -85,6 +89,44 @@ class PerChargerContext:
     skipped_for_night: bool = False
     """``True`` when the charger's mode opts it out of the current night
     state (set during ``for_charger`` based on ``_mode_allows_night_charging``)."""
+
+    # ------------------------------------------------------------------
+    # v1.6.14: computed per-charger fields
+    # ------------------------------------------------------------------
+    power: Any = None
+    """The ``PowerReadings`` for the current cycle. Stored so
+    ``__enter__`` can compute ``this_power_w`` for THIS charger via
+    the coordinator's existing helper. The factory's caller passes
+    the same ``power`` it would pass to ``_execute_ev_control``."""
+
+    this_power_w: Optional[float] = None
+    """THIS charger's draw in watts, computed once in ``__enter__``
+    via ``coord._this_charger_power(ev_dev, power)``. Reads from
+    inside the per-charger loop use this field instead of the
+    fleet-aggregated ``power.ev_power``. Pre-v1.6.14 each
+    ``coordinator/ev_control.py`` method that needed it cached a
+    local copy — works, but the value lived in three places.
+
+    ``None`` until ``__enter__`` runs. After exit, the value is
+    preserved on the dataclass (the context is short-lived; readers
+    don't access it post-exit, but leaving the field set is safer
+    than clearing it)."""
+
+    effective_state: Any = None
+    """THIS charger's effective ``ChargingState`` for the current
+    cycle. Set by the per-charger code inside the ``with`` block.
+    Persisted to ``coord._effective_states_per_charger[cid]`` by
+    ``__exit__`` so ``_send_notifications`` can dispatch per-charger
+    flap-suppressed notifications.
+
+    ``None`` means "this charger did not participate in this cycle"
+    (e.g. skipped for night, observer mode); ``__exit__`` then omits
+    the write."""
+
+    charger_name: Optional[str] = None
+    """Display name for the charger; persisted alongside
+    ``effective_state``. Falls back to ``cid`` if the config omits
+    a ``name`` key."""
 
     # ------------------------------------------------------------------
     # Internal: references + the swap snapshot.
@@ -115,6 +157,7 @@ class PerChargerContext:
         ev_dev: Any,
         ev_budget_per_charger: dict,
         chargers_by_id: Optional[dict] = None,
+        power: Any = None,
     ) -> "PerChargerContext":
         """Build a per-charger context.
 
@@ -138,6 +181,10 @@ class PerChargerContext:
                 caller can pass to avoid rebuilding it inside the loop.
                 If ``None``, this method rebuilds it from
                 ``coordinator.config``.
+            power: the ``PowerReadings`` for this cycle. Stored on the
+                context so ``__enter__`` can compute ``this_power_w`` via
+                the coordinator's existing helper. Optional for legacy
+                callers / unit tests that don't exercise ``this_power_w``.
 
         Returns:
             A ``PerChargerContext`` ready to be used as a context manager.
@@ -155,6 +202,8 @@ class PerChargerContext:
             ev_dev=ev_dev,
             charger_cfg=charger_cfg,
             budget_w=budget_w,
+            charger_name=charger_cfg.get("name") or cid,
+            power=power,
             _coord=coordinator,
         )
 
@@ -210,6 +259,26 @@ class PerChargerContext:
         coord._ev_charge_refused = coord._ev_charge_refused_per_charger.get(self.cid, False)
         coord._current_charger_budget = self.budget_w
 
+        # v1.6.14: precompute this charger's draw via the coordinator's
+        # kW-aware helper. Reads ``self._ev_device`` indirectly via
+        # ``_get_active_charger_config`` — must happen AFTER the swap
+        # above so the helper sees THIS charger's config. Power is
+        # optional (legacy unit tests) — without it the helper falls
+        # back to ``power.ev_power`` which is 0 for a None power object.
+        if self.power is not None and hasattr(coord, "_this_charger_power"):
+            try:
+                self.this_power_w = coord._this_charger_power(self.ev_dev, self.power)
+            except Exception:  # noqa: BLE001
+                # Helper failures shouldn't break the swap; fall back to
+                # method-local recompute (the legacy path).
+                self.this_power_w = None
+
+        # v1.6.14: stash on the coordinator so ``_this_charger_power``
+        # can return the cached value to in-loop callers (replaces
+        # per-method ``this_power_w = ...`` locals in ev_control.py
+        # without changing those callsites).
+        coord._current_pcc = self
+
         return self
 
     def __exit__(self, exc_type, exc, tb) -> bool:
@@ -236,6 +305,21 @@ class PerChargerContext:
             coord._ev_last_change_per_charger[self.cid] = coord._ev_last_change_time
             coord._ev_reenable_attempts_per_charger[self.cid] = coord._ev_reenable_attempts
             coord._ev_charge_refused_per_charger[self.cid] = coord._ev_charge_refused
+
+            # v1.6.14: persist effective state for the post-loop
+            # notification dispatcher. The dict on the coordinator
+            # remains the storage; pcc is the write path.
+            if self.effective_state is not None:
+                coord._effective_states_per_charger[self.cid] = (
+                    self.effective_state,
+                    self.charger_name or self.cid,
+                )
+
+            # v1.6.14: clear the cache pointer so out-of-loop reads
+            # (single-charger fallback path, post-loop helpers) hit the
+            # direct-compute branch in ``_this_charger_power``.
+            if getattr(coord, "_current_pcc", None) is self:
+                coord._current_pcc = None
 
             # Restore primary view.
             coord._ev_device = self._saved["dev"]

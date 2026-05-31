@@ -5,6 +5,194 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.14] — 2026-05-31
+
+Multi-charger debt closeout. Bundles four pieces of work into one
+release (the maintainer-set rule "no v1.7 until every multi-charger
+follow-up is closed" pulled deferred ``v1.7+`` items back into
+v1.6.x; this is them, packaged as one release rather than four
+separate HACS bumps).
+
+### Fixed
+
+- **Surplus tracker jump-from-0 spike (#8)** —
+  ``_apply_ramp_limit`` used to short-circuit on ``current < 1`` and
+  return ``target_current`` directly, so a cold-start cycle handed
+  KEBA a 14 A command from 0 A. KEBA's ~30 s physical actuator lag
+  then caused a ~4.4 kW grid-import overshoot during the ramp
+  (confirmed live on PROD 2026-05-31 at 10:43). Cold start now hands
+  KEBA ``min_current`` (typically 6 A ≈ 4140 W on 3-phase EU);
+  subsequent cycles climb via the existing ``±ramp_rate`` clamp at
+  the user-configured ``ev_ramp_rate_amps`` (default 2 A/cycle, so
+  target reached in ~4 cycles for a 14 A request). The stop-fast
+  branch is preserved: ``target_current < 1`` still returns 0
+  immediately so explicit-off / disable stays snappy. 13 new unit
+  tests in ``tests/test_ramp_limit_8.py`` pin every branch.
+
+### Changed
+
+- **``effective_state`` and ``charger_name`` migrated onto
+  ``PerChargerContext``** instead of writing the parallel
+  ``_effective_states_per_charger`` dict from inside the loop body.
+  The loop body assigns ``pcc.effective_state = …``; ``__exit__``
+  persists ``(state, name)`` into the coordinator's dict so the
+  post-loop ``_send_notifications`` dispatcher continues reading
+  from a single map. The dict is the storage; pcc is the write
+  path. Lets a future AST lint enforce field access at type level
+  (no callsite outside the loop touches the dict directly).
+- **``this_power_w`` precomputed in ``PerChargerContext.__enter__``**
+  via ``coord._this_charger_power(ev_dev, power)`` and exposed as a
+  typed field. The coordinator stashes the active pcc on
+  ``coord._current_pcc``; ``_this_charger_power`` becomes a cache
+  shim — when invoked with the same ``ev_dev`` it returns
+  ``pcc.this_power_w`` instead of re-reading HA state. Replaces
+  the three per-method ``this_power_w = self._this_charger_power(…)``
+  local-var caches in ``coordinator/ev_control.py`` without
+  changing the callsites. Helper exceptions in the precompute fall
+  through to the legacy read path so a transient HA-state issue
+  can't half-apply the swap.
+
+### Added
+
+- ``PerChargerContext.power``, ``this_power_w``, ``effective_state``,
+  ``charger_name`` dataclass fields.
+- ``SEMCoordinator._current_pcc`` short-lived pointer to the active
+  context (``None`` outside any per-charger iteration).
+- ``# FLEET-READ:`` annotation on the documented multi-charger
+  fallback in ``_this_charger_power`` (only reached when a charger
+  config omits ``ev_charging_power_sensor`` — rare).
+- 47 new tests across three areas (13 ramp-limit + 14 pcc-field +
+  20 per-charger flow):
+  - ``tests/test_ramp_limit_8.py``: cold-start, near-zero,
+    steady-state ramp, stop-fast, custom ``min_current``,
+    end-to-end multi-cycle climb.
+  - ``tests/test_per_charger_context.py``: effective_state
+    persistence, this_power_w precompute, current-pcc-pointer
+    lifecycle.
+  - ``tests/test_this_charger_power_cache.py``: cache HIT, three
+    MISS variants, kW→W conversion regression from #315.
+  - ``tests/test_per_charger_energy_flows.py``: sum invariant,
+    multi-cycle accumulation, day rollover, persistence
+    round-trip (incl. legacy snapshot back-compat), edge cases
+    (charger appears mid-day, charger idle in cycle,
+    zero-interval), bad-snapshot defence, sensor-description
+    generation gate.
+
+- **Per-charger flow sensors (gated on ``len(ev_chargers) > 1``)**:
+  ``sensor.sem_charger_<id>_flow_solar_to_ev_power``,
+  ``..._grid_to_ev_power``, ``..._battery_to_ev_power`` (W,
+  MEASUREMENT) plus matching ``..._energy`` (kWh, TOTAL, daily-
+  reset). The Sankey card + HA Energy dashboard can now show
+  per-charger EV sourcing instead of a fleet-proportional split —
+  closes the @RienduPre observation on #316. Single-charger setups
+  unchanged (fleet ``sensor.sem_flow_*_to_ev_*`` is authoritative).
+  - ``ChargerEnergyFlows`` dataclass + ``EnergyFlows.per_charger``
+    field.
+  - ``FlowCalculator._per_charger_accumulators`` (kWh) integrated
+    over time alongside the fleet accumulator; sum invariant
+    pinned in tests.
+  - Day rollover clears both fleet AND per-charger accumulators.
+  - Snapshot persistence round-trip: new ``per_charger`` key
+    under the existing snapshot dict; pre-v1.6.15 snapshots
+    (without the key) restore bit-for-bit identical.
+  - Accumulator semantic: once a charger appears, its kWh stays
+    surfaced until the day rollover, even on cycles where the
+    charger is idle (the user-visible counter must not regress
+    to 0 just because the car unplugs).
+
+- **``FleetEvPower`` newtype + global AST lint (v1.6.16 work)**.
+  ``PowerReadings.ev_power`` is now typed as ``FleetEvPower`` — a
+  ``float`` subclass that exposes ``.as_fleet_total(reason: str)``.
+  Two equivalent ways to acknowledge a fleet read:
+  - Comment form (v1.6.8 idiom, still valid):
+    ``# FLEET-READ: <reason>`` on the same line or up to 5 lines
+    above (walking back through ``#``-comment lines only).
+  - Method form (preferred for new code):
+    ``power.ev_power.as_fleet_total("<reason>")`` — the reason
+    rides in the bytecode (mypy / IDE hover / ``git blame``)
+    instead of an adjacent comment.
+
+  Lint expanded to every module under ``coordinator/`` (was
+  ``ev_control.py`` only). Exempt files: ``types.py`` (defines the
+  field) and ``per_charger_context.py`` (docstrings only). The
+  ~15 legitimate fleet reads got explicit ``# FLEET-READ:``
+  reasons; one ``coordinator.py:3459`` stall-detection site
+  migrated to the new method form as the in-tree demo.
+
+  Sensor reader (the only writer) constructs ``FleetEvPower``
+  instances at the assignment sites. Single-charger setups
+  unchanged — ``FleetEvPower(value)`` reduces to a tagged float.
+
+  12 new tests in ``tests/test_fleet_ev_power_reads_global.py``:
+  - ``TestGlobalFleetEvPowerLint`` (6): every read acknowledged
+    across coordinator/; exempt-list minimality; synthetic-code
+    sanity (method form detected, bare read flagged, comment
+    form still accepted).
+  - ``TestFleetEvPowerNewtype`` (6): is float subclass,
+    arithmetic works (no migration cost), ``.as_fleet_total``
+    returns plain float, reason arg is documentation-only,
+    default ``PowerReadings.ev_power`` is the newtype, repr
+    includes class name.
+
+### Why
+
+Senior reviewer on the v1.6.7→v1.6.10 arc flagged ``effective_state``
+and ``this_power_w`` as "works correctly; not on the context object."
+Both shipped working — but the docs claimed "pcc is the single source
+of truth for per-charger data" while these two lived in a parallel
+dict and method-local vars. This release makes the doc honest.
+
+The ``#8`` surplus-tracker spike fix bundled in here was confirmed
+live on PROD 2026-05-31 during the v1.6.3 soak — held with the
+refactor rather than shipped standalone so PROD users get one
+soak window instead of four staggered HACS updates.
+
+@RienduPre's #316 observation ("Sankey shows charger 2 sourcing
+from grid even in solar_only") was the user-visible gap behind the
+flow-sensor work. v1.6.9 fixed the underlying data (proportional
+W-level split was honest); v1.6.15 ships the entity surface so the
+dashboard + Energy dashboard actually render the per-charger split.
+
+### Polish (HA-TEST soak findings folded into v1.6.14)
+
+- **PR #333** — initialise ``SEMCoordinator._current_charger_budget``.
+  Missed in the v1.6.7 PerChargerContext refactor; ``__enter__``
+  snapshotted the attribute but ``__init__`` never set it, so every
+  multi-charger setup blew up its first cycle with
+  ``AttributeError``. Single-charger setups (HA-PROD) never tripped
+  it; HA-TEST today was the first multi-charger clean install since
+  v1.6.7. New regression test ``test_coordinator_swap_attrs_initialized.py``
+  AST-walks ``SEMCoordinator.__init__`` to assert every attribute
+  ``PerChargerContext.__enter__`` snapshots is initialised.
+
+- **PR #334** — per-charger notification ``NoneType`` coerce + flow
+  sensor zero-fill. ``intel.get(k, default)`` returns the default
+  only when the KEY is missing — mock chargers without upstream
+  data have the key set to ``None``, so ``est_soc > 0`` raised
+  ``TypeError`` every cycle (DEBUG noise). Fix: ``intel.get(k) or 0``.
+  Plus: ``flow_calculator`` now zero-fills per-charger flows when
+  the fleet is idle so the v1.6.15 flow sensors stay AVAILABLE at
+  0 W instead of going ``unavailable`` whenever no charger draws.
+
+- **PR #335** — upgrade-notification helper. After a HACS update +
+  HA restart, the browser's loaded frontend bootstrap still
+  references the OLD ``sem-localize.js`` URL until hard-refreshed
+  — soft reload serves the cached bootstrap → loads stale
+  translations → raw keys like ``today_plan_title`` /
+  ``plan_strip_idle`` appear in cards. HA-TEST 2026-05-31 confirmed.
+  New ``_maybe_emit_upgrade_notification`` helper detects a SEM
+  version change at setup (via a per-entry
+  ``hass.helpers.storage.Store``) and fires a one-shot
+  ``persistent_notification`` instructing users to hard-refresh
+  (Ctrl+Shift+R / Cmd+Shift+R). First install is silent. Failure
+  is non-fatal. 5 new tests pin the contract (first-install,
+  same-version, upgrade, per-version notification-id, per-entry
+  storage key).
+
+2263 tests pass on Python 3.12 (2210 v1.6.12 baseline + 13 #8 +
+14 v1.6.14 + 20 v1.6.15 + 12 v1.6.16 + 2 v1.6.14-hotfix +
+5 v1.6.14-polish = 66 new tests in this release). Manifest at 1.6.14.
+
 ## [1.6.12] — 2026-05-31
 
 Closes the last open senior-reviewer item on the v1.6.7 → v1.6.11
