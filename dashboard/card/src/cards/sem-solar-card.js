@@ -10,7 +10,10 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { semTheme, semFormatPower, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
+import {
+    semTheme, semFormatPower, semCardSurfaceCSS, SEM_COLORS, semDefineCard,
+    semDiscoverPVStrings, semPVStringsCSS,
+} from '../base/sem-shared.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -151,6 +154,11 @@ class SEMSolarCard extends SEMLitBase {
         const vsFCText  = vsFC !== 0 ? this._fmt(vsFC, 0) + '%' : '—';
         const vsFCColor = vsFC >= 0 ? '#8DC892' : '#f06292';
 
+        // v1.7.1 / #312: per-PV-string chip strip. Auto-shown when ≥ 2
+        // strings are present (v1.7.0 discovery surface); empty array
+        // otherwise so the row collapses to ``nothing``.
+        const pvStrings = semDiscoverPVStrings(this._hass, this._prefix);
+
         return html`
             <style>
                 :host { display: block; }
@@ -271,6 +279,8 @@ class SEMSolarCard extends SEMLitBase {
                     font-size: 13px; font-weight: 600; color: #ff9800;
                     font-variant-numeric: tabular-nums;
                 }
+                /* v1.7.1 / #312: per-PV-string chip strip styles */
+                ${semPVStringsCSS}
             </style>
 
             <!-- SVG glow filters -->
@@ -291,6 +301,21 @@ class SEMSolarCard extends SEMLitBase {
 
             <ha-card>
                 <div class="wrap">
+
+                    <!-- v1.7.1 / #312: per-PV-string chip strip (auto-shown ≥ 2 strings) -->
+                    ${pvStrings.length >= 2 ? html`
+                        <div class="pv-strings-row">
+                            ${pvStrings.map(s => html`
+                                <div class="pv-chip"
+                                     title="${s.entityId}"
+                                     data-entity="${s.entityId}"
+                                     @click=${() => this._fireMoreInfo?.(s.entityId)}>
+                                    <span class="pv-chip-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                    <span class="pv-chip-value">${(Math.abs(s.watts)/1000).toFixed(2)} kW</span>
+                                </div>
+                            `)}
+                        </div>
+                    ` : nothing}
 
                     <!-- Hero -->
                     <div class="hero">

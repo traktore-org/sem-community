@@ -17,7 +17,10 @@
  */
 
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
-import { semFormatPower, semCalcDuration, semDefineCard, SEM_DEVICE_COLORS } from '../base/sem-shared.js';
+import {
+    semFormatPower, semCalcDuration, semDefineCard, SEM_DEVICE_COLORS,
+    semDiscoverPVStrings, semPVStringsCSS,
+} from '../base/sem-shared.js';
 
 /* ── Required IDs for imperative updates (must exist in render output) ──
  * val-solar, val-solar-kwh
@@ -136,8 +139,28 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const F = "'Segoe UI','Roboto',sans-serif";
         const fl = L.font.label, fv = L.font.value, fs = L.font.sub;
 
+        // v1.7.1 / #312: per-PV-string HUD chip strip — auto-shown
+        // when ≥ 2 strings exist. The illustrated SVG sun motif
+        // doesn't split well visually, so chips sit above as a
+        // compact heads-up overview instead.
+        const pvStrings = semDiscoverPVStrings(this._hass, this._prefix);
+
         return html`
             <ha-card>
+                <style>${semPVStringsCSS}</style>
+                ${pvStrings.length >= 2 ? html`
+                    <div class="pv-strings-row">
+                        ${pvStrings.map(s => html`
+                            <div class="pv-chip"
+                                 title="${s.entityId}"
+                                 data-entity="${s.entityId}"
+                                 @click=${() => this._fireMoreInfo?.(s.entityId)}>
+                                <span class="pv-chip-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                <span class="pv-chip-value">${(Math.abs(s.watts)/1000).toFixed(2)} kW</span>
+                            </div>
+                        `)}
+                    </div>
+                ` : nothing}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="${L.vb}"
                      style="background:transparent;overflow:hidden"
                      role="img" aria-label="Solar energy system power flow diagram">

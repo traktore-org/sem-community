@@ -5,6 +5,56 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] — 2026-05-31
+
+Phase 2 of the v1.7.0 per-PV-string visibility arc (#312). Adds
+visual per-string display to SEM's three flow-style cards. Data
+layer ships in v1.7.0; dashboard generator wiring + docs ship in
+v1.7.2.
+
+### Added
+
+- **Per-PV-string chip strip** on three cards, auto-shown when
+  ``≥ 2`` strings are present (gated on the v1.7.0
+  ``sensor.sem_pv_string_*_power`` discovery surface). Each chip
+  shows ``PVn N.NN kW`` and links to the underlying sensor entity
+  on tap.
+  - ``sem-flow-card``: chips sit above the SVG flow diagram.
+  - ``sem-solar-card``: chips sit above the hero (arc ring) inside
+    the card surface.
+  - ``sem-system-diagram-card``: chips sit above the illustrated
+    diagram as a compact HUD (the illustrated sun motif doesn't
+    split well visually, so the panel approach matches what the
+    Sunsynk Power Flow Card does).
+- ``semDiscoverPVStrings(hass, prefix)`` helper in
+  ``dashboard/card/src/base/sem-shared.js`` — reads
+  ``sensor.{prefix}pv_string_pv1_power`` … ``pv4_power``,
+  returns ``[]`` when fewer than 2 are present (so every caller
+  can pass the result straight to a Lit ``html`` template).
+- ``semPVStringsCSS`` shared style block (chip-style row, hover
+  effect, tabular-nums for the value).
+
+### Why
+
+@MRAK96 asked for Sunsynk-style per-string visibility in #312.
+v1.7.0 shipped the data layer; users could plot the per-string
+sensors manually but the cards still showed only the aggregated
+solar number. v1.7.1 closes the loop: when ≥ 2 strings are
+discovered, the cards auto-render an overview chip strip.
+Single-string installs are pixel-identical to v1.7.0.
+
+### Tests
+
+Card rendering is exercised via the bundle build (Rollup) which
+catches syntax errors and missing imports. End-to-end visual
+verification on HA-TEST uses synthetic ``input_number`` helpers
+acting as per-string sensors (the discovery's platform check
+allows this when the seed solar source is also an
+``input_number``).
+
+Full Python suite still 2281 green (no Python changes in this
+phase). Bundle rebuilt — ``dist/sem-cards.js`` regenerated.
+
 ## [1.7.0] — 2026-05-31
 
 First feature release after the v1.6.14 multi-charger closeout. Adds
