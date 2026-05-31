@@ -279,6 +279,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``None`` outside any per-charger iteration.
         self._current_pcc = None
 
+        # Per-charger surplus budget for the active iteration.
+        # ``None`` outside any per-charger iteration; set by
+        # ``PerChargerContext.__enter__`` from the per-charger
+        # distribution map and cleared on ``__exit__``.
+        #
+        # Loadbearing: ``PerChargerContext.__enter__`` snapshots this
+        # field into ``_saved`` before pushing this charger's value —
+        # if it's missing on the coordinator the very first cycle
+        # raises ``AttributeError`` and the integration stops updating
+        # (HA-TEST 2026-05-31 PROD repro: shipped v1.6.7 → v1.6.14
+        # always crashed multi-charger first cycle; single-charger
+        # never entered this code path and so didn't surface the bug).
+        self._current_charger_budget: Optional[float] = None
+
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
         # False-stall guard: consecutive failed re-enables + "car full" latch (#243)
