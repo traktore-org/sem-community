@@ -67,18 +67,18 @@
           "ev_target_soc": "EV Doel SOC (%)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current (e.g. keba.set_current). Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "enable_charger_notifications": "Enable/disable persistent notification banners shown on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor that reports the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "ev_connected_sensor": "Binaire sensor die aangeeft of de stekker momenteel is aangesloten op het voertuig.",
+          "ev_charging_sensor": "Binaire sensor die aangeeft of de EV actief aan het laden is.",
+          "ev_charging_power_sensor": "Numerieke sensor (W) die het vermogen toont dat momenteel naar het voertuig stroomt.",
+          "ev_charger_service": "HA-service die wordt aangeroepen om de laadstroom in te stellen (bijv. keba.set_current). Laat leeg voor laadpalen met een number-entiteit.",
+          "ev_charger_service_entity_id": "Entiteit-ID dat als doel van de serviceaanroep wordt meegegeven. Laat leeg indien niet nodig.",
+          "ev_total_energy_sensor": "Optionele cumulatieve kWh-teller voor energie geleverd aan het voertuig.",
+          "enable_charger_notifications": "Schakel persistente meldingsbanners op de laadpaalstatuskaart in of uit.",
+          "enable_mobile_notifications": "Schakel pushmeldingen naar uw mobiele apparaat in of uit.",
+          "mobile_notification_service": "HA notify-service voor mobiele pushmeldingen (bijv. notify.mobile_app_uw_telefoon).",
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
+          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
         }
       }
     },
@@ -124,15 +124,15 @@
           "ev_kwh_per_100km": "Voertuigverbruik (kWh/100km)"
         },
         "data_description": {
-          "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is connected.",
-          "ev_charging_sensor": "Binary sensor that reports whether the EV is actively charging.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power currently flowing into the vehicle.",
-          "ev_charger_service": "HA service called to set the charging current. Leave blank for number-entity chargers.",
-          "ev_charger_service_entity_id": "Entity ID passed as the service call target. Leave blank if not needed.",
-          "ev_total_energy_sensor": "Optional cumulative kWh counter for energy delivered to the vehicle.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh. Used to estimate SOC and charge time.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged.",
+          "ev_connected_sensor": "Binaire sensor die aangeeft of de stekker is aangesloten op het voertuig.",
+          "ev_charging_sensor": "Binaire sensor die aangeeft of de EV actief aan het laden is.",
+          "ev_charging_power_sensor": "Numerieke sensor (W) die het vermogen toont dat momenteel naar het voertuig stroomt.",
+          "ev_charger_service": "HA-service die wordt aangeroepen om de laadstroom in te stellen. Laat leeg voor laadpalen met een number-entiteit.",
+          "ev_charger_service_entity_id": "Entiteit-ID dat als doel van de serviceaanroep wordt meegegeven. Laat leeg indien niet nodig.",
+          "ev_total_energy_sensor": "Optionele cumulatieve kWh-teller voor energie geleverd aan het voertuig.",
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh. Wordt gebruikt om het laadniveau en de laadtijd te schatten.",
+          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt.",
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
           "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden.",
           "ev_kwh_per_100km": "Gebruikt om het rijbereik te schatten wanneer er geen bereiksensor is geconfigureerd.",
@@ -191,10 +191,10 @@
           "battery_capacity_kwh": "Totale bruikbare capaciteit van de thuisbatterij (NIET de EV-batterij — dat is een aparte instelling). Wordt gebruikt voor forecast-gestuurd laden.",
           "battery_discharge_protection_enabled": "Indien AAN, beperkt SEM het ontladingsvermogen van de omvormer tijdens nachtelijk EV-laden zodat de batterij alleen het huis voedt (niet de EV).",
           "battery_max_discharge_power": "Harde bovengrens voor batterijontlading die door de beschermingsfunctie wordt afgedwongen.",
-          "electricity_import_rate": "Dag-/vlaktarief (CHF/kWh, incl. btw). Gebruikt voor kostenregistratie.",
-          "electricity_off_peak_rate": "Nachtelijk tarief (CHF/kWh). Stel gelijk aan het importtarief als je geen dubbeltarief hebt.",
-          "electricity_export_rate": "Terugleververgoeding van de energieleverancier (CHF/kWh).",
-          "demand_charge_rate": "Maandelijkse capaciteitstarief per kW piekvermogen (CHF/kW/maand). Zet op 0 als dit niet van toepassing is.",
+          "electricity_import_rate": "Dag-/vlaktarief (Euro/kWh, incl. btw). Gebruikt voor kostenregistratie.",
+          "electricity_off_peak_rate": "Nachtelijk tarief (Euro/kWh). Stel gelijk aan het importtarief als je geen dubbeltarief hebt.",
+          "electricity_export_rate": "Terugleververgoeding van de energieleverancier (Euro/kWh).",
+          "demand_charge_rate": "Maandelijkse capaciteitstarief per kW piekvermogen (Euro/kW/maand). Zet op 0 als dit niet van toepassing is.",
           "observer_mode": "Indien AAN, monitort en berekent SEM alles, maar stuurt geen commando's naar hardware. Te gebruiken in een test-/acceptatieomgeving.",
           "smart_night_charging": "Indien AAN, slaat SEM nachtelijk laden slim over of vermindert dit op basis van geschatte EV SOC, zonneverwachting, temperatuurgecorrigeerde verbruiksvoorspelling en geleerde rijpatronen.",
           "battery_discharge_control_entity": "Nummer-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig.",
@@ -215,11 +215,11 @@
           "smart_night_charging": "Nachtdoel verlagen op basis van voorspelling van morgen"
         },
         "data_description": {
-          "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
-          "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "max_grid_import": "Maximum grid power (W) SEM may use during solar charging. Set to 0 for pure-solar mode.",
-          "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
-          "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
+          "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
+          "min_solar_power": "Minimaal zonne-energieoverschot (W) dat vereist is voordat SEM begint met zonneladen voor de EV.",
+          "max_grid_import": "Maximaal netvermogen (W) dat SEM mag gebruiken tijdens zonneladen. Stel in op 0 voor puur-zonne-modus.",
+          "observer_mode": "Wanneer AAN, bewaakt SEM alles maar stuurt nooit opdrachten naar hardware.",
+          "smart_night_charging": "Wanneer AAN, verlaagt SEM het nachtlaaddoel wanneer de zonne-energieprognose voor morgen voldoende is."
         }
       },
       "settings_tariff": {
@@ -234,28 +234,28 @@
           "power_delta": "Drempel vermogenswijziging (W)",
           "current_delta": "Drempel stroomwijziging (A)",
           "soc_delta": "Drempel SOC-wijziging (%)",
-          "tariff_mode": "Tariff mode",
-          "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
-          "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
-          "dynamic_feedin_entity": "Feed-in price entity (optional, for dynamic export rate)",
-          "grid_import_power_entity": "Grid import power sensor (optional, auto-detected from Energy Dashboard)",
-          "grid_export_power_entity": "Grid export power sensor (optional, auto-detected from Energy Dashboard)"
+          "tariff_mode": "Tarief modus",
+          "dynamic_tariff_entity": "Dynamische prijsentiteit (automatisch gedetecteerd indien leeg)",
+          "dynamic_forecast_entity": "Prognose-entiteit (optioneel, automatisch gedetecteerd indien leeg)",
+          "dynamic_feedin_entity": "Terugleverprijs-entiteit (optioneel, voor dynamisch exporttarief)",
+          "grid_import_power_entity": "Netstroom-invoersensor (optioneel, automatisch gedetecteerd via Energiedashboard)",
+          "grid_export_power_entity": "Netstroom-exportssensor (optioneel, automatisch gedetecteerd via Energiedashboard)"
         },
         "data_description": {
-          "electricity_import_rate": "Day/flat import rate (currency/kWh incl. VAT). Used as fallback when dynamic pricing is unavailable.",
-          "electricity_off_peak_rate": "Night/off-peak import rate (currency/kWh). Set equal to import rate if you have a flat tariff.",
-          "electricity_export_rate": "Feed-in rate paid by the utility (currency/kWh).",
-          "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
-          "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
-          "power_delta": "Minimum power change (W) before SEM reacts. Lower = more responsive but heavier on the recorder.",
-          "current_delta": "Minimum charging-current change (A) before SEM updates the EV charger.",
-          "soc_delta": "Minimum battery SOC change (%) before SEM reacts to battery state changes.",
-          "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
-          "dynamic_tariff_entity": "Sensor providing the current electricity import price. Auto-detected from Tibber, Nordpool, etc.",
-          "dynamic_forecast_entity": "Optional sensor with hourly price forecasts used for smart scheduling.",
-          "dynamic_feedin_entity": "Optional sensor providing the current feed-in / export price for dynamic export rate.",
-          "grid_import_power_entity": "Optional sensor (W) for grid import power. Auto-detected from the Energy Dashboard; override here if needed.",
-          "grid_export_power_entity": "Optional sensor (W) for grid export power. Auto-detected from the Energy Dashboard; override here if needed."
+          "electricity_import_rate": "Dag-/standaard importtarief (valuta/kWh incl. btw). Wordt gebruikt als terugval wanneer dynamische prijzen niet beschikbaar zijn.",
+          "electricity_off_peak_rate": "Nacht-/dalimporttarief (valuta/kWh). Stel gelijk aan het importtarief in bij een vast tarief.",
+          "electricity_export_rate": "Teruglevertarief dat door de energieleverancier wordt vergoed (valuta/kWh).",
+          "demand_charge_rate": "Maandelijkse piekvermogensheffing (valuta/kW/maand). Stel in op 0 als uw contract dit niet heeft.",
+          "update_interval": "Hoe vaak SEM sensoren uitleest en hardware bijstuurt (seconden). Bereik 10–60 s.",
+          "power_delta": "Minimale vermogenswijziging (W) voordat SEM reageert. Lager = responsiever maar zwaarder voor de recorder.",
+          "current_delta": "Minimale laadstroomwijziging (A) voordat SEM de laadpaal bijwerkt.",
+          "soc_delta": "Minimale accu-SOC-wijziging (%) voordat SEM reageert op wijzigingen in de accu-toestand.",
+          "tariff_mode": "Kies 'Statisch' voor vaste tarieven, 'Dynamisch' voor realtime prijzen of 'Kalender' voor tijdsgebonden tariefschema's.",
+          "dynamic_tariff_entity": "Sensor die de actuele elektriciteitsinkoopprijs levert. Automatisch gedetecteerd via Tibber, Nordpool, enz.",
+          "dynamic_forecast_entity": "Optionele sensor met uurlijkse prijsverwachtingen voor slimme planning.",
+          "dynamic_feedin_entity": "Optionele sensor die de actuele teruglever-/exportprijs levert voor dynamisch exporttarief.",
+          "grid_import_power_entity": "Optionele sensor (W) voor netstroom-invoervermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig.",
+          "grid_export_power_entity": "Optionele sensor (W) voor netstroom-exportvermogen. Automatisch gedetecteerd via het Energiedashboard; overschrijf hier indien nodig."
         }
       },
       "load_management": {
@@ -272,14 +272,14 @@
           "ev_target_soc": "EV doel SOC (%)"
         },
         "data_description": {
-          "load_management_enabled": "Enable/disable SEM's automatic load-shedding to stay under your grid peak limit.",
-          "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
-          "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
-          "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "critical_device_protection": "When enabled, devices marked as critical are never shed regardless of peak level.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "load_management_enabled": "Schakel SEM's automatische lastafschakeling in of uit om onder uw netpieklimiet te blijven.",
+          "target_peak_limit": "Maximaal netvermogen (kW) waarna SEM begint met het afschakelen van regelbare verbruikers.",
+          "warning_peak_level": "Vermogensniveau (kW) waarbij SEM een waarschuwing geeft voordat actie wordt ondernomen.",
+          "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden.",
+          "critical_device_protection": "Wanneer ingeschakeld, worden apparaten die als kritiek zijn gemarkeerd nooit afgeschakeld, ongeacht het pieklevel.",
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
+          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
         }
       },
       "notifications": {
@@ -294,12 +294,12 @@
           "ev_target_soc": "EV Doel SOC (%)"
         },
         "data_description": {
-          "enable_charger_notifications": "Enable/disable persistent notification banners on the charger status card.",
-          "enable_mobile_notifications": "Enable/disable push notifications sent to your mobile device.",
-          "mobile_notification_service": "HA notify service for mobile push (e.g. notify.mobile_app_your_phone).",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "enable_charger_notifications": "Schakel persistente meldingsbanners op de laadpaalstatuskaart in of uit.",
+          "enable_mobile_notifications": "Schakel pushmeldingen naar uw mobiele apparaat in of uit.",
+          "mobile_notification_service": "HA notify-service voor mobiele pushmeldingen (bijv. notify.mobile_app_uw_telefoon).",
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
+          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
         }
       },
       "dashboard_options": {
@@ -321,9 +321,9 @@
           "dashboard_path": "URL-pad voor het dashboard (kleine letters, gebruik streepjes). Voorbeeld: 'sem-dashboard'",
           "include_financial": "Voeg een tabblad toe voor financiële tracking met kosten, besparingen en ROI-metrieken.",
           "include_flows": "Voeg een tabblad toe voor een visualisatie van energiestromen met een Sankey-diagram dat de energiestromen weergeeft.",
-          "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
-          "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
-          "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
+          "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
+          "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
+          "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
         }
       },
       "battery_scheduler": {
@@ -358,14 +358,14 @@
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         },
         "data_description": {
-          "charger_name": "Friendly name for this charger shown in the dashboard.",
-          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
-          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
-          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
-          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
-          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
-          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
+          "ev_connected_sensor": "Binaire sensor die aangeeft of een voertuig is aangesloten op deze laadpaal.",
+          "ev_charging_sensor": "Binaire sensor die aangeeft of deze laadpaal actief vermogen levert.",
+          "ev_charging_power_sensor": "Numerieke sensor (W) die het vermogen toont dat door deze laadpaal wordt geleverd.",
+          "ev_charger_service": "HA-service die wordt gebruikt om de laadstroom in te stellen. Gebruiken voor KEBA of Easee.",
+          "ev_charger_service_entity_id": "Entiteit-ID dat als doel van de serviceaanroep wordt meegegeven. Laat leeg indien niet nodig.",
+          "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
+          "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
           "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
         }
