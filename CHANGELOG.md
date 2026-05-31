@@ -5,6 +5,33 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.5] — 2026-05-31
+
+Same-day follow-up to v1.6.4. Closes the second half of the off-mode
+problem: KEBA P30 self-resumes from a stored setpoint on plug-in events
+or after internal firmware events, completely independent of SEM. The
+v1.6.4 fix only stopped SEM-owned sessions; if SEM never started the
+session (because mode was already off when the EV plugged in, or KEBA
+restarted on its own), the contactor stayed closed and KEBA drew power
+SEM never knew about.
+
+### Fixed
+
+- **off-mode now stops charger-initiated charging** (#315) — the
+  actuator's terminal-state branch in ``ev_control.py`` now also calls
+  ``stop_session()`` when ``charging_strategy == "disabled"`` and
+  ``ev_power > 500W``, regardless of ``ev._session_active``. Every
+  coordinator cycle (10 s) re-asserts the per-brand disable (e.g.
+  ``keba.disable``) until ev_power drops below the 500 W threshold.
+  Idempotent — safe to call on an already-disabled charger.
+
+  Threshold rationale: KEBA's handshake idle draws 100–200 W
+  continuously while plugged in (control-pilot duty cycle). Real
+  charging starts at 4140 W minimum (3 phases × 6 A × 230 V). The
+  500 W cutoff cleanly separates "actually pulling current" from
+  "plugged in, parked" so SEM doesn't spam stop_session every cycle
+  while the car is idle at the charger.
+
 ## [1.6.4] — 2026-05-31
 
 Hotfix on top of v1.6.3 plus the cleanup follow-ups #304/#305 that

@@ -556,6 +556,29 @@ class EVControlMixin:
         # === TERMINAL STATES: full stop (EV disconnected, target reached, etc.) ===
         if ev._session_active:
             await ev.stop_session()
+        elif (
+            context.charging_strategy == "disabled"
+            and power.ev_power > 500
+        ):
+            # User intent is mode=off but the charger is physically drawing
+            # real power that SEM doesn't own (#315). KEBA P30 is the
+            # canonical example: its firmware self-resumes on plug-in or
+            # after certain internal events using a stored setpoint,
+            # completely independent of SEM. Since SEM never started a
+            # session here, `_session_active` is False and the branch
+            # above is skipped, but the charger keeps drawing. Force-call
+            # stop_session to invoke the per-brand disable (e.g.
+            # ``keba.disable``) every cycle until ev_power drops below
+            # the 500 W threshold.
+            #
+            # Threshold rationale: KEBA's handshake idle draws 100–200 W
+            # continuously while plugged in (control-pilot duty cycle).
+            # Real charging starts at ev.min_current × phases × voltage
+            # (3 phases × 6 A × 230 V ≈ 4140 W). 500 W safely separates
+            # "actually pulling current" from "plugged in, not charging" so
+            # we don't spam stop_session every coordinator cycle while the
+            # car is parked at the charger.
+            await ev.stop_session()
         self._ev_stalled_since = None
         self._ev_reenable_attempts = 0
         self._ev_charge_refused = False

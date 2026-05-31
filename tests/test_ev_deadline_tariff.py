@@ -528,3 +528,90 @@ class TestDeadlineFloorApplied:
         await coord._execute_ev_control(
             ChargingState.TARIFF_WAITING_FOR_CHEAP, power, MagicMock(), ctx)
         dev.stop_session.assert_awaited()
+
+
+# ---------------------------------------------------------------------------
+# #315 — off-mode terminal-state must also stop self-charging chargers (KEBA)
+# ---------------------------------------------------------------------------
+class TestOffModeTerminatesActiveCharge:
+    """When ``charge_mode=off`` and the charger is physically drawing power
+    that SEM doesn't own (typical for KEBA P30 which self-resumes from a
+    stored setpoint), the actuator's terminal-state branch must still call
+    ``stop_session()`` so the per-brand disable fires every cycle until the
+    contactor opens. Pre-#315 fix the terminal block only stopped if
+    ``ev._session_active`` was True — which it never is when KEBA self-
+    started without SEM mediation.
+    """
+
+    @pytest.mark.asyncio
+    async def test_off_with_self_charging_keba_calls_stop_session(self):
+        """KEBA drawing 4140 W on plug-in + mode=off → stop_session called."""
+        coord = _build_coordinator()
+        # session_active=False is the load-bearing precondition — SEM never
+        # owned the session because KEBA self-started.
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled",
+                              charging_strategy_reason="Charging disabled (mode=off)")
+        power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_off_with_handshake_only_no_stop_call(self):
+        """KEBA at handshake idle (110 W) doesn't trigger the override —
+        the 100 W threshold matches the actuator's existing 'actually
+        charging vs handshake' cutoff so we don't spam stop_session every
+        cycle while the EV is plugged in but parked."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled",
+                              charging_strategy_reason="Charging disabled (mode=off)")
+        power = PowerReadings(ev_connected=True, ev_power=110.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_off_with_inactive_session_and_no_ev_power_skips(self):
+        """EV unplugged or fully off → terminal branch doesn't call stop_session
+        (it was never started). Sanity check the override doesn't fire
+        when there's nothing to stop."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=False, charging_strategy="disabled")
+        power = PowerReadings(ev_connected=False, ev_power=0.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_session_active_path_still_works(self):
+        """The original SEM-owned session → stop_session path is unchanged.
+        Pinned so the new override doesn't accidentally shadow it."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=True, current_setpoint=10)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled")
+        power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_idle_strategy_does_not_trigger_override(self):
+        """Generic ``"idle"`` (Zone 1, solar<200W, target met) must NOT
+        trigger the override — only the explicit-off ``"disabled"`` does.
+        Pre-refinement check: prevents the #305 conflation from creeping
+        back in via the actuator path."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="idle")
+        power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_not_awaited()
