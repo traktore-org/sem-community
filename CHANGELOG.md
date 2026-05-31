@@ -153,9 +153,45 @@ flow-sensor work. v1.6.9 fixed the underlying data (proportional
 W-level split was honest); v1.6.15 ships the entity surface so the
 dashboard + Energy dashboard actually render the per-charger split.
 
-2256 tests pass on Python 3.12 (2210 v1.6.12 baseline + 13 #8 +
-14 v1.6.14 + 20 v1.6.15 + 12 v1.6.16 = 59 new tests in this
-release). Manifest bumped to 1.6.14.
+### Polish (HA-TEST soak findings folded into v1.6.14)
+
+- **PR #333** — initialise ``SEMCoordinator._current_charger_budget``.
+  Missed in the v1.6.7 PerChargerContext refactor; ``__enter__``
+  snapshotted the attribute but ``__init__`` never set it, so every
+  multi-charger setup blew up its first cycle with
+  ``AttributeError``. Single-charger setups (HA-PROD) never tripped
+  it; HA-TEST today was the first multi-charger clean install since
+  v1.6.7. New regression test ``test_coordinator_swap_attrs_initialized.py``
+  AST-walks ``SEMCoordinator.__init__`` to assert every attribute
+  ``PerChargerContext.__enter__`` snapshots is initialised.
+
+- **PR #334** — per-charger notification ``NoneType`` coerce + flow
+  sensor zero-fill. ``intel.get(k, default)`` returns the default
+  only when the KEY is missing — mock chargers without upstream
+  data have the key set to ``None``, so ``est_soc > 0`` raised
+  ``TypeError`` every cycle (DEBUG noise). Fix: ``intel.get(k) or 0``.
+  Plus: ``flow_calculator`` now zero-fills per-charger flows when
+  the fleet is idle so the v1.6.15 flow sensors stay AVAILABLE at
+  0 W instead of going ``unavailable`` whenever no charger draws.
+
+- **PR #335** — upgrade-notification helper. After a HACS update +
+  HA restart, the browser's loaded frontend bootstrap still
+  references the OLD ``sem-localize.js`` URL until hard-refreshed
+  — soft reload serves the cached bootstrap → loads stale
+  translations → raw keys like ``today_plan_title`` /
+  ``plan_strip_idle`` appear in cards. HA-TEST 2026-05-31 confirmed.
+  New ``_maybe_emit_upgrade_notification`` helper detects a SEM
+  version change at setup (via a per-entry
+  ``hass.helpers.storage.Store``) and fires a one-shot
+  ``persistent_notification`` instructing users to hard-refresh
+  (Ctrl+Shift+R / Cmd+Shift+R). First install is silent. Failure
+  is non-fatal. 5 new tests pin the contract (first-install,
+  same-version, upgrade, per-version notification-id, per-entry
+  storage key).
+
+2263 tests pass on Python 3.12 (2210 v1.6.12 baseline + 13 #8 +
+14 v1.6.14 + 20 v1.6.15 + 12 v1.6.16 + 2 v1.6.14-hotfix +
+5 v1.6.14-polish = 66 new tests in this release). Manifest at 1.6.14.
 
 ## [1.6.12] — 2026-05-31
 
