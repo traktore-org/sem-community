@@ -740,7 +740,14 @@ class CurrentControlDevice(ControllableDevice):
         """Stop the charging session.
 
         Uses the charger profile to determine the correct stop method (#82).
+
+        Logs which mechanism fired and warns if none did (which means we're
+        relying on ``_set_current(0)`` alone to stop charging — that works
+        on chargers where 0 A == pause, but NOT on KEBA where 0 A is
+        documented as "minimum" and the contactor stays closed without an
+        explicit ``keba.disable`` call (v1.6.3 PROD soak regression).
         """
+        stop_method = None
         try:
             if self.stop_service:
                 domain, service = self.stop_service.split(".", 1)
@@ -748,12 +755,14 @@ class CurrentControlDevice(ControllableDevice):
                 if self.service_device_id:
                     data["device_id"] = self.service_device_id
                 await self.hass.services.async_call(domain, service, data, blocking=True)
+                stop_method = f"stop_service={self.stop_service}"
             elif self.charge_mode_entity and self.charge_mode_stop:
                 await self.hass.services.async_call(
                     "select", "select_option",
                     {"entity_id": self.charge_mode_entity, "option": self.charge_mode_stop},
                     blocking=True,
                 )
+                stop_method = f"charge_mode={self.charge_mode_stop}"
             elif self.start_stop_entity:
                 domain = self.start_stop_entity.split(".")[0]
                 if domain == "switch":
@@ -761,6 +770,7 @@ class CurrentControlDevice(ControllableDevice):
                         "switch", "turn_off",
                         {"entity_id": self.start_stop_entity}, blocking=True,
                     )
+                    stop_method = f"switch.turn_off={self.start_stop_entity}"
                 elif domain == "button":
                     # Stop buttons have different entity_ids than start buttons
                     # The stop entity is typically named *_stop_charging*
@@ -771,18 +781,47 @@ class CurrentControlDevice(ControllableDevice):
                         "button", "press",
                         {"entity_id": stop_entity}, blocking=True,
                     )
+                    stop_method = f"button.press={stop_entity}"
             elif self.charger_service:
                 # KEBA-style fallback
                 domain = self.charger_service.split(".", 1)[0]
                 if self.hass.services.has_service(domain, "disable"):
                     await self.hass.services.async_call(domain, "disable", {}, blocking=True)
+                    stop_method = f"{domain}.disable"
+                else:
+                    _LOGGER.warning(
+                        "stop_session(%s): charger_service=%s configured but "
+                        "%s.disable service is not registered — falling back to "
+                        "_set_current(0) which does NOT stop KEBA-style contactors. "
+                        "Check that the underlying charger integration is loaded.",
+                        self.name, self.charger_service, domain,
+                    )
 
             await self._set_current(0)
             self._session_active = False
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
             self._current_setpoint = 0.0
-            _LOGGER.info("Charging session stopped for %s", self.name)
+
+            if stop_method is None:
+                # No brand-specific stop fired — relying on _set_current(0) alone.
+                # That works on Wallbox / Easee / go-e / OpenEVSE (firmware treats
+                # 0 A as pause) but NOT on KEBA (0 A is "minimum", contactor stays
+                # closed; needs keba.disable). Warning so this case is visible in
+                # PROD logs the next time the bug class re-emerges.
+                _LOGGER.warning(
+                    "stop_session(%s): no brand-specific stop mechanism "
+                    "configured (stop_service=None, charge_mode_entity=None, "
+                    "start_stop_entity=None, charger_service=None). Relying on "
+                    "_set_current(0) alone — confirm your charger firmware "
+                    "treats 0 A as a stop signal, not as a minimum hold.",
+                    self.name,
+                )
+            else:
+                _LOGGER.info(
+                    "Charging session stopped for %s via %s",
+                    self.name, stop_method,
+                )
         except Exception as e:
             _LOGGER.error("Failed to stop session on %s: %s", self.name, e)
 

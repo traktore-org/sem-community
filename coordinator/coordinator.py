@@ -335,6 +335,32 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if pc.get(key) is not None:
                 self.config[key] = pc[key]
 
+    @staticmethod
+    def _apply_per_charger_off_override(global_state: str, per_mode: str) -> str:
+        """Per-charger override of the global solar charging state (v1.6.3 hotfix).
+
+        The global ``charging_state`` is derived from the primary
+        charger's config only. Two correctness gaps in the multi-charger
+        loop need to be closed:
+
+        1. **This charger is off**: force ``SOLAR_IDLE`` so the actuator's
+           TERMINAL branch calls ``stop_session()`` regardless of what
+           the primary charger is doing. Without this, charger[1]=off
+           would never be stopped.
+        2. **Primary is off but this charger isn't**: don't propagate
+           the primary's terminate. Fall back to ``SOLAR_CHARGING_ALLOWED``
+           (warm-waiting) so this charger keeps participating in surplus
+           distribution.
+
+        Pure function — no side effects, no coordinator state read.
+        Directly unit-testable.
+        """
+        if per_mode == "off":
+            return ChargingState.SOLAR_IDLE
+        if global_state == ChargingState.SOLAR_IDLE:
+            return ChargingState.SOLAR_CHARGING_ALLOWED
+        return global_state
+
     def _effective_charge_mode_for(self, charger_cfg: dict) -> str:
         """Resolve the user-intent Charge mode for one charger (#277).
 
@@ -1164,6 +1190,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     charging_context.night_deadline_active = False
                     charging_context.night_tariff_wait = False
                     charging_context.night_deadline_reachable = True
+
+                    # Per-charger off-mode override (v1.6.3 hotfix follow-up).
+                    # The global ``charging_state`` is derived from the primary
+                    # charger only — the multi-charger loop needs to correct it
+                    # per charger so an OFF primary doesn't bleed its terminate
+                    # into the other chargers. See the helper for details.
+                    per_mode = self._effective_charge_mode_for(charger_cfg)
+                    effective_state = self._apply_per_charger_off_override(
+                        charging_state, per_mode
+                    )
                     if charging_state in (
                         ChargingState.NIGHT_CHARGING_ACTIVE,
                         ChargingState.TARIFF_WAITING_FOR_CHEAP,
@@ -2321,10 +2357,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         if legacy_strategy == "idle":
             return EVBudgetStrategy.IDLE
+        if legacy_strategy == "disabled":
+            # User-disabled (charge_mode=off). Same budget shape as IDLE
+            # (zero watts). Distinct upstream so the state machine can
+            # route this to SOLAR_IDLE instead of CHARGING_ALLOWED.
+            return EVBudgetStrategy.IDLE
         if legacy_strategy == "now":
             return EVBudgetStrategy.NOW
-        if legacy_strategy == "min_pv":
-            return EVBudgetStrategy.MIN_PV
+        # ``min_pv`` removed in #305: post-#277 Phase C no charge mode
+        # produces this tuple. ``_determine_charging_strategy`` only
+        # returns solar_only / battery_assist / night_grid / idle; the
+        # canonical ``MIN_PV`` is still reachable via the night_grid
+        # mapping below and is not retired.
         if legacy_strategy == "night_grid":
             # Night charging tops up to the Min floor using grid (#245
             # semantic). Canonical MIN_PV is the right shape — its formula
@@ -2444,7 +2488,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if mode == "always_max":
             return ("now", "Always (max) mode — charge at max immediately")
         if mode == "off":
-            return ("idle", "Charging disabled (mode=off)")
+            # Distinct from generic "idle" (which can be transient — Zone 1
+            # battery priority, solar<200W, target met). "disabled" is the
+            # user's explicit OFF intent and routes the state machine to
+            # SOLAR_IDLE → actuator stop_session() → keba.disable. The
+            # canonical-budget mapper (`_canonical_strategy_from_legacy`)
+            # collapses it back to EVBudgetStrategy.IDLE so the budget is 0.
+            return ("disabled", "Charging disabled (mode=off)")
         if mode == "solar_only":
             # Strict surplus, never grid import. Self-consumption strategy
             # subtracts battery_charge below auto_start_soc so the home
@@ -2501,12 +2551,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``_mode_allows_night_charging`` etc), so the daytime strategy
         # just runs the zone decision tree unchanged.
         #
-        # (Pre-Phase-C the legacy ``auto`` mode wrapped this branch in
-        # ``_auto_mode_strategy`` — forecast-aware self_consumption
-        # when ratio>2. That wrapper is still callable via
-        # ``_auto_mode_strategy`` but no charge mode dispatches to it
-        # in Phase C. v1.7.x or later can opt-in users who actually
-        # want forecast-aware switching, but it's not the default.)
+        # The legacy ``_auto_mode_strategy`` forecast-aware wrapper
+        # (self_consumption when ratio>2) was removed in #305 — no
+        # charge mode dispatched to it post-Phase-C. A future opt-in
+        # ``auto`` mode can re-introduce a forecast switcher; resurrect
+        # via git history rather than carrying dead code.
         # No-op — explicit fall-through.
 
         # No meaningful solar → wait
@@ -2608,45 +2657,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         available = max(0, available)
         zone = "Z4-redirect" if power.battery_soc >= auto_start_soc else f"Z{self._get_zone(power.battery_soc)}"
         return ("solar_only", f"self_consumption ({zone}): surplus={available:.0f}W, solar={power.solar_power:.0f}W")
-
-    def _auto_mode_strategy(self, power, energy, remaining_need: float) -> tuple:
-        """Auto mode: forecast-aware switching between self_consumption and pv (#67).
-
-        ratio = remaining_solar / remaining_ev_need
-        ratio > 2.0 → self_consumption (plenty of sun, no rush)
-        1.0-2.0     → pv with cap (tight, charge when available)
-        < 1.0       → pv aggressive (not enough, battery assist)
-        """
-        forecast = self._cycle_forecast
-        remaining_solar = 0
-        if forecast and forecast.available:
-            remaining_solar = forecast.forecast_remaining_today_kwh
-            try:
-                remaining_solar = self._forecast_tracker.apply_dampening(remaining_solar)
-            except (ValueError, AttributeError):
-                pass
-
-        if remaining_need < 0.5:
-            # Floor (Min) met — no forecast-based pacing needed. Solar surplus
-            # still continues up to the Max ceiling via the surplus path (#245).
-            return ("idle", "auto: min target met, solar continues to ceiling")
-
-        ratio = remaining_solar / remaining_need if remaining_need > 0 else 99
-
-        if ratio > 2.0:
-            # Plenty of sun → self_consumption
-            result = self._self_consumption_strategy(power, energy)
-            return (result[0], f"auto (ratio={ratio:.1f}→self_consumption): {result[1]}")
-        elif not forecast or not forecast.available:
-            # No forecast → default pv behavior (fall through to zone logic below)
-            pass
-        else:
-            # Tight or insufficient → pv with zones (fall through)
-            _LOGGER.debug("auto: ratio=%.1f → pv mode (zones active)", ratio)
-
-        # Fall through to normal zone-based pv logic
-        # (return None so caller continues to zone logic)
-        return None  # Signal: continue to zone logic
 
     def _raw_zone(self, soc: float, auto_start: float, buffer: float, priority: float) -> int:
         """Map SOC to a zone number using raw (un-debounced) thresholds."""
@@ -3196,6 +3206,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             })
         return payload
 
+    def _update_per_charger_detector_energy(
+        self, cid: str, charger_power: float, interval_hours: float,
+    ) -> None:
+        """Feed the per-charger taper detector its own energy increment (#318).
+
+        Mirrors what ``self._ev_taper_detector.update_energy(...)`` does
+        for the primary detector — but per-charger, so each charger's
+        ``_energy_since_full`` tracks its own session. Without this,
+        every per-charger detector stays at 0 → ``get_virtual_soc()``
+        returns the same default (100 %) for every charger → dashboard
+        shows identical SOC across the fleet.
+
+        Uses each charger's own ``ev_total_energy_sensor`` HW counter
+        when configured (drift-free); falls back to incremental-only
+        tracking when not (same behaviour the primary detector had for
+        installs without a hardware counter).
+
+        No-op when ``charger_power <= 0`` (idle) — matches the legacy
+        per-charger ``update()`` gating at the call site.
+        """
+        if charger_power <= 0:
+            return
+        detector = self._ev_taper_detectors.get(cid)
+        if detector is None:
+            return
+        per_charger_cfg = next(
+            (c for c in (self.config.get("ev_chargers") or [])
+             if c.get("id") == cid), {}
+        ) or {}
+        per_increment = charger_power * interval_hours / 1000
+        per_hw_total = None
+        per_hw_entity = per_charger_cfg.get("ev_total_energy_sensor")
+        if per_hw_entity:
+            hw_state = self.hass.states.get(per_hw_entity)
+            if hw_state and hw_state.state not in ("unknown", "unavailable"):
+                try:
+                    per_hw_total = float(hw_state.state)
+                except (ValueError, TypeError):
+                    pass
+        detector.update_energy(per_increment, per_hw_total)
+
     def _update_ev_intelligence(
         self, power: PowerReadings, energy,
     ) -> "EVIntelligenceData":
@@ -3279,6 +3330,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._ev_taper_detectors[cid].update(
                         charger_power, charger_setpoint, charger_connected, now,
                     )
+
+                # Per-charger energy update (#318). Without this every
+                # per-charger detector keeps ``_energy_since_full=0`` so
+                # the SOC estimator falls through to the same default for
+                # every charger — symptom: "Charger 1 and Charger 2 show
+                # identical SOC, both rise when only one is charging"
+                # (RienduPre, 2026-05-31 multi-charger Wallbox + Growatt).
+                # The primary detector's update_energy below at line ~3326
+                # was only feeding the global ``self._ev_taper_detector``,
+                # not the per-charger detectors in ``self._ev_taper_detectors``.
+                self._update_per_charger_detector_energy(
+                    cid, charger_power, interval_hours,
+                )
 
             # Primary charger's detector drives SOC/skip (sync with main detector)
             primary_id = next(iter(self._ev_devices))

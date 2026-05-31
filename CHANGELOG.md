@@ -5,6 +5,98 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.6] — 2026-05-31
+
+Same-day hotfix for v1.6.5 — the per-charger power read at
+``_this_charger_power`` did a unit-naive ``float(state.state)`` and
+compared a kW value to a 500 W threshold. KEBA's native
+``sensor.keba_p30_charging_power`` reports in kW; the comparison
+``4.14 < 500`` was always False so the v1.6.5 off-mode stop never
+fired on KEBA, even when the firmware self-resumed. Confirmed live
+on PROD 2026-05-31 15:26 — KEBA self-resumed and ran uncontrolled
+for ~2 min until a manual ``keba.disable`` stopped it.
+
+### Fixed
+
+- **Unit-aware per-charger power reading** — ``_this_charger_power``
+  now reads the sensor's ``unit_of_measurement`` attribute and
+  converts kW → W before the 500 W threshold check. Tests pin both
+  KEBA-style (kW) and Wallbox-style (W) sensors so the next charger
+  integration doesn't introduce the same trap.
+
+- **Per-charger SOC isolation in multi-charger setups** (#318) —
+  ``_update_ev_intelligence`` was only calling ``update_energy()`` on
+  the PRIMARY taper detector at line ~3326; every per-charger detector
+  in ``_ev_taper_detectors`` stayed at ``_energy_since_full=0``,
+  giving every charger the same default SOC. Confirmed by @RienduPre
+  on a multi-charger Wallbox Pulsar + Growatt setup. Fix: also call
+  ``update_energy(per_increment, per_hw_total)`` inside the
+  per-charger loop, using each charger's own ``ev_total_energy_sensor``
+  hardware counter for drift-free tracking when configured.
+
+## [1.6.5] — 2026-05-31
+
+Same-day follow-up to v1.6.4. Closes the second half of the off-mode
+problem: KEBA P30 self-resumes from a stored setpoint on plug-in events
+or after internal firmware events, completely independent of SEM. The
+v1.6.4 fix only stopped SEM-owned sessions; if SEM never started the
+session (because mode was already off when the EV plugged in, or KEBA
+restarted on its own), the contactor stayed closed and KEBA drew power
+SEM never knew about.
+
+### Fixed
+
+- **off-mode now stops charger-initiated charging** (#315) — the
+  actuator's terminal-state branch in ``ev_control.py`` now also calls
+  ``stop_session()`` when ``charging_strategy == "disabled"`` and
+  ``ev_power > 500W``, regardless of ``ev._session_active``. Every
+  coordinator cycle (10 s) re-asserts the per-brand disable (e.g.
+  ``keba.disable``) until ev_power drops below the 500 W threshold.
+  Idempotent — safe to call on an already-disabled charger.
+
+  Threshold rationale: KEBA's handshake idle draws 100–200 W
+  continuously while plugged in (control-pilot duty cycle). Real
+  charging starts at 4140 W minimum (3 phases × 6 A × 230 V). The
+  500 W cutoff cleanly separates "actually pulling current" from
+  "plugged in, parked" so SEM doesn't spam stop_session every cycle
+  while the car is idle at the charger.
+
+## [1.6.4] — 2026-05-31
+
+Hotfix on top of v1.6.3 plus the cleanup follow-ups #304/#305 that
+shipped to develop the same day.
+
+### Fixed
+
+- **`charge_mode=off` did not stop EV charging** — surfaced during the
+  v1.6.3 PROD soak. Setting the per-charger Charge mode to ``Off`` while
+  the EV was actively charging left the KEBA contactor closed; SEM
+  reported "Charging allowed" with budget 0 but the charger kept drawing
+  power, requiring a manual ``keba.disable`` call to stop. The state
+  machine fell through to ``SOLAR_CHARGING_ALLOWED`` instead of a
+  terminal stop, so ``stop_session()`` was never invoked.
+
+  Fix: introduce a distinct ``"disabled"`` strategy string for explicit-off
+  (separate from transient ``"idle"``). The state machine routes it to
+  ``SOLAR_IDLE``, which the actuator treats as terminal → calls
+  ``stop_session()`` → ``keba.disable``. The canonical EV budget enum
+  collapses ``"disabled"`` back to ``IDLE`` (same 0 W shape, distinct
+  upstream).
+
+  Multi-charger correctness: a static helper
+  ``_apply_per_charger_off_override`` runs in the dispatch loop so a
+  primary charger's ``off`` cannot bleed its terminate into siblings
+  with active ``solar_only``/``min_plus_solar`` modes.
+
+### Cleanup (from develop merge)
+
+- **#304** — ``select.py`` orphan removal now uses a registry-key sweep
+  matching ``switch.py``. Catches stale entries from previously-removed
+  chargers (rather than only those currently in the config).
+- **#305** — drop dead ``_auto_mode_strategy`` and the unreachable
+  ``min_pv`` branch in ``_canonical_strategy_from_legacy``. Both were
+  Phase C leftovers documented as deferred.
+
 ## [1.6.3] — 2026-05-30
 
 The **EV charge UX consolidation** release (#277). Replaces the

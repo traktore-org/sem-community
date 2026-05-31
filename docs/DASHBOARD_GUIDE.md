@@ -43,14 +43,34 @@ The main at-a-glance view with real-time power flows.
 | Card | Description |
 |------|-------------|
 | **Status Chips** | Solar power, battery SOC, autarky rate, EV status, optimization score |
+| **Today's Plan** | Forward-looking timeline of today's solar, tariff, night-window, and EV events — see [Today's Plan rows](#todays-plan-rows) for the row-by-row breakdown |
 | **System Diagram** | Illustrated SVG with detailed component drawings (solar panels, house, battery, grid pole, EV charger), K-Flow-inspired spark flow animations, time-based sun arc, clickable nodes, individual device list (desktop) |
 | **Solar Summary** | Production metrics with animated glow ring, yield, forecast, self-use, costs, savings |
 | **7-Day Chart** | Bar chart showing daily solar, home, and grid import over the last week |
 | **Smart Recommendation** | AI-powered energy tip based on forecast, pricing, and current conditions |
 | **Peak Load + Energy Tip** | Current 15-min peak vs limit, actionable energy tip |
-| **Quick Controls** | Smart Night Charging and observer mode toggles |
+| **Quick Controls** | Observer mode toggle. (`Smart Night Charging` and `Night Charging` switches were removed in v1.6.3 — their intent now lives in the per-charger [Charge mode selector](#charging-mode-selector-v163) on the EV tab.) |
 | **EV Status** | Conditional — shows charging state, current, power, session progress when EV is connected |
 | **Weather** | Live clock, temperature, weather conditions, 5-day forecast with temperature bars |
+
+#### Today's Plan rows
+
+Today's Plan is the forward-looking timeline at the top of the Home tab. It collapses solar, tariff, night-window, EV-session, and home-battery events into one chronological list so you can see at a glance what SEM is planning between now and tomorrow morning. Rows appear conditionally based on what's active — an empty plan is normal during the day for a configuration without dynamic tariff or active EV session.
+
+| Row | Meaning | When it appears |
+|---|---|---|
+| **Now** | Anchor row for the current moment. Everything below this is "from here." | Always |
+| **Solar peak — X kWh expected today** | Forecast solar peak time + total kWh expected | When a solar forecast is available (Solcast or HA's Energy dashboard) |
+| **Cheap hours open** / **Cheap hours end** | Boundaries of the cheapest contiguous price window | Dynamic tariff configured |
+| **Expensive hours start** / **end** | Boundaries of the price-peak window | Dynamic tariff configured, peak window is in the future |
+| **Night charging window opens** | Time SEM enters night mode (your `Night earliest start` or the dynamic dusk window). Until this opens, EV night charging stays gated off regardless of mode. | Always — even when no EV is connected, so you can see the window |
+| **EV charging starts** with subtitle `gentle peak-managed ramp` *or* `tariff-optimized, waiting for cheap window` | Time SEM expects the EV to start pulling. Subtitle = how: gentle ramp within peak limit, or wait for cheap-tariff window before starting. | EV connected, mode allows night/grid charging |
+| **Min reached (X kWh)** | Predicted ETA for hitting the Min target on the charger — derived from planned ramp rate, your Min current, peak headroom, and home-load forecast. If later than your `Charge by` deadline, SEM forces the rate up automatically and this row turns red. | EV session is planned or in progress |
+| **EV reaches target at HH:MM** | Live ETA for hitting the Max target during an active session (v1.6.3, #298) | EV is actively charging |
+| **Battery full at HH:MM** | Live ETA for the home battery reaching 100% SOC (v1.6.3, #298) | Home battery is charging at a meaningful rate (\|power\| > 200 W) |
+| **Battery reaches floor at HH:MM** | Live ETA for the home battery reaching its floor SOC (v1.6.3, #298) | Home battery is discharging at a meaningful rate |
+| **Charge-by deadline** | Your configured `Charge by` time. Hard end of the night plan — earlier than the window's natural end means SEM forces the ramp to guarantee Min by then (even if it briefly exceeds the peak limit). | EV has a deadline set |
+| **Night charging window ends** | End of the night-mode window | Always (paired with `opens`) |
 
 ### Energy
 
@@ -95,20 +115,23 @@ EV charging session tracking and statistics.
 | **Charging Status** | Current mode, power, session energy, solar share |
 | **Session Gauges** | Daily energy vs target, solar share percentage |
 | **Charging Power Chart** | 24h EV power curve |
-| **Charging Settings** | Charge target range (Min ↔ Max), Overnight grid charging, Cheapest hours (tariff), Charge by deadline picker, Set as default |
+| **Charging Settings** | Charge target range (Min ↔ Max), [Charge mode selector](#charging-mode-selector-v163), Charge by deadline picker, Set as default |
 | **EV Intelligence** | Taper trend visualization, virtual SOC estimate, charge skip status & reasoning, battery health indicator |
 | **Lifetime Statistics** | Total energy, cost, sessions, solar share over all time |
 
-#### Charging setup variants (1.5.16+)
+#### Charging mode selector (v1.6.3)
 
-The Charge Target panel renders differently based on which controls are enabled. Three common configurations:
+The per-charger `Charge mode` selector replaces the v1.6.x toggle-soup (`Overnight grid charging`, `Smart night charging`, `Cheapest hours`) with one named intent control. Five modes:
 
-| Default — solar-first with grid fallback | Tariff-optimized — defer to cheap hours | Pure solar — overnight grid off |
-|:--:|:--:|:--:|
-| ![Default](images/sem_ev_setup_default.png) | ![Tariff](images/sem_ev_setup_tariff.png) | ![Night off](images/sem_ev_setup_night_off.png) |
-| Overnight grid charging ON, Cheapest hours OFF. Standard peak-managed night top-up to hit Min by 07:00. | Overnight grid charging ON, Cheapest hours ON. Defers night charging to the cheapest contiguous window in the upcoming 24h; Min still guaranteed by the deadline. | Overnight grid charging OFF. Solar-only — never pulls grid for the EV. The Cheapest hours sub-row is hidden because tariff timing is a refinement of grid charging. |
+| Mode | Behaviour | Typical user |
+|---|---|---|
+| **Solar only** | Surplus only — never imports from grid | Solar maximalist |
+| **Solar + cheapest hours** | Surplus by day, grid only in the cheapest contiguous tariff window at night (hidden if no dynamic tariff is configured) | Dynamic-tariff users |
+| **Min + Solar** (default) | Guarantee Min by deadline (from night top-up), solar adds up to Max. Zone-adaptive during the day. | Daily commuter |
+| **Always (max)** | Charge at max regardless of source | "Just charge the car" / strict legacy `minpv` |
+| **Off** | No charging — SEM monitors but issues no commands | Disabled |
 
-For the full decision matrix (mode × time-of-day × switches × outcomes), see **[EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md)**.
+A help line under the selector explains what the currently-selected mode does. For the full decision matrix (mode × time-of-day × outcomes) and the v4 → v7 migration mapping, see **[EV_CHARGING_LOGIC.md](EV_CHARGING_LOGIC.md)**.
 
 ### Control
 
@@ -118,7 +141,7 @@ All settings and device management in one place.
 
 | Card | Description |
 |------|-------------|
-| **EV Charging** | Night charging toggle, smart night charging, target, current settings |
+| **EV Charging** | Per-charger [Charge mode](#charging-mode-selector-v163) selector, target range, current settings (the standalone `night_charging` and `smart_night_charging` toggles were removed in v1.6.3 — their intent is now carried by the mode) |
 | **Surplus Control** | Surplus available indicator, regulation offset |
 | **Battery Management** | Priority/minimum/resume SOC, capacity |
 | **Heat Pump & Hot Water** | Boost offset, hot water max temperature |

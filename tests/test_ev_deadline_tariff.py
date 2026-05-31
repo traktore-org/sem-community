@@ -528,3 +528,225 @@ class TestDeadlineFloorApplied:
         await coord._execute_ev_control(
             ChargingState.TARIFF_WAITING_FOR_CHEAP, power, MagicMock(), ctx)
         dev.stop_session.assert_awaited()
+
+
+# ---------------------------------------------------------------------------
+# #315 — off-mode terminal-state must also stop self-charging chargers (KEBA)
+# ---------------------------------------------------------------------------
+class TestOffModeTerminatesActiveCharge:
+    """When ``charge_mode=off`` and the charger is physically drawing power
+    that SEM doesn't own (typical for KEBA P30 which self-resumes from a
+    stored setpoint), the actuator's terminal-state branch must still call
+    ``stop_session()`` so the per-brand disable fires every cycle until the
+    contactor opens. Pre-#315 fix the terminal block only stopped if
+    ``ev._session_active`` was True — which it never is when KEBA self-
+    started without SEM mediation.
+    """
+
+    @pytest.mark.asyncio
+    async def test_off_with_self_charging_keba_calls_stop_session(self):
+        """KEBA drawing 4140 W on plug-in + mode=off → stop_session called."""
+        coord = _build_coordinator()
+        # session_active=False is the load-bearing precondition — SEM never
+        # owned the session because KEBA self-started.
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled",
+                              charging_strategy_reason="Charging disabled (mode=off)")
+        power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_off_with_handshake_only_no_stop_call(self):
+        """KEBA at handshake idle (110 W) doesn't trigger the override —
+        the 100 W threshold matches the actuator's existing 'actually
+        charging vs handshake' cutoff so we don't spam stop_session every
+        cycle while the EV is plugged in but parked."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled",
+                              charging_strategy_reason="Charging disabled (mode=off)")
+        power = PowerReadings(ev_connected=True, ev_power=110.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_off_with_inactive_session_and_no_ev_power_skips(self):
+        """EV unplugged or fully off → terminal branch doesn't call stop_session
+        (it was never started). Sanity check the override doesn't fire
+        when there's nothing to stop."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=False, charging_strategy="disabled")
+        power = PowerReadings(ev_connected=False, ev_power=0.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_session_active_path_still_works(self):
+        """The original SEM-owned session → stop_session path is unchanged.
+        Pinned so the new override doesn't accidentally shadow it."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=True, current_setpoint=10)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled")
+        power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_idle_strategy_does_not_trigger_override(self):
+        """Generic ``"idle"`` (Zone 1, solar<200W, target met) must NOT
+        trigger the override — only the explicit-off ``"disabled"`` does.
+        Pre-refinement check: prevents the #305 conflation from creeping
+        back in via the actuator path."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="idle")
+        power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_multi_charger_uses_per_charger_power(self):
+        """Multi-charger reviewer BLOCK: ``power.ev_power`` is the global
+        sum across all chargers (sensor_reader.py:426-434). Charger[0]=off
+        idle, charger[1]=solar_only charging at 4 kW: pre-fix the global
+        sum 4000 > 500 would trigger stop_session on charger[0]'s idle
+        KEBA every cycle. The fix reads THIS charger's individual
+        ``ev_charging_power_sensor`` from HA state instead. This test
+        pins that behaviour by giving charger[0]=idle a per-charger
+        sensor value of 0 while the global ``power.ev_power`` is 4000.
+        """
+        coord = _build_coordinator()
+        # Two chargers in config — charger[0]=off, charger[1]=solar_only.
+        coord.config["ev_chargers"] = [
+            {"id": "keba", "charge_mode": "off",
+             "ev_charging_power_sensor": "sensor.keba_p30_charging_power"},
+            {"id": "wallbox", "charge_mode": "solar_only",
+             "ev_charging_power_sensor": "sensor.wallbox_charging_power"},
+        ]
+        dev = _make_device(device_id="keba", session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+
+        # Mock HA states: THIS charger (keba) at 0W, OTHER (wallbox) at 4kW.
+        def states_get(eid):
+            sb = MagicMock()
+            sb.state = "0" if eid == "sensor.keba_p30_charging_power" else "4140"
+            return sb
+        coord.hass.states.get = states_get
+
+        # Global sum is 4140 (would trip the > 500 check with old code).
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled")
+        power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        # Per-charger 0W → not drawing → no spurious stop on idle charger.
+        dev.stop_session.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_kw_unit_conversion_from_native_charger_sensor(self):
+        """KEBA's native ``sensor.keba_p30_charging_power`` reports in
+        kW. The first cut of ``_this_charger_power`` did a raw
+        ``float(state.state)`` and compared 4.14 (kW) to the 500 W
+        threshold — silently failed every cycle. Confirmed on PROD
+        2026-05-31 15:26 during the v1.6.5 soak.
+
+        This test pins unit-aware reading: a state value of "4.14" with
+        ``unit_of_measurement="kW"`` is converted to 4140 W BEFORE the
+        threshold check, so the override fires correctly.
+        """
+        coord = _build_coordinator()
+        coord.config["ev_chargers"] = [{
+            "id": "keba", "charge_mode": "off",
+            "ev_charging_power_sensor": "sensor.keba_p30_charging_power",
+        }]
+        dev = _make_device(device_id="keba", session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+
+        def states_get(eid):
+            if eid == "sensor.keba_p30_charging_power":
+                s = MagicMock()
+                s.state = "4.14"  # KEBA reports kW
+                s.attributes = {"unit_of_measurement": "kW"}
+                return s
+            return None
+        coord.hass.states.get = states_get
+
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled")
+        # ``power.ev_power`` is the fallback (already in W); doesn't matter
+        # here because the per-charger sensor read takes precedence.
+        power = PowerReadings(ev_connected=True, ev_power=0.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_w_unit_passes_through(self):
+        """A charger that reports in W (most non-KEBA) is read raw."""
+        coord = _build_coordinator()
+        coord.config["ev_chargers"] = [{
+            "id": "wallbox", "charge_mode": "off",
+            "ev_charging_power_sensor": "sensor.wallbox_charging_power",
+        }]
+        dev = _make_device(device_id="wallbox", session_active=False)
+        coord._ev_device = dev
+
+        def states_get(eid):
+            if eid == "sensor.wallbox_charging_power":
+                s = MagicMock()
+                s.state = "4140"  # Wallbox reports W
+                s.attributes = {"unit_of_measurement": "W"}
+                return s
+            return None
+        coord.hass.states.get = states_get
+
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled")
+        power = PowerReadings(ev_connected=True, ev_power=0.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_log_suppression_then_reset(self):
+        """Per-charger ``_off_mode_stop_logged_for`` debounces the WARNING.
+
+        Cycle 1: KEBA self-resumes, WARNING fires, flag set to device_id.
+        Cycle 2: KEBA still resuming, stop_session called again but
+                 WARNING is suppressed (flag matches device_id).
+        Cycle 3: ev_power drops below threshold, flag cleared so the
+                 next episode logs loudly again.
+        """
+        coord = _build_coordinator()
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="disabled")
+
+        # Cycle 1: self-resume.
+        power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        assert coord._off_mode_stop_logged_for == "keba"
+
+        # Cycle 2: still resuming. stop_session called again, flag stays.
+        dev.stop_session.reset_mock()
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()  # still called every cycle
+        assert coord._off_mode_stop_logged_for == "keba"  # but flag prevents log
+
+        # Cycle 3: KEBA finally stopped (ev_power below threshold).
+        power = PowerReadings(ev_connected=True, ev_power=110.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        # Flag cleared so the next self-resume logs loudly again.
+        assert coord._off_mode_stop_logged_for is None
