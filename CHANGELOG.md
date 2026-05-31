@@ -5,6 +5,40 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.11] — 2026-05-31
+
+Diagnostics improvement + doc polish closing the senior-engineer
+review NITs on the v1.6.7 → v1.6.10 multi-charger cleanup arc. No
+behaviour change.
+
+### Added
+
+- **Recent SEM log lines in the Copy diagnostics dump** —
+  ``diagnostics.py::_get_recent_sem_logs`` reads the last 2 MB of
+  ``home-assistant.log``, filters for
+  ``solar_energy_management`` mentions, and includes up to 80 matching
+  lines as ``recent_logs`` in the diagnostics output. Bug reports now
+  come pre-loaded with the surrounding log context so we don't have
+  to ask reporters for a separate ``ha core logs`` dump. Supervisor
+  installs (no flat log file, journald-based) get a one-line
+  placeholder explaining how to attach logs manually.
+
+### Docs
+
+- ``CLAUDE.md`` — new "Multi-charger correctness" pointer to
+  [``docs/MULTI_CHARGER.md``](docs/MULTI_CHARGER.md) so future AI
+  sessions can find the invariant doc without needing to grep.
+- ``docs/MULTI_CHARGER.md`` — updated the roadmap to reflect what
+  **actually shipped** vs what was planned. Specifically: the original
+  v1.6.7 design proposed migrating ``effective_state``,
+  ``this_power_w``, ``night_plan`` onto ``PerChargerContext`` in
+  v1.6.8/v1.6.9 — none of those landed. The current dataclass has
+  ``cid`` / ``ev_dev`` / ``charger_cfg`` / ``budget_w`` /
+  ``skipped_for_night`` only. Per-charger flow **sensors** (data is on
+  ``PowerFlows.per_charger`` but no top-level HA entities yet) were
+  also descoped. Both are deferred to v1.7+ in the roadmap so the doc
+  no longer oversells the abstraction.
+
 ## [1.6.10] — 2026-05-31
 
 Code-quality cleanup release. Closes the three follow-up issues filed
