@@ -90,31 +90,6 @@ async def async_setup_entry(
     except Exception as e:
         _LOGGER.debug("Global select removal skipped: %s", e)
 
-    # #277 Phase C — drop the per-charger ``ev_charging_mode`` selects
-    # the new ``charge_mode`` selector replaces. The v6→v7 migration
-    # already cleared the underlying config key; this purges the
-    # orphaned entity rows from the registry so the dashboard doesn't
-    # leak stale "EV Charging Mode" labels.
-    try:
-        registry = er.async_get(hass)
-        full_config_legacy = {**entry.data, **entry.options}
-        for charger_cfg in full_config_legacy.get("ev_chargers") or []:
-            cid = (
-                charger_cfg.get("id", "ev_charger")
-                if isinstance(charger_cfg, dict) else "ev_charger"
-            )
-            legacy_uid = f"{entry.entry_id}_charger_{cid}_ev_charging_mode"
-            legacy_eid = registry.async_get_entity_id("select", DOMAIN, legacy_uid)
-            if legacy_eid:
-                registry.async_remove(legacy_eid)
-                _LOGGER.info(
-                    "Removed legacy per-charger select %s "
-                    "(replaced by charge_mode selector, #277 Phase C)",
-                    legacy_eid,
-                )
-    except Exception as e:
-        _LOGGER.debug("Per-charger legacy select cleanup skipped: %s", e)
-
     entities = [
         SEMSelectEntity(coordinator, entry, description)
         for description in SELECT_TYPES
@@ -123,13 +98,17 @@ async def async_setup_entry(
     # Per-charger selects (#235, #255): target-type (kWh / SOC %) + charging mode.
     full_config = {**entry.data, **entry.options}
     ev_chargers = full_config.get("ev_chargers", [])
+    per_charger_keys: set[str] = set()
     if len(ev_chargers) >= 1:
         for charger_cfg in ev_chargers:
             cid = charger_cfg.get("id", "ev_charger")
+            target_key = f"charger_{cid}_ev_target_type"
+            mode_key = f"charger_{cid}_charge_mode"
+            per_charger_keys.update({target_key, mode_key})
             entities.append(SEMPerChargerSelect(
                 coordinator,
                 SelectEntityDescription(
-                    key=f"charger_{cid}_ev_target_type",
+                    key=target_key,
                     options=list(EV_TARGET_TYPES.keys()),
                     entity_category=EntityCategory.CONFIG,
                 ),
@@ -139,13 +118,12 @@ async def async_setup_entry(
             # The legacy ``ev_charging_mode`` per-charger select was
             # retired in #277 Phase C — the new ``charge_mode``
             # selector (registered below) is the only intent knob now.
-            # The entity registry's stale-cleanup at the top of this
-            # function removes orphaned ``charger_<id>_ev_charging_mode``
-            # entries on the next setup.
+            # The stale-key cleanup at the bottom of this function
+            # purges orphaned ``charger_<id>_ev_charging_mode`` rows.
             entities.append(SEMPerChargerSelect(
                 coordinator,
                 SelectEntityDescription(
-                    key=f"charger_{cid}_charge_mode",
+                    key=mode_key,
                     options=list(EV_CHARGE_MODES.keys()),
                     entity_category=EntityCategory.CONFIG,
                 ),
@@ -154,6 +132,34 @@ async def async_setup_entry(
             ))
 
     async_add_entities(entities)
+
+    # Stale-key cleanup (#304): scan the registry instead of iterating
+    # the current config so entries left behind by previously-removed
+    # chargers are caught. The per-config loop above only knew about
+    # currently-attached chargers, so a charger that was renamed or
+    # removed left its ``charger_<id>_ev_charging_mode`` (and any
+    # other retired per-charger select) in the registry indefinitely.
+    # Mirrors the pattern in ``switch.py`` (#277 Phase C cleanup).
+    try:
+        registry = er.async_get(hass)
+        valid_keys = {d.key for d in SELECT_TYPES} | per_charger_keys
+        for entity_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+            if entity_entry.domain != "select":
+                continue
+            unique_id = entity_entry.unique_id or ""
+            key: str | None = None
+            if unique_id.startswith("sem_"):
+                key = unique_id[4:]
+            elif unique_id.startswith(f"{entry.entry_id}_"):
+                key = unique_id[len(entry.entry_id) + 1:]
+            if key and key not in valid_keys:
+                _LOGGER.info(
+                    "Removing stale select entity %s (key '%s' no longer registered)",
+                    entity_entry.entity_id, key,
+                )
+                registry.async_remove(entity_entry.entity_id)
+    except Exception as e:
+        _LOGGER.debug("Stale select cleanup skipped: %s", e)
 
 
 class SEMSelectEntity(CoordinatorEntity, SelectEntity):
