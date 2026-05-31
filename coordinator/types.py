@@ -35,6 +35,15 @@ class PowerReadings:
     ev_power: float = 0.0
     home_consumption_power: float = 0.0
 
+    # Per-charger EV power (v1.6.9). Populated by ``sensor_reader`` for
+    # multi-charger setups (``len(ev_chargers) > 1``); each key is a
+    # charger id and the value is that charger's draw in watts. Sum of
+    # values equals ``ev_power``. Empty dict in single-charger setups —
+    # downstream code must fall back to ``ev_power`` when the dict is
+    # empty (see ``flow_calculator.calculate_power_flows``). Drives the
+    # per-charger flow attribution that closes the #316 family.
+    ev_power_per_charger: "Dict[str, float]" = field(default_factory=dict)
+
     # Derived values
     grid_import_power: float = 0.0
     grid_export_power: float = 0.0
@@ -74,6 +83,25 @@ class PowerReadings:
 
 
 @dataclass
+class ChargerFlows:
+    """Per-charger slice of the EV power flow attribution (v1.6.9).
+
+    Mirrors the EV-relevant subset of :class:`PowerFlows` for ONE
+    charger. The fleet-level ``PowerFlows.solar_to_ev`` (etc.) is the
+    sum over all chargers' values here — invariant pinned in the
+    scenario tests.
+
+    Closes the #316 / #284 family of multi-charger complaints
+    ("charger 2 looks like it's drawing from grid even in solar_only
+    mode") by exposing per-charger sourcing the dashboard can render
+    instead of attributing the fleet proportional split equally.
+    """
+    solar_to_ev: float = 0.0
+    grid_to_ev: float = 0.0
+    battery_to_ev: float = 0.0
+
+
+@dataclass
 class PowerFlows:
     """Power flow distribution between sources and destinations."""
     # Solar flows (W)
@@ -90,6 +118,15 @@ class PowerFlows:
     # Battery flows (W)
     battery_to_home: float = 0.0
     battery_to_ev: float = 0.0
+
+    # Per-charger EV flow split (v1.6.9). Populated by
+    # ``flow_calculator.calculate_power_flows`` when ``PowerReadings``
+    # provides ``ev_power_per_charger``. Sum invariant:
+    # ``sum(c.solar_to_ev for c in per_charger.values()) == solar_to_ev``
+    # (similarly for grid_to_ev and battery_to_ev). Empty dict in
+    # single-charger setups — backward-compat for downstream readers
+    # that only know about the fleet-level fields.
+    per_charger: "Dict[str, ChargerFlows]" = field(default_factory=dict)
 
 
 @dataclass
