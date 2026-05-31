@@ -5,19 +5,35 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.14] — 2026-05-31
+## [Unreleased] — v1.6.14 candidate
 
-PerChargerContext field migration. Closes the two abstraction leaks
-the senior reviewer flagged on the v1.6.7→v1.6.10 arc that were
-previously deferred to v1.7+ (the user pulled them back into v1.6.x
-under the "no v1.7 until every multi-charger follow-up is closed"
-rule).
+Multi-charger debt closeout. Bundles four pieces of work into one
+release (the maintainer-set rule "no v1.7 until every multi-charger
+follow-up is closed" pulled deferred ``v1.7+`` items back into
+v1.6.x; this is them, packaged as one release rather than four
+separate HACS bumps).
+
+### Fixed
+
+- **Surplus tracker jump-from-0 spike (#8)** —
+  ``_apply_ramp_limit`` used to short-circuit on ``current < 1`` and
+  return ``target_current`` directly, so a cold-start cycle handed
+  KEBA a 14 A command from 0 A. KEBA's ~30 s physical actuator lag
+  then caused a ~4.4 kW grid-import overshoot during the ramp
+  (confirmed live on PROD 2026-05-31 at 10:43). Cold start now hands
+  KEBA ``min_current`` (typically 6 A ≈ 4140 W on 3-phase EU);
+  subsequent cycles climb via the existing ``±ramp_rate`` clamp at
+  the user-configured ``ev_ramp_rate_amps`` (default 2 A/cycle, so
+  target reached in ~4 cycles for a 14 A request). The stop-fast
+  branch is preserved: ``target_current < 1`` still returns 0
+  immediately so explicit-off / disable stays snappy. 13 new unit
+  tests in ``tests/test_ramp_limit_8.py`` pin every branch.
 
 ### Changed
 
-- **``effective_state`` and ``charger_name`` now live on
-  ``PerChargerContext``**, not in a parallel
-  ``_effective_states_per_charger`` dict written by the loop body.
+- **``effective_state`` and ``charger_name`` migrated onto
+  ``PerChargerContext``** instead of writing the parallel
+  ``_effective_states_per_charger`` dict from inside the loop body.
   The loop body assigns ``pcc.effective_state = …``; ``__exit__``
   persists ``(state, name)`` into the coordinator's dict so the
   post-loop ``_send_notifications`` dispatcher continues reading
@@ -45,61 +61,28 @@ rule).
 - ``# FLEET-READ:`` annotation on the documented multi-charger
   fallback in ``_this_charger_power`` (only reached when a charger
   config omits ``ev_charging_power_sensor`` — rare).
-- 14 new tests:
-  - ``tests/test_per_charger_context.py``: 4 effective_state tests,
-    3 this_power_w tests, 2 current-pcc-pointer tests.
-  - ``tests/test_this_charger_power_cache.py``: 5 tests pinning the
-    cache HIT, three MISS variants (different ev, no pcc, None
-    this_power_w), and the legacy kW→W conversion path.
+- 27 new tests across two files (13 ramp-limit + 14 pcc-field):
+  - ``tests/test_ramp_limit_8.py``: cold-start, near-zero,
+    steady-state ramp, stop-fast, custom ``min_current``,
+    end-to-end multi-cycle climb.
+  - ``tests/test_per_charger_context.py``: effective_state
+    persistence, this_power_w precompute, current-pcc-pointer
+    lifecycle.
+  - ``tests/test_this_charger_power_cache.py``: cache HIT, three
+    MISS variants, kW→W conversion regression from #315.
 
 ### Why
 
-Senior reviewer on the v1.6.7→v1.6.10 arc flagged:
-
-> ``effective_state`` — currently stored in the parallel coordinator
-> dict ``_effective_states_per_charger`` and dispatched in
-> ``_send_notifications``. Works correctly; not on the context object.
->
-> ``this_power_w`` — currently cached as a local variable per method
-> inside ``coordinator/ev_control.py``. Works correctly; not on the
-> context object.
-
+Senior reviewer on the v1.6.7→v1.6.10 arc flagged ``effective_state``
+and ``this_power_w`` as "works correctly; not on the context object."
 Both shipped working — but the docs claimed "pcc is the single source
-of truth for per-charger data" while these two fields lived elsewhere.
-v1.6.14 makes the doc honest.
+of truth for per-charger data" while these two lived in a parallel
+dict and method-local vars. This release makes the doc honest.
 
-2224 tests pass on Python 3.12 (2210 v1.6.13 baseline + 14 new).
-Manifest bumped to 1.6.14.
-
-## [1.6.13] — 2026-05-31
-
-Closes the long-standing surplus-tracker spike on KEBA (#8). First of
-a four-release closeout pulling deferred ``v1.7+`` items back into
-v1.6.x — per the maintainer's "no v1.7 until multi-charger is properly
-fixed AND every deferred follow-up is closed" rule.
-
-### Fixed
-
-- **Surplus tracker jump-from-0 spike (#8)** — ``_apply_ramp_limit``
-  used to short-circuit on ``current < 1`` and return ``target_current``
-  directly, so a cold-start cycle handed KEBA a 14 A command from 0 A.
-  KEBA's ~30 s physical actuator lag then caused a ~4.4 kW grid-import
-  overshoot during the ramp (confirmed live on PROD 2026-05-31 at
-  10:43). Cold start now hands KEBA ``min_current`` (typically 6 A ≈
-  4140 W on 3-phase EU); subsequent cycles climb via the existing
-  ``±ramp_rate`` clamp at the user-configured ``ev_ramp_rate_amps``
-  (default 2 A/cycle, so target reached in ~4 cycles for a 14 A
-  request).
-
-  The stop-fast branch is preserved: ``target_current < 1`` still
-  returns 0 immediately (no gentle ramp-down) so the explicit-off /
-  disable path stays snappy.
-
-  13 new unit tests in ``tests/test_ramp_limit_8.py`` pin: cold
-  start → ``min_current``, near-zero current → cold-start treatment,
-  steady-state ``±ramp_rate`` unchanged, stop-fast preserved, custom
-  ``min_current`` per charger honoured, end-to-end multi-cycle climb
-  to target.
+The ``#8`` surplus-tracker spike fix bundled in here was confirmed
+live on PROD 2026-05-31 during the v1.6.3 soak — held with the
+refactor rather than shipped standalone so PROD users get one
+soak window instead of four staggered HACS updates.
 
 ## [1.6.12] — 2026-05-31
 
