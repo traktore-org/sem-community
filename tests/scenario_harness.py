@@ -66,6 +66,12 @@ TIMELINE_FIELDS = {
     "battery_soc", "battery_temperature", "battery_soc_unavailable",
     "ev_connected", "ev_charging",
     "home_consumption_power",  # override the derived value when needed
+    # v1.6.12: per-charger EV draw in watts as a mapping ``{cid: watts}``.
+    # When present, populates ``PowerReadings.ev_power_per_charger`` so
+    # the flow calculator can produce ``PowerFlows.per_charger`` for
+    # multi-charger scenarios. ``ev_power`` is still the fleet sum; the
+    # values here should add to it (the harness does NOT auto-derive).
+    "ev_power_per_charger",
 }
 
 
@@ -166,6 +172,15 @@ def _build_power_readings(effective: Dict[str, Any]):
     # Allow explicit override of home_consumption_power for stale-sensor scenarios
     if "home_consumption_power" in effective:
         pr.home_consumption_power = float(effective["home_consumption_power"])
+    # v1.6.12: per-charger EV power for ``flow_calculator.calculate_power_flows``
+    # per-charger split. Sticky timeline carries the mapping forward like
+    # any other field.
+    if "ev_power_per_charger" in effective:
+        per_charger = effective["ev_power_per_charger"]
+        if isinstance(per_charger, dict):
+            pr.ev_power_per_charger = {
+                str(k): float(v) for k, v in per_charger.items()
+            }
     return pr
 
 
@@ -457,6 +472,63 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
             "flow_battery_to_ev_power": power_flows.battery_to_ev,
         }
 
+        # v1.6.12: per-charger flow attribution. When the scenario
+        # populated ``ev_power_per_charger`` on the readings,
+        # ``calculate_power_flows`` produces a per-charger flow map
+        # (``PowerFlows.per_charger[cid] = ChargerFlows(...)``) that
+        # closes the #316 family. Surface those flows in the cycle
+        # result so the assertion machinery can pin them.
+        if power_flows.per_charger:
+            result["per_charger_flows"] = {
+                cid: {
+                    "solar_to_ev": cf.solar_to_ev,
+                    "grid_to_ev": cf.grid_to_ev,
+                    "battery_to_ev": cf.battery_to_ev,
+                }
+                for cid, cf in power_flows.per_charger.items()
+            }
+
+        # v1.6.12: per-charger effective state — exercise the same
+        # ``_apply_per_charger_off_override`` static helper the
+        # production multi-charger loop calls at coordinator.py:1217.
+        # Maps the fleet ``charging_state`` (from the state machine, or
+        # a synthetic ``SOLAR_CHARGING_ACTIVE`` here since the harness
+        # skips the state machine) onto each charger's effective state
+        # using its per-charger ``charge_mode``. This is the surface
+        # that #315's regression class shows up on.
+        ev_chargers_cfg = coord.config.get("ev_chargers") or []
+        if len(ev_chargers_cfg) >= 2 and strategy is not None:
+            from custom_components.solar_energy_management.consts.states import (
+                ChargingState,
+            )
+            from custom_components.solar_energy_management.coordinator import (
+                SEMCoordinator,
+            )
+            # Pick a fleet baseline that lets each charger's override
+            # branch reveal itself. SOLAR_CHARGING_ACTIVE = primary is
+            # actively charging; the override turns a per-charger
+            # ``off`` mode into SOLAR_IDLE (terminate) and leaves
+            # ``solar_only`` / ``min_plus_solar`` untouched.
+            global_state = (
+                ChargingState.SOLAR_CHARGING_ACTIVE
+                if strategy == "solar_only" else ChargingState.SOLAR_IDLE
+            )
+            per_charger_states: Dict[str, str] = {}
+            for c in ev_chargers_cfg:
+                cid = c.get("id") or "ev_charger"
+                # ``charge_mode`` lives in per-charger config; fall back
+                # through the same precedence the production helper
+                # uses (per-charger > global > default).
+                per_mode = c.get("charge_mode") or coord.config.get(
+                    "charge_mode", "min_plus_solar",
+                )
+                per_charger_states[cid] = (
+                    SEMCoordinator._apply_per_charger_off_override(
+                        global_state, per_mode,
+                    )
+                )
+            result["per_charger_effective_states"] = per_charger_states
+
         # Multi-charger distribution (Phase B.5 / #284). The canonical
         # ``ev_budget_obj`` computed above already represents the total
         # fleet budget; we pass its ``net_w`` through the real
@@ -623,6 +695,80 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
                     f"budget. Distributor returned {allocs}. "
                     f"Phase B.5 / #284 regression."
                 )
+
+        # v1.6.12: per-charger effective state assertion. Pinning the
+        # output of ``_apply_per_charger_off_override`` per charger
+        # closes the gap the senior-engineer review flagged on the
+        # v1.6.7→v1.6.10 arc (no scenario covered charger A=off +
+        # charger B=solar_only mixed). YAML shape:
+        #   multi_charger:
+        #     per_charger_effective_states:
+        #       charger_left: "solar_idle"     # exact match (case-insensitive)
+        #       charger_right_contains: "charging_allowed"   # substring
+        pces = mc.get("per_charger_effective_states") or {}
+        if pces:
+            cycles_with_states = [
+                c for c in run.cycles
+                if "per_charger_effective_states" in c.result
+            ]
+            assert cycles_with_states, (
+                "expect.multi_charger.per_charger_effective_states is set "
+                "but no cycle recorded per-charger effective states. "
+                "The scenario's ``ev_chargers`` block needs 2+ entries "
+                "AND a ``charge_mode`` on each charger."
+            )
+            last_states = cycles_with_states[-1].result["per_charger_effective_states"]
+            for key, expected in pces.items():
+                if key.endswith("_contains"):
+                    cid = key[: -len("_contains")]
+                    got = str(last_states.get(cid, "")).lower()
+                    assert str(expected).lower() in got, (
+                        f"per-charger effective state mismatch: charger "
+                        f"{cid!r} ended up as {got!r}, expected substring "
+                        f"{expected!r}. All states: {last_states}"
+                    )
+                else:
+                    cid = key
+                    got = str(last_states.get(cid, "")).lower()
+                    assert got == str(expected).lower(), (
+                        f"per-charger effective state mismatch: charger "
+                        f"{cid!r} ended up as {got!r}, expected exactly "
+                        f"{expected!r}. All states: {last_states}"
+                    )
+
+        # v1.6.12: per-charger flow attribution assertion. Pin the
+        # ``PowerFlows.per_charger`` map populated by
+        # ``flow_calculator.calculate_power_flows`` when the readings
+        # carry ``ev_power_per_charger``. The fleet-sum invariant is
+        # tested by ``test_per_charger_flows_319.py``; here we pin the
+        # per-charger user-visible attribution that closes #316. YAML:
+        #   multi_charger:
+        #     per_charger_flow_max:
+        #       charger_left:
+        #         grid_to_ev: 0       # solar_only must not draw grid
+        #       charger_right:
+        #         grid_to_ev: 10000   # min_plus_solar may
+        pcfm = mc.get("per_charger_flow_max") or {}
+        if pcfm:
+            cycles_with_flows = [
+                c for c in run.cycles if "per_charger_flows" in c.result
+            ]
+            assert cycles_with_flows, (
+                "expect.multi_charger.per_charger_flow_max is set but no "
+                "cycle recorded per-charger flows. The scenario timeline "
+                "needs ``ev_power_per_charger`` populated."
+            )
+            for cid, limits in pcfm.items():
+                for c in cycles_with_flows:
+                    flows = c.result["per_charger_flows"].get(cid) or {}
+                    for flow_key, max_w in limits.items():
+                        actual = float(flows.get(flow_key, 0.0))
+                        assert actual <= float(max_w) + 0.5, (
+                            f"Cycle t={c.t_seconds}: charger {cid!r} "
+                            f"per-charger flow {flow_key}={actual:.1f} W "
+                            f"exceeds max {float(max_w):.1f} W. "
+                            f"Full flows for charger: {flows}"
+                        )
 
         # `priority_order: true` — when budget can only feed N of M chargers,
         # the N lower-numbered priority chargers must get the budget.

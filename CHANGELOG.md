@@ -5,6 +5,50 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.12] — 2026-05-31
+
+Closes the last open senior-reviewer item on the v1.6.7 → v1.6.11
+multi-charger cleanup arc — the missing end-to-end scenario covering
+``charger A = off + charger B = solar_only`` mixed-mode. No
+behaviour change for any user.
+
+### Added
+
+- **New scenario test** ``tests/scenarios/2026-05-31_off_plus_solar_only.yaml``
+  exercises the senior-reviewer-flagged hole in coverage:
+  - **Per-charger effective state isolation** (v1.6.4
+    ``_apply_per_charger_off_override``). Charger ``off`` mode →
+    ``SOLAR_IDLE`` (terminate); sibling ``solar_only`` →
+    ``SOLAR_CHARGING_ACTIVE`` (untouched). Pins the #315 mitigation
+    at the unit-pipeline level — would have mechanically caught the
+    v1.6.3 regression at PR-review time.
+  - **Per-charger flow attribution** (v1.6.9
+    ``PowerFlows.per_charger``). With per-charger draw set to
+    ``{left: 4000, right: 0}``, the per-charger split must give
+    ``right`` zero EV-side flow — the user-visible attribution
+    @RienduPre asked for in #316.
+  - **Distribution sum invariant** (Phase B.5 / #284) re-asserted on
+    top of the mixed-mode case.
+
+- **Scenario harness extensions** in ``tests/scenario_harness.py``:
+  - ``TIMELINE_FIELDS`` accepts ``ev_power_per_charger: {cid: watts}``
+    so multi-charger flow attribution can be driven from YAML.
+  - Cycle results now include ``per_charger_effective_states`` and
+    ``per_charger_flows`` when the scenario has 2+ chargers.
+  - Two new ``expect.multi_charger`` assertion blocks:
+    ``per_charger_effective_states`` (exact match or
+    ``{cid}_contains: substring``) and ``per_charger_flow_max`` for
+    per-charger upper-bound caps.
+
+### Docs
+
+- ``docs/MULTI_CHARGER.md`` roadmap updated: the off + solar_only
+  scenario gap is now closed (was a senior-reviewer FIX-BEFORE-MERGE
+  on the v1.6.7-v1.6.10 arc).
+- CHANGELOG entry per the
+  ``feedback_docs_per_release`` rule — docs are part of every
+  release, not a follow-up.
+
 ## [1.6.11] — 2026-05-31
 
 Diagnostics improvement + doc polish closing the senior-engineer
