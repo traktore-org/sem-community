@@ -26,13 +26,80 @@ class EnergySource(Enum):
     MIXED = "mixed"
 
 
+class FleetEvPower(float):
+    """Newtype for the fleet-aggregated EV power sum (v1.6.16).
+
+    Background. In multi-charger setups (``len(ev_chargers) > 1``)
+    ``PowerReadings.ev_power`` is the SUM across every charger's draw,
+    populated by ``sensor_reader`` from per-charger power sensors. Code
+    paths that loop per-charger and read the fleet sum directly produce
+    the recurring bug class that filled the v1.6.4 → v1.6.6 hotfix
+    sequence (#284, #289, #315, #318).
+
+    Goal. Make "I deliberately want the fleet sum" structurally
+    explicit — every read carries a written reason at the call site.
+
+    Mechanism. ``FleetEvPower`` subclasses ``float`` so arithmetic and
+    comparisons still work (no migration cost for the ~15 legitimate
+    fleet reads across ``coordinator/``). Layered on top:
+
+    1. The ``.as_fleet_total(reason: str)`` accessor returns the
+       underlying watts and documents intent in the code (not a
+       comment). The ``reason`` arg has no runtime effect but appears
+       in code review and ``git blame`` — the structural improvement
+       over the v1.6.8 ``# FLEET-READ:`` comment.
+
+    2. The expanded AST lint
+       (``tests/test_fleet_ev_power_reads_global.py``) treats
+       ``power.ev_power.as_fleet_total(...)`` as equivalent to the
+       comment annotation. Reads that are neither acknowledged form
+       fail CI across every ``coordinator/`` module — not just
+       ``ev_control.py`` like the v1.6.8 lint.
+
+    Mostly the v1.6.8 ``# FLEET-READ:`` comment idiom continues to
+    work — there is no flag-day. New code is encouraged to use the
+    method form because it appears in the bytecode (mypy, IDE hover,
+    even ``ast.dump``).
+    """
+
+    __slots__ = ()
+
+    def as_fleet_total(self, reason: str) -> float:
+        """Return the underlying watts; ``reason`` documents intent.
+
+        Args:
+            reason: short string explaining WHY this call site wants
+                the fleet sum rather than a per-charger draw. Required
+                positional argument — by convention the lint at
+                ``tests/test_fleet_ev_power_reads_global.py`` accepts
+                any non-empty string. Keep it concrete: "energy
+                balance computation" beats "fleet read".
+
+        Returns:
+            The wrapped watts as a plain ``float``. Identical to
+            ``float(self)``; the layer exists for documentation, not
+            for unit conversion.
+        """
+        return float(self)
+
+    def __repr__(self) -> str:  # noqa: D401
+        return f"FleetEvPower({float(self):.1f})"
+
+
 @dataclass
 class PowerReadings:
     """Current power readings from sensors."""
     solar_power: float = 0.0
     grid_power: float = 0.0  # Negative = import, Positive = export
     battery_power: float = 0.0  # Positive = charge, Negative = discharge
-    ev_power: float = 0.0
+    # v1.6.16: typed as ``FleetEvPower`` — a ``float`` subclass marking
+    # the fleet-aggregated EV power sum. Reads that want the sum
+    # acknowledge it via ``.as_fleet_total(reason)`` (preferred) or
+    # ``# FLEET-READ:`` comment (legacy v1.6.8 idiom). The AST lint at
+    # ``tests/test_fleet_ev_power_reads_global.py`` covers every
+    # ``coordinator/`` module — not just ``ev_control.py``. See
+    # ``docs/MULTI_CHARGER.md`` for the full invariant.
+    ev_power: "FleetEvPower" = field(default_factory=lambda: FleetEvPower(0.0))
     home_consumption_power: float = 0.0
 
     # Per-charger EV power (v1.6.9). Populated by ``sensor_reader`` for
