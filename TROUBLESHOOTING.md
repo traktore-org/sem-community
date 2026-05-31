@@ -29,6 +29,49 @@
 
 ---
 
+## EV keeps charging when Charge mode is set to "Off"
+
+**Symptom:** You set `select.sem_charger_<id>_charge_mode` to **Off**, the SEM
+dashboard shows "Solar mode - System ready" with 0 A commanded, but the EV
+charger still draws power.
+
+**Cause (pre-v1.6.4):** A regression in the v1.6.3 consolidated Charge mode
+selector. The state machine fell through to `SOLAR_CHARGING_ALLOWED` instead
+of `SOLAR_IDLE`, and the actuator's stop path was never reached.
+
+**Cause (post-v1.6.4 on KEBA):** KEBA P30's firmware remembers its last
+current setpoint across power cycles. When an EV plugs in (or KEBA hits
+certain internal events), the charger **self-starts** at the stored
+setpoint independently of SEM. Because SEM never started an owned
+session, its `_session_active` flag was False and the disable path
+silently skipped.
+
+**Fix (v1.6.5+):** Upgrade to v1.6.5 or later. SEM now re-asserts the
+per-brand disable service (e.g. `keba.disable`) every coordinator cycle
+(~10 s) whenever Charge mode is **Off** and the charger is actually
+drawing power (> 500 W). Idempotent and KEBA-firmware-safe. Logs will
+show a one-time WARNING per self-resume episode:
+
+```
+Charger <name> self-resumed while mode=off (drawing 4140W). Calling
+stop_session() — will re-assert every cycle until ev_power drops
+below 500W. (#315)
+```
+
+**Workaround if you're on v1.6.4 or earlier:**
+
+1. Manually call the `keba.disable` service (or your charger's
+   equivalent) from **Developer Tools > Services**.
+2. Or simply **unplug** the EV — KEBA can't self-start on an unplugged
+   cable.
+
+The v1.6.5 fix has a worst-case 10-second window where KEBA can draw
+power before SEM catches the self-resume; if you observe sustained
+draw beyond that, file an issue with the SEM log line and the KEBA
+`max_current` setpoint reported at the moment of the resume.
+
+---
+
 ## Car charged overnight when I only wanted solar surplus
 
 **Cause:** Grid-assisted **night charging** is enabled, with a charge target (a daily kWh target or a target SOC %) the car hadn't reached, so SEM topped it up from the grid overnight. On fresh installs this is now off by default, but it stays enabled on upgraded systems that already had it on, and a multi-charger setup tracks an enable switch *per charger*.

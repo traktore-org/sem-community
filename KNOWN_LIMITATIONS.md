@@ -101,6 +101,50 @@ is fully safe — if you DO unplug the car, both `ev_power` and
 `ev_charging` will drop and SEM will correctly transition to
 disconnected.
 
+## Charger self-resume on plug-in (KEBA P30 confirmed)
+
+KEBA P30 firmware remembers its last current setpoint across power
+cycles. When an EV plugs in — or after certain internal events SEM
+cannot observe — KEBA **self-starts** at the stored setpoint
+completely independently of SEM. This was confirmed on a 2026-05-31
+PROD soak where Charge mode was set to **Off** and the EV plugged in:
+KEBA pulled 4.1 kW on its own while SEM correctly reported
+"Solar mode - System ready" with 0 A commanded.
+
+Since v1.6.5, SEM **mitigates** this by re-asserting the per-brand
+disable service (e.g. `keba.disable`) every coordinator cycle (~10 s)
+whenever the user-intent strategy is `"disabled"` (mode=Off) AND THIS
+charger is drawing more than 500 W (handshake idle is 100–200 W; real
+charging starts at 4140 W). The mitigation is **per-charger correct**
+in multi-charger setups — only the off charger gets the disable
+re-asserted; sibling chargers with active modes are untouched.
+
+Worst-case unwanted draw is **bounded by the coordinator cycle period
+(~10 s)**: KEBA can self-start, ramp for one cycle, then SEM catches
+it on the next cycle and calls `keba.disable`. A WARNING line in the
+log records each self-resume episode so the upstream behaviour stays
+visible:
+
+```
+Charger <name> self-resumed while mode=off (drawing 4140W). Calling
+stop_session() — will re-assert every cycle until ev_power drops
+below 500W. (#315)
+```
+
+If you're concerned about even the bounded 10-s window — e.g. your
+electricity tariff penalises any grid draw — simply **unplug** the EV
+when not actively charging. Mitigation only fires when both Charge
+mode is Off and the charger is plugged in; unplugged cables can't
+self-start.
+
+Other chargers (Wallbox, Easee, go-eCharger, OpenEVSE, …) generally
+treat 0 A as "stop" rather than "minimum hold" and don't exhibit this
+behaviour; SEM's `_set_current(0)` call is sufficient on those.
+However, the v1.6.5 fix applies universally — if any charger
+integration reports power draw > 500 W with Charge mode = Off, the
+per-brand `stop_session()` mechanism fires regardless of firmware
+specifics.
+
 ## Battery-assist mode may transiently attribute a small grid flow to the EV
 
 When the EV is charging in `battery_assist` mode (Zone 4, home battery ≥ `battery_auto_start_soc`), SEM offers the EV a budget that includes the expected battery discharge contribution (up to `battery_assist_max_power`, default 4500 W). The EV's onboard charger ramps to that current effectively instantly, but the home battery — an LFP pack managed by the inverter's BMS — takes several seconds to ramp its discharge from 0 W to the requested level. During that ramp window, the grid backfills the gap.
