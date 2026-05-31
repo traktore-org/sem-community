@@ -16,6 +16,7 @@ import { unsafeSVG } from 'lit/directives/unsafe-svg.js';
 import {
     semTheme, semFormatPower, semCalcDuration, semGetCurrency, semDefineCard,
     SEM_COLORS, SEM_DEVICE_COLORS, SEM_FLOW_ACTIVE_THRESHOLD,
+    semDiscoverPVStrings, semPVStringsCSS,
 } from '../base/sem-shared.js';
 
 /* ── Defaults ── */
@@ -174,9 +175,28 @@ class SEMFlowCard extends SEMLitBase {
         const hasEv      = this._hasNode('ev');
         const hasInverter = this._showInverter && this._hasNode('inverter');
 
+        // v1.7.1 / #312: per-PV-string chip strip — auto-shown when
+        // ≥ 2 strings exist (gated on v1.7.0 sensor discovery). Sits
+        // above the SVG flow diagram, doesn't change the diagram layout.
+        const pvStrings = semDiscoverPVStrings(this._hass, this._prefix);
+
         // Build SVG as tagged-template string (inside html``)
         return html`
             <ha-card>
+                <style>${semPVStringsCSS}</style>
+                ${pvStrings.length >= 2 ? html`
+                    <div class="pv-strings-row">
+                        ${pvStrings.map(s => html`
+                            <div class="pv-chip"
+                                 title="${s.entityId}"
+                                 data-entity="${s.entityId}"
+                                 @click=${() => this._fireMoreInfo?.(s.entityId)}>
+                                <span class="pv-chip-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                <span class="pv-chip-value">${(Math.abs(s.watts)/1000).toFixed(2)} kW</span>
+                            </div>
+                        `)}
+                    </div>
+                ` : nothing}
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="${L.vb}" style="background:transparent">
                     <defs>
                         <radialGradient id="bgGrad" cx="50%" cy="45%" r="60%">
