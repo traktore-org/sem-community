@@ -5,12 +5,41 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] — 2026-05-31
+
+Phase 3 (final) of the v1.7.x per-PV-string visibility arc (#312).
+Adds the user-facing docs + release polish. v1.7.0 ships the data
+layer; v1.7.1 ships the card chips; v1.7.2 ships the docs.
+
+### Added
+
+- **``docs/PV_STRINGS.md``** — end-user-facing reference for the
+  per-PV-string feature. Covers what sensors get created,
+  supported inverter brands (with the regex pattern table),
+  how discovery works, "what if I don't see my strings"
+  troubleshooting flow, and the internals pointer table for
+  contributors.
+
+### Why
+
+The data layer (v1.7.0) and visual layer (v1.7.1) shipped without
+the user-facing reference doc — v1.7.2 closes that. The doc
+explicitly maps to the symmetric ``MULTI_CHARGER.md`` so the
+multi-source / multi-destination pattern reads as one consistent
+SEM design idea.
+
+### Tests
+
+Documentation-only release; no Python or JavaScript changes.
+Python suite remains 2281 green; bundle unchanged.
+
+Manifest bumped 1.7.1 → 1.7.2.
+
 ## [1.7.1] — 2026-05-31
 
 Phase 2 of the v1.7.0 per-PV-string visibility arc (#312). Adds
 visual per-string display to SEM's three flow-style cards. Data
-layer ships in v1.7.0; dashboard generator wiring + docs ship in
-v1.7.2.
+layer ships in v1.7.0; user-facing docs ship in v1.7.2.
 
 ### Added
 
@@ -34,26 +63,13 @@ v1.7.2.
 - ``semPVStringsCSS`` shared style block (chip-style row, hover
   effect, tabular-nums for the value).
 
-### Why
-
-@MRAK96 asked for Sunsynk-style per-string visibility in #312.
-v1.7.0 shipped the data layer; users could plot the per-string
-sensors manually but the cards still showed only the aggregated
-solar number. v1.7.1 closes the loop: when ≥ 2 strings are
-discovered, the cards auto-render an overview chip strip.
-Single-string installs are pixel-identical to v1.7.0.
-
 ### Tests
 
-Card rendering is exercised via the bundle build (Rollup) which
-catches syntax errors and missing imports. End-to-end visual
-verification on HA-TEST uses synthetic ``input_number`` helpers
-acting as per-string sensors (the discovery's platform check
-allows this when the seed solar source is also an
-``input_number``).
+Card rendering exercised via the Rollup bundle build (catches
+syntax / import errors); Python suite unchanged from v1.7.0 at
+2281 green.
 
-Full Python suite still 2281 green (no Python changes in this
-phase). Bundle rebuilt — ``dist/sem-cards.js`` regenerated.
+Manifest bumped 1.7.0 → 1.7.1.
 
 ## [1.7.0] — 2026-05-31
 
