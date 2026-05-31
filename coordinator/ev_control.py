@@ -904,7 +904,19 @@ class EVControlMixin:
         Single-charger setups: ``power.ev_power`` is already the single
         sensor reading (normalized to W by ``sensor_reader``), so the
         fallback path matches what the original code path was doing.
+
+        v1.6.14: when called from inside a ``PerChargerContext`` for
+        the same ``ev``, returns the cached value
+        ``self._current_pcc.this_power_w`` computed once at
+        ``__enter__``. Outside the loop (single-charger path, post-loop
+        helpers) the direct-compute branch below runs. The lint enforces
+        that no callsite reads ``power.ev_power`` directly — they all
+        funnel through here.
         """
+        pcc = getattr(self, "_current_pcc", None)
+        if (pcc is not None and pcc.ev_dev is ev
+                and pcc.this_power_w is not None):
+            return pcc.this_power_w
         try:
             charger_cfg = self._get_active_charger_config()
             cps = charger_cfg.get("ev_charging_power_sensor") if charger_cfg else None
@@ -922,6 +934,10 @@ class EVControlMixin:
         # sensor_reader). Correct for single-charger; for multi-charger
         # it's the sum (over-counts but only matters when no per-charger
         # sensor is configured — rare).
+        # FLEET-READ: documented fallback when no per-charger sensor is
+        # configured; in multi-charger setups this code path is only
+        # reached when ``_get_active_charger_config`` lacks a
+        # ``ev_charging_power_sensor`` entry (rare).
         return float(getattr(power, "ev_power", 0.0) or 0.0)
 
     def _this_charger_drawing_power(self, ev, power) -> bool:

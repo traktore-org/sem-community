@@ -5,35 +5,84 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.13] — 2026-05-31
+## [Unreleased] — v1.6.14 candidate
 
-Closes the long-standing surplus-tracker spike on KEBA (#8). First of
-a four-release closeout pulling deferred ``v1.7+`` items back into
-v1.6.x — per the maintainer's "no v1.7 until multi-charger is properly
-fixed AND every deferred follow-up is closed" rule.
+Multi-charger debt closeout. Bundles four pieces of work into one
+release (the maintainer-set rule "no v1.7 until every multi-charger
+follow-up is closed" pulled deferred ``v1.7+`` items back into
+v1.6.x; this is them, packaged as one release rather than four
+separate HACS bumps).
 
 ### Fixed
 
-- **Surplus tracker jump-from-0 spike (#8)** — ``_apply_ramp_limit``
-  used to short-circuit on ``current < 1`` and return ``target_current``
-  directly, so a cold-start cycle handed KEBA a 14 A command from 0 A.
-  KEBA's ~30 s physical actuator lag then caused a ~4.4 kW grid-import
-  overshoot during the ramp (confirmed live on PROD 2026-05-31 at
-  10:43). Cold start now hands KEBA ``min_current`` (typically 6 A ≈
-  4140 W on 3-phase EU); subsequent cycles climb via the existing
-  ``±ramp_rate`` clamp at the user-configured ``ev_ramp_rate_amps``
-  (default 2 A/cycle, so target reached in ~4 cycles for a 14 A
-  request).
+- **Surplus tracker jump-from-0 spike (#8)** —
+  ``_apply_ramp_limit`` used to short-circuit on ``current < 1`` and
+  return ``target_current`` directly, so a cold-start cycle handed
+  KEBA a 14 A command from 0 A. KEBA's ~30 s physical actuator lag
+  then caused a ~4.4 kW grid-import overshoot during the ramp
+  (confirmed live on PROD 2026-05-31 at 10:43). Cold start now hands
+  KEBA ``min_current`` (typically 6 A ≈ 4140 W on 3-phase EU);
+  subsequent cycles climb via the existing ``±ramp_rate`` clamp at
+  the user-configured ``ev_ramp_rate_amps`` (default 2 A/cycle, so
+  target reached in ~4 cycles for a 14 A request). The stop-fast
+  branch is preserved: ``target_current < 1`` still returns 0
+  immediately so explicit-off / disable stays snappy. 13 new unit
+  tests in ``tests/test_ramp_limit_8.py`` pin every branch.
 
-  The stop-fast branch is preserved: ``target_current < 1`` still
-  returns 0 immediately (no gentle ramp-down) so the explicit-off /
-  disable path stays snappy.
+### Changed
 
-  13 new unit tests in ``tests/test_ramp_limit_8.py`` pin: cold
-  start → ``min_current``, near-zero current → cold-start treatment,
-  steady-state ``±ramp_rate`` unchanged, stop-fast preserved, custom
-  ``min_current`` per charger honoured, end-to-end multi-cycle climb
-  to target.
+- **``effective_state`` and ``charger_name`` migrated onto
+  ``PerChargerContext``** instead of writing the parallel
+  ``_effective_states_per_charger`` dict from inside the loop body.
+  The loop body assigns ``pcc.effective_state = …``; ``__exit__``
+  persists ``(state, name)`` into the coordinator's dict so the
+  post-loop ``_send_notifications`` dispatcher continues reading
+  from a single map. The dict is the storage; pcc is the write
+  path. Lets a future AST lint enforce field access at type level
+  (no callsite outside the loop touches the dict directly).
+- **``this_power_w`` precomputed in ``PerChargerContext.__enter__``**
+  via ``coord._this_charger_power(ev_dev, power)`` and exposed as a
+  typed field. The coordinator stashes the active pcc on
+  ``coord._current_pcc``; ``_this_charger_power`` becomes a cache
+  shim — when invoked with the same ``ev_dev`` it returns
+  ``pcc.this_power_w`` instead of re-reading HA state. Replaces
+  the three per-method ``this_power_w = self._this_charger_power(…)``
+  local-var caches in ``coordinator/ev_control.py`` without
+  changing the callsites. Helper exceptions in the precompute fall
+  through to the legacy read path so a transient HA-state issue
+  can't half-apply the swap.
+
+### Added
+
+- ``PerChargerContext.power``, ``this_power_w``, ``effective_state``,
+  ``charger_name`` dataclass fields.
+- ``SEMCoordinator._current_pcc`` short-lived pointer to the active
+  context (``None`` outside any per-charger iteration).
+- ``# FLEET-READ:`` annotation on the documented multi-charger
+  fallback in ``_this_charger_power`` (only reached when a charger
+  config omits ``ev_charging_power_sensor`` — rare).
+- 27 new tests across two files (13 ramp-limit + 14 pcc-field):
+  - ``tests/test_ramp_limit_8.py``: cold-start, near-zero,
+    steady-state ramp, stop-fast, custom ``min_current``,
+    end-to-end multi-cycle climb.
+  - ``tests/test_per_charger_context.py``: effective_state
+    persistence, this_power_w precompute, current-pcc-pointer
+    lifecycle.
+  - ``tests/test_this_charger_power_cache.py``: cache HIT, three
+    MISS variants, kW→W conversion regression from #315.
+
+### Why
+
+Senior reviewer on the v1.6.7→v1.6.10 arc flagged ``effective_state``
+and ``this_power_w`` as "works correctly; not on the context object."
+Both shipped working — but the docs claimed "pcc is the single source
+of truth for per-charger data" while these two lived in a parallel
+dict and method-local vars. This release makes the doc honest.
+
+The ``#8`` surplus-tracker spike fix bundled in here was confirmed
+live on PROD 2026-05-31 during the v1.6.3 soak — held with the
+refactor rather than shipped standalone so PROD users get one
+soak window instead of four staggered HACS updates.
 
 ## [1.6.12] — 2026-05-31
 
