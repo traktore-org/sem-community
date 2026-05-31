@@ -5,6 +5,72 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.14] — 2026-05-31
+
+PerChargerContext field migration. Closes the two abstraction leaks
+the senior reviewer flagged on the v1.6.7→v1.6.10 arc that were
+previously deferred to v1.7+ (the user pulled them back into v1.6.x
+under the "no v1.7 until every multi-charger follow-up is closed"
+rule).
+
+### Changed
+
+- **``effective_state`` and ``charger_name`` now live on
+  ``PerChargerContext``**, not in a parallel
+  ``_effective_states_per_charger`` dict written by the loop body.
+  The loop body assigns ``pcc.effective_state = …``; ``__exit__``
+  persists ``(state, name)`` into the coordinator's dict so the
+  post-loop ``_send_notifications`` dispatcher continues reading
+  from a single map. The dict is the storage; pcc is the write
+  path. Lets a future AST lint enforce field access at type level
+  (no callsite outside the loop touches the dict directly).
+- **``this_power_w`` precomputed in ``PerChargerContext.__enter__``**
+  via ``coord._this_charger_power(ev_dev, power)`` and exposed as a
+  typed field. The coordinator stashes the active pcc on
+  ``coord._current_pcc``; ``_this_charger_power`` becomes a cache
+  shim — when invoked with the same ``ev_dev`` it returns
+  ``pcc.this_power_w`` instead of re-reading HA state. Replaces
+  the three per-method ``this_power_w = self._this_charger_power(…)``
+  local-var caches in ``coordinator/ev_control.py`` without
+  changing the callsites. Helper exceptions in the precompute fall
+  through to the legacy read path so a transient HA-state issue
+  can't half-apply the swap.
+
+### Added
+
+- ``PerChargerContext.power``, ``this_power_w``, ``effective_state``,
+  ``charger_name`` dataclass fields.
+- ``SEMCoordinator._current_pcc`` short-lived pointer to the active
+  context (``None`` outside any per-charger iteration).
+- ``# FLEET-READ:`` annotation on the documented multi-charger
+  fallback in ``_this_charger_power`` (only reached when a charger
+  config omits ``ev_charging_power_sensor`` — rare).
+- 14 new tests:
+  - ``tests/test_per_charger_context.py``: 4 effective_state tests,
+    3 this_power_w tests, 2 current-pcc-pointer tests.
+  - ``tests/test_this_charger_power_cache.py``: 5 tests pinning the
+    cache HIT, three MISS variants (different ev, no pcc, None
+    this_power_w), and the legacy kW→W conversion path.
+
+### Why
+
+Senior reviewer on the v1.6.7→v1.6.10 arc flagged:
+
+> ``effective_state`` — currently stored in the parallel coordinator
+> dict ``_effective_states_per_charger`` and dispatched in
+> ``_send_notifications``. Works correctly; not on the context object.
+>
+> ``this_power_w`` — currently cached as a local variable per method
+> inside ``coordinator/ev_control.py``. Works correctly; not on the
+> context object.
+
+Both shipped working — but the docs claimed "pcc is the single source
+of truth for per-charger data" while these two fields lived elsewhere.
+v1.6.14 makes the doc honest.
+
+2224 tests pass on Python 3.12 (2210 v1.6.13 baseline + 14 new).
+Manifest bumped to 1.6.14.
+
 ## [1.6.13] — 2026-05-31
 
 Closes the long-standing surplus-tracker spike on KEBA (#8). First of

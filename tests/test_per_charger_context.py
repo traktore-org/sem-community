@@ -49,6 +49,14 @@ def _make_coord(ev_chargers=None):
     coord._ev_last_change_per_charger = {}
     coord._ev_reenable_attempts_per_charger = {}
     coord._ev_charge_refused_per_charger = {}
+    # v1.6.14: parallel dict written by ``__exit__`` from ``pcc.effective_state``.
+    coord._effective_states_per_charger = {}
+    # v1.6.14: cache pointer ``__enter__`` sets, ``__exit__`` clears.
+    coord._current_pcc = None
+    # v1.6.14: ``__enter__`` calls this helper to pre-compute
+    # ``this_power_w``. Real coordinator's helper is on ``EVControlMixin``;
+    # the stub returns whatever the test wants.
+    coord._this_charger_power = MagicMock(return_value=0.0)
     return coord
 
 
@@ -218,3 +226,136 @@ class TestBudget:
         with PerChargerContext.for_charger(coord, "left", MagicMock(), {}):
             assert coord._current_charger_budget is None
         assert coord._current_charger_budget is None
+
+
+class TestEffectiveStateField:
+    """v1.6.14: ``pcc.effective_state`` is the write path for
+    ``coord._effective_states_per_charger``. ``__exit__`` persists the
+    field if it's not ``None``; the post-loop notification dispatcher
+    iterates the dict. The loop body never touches the dict directly."""
+
+    def test_effective_state_persists_on_exit(self):
+        """Writing the field inside the ``with`` block lands the
+        ``(state, name)`` tuple in the coordinator's per-charger dict
+        after exit."""
+        coord = _make_coord()
+        ev_dev = MagicMock(name="left_dev")
+        cfg = {"id": "left", "name": "Wallbox Left"}
+        with PerChargerContext.for_charger(
+            coord, "left", ev_dev, {"left": 4000.0},
+            chargers_by_id={"left": cfg},
+        ) as pcc:
+            pcc.effective_state = "CHARGING_ACTIVE"
+        assert coord._effective_states_per_charger == {
+            "left": ("CHARGING_ACTIVE", "Wallbox Left"),
+        }
+
+    def test_effective_state_omitted_when_not_set(self):
+        """Skipped chargers (e.g. ``solar_only`` during night) never
+        set ``pcc.effective_state``; the dict stays empty for them."""
+        coord = _make_coord()
+        with PerChargerContext.for_charger(coord, "left", MagicMock(), {}):
+            pass  # no assignment to pcc.effective_state
+        assert coord._effective_states_per_charger == {}
+
+    def test_effective_state_falls_back_to_cid_when_name_missing(self):
+        """Config without a ``name`` key — the cid stands in as the
+        display name (matches legacy behaviour at coordinator.py:1245)."""
+        coord = _make_coord()
+        with PerChargerContext.for_charger(
+            coord, "left", MagicMock(), {"left": 4000.0},
+            chargers_by_id={"left": {"id": "left"}},
+        ) as pcc:
+            pcc.effective_state = "CHARGING_ACTIVE"
+        assert coord._effective_states_per_charger["left"] == (
+            "CHARGING_ACTIVE", "left",
+        )
+
+    def test_multi_charger_dispatches_independently(self):
+        """Two chargers, different states — each ``__exit__`` writes its
+        own key into the dict; no cross-contamination."""
+        coord = _make_coord()
+        with PerChargerContext.for_charger(
+            coord, "left", MagicMock(), {"left": 4000.0},
+            chargers_by_id={"left": {"id": "left", "name": "A"}},
+        ) as pcc_left:
+            pcc_left.effective_state = "CHARGING_ACTIVE"
+        with PerChargerContext.for_charger(
+            coord, "right", MagicMock(), {"right": 0.0},
+            chargers_by_id={"right": {"id": "right", "name": "B"}},
+        ) as pcc_right:
+            pcc_right.effective_state = "IDLE"
+        assert coord._effective_states_per_charger == {
+            "left": ("CHARGING_ACTIVE", "A"),
+            "right": ("IDLE", "B"),
+        }
+
+
+class TestThisPowerWField:
+    """v1.6.14: ``pcc.this_power_w`` is precomputed in ``__enter__``
+    via ``coord._this_charger_power(ev_dev, power)``. The coordinator
+    stashes the active pcc on ``coord._current_pcc`` so the helper's
+    subsequent calls (from inside ev_control methods) serve the cached
+    value rather than re-reading HA state."""
+
+    def test_this_power_w_precomputed_on_enter(self):
+        coord = _make_coord()
+        coord._this_charger_power.return_value = 4150.0
+        ev_dev = MagicMock(name="left_dev")
+        power = MagicMock()
+        with PerChargerContext.for_charger(
+            coord, "left", ev_dev, {"left": 4000.0}, power=power,
+        ) as pcc:
+            assert pcc.this_power_w == 4150.0
+            # Helper called with this charger's ev_dev + the cycle power.
+            coord._this_charger_power.assert_called_once_with(ev_dev, power)
+
+    def test_this_power_w_none_when_no_power_passed(self):
+        """Legacy/unit-test callers that omit ``power`` get ``None`` —
+        the in-loop helper then falls back to direct compute."""
+        coord = _make_coord()
+        with PerChargerContext.for_charger(
+            coord, "left", MagicMock(), {"left": 4000.0},
+        ) as pcc:
+            assert pcc.this_power_w is None
+        # Helper not called when power wasn't supplied.
+        coord._this_charger_power.assert_not_called()
+
+    def test_this_power_w_helper_failure_falls_through(self):
+        """If the helper raises (transient HA state issue), pcc gets
+        ``None`` and the legacy method-local recompute path runs.
+        ``__enter__`` must not propagate the exception — that would
+        leave the swap half-applied."""
+        coord = _make_coord()
+        coord._this_charger_power.side_effect = ValueError("bad state")
+        with PerChargerContext.for_charger(
+            coord, "left", MagicMock(), {"left": 4000.0}, power=MagicMock(),
+        ) as pcc:
+            assert pcc.this_power_w is None
+        # Swap still restored.
+        assert coord._current_pcc is None
+
+
+class TestCurrentPccPointer:
+    """v1.6.14: ``coord._current_pcc`` is set in ``__enter__``, cleared
+    in ``__exit__``. Lets the ``_this_charger_power`` helper return the
+    cached value to in-loop callers without changing their signatures."""
+
+    def test_current_pcc_set_inside_block_cleared_outside(self):
+        coord = _make_coord()
+        assert coord._current_pcc is None
+        with PerChargerContext.for_charger(
+            coord, "left", MagicMock(), {"left": 4000.0},
+        ) as pcc:
+            assert coord._current_pcc is pcc
+        assert coord._current_pcc is None
+
+    def test_current_pcc_cleared_even_on_exception(self):
+        coord = _make_coord()
+        with pytest.raises(RuntimeError, match="boom"):
+            with PerChargerContext.for_charger(
+                coord, "left", MagicMock(), {"left": 4000.0},
+            ):
+                assert coord._current_pcc is not None
+                raise RuntimeError("boom")
+        assert coord._current_pcc is None

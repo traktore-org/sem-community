@@ -266,8 +266,18 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # ``charger_id`` and flap-suppression key. Cleared at the top of
         # each loop pass; empty in single-charger setups (notification
         # falls back to the fleet-level call).
-        # Shape: ``{cid: (effective_state, charger_name)}``.
+        # Shape: ``{cid: (effective_state, charger_name)}``. v1.6.14:
+        # populated by ``PerChargerContext.__exit__`` (not by the loop
+        # body directly) — pcc owns the write path now.
         self._effective_states_per_charger: Dict[str, tuple] = {}
+
+        # v1.6.14: short-lived pointer to the currently active
+        # ``PerChargerContext`` so ``ev_control._this_charger_power``
+        # can serve the cached value computed once at ``__enter__``
+        # instead of re-reading the HA state every call. Set in
+        # ``PerChargerContext.__enter__`` / cleared in ``__exit__``.
+        # ``None`` outside any per-charger iteration.
+        self._current_pcc = None
 
         # EV stall detection for self-healing
         self._ev_stalled_since: Optional[float] = None
@@ -1158,6 +1168,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     pcc = PerChargerContext.for_charger(
                         self, cid, ev_dev, ev_budget_per_charger,
                         chargers_by_id=_chargers_by_id,
+                        power=power,
                     )
                     with pcc:
                         # Set per-charger night target (#193). The
@@ -1236,14 +1247,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 )
                                 await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
 
-                        # v1.6.9: capture per-charger effective state so
-                        # the notification dispatch in ``_send_notifications``
-                        # can fire ``notify_state_change`` per charger with
-                        # its own flap-suppression key.
-                        self._effective_states_per_charger[cid] = (
-                            effective_state,
-                            charger_cfg.get("name") or cid,
-                        )
+                        # v1.6.14: write the effective state to ``pcc``;
+                        # ``__exit__`` persists it into
+                        # ``self._effective_states_per_charger`` so the
+                        # post-loop ``_send_notifications`` dispatch sees
+                        # the per-charger state. Writing through pcc
+                        # makes the AST lint enforceable: no callsite
+                        # outside the loop touches the parallel dict
+                        # directly.
+                        pcc.effective_state = effective_state
 
                         try:
                             await self._execute_ev_control(
