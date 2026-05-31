@@ -61,7 +61,8 @@ separate HACS bumps).
 - ``# FLEET-READ:`` annotation on the documented multi-charger
   fallback in ``_this_charger_power`` (only reached when a charger
   config omits ``ev_charging_power_sensor`` — rare).
-- 27 new tests across two files (13 ramp-limit + 14 pcc-field):
+- 47 new tests across three areas (13 ramp-limit + 14 pcc-field +
+  20 per-charger flow):
   - ``tests/test_ramp_limit_8.py``: cold-start, near-zero,
     steady-state ramp, stop-fast, custom ``min_current``,
     end-to-end multi-cycle climb.
@@ -70,6 +71,34 @@ separate HACS bumps).
     lifecycle.
   - ``tests/test_this_charger_power_cache.py``: cache HIT, three
     MISS variants, kW→W conversion regression from #315.
+  - ``tests/test_per_charger_energy_flows.py``: sum invariant,
+    multi-cycle accumulation, day rollover, persistence
+    round-trip (incl. legacy snapshot back-compat), edge cases
+    (charger appears mid-day, charger idle in cycle,
+    zero-interval), bad-snapshot defence, sensor-description
+    generation gate.
+
+- **Per-charger flow sensors (gated on ``len(ev_chargers) > 1``)**:
+  ``sensor.sem_charger_<id>_flow_solar_to_ev_power``,
+  ``..._grid_to_ev_power``, ``..._battery_to_ev_power`` (W,
+  MEASUREMENT) plus matching ``..._energy`` (kWh, TOTAL, daily-
+  reset). The Sankey card + HA Energy dashboard can now show
+  per-charger EV sourcing instead of a fleet-proportional split —
+  closes the @RienduPre observation on #316. Single-charger setups
+  unchanged (fleet ``sensor.sem_flow_*_to_ev_*`` is authoritative).
+  - ``ChargerEnergyFlows`` dataclass + ``EnergyFlows.per_charger``
+    field.
+  - ``FlowCalculator._per_charger_accumulators`` (kWh) integrated
+    over time alongside the fleet accumulator; sum invariant
+    pinned in tests.
+  - Day rollover clears both fleet AND per-charger accumulators.
+  - Snapshot persistence round-trip: new ``per_charger`` key
+    under the existing snapshot dict; pre-v1.6.15 snapshots
+    (without the key) restore bit-for-bit identical.
+  - Accumulator semantic: once a charger appears, its kWh stays
+    surfaced until the day rollover, even on cycles where the
+    charger is idle (the user-visible counter must not regress
+    to 0 just because the car unplugs).
 
 ### Why
 
@@ -83,6 +112,16 @@ The ``#8`` surplus-tracker spike fix bundled in here was confirmed
 live on PROD 2026-05-31 during the v1.6.3 soak — held with the
 refactor rather than shipped standalone so PROD users get one
 soak window instead of four staggered HACS updates.
+
+@RienduPre's #316 observation ("Sankey shows charger 2 sourcing
+from grid even in solar_only") was the user-visible gap behind the
+flow-sensor work. v1.6.9 fixed the underlying data (proportional
+W-level split was honest); v1.6.15 ships the entity surface so the
+dashboard + Energy dashboard actually render the per-charger split.
+
+2244 tests pass on Python 3.12 (2210 v1.6.13 baseline + 14 v1.6.14
+field migration + 20 v1.6.15 flow sensors). Manifest will bump to
+1.6.14 in the consolidation PR (after v1.6.16 FleetEvPower newtype).
 
 ## [1.6.12] — 2026-05-31
 

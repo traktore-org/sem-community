@@ -143,7 +143,7 @@ the structural invariant.
 | **v1.6.10** | Code-quality cleanup (#308 / #309 / #310) | ✓ shipped |
 | **v1.6.11** | Recent-logs in diagnostics + doc polish | ✓ shipped |
 | **v1.6.12** | Multi-charger off + solar_only scenario test + harness `per_charger_effective_states` / `per_charger_flow_max` assertions | ✓ shipped |
-| **v1.6.14 (in progress, bundled)** | (a) Surplus tracker jump-from-0 fix (#8); (b) `effective_state` + `this_power_w` migrated onto `PerChargerContext` fields; (c) per-charger flow sensors; (d) `FleetEvPower` newtype. Shipped as one release rather than four per-PR HACS bumps. | ◐ in develop |
+| **v1.6.14 (in progress, bundled)** | (a) ✓ Surplus tracker jump-from-0 fix (#8); (b) ✓ `effective_state` + `this_power_w` migrated onto `PerChargerContext` fields; (c) ✓ per-charger flow sensors (`sensor.sem_charger_<id>_flow_*_to_ev_*` gated on `len(ev_chargers) > 1`); (d) ◻ `FleetEvPower` newtype. Shipping as one release rather than four per-PR HACS bumps. | ◐ in develop |
 
 ### What landed under the abstraction
 
