@@ -84,6 +84,26 @@ but published as one user-visible release.
   out-of-scope list (per-string-to-destination attribution,
   per-string cost, Solcast multi-plane — file-an-issue links).
 
+### Fixed
+
+- **EV charges overnight in `charge_mode=solar_only` (#346)** —
+  also shipped as the v1.6.17 hotfix. `_determine_charging_strategy`
+  returned `"night_grid"` unconditionally when `is_night_mode()` was
+  True, ignoring the per-charger `charge_mode`. Strategy now consults
+  `MODE_NIGHT_ALLOWED` first: `solar_only` at night → `idle`; `off` →
+  `disabled`; other modes unchanged. Defence in depth: actuator self-
+  resume guard extended from `{"disabled"}` to `{"disabled", "idle"}`
+  so future strategy disagreements land safely.
+- **Autarky reported 0% when battery overnight-charged from grid
+  (#344, #345)** — fleet-summed `daily_grid_import` was treated as
+  unconditional autarky penalty, including the grid-to-battery slice
+  that doesn't displace home consumption. Then a second pass (#345)
+  switched the formula to fully flow-attributed accumulators
+  (`solar_to_home + solar_to_ev + battery_to_home + battery_to_ev`
+  over total consumption) so the temporal mismatch between sunrise-
+  reset `daily_ev` and calendar-reset `flow_grid_to_ev` no longer
+  drowns the numerator.
+
 ### Changed
 
 - Day rollover in `FlowCalculator.integrate_energy_flows` now
