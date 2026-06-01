@@ -40,6 +40,15 @@ const ENTITY_SUFFIXES = [
     'pv_performance_vs_forecast',
     'pv_estimated_annual_degradation',
     'pv_degradation_trend',
+    // v1.7.0 / #312: per-PV-string sensors. Watch all 4 slots —
+    // when fewer exist the lookup is a no-op + harmless. Watching
+    // them here makes the card re-render on every per-string sample
+    // change, keeping the chip strip + "Per string today" section
+    // in sync with sibling cards rendering the same sensors.
+    'pv_string_pv1_power', 'pv_string_pv1_daily_energy',
+    'pv_string_pv2_power', 'pv_string_pv2_daily_energy',
+    'pv_string_pv3_power', 'pv_string_pv3_daily_energy',
+    'pv_string_pv4_power', 'pv_string_pv4_daily_energy',
 ];
 
 function buildEntityIds(prefix) {
@@ -389,6 +398,35 @@ class SEMSolarCard extends SEMLitBase {
                             </div>
                         </div>
                     </div>
+
+                    <!-- v1.7.0 / #312: per-PV-string detail. Reuses the
+                         "flow row" style for visual consistency with
+                         the Today's Flows section above. Auto-shown
+                         when ≥ 2 strings are present; collapses to
+                         ``nothing`` on single-string installs. -->
+                    ${pvStrings.length >= 2 ? html`
+                        <div class="section">
+                            <div class="section-title">${this._t('pv_strings_today') || "Per string today"}</div>
+                            <div class="flows-grid">
+                                ${pvStrings.map(s => html`
+                                    <div class="flow-row"
+                                         style="cursor:pointer"
+                                         @click=${() => this._fireMoreInfo?.(s.entityId)}>
+                                        <div class="flow-dot" style="background:#ff9800"></div>
+                                        <span class="flow-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                        <div class="flow-vals">
+                                            <div class="flow-power">${semFormatPower(s.watts)}</div>
+                                            <div class="flow-energy">${
+                                                s.energyKwh != null
+                                                    ? this._fmt(s.energyKwh, 2) + ' kWh'
+                                                    : '—'
+                                            }</div>
+                                        </div>
+                                    </div>
+                                `)}
+                            </div>
+                        </div>
+                    ` : nothing}
 
                     <!-- Forecast + Performance (side by side) -->
                     <div class="section two-col">

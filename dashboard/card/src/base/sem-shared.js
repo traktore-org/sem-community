@@ -144,6 +144,25 @@ export function semCardSurfaceCSS(theme, tintHex, glowAlpha) {
  * render nothing extra for single-string installs, preserving the
  * v1.6.x behaviour.
  */
+/**
+ * Compute a cheap dirty-check string from the per-PV-string sensor
+ * states. Cards whose hass setter normally throttles to imperative
+ * updates (sem-flow-card, sem-system-diagram-card) call this in their
+ * setter; on change they call ``requestUpdate()`` so the Lit-rendered
+ * chip strip refreshes alongside the SVG flow values.
+ *
+ * Returns an empty string when no per-string sensors are present
+ * (single-string installs). Joined with ``|`` so an unavailable state
+ * change is visible in the key. Cheap by design — 4 hash-map lookups.
+ */
+export function semPVStringStatesKey(hass, prefix) {
+    if (!hass?.states) return '';
+    const pfx = prefix || 'sensor.sem_';
+    return ['pv1', 'pv2', 'pv3', 'pv4']
+        .map(s => hass.states[`${pfx}pv_string_${s}_power`]?.state ?? '')
+        .join('|');
+}
+
 export function semDiscoverPVStrings(hass, prefix) {
     if (!hass || !hass.states) return [];
     const pfx = prefix || 'sensor.sem_';
@@ -154,7 +173,24 @@ export function semDiscoverPVStrings(hass, prefix) {
         if (!st) continue;
         const raw = parseFloat(st.state);
         if (isNaN(raw)) continue;
-        found.push({ slot, watts: raw, entityId: eid });
+
+        // Sibling daily-energy sensor (v1.7.0). Always companions the
+        // power sensor when the gate trips, so we surface it on the
+        // same object — callers that just want power ignore the extra
+        // fields; callers that show "today" (sem-solar-card's
+        // per-string detail section) read ``energyKwh`` /
+        // ``energyEntityId`` without a second hass-state walk.
+        const eEid = `${pfx}pv_string_${slot}_daily_energy`;
+        const eSt = hass.states[eEid];
+        const eKwh = eSt ? parseFloat(eSt.state) : NaN;
+
+        found.push({
+            slot,
+            watts: raw,
+            entityId: eid,
+            energyKwh: isNaN(eKwh) ? null : eKwh,
+            energyEntityId: eSt ? eEid : null,
+        });
     }
     return found.length >= 2 ? found : [];
 }

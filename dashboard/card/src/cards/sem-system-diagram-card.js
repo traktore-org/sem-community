@@ -19,7 +19,7 @@
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import {
     semFormatPower, semCalcDuration, semDefineCard, SEM_DEVICE_COLORS,
-    semDiscoverPVStrings, semPVStringsCSS,
+    semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey,
 } from '../base/sem-shared.js';
 
 /* ── Required IDs for imperative updates (must exist in render output) ──
@@ -62,6 +62,16 @@ class SEMSystemDiagramCard extends SEMLitBase {
         if (lang !== this._lang) {
             this._lang = lang;
             this._lastKey = '';
+            this.requestUpdate();
+            return;
+        }
+        // v1.7.0 / #312: per-PV-string chip strip is Lit-rendered;
+        // without this dirty-check the chips freeze and diverge from
+        // sibling cards rendering the same sensors at different
+        // sample times. See sem-flow-card for the matching pattern.
+        const newPVKey = semPVStringStatesKey(hass, this._prefix);
+        if (newPVKey !== this._lastPVKey) {
+            this._lastPVKey = newPVKey;
             this.requestUpdate();
             return;
         }
