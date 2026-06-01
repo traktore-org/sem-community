@@ -232,6 +232,31 @@ class FleetContext:
     """Watts already committed to higher-priority chargers in
     this cycle (the #274/H1 share-one-peak-budget invariant)."""
 
+    # ─── SOC zones (Step 3) ────────────────────────────────────
+    # The four-zone model from ``_zone_based_strategy``. Thresholds
+    # are fleet config (one home battery), so they live here, not
+    # on the per-charger view.
+
+    auto_start_soc: float = 90.0
+    buffer_soc: float = 70.0
+    priority_soc: float = 30.0
+    battery_floor_soc: float = 60.0
+    battery_capacity_kwh: float = 15.0
+
+    min_solar_w: float = 200.0
+    """Solar below this is treated as "no meaningful solar" — the
+    threshold for skipping the surplus calculation entirely.
+    Same constant as ``_zone_based_strategy`` uses at
+    ``coordinator.py:2709``."""
+
+    # ─── Tariff (Step 3) ───────────────────────────────────────
+    tariff_level: "Optional[str]" = None
+    """``None`` when no dynamic tariff configured; otherwise one
+    of ``"very_cheap"`` / ``"cheap"`` / ``"normal"`` / ``"expensive"`` /
+    ``"very_expensive"`` (matches :class:`PriceLevel`). The
+    ``solar_plus_cheap`` mode falls back to pure self-consumption
+    during ``expensive`` / ``very_expensive`` windows."""
+
 
 @dataclass(frozen=True)
 class ChargerView:
