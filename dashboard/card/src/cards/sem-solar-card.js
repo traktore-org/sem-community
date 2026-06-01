@@ -390,6 +390,35 @@ class SEMSolarCard extends SEMLitBase {
                         </div>
                     </div>
 
+                    <!-- v1.7.0 / #312: per-PV-string detail. Reuses the
+                         "flow row" style for visual consistency with
+                         the Today's Flows section above. Auto-shown
+                         when ≥ 2 strings are present; collapses to
+                         ``nothing`` on single-string installs. -->
+                    ${pvStrings.length >= 2 ? html`
+                        <div class="section">
+                            <div class="section-title">${this._t('pv_strings_today') || "Per string today"}</div>
+                            <div class="flows-grid">
+                                ${pvStrings.map(s => html`
+                                    <div class="flow-row"
+                                         style="cursor:pointer"
+                                         @click=${() => this._fireMoreInfo?.(s.entityId)}>
+                                        <div class="flow-dot" style="background:#ff9800"></div>
+                                        <span class="flow-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                        <div class="flow-vals">
+                                            <div class="flow-power">${semFormatPower(s.watts)}</div>
+                                            <div class="flow-energy">${
+                                                s.energyKwh != null
+                                                    ? this._fmt(s.energyKwh, 2) + ' kWh'
+                                                    : '—'
+                                            }</div>
+                                        </div>
+                                    </div>
+                                `)}
+                            </div>
+                        </div>
+                    ` : nothing}
+
                     <!-- Forecast + Performance (side by side) -->
                     <div class="section two-col">
                         <div>
