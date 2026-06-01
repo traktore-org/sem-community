@@ -17,7 +17,9 @@ from typing import TYPE_CHECKING, Dict, Any, List, Optional
 from enum import Enum
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
-    from .charger_types import BatteryPower, InverterPower
+    from .charger_types import (
+        BatteryPower, BatteryRuntime, InverterPower, InverterRuntime,
+    )
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -304,7 +306,23 @@ class PowerFlows:
 
 @dataclass
 class EnergyTotals:
-    """Daily/monthly energy totals."""
+    """Daily/monthly energy totals.
+
+    v1.7.0 arch follow-up: ``daily_solar`` / ``daily_battery_charge``
+    / ``daily_battery_discharge`` are populated as plain fields by
+    sensor_reader for single-device installs. Multi-device installs
+    populate ``per_inverter`` / ``per_battery`` dicts and the
+    legacy fields stay at 0 — the ``daily_solar_view`` /
+    ``daily_battery_charge_view`` / ``daily_battery_discharge_view``
+    @property accessors compute from the dicts and fall back to the
+    legacy field when the dict is empty.
+
+    The properties don't shadow the fields (Python dataclass
+    semantics) — consumers must read ``.daily_solar_view`` etc.
+    to get the per-device-aware value. ``to_dict()`` already emits
+    the legacy fields; the view properties become the canonical
+    sensor source once multi-device installs are common.
+    """
     # Daily totals (kWh)
     daily_solar: float = 0.0
     daily_home: float = 0.0
@@ -330,6 +348,34 @@ class EnergyTotals:
     yearly_battery_charge: float = 0.0
     yearly_battery_discharge: float = 0.0
     yearly_ev: float = 0.0
+
+    # v1.7.0 arch follow-up — per-device runtime dicts.
+    # Populated by sensor_reader on multi-device installs. Empty on
+    # single-device installs → the view properties fall back to the
+    # legacy fields. See ``coordinator/charger_types.py`` for the
+    # runtime dataclass shapes.
+    per_inverter: "Dict[str, InverterRuntime]" = field(default_factory=dict)
+    per_battery: "Dict[str, BatteryRuntime]" = field(default_factory=dict)
+
+    @property
+    def daily_solar_view(self) -> float:
+        """Per-device-aware daily solar kWh. Falls back to
+        ``daily_solar`` when no per-inverter data."""
+        if not self.per_inverter:
+            return self.daily_solar
+        return sum(i.daily_kwh for i in self.per_inverter.values())
+
+    @property
+    def daily_battery_charge_view(self) -> float:
+        if not self.per_battery:
+            return self.daily_battery_charge
+        return sum(b.daily_charge_kwh for b in self.per_battery.values())
+
+    @property
+    def daily_battery_discharge_view(self) -> float:
+        if not self.per_battery:
+            return self.daily_battery_discharge
+        return sum(b.daily_discharge_kwh for b in self.per_battery.values())
 
 
 @dataclass
