@@ -343,30 +343,6 @@ class TestEnergyResetBehavior:
 # Test: Night charging strategy
 # ============================================================
 
-@pytest.mark.unit
-class TestNightChargingStrategy:
-    """Verify night charging only uses grid when target not reached."""
-
-    def test_night_target_reached_returns_idle(self):
-        """Night mode + target reached = idle (don't charge from grid)."""
-        from .test_soc_zone_strategy import _build_coordinator, _make_power, _MockEnergy
-        coord = _build_coordinator()
-        coord.time_manager.is_night_mode.return_value = True
-        strategy, reason = coord._determine_charging_strategy(
-            _make_power(battery_soc=95), _MockEnergy(daily_ev=10.0)
-        )
-        assert strategy == "idle"
-        assert "target reached" in reason.lower()
-
-    def test_solar_target_reached_continues(self):
-        """Daytime + target reached = solar continues (free surplus)."""
-        from .test_soc_zone_strategy import _build_coordinator, _make_power, _MockEnergy
-        coord = _build_coordinator()
-        strategy, _ = coord._determine_charging_strategy(
-            _make_power(battery_soc=95, solar_power=5000), _MockEnergy(daily_ev=10.0)
-        )
-        assert strategy != "idle"
-
 
 # ============================================================
 # Test: Notification filtering

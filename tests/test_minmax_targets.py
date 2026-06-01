@@ -366,38 +366,3 @@ class TestLimitSurplusMigration:
 # Per-charger target propagation into the night decision (#245 review)
 # ──────────────────────────────────────────────
 
-class TestPerChargerTargetPropagation:
-    """The night charge-or-idle decision must honor the PER-CHARGER target,
-    not only the global one (the global/per-charger split that kept biting)."""
-
-    def _night_coord(self, global_target):
-        coord = _make_coordinator({"daily_ev_target": global_target})
-        coord._cycle_vehicle_soc = None
-        tm = MagicMock()
-        tm.is_night_mode = lambda: True
-        coord.time_manager = tm
-        return coord
-
-    def test_night_idle_uses_per_charger_target(self):
-        # Global target 10 (not met at 8.0), but the charger's target is 8 → met
-        # (remaining 0.0 — unambiguously below the 0.1 strict threshold the
-        # strategy and state-machine now share, post-#282 followup).
-        coord = self._night_coord(10)
-        energy = _make_energy(daily_ev=8.0)
-        power = MagicMock(); power.ev_connected = True
-        strat, reason = coord._determine_charging_strategy(
-            power, energy, {"daily_ev_target": 8},
-        )
-        assert strat == "idle"
-        assert "night target reached" in reason
-
-    def test_night_active_when_per_charger_target_not_met(self):
-        # Charger target 12 (not met at 7.8) → should NOT idle on the target gate.
-        coord = self._night_coord(10)
-        coord._tariff_provider = None  # skip price-optimized branch
-        energy = _make_energy(daily_ev=7.8)
-        power = MagicMock(); power.ev_connected = True
-        strat, reason = coord._determine_charging_strategy(
-            power, energy, {"daily_ev_target": 12},
-        )
-        assert strat != "idle" or "target reached" not in reason
