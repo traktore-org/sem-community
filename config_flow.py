@@ -1334,6 +1334,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                # #352 — Enphase + a handful of other installs report
+                # grid power with +import / -export polarity (opposite
+                # of SEM's convention). The Energy-Dashboard-counter
+                # auto-detect can't always stabilise on these (counters
+                # tick at coarse intervals). This toggle is the manual
+                # escape hatch: when ON, the raw read is negated and
+                # auto-detect is bypassed.
+                vol.Optional(
+                    "grid_sign_invert",
+                    default=_c("grid_sign_invert", False),
+                ): selector.BooleanSelector(),
             }),
             errors=errors,
         )
