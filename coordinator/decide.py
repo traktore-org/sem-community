@@ -83,6 +83,39 @@ def self_consumption_surplus_w(view: ChargerView) -> float:
     return max(0.0, available)
 
 
+def battery_assist_budget_w(view: ChargerView) -> float:
+    """Budget for Zone 3/4 battery-assist charging.
+
+    In ``min_plus_solar`` / ``solar_plus_cheap`` / ``always_max``
+    modes (NOT solar_only / off), when the home battery is
+    high enough (Zone 3 or 4), it can discharge to bridge the gap
+    between solar surplus and EV demand. The budget here is:
+
+      Zone 4 (SOC ≥ auto_start_soc): solar - home + usable_battery
+        usable_battery = (SOC - floor_soc) / 100 × capacity, scaled
+        per-cycle so we don't drain in one cycle. Bound by
+        battery_discharge_w (the physical max the battery is
+        currently providing).
+
+      Zone 3 (buffer_soc ≤ SOC < auto_start_soc): same formula but
+        only when forecast shows tomorrow has plenty of sun (legacy
+        ``_zone_based_strategy`` line 2742-2750 — forecast check
+        deferred to Step 5 here; for now we treat Zone 3 same as
+        Zone 4).
+
+      Zone 1/2: no battery assist. Return surplus only.
+    """
+    f = view.fleet
+    surplus = self_consumption_surplus_w(view)
+    zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
+    if zone < 3:
+        return surplus
+    # Zone 3 or 4: add the battery's actual current discharge to
+    # the EV budget. (Don't speculate on future discharge; use what
+    # the inverter is reporting right now.)
+    return surplus + f.battery_discharge_w
+
+
 def amps_from_watts(watts: float, phases: int, voltage: int) -> int:
     """Watts → whole amps (round down). The actuator (Step 4)
     clamps to ``[min_current_a, max_current_a]``."""
@@ -306,10 +339,63 @@ class MinPlusSolarMode(ModeStrategy):
         )
 
     def _decide_day(self, view: ChargerView) -> ChargerDecision:
-        # Daytime min_plus_solar uses the same self-consumption
-        # logic as solar_only — the difference is night behaviour.
-        # Reuse via composition (no inheritance gymnastics).
-        return _SOLAR_ONLY.decide(view)
+        """Daytime min_plus_solar: Zone-aware battery assist on top
+        of solar surplus. Zone 4 (SOC≥90) drains battery to EV;
+        Zone 3 (SOC≥70) discharges battery if it's already; Zone 2
+        is pure solar (same as solar_only); Zone 1 idles."""
+        f = view.fleet
+        cid = view.power.charger_id
+        if not view.power.connected:
+            return ChargerDecision(
+                charger_id=cid, mode="min_plus_solar",
+                intent=ChargerIntent.IDLE,
+                reason="min_plus_solar day: EV disconnected",
+            )
+        zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
+        # Zone 1: battery priority — never charge EV from anywhere
+        # when battery is below priority_soc.
+        if zone == 1:
+            return ChargerDecision(
+                charger_id=cid, mode="min_plus_solar",
+                intent=ChargerIntent.IDLE,
+                reason=(
+                    f"min_plus_solar day: Zone 1 "
+                    f"(SOC={f.battery_soc:.0f}% < priority="
+                    f"{f.priority_soc:.0f}%) — battery priority"
+                ),
+            )
+        # Zone 2: pure solar (same as solar_only).
+        if zone == 2:
+            return _SOLAR_ONLY.decide(view)
+        # Zone 3 / 4: battery-assist budget includes battery_discharge.
+        budget_w = battery_assist_budget_w(view)
+        cfg = view.config if isinstance(view.config, dict) else {}
+        min_amps = int(cfg.get("ev_min_current", 6))
+        phases = int(cfg.get("ev_phases", 3))
+        voltage = int(cfg.get("ev_voltage", 230))
+        min_w = min_amps * phases * voltage
+        if budget_w < min_w:
+            return ChargerDecision(
+                charger_id=cid, mode="min_plus_solar",
+                intent=ChargerIntent.IDLE,
+                budget_w=budget_w,
+                reason=(
+                    f"min_plus_solar day Zone {zone}: budget="
+                    f"{budget_w:.0f}W < min={min_w}W — idle"
+                ),
+            )
+        max_amps = int(cfg.get("ev_max_current", 32))
+        amps = max(min_amps, min(max_amps, amps_from_watts(budget_w, phases, voltage)))
+        return ChargerDecision(
+            charger_id=cid, mode="min_plus_solar",
+            intent=ChargerIntent.CHARGE_AT_AMPS,
+            commanded_amps=amps, budget_w=budget_w,
+            reason=(
+                f"min_plus_solar day Zone {zone}: budget={budget_w:.0f}W "
+                f"→ {amps}A (solar={f.solar_w:.0f}W + battery_dis="
+                f"{f.battery_discharge_w:.0f}W)"
+            ),
+        )
 
 
 # ─────────────────────────────────────────────────────────────────

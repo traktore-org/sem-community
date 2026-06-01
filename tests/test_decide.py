@@ -227,6 +227,56 @@ class TestMinPlusSolarMode:
         assert d.intent is ChargerIntent.IDLE
 
 
+class TestMinPlusSolarZoneAssist:
+    """min_plus_solar day-path uses Zone-aware battery assist
+    (Zone 4 = drain battery; Zone 3 = use current discharge;
+    Zone 2 = pure solar; Zone 1 = idle).
+    """
+
+    def test_zone_4_battery_assist_charges_from_battery(self):
+        """SOC = 95 (Zone 4), solar = 0 (evening), battery
+        discharging 4.5 kW → EV draws from battery."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=0, home_w=500, battery_discharge_w=4500,
+            battery_soc=95,
+        ))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 6   # 4500 W / 690 = 6 A (clamped to min)
+        assert "Zone 4" in d.reason
+
+    def test_zone_3_battery_assist_when_battery_discharging(self):
+        """SOC = 75 (Zone 3), some solar + battery → EV charges."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=3000, home_w=500, battery_discharge_w=2000,
+            battery_soc=75,
+        ))
+        # surplus = 3000 - 500 - battery_charge(0) = 2500
+        # + battery_dis 2000 = 4500 → 6A
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert "Zone 3" in d.reason
+
+    def test_zone_2_falls_back_to_solar_only(self):
+        """SOC = 50 (Zone 2), solar high → pure solar surplus."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=8000, home_w=500, battery_soc=50,
+        ))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        # Zone 2 → solar_only path; surplus = 7500 → 10A
+        assert d.commanded_amps == 10
+
+    def test_zone_1_idle(self):
+        """SOC = 20 (Zone 1), battery priority — EV blocked."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=8000, home_w=500, battery_soc=20,
+        ))
+        assert d.intent is ChargerIntent.IDLE
+        assert "Zone 1" in d.reason
+
+
 class TestSolarPlusCheapMode:
     """Daytime: solar_only behaviour, paused during expensive.
     Night: cheap-window top-up (defers to night planner)."""
