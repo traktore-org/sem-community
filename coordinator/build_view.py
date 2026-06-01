@@ -1,0 +1,127 @@
+"""Build a :class:`ChargerView` from the coordinator's per-cycle data.
+
+The bridge between the existing fleet-primary data model and the new
+per-charger-primary architecture (Steps 1-4). Lives standalone so the
+coordinator imports a single function and the construction details
+stay together.
+
+Step 6 will invert the data model so the coordinator HAS the
+per-charger primaries natively; until then this module is the seam.
+"""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, Mapping, Optional
+
+from .charger_types import (
+    ChargerEnergy,
+    ChargerPower,
+    ChargerView,
+    FleetContext,
+)
+
+if TYPE_CHECKING:  # pragma: no cover — type-only
+    from .types import PowerReadings
+
+
+def build_charger_view(
+    charger_id: str,
+    charger_cfg: Mapping[str, Any],
+    mode: str,
+    power_reading: "PowerReadings",
+    daily_ev_kwh: float,
+    is_night: bool,
+    config: Mapping[str, Any],
+    *,
+    target_kwh: Optional[float] = None,
+    target_soc: Optional[float] = None,
+    deadline_amps: int = 0,
+    tariff_level: Optional[str] = None,
+    tariff_wait: bool = False,
+) -> ChargerView:
+    """Construct a ChargerView from the coordinator's per-cycle state.
+
+    Args:
+        charger_id: The charger's id (matches ``ev_chargers[i]["id"]``).
+        charger_cfg: The per-charger config dict.
+        mode: Resolved per-charger charge mode (from
+            ``effective_charge_mode_for``).
+        power_reading: The fleet PowerReadings; we extract this
+            charger's slice via ``ev_power_per_charger[id]`` and
+            ``ev_connected_per_charger[id]``.
+        daily_ev_kwh: Per-charger calendar-reset kWh today (from
+            ``_daily_ev_per_charger[id]``).
+        is_night: ``time_manager.is_night_mode()``.
+        config: The global config dict (for SOC thresholds, etc.).
+        target_kwh: Per-charger remaining-to-Min kWh, or None.
+        target_soc: Per-charger SOC target, or None.
+        deadline_amps: Pre-computed deadline floor amps (#246), or 0.
+        tariff_level: Tariff price level string, or None.
+        tariff_wait: Night planner says wait for cheap (#247).
+
+    Returns:
+        An immutable :class:`ChargerView` for ``decide()``.
+    """
+    # Per-charger power slice
+    ev_power_per_charger = getattr(power_reading, "ev_power_per_charger", None) or {}
+    this_charger_w = float(ev_power_per_charger.get(charger_id, 0.0))
+
+    # Per-charger connected state — when no per-charger sensor is
+    # configured, fall back to the fleet OR (the legacy behaviour).
+    # Step 6 makes this per-charger native.
+    connected_per_charger = getattr(power_reading, "ev_connected_per_charger", None) or {}
+    if charger_id in connected_per_charger:
+        connected = bool(connected_per_charger[charger_id])
+    else:
+        connected = bool(getattr(power_reading, "ev_connected", False))
+
+    charging_per_charger = getattr(power_reading, "ev_charging_per_charger", None) or {}
+    if charger_id in charging_per_charger:
+        charging = bool(charging_per_charger[charger_id])
+    else:
+        charging = bool(getattr(power_reading, "ev_charging", False))
+
+    cp = ChargerPower(
+        charger_id=charger_id,
+        power_w=this_charger_w,
+        connected=connected,
+        charging=charging,
+    )
+
+    ce = ChargerEnergy(charger_id=charger_id, day_kwh=daily_ev_kwh)
+
+    # Fleet context — same object across every ChargerView in a cycle
+    # (the coordinator should build it ONCE outside the per-charger
+    # loop and pass it in; the test fixture builds one here).
+    fleet = FleetContext(
+        solar_w=float(getattr(power_reading, "solar_power", 0.0) or 0.0),
+        home_w=float(getattr(power_reading, "home_consumption_power", 0.0) or 0.0),
+        battery_charge_w=float(getattr(power_reading, "battery_charge_power", 0.0) or 0.0),
+        battery_discharge_w=float(getattr(power_reading, "battery_discharge_power", 0.0) or 0.0),
+        battery_soc=float(getattr(power_reading, "battery_soc", 0.0) or 0.0),
+        grid_import_w=float(getattr(power_reading, "grid_import_power", 0.0) or 0.0),
+        grid_export_w=float(getattr(power_reading, "grid_export_power", 0.0) or 0.0),
+        is_night=bool(is_night),
+        tariff_level=tariff_level,
+        auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
+        buffer_soc=float(config.get("battery_buffer_soc", 70)),
+        priority_soc=float(config.get("battery_priority_soc", 30)),
+        battery_floor_soc=float(config.get("battery_assist_floor_soc", 60)),
+        battery_capacity_kwh=float(config.get("battery_capacity_kwh", 15)),
+    )
+
+    # Merge per-charger config with the tariff_wait flag so
+    # SolarPlusCheapMode can consult it. Avoids extending the
+    # ChargerView signature with an opaque kwarg.
+    cfg_with_wait = dict(charger_cfg) if isinstance(charger_cfg, dict) else {}
+    cfg_with_wait["_tariff_wait"] = tariff_wait
+
+    return ChargerView(
+        power=cp,
+        energy=ce,
+        mode=mode,
+        config=cfg_with_wait,
+        fleet=fleet,
+        target_kwh=target_kwh,
+        target_soc=target_soc,
+        deadline_amps=deadline_amps,
+    )

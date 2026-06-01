@@ -1330,6 +1330,44 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         # directly.
                         pcc.effective_state = effective_state
 
+                        # ─── arch/multi-charger-primary shadow mode ───
+                        # Build the new ChargerView, call decide(view),
+                        # log the decision. Doesn't actuate yet — the
+                        # legacy _execute_ev_control below is still
+                        # authoritative. The log lines let us verify on
+                        # HA-TEST that the new pipeline produces the
+                        # correct intent for every (mode, environment)
+                        # combination before flipping the actuator.
+                        try:
+                            from .build_view import build_charger_view
+                            from .decide import decide as decide_v2
+                            shadow_view = build_charger_view(
+                                charger_id=cid,
+                                charger_cfg=charger_cfg,
+                                mode=per_mode,
+                                power_reading=power,
+                                daily_ev_kwh=self._daily_ev_per_charger.get(cid, 0.0),
+                                is_night=self.time_manager.is_night_mode(),
+                                config=self.config,
+                                target_kwh=per_remaining_floor,
+                                deadline_amps=int(charging_context.night_deadline_amps or 0),
+                                tariff_wait=bool(charging_context.night_tariff_wait),
+                            )
+                            shadow_decision = decide_v2(shadow_view)
+                            _LOGGER.info(
+                                "shadow-decide %s mode=%s state=%s → "
+                                "intent=%s amps=%d budget=%.0fW :: %s",
+                                cid, per_mode, effective_state,
+                                shadow_decision.intent.value,
+                                shadow_decision.commanded_amps,
+                                shadow_decision.budget_w,
+                                shadow_decision.reason,
+                            )
+                        except Exception as e:
+                            _LOGGER.debug(
+                                "shadow-decide %s failed: %s", cid, e,
+                            )
+
                         try:
                             await self._execute_ev_control(
                                 effective_state, power, energy, charging_context
