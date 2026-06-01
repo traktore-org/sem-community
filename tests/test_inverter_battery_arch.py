@@ -330,6 +330,58 @@ class TestActuateDispatch:
 # Adapter factory
 # ─────────────────────────────────────────────────────────────────
 
+class TestEnergyTotalsViews:
+    """EnergyTotals daily_*_view @property accessors compute from
+    per-device dicts when populated, fall back to legacy fields
+    otherwise."""
+
+    def test_daily_solar_view_empty_dict_falls_back(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            EnergyTotals,
+        )
+        e = EnergyTotals(daily_solar=15.0)
+        assert e.daily_solar_view == 15.0
+
+    def test_daily_solar_view_sums_inverters(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            EnergyTotals,
+        )
+        e = EnergyTotals(daily_solar=0.0)
+        e.per_inverter["a"] = InverterRuntime(inverter_id="a", daily_kwh=8.0)
+        e.per_inverter["b"] = InverterRuntime(inverter_id="b", daily_kwh=5.5)
+        assert e.daily_solar_view == pytest.approx(13.5)
+
+    def test_daily_battery_charge_view_sums(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            EnergyTotals,
+        )
+        e = EnergyTotals(daily_battery_charge=0.0)
+        e.per_battery["a"] = BatteryRuntime(battery_id="a", daily_charge_kwh=4.0)
+        e.per_battery["b"] = BatteryRuntime(battery_id="b", daily_charge_kwh=2.5)
+        assert e.daily_battery_charge_view == pytest.approx(6.5)
+
+    def test_daily_battery_discharge_view_sums(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            EnergyTotals,
+        )
+        e = EnergyTotals()
+        e.per_battery["a"] = BatteryRuntime(battery_id="a", daily_discharge_kwh=3.0)
+        e.per_battery["b"] = BatteryRuntime(battery_id="b", daily_discharge_kwh=1.2)
+        assert e.daily_battery_discharge_view == pytest.approx(4.2)
+
+    def test_views_invariant_legacy_field_matches_when_consistent(self):
+        """When sensor_reader populates BOTH legacy field + dict
+        consistently, the view equals the field. Pinned so a future
+        refactor can't drift them."""
+        from custom_components.solar_energy_management.coordinator.types import (
+            EnergyTotals,
+        )
+        e = EnergyTotals(daily_solar=20.0)
+        e.per_inverter["a"] = InverterRuntime(inverter_id="a", daily_kwh=12.0)
+        e.per_inverter["b"] = InverterRuntime(inverter_id="b", daily_kwh=8.0)
+        assert e.daily_solar_view == e.daily_solar == 20.0
+
+
 class TestAdapterFactory:
     def test_explicit_huawei(self):
         hass = MagicMock()
