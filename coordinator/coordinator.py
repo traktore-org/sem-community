@@ -1376,6 +1376,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             adapter = adapter_for(ev_dev)
                             adapter_cache[cid] = adapter
 
+                        # PR A — pass the same resolved per-charger target that
+                        # the legacy state machine path above used
+                        # (charging_context.night_target_kwh, lines 1287, 1323).
+                        # Pre-fix this passed per_remaining_floor which can
+                        # differ from per_charger_target, causing decide() to
+                        # see 0.6 kWh remaining while the state machine path
+                        # saw 0.05 — the resulting "Night mode - Target reached"
+                        # sensor display vs CHARGE_AT_AMPS intent mismatch
+                        # observed live on PROD 2026-06-01.
+                        decide_target_kwh = (
+                            charging_context.night_target_kwh
+                            if charging_context.night_target_kwh is not None
+                            else per_remaining_floor
+                        )
                         view = build_charger_view(
                             charger_id=cid,
                             charger_cfg=charger_cfg,
@@ -1384,7 +1398,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             daily_ev_kwh=self._daily_ev_per_charger.get(cid, 0.0),
                             is_night=self.time_manager.is_night_mode(),
                             config=self.config,
-                            target_kwh=per_remaining_floor,
+                            target_kwh=decide_target_kwh,
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
                             tariff_wait=bool(charging_context.night_tariff_wait),
                             solar_committed_w=self._solar_committed_w_per_cycle,
@@ -1398,15 +1412,36 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         charging_context.charging_strategy = decision.reason
                         # Reflect decision into the effective_state sensor
                         # (for dashboards that read sem_charging_state).
-                        from .charger_types import ChargerIntent as _CI
-                        if decision.intent is _CI.DISABLE:
-                            effective_state = ChargingState.SOLAR_IDLE
-                        elif decision.intent is _CI.IDLE:
-                            effective_state = ChargingState.SOLAR_IDLE
-                        elif decision.intent is _CI.CHARGE_MAX:
-                            effective_state = ChargingState.SOLAR_SUPER_CHARGING
-                        else:
-                            effective_state = ChargingState.SOLAR_CHARGING_ACTIVE
+                        #
+                        # PR A — preserve night-specific states set above.
+                        # The pre-decide block at lines 1316-1338 already
+                        # computed the correct effective_state for night
+                        # operation (NIGHT_TARGET_REACHED /
+                        # TARIFF_WAITING_FOR_CHEAP / NIGHT_CHARGING_ACTIVE).
+                        # Only overwrite when the global charging_state is a
+                        # solar / non-night state — otherwise the night state
+                        # wins. Pre-fix the intent-derived state unconditionally
+                        # clobbered NIGHT_TARGET_REACHED with
+                        # SOLAR_CHARGING_ACTIVE.
+                        _NIGHT_STATES = (
+                            ChargingState.NIGHT_CHARGING_ACTIVE,
+                            ChargingState.TARIFF_WAITING_FOR_CHEAP,
+                            ChargingState.NIGHT_TARGET_REACHED,
+                            ChargingState.NIGHT_IDLE,
+                            ChargingState.NIGHT_DISABLED,
+                            ChargingState.NIGHT_TIME_EXPIRED,
+                            ChargingState.NIGHT_WAITING_FOR_WINDOW,
+                        )
+                        if effective_state not in _NIGHT_STATES:
+                            from .charger_types import ChargerIntent as _CI
+                            if decision.intent is _CI.DISABLE:
+                                effective_state = ChargingState.SOLAR_IDLE
+                            elif decision.intent is _CI.IDLE:
+                                effective_state = ChargingState.SOLAR_IDLE
+                            elif decision.intent is _CI.CHARGE_MAX:
+                                effective_state = ChargingState.SOLAR_SUPER_CHARGING
+                            else:
+                                effective_state = ChargingState.SOLAR_CHARGING_ACTIVE
                         pcc.effective_state = effective_state
 
                         try:
