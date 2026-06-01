@@ -602,16 +602,42 @@ class TestOffModeTerminatesActiveCharge:
         dev.stop_session.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_idle_strategy_does_not_trigger_override(self):
-        """Generic ``"idle"`` (Zone 1, solar<200W, target met) must NOT
-        trigger the override — only the explicit-off ``"disabled"`` does.
-        Pre-refinement check: prevents the #305 conflation from creeping
-        back in via the actuator path."""
+    async def test_idle_strategy_triggers_override_on_self_resume(self):
+        """#346: ``"idle"`` strategy + charger drawing >500 W without an
+        active session = self-resume anomaly. Same pattern as #315 for
+        ``"disabled"``. The original test asserted the opposite (that
+        only ``"disabled"`` triggered the override), which is exactly
+        what made the PROD #346 incident possible: a solar_only KEBA
+        in NIGHT_DISABLED state with strategy=idle and a self-resumed
+        session kept drawing 1.5 kW because the actuator wouldn't kill
+        a session it didn't own.
+
+        Legitimate ``"idle"`` states (Zone 1, solar<200W, target met)
+        either have an active SEM session (caught by the first branch
+        above) or have ev_power ≈ 0 (handshake idle, caught by the
+        500 W threshold). The combination "idle + no session +
+        >500 W draw" only happens when the charger is acting
+        independently of SEM, which is always wrong.
+        """
         coord = _build_coordinator()
         dev = _make_device(session_active=False, current_setpoint=0)
         coord._ev_device = dev
         ctx = ChargingContext(ev_connected=True, charging_strategy="idle")
         power = PowerReadings(ev_connected=True, ev_power=4140.0)
+        await coord._execute_ev_control(
+            ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
+        dev.stop_session.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_idle_strategy_handshake_only_no_override(self):
+        """#346 + #315: ``"idle"`` with ev_power below the 500 W
+        handshake threshold doesn't trigger the override. Mirrors
+        the equivalent ``"disabled"`` test above."""
+        coord = _build_coordinator()
+        dev = _make_device(session_active=False, current_setpoint=0)
+        coord._ev_device = dev
+        ctx = ChargingContext(ev_connected=True, charging_strategy="idle")
+        power = PowerReadings(ev_connected=True, ev_power=110.0)
         await coord._execute_ev_control(
             ChargingState.SOLAR_IDLE, power, MagicMock(), ctx)
         dev.stop_session.assert_not_awaited()

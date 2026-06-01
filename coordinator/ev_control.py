@@ -564,21 +564,29 @@ class EVControlMixin:
         if ev._session_active:
             await ev.stop_session()
         elif (
-            context.charging_strategy == "disabled"
+            context.charging_strategy in ("disabled", "idle")
             and self._this_charger_drawing_power(ev, power)
         ):
-            # User intent is mode=off but the charger is physically drawing
-            # real power that SEM doesn't own (#315). KEBA P30 is the
-            # canonical example: its firmware self-resumes on plug-in or
-            # after certain internal events using a stored setpoint,
-            # completely independent of SEM. Since SEM never started a
-            # session here, `_session_active` is False and the branch
-            # above is skipped, but the charger keeps drawing. Force-call
-            # stop_session to invoke the per-brand disable (e.g.
-            # ``keba.disable``) every cycle until ev_power drops below
-            # the 500 W threshold (handshake idle is 100–200 W; real
-            # charging starts at 4140 W). Idempotent — safe to call on
+            # User intent is mode=off (#315) or solar_only at night with no
+            # surplus (#346) — but the charger is physically drawing real
+            # power that SEM doesn't own. KEBA P30 is the canonical example:
+            # its firmware self-resumes on plug-in or after certain internal
+            # events using a stored setpoint, completely independent of SEM.
+            # Since SEM never started a session here, ``_session_active`` is
+            # False and the branch above is skipped, but the charger keeps
+            # drawing. Force-call stop_session to invoke the per-brand
+            # disable (e.g. ``keba.disable``) every cycle until ev_power
+            # drops below the 500 W threshold (handshake idle is 100–200 W;
+            # real charging starts at 4140 W). Idempotent — safe to call on
             # an already-disabled charger.
+            #
+            # #346 extended the trigger from {"disabled"} to {"disabled",
+            # "idle"} after a PROD incident where a solar_only KEBA
+            # self-resumed at 22:07 and drew 1.5 kW from the home battery
+            # till 00:48. With the strategy fix in coordinator.py honoring
+            # MODE_NIGHT_ALLOWED, solar_only at night now returns "idle";
+            # without this guard the actuator's terminal branch would still
+            # let the self-resumed session run.
             await ev.stop_session()
             # Suppress the per-cycle INFO log from stop_session() once
             # we've logged it for this self-resume episode. The
@@ -589,14 +597,15 @@ class EVControlMixin:
             # drops below threshold so the next episode is loud again.
             if getattr(self, "_off_mode_stop_logged_for", None) != ev.device_id:
                 _LOGGER.warning(
-                    "Charger %s self-resumed while mode=off (drawing %.0fW). "
+                    "Charger %s self-resumed while strategy=%s (drawing %.0fW). "
                     "Calling stop_session() — will re-assert every cycle "
-                    "until ev_power drops below 500W. (#315)",
-                    ev.name, self._this_charger_power(ev, power),
+                    "until ev_power drops below 500W. (#315/#346)",
+                    ev.name, context.charging_strategy,
+                    self._this_charger_power(ev, power),
                 )
                 self._off_mode_stop_logged_for = ev.device_id
         elif (
-            context.charging_strategy == "disabled"
+            context.charging_strategy in ("disabled", "idle")
             and getattr(self, "_off_mode_stop_logged_for", None) == ev.device_id
         ):
             # Charger settled below threshold — clear the log-suppression
