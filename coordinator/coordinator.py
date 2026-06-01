@@ -951,15 +951,38 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     _LOGGER.warning("Tariff rate update failed; using previous rates: %s", e)
                     self._tariff_rate_warned = True
 
-            # Step 2: Calculate energy from power integration
-            energy = self._energy_calculator.calculate_energy(power)
-
-            # Step 3: Calculate costs and performance
-            costs = self._energy_calculator.calculate_costs(energy)
-            performance = self._energy_calculator.calculate_performance(power, energy)
-
-            # Step 4: Calculate power flows (instantaneous)
+            # Step 2a: Compute instantaneous power flows FIRST. v1.7.0
+            # reorder — the autarky + cost-savings calculators need the
+            # flow-attributed values (``solar_to_home``, ``grid_to_home``
+            # etc.) so we can distinguish "grid → home" from "grid →
+            # battery". Without this, autarky on HA-PROD was reading 0 %
+            # any time the battery had been overnight-grid-charged
+            # (raw ``daily_grid_import`` includes the battery-bound
+            # slice; the flow attribution doesn't).
             power_flows = self._flow_calculator.calculate_power_flows(power)
+
+            # Step 2b: Calculate energy from power integration. The
+            # solar-self-consumed cost-savings accumulator inside
+            # ``calculate_energy`` now uses ``power_flows.solar_to_home
+            # + solar_to_ev`` directly instead of the legacy
+            # subtraction heuristic. See the note inside the function.
+            energy = self._energy_calculator.calculate_energy(power, power_flows)
+
+            # Step 2c: Time-integrate the per-cycle flows into daily
+            # kWh totals. ``energy_flows.grid_to_home + grid_to_ev``
+            # feeds the autarky calculator below.
+            energy_flows = self._flow_calculator.integrate_energy_flows(
+                power_flows, self.update_interval.total_seconds(),
+            )
+
+            # Step 3: Calculate costs and performance. ``performance``
+            # gets ``energy_flows`` so autarky uses the
+            # flow-attributed grid-to-consumption rather than raw
+            # grid_import.
+            costs = self._energy_calculator.calculate_costs(energy)
+            performance = self._energy_calculator.calculate_performance(
+                power, energy, energy_flows,
+            )
 
             # Step 4.5: Update session tracking (before charging decisions)
             # Multi-charger (#112): track sessions for each charger
@@ -1067,15 +1090,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_intelligence = self._update_ev_intelligence(power, energy)
             self._last_ev_intelligence = ev_intelligence  # For notifications (#106)
 
-            # Step 5: Integrate energy flows from this cycle's instantaneous
-            # power_flows (#282). Replaces the legacy daily proportional
-            # allocation (calculate_energy_flows) which credited solar to the
-            # EV even when the EV wasn't drawing. The integrated version
-            # matches the session attribution: small honest numbers that
-            # reflect what physically happened, not a daily average.
-            energy_flows = self._flow_calculator.integrate_energy_flows(
-                power_flows, self.update_interval.total_seconds(),
-            )
+            # (``energy_flows`` was already computed up at step 2c so
+            # ``calculate_performance`` could feed the autarky calculator
+            # with flow-attributed grid_to_home + grid_to_ev. The
+            # legacy step-5 ``integrate_energy_flows`` call here was
+            # removed in v1.7.0 to avoid double-integration.)
 
             # Step 6: Build the charging context. The canonical EV budget
             # is computed inside (#282 unification, Phase B+D) and cached

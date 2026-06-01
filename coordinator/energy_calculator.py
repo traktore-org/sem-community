@@ -9,7 +9,10 @@ from typing import Dict, Any, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .types import PowerReadings, EnergyTotals, CostData, PerformanceMetrics
+from .types import (
+    PowerReadings, EnergyTotals, CostData, PerformanceMetrics,
+    PowerFlows, EnergyFlows,
+)
 from ..utils.time_manager import TimeManager
 
 _LOGGER = logging.getLogger(__name__)
@@ -112,7 +115,10 @@ class EnergyCalculator:
         latest = max(deadlines)
         return self._time_manager.get_current_meter_day_offset_based(latest)
 
-    def calculate_energy(self, power: PowerReadings) -> EnergyTotals:
+    def calculate_energy(
+        self, power: PowerReadings,
+        power_flows: "Optional[PowerFlows]" = None,
+    ) -> EnergyTotals:
         """Calculate energy totals by integrating power over time."""
         now = dt_util.now()
         today = now.date()  # Midnight-based reset — matches HA Energy Dashboard
@@ -220,15 +226,33 @@ class EnergyCalculator:
 
         # Solar self-consumption savings (incremental, rate-weighted for dynamic tariff accuracy)
         # Only tracks savings from solar — battery discharge savings are in cost_batt_savings.
-        # Subtracting discharge_incr prevents double-counting: battery discharge is not solar.
-        home_incr = (power.home_consumption_power * interval_hours) / 1000 if power.home_consumption_power >= MIN_POWER_THRESHOLD else 0.0
-        # FLEET-READ: same fleet-energy integration as ``ev_daily_sun``
-        # above, applied here to the cost-savings accumulator.
-        ev_incr = (power.ev_power * interval_hours) / 1000 if power.ev_power >= MIN_POWER_THRESHOLD else 0.0
-        import_incr = (power.grid_import_power * interval_hours) / 1000 if power.grid_import_power >= MIN_POWER_THRESHOLD else 0.0
-        discharge_incr = (power.battery_discharge_power * interval_hours) / 1000 if power.battery_discharge_power >= MIN_POWER_THRESHOLD else 0.0
-        # Solar self-consumed = total consumption minus what came from grid or battery discharge
-        solar_self_consumed = max(0.0, (home_incr + ev_incr) - import_incr - discharge_incr)
+        #
+        # v1.7.0: use flow-attributed solar_to_home + solar_to_ev when
+        # ``power_flows`` is passed (computed by ``calculate_power_flows``).
+        # The legacy subtraction heuristic
+        # ``(home + ev) - import - discharge`` undercounts savings whenever
+        # the grid is simultaneously charging the battery (cheap-tariff
+        # daytime, mixed solar+grid moments) because ``import_incr`` is the
+        # raw grid pull — including the grid → battery slice that DIDN'T
+        # displace any home consumption. Same bug class as the autarky
+        # mis-attribution; see ``calculate_performance`` for the symmetric
+        # fix.
+        if power_flows is not None:
+            solar_self_consumed = (
+                ((power_flows.solar_to_home + power_flows.solar_to_ev)
+                 * interval_hours) / 1000
+            )
+        else:
+            home_incr = (power.home_consumption_power * interval_hours) / 1000 if power.home_consumption_power >= MIN_POWER_THRESHOLD else 0.0
+            # FLEET-READ: legacy fallback path. ``power_flows`` is the
+            # preferred input in the v1.7.0+ coordinator pipeline; this
+            # branch only fires for the two-arg test fixtures that
+            # pre-date the per-cycle ``calculate_power_flows`` call.
+            ev_incr = (power.ev_power * interval_hours) / 1000 if power.ev_power >= MIN_POWER_THRESHOLD else 0.0
+            import_incr = (power.grid_import_power * interval_hours) / 1000 if power.grid_import_power >= MIN_POWER_THRESHOLD else 0.0
+            discharge_incr = (power.battery_discharge_power * interval_hours) / 1000 if power.battery_discharge_power >= MIN_POWER_THRESHOLD else 0.0
+            # Solar self-consumed = total consumption minus what came from grid or battery discharge
+            solar_self_consumed = max(0.0, (home_incr + ev_incr) - import_incr - discharge_incr)
         if solar_self_consumed > 0.0:
             self._accumulate_cost("cost_savings", today, month_key, year_key, solar_self_consumed * self._import_rate)
 
@@ -730,12 +754,30 @@ class EnergyCalculator:
         return costs
 
     def calculate_performance(
-        self, power: PowerReadings, energy: EnergyTotals
+        self, power: PowerReadings, energy: EnergyTotals,
+        energy_flows: "Optional[EnergyFlows]" = None,
     ) -> PerformanceMetrics:
-        """Calculate performance metrics."""
+        """Calculate performance metrics.
+
+        ``energy_flows`` (v1.7.0+ — optional for back-compat with the
+        legacy two-arg call shape) provides flow-attributed daily
+        kWh totals. When supplied, the autarky calculation uses
+        ``grid_to_home + grid_to_ev`` instead of the raw
+        ``daily_grid_import``. The legacy formula treated every kWh
+        imported from the grid as a penalty against autarky — but a
+        kWh that flowed grid → battery (e.g. overnight cheap-tariff
+        charging) doesn't reduce the home's own-supply share. Live
+        evidence captured on HA-PROD 2026-06-01: 9.38 kWh grid_import
+        with 2.9 kWh going to the battery left autarky pinned at 0 %
+        while self_consumption was 98.1 % — clearly the formula was
+        mis-attributing the grid → battery slice.
+        """
         metrics = PerformanceMetrics()
 
-        # Self consumption rate = (solar - export) / solar
+        # Self consumption rate = (solar - export) / solar — direction-of-
+        # flow-agnostic; whatever solar didn't go to the grid was
+        # consumed locally (by home, battery, or EV). No flow attribution
+        # needed.
         if energy.daily_solar > 0:
             solar_used = energy.daily_solar - energy.daily_grid_export
             metrics.self_consumption_rate = round(
@@ -743,10 +785,21 @@ class EnergyCalculator:
             )
             metrics.self_consumption_rate = max(0, min(100, metrics.self_consumption_rate))
 
-        # Autarky rate = (consumption - import) / consumption
+        # Autarky rate = (consumption - grid-to-consumption) / consumption.
+        # Use the flow-attributed grid_to_home + grid_to_ev when
+        # available; fall back to the legacy raw daily_grid_import for
+        # callers that don't yet pass energy_flows (kept for the v1.6.x
+        # test fixtures + any external integration).
         total_consumption = energy.daily_home + energy.daily_ev
         if total_consumption > 0:
-            own_supply = total_consumption - energy.daily_grid_import
+            if energy_flows is not None:
+                grid_to_consumption = (
+                    getattr(energy_flows, "grid_to_home", 0.0)
+                    + getattr(energy_flows, "grid_to_ev", 0.0)
+                )
+            else:
+                grid_to_consumption = energy.daily_grid_import
+            own_supply = total_consumption - grid_to_consumption
             metrics.autarky_rate = round((own_supply / total_consumption) * 100, 1)
             metrics.autarky_rate = max(0, min(100, metrics.autarky_rate))
 
