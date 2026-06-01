@@ -733,7 +733,27 @@ class SEMEVStatusCard extends SEMLitBase {
                             </svg>
                         </div>
 
-                        ${this._chargers.length > 1 ? nothing : html`
+                        ${this._chargers.length >= 1 ? html`
+                            <!-- #356: when at least one per-charger section
+                                 will render below, the hero only shows a
+                                 single status/power line. The per-charger
+                                 section repeats today/session/solar-share/
+                                 power for each charger, so duplicating them
+                                 here as well produced the "4 tiles per
+                                 charger" appearance the user reported. -->
+                            <div class="metrics-col compact">
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('status')}</span>
+                                    <span class="${statusClass}">${statusText}</span>
+                                </div>
+                                ${charging ? html`
+                                    <div class="metric-row power-row">
+                                        <span class="metric-label">${this._t('power')}</span>
+                                        <span class="metric-value power-value">${semFormatPower(power)}</span>
+                                    </div>
+                                ` : nothing}
+                            </div>
+                        ` : html`
                             <div class="metrics-col">
                                 <div class="metric-row">
                                     <span class="metric-label">${this._t('status')}</span>
@@ -757,7 +777,7 @@ class SEMEVStatusCard extends SEMLitBase {
                         `}
                     </div>
 
-                    ${this._chargers.length > 1 ? nothing : html`
+                    ${this._chargers.length >= 1 ? nothing : html`
                         <div class="bottom-bar">
                             <div class="chip">
                                 <span class="chip-label">${this._t('session_cost')}</span>

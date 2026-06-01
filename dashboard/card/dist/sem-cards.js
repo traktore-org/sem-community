@@ -2809,7 +2809,27 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                             </svg>
                         </div>
 
-                        ${this._chargers.length>1?K:H`
+                        ${this._chargers.length>=1?H`
+                            <!-- #356: when at least one per-charger section
+                                 will render below, the hero only shows a
+                                 single status/power line. The per-charger
+                                 section repeats today/session/solar-share/
+                                 power for each charger, so duplicating them
+                                 here as well produced the "4 tiles per
+                                 charger" appearance the user reported. -->
+                            <div class="metrics-col compact">
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t("status")}</span>
+                                    <span class="${c}">${l}</span>
+                                </div>
+                                ${e?H`
+                                    <div class="metric-row power-row">
+                                        <span class="metric-label">${this._t("power")}</span>
+                                        <span class="metric-value power-value">${ht(i)}</span>
+                                    </div>
+                                `:K}
+                            </div>
+                        `:H`
                             <div class="metrics-col">
                                 <div class="metric-row">
                                     <span class="metric-label">${this._t("status")}</span>
@@ -2833,7 +2853,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         `}
                     </div>
 
-                    ${this._chargers.length>1?K:H`
+                    ${this._chargers.length>=1?K:H`
                         <div class="bottom-bar">
                             <div class="chip">
                                 <span class="chip-label">${this._t("session_cost")}</span>
