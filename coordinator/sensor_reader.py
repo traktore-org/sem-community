@@ -427,9 +427,21 @@ class SensorReader:
         ed = self._energy_dashboard_config
         readings = PowerReadings()
 
-        # Solar power — sum all inverters if multiple configured
+        # Solar power — sum all inverters if multiple configured.
+        # v1.7.0 arch/multi-inverter-battery-primary: also populate
+        # the per-inverter dict so downstream consumers can attribute
+        # by inverter (multi-inverter installs only — single-inverter
+        # leaves the dict empty and falls back to readings.solar_power).
+        from .charger_types import InverterPower
         if len(ed.solar_power_list) > 1:
-            readings.solar_power = self._read_sensors_sum(ed.solar_power_list, "solar")
+            total = 0.0
+            for entity in ed.solar_power_list:
+                w = self._read_sensor(entity, "solar")
+                total += w
+                readings.inverters[entity] = InverterPower(
+                    inverter_id=entity, power_w=w, name=entity,
+                )
+            readings.solar_power = total
         elif ed.solar_power:
             readings.solar_power = self._read_sensor(ed.solar_power, "solar")
 
@@ -493,10 +505,23 @@ class SensorReader:
                 )
 
         # Battery power — sum all battery units if multiple configured.
-        # Sign auto-detection (in read_power → _detect_battery_sign) uses the
-        # primary sensor and assumes all units share the same sign convention.
+        # v1.7.0 arch: also populate the per-battery dict so multi-
+        # battery installs can be attributed per-unit. Single-battery
+        # leaves the dict empty and downstream consumers fall back to
+        # readings.battery_power.
+        # Sign auto-detection (in read_power → _detect_battery_sign)
+        # uses the primary sensor and assumes all units share the same
+        # sign convention.
+        from .charger_types import BatteryPower
         if len(ed.battery_power_list) > 1:
-            readings.battery_power = self._read_sensors_sum(ed.battery_power_list, "battery")
+            total = 0.0
+            for entity in ed.battery_power_list:
+                w = self._read_sensor(entity, "battery")
+                total += w
+                readings.batteries[entity] = BatteryPower(
+                    battery_id=entity, power_w=w, name=entity,
+                )
+            readings.battery_power = total
         elif ed.battery_power:
             readings.battery_power = self._read_sensor(ed.battery_power, "battery")
 

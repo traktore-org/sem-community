@@ -13,8 +13,11 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import TYPE_CHECKING, Dict, Any, List, Optional
 from enum import Enum
+
+if TYPE_CHECKING:  # pragma: no cover — type-only
+    from .charger_types import BatteryPower, InverterPower
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,7 +91,22 @@ class FleetEvPower(float):
 
 @dataclass
 class PowerReadings:
-    """Current power readings from sensors."""
+    """Current power readings from sensors.
+
+    v1.7.0 arch/multi-device-primary: the per-device dicts
+    (``inverters``, ``batteries``, ``ev_power_per_charger``,
+    ``solar_power_per_string``) are the PRIMARY representation.
+    The legacy fleet float fields (``solar_power``, ``battery_power``,
+    ``ev_power``) are kept as cached sums for backward compat with
+    downstream consumers; ``sensor_reader`` populates both. The
+    ``fleet_solar_w`` / ``fleet_battery_w`` / ``fleet_ev_w``
+    properties are the sanctioned way to read the fleet sum going
+    forward — they recompute from the dict and so cannot drift.
+
+    Pin: ``solar_power == fleet_solar_w`` and
+    ``battery_power == fleet_battery_w`` whenever the dicts are
+    populated. Enforced by the Step 8 invariant test suite.
+    """
     solar_power: float = 0.0
     grid_power: float = 0.0  # Negative = import, Positive = export
     battery_power: float = 0.0  # Positive = charge, Negative = discharge
@@ -124,6 +142,29 @@ class PowerReadings:
     # inverter setups; downstream readers must fall back to
     # ``solar_power``.
     solar_power_per_string: "Dict[str, float]" = field(default_factory=dict)
+
+    # v1.7.0 arch/multi-inverter-battery-primary.
+    #
+    # Per-inverter and per-battery dicts are now the PRIMARY
+    # representation of multi-device fleets. ``sensor_reader``
+    # populates them whenever the config lists more than one
+    # source (``solar_power_list`` length > 1 or
+    # ``battery_power_list`` length > 1). The fleet ``solar_power``
+    # and ``battery_power`` fields above stay as cached sums for
+    # backward compat — every downstream consumer that adds up
+    # ``solar_power`` continues to work — but new code should
+    # read the dicts via ``fleet_solar_w`` / ``fleet_battery_w``
+    # (the ``@property`` accessors below) so a future refactor
+    # can swap the cached sums to computed-on-read without a
+    # consumer churn.
+    #
+    # Sum invariants pinned by ``tests/test_step8_invariants.py``:
+    #   ``solar_power == fleet_solar_w`` (cached == computed)
+    #   ``battery_power == fleet_battery_w``
+    # The invariant doesn't fire on single-device setups (dict
+    # empty) — they keep the fleet field semantics unchanged.
+    inverters: "Dict[str, InverterPower]" = field(default_factory=dict)
+    batteries: "Dict[str, BatteryPower]" = field(default_factory=dict)
 
     # Derived values
     grid_import_power: float = 0.0
@@ -161,6 +202,47 @@ class PowerReadings:
         energy_in = self.solar_power + self.grid_import_power + self.battery_discharge_power
         energy_out = self.ev_power + self.grid_export_power + self.battery_charge_power
         self.home_consumption_power = max(0, energy_in - energy_out)
+
+    # ─── arch/multi-inverter-battery-primary @property views ───
+    #
+    # ``fleet_*_w`` accessors compute from the per-device dict —
+    # the sanctioned way to obtain a fleet sum going forward.
+    # New code reads these; legacy ``solar_power``/``battery_power``
+    # consumers continue to work via the cached field.
+
+    @property
+    def fleet_solar_w(self) -> float:
+        """Fleet-aggregated solar AC power (W). Computed from the
+        per-inverter dict. Empty dict (single-inverter or pre-v1.7.0
+        snapshot) falls back to the cached ``solar_power``."""
+        if not self.inverters:
+            return self.solar_power
+        return sum(i.power_w for i in self.inverters.values())
+
+    @property
+    def fleet_battery_w(self) -> float:
+        """Fleet-aggregated battery power (W; + = charge,
+        − = discharge). Computed from the per-battery dict."""
+        if not self.batteries:
+            return self.battery_power
+        return sum(b.power_w for b in self.batteries.values())
+
+    @property
+    def fleet_battery_soc(self) -> float:
+        """Capacity-weighted fleet SOC (0-100). Falls back to the
+        single ``battery_soc`` field when the per-battery dict is
+        empty or no unit reports its capacity."""
+        if not self.batteries:
+            return self.battery_soc
+        total_capacity = sum(b.capacity_kwh for b in self.batteries.values())
+        if total_capacity <= 0:
+            # No capacity → simple arithmetic mean (better than 0)
+            socs = [b.soc_pct for b in self.batteries.values()]
+            return sum(socs) / len(socs) if socs else self.battery_soc
+        weighted_sum = sum(
+            b.soc_pct * b.capacity_kwh for b in self.batteries.values()
+        )
+        return weighted_sum / total_capacity
 
 
 @dataclass
