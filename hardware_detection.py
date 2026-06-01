@@ -1385,6 +1385,29 @@ _PV_STRING_PATTERNS: List[re.Pattern] = [
     re.compile(r"string[_\s]*(\d+)[_\s]*(?:power|watt)", re.IGNORECASE),
 ]
 
+# v1.7.0 V+I synthesis: some integrations (Huawei Solar Modbus, several
+# Modbus-only inverter brands) expose ``pv_N_voltage`` and
+# ``pv_N_current`` per string but no ``pv_N_power``. When these pairs
+# are discovered, SEM multiplies V × I at read time in
+# ``sensor_reader`` to synthesise the per-string power. Same slot
+# scheme (``pv1``, ``pv2``, …) and same len ≥ 2 gate as direct-power
+# discovery.
+#
+# Voltage / current names vary by integration locale:
+#   English: voltage / current
+#   German:  spannung / strom         (e.g. huawei_solar)
+#   Volt/Amp short forms also accepted
+_PV_VOLTAGE_PATTERNS: List[re.Pattern] = [
+    re.compile(r"pv[_\s]*(\d+)[_\s]*(?:voltage|spannung|volt)\b", re.IGNORECASE),
+    re.compile(r"mppt[_\s]*(\d+)[_\s]*(?:voltage|spannung|volt)\b", re.IGNORECASE),
+    re.compile(r"string[_\s]*(\d+)[_\s]*(?:voltage|spannung|volt)\b", re.IGNORECASE),
+]
+_PV_CURRENT_PATTERNS: List[re.Pattern] = [
+    re.compile(r"pv[_\s]*(\d+)[_\s]*(?:current|strom|amp)\b", re.IGNORECASE),
+    re.compile(r"mppt[_\s]*(\d+)[_\s]*(?:current|strom|amp)\b", re.IGNORECASE),
+    re.compile(r"string[_\s]*(\d+)[_\s]*(?:current|strom|amp)\b", re.IGNORECASE),
+]
+
 
 def discover_pv_strings_from_registry(
     hass: HomeAssistant,
@@ -1478,6 +1501,123 @@ def discover_pv_strings_from_registry(
         return result
 
     return {}
+
+
+def discover_pv_string_vi_pairs(
+    hass: "HomeAssistant",
+    energy_dashboard_config,
+) -> Dict[str, Tuple[str, str]]:
+    """Auto-discover per-string voltage+current sensor pairs (v1.7.0).
+
+    Companion to ``discover_pv_strings_from_registry``. Some integrations
+    (Huawei Solar Modbus, generic Modbus drivers, several other
+    Modbus-only inverter brands) expose ``pv_N_voltage`` and
+    ``pv_N_current`` per string but DO NOT publish a pre-multiplied
+    ``pv_N_power`` sensor. Detected on HA-PROD 2026-06-01:
+    ``sensor.inverter_pv_1_spannung`` + ``..._strom`` are there, but
+    no ``pv_1_power`` — direct-power discovery comes back empty.
+
+    This function fills the gap. The caller (coordinator) calls BOTH
+    functions; ``sensor_reader`` reads either form at runtime. When V
+    and I pair are stored, SEM multiplies them every cycle to
+    synthesise the per-string watts.
+
+    Args:
+        hass: Home Assistant instance.
+        energy_dashboard_config: ``EnergyDashboardConfig`` (same seed
+            as the direct-power discovery).
+
+    Returns:
+        Dict mapping slot label (``"pv1"``, ``"pv2"``, …) to a tuple
+        ``(voltage_entity_id, current_entity_id)``. Empty dict when
+        no pairs are found, fewer than 2 complete pairs are found, or
+        the seed is unavailable. Max 4 entries.
+
+    Why fewer-than-2 returns empty:
+        The downstream sensor surface is gated on ``len(strings) >= 2``
+        anyway (single-string users see no per-string entities — the
+        fleet ``sensor.sem_solar_power`` is authoritative there).
+        Returning ``{}`` early keeps the coordinator path consistent
+        with the direct-power discovery's gate semantics.
+    """
+    if energy_dashboard_config is None:
+        return {}
+
+    seed_candidates = [
+        getattr(energy_dashboard_config, "solar_power", None),
+        getattr(energy_dashboard_config, "solar_energy", None),
+    ]
+    seed_candidates = [s for s in seed_candidates if s]
+    if not seed_candidates:
+        return {}
+
+    entity_reg = entity_registry.async_get(hass)
+    seed_entry = None
+    for seed in seed_candidates:
+        entry = entity_reg.async_get(seed)
+        if entry is not None:
+            seed_entry = entry
+            break
+
+    if seed_entry is None or not seed_entry.platform:
+        return {}
+
+    platform = seed_entry.platform
+    config_entry_id = seed_entry.config_entry_id
+
+    # Collect candidate sibling sensors. Same scoping rule as
+    # ``discover_pv_strings_from_registry`` — same integration, same
+    # config entry — so cross-integration entities can't false-pair.
+    siblings: List[str] = []
+    for entry in entity_reg.entities.values():
+        if entry.platform != platform:
+            continue
+        if entry.disabled_by:
+            continue
+        if not entry.entity_id.startswith("sensor."):
+            continue
+        if config_entry_id and entry.config_entry_id != config_entry_id:
+            continue
+        siblings.append(entry.entity_id)
+
+    # Match voltage candidates per string number.
+    voltages: Dict[int, str] = {}
+    for eid in siblings:
+        for pat in _PV_VOLTAGE_PATTERNS:
+            m = pat.search(eid)
+            if m:
+                n = int(m.group(1))
+                if 1 <= n <= 4 and n not in voltages:
+                    voltages[n] = eid
+                break
+
+    # Match current candidates per string number.
+    currents: Dict[int, str] = {}
+    for eid in siblings:
+        for pat in _PV_CURRENT_PATTERNS:
+            m = pat.search(eid)
+            if m:
+                n = int(m.group(1))
+                if 1 <= n <= 4 and n not in currents:
+                    currents[n] = eid
+                break
+
+    # Intersect — only strings with BOTH V and I get returned.
+    paired = {n: (voltages[n], currents[n]) for n in voltages if n in currents}
+    if len(paired) < 2:
+        return {}
+
+    result = {
+        f"pv{n}": pair
+        for n, pair in sorted(paired.items())
+    }
+    for slot, (v_eid, c_eid) in result.items():
+        _LOGGER.info(
+            "PV string %s V+I pair detected: V=%s I=%s (platform=%s) "
+            "— SEM will synthesise power = V × I at read time",
+            slot, v_eid, c_eid, platform,
+        )
+    return result
 
 
 # ============================================================

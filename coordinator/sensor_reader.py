@@ -115,31 +115,87 @@ class SensorReader:
             ev_charging_sensor=config.get("ev_charging_sensor", ""),
         )
 
-    def set_pv_strings(self, pv_strings_map: Dict[str, str]) -> None:
-        """Register the discovered per-PV-string sensors (v1.7.0 / #312).
+    def _read_pv_string_source(self, slot: str, source) -> float:
+        """Read one per-PV-string source (v1.7.0 / #312).
 
-        ``pv_strings_map`` is the return value of
-        ``hardware_detection.discover_pv_strings_from_registry`` —
-        ``{"pv1_power": "sensor.inverter_pv1_power", ...}`` with up to
-        4 entries. We strip the trailing ``_power`` to get the stable
-        slot label (``"pv1"``, ``"pv2"``, …) used as the dict key on
-        ``PowerReadings.solar_power_per_string`` and the suffix on
-        the published sensors (``sensor.sem_pv_string_1_power`` etc.).
+        Handles both registered source shapes:
 
-        Single-string installs pass an empty dict; sensor reads stay
+        - ``str`` → direct power entity. Read the value, return W.
+        - ``tuple(V_entity, I_entity)`` → V+I synthesis. Read both,
+          return ``V × I`` (W). Used for inverter integrations that
+          publish voltage + current per string but no power sensor
+          (Huawei Solar Modbus is the motivating case — confirmed
+          on HA-PROD 2026-06-01: ``inverter_pv_1_spannung`` and
+          ``..._strom`` exist but no ``..._power``).
+
+        Returns 0.0 on any read failure (unavailable sensor, non-
+        numeric state, etc.) — same fail-soft contract as
+        ``_read_sensor``. The synthesised power is then surfaced
+        through the same ``solar_power_per_string`` dict as a
+        directly-read value; downstream consumers don't need to
+        know the source shape.
+        """
+        if isinstance(source, tuple):
+            v_entity, i_entity = source
+            v = self._read_sensor(v_entity, f"pv_{slot}_voltage")
+            i = self._read_sensor(i_entity, f"pv_{slot}_current")
+            return float(v) * float(i)
+        # Direct power entity — keep the legacy fast path.
+        return self._read_sensor(source, f"pv_{slot}")
+
+    def set_pv_strings(
+        self,
+        pv_strings_map: Dict[str, str],
+        pv_vi_pairs_map: Optional[Dict[str, "Tuple[str, str]"]] = None,
+    ) -> None:
+        """Register the discovered per-PV-string sources (v1.7.0 / #312).
+
+        Two sources supported, both feed the same ``_pv_strings`` dict:
+
+        - ``pv_strings_map``: result of
+          ``hardware_detection.discover_pv_strings_from_registry`` —
+          direct power sensors (``{"pv1_power": "sensor.inverter_pv1_power"}``).
+        - ``pv_vi_pairs_map`` (v1.7.0): result of
+          ``hardware_detection.discover_pv_string_vi_pairs`` —
+          V+I sibling pairs for inverters that publish only voltage
+          and current per string (Huawei Solar Modbus, generic
+          Modbus drivers). At read time SEM multiplies V × I to
+          synthesise the per-string watts. Keys are stripped slot
+          labels ``"pv1"`` / ``"pv2"`` / …; values are tuples
+          ``(voltage_entity, current_entity)``.
+
+        When the same slot appears in BOTH maps, the direct power
+        sensor wins — it's a real measurement rather than a
+        computed product, slightly more accurate (the inverter's
+        own internal computation accounts for MPPT efficiency etc.).
+
+        Single-string installs pass empty dicts; sensor reads stay
         identical to today.
 
         Called once from ``SEMCoordinator.async_initialize_energy_dashboard``
         after Energy Dashboard config is read — discovery is a config-
         flow operation, not something to repeat every cycle.
         """
-        self._pv_strings: Dict[str, str] = {}
+        # Internal shape: ``{slot: str | (V_entity, I_entity)}``. Stored
+        # as ``Any`` because the union type is awkward to express in
+        # a single dataclass field; the per-cycle read loop tags by
+        # ``isinstance(value, tuple)``.
+        self._pv_strings: Dict[str, "Any"] = {}
+
         for slot_key, entity_id in (pv_strings_map or {}).items():
             # Slot keys arrive as ``pv1_power``, ``mppt1_power`` etc.
             # Normalise to ``pv1`` for stable downstream labelling.
             label = slot_key.replace("_power", "").replace("mppt", "pv")
             if entity_id:
                 self._pv_strings[label] = entity_id
+
+        for slot_label, vi_pair in (pv_vi_pairs_map or {}).items():
+            # Don't override a direct power entry from a parallel
+            # V+I match — see contract above.
+            if slot_label in self._pv_strings:
+                continue
+            if vi_pair and len(vi_pair) == 2 and all(vi_pair):
+                self._pv_strings[slot_label] = tuple(vi_pair)
 
     def set_energy_dashboard_config(self, ed_config) -> None:
         """Set energy dashboard configuration for alternative sensor reading."""
@@ -380,11 +436,13 @@ class SensorReader:
         # v1.7.0 / #312: per-PV-string power. Gated on len ≥ 2 — single-
         # string setups get nothing here and downstream readers fall
         # back to ``readings.solar_power``. The discovery already
-        # capped the slot count at 4, so the loop is O(≤4).
+        # capped the slot count at 4, so the loop is O(≤4). Sources
+        # may be either a direct power entity (str) or a V+I sibling
+        # pair (tuple) — the per-cycle helper handles both.
         if len(self._pv_strings) >= 2:
-            for slot, entity_id in self._pv_strings.items():
-                readings.solar_power_per_string[slot] = self._read_sensor(
-                    entity_id, f"pv_{slot}",
+            for slot, source in self._pv_strings.items():
+                readings.solar_power_per_string[slot] = self._read_pv_string_source(
+                    slot, source,
                 )
 
         # Grid power from Energy Dashboard.

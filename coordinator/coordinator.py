@@ -658,15 +658,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 try:
                     from ..hardware_detection import (
                         discover_pv_strings_from_registry,
+                        discover_pv_string_vi_pairs,
                     )
                     pv_strings = discover_pv_strings_from_registry(
                         self.hass, dashboard_config,
-                    )
-                    self._sensor_reader.set_pv_strings(pv_strings or {})
-                    if pv_strings:
+                    ) or {}
+                    # V+I synthesis (v1.7.0): for integrations that
+                    # publish per-string voltage + current but no
+                    # per-string power (Huawei Solar Modbus, generic
+                    # Modbus drivers). SEM multiplies V × I at read
+                    # time so these users get the per-string sensors
+                    # without writing a template themselves. Direct
+                    # power match wins over V+I synthesis when both
+                    # exist for the same slot (real sensor preferred).
+                    vi_pairs = discover_pv_string_vi_pairs(
+                        self.hass, dashboard_config,
+                    ) or {}
+                    self._sensor_reader.set_pv_strings(pv_strings, vi_pairs)
+                    if pv_strings or vi_pairs:
                         _info(
-                            "Per-PV-string discovery found %d strings: %s",
-                            len(pv_strings), list(pv_strings.keys()),
+                            "Per-PV-string discovery: %d direct power, "
+                            "%d V+I pairs",
+                            len(pv_strings), len(vi_pairs),
                         )
                 except Exception as err:  # noqa: BLE001 — discovery never fatal
                     _LOGGER.debug(
