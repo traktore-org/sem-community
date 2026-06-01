@@ -785,23 +785,64 @@ class EnergyCalculator:
             )
             metrics.self_consumption_rate = max(0, min(100, metrics.self_consumption_rate))
 
-        # Autarky rate = (consumption - grid-to-consumption) / consumption.
-        # Use the flow-attributed grid_to_home + grid_to_ev when
-        # available; fall back to the legacy raw daily_grid_import for
-        # callers that don't yet pass energy_flows (kept for the v1.6.x
-        # test fixtures + any external integration).
-        total_consumption = energy.daily_home + energy.daily_ev
-        if total_consumption > 0:
-            if energy_flows is not None:
-                grid_to_consumption = (
-                    getattr(energy_flows, "grid_to_home", 0.0)
-                    + getattr(energy_flows, "grid_to_ev", 0.0)
+        # Autarky rate — share of consumption supplied from "own"
+        # sources (solar + battery) vs grid.
+        #
+        # When ``energy_flows`` is provided we use ONLY flow-attributed
+        # values — all calendar-midnight aligned, so no temporal-
+        # mismatch bug. Earlier fix used ``daily_home + daily_ev`` for
+        # the denominator but ``daily_ev`` resets at SUNRISE (per #279
+        # EV-target arc) while ``flow_grid_to_ev`` resets at calendar
+        # midnight; pre-sunrise EV charging then appeared in the grid
+        # penalty but not in the consumption total, pinning autarky
+        # at single digits. HA-PROD 2026-06-01 saw exactly this:
+        # ``flow_grid_to_ev = 6.2 kWh`` (pre-sunrise) while
+        # ``daily_ev = 0`` (sunrise window started later) → autarky
+        # 9 % instead of a realistic ~42 %.
+        #
+        # New definition (all from ``energy_flows``, calendar-aligned):
+        # * own_supply  = solar_to_home + solar_to_ev
+        #               + battery_to_home + battery_to_ev
+        # * grid_supply = grid_to_home + grid_to_ev
+        # * total      = own_supply + grid_supply
+        # * autarky    = own_supply / total × 100
+        #
+        # Treating ``battery_to_X`` as own supply is an approximation
+        # — strictly some battery discharge originated from cheap-
+        # tariff grid charge, not solar. SEM doesn't track battery-
+        # energy provenance, so the "all-battery-is-own" rule
+        # matches user intuition ("my battery is mine").
+        #
+        # Legacy two-arg callers (no energy_flows) keep the v1.6.x
+        # behaviour. They share the bug class, but their existing
+        # tests pin the old numbers so we don't quietly retcon them.
+        if energy_flows is not None:
+            own_supply = (
+                getattr(energy_flows, "solar_to_home", 0.0)
+                + getattr(energy_flows, "solar_to_ev", 0.0)
+                + getattr(energy_flows, "battery_to_home", 0.0)
+                + getattr(energy_flows, "battery_to_ev", 0.0)
+            )
+            grid_supply = (
+                getattr(energy_flows, "grid_to_home", 0.0)
+                + getattr(energy_flows, "grid_to_ev", 0.0)
+            )
+            total_consumption = own_supply + grid_supply
+            if total_consumption > 0:
+                metrics.autarky_rate = round(
+                    (own_supply / total_consumption) * 100, 1,
                 )
-            else:
-                grid_to_consumption = energy.daily_grid_import
-            own_supply = total_consumption - grid_to_consumption
-            metrics.autarky_rate = round((own_supply / total_consumption) * 100, 1)
-            metrics.autarky_rate = max(0, min(100, metrics.autarky_rate))
+                metrics.autarky_rate = max(0, min(100, metrics.autarky_rate))
+        else:
+            # Legacy path — kept for v1.6.x compatibility and the
+            # two-arg call shape used in pre-v1.7.0 test fixtures.
+            total_consumption = energy.daily_home + energy.daily_ev
+            if total_consumption > 0:
+                own_supply = total_consumption - energy.daily_grid_import
+                metrics.autarky_rate = round(
+                    (own_supply / total_consumption) * 100, 1,
+                )
+                metrics.autarky_rate = max(0, min(100, metrics.autarky_rate))
 
         # Simple efficiency estimates
         metrics.solar_efficiency = 85.0 if power.solar_power > 0 else 0.0

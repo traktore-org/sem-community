@@ -34,24 +34,30 @@ class TestAutarkyFlowAttribution:
         return EnergyCalculator(config={}, time_manager=MagicMock())
 
     def test_prod_scenario_autarky_no_longer_zero(self):
-        """HA-PROD 2026-06-01: home 9.25 kWh, grid_import 9.38 kWh,
-        of which 2.9 went to battery. Pre-fix the formula gave
-        autarky=0 % because raw grid_import > home. With flow
-        attribution the battery-bound slice is excluded."""
+        """HA-PROD 2026-06-01 second sample: a complete flow picture.
+        Pure-flow formula:
+        own_supply  = solar_to_home + battery_to_home (+ EV slices)
+        grid_supply = grid_to_home + grid_to_ev
+        total       = own + grid
+        autarky     = own / total
+
+        Numbers from PROD's actual flow accumulators:
+            solar_to_home   = 4.277
+            battery_to_home = 2.607
+            grid_to_home    = 3.164
+            grid_to_ev      = 6.225  (pre-sunrise EV charging)
+        ⇒ own=6.884, grid=9.389, total=16.273 → autarky 42.3 %"""
         calc = self._calc()
-        energy = EnergyTotals(
-            daily_home=9.25, daily_ev=0.0,
-            daily_grid_import=9.38, daily_grid_export=0.12,
-            daily_battery_charge=2.9, daily_battery_discharge=3.42,
-            daily_solar=6.18,
-        )
+        energy = EnergyTotals(daily_home=10.32, daily_ev=0.0)
         flows = EnergyFlows(
-            grid_to_home=6.48, grid_to_ev=0.0,
-            grid_to_battery=2.9,
+            solar_to_home=4.277, solar_to_ev=0.0,
+            battery_to_home=2.607, battery_to_ev=0.0,
+            grid_to_home=3.164, grid_to_ev=6.225,
+            grid_to_battery=0.112,
         )
         metrics = calc.calculate_performance(PowerReadings(), energy, flows)
-        # autarky = (9.25 - 6.48) / 9.25 = 29.9 %
-        assert metrics.autarky_rate == pytest.approx(29.9, abs=0.1)
+        # autarky = 6.884 / 16.273 = 42.3 %
+        assert metrics.autarky_rate == pytest.approx(42.3, abs=0.1)
 
     def test_legacy_call_still_works_no_flows(self):
         """Two-arg call without ``energy_flows`` → legacy formula."""
@@ -64,38 +70,60 @@ class TestAutarkyFlowAttribution:
         # legacy: (10 - 3) / 10 = 70 %
         assert metrics.autarky_rate == pytest.approx(70.0, abs=0.1)
 
-    def test_autarky_100_when_no_grid_to_consumption(self):
-        """All grid import went to battery — autarky pinned at 100 %."""
+    def test_autarky_100_when_all_consumption_from_own(self):
+        """All consumption from solar + battery; grid only charged
+        battery → autarky pinned at 100 %."""
         calc = self._calc()
-        energy = EnergyTotals(
-            daily_home=5.0, daily_ev=0.0,
-            daily_grid_import=2.0, daily_solar=8.0,
+        energy = EnergyTotals(daily_home=5.0, daily_ev=0.0)
+        flows = EnergyFlows(
+            solar_to_home=3.0, battery_to_home=2.0,
+            grid_to_home=0.0, grid_to_ev=0.0,
+            grid_to_battery=2.0,
         )
-        flows = EnergyFlows(grid_to_home=0.0, grid_to_ev=0.0, grid_to_battery=2.0)
         metrics = calc.calculate_performance(PowerReadings(), energy, flows)
         assert metrics.autarky_rate == pytest.approx(100.0)
 
-    def test_autarky_clamps_to_zero_on_negative(self):
-        """Edge: if grid_to_home > home (sensor lag, rounding), clamp to 0."""
+    def test_autarky_zero_when_no_own_supply(self):
+        """All consumption from grid → autarky 0 %."""
         calc = self._calc()
-        energy = EnergyTotals(daily_home=5.0, daily_ev=0.0)
-        flows = EnergyFlows(grid_to_home=7.0, grid_to_ev=0.0)
-        metrics = calc.calculate_performance(PowerReadings(), energy, flows)
+        flows = EnergyFlows(
+            solar_to_home=0.0, battery_to_home=0.0,
+            grid_to_home=5.0, grid_to_ev=2.0,
+        )
+        metrics = calc.calculate_performance(PowerReadings(), EnergyTotals(), flows)
         assert metrics.autarky_rate == 0.0
 
-    def test_autarky_includes_ev_grid_consumption(self):
-        """EV charged from grid counts as grid_to_consumption too."""
+    def test_autarky_temporal_alignment_with_ev(self):
+        """Pure-flow formula handles the EV-sunrise-reset case
+        correctly: pre-sunrise grid → EV is included in both numerator's
+        denominator (via grid_to_ev) and the consumption total. The
+        legacy formula would have used daily_ev=0 (sunrise reset) and
+        flow_grid_to_ev=6 (calendar reset), drowning autarky."""
         calc = self._calc()
-        energy = EnergyTotals(
-            daily_home=5.0, daily_ev=10.0,
-            daily_grid_import=12.0,
-        )
+        # Simulate pre-sunrise EV charging: 6 kWh grid → EV before today's
+        # sunrise window, plus 4 kWh of solar → home after sunrise.
         flows = EnergyFlows(
-            grid_to_home=4.0, grid_to_ev=6.0, grid_to_battery=2.0,
+            solar_to_home=4.0, solar_to_ev=0.0,
+            battery_to_home=0.0, battery_to_ev=0.0,
+            grid_to_home=0.0, grid_to_ev=6.0,
         )
-        # total_consumption=15, grid_to_consumption=10 → autarky=33.3 %
+        # daily_ev is sunrise-reset = 0; daily_home is calendar = 4.
+        # The pure-flow formula doesn't care — uses flows only.
+        energy = EnergyTotals(daily_home=4.0, daily_ev=0.0)
         metrics = calc.calculate_performance(PowerReadings(), energy, flows)
-        assert metrics.autarky_rate == pytest.approx(33.3, abs=0.1)
+        # total=10, own=4, autarky=40 %.
+        assert metrics.autarky_rate == pytest.approx(40.0, abs=0.1)
+
+    def test_autarky_battery_to_home_counted_as_own(self):
+        """battery_to_home counts as own supply — battery is "mine"."""
+        calc = self._calc()
+        flows = EnergyFlows(
+            solar_to_home=0.0, battery_to_home=8.0,
+            grid_to_home=2.0, grid_to_ev=0.0,
+        )
+        metrics = calc.calculate_performance(PowerReadings(), EnergyTotals(), flows)
+        # total=10, own=8, autarky=80 %.
+        assert metrics.autarky_rate == pytest.approx(80.0, abs=0.1)
 
     def test_self_consumption_unaffected_by_flows(self):
         """self_consumption_rate is (solar - export) / solar; flow
