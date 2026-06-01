@@ -2490,6 +2490,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if not power.ev_connected:
             return ("idle", f"ev disconnected")
 
+        # Mode gate (#346): consult the per-charger named ``charge_mode``
+        # BEFORE the is_night_mode() branch. Pre-fix the night branch
+        # returned ``"night_grid"`` unconditionally, so a charger in
+        # ``solar_only`` or ``off`` mode silently inherited the MIN_PV
+        # floor (≈1380 W) at night — the state machine returned
+        # NIGHT_DISABLED in parallel, producing the v1.7.0 PROD bug
+        # (KEBA drew ~1.5 kW from battery/grid 22:07–00:48 while
+        # sensor.sem_charging_state showed "Night charging disabled").
+        # ``MODE_NIGHT_ALLOWED`` is the same set used by
+        # _read_night_enabled_raw — solar_only and off are not in it.
+        from ..consts.ev_charge_modes import MODE_NIGHT_ALLOWED
+        _mode_for_night = self._effective_charge_mode_for(charger_cfg or {})
+        if (
+            self.time_manager.is_night_mode()
+            and _mode_for_night not in MODE_NIGHT_ALLOWED
+        ):
+            if _mode_for_night == "off":
+                return ("disabled", "Charging disabled (mode=off)")
+            return (
+                "idle",
+                f"night mode but charge_mode={_mode_for_night} forbids "
+                f"grid charging",
+            )
+
         # Night mode → grid charging tops up to the floor (Min) (#245).
         # remaining_need above is already the Min-bound value (default bound="min").
         if self.time_manager.is_night_mode():

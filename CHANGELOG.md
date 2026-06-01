@@ -5,6 +5,44 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.17] — 2026-06-01
+
+Hotfix release. Single bug fix for #346 — `solar_only` charge mode
+was silently importing grid + draining the home battery overnight.
+
+### Fixed
+
+- **EV charges overnight in `charge_mode=solar_only` (#346)** — PROD
+  incident 2026-05-31: a KEBA configured with `charge_mode =
+  solar_only` drew ~4 kWh from battery + grid between 22:07 → 00:48
+  despite solar being 0 W since 21:19. `sensor.sem_charging_state`
+  correctly read "Night charging disabled" the entire window, so the
+  bug was invisible from the dashboard.
+
+  Root cause: `_determine_charging_strategy` returned `"night_grid"`
+  unconditionally when `is_night_mode()` was True, ignoring the
+  per-charger `charge_mode`. The named-mode dispatch (`mode ==
+  "solar_only"`) only ran in the day branch. The legacy mapper then
+  converted `night_grid` → `EVBudgetStrategy.MIN_PV` (≈1380 W floor).
+  In parallel `_night_state_machine` correctly returned
+  `NIGHT_DISABLED`, but the actuator's terminal branch could not kill
+  a session SEM didn't own. Latent since April 2026 — any HACS user
+  on `solar_only` mode has been affected.
+
+  Fix is two layers:
+  1. **Strategy mode-gate** — consult `MODE_NIGHT_ALLOWED` before the
+     `is_night_mode()` branch. `solar_only` at night → `idle`; `off`
+     → `disabled`. Other modes unchanged.
+  2. **Defence in depth** — extend the #315 self-resume actuator
+     guard from `{"disabled"}` to `{"disabled", "idle"}` so future
+     strategy disagreements land safely.
+
+  6 new tests in `tests/test_346_solar_only_night.py` pin both
+  layers. The pre-existing `test_idle_strategy_does_not_trigger_
+  override` (which pinned the OLD restrictive actuator behaviour
+  that made this bug possible) was inverted to assert the new
+  contract.
+
 ## [1.6.14] — 2026-05-31
 
 Multi-charger debt closeout. Bundles four pieces of work into one
