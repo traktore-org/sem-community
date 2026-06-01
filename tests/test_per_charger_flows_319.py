@@ -165,23 +165,24 @@ class TestRegressionForIssue316:
         assert b.battery_to_ev == 0.0
 
     def test_solar_only_charger_does_not_get_grid_attribution(self):
-        """The #316-class symptom: in fleet-proportional split, a
-        solar_only charger that happens to be drawing alongside a
-        min_plus_solar charger would still get attributed part of the
-        grid flow proportionally — feels wrong even if the global sum
-        is correct. Per-charger split lets the dashboard tell each
-        charger's true sourcing.
+        """Step 5 (arch/multi-charger-primary): per-charger native
+        priority allocation.
 
-        Setup: solar 4 kW, grid_import 4 kW, total EV 8 kW. Charger A
-        (``solar_only``) draws 4 kW; charger B (``min_plus_solar``)
-        draws 4 kW. By math, each charger gets 50% of fleet flows —
-        which means A shows 2 kW grid_to_ev. The PRINCIPLED fix lives
-        upstream in the budget distributor (already done in v1.6.0 #284),
-        but per-charger flow attribution at least lets the user SEE
-        their 2 kW of "grid_to_A" — which is the audit trail they need
-        to know whether the upstream fix is doing its job. This test
-        pins the math; the user-visible interpretation lives in the
-        dashboard."""
+        Pre-Step-5 this test pinned proportional split — both chargers
+        got 50% of solar AND 50% of grid even when one was on
+        solar_only mode. The "principled fix lives upstream" caveat
+        in the original comment IS this step.
+
+        Now: A (inserted first / higher priority) gets ALL the solar.
+        B (lower priority) gets ALL the grid. The user-visible
+        interpretation is now structurally correct: a solar_only
+        charger shows 0 grid_to_ev when there's enough solar to
+        cover its draw alone.
+
+        Setup: solar 4 kW, grid_import 4 kW, total EV 8 kW. Charger
+        A draws 4 kW; B draws 4 kW. Solar pool exactly covers A;
+        grid covers B.
+        """
         fc = FlowCalculator()
         flows = fc.calculate_power_flows(_power(
             solar=4000, grid=-4000, battery=0, ev=8000, home=0,
@@ -189,10 +190,13 @@ class TestRegressionForIssue316:
         ))
         a = flows.per_charger["A_solar_only"]
         b = flows.per_charger["B_min_plus_solar"]
-        # 50/50 split because draw is equal.
-        assert a.solar_to_ev == pytest.approx(b.solar_to_ev, abs=0.1)
-        assert a.grid_to_ev == pytest.approx(b.grid_to_ev, abs=0.1)
-        # Sum equals fleet (the invariant).
+        # A (priority 1) gets all solar, no grid.
+        assert a.solar_to_ev == pytest.approx(4000, abs=1)
+        assert a.grid_to_ev == 0
+        # B (priority 2) gets all grid, no solar.
+        assert b.solar_to_ev == 0
+        assert b.grid_to_ev == pytest.approx(4000, abs=1)
+        # Sum equals fleet (the conservation invariant — preserved).
         assert a.solar_to_ev + b.solar_to_ev == pytest.approx(flows.solar_to_ev, abs=0.2)
         assert a.grid_to_ev + b.grid_to_ev == pytest.approx(flows.grid_to_ev, abs=0.2)
 

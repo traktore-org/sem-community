@@ -292,24 +292,72 @@ class FlowCalculator:
         if power.solar_power_per_string:
             flows.solar_per_string = dict(power.solar_power_per_string)
 
-        # construction (sum of shares == 1.0 modulo float rounding;
-        # final ``round(..., 1)`` may leak ≤ 0.1 W which is well below
-        # any user-visible threshold).
+        # Per-charger native attribution (Step 5 of arch/
+        # multi-charger-primary, addresses #351 finding M3).
+        #
+        # Pre-Step-5 SEM did proportional fraction-of-fleet:
+        # ``flows.per_charger[cid].solar_to_ev = flows.solar_to_ev *
+        # (charger_ev_w / fleet_ev_w)``. If charger A was on solar
+        # and charger B was on grid (different priorities or just
+        # different surplus availability), both got the SAME
+        # proportional mix — losing the priority signal that the
+        # main allocator above just computed.
+        #
+        # Step 5 attribution: priority-allocate each charger's
+        # draw against the residual supply, in charger priority
+        # order. Higher-priority chargers get first claim on
+        # solar; lower-priority ones fall back to battery / grid.
+        # The sum invariant
+        # ``sum(per_charger.solar_to_ev) == fleet.solar_to_ev``
+        # is preserved by construction (we just split the same
+        # totals across chargers in priority order instead of by
+        # equal fraction).
         if power.ev_power_per_charger:
-            for cid, charger_ev_w in power.ev_power_per_charger.items():
-                if charger_ev_w <= 0 or ev <= 0:
-                    # An idle charger (or the whole fleet idle) gets a
-                    # zero-filled ChargerFlows so the per-charger
-                    # sensors stay AVAILABLE at 0 W instead of going
-                    # ``unavailable`` whenever no charger is drawing
-                    # (HA-TEST 2026-05-31 noise after first deploy).
+            # Sort chargers by priority (lower = higher priority).
+            # Falls back to dict-insertion order if priority dict
+            # not provided — preserves v1.6.9 behaviour on single-
+            # charger setups.
+            priorities = getattr(power, "ev_priority_per_charger", None) or {}
+            sorted_cids = sorted(
+                power.ev_power_per_charger.keys(),
+                key=lambda c: (priorities.get(c, 999), c),
+            )
+
+            # Per-source pool of fleet-attributed EV flow that's
+            # still up for grabs by per-charger consumers.
+            ev_pool = {
+                "solar": flows.solar_to_ev,
+                "grid": flows.grid_to_ev,
+                "battery": flows.battery_to_ev,
+            }
+
+            for cid in sorted_cids:
+                charger_ev_w = power.ev_power_per_charger.get(cid, 0.0)
+                if charger_ev_w <= 0:
+                    # Idle charger: zero-filled ChargerFlows (the
+                    # v1.6.9 behaviour preserved).
                     flows.per_charger[cid] = ChargerFlows()
                     continue
-                share = charger_ev_w / ev
+
+                # Allocate from each source in priority order
+                # (solar first, then battery, then grid).
+                need = charger_ev_w
+                solar_share = min(ev_pool["solar"], need)
+                ev_pool["solar"] -= solar_share
+                need -= solar_share
+
+                battery_share = min(ev_pool["battery"], need)
+                ev_pool["battery"] -= battery_share
+                need -= battery_share
+
+                grid_share = min(ev_pool["grid"], need)
+                ev_pool["grid"] -= grid_share
+                need -= grid_share
+
                 flows.per_charger[cid] = ChargerFlows(
-                    solar_to_ev=round(flows.solar_to_ev * share, 1),
-                    grid_to_ev=round(flows.grid_to_ev * share, 1),
-                    battery_to_ev=round(flows.battery_to_ev * share, 1),
+                    solar_to_ev=round(solar_share, 1),
+                    grid_to_ev=round(grid_share, 1),
+                    battery_to_ev=round(battery_share, 1),
                 )
 
         return flows
