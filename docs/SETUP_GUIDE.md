@@ -292,6 +292,7 @@ The options flow is organized into these pages:
 | Assist floor SOC (%) | 60% | Once battery assist starts, it stays on until SOC drops here. This prevents rapid on/off cycling. Raise it if the battery cycles too often. |
 | Battery capacity (kWh) | 10 kWh | Your battery's usable capacity. Used for SOC target calculations and cost attribution. |
 | Max assist power (W) | 4500 W | Maximum battery discharge power allowed for EV charging. Set it to the lower of your battery's rated discharge power and your charger's maximum input. |
+| Invert grid sign | Off | Manual override for grid power polarity. SEM expects `negative = import, positive = export`. Enphase and a handful of other inverters report the opposite. Turn this on **only** if your "Daily Grid Import" stays at 0 while you are clearly drawing from the grid, or if the system diagram shows export when you are importing — see #352. When this is on the auto-detect path is bypassed. |
 
 ### Tariff and Pricing settings
 

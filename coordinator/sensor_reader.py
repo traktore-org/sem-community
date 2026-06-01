@@ -214,15 +214,25 @@ class SensorReader:
         # Calculate derived values
         readings.calculate_derived()
 
-        # Auto-detect grid sign convention using Energy Dashboard counters.
-        # SEM convention: negative = import, positive = export.
-        # Compares power sensor sign against import/export energy counter
-        # changes to determine if negation is needed.
-        needs_negate = self._detect_grid_sign(readings)
-
-        if needs_negate:
+        # Manual grid-sign override (#352): when the user sets
+        # ``grid_sign_invert: True`` the auto-detect path is bypassed
+        # entirely and the raw read is negated. Required for Enphase /
+        # other installs where the energy-counter heuristic can't
+        # stabilise.
+        manual_grid_invert = bool(self._raw_config.get("grid_sign_invert", False))
+        if manual_grid_invert:
             readings.grid_power = -readings.grid_power
             readings.calculate_derived()
+        else:
+            # Auto-detect grid sign convention using Energy Dashboard counters.
+            # SEM convention: negative = import, positive = export.
+            # Compares power sensor sign against import/export energy counter
+            # changes to determine if negation is needed.
+            needs_negate = self._detect_grid_sign(readings)
+
+            if needs_negate:
+                readings.grid_power = -readings.grid_power
+                readings.calculate_derived()
 
         # Auto-detect battery sign convention using Energy Dashboard counters.
         # SEM convention: positive = charge, negative = discharge.
