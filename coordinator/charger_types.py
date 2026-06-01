@@ -232,6 +232,15 @@ class FleetContext:
     """Watts already committed to higher-priority chargers in
     this cycle (the #274/H1 share-one-peak-budget invariant)."""
 
+    solar_committed_w: float = 0.0
+    """Solar surplus already committed to higher-priority chargers
+    in this cycle. Step 6 multi-charger correctness: when the
+    per-charger loop walks chargers in priority order, each call
+    to ``decide(view)`` sees a fleet context where
+    ``solar_committed_w`` reflects what previous chargers in the
+    cycle already grabbed. Prevents two solar_only chargers from
+    each thinking they can have ALL the surplus."""
+
     # ─── SOC zones (Step 3) ────────────────────────────────────
     # The four-zone model from ``_zone_based_strategy``. Thresholds
     # are fleet config (one home battery), so they live here, not

@@ -70,14 +70,20 @@ def soc_zone(soc: float, auto_start: float, buffer: float, priority: float) -> i
 
 
 def self_consumption_surplus_w(view: ChargerView) -> float:
-    """Pure surplus = solar - home (- battery_charge unless Zone 4).
+    """Pure surplus = solar - home (- battery_charge unless Zone 4)
+    (- solar_committed_w by higher-priority chargers).
 
     Ports ``_self_consumption_strategy`` from
     ``coordinator.py:2787``. Battery charges first below
     ``auto_start_soc``; above it, leftover solar redirects to EV.
+
+    Step 6 multi-charger correctness: ``solar_committed_w`` is
+    subtracted so the second charger in the per-charger loop sees
+    only the surplus NOT already claimed by charger A. Prevents
+    over-allocation of solar in multi-charger fleets.
     """
     f = view.fleet
-    available = f.solar_w - f.home_w
+    available = f.solar_w - f.home_w - f.solar_committed_w
     if f.battery_soc < f.auto_start_soc:
         available -= f.battery_charge_w
     return max(0.0, available)

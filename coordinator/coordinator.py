@@ -1201,6 +1201,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # priority order against one peak headroom; reset the running
                 # commitment before the loop.
                 self._night_committed_w = 0.0
+                # Step 6: shared solar surplus budget across per-charger loop.
+                # Each charger's decide(view) sees solar_committed_w reflecting
+                # higher-priority chargers' already-committed surplus, so
+                # two solar_only chargers don't each think they can have ALL
+                # the surplus.
+                self._solar_committed_w_per_cycle = 0.0
                 # v1.6.9: per-charger effective states are captured below
                 # so the notification dispatch can fire per charger.
                 # Reset before the loop so a removed charger's stale
@@ -1330,58 +1336,70 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         # directly.
                         pcc.effective_state = effective_state
 
-                        # ─── arch/multi-charger-primary shadow mode ───
-                        # Build the new ChargerView, call decide(view),
-                        # log the decision. Doesn't actuate yet — the
-                        # legacy _execute_ev_control below is still
-                        # authoritative. The log lines let us verify on
-                        # HA-TEST that the new pipeline produces the
-                        # correct intent for every (mode, environment)
-                        # combination before flipping the actuator.
-                        try:
-                            from .build_view import build_charger_view
-                            from .decide import decide as decide_v2
-                            # Verify the config_entry / per-cycle config see
-                            # the same mode the select entity wrote. Log
-                            # the raw cfg.charge_mode + the resolved per_mode
-                            # so any mismatch surfaces.
-                            raw_mode = charger_cfg.get("charge_mode") if isinstance(charger_cfg, dict) else None
-                            if raw_mode != per_mode:
-                                _LOGGER.warning(
-                                    "shadow-decide %s mode mismatch: raw_cfg=%r per_mode=%r",
-                                    cid, raw_mode, per_mode,
-                                )
-                            shadow_view = build_charger_view(
-                                charger_id=cid,
-                                charger_cfg=charger_cfg,
-                                mode=per_mode,
-                                power_reading=power,
-                                daily_ev_kwh=self._daily_ev_per_charger.get(cid, 0.0),
-                                is_night=self.time_manager.is_night_mode(),
-                                config=self.config,
-                                target_kwh=per_remaining_floor,
-                                deadline_amps=int(charging_context.night_deadline_amps or 0),
-                                tariff_wait=bool(charging_context.night_tariff_wait),
-                            )
-                            shadow_decision = decide_v2(shadow_view)
-                            _LOGGER.info(
-                                "shadow-decide %s mode=%s state=%s → "
-                                "intent=%s amps=%d budget=%.0fW :: %s",
-                                cid, per_mode, effective_state,
-                                shadow_decision.intent.value,
-                                shadow_decision.commanded_amps,
-                                shadow_decision.budget_w,
-                                shadow_decision.reason,
-                            )
-                        except Exception as e:
-                            _LOGGER.debug(
-                                "shadow-decide %s failed: %s", cid, e,
-                            )
+                        # ─── arch/multi-charger-primary: the new pipeline IS the actuator ───
+                        # Build ChargerView → decide(view) → actuate(decision, adapter).
+                        # The legacy _execute_ev_control is no longer authoritative
+                        # for the per-charger loop. Every per-charger decision and
+                        # command flows through this single pipeline.
+                        #
+                        # The structural payoff: the strategy/state-machine
+                        # disagreement class (#346) cannot exist by construction —
+                        # decide() is the only place a per-charger decision is made.
+                        # Brand quirks (KEBA's 6A min, self-resume — #315/#346/#353)
+                        # live entirely in ChargerAdapter, not in the actuator.
+                        from .actuate import actuate
+                        from .build_view import build_charger_view
+                        from .charger_adapters import adapter_for
+                        from .decide import decide as decide_v2
+
+                        # Per-cycle adapter cache: KebaAdapter holds last_intent
+                        # state used by is_self_charging(); recreating it each
+                        # cycle would lose the self-resume detection. Stored on
+                        # the coordinator keyed by charger_id.
+                        adapter_cache = getattr(self, "_charger_adapters", None)
+                        if adapter_cache is None:
+                            adapter_cache = {}
+                            self._charger_adapters = adapter_cache
+                        adapter = adapter_cache.get(cid)
+                        if adapter is None or adapter._device is not ev_dev:
+                            adapter = adapter_for(ev_dev)
+                            adapter_cache[cid] = adapter
+
+                        view = build_charger_view(
+                            charger_id=cid,
+                            charger_cfg=charger_cfg,
+                            mode=per_mode,
+                            power_reading=power,
+                            daily_ev_kwh=self._daily_ev_per_charger.get(cid, 0.0),
+                            is_night=self.time_manager.is_night_mode(),
+                            config=self.config,
+                            target_kwh=per_remaining_floor,
+                            deadline_amps=int(charging_context.night_deadline_amps or 0),
+                            tariff_wait=bool(charging_context.night_tariff_wait),
+                            solar_committed_w=self._solar_committed_w_per_cycle,
+                        )
+                        decision = decide_v2(view)
+                        _LOGGER.debug(
+                            "decide %s mode=%s → intent=%s amps=%d budget=%.0fW :: %s",
+                            cid, per_mode, decision.intent.value,
+                            decision.commanded_amps, decision.budget_w, decision.reason,
+                        )
+                        charging_context.charging_strategy = decision.reason
+                        # Reflect decision into the effective_state sensor
+                        # (for dashboards that read sem_charging_state).
+                        from .charger_types import ChargerIntent as _CI
+                        if decision.intent is _CI.DISABLE:
+                            effective_state = ChargingState.SOLAR_IDLE
+                        elif decision.intent is _CI.IDLE:
+                            effective_state = ChargingState.SOLAR_IDLE
+                        elif decision.intent is _CI.CHARGE_MAX:
+                            effective_state = ChargingState.SOLAR_SUPER_CHARGING
+                        else:
+                            effective_state = ChargingState.SOLAR_CHARGING_ACTIVE
+                        pcc.effective_state = effective_state
 
                         try:
-                            await self._execute_ev_control(
-                                effective_state, power, energy, charging_context
-                            )
+                            await actuate(decision, adapter, view.power)
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
                             # remaining headroom (#274/H1). Estimate from the setpoint
@@ -1392,16 +1410,63 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 ))
                             except (AttributeError, TypeError):
                                 pass
+                            # Step 6: thread solar commitment through to the next
+                            # per-charger view so lower-priority chargers see only
+                            # the surplus this one didn't take.
+                            from .charger_types import ChargerIntent as _CI2
+                            if decision.intent is _CI2.CHARGE_AT_AMPS:
+                                committed_solar_w = min(
+                                    decision.budget_w,
+                                    decision.commanded_amps * adapter.phases * adapter.voltage,
+                                )
+                                self._solar_committed_w_per_cycle += committed_solar_w
+                            elif decision.intent is _CI2.CHARGE_MAX:
+                                self._solar_committed_w_per_cycle += (
+                                    adapter.max_current_a * adapter.phases * adapter.voltage
+                                )
                         except (HomeAssistantError, ServiceValidationError) as e:
                             _LOGGER.error("EV control service failed for %s: %s", cid, e)
                         except ValueError as e:
                             _LOGGER.warning("EV control invalid value for %s: %s", cid, e)
                 self._save_ev_session_state()
             elif self._ev_device and not self._observer_mode:
+                # Single-charger legacy path — also flipped to the new pipeline.
+                # Build a synthetic per-charger view from the global config.
+                from .actuate import actuate
+                from .build_view import build_charger_view
+                from .charger_adapters import adapter_for
+                from .decide import decide as decide_v2
+
+                cid = getattr(self._ev_device, "device_id", "ev_charger") or "ev_charger"
+                adapter_cache = getattr(self, "_charger_adapters", None)
+                if adapter_cache is None:
+                    adapter_cache = {}
+                    self._charger_adapters = adapter_cache
+                adapter = adapter_cache.get(cid)
+                if adapter is None or adapter._device is not self._ev_device:
+                    adapter = adapter_for(self._ev_device)
+                    adapter_cache[cid] = adapter
+
+                # Resolve mode from global config (no per-charger cfg in this branch).
+                per_mode = self._effective_charge_mode_for(
+                    self.config.get("ev_chargers", [{}])[0]
+                    if self.config.get("ev_chargers") else {}
+                )
+                view = build_charger_view(
+                    charger_id=cid,
+                    charger_cfg={},
+                    mode=per_mode,
+                    power_reading=power,
+                    daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
+                    is_night=self.time_manager.is_night_mode(),
+                    config=self.config,
+                    target_kwh=getattr(charging_context, "night_target_kwh", None),
+                    deadline_amps=int(getattr(charging_context, "night_deadline_amps", 0) or 0),
+                    tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
+                )
+                decision = decide_v2(view)
                 try:
-                    await self._execute_ev_control(
-                        charging_state, power, energy, charging_context
-                    )
+                    await actuate(decision, adapter, view.power)
                     self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("EV control service failed: %s", e)
