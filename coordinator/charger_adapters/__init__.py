@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 from .base import ChargerAdapter
 from .generic import GenericAdapter
 from .keba import KebaAdapter
+from .wallbox import WallboxAdapter, _looks_like_wallbox
 
 if TYPE_CHECKING:  # pragma: no cover
     from ...devices.base import CurrentControlDevice
@@ -45,14 +46,24 @@ def adapter_for(device: "CurrentControlDevice") -> ChargerAdapter:
 
     Inspection: the device's ``charger_service`` reveals which
     integration. Anything starting with ``keba.`` gets the KEBA
-    adapter (6 A min, self-resume guard, etc.). Everything else gets
-    ``GenericAdapter``. To add brand-specific quirks in the future:
-    add a dedicated adapter subclass + branch here.
+    adapter (6 A min, self-resume guard, etc.). Wallbox installs
+    (#357) get the ``WallboxAdapter`` so the dedicated
+    ``pause_resume`` switch is toggled on disable. Everything else
+    gets ``GenericAdapter``. To add brand-specific quirks: add a
+    dedicated adapter subclass + branch here.
     """
     service = (getattr(device, "charger_service", "") or "").lower()
     if service.startswith("keba."):
         return KebaAdapter(device)
+    if _looks_like_wallbox(device):
+        return WallboxAdapter(device)
     return GenericAdapter(device)
 
 
-__all__ = ["ChargerAdapter", "GenericAdapter", "KebaAdapter", "adapter_for"]
+__all__ = [
+    "ChargerAdapter",
+    "GenericAdapter",
+    "KebaAdapter",
+    "WallboxAdapter",
+    "adapter_for",
+]
