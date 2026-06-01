@@ -179,6 +179,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 cheap_threshold=config.get("cheap_price_threshold", 0.15),
                 expensive_threshold=config.get("expensive_price_threshold", 0.35),
                 currency=currency,
+                # #359: percentile is the new default for users on
+                # Tibber/Octopus/Amber/Nordpool where today's range
+                # determines what "cheap" means — the static 0.15/0.35
+                # CHF cutoffs misclassified the whole day on dynamic
+                # tariffs.
+                classification_mode=config.get(
+                    "tariff_classification_mode", "percentile",
+                ),
             )
         elif tariff_mode == "calendar":
             schedule = {}  # Was config.get("tariff_schedule", {}) — never set via UI

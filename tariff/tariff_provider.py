@@ -223,11 +223,21 @@ class DynamicTariffProvider(TariffProvider):
         cheap_threshold: float = 0.15,
         expensive_threshold: float = 0.35,
         currency: str = "CHF",
+        classification_mode: str = "percentile",
     ):
         self.hass = hass
         self.export_rate = export_rate
         self.cheap_threshold = cheap_threshold
         self.expensive_threshold = expensive_threshold
+        # #359: switch the default classification away from the static
+        # 0.15 / 0.35 CHF thresholds (worthless on Tibber-style tariffs
+        # ranging 0.10–0.80) to percentile-based bucketing over today's
+        # 24-hour price array. ``static`` preserved as an opt-out for
+        # users with flat tariffs / spike-prone markets.
+        self.classification_mode = (
+            classification_mode if classification_mode in ("static", "percentile")
+            else "percentile"
+        )
         self.currency = currency
         self._price_entity = price_entity
         self._provider_name = "unknown"
@@ -235,6 +245,10 @@ class DynamicTariffProvider(TariffProvider):
         self._feedin_entity: Optional[str] = feedin_entity
         self._prices_cache: List[PricePoint] = []
         self._last_cache_update: Optional[datetime] = None
+        # Cached percentile breakpoints, recomputed when today's price
+        # array changes. Keys: ``p10``, ``p25``, ``p75``, ``p90``.
+        self._percentile_breaks: Optional[Dict[str, float]] = None
+        self._percentile_breaks_for: Optional[str] = None  # date iso
 
     def detect_provider(self) -> Optional[str]:
         """Auto-detect available price integration."""
@@ -425,12 +439,63 @@ class DynamicTariffProvider(TariffProvider):
                 if prices:
                     break  # Found data in this source, stop
 
-        return sorted(prices, key=lambda p: p.timestamp)
+        prices = sorted(prices, key=lambda p: p.timestamp)
+
+        # #359: write back to the cache so ``_get_percentile_breaks``
+        # can compute today's distribution. The classification done
+        # in-line above used the cold cache (static fallback); now
+        # reclassify with percentile breaks if there's enough data.
+        # Single pass — cheap relative to the dozens of HA-state
+        # reads above. Date guard inside ``_get_percentile_breaks``
+        # keeps the calculation to once per day.
+        self._prices_cache = prices
+        self._percentile_breaks = None  # invalidate to force recompute
+        self._percentile_breaks_for = None
+        if self.classification_mode == "percentile" and prices:
+            for p in prices:
+                p.level = self._classify_price(p.price)
+
+        return prices
 
     def _classify_price(self, price: float) -> PriceLevel:
-        """Classify a price into levels."""
+        """Classify a price into levels.
+
+        v1.7.0 / #359: when ``classification_mode == "percentile"``,
+        bucket relative to today's price distribution:
+
+        - ``very_cheap`` — bottom 10%
+        - ``cheap``      — bottom 25%
+        - ``normal``     — 25 – 75%
+        - ``expensive``  — top 25%
+        - ``very_expensive`` — top 90%+
+
+        That works on Tibber / Octopus / Amber / Nordpool where the
+        absolute price range varies daily and the static 0.15 / 0.35
+        CHF cutoffs flag everything as ``normal`` (UK summer) or
+        ``very_expensive`` (winter peaks).
+
+        ``static`` preserves the legacy fixed-cutoff behaviour for
+        users with flat tariffs or unpredictable spike markets.
+        """
         if price < 0:
             return PriceLevel.NEGATIVE
+
+        if self.classification_mode == "percentile":
+            breaks = self._get_percentile_breaks()
+            if breaks is not None:
+                if price <= breaks["p10"]:
+                    return PriceLevel.VERY_CHEAP
+                if price <= breaks["p25"]:
+                    return PriceLevel.CHEAP
+                if price >= breaks["p90"]:
+                    return PriceLevel.VERY_EXPENSIVE
+                if price >= breaks["p75"]:
+                    return PriceLevel.EXPENSIVE
+                return PriceLevel.NORMAL
+            # Fall through to static when we can't compute percentiles
+            # yet (cold start, single price point).
+
+        # Static thresholds (legacy + fallback).
         if price < self.cheap_threshold * 0.5:
             return PriceLevel.VERY_CHEAP
         if price < self.cheap_threshold:
@@ -440,6 +505,56 @@ class DynamicTariffProvider(TariffProvider):
         if price > self.expensive_threshold:
             return PriceLevel.EXPENSIVE
         return PriceLevel.NORMAL
+
+    def _get_percentile_breaks(self) -> Optional[Dict[str, float]]:
+        """Compute today's percentile breakpoints from the cached
+        price array. Returns ``None`` when there's not enough data
+        (< 4 points) for percentiles to be meaningful.
+
+        Cached per calendar date so the calculation runs at most once
+        per day (the underlying ``_prices_cache`` is updated by the
+        usual cache-invalidation path)."""
+        if not self._prices_cache:
+            return None
+
+        today = dt_util.now().date()
+        today_key = today.isoformat()
+        if (
+            self._percentile_breaks is not None
+            and self._percentile_breaks_for == today_key
+        ):
+            return self._percentile_breaks
+
+        today_prices = sorted(
+            p.price for p in self._prices_cache
+            if p.timestamp.date() == today and p.price is not None
+        )
+        if len(today_prices) < 4:
+            return None
+
+        def _quantile(sorted_values: List[float], q: float) -> float:
+            # Plain nearest-rank quantile — good enough for 24/48-point
+            # arrays; avoids a numpy dependency.
+            if not sorted_values:
+                return 0.0
+            idx = max(
+                0,
+                min(
+                    len(sorted_values) - 1,
+                    int(round(q * (len(sorted_values) - 1))),
+                ),
+            )
+            return sorted_values[idx]
+
+        breaks = {
+            "p10": _quantile(today_prices, 0.10),
+            "p25": _quantile(today_prices, 0.25),
+            "p75": _quantile(today_prices, 0.75),
+            "p90": _quantile(today_prices, 0.90),
+        }
+        self._percentile_breaks = breaks
+        self._percentile_breaks_for = today_key
+        return breaks
 
     def get_current_import_rate(self) -> float:
         return self._read_current_price()

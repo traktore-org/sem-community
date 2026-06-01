@@ -1439,6 +1439,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                # #359 — dynamic-tariff price classification mode. The
+                # legacy fixed thresholds (0.15 / 0.35 CHF) mis-bucketed
+                # everything as "normal" on UK/AU/NL providers whose
+                # daily range is 0.05–0.80 €/kWh. Percentile (default)
+                # bucket relative to today's 24-hour price distribution.
+                vol.Optional(
+                    "tariff_classification_mode",
+                    default=_c("tariff_classification_mode", "percentile"),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "percentile", "label": "Percentile (relative to today's prices)"},
+                            {"value": "static", "label": "Static (fixed cheap/expensive thresholds)"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Optional(
                     "electricity_import_rate",
                     default=_c("electricity_import_rate", 0.3387),
