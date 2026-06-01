@@ -5,87 +5,28 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.7.2] — 2026-05-31
+## [1.7.0] — 2026-06-01
 
-Phase 3 (final) of the v1.7.x per-PV-string visibility arc (#312).
-Adds the user-facing docs + release polish. v1.7.0 ships the data
-layer; v1.7.1 ships the card chips; v1.7.2 ships the docs.
-
-### Added
-
-- **``docs/PV_STRINGS.md``** — end-user-facing reference for the
-  per-PV-string feature. Covers what sensors get created,
-  supported inverter brands (with the regex pattern table),
-  how discovery works, "what if I don't see my strings"
-  troubleshooting flow, and the internals pointer table for
-  contributors.
-
-### Why
-
-The data layer (v1.7.0) and visual layer (v1.7.1) shipped without
-the user-facing reference doc — v1.7.2 closes that. The doc
-explicitly maps to the symmetric ``MULTI_CHARGER.md`` so the
-multi-source / multi-destination pattern reads as one consistent
-SEM design idea.
-
-### Tests
-
-Documentation-only release; no Python or JavaScript changes.
-Python suite remains 2281 green; bundle unchanged.
-
-Manifest bumped 1.7.1 → 1.7.2.
-
-## [1.7.1] — 2026-05-31
-
-Phase 2 of the v1.7.0 per-PV-string visibility arc (#312). Adds
-visual per-string display to SEM's three flow-style cards. Data
-layer ships in v1.7.0; user-facing docs ship in v1.7.2.
+Per-PV-string visibility (#312). Closes the long-standing
+@MRAK96 request for Sunsynk-style per-string display: SEM had
+the auto-discovery (`hardware_detection.discover_pv_strings_from_registry`,
+8 inverter brands) for the optional HACS K-Flow card since v1.5.x
+but never promoted per-string to SEM's own surface. v1.7.0 ships
+the full stack: data layer, sensor entities, card rendering, and
+user docs — internally implemented as three discrete phases so
+each piece could be reviewed and tested independently on HA-TEST,
+but published as one user-visible release.
 
 ### Added
 
-- **Per-PV-string chip strip** on three cards, auto-shown when
-  ``≥ 2`` strings are present (gated on the v1.7.0
-  ``sensor.sem_pv_string_*_power`` discovery surface). Each chip
-  shows ``PVn N.NN kW`` and links to the underlying sensor entity
-  on tap.
-  - ``sem-flow-card``: chips sit above the SVG flow diagram.
-  - ``sem-solar-card``: chips sit above the hero (arc ring) inside
-    the card surface.
-  - ``sem-system-diagram-card``: chips sit above the illustrated
-    diagram as a compact HUD (the illustrated sun motif doesn't
-    split well visually, so the panel approach matches what the
-    Sunsynk Power Flow Card does).
-- ``semDiscoverPVStrings(hass, prefix)`` helper in
-  ``dashboard/card/src/base/sem-shared.js`` — reads
-  ``sensor.{prefix}pv_string_pv1_power`` … ``pv4_power``,
-  returns ``[]`` when fewer than 2 are present (so every caller
-  can pass the result straight to a Lit ``html`` template).
-- ``semPVStringsCSS`` shared style block (chip-style row, hover
-  effect, tabular-nums for the value).
-
-### Tests
-
-Card rendering exercised via the Rollup bundle build (catches
-syntax / import errors); Python suite unchanged from v1.7.0 at
-2281 green.
-
-Manifest bumped 1.7.0 → 1.7.1.
-
-## [1.7.0] — 2026-05-31
-
-First feature release after the v1.6.14 multi-charger closeout. Adds
-per-PV-string data layer + sensor surface (#312). Cards rendering
-ships separately in v1.7.1 (the maintainer-set rule for the v1.7.x
-arc: each phase is its own published release — labels in commits
-match the tag users see in HACS).
-
-### Added
-
-- **Per-PV-string power + daily-energy sensors** (gated on `len(strings) >= 2`):
+- **Per-PV-string power + daily-energy sensors** (gated on
+  `len(strings) >= 2`):
   - `sensor.sem_pv_string_<slot>_power` (W, MEASUREMENT)
-  - `sensor.sem_pv_string_<slot>_daily_energy` (kWh, TOTAL, daily-reset)
+  - `sensor.sem_pv_string_<slot>_daily_energy` (kWh, TOTAL,
+    daily-reset)
   where `<slot>` is the normalised label `pv1`, `pv2`, … (max 4
-  per discovery's slot cap). Single-string installs see no change.
+  per discovery's slot cap). Single-string installs see no
+  change.
 - `PowerReadings.solar_power_per_string: Dict[str, float]` — the
   source-side mirror of v1.6.9's `ev_power_per_charger`. Sum
   invariant: `sum(values) ≈ solar_power` within rounding.
@@ -103,8 +44,26 @@ match the tag users see in HACS).
 - Auto-discovery wired through coordinator: the existing
   `hardware_detection.discover_pv_strings_from_registry`
   (Huawei / GoodWe / Growatt / Kostal / Sungrow / Fronius /
-  SolarEdge / Victron — already used by the K-Flow card since
-  v1.5.x) now also feeds SEM's own sensors.
+  SolarEdge / Victron) now also feeds SEM's own sensors.
+- **Per-PV-string chip strip** on three cards, auto-shown when
+  ≥ 2 strings are present. Each chip shows `PVn N.NN kW` and
+  links to the underlying sensor entity on tap.
+  - `sem-flow-card`: chips above the SVG flow diagram.
+  - `sem-solar-card`: chips above the hero arc ring.
+  - `sem-system-diagram-card`: chips above the illustrated
+    diagram as a compact HUD.
+- `semDiscoverPVStrings(hass, prefix)` shared card helper —
+  reads `sensor.{prefix}pv_string_pv1_power` … `pv4_power`,
+  returns `[]` when fewer than 2 present so callers can pass
+  the result straight to a Lit `html` template.
+- `semPVStringsCSS` shared style block.
+- **New user reference doc**
+  [`docs/PV_STRINGS.md`](docs/PV_STRINGS.md) — what sensors get
+  created, supported inverter brands with regex pattern table,
+  how discovery works, "what if I don't see my strings"
+  troubleshooting flow, internals pointer table, and the
+  out-of-scope list (per-string-to-destination attribution,
+  per-string cost, Solcast multi-plane — file-an-issue links).
 
 ### Changed
 
@@ -117,15 +76,6 @@ match the tag users see in HACS).
   bit-for-bit identical (no `per_string` key → no per-string
   state).
 
-### Why
-
-@MRAK96 (#312) asked for per-string visibility similar to the
-Sunsynk Power Flow Card. SEM had the discovery for K-Flow since
-v1.5.x but didn't promote per-string to its own entity surface.
-v1.7.0 closes that gap so users can plot strings independently
-in Lovelace and the HA Energy dashboard immediately, regardless
-of whether they install K-Flow.
-
 ### Tests (18 new)
 
 `tests/test_per_string_energy.py`:
@@ -133,8 +83,8 @@ of whether they install K-Flow.
 - Sum invariant: 2-string and 4-string splits.
 - Multi-cycle accumulation.
 - Day rollover clears per-string accumulator.
-- Persistence round-trip (4 tests, incl. legacy snapshot back-
-  compat).
+- Persistence round-trip (4 tests, incl. legacy snapshot
+  back-compat).
 - Bad-snapshot defence (3 tests: non-dict per_string, non-dict
   per-slot entry, non-numeric values).
 - Idle-string preservation (clouded string keeps its surfaced
@@ -143,16 +93,21 @@ of whether they install K-Flow.
   omitted when empty).
 - `SensorReader` gate (1 string → no pollution; ≥2 → populated).
 
-Full suite 2281 green on Python 3.12 (2263 v1.6.14 baseline + 18 new).
-Manifest bumped to 1.7.0.
+Full suite 2281 green on Python 3.12 (2263 v1.6.14 baseline +
+18 new). Bundle (`dist/sem-cards.js`) rebuilt with the chip
+strip rendering for all three cards.
 
-### Roadmap
+### Phase trail (internal)
 
-- **v1.7.1**: SEM-side cards render per-string visually
-  (`sem-flow-card` auto-split, `sem-solar-card` per-string
-  section, `sem-system-diagram-card` HUD overlay).
-- **v1.7.2**: `dashboard_generator` feeds string entities to SEM
-  cards (not just K-Flow); docs (`PV_STRINGS.md`); release polish.
+Implementation shipped to develop as three feature PRs for
+focused review, then consolidated to one user-visible v1.7.0
+release per maintainer policy:
+- PR #337 — data layer (sensors, types, sensor reader,
+  flow calculator persistence).
+- PR #338 — card rendering (3 cards, shared helper, bundle).
+- PR #339 — user reference doc.
+
+Manifest stays at 1.7.0.
 
 ## [1.6.14] — 2026-05-31
 
