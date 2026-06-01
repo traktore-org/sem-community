@@ -122,6 +122,27 @@ class TestPercentileBucketing:
         # Bucket using static thresholds.
         assert p._classify_price(0.10) is PriceLevel.CHEAP
 
+    def test_flat_distribution_falls_back_to_static(self):
+        """M1 reviewer note: a flat day collapses p10 == p90 and would
+        silently classify every price as VERY_CHEAP, over-triggering
+        cheap-window logic. Spread < 1 ct/kWh must fall through."""
+        p = _make_provider("percentile")
+        # 24-point flat day at 0.20 €/kWh.
+        p._prices_cache = _today_prices([0.20] * 24)
+
+        # Static says 0.20 lies in 0.15..0.35 → NORMAL (not
+        # VERY_CHEAP which the degenerate percentile path would
+        # produce).
+        assert p._classify_price(0.20) is PriceLevel.NORMAL
+
+    def test_near_flat_distribution_falls_back(self):
+        """Spread under the 1 ct threshold also falls back."""
+        p = _make_provider("percentile")
+        prices = [0.20 + i * 0.0001 for i in range(24)]  # ~0.20 → ~0.2023
+        p._prices_cache = _today_prices(prices)
+
+        assert p._classify_price(0.20) is PriceLevel.NORMAL
+
 
 class TestStaticMode:
     """Static mode (opt-out) ignores percentiles even when cache is
