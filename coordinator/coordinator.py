@@ -1528,9 +1528,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if not self._observer_mode:
                 try:
                     await self._run_battery_pipeline(power, energy, charging_state)
-                    # Surface the most recent LIMIT_DISCHARGE for the sensor
-                    # that pre-architecture got it from
-                    # _apply_battery_discharge_protection's return value.
+                    # Surface the most recent LIMIT_DISCHARGE for the
+                    # discharge-limit sensor.
                     adapter = getattr(self, "_battery_adapter", None)
                     if adapter is not None:
                         from .charger_types import BatteryIntent as _BI
@@ -2489,99 +2488,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             forecast_age_hours=forecast_age,
             current_price=current_price,
         )
-
-    async def _execute_battery_charge_scheduler(self, power) -> None:
-        """Execute the battery charge scheduler cycle (#6).
-
-        - Checks if it's time for daily evaluation (21:00)
-        - Checks if re-plan is needed (SOC drift, EV change)
-        - Runs the update cycle (start/stop/adjust forced charge)
-        """
-        scheduler = self._battery_charge_scheduler
-        now = dt_util.now()
-
-        # Daily evaluation trigger
-        if scheduler.should_trigger_evaluation(now):
-            forecast = self._forecast_reader.read_forecast()
-            forecast_tomorrow = forecast.forecast_tomorrow_kwh if forecast.available else 0.0
-            forecast_age = 0.0
-            if hasattr(forecast, 'last_update') and forecast.last_update:
-                forecast_age = (now - forecast.last_update).total_seconds() / 3600
-
-            correction = self._forecast_tracker.correction_factor
-
-            # Get expected consumption from predictor
-            expected_consumption = self._predictor.predict_consumption_today_kwh(now)
-            if expected_consumption <= 0:
-                expected_consumption = 12.0  # Fallback: 12 kWh/day
-
-            # Get tariff rates
-            off_peak_rate = self._tariff_provider.get_price_at(
-                now.replace(hour=2, minute=0)  # Night / off-peak rate
-            ) if hasattr(self._tariff_provider, 'get_price_at') else self.config.get("electricity_off_peak_rate") or self.config.get("electricity_nt_rate", 0.22)
-            peak_rate = self._tariff_provider.get_price_at(
-                now.replace(hour=14, minute=0)  # Day / peak rate
-            ) if hasattr(self._tariff_provider, 'get_price_at') else self.config.get("electricity_import_rate", 0.30)
-
-            # Current price for negative tariff detection
-            current_price = 0.0
-            if hasattr(self._tariff_provider, 'get_current_import_rate'):
-                current_price = self._tariff_provider.get_current_import_rate()
-
-            # EV energy needed tonight
-            ev_kwh_needed = 0.0
-            ev_max_power = 0.0
-            if self._ev_devices:
-                daily_target = self.config.get("daily_ev_target", 10)
-                ev_today = self._energy_calculator._get_daily("ev_charging")
-                ev_kwh_needed = max(0, daily_target - ev_today)
-                # Use first charger's max power as reference
-                first_charger = next(iter(self._ev_devices.values()), None)
-                if first_charger and hasattr(first_charger, 'max_power_w'):
-                    ev_max_power = first_charger.max_power_w
-                else:
-                    ev_max_power = self.config.get("ev_max_power_w", 11000)
-
-            # Dynamic tariff provider (if available)
-            tariff_provider = None
-            if hasattr(self._tariff_provider, 'find_cheapest_hours'):
-                tariff_provider = self._tariff_provider
-
-            scheduler.evaluate(
-                current_soc=power.battery_soc,
-                forecast_tomorrow_kwh=forecast_tomorrow,
-                expected_consumption_kwh=expected_consumption,
-                off_peak_rate=off_peak_rate,
-                peak_rate=peak_rate,
-                tariff_provider=tariff_provider,
-                correction_factor=correction,
-                ev_kwh_needed=ev_kwh_needed,
-                ev_max_power_w=ev_max_power,
-                forecast_available=forecast.available,
-                forecast_age_hours=forecast_age,
-                current_price=current_price,
-            )
-
-        # Re-plan check
-        ev_connected = power.ev_connected if hasattr(power, 'ev_connected') else False
-        if scheduler.should_replan(power.battery_soc, ev_connected):
-            # Force re-evaluation by clearing date guard
-            scheduler._last_evaluation_date = None
-            # Will trigger on next cycle since should_trigger won't match time
-            # For immediate replan, just call evaluate again
-            _LOGGER.info("Battery scheduler: re-plan triggered, will re-evaluate")
-
-        # Execute the decision (start/stop/adjust charge)
-        await scheduler.update(
-            current_soc=power.battery_soc,
-            # FLEET-READ: battery scheduler needs whole-house EV draw to
-            # decide whether the night charge is competing with EV load.
-            ev_charging_power_w=power.ev_power,
-        )
-
-        # Reset scheduler when night ends
-        if not self.time_manager.is_night_mode() and scheduler.state.value not in ("idle", "not_needed", "not_profitable"):
-            scheduler.reset()
 
     async def _send_notifications(
         self, charging_state, power, energy, costs, performance,
