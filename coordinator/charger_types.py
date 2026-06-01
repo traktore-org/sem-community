@@ -1,4 +1,12 @@
-"""Per-charger primary types (arch/multi-charger-primary, v1.7.0).
+"""Per-device primary types (arch/multi-charger-primary, v1.7.0).
+
+Naming note: the module is called ``charger_types`` for historical
+reasons (it started as EV-only). With v1.7.0's
+arch/multi-inverter-battery-primary work it also houses
+``InverterPower`` and ``BatteryPower``. Future rename to
+``per_device_types`` is a cleanup task.
+
+
 
 The multi-charger architecture migration moves SEM's data model from
 ``fleet-primary + per_charger shadow dicts`` (the v1.4.0 → v1.6.16
@@ -106,6 +114,81 @@ class ChargerPower:
     real draw by ~5 s (#289); consumers should prefer
     ``power_w > 500`` for the "actually charging" decision and
     treat ``charging`` as informational."""
+
+
+# ─────────────────────────────────────────────────────────────────
+# Per-inverter instantaneous reading (v1.7.0 arch follow-up)
+# ─────────────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class InverterPower:
+    """One inverter's instantaneous power reading.
+
+    Inverters are SOURCES — SEM observes them, doesn't command them
+    (the inverter brand integration handles its own modes). The
+    per-inverter dict on :class:`PowerReadings` replaces what was a
+    single fleet ``solar_power`` field summed in ``sensor_reader``
+    (multi-inverter Pattern E in CLAUDE.md, ``solar_power_list``).
+
+    Fleet sum invariant:
+        ``PowerReadings.fleet_solar_w ==
+         sum(i.power_w for i in PowerReadings.inverters.values())``
+
+    Pinned in ``tests/test_step8_invariants.py`` (Step 8 follow-up).
+    """
+
+    inverter_id: str
+    """Stable identifier — entity name when populated by sensor_reader,
+    or test fixture id. Used as the dict key."""
+
+    power_w: float = 0.0
+    """Instantaneous AC output (W). ≥ 0 by SEM convention."""
+
+    daily_kwh: float = 0.0
+    """Calendar-reset daily AC energy (kWh)."""
+
+    name: str = ""
+    """Human-readable label (e.g. "SUN2000-1") for dashboard display."""
+
+
+# ─────────────────────────────────────────────────────────────────
+# Per-battery instantaneous reading (v1.7.0 arch follow-up)
+# ─────────────────────────────────────────────────────────────────
+
+@dataclass(frozen=True)
+class BatteryPower:
+    """One home battery's instantaneous power + state.
+
+    Like inverters, batteries are OBSERVED, not commanded by SEM
+    (the battery brand integration owns its own control loop;
+    SEM only requests battery_priority via the inverter side).
+
+    Fleet sum invariant:
+        ``PowerReadings.fleet_battery_w ==
+         sum(b.power_w for b in PowerReadings.batteries.values())``
+
+    Sign: positive = charging, negative = discharging — matches
+    SEM convention (CLAUDE.md).
+    """
+
+    battery_id: str
+    """Stable identifier — entity name when populated by sensor_reader."""
+
+    power_w: float = 0.0
+    """Instantaneous power (W). + = charge, − = discharge."""
+
+    soc_pct: float = 0.0
+    """State of charge (0-100). Fleet SOC is the
+    capacity-weighted average."""
+
+    capacity_kwh: float = 0.0
+    """Nameplate capacity for this unit. Used by the fleet SOC
+    weighted average + battery_assist budget math."""
+
+    daily_charge_kwh: float = 0.0
+    daily_discharge_kwh: float = 0.0
+
+    name: str = ""
 
 
 # ─────────────────────────────────────────────────────────────────
