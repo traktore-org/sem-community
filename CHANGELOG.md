@@ -5,6 +5,45 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.3] — 2026-06-01
+
+Beta batch addressing 5 open user-reported issues + dead-code cleanup
+from #351's audit deferred list.
+
+### Fixed
+- **#352** — Manual `grid_sign_invert` config option for Enphase and
+  other inverters where the energy-counter auto-detect can't
+  stabilise on the grid power polarity (PR #370).
+- **#355** — Bumped EV target slider max from 100 to 200 kWh so the
+  Min and Max handles have drag-room when both sit at the previous
+  cap (PR #368).
+- **#356** — Collapsed the duplicated hero metrics on the EV status
+  card when per-charger sections render — the gate was `> 1`
+  instead of `>= 1`, so 1-charger installs saw both layers. Hero
+  now shows only Status + Power when ≥1 charger sections will
+  render below (PR #371).
+- **#357** — New dedicated `WallboxAdapter` that auto-discovers the
+  Wallbox `pause_resume` switch from the HA entity registry and
+  toggles it explicitly on `command_idle` / `command_disable` in
+  addition to `_set_current(0)` + `stop_session()`. Closes the
+  v1.6.17 reporter's bug where mode=off didn't stop the Pulsar
+  (PR #372).
+- **#359** — Percentile-based tariff price classification (default
+  for dynamic tariffs). The legacy static 0.15/0.35 CHF cutoffs
+  mis-bucketed everything on Tibber/Octopus/Amber/Nordpool where
+  daily ranges span €0.05–€0.80. Buckets now compute relative to
+  today's 24h distribution. Static mode preserved as opt-out
+  (PR #373).
+
+### Removed
+- `coordinator._execute_battery_charge_scheduler` (91 LOC) and
+  `coordinator.BatteryProtectionMixin._apply_battery_discharge_protection`
+  (66 LOC) — both retired by the v1.7.0 per-device-primary
+  rebuild; zero live callers since the `_run_battery_pipeline`
+  flip. `BatteryProtectionMixin` survives this release with only
+  `_restore_battery_discharge_limit_on_startup` (planned full
+  retirement in v1.7.1) (PR #369).
+
 ## [1.7.0] — 2026-06-01
 
 Major release. Two headline themes:
