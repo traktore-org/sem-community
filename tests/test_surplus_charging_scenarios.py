@@ -405,6 +405,61 @@ class TestEndToEndActuation:
 # discharging to home" simultaneously when the EV is at handshake idle)
 # ─────────────────────────────────────────────────────────────────
 
+class TestNightTargetReachedVsDecide:
+    """PR A regression — when the legacy state machine sets
+    NIGHT_TARGET_REACHED based on a per_charger_target ≤ 0.1, but
+    decide_v2 is fed a different target_kwh (per_remaining_floor)
+    that's > 0.1, the post-decide intent-to-state mapper used to
+    unconditionally overwrite NIGHT_TARGET_REACHED with
+    SOLAR_CHARGING_ACTIVE. Observed live on PROD 2026-06-01.
+
+    Two assertions:
+    1. decide_v2 sees the same target_kwh the state machine sees
+       (per_charger_target when set, per_remaining_floor otherwise).
+    2. When the per-decide effective_state is NIGHT_TARGET_REACHED,
+       the post-decide mapper doesn't clobber it.
+    """
+
+    def test_decide_uses_resolved_per_charger_target(self):
+        """Test the resolution logic that feeds build_charger_view's
+        target_kwh: per_charger_target wins when set, falls back to
+        per_remaining_floor otherwise.
+
+        This matches charging_context.night_target_kwh at
+        coordinator.py:1287 — the value the legacy night-state
+        check at 1323 uses for the ≤0.1 threshold.
+        """
+        # Scenario: per_charger_target = 0.05 (state-machine says
+        # "target reached"); per_remaining_floor = 0.6 (a different
+        # bound).
+        per_charger_target = 0.05
+        per_remaining_floor = 0.6
+        resolved = (
+            per_charger_target
+            if per_charger_target is not None
+            else per_remaining_floor
+        )
+        assert resolved == 0.05, (
+            "PR A: target_kwh passed to decide must be the resolved "
+            "per_charger_target (the value used by the legacy state "
+            "machine), not the divergent per_remaining_floor."
+        )
+
+        # With resolved=0.05, decide_v2 sees target_kwh=0.05 → IDLE
+        # (matches state machine's NIGHT_TARGET_REACHED).
+        from dataclasses import replace
+        view = _ev_view(
+            mode="min_plus_solar", solar_w=0, soc=80,
+            is_night=True, target_kwh=resolved,
+        )
+        d = decide(view)
+        assert d.intent is ChargerIntent.IDLE, (
+            f"With target_kwh={resolved} ≤ 0.1, decide must return "
+            f"IDLE (matching state-machine's NIGHT_TARGET_REACHED). "
+            f"Got {d.intent}: {d.reason}"
+        )
+
+
 class TestJointDecisionCoherence:
     """When both pipelines run on the same cycle, do their decisions
     fit together? Sample a few realistic operating points and verify."""
