@@ -259,7 +259,9 @@ class SolarOnlyMode(ModeStrategy):
                 ),
             )
 
-        amps = max(min_amps, amps_from_watts(surplus_w, phases, voltage))
+        max_amps = int(cfg.get("ev_max_current", 32)) \
+            if isinstance(cfg, dict) else 32
+        amps = max(min_amps, min(max_amps, amps_from_watts(surplus_w, phases, voltage)))
         return ChargerDecision(
             charger_id=cid, mode="solar_only",
             intent=ChargerIntent.CHARGE_AT_AMPS,
