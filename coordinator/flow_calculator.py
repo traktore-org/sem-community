@@ -166,75 +166,120 @@ class FlowCalculator:
         self._current_date: date = dt_util.now().date()
 
     def calculate_power_flows(self, power: PowerReadings) -> PowerFlows:
-        """Calculate instantaneous power flows using proportional allocation.
+        """Calculate instantaneous power flows using priority-based allocation (#349).
 
-        Each source flows to ALL destinations based on demand percentages.
-        This matches how electricity physically distributes in a system.
+        Sources drain in priority order — ``solar → battery_discharge →
+        grid_import`` (best-for-user first). Destinations are served in
+        priority order — ``home → ev → battery_charge → grid_export``.
 
-        v1.6.9: when ``power.ev_power_per_charger`` is populated
-        (multi-charger setups, ``len(ev_chargers) > 1`` in
-        ``sensor_reader``), the EV-side flow attribution is also split
-        per charger and stored on ``flows.per_charger``. The fleet-level
-        ``flows.solar_to_ev`` (etc.) remains the sum across all chargers
-        — invariant pinned in the scenario tests. Single-charger setups
-        leave ``per_charger`` empty, preserving identical behaviour for
-        every downstream reader.
+        Pre-#349 SEM used proportional allocation: every source split
+        across every destination by demand percentage. That model
+        broke user intent whenever multiple consumers ran in parallel
+        — on HA-PROD 2026-06-01 the dashboard showed 6.6 kWh of
+        grid_to_ev on a day the EV was actually 91 % solar (the home
+        battery was charging from grid; proportional allocation
+        attributed a slice of that grid pull to the EV). It also broke
+        algebraic conservation in supply ≠ demand cycles (scenario:
+        solar=5000 W, home=500 W, grid_export=0 mis-specified →
+        solar_to_home overshoots home demand).
+
+        Priority allocation matches user intent AND conserves on
+        both sides for every cycle:
+
+            sum(flows_to_dest) = dest_demand   for every destination
+            sum(flows_from_src) = src_supply   for every source
+
+        when the input ``power`` is balanced (supply == demand). When
+        the input is unbalanced (sensor lag, transient mismatch), the
+        algorithm degrades gracefully — destinations are served up to
+        their demand from the available supplies in priority order;
+        leftover supply lands in ``solar_to_grid`` (acting as the
+        slack variable) and leftover demand reads zero on the missing
+        rows. Pinned in ``tests/test_349_flow_priority_attribution.py``.
+
+        v1.6.9 multi-charger split + v1.7.0 per-string passthrough
+        (see below the allocator) are unchanged.
         """
         flows = PowerFlows()
 
-        # Get source powers
+        # Get source powers (priority order: solar > battery > grid)
         solar = power.solar_power
-        grid_import = power.grid_import_power
         battery_discharge = power.battery_discharge_power
+        grid_import = power.grid_import_power
 
-        # Get destination powers
+        # Get destination powers (priority order: home > ev > battery_charge > grid_export)
         home = power.home_consumption_power
-        # FLEET-READ: fleet EV demand is the input to proportional
-        # attribution; per-charger split happens below via
-        # ``power.ev_power_per_charger``.
+        # FLEET-READ: fleet EV demand drives the destination allocation;
+        # per-charger split happens below via ``power.ev_power_per_charger``.
         ev = power.ev_power
         battery_charge = power.battery_charge_power
         grid_export = power.grid_export_power
 
-        # Calculate total supply and demand
-        total_supply = solar + grid_import + battery_discharge
-        total_demand = home + ev + battery_charge + grid_export
-
-        # Skip if no activity (prevents division by zero)
-        if total_supply < 1 or total_demand < 1:
+        # Skip if everything's idle (avoids spurious zero-flow rows).
+        if (solar + battery_discharge + grid_import < 1
+                and home + ev + battery_charge + grid_export < 1):
             return flows
 
-        # Calculate demand percentages
-        home_pct = home / total_demand
-        ev_pct = ev / total_demand
-        battery_charge_pct = battery_charge / total_demand
-        grid_export_pct = grid_export / total_demand
+        # Greedy priority allocator. Each (source, destination) pair
+        # consumes ``min(source_left, dest_left)``; the chosen field on
+        # ``flows`` is set; both counters tick down. ``solar_to_battery``
+        # / ``solar_to_grid`` / etc. roll up the leftovers naturally.
+        sources_left = {
+            "solar": solar,
+            "battery": battery_discharge,
+            "grid": grid_import,
+        }
+        destinations_left = {
+            "home": home,
+            "ev": ev,
+            "battery_charge": battery_charge,
+            "grid_export": grid_export,
+        }
 
-        # Distribute solar proportionally to all destinations
-        flows.solar_to_home = round(solar * home_pct, 1)
-        flows.solar_to_ev = round(solar * ev_pct, 1)
-        flows.solar_to_battery = round(solar * battery_charge_pct, 1)
-        flows.solar_to_grid = round(solar * grid_export_pct, 1)
-
-        # Grid import only flows to home, EV, battery (not back to grid)
-        demand_without_export = home + ev + battery_charge
-        if demand_without_export > 0:
-            home_pct_no_export = home / demand_without_export
-            ev_pct_no_export = ev / demand_without_export
-            battery_pct_no_export = battery_charge / demand_without_export
-
-            flows.grid_to_home = round(grid_import * home_pct_no_export, 1)
-            flows.grid_to_ev = round(grid_import * ev_pct_no_export, 1)
-            flows.grid_to_battery = round(grid_import * battery_pct_no_export, 1)
-
-        # Battery discharge flows to home and EV (not to grid or battery charge)
-        demand_for_battery = home + ev
-        if demand_for_battery > 0:
-            home_pct_battery = home / demand_for_battery
-            ev_pct_battery = ev / demand_for_battery
-
-            flows.battery_to_home = round(battery_discharge * home_pct_battery, 1)
-            flows.battery_to_ev = round(battery_discharge * ev_pct_battery, 1)
+        # Allowed (source, destination) pairs. The omissions are
+        # deliberate:
+        # - ``grid → grid_export``: a flow-meter sign artefact, not real.
+        # - ``battery_discharge → battery_charge``: a battery can't
+        #   simultaneously discharge and charge itself.
+        # - ``battery_discharge → grid_export``: SEM doesn't support
+        #   battery-to-grid arbitrage (the few installs that do would
+        #   need a ``battery_to_grid`` flow field — out of scope here).
+        #   In a normal install solar/battery sign-conflicts caused by
+        #   sensor lag are rare; if they happen the leftover battery
+        #   discharge stays unattributed for that cycle, which is a
+        #   small honest under-count rather than a wrong attribution.
+        pairs = [
+            ("solar", "home"),
+            ("solar", "ev"),
+            ("solar", "battery_charge"),
+            ("solar", "grid_export"),
+            ("battery", "home"),
+            ("battery", "ev"),
+            ("grid", "home"),
+            ("grid", "ev"),
+            ("grid", "battery_charge"),
+        ]
+        flow_field = {
+            ("solar", "home"): "solar_to_home",
+            ("solar", "ev"): "solar_to_ev",
+            ("solar", "battery_charge"): "solar_to_battery",
+            ("solar", "grid_export"): "solar_to_grid",
+            ("battery", "home"): "battery_to_home",
+            ("battery", "ev"): "battery_to_ev",
+            ("grid", "home"): "grid_to_home",
+            ("grid", "ev"): "grid_to_ev",
+            ("grid", "battery_charge"): "grid_to_battery",
+        }
+        for src, dst in pairs:
+            avail = sources_left[src]
+            need = destinations_left[dst]
+            if avail <= 0 or need <= 0:
+                continue
+            delivered = min(avail, need)
+            field = flow_field[(src, dst)]
+            setattr(flows, field, round(delivered, 1))
+            sources_left[src] = avail - delivered
+            destinations_left[dst] = need - delivered
 
         # v1.6.9 per-charger attribution. When per-charger draws are
         # available, split the fleet-level EV flows by each charger's

@@ -86,6 +86,25 @@ but published as one user-visible release.
 
 ### Fixed
 
+- **Flow attribution: priority-based instead of proportional (#349)** —
+  HA-PROD 2026-06-01 dashboard showed `flow_grid_to_ev_energy =
+  6.633 kWh` on a day when the actuator's `session_solar_share` said
+  the car was 91 % solar. Root cause: SEM split every source across
+  every destination by demand percentage, attributing grid to the EV
+  whenever the home battery was simultaneously charging (the battery
+  was actually the grid-paid consumer; EV was on solar). The model
+  also overshot destinations when supply ≠ demand exactly.
+
+  New model: sources drain in priority `solar → battery_discharge →
+  grid_import`; destinations served in priority `home → ev →
+  battery_charge → grid_export`. Each watt is attributed to exactly
+  one (source, destination) pair. The conservation invariants hold:
+  for each destination, sum of (source→destination) flows = demand;
+  for each source, sum of (source→destination) flows = supply. 14
+  new tests in `tests/test_349_flow_priority_attribution.py` pin
+  both. The previously misleading `flow_grid_to_ev` should now match
+  user intent — solar covers EV first when there's enough.
+
 - **EV charges overnight in `charge_mode=solar_only` (#346)** —
   also shipped as the v1.6.17 hotfix. `_determine_charging_strategy`
   returned `"night_grid"` unconditionally when `is_night_mode()` was
