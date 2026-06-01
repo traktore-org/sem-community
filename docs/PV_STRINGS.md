@@ -55,6 +55,34 @@ a different pattern, file a [GitHub
 issue](https://github.com/traktore-org/sem-community/issues) with
 your entity IDs and we'll add the regex.
 
+## V+I synthesis fallback
+
+Some integrations expose per-string voltage and current but not
+power directly — typically Modbus-based drivers. The most common
+case in the SEM user base is **Huawei Solar Modbus** which
+publishes `sensor.inverter_pv_1_spannung` (V) and
+`sensor.inverter_pv_1_strom` (A) per string but no `pv_1_power`.
+
+SEM handles this automatically. After the direct-power discovery
+runs, a parallel `hardware_detection.discover_pv_string_vi_pairs`
+walks the same registry looking for sibling V+I pairs matching:
+
+| Quantity | Patterns matched |
+|---|---|
+| Voltage | `*_pvN_voltage`, `*_pvN_spannung`, `*_pvN_volt`, `*_mpptN_voltage`, `*_stringN_voltage` (and German equivalents) |
+| Current | `*_pvN_current`, `*_pvN_strom`, `*_pvN_amp`, `*_mpptN_current`, `*_stringN_current` (and German equivalents) |
+
+When a complete V+I pair is found for slot N, SEM multiplies
+V × I at read time to synthesise the per-string watts.
+Downstream consumers (cards, energy accumulator, sum invariant)
+don't know which way the value was sourced.
+
+**Conflict resolution**: when the same slot has BOTH a direct
+power sensor AND a V+I pair, the direct power sensor wins.
+It's a real measurement; the V+I synthesis is a computed
+fallback, slightly less accurate because it doesn't include
+the inverter's own MPPT-efficiency math.
+
 ## How discovery works
 
 1. Discovery runs once at integration setup

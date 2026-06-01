@@ -45,6 +45,25 @@ but published as one user-visible release.
   `hardware_detection.discover_pv_strings_from_registry`
   (Huawei / GoodWe / Growatt / Kostal / Sungrow / Fronius /
   SolarEdge / Victron) now also feeds SEM's own sensors.
+- **V+I synthesis fallback**
+  `hardware_detection.discover_pv_string_vi_pairs` — when an
+  inverter exposes per-string voltage + current but no
+  per-string power sensor (Huawei Solar Modbus, generic
+  Modbus drivers, Solarman bridges), SEM detects sibling
+  `pv_N_voltage` + `pv_N_current` pairs and multiplies V × I
+  at read time to synthesise the per-string watts. Surfaces
+  the same `sensor.sem_pv_string_<slot>_power` entities as
+  the direct-power path; downstream consumers (cards, energy
+  accumulator, sum invariant) don't know which way the value
+  was sourced. Voltage / current patterns accept English
+  (`voltage` / `current` / `volt` / `amp`) and German
+  (`spannung` / `strom`) suffixes. When the same slot has
+  BOTH a direct power sensor AND a V+I pair, the direct
+  sensor wins (slightly more accurate — accounts for the
+  inverter's MPPT efficiency math). Confirmed on HA-PROD
+  2026-06-01: Huawei `inverter_pv_1_spannung` +
+  `..._strom` pair now feeds `sensor.sem_pv_string_pv1_power`
+  via this path.
 - **Per-PV-string chip strip** on three cards, auto-shown when
   ≥ 2 strings are present. Each chip shows `PVn N.NN kW` and
   links to the underlying sensor entity on tap.
