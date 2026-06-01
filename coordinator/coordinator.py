@@ -1302,6 +1302,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         # per charger so an OFF primary doesn't bleed its terminate
                         # into the other chargers. See the helper for details.
                         per_mode = self._effective_charge_mode_for(charger_cfg)
+                        _raw_mode = charger_cfg.get("charge_mode") if isinstance(charger_cfg, dict) else None
+                        if _raw_mode != per_mode:
+                            _LOGGER.warning(
+                                "per-charger mode mismatch: cid=%s raw_cfg=%r per_mode=%r charger_cfg_id=%s",
+                                cid, _raw_mode, per_mode, id(charger_cfg),
+                            )
                         effective_state = self._apply_per_charger_off_override(
                             charging_state, per_mode
                         )
@@ -2578,412 +2584,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         _LOGGER.info("EV charger registered via late discovery: service=%s", ev_auto.get("ev_charger_service"))
 
-    def _canonical_strategy_from_legacy(self, legacy_strategy: str, legacy_reason: str) -> str:
-        """Map ``_determine_charging_strategy`` output → :class:`EVBudgetStrategy`.
+    # ─── Legacy strategy machine removed (arch Step 7) ──────────
+    # _determine_charging_strategy / _self_consumption_strategy /
+    # _zone_based_strategy / _canonical_strategy_from_legacy and the
+    # zone helpers (_raw_zone, _get_zone, _debounce_zone) all lived
+    # here. The new architecture (coordinator/decide.py) replaces
+    # every per-charger decision they made. See PR #358.
 
-        The legacy code returns ``"solar_only"`` for both Zone 3
-        surplus-with-redirect AND Zone 2 surplus-only. The actuator
-        distinguished via substring matching on the reason text — the
-        proximate cause of the #282 three-way disagreement. This mapper
-        immortalises that signal while we transition; Phase D promotes
-        ``self_consumption`` to a first-class strategy return and the
-        substring matching goes away.
-        """
-        from .flow_calculator import EVBudgetStrategy
-
-        if legacy_strategy == "idle":
-            return EVBudgetStrategy.IDLE
-        if legacy_strategy == "disabled":
-            # User-disabled (charge_mode=off). Same budget shape as IDLE
-            # (zero watts). Distinct upstream so the state machine can
-            # route this to SOLAR_IDLE instead of CHARGING_ALLOWED.
-            return EVBudgetStrategy.IDLE
-        if legacy_strategy == "now":
-            return EVBudgetStrategy.NOW
-        # ``min_pv`` removed in #305: post-#277 Phase C no charge mode
-        # produces this tuple. ``_determine_charging_strategy`` only
-        # returns solar_only / battery_assist / night_grid / idle; the
-        # canonical ``MIN_PV`` is still reachable via the night_grid
-        # mapping below and is not retired.
-        if legacy_strategy == "night_grid":
-            # Night charging tops up to the Min floor using grid (#245
-            # semantic). Canonical MIN_PV is the right shape — its formula
-            # is ``max(min_power_floor, surplus + redirect)`` and at night
-            # the surplus term is ~0, leaving the grid floor as the actual
-            # budget. The actuator's NIGHT_CHARGING_ACTIVE branch in
-            # ev_control.py uses its own peak-aware, deadline-aware current
-            # calculation independently — so this mapping affects only
-            # what's published on sem_available_power / sem_calculated_current
-            # (now reflects the canonical floor instead of 0). Pre-fix this
-            # case was missing and raised ValueError on the first real night
-            # charging cycle with remaining_need > 0.1.
-            return EVBudgetStrategy.MIN_PV
-        if legacy_strategy == "battery_assist":
-            return EVBudgetStrategy.BATTERY_ASSIST
-        if legacy_strategy == "solar_only":
-            # Disambiguate Z2 self_consumption from Z3 solar_only via reason.
-            # Both _self_consumption_strategy and Zone 2 in the zone logic
-            # tag their reason with "self_consumption" or "Zone 2".
-            if "self_consumption" in legacy_reason or "Zone 2" in legacy_reason:
-                return EVBudgetStrategy.SELF_CONSUMPTION
-            return EVBudgetStrategy.SOLAR_ONLY
-        # Be loud about unknown strategies — silent fallthrough was the #282 root.
-        raise ValueError(
-            f"_canonical_strategy_from_legacy: unknown legacy strategy "
-            f"{legacy_strategy!r} (reason: {legacy_reason!r}). Add a case "
-            f"in this mapper if you introduced a new strategy value."
-        )
-
-    def _determine_charging_strategy(self, power: PowerReadings, energy: Any,
-                                     charger_cfg: dict | None = None) -> tuple:
-        """SOC-zone-based charging strategy decision (inspired by evcc).
-
-        SOC Zones:
-          Zone 4: SOC >= auto_start_soc (90%) — full battery assist, start EV even without surplus
-          Zone 3: SOC >= buffer_soc (70%)     — battery can discharge to bridge gaps
-          Zone 2: SOC >= priority_soc (30%)   — surplus only, no battery discharge
-          Zone 1: SOC < priority_soc (30%)    — battery priority, EV blocked
-
-        Returns: (strategy, reason) where strategy is one of:
-            "solar_only", "battery_assist", "night_grid", "idle"
-        """
-        vehicle_soc = self._cycle_vehicle_soc
-        # Measured against the floor (Min, the default): this is the guaranteed
-        # target used for the night top-up decision and the auto-mode forecast
-        # ratio. Solar surplus still continues past Min up to the Max ceiling —
-        # that stop is gated separately by soc_limit_active, not here (#245).
-        # charger_cfg makes the night go/stop decision honor the PER-CHARGER target
-        # (Min floor) instead of only the global one (#245 propagation review).
-        remaining_need = self._calculate_remaining_need(energy, vehicle_soc, charger_cfg)
-
-        # EV not connected → idle
-        if not power.ev_connected:
-            return ("idle", f"ev disconnected")
-
-        # Mode gate (#346): consult the per-charger named ``charge_mode``
-        # BEFORE the is_night_mode() branch. Pre-fix the night branch
-        # returned ``"night_grid"`` unconditionally, so a charger in
-        # ``solar_only`` or ``off`` mode silently inherited the MIN_PV
-        # floor (≈1380 W) at night — the state machine returned
-        # NIGHT_DISABLED in parallel, producing the v1.7.0 PROD bug
-        # (KEBA drew ~1.5 kW from battery/grid 22:07–00:48 while
-        # sensor.sem_charging_state showed "Night charging disabled").
-        # ``MODE_NIGHT_ALLOWED`` is the same set used by
-        # _read_night_enabled_raw — solar_only and off are not in it.
-        from ..consts.ev_charge_modes import MODE_NIGHT_ALLOWED
-        _mode_for_night = self._effective_charge_mode_for(charger_cfg or {})
-        if (
-            self.time_manager.is_night_mode()
-            and _mode_for_night not in MODE_NIGHT_ALLOWED
-        ):
-            if _mode_for_night == "off":
-                return ("disabled", "Charging disabled (mode=off)")
-            return (
-                "idle",
-                f"night mode but charge_mode={_mode_for_night} forbids "
-                f"grid charging",
-            )
-
-        # Night mode → grid charging tops up to the floor (Min) (#245).
-        # remaining_need above is already the Min-bound value (default bound="min").
-        if self.time_manager.is_night_mode():
-            # Threshold aligned with _night_state_machine (#282 followup): both
-            # paths now agree at 0.1 kWh ≈ one cycle of 6A × 3 × 230 V min
-            # current. Pre-fix the strategy used `< 0.5` while the state machine
-            # used `<= 0.1`, producing the dashboard "Night charging active"
-            # label while the strategy reported "idle, target reached" — same
-            # disagreement class as #282 (display/decision mismatch).
-            # Min is the GUARANTEED floor; deliver to it exactly.
-            if remaining_need <= 0.1:
-                soc_info = f", SOC={vehicle_soc:.0f}%" if vehicle_soc is not None else ""
-                return ("idle", f"night target reached ({energy.daily_ev:.1f}kWh{soc_info})")
-
-            _cfg = charger_cfg or {}
-            _target_soc = (
-                _cfg.get("ev_target_soc") if _cfg.get("ev_target_soc") is not None
-                else self.config.get("ev_target_soc", 80)
-            )
-            soc_info = f", SOC={vehicle_soc:.0f}%→{_target_soc}%" if vehicle_soc is not None else ""
-
-            # Tariff-optimized cheap-hour waiting is OPT-IN (#247). The authoritative
-            # decision lives in the night planner (_compute_night_plan →
-            # NightChargePlan.should_wait_for_cheap → TARIFF_WAITING_FOR_CHEAP
-            # state). This branch only sets the strategy reason string; consult
-            # the SAME plan to avoid the two paths disagreeing (#281/D3): the old
-            # code re-ran its own cheap-hour calc with a hardcoded 12h lookahead
-            # and no peak-awareness, so it could report "waiting for cheaper
-            # hour" while the planner had already decided to charge now because
-            # Min would miss — a contradictory state for debugging.
-            if self._tariff_optimized_for(charger_cfg or {}):
-                primary_cid = (charger_cfg or {}).get("id")
-                cached_plan = self._night_plan_per_charger.get(primary_cid)
-                if cached_plan is not None and cached_plan.should_wait_for_cheap:
-                    nxt = cached_plan.next_cheap_start
-                    when = nxt.strftime("%H:%M") if nxt else "?"
-                    return ("idle", f"night: waiting for cheaper hour (next: {when}){soc_info}")
-
-            return ("night_grid", f"night mode, remaining={remaining_need:.1f}kWh{soc_info}")
-
-        # Solar mode: keep charging even past target (free surplus)
-        # Target check only applies to night (grid) charging above
-
-        # Strategy dispatch on the named Charge mode (#277 Phase C).
-        # Pre-Phase-C this read the legacy ``ev_charging_mode`` string
-        # (auto / pv / minpv / now / off) — see #277 Phase B PR for the
-        # reason that split was held. Phase C completes the unification:
-        # the strategy machine reads the named mode directly, ``ev_
-        # charging_mode`` is no longer authoritative anywhere. The v6→v7
-        # migration drops the legacy key from the per-charger config.
-        #
-        # Mode → strategy mapping (decided by maintainer for Phase C):
-        #   always_max       → ("now", …)                explicit Max regardless of source
-        #   off              → ("idle", …)               no charging
-        #   solar_only       → _self_consumption_strategy strict surplus, never grid import
-        #   solar_plus_cheap → zone logic + tariff pause day; tariff-windowed night
-        #   min_plus_solar   → zone logic + night top-up to Min (no day grid pull —
-        #                      the Min in "Min + Solar" comes from NIGHT charging,
-        #                      day stays zone-adaptive like legacy ``pv``)
-        mode = self._effective_charge_mode_for(charger_cfg or {})
-
-        if mode == "always_max":
-            return ("now", "Always (max) mode — charge at max immediately")
-        if mode == "off":
-            # Distinct from generic "idle" (which can be transient — Zone 1
-            # battery priority, solar<200W, target met). "disabled" is the
-            # user's explicit OFF intent and routes the state machine to
-            # SOLAR_IDLE → actuator stop_session() → keba.disable. The
-            # canonical-budget mapper (`_canonical_strategy_from_legacy`)
-            # collapses it back to EVBudgetStrategy.IDLE so the budget is 0.
-            return ("disabled", "Charging disabled (mode=off)")
-        if mode == "solar_only":
-            # Strict surplus, never grid import. Self-consumption strategy
-            # subtracts battery_charge below auto_start_soc so the home
-            # battery still gets priority; only true above-everything
-            # surplus reaches the EV. Identical to the legacy
-            # ``self_consumption`` mode (#67).
-            return self._self_consumption_strategy(power, energy)
-
-        # Tariff-aware daytime behaviour for ``solar_plus_cheap`` (#247).
-        # During EXPENSIVE / VERY_EXPENSIVE windows we want to pause the
-        # surplus-from-grid behaviour and stay strictly on solar. Pre-
-        # Phase-C this gated on ``charging_mode == "minpv"`` (the only
-        # legacy mode that could import grid from the daytime strategy);
-        # post-C the only mode that imports from grid during the day is
-        # the auto-mode forecast path, and only if the user picked
-        # ``solar_plus_cheap``.
-        if mode == "solar_plus_cheap":
-            try:
-                level = self._tariff_provider.get_price_level()
-                # A successful call means the provider is healthy — drop
-                # the one-shot ``provider error'' warning flag regardless
-                # of the returned price level. The next exception will
-                # re-arm it. Cleared *before* the branch on ``level`` so
-                # the EXPENSIVE and CHEAP paths share identical recovery
-                # semantics (#301 review pushed back on a duplicated
-                # clear that read like a price-level bug; the canonical
-                # invariant is ``successful read ⇒ no pending warning'').
-                if getattr(self, "_tariff_pause_warned", False):
-                    self._tariff_pause_warned = False
-                if level in (PriceLevel.EXPENSIVE, PriceLevel.VERY_EXPENSIVE):
-                    _LOGGER.debug(
-                        "Tariff pause: %s price — solar_plus_cheap "
-                        "falling through to pure surplus", level.value,
-                    )
-                    # Falls through to self_consumption to enforce
-                    # surplus-only during expensive windows.
-                    return self._self_consumption_strategy(power, energy)
-            except Exception as e:
-                # Surface once (#274/L1) — a persistently broken provider
-                # would otherwise silently keep the surplus-from-grid
-                # behaviour on through expensive windows.
-                if not getattr(self, "_tariff_pause_warned", False):
-                    _LOGGER.warning(
-                        "Tariff-optimized daytime pause disabled — "
-                        "price provider error: %s", e,
-                    )
-                    self._tariff_pause_warned = True
-
-        # ``min_plus_solar`` and ``solar_plus_cheap`` fall through to
-        # the pure zone-based pv logic below — matches the legacy
-        # ``pv + night=on`` factory default that the majority of PROD
-        # installs were running pre-Phase-C. The night/tariff/smart
-        # dimensions are already gated separately (mode-driven via
-        # ``_mode_allows_night_charging`` etc), so the daytime strategy
-        # just runs the zone decision tree unchanged.
-        #
-        # The legacy ``_auto_mode_strategy`` forecast-aware wrapper
-        # (self_consumption when ratio>2) was removed in #305 — no
-        # charge mode dispatched to it post-Phase-C. A future opt-in
-        # ``auto`` mode can re-introduce a forecast switcher; resurrect
-        # via git history rather than carrying dead code.
-        # No-op — explicit fall-through.
-
-        # No meaningful solar → wait
-        if power.solar_power < 200:
-            return ("idle", f"solar={power.solar_power:.0f}W < 200W threshold")
-
-        # SOC zone thresholds
-        auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-        buffer_soc = self.config.get("battery_buffer_soc", 70)
-        priority_soc = self.config.get("battery_priority_soc", 30)
-        battery_floor = self.config.get("battery_assist_floor_soc", 60)
-        battery_capacity = self.battery_capacity_kwh
-
-        already_assisting = (self._state_machine.current_state == ChargingState.SOLAR_SUPER_CHARGING)
-
-        # Debounce zone selection so single-cycle blips (config tweak, SOC
-        # jitter near a boundary) don't bounce strategy idle ↔ solar/assist.
-        raw_zone = self._raw_zone(power.battery_soc, auto_start_soc, buffer_soc, priority_soc)
-        zone = self._debounce_zone(raw_zone, (auto_start_soc, buffer_soc, priority_soc))
-
-        # Zone 4: full battery assist (battery full enough to start EV even
-        # without surplus).
-        if zone == 4:
-            usable_battery = max(0, (power.battery_soc - battery_floor) / 100 * battery_capacity)
-            return (
-                "battery_assist",
-                f"Zone 4: SOC={power.battery_soc:.0f}% >= auto_start={auto_start_soc}% — "
-                f"full battery assist (usable={usable_battery:.1f}kWh)"
-            )
-
-        # Zone 3: battery can discharge to bridge gaps.
-        if zone == 3:
-            try:
-                forecast = self._cycle_forecast
-                if forecast.available:
-                    surplus_factor = 0.5
-                    dampening = self._forecast_tracker.dampening_factor
-                    estimated_surplus = forecast.forecast_remaining_today_kwh * dampening * surplus_factor
-                    if estimated_surplus >= remaining_need * 1.5:
-                        # Plenty of solar ahead — solar_only is fine
-                        return (
-                            "solar_only",
-                            f"Zone 3: SOC={power.battery_soc:.0f}% >= buffer={buffer_soc}%, "
-                            f"forecast surplus {estimated_surplus:.1f}kWh >> need {remaining_need:.1f}kWh"
-                        )
-            except Exception as e:
-                _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
-
-            usable_battery = max(0, (power.battery_soc - battery_floor) / 100 * battery_capacity)
-            return (
-                "battery_assist",
-                f"Zone 3: SOC={power.battery_soc:.0f}% >= buffer={buffer_soc}% — "
-                f"discharge assist (usable={usable_battery:.1f}kWh, need={remaining_need:.1f}kWh)"
-            )
-
-        # Zone 2: surplus only (battery still needs charge; forecast-aware
-        # redirect lives in flow_calculator).
-        if zone == 2:
-            # Hysteresis: if already assisting, stay active down to floor_soc
-            if already_assisting and power.battery_soc >= battery_floor:
-                return (
-                    "battery_assist",
-                    f"Zone 2 hysteresis: SOC={power.battery_soc:.0f}% >= floor={battery_floor}%, "
-                    f"keeping battery assist active"
-                )
-            reason = f"Zone 2: SOC={power.battery_soc:.0f}% in [{priority_soc}%..{buffer_soc}%) — surplus only"
-            try:
-                forecast = self._cycle_forecast
-                if forecast.available:
-                    surplus_factor = 0.5
-                    dampening = self._forecast_tracker.dampening_factor
-                    estimated_surplus = forecast.forecast_remaining_today_kwh * dampening * surplus_factor
-                    reason += f" (forecast surplus={estimated_surplus:.1f}kWh, need={remaining_need:.1f}kWh)"
-            except Exception as e:
-                _LOGGER.debug("Forecast unavailable in charging strategy: %s", e)
-            return ("solar_only", reason)
-
-        # Zone 1: battery priority. State machine routes to
-        # SOLAR_PAUSE_LOW_BATTERY via battery_too_low flag.
-        return ("idle", f"Zone 1: SOC={power.battery_soc:.0f}% < priority={priority_soc}% — battery priority")
-
-    def _self_consumption_strategy(self, power, energy) -> tuple:
-        """Self-consumption mode: charge EV from true solar surplus only (#67).
-
-        Budget = solar - home (no ev_power add-back, no battery discharge for EV).
-        Zone 4 (SOC ≥ 90%): don't subtract battery charge (redirect to EV).
-        Zone 1-3: battery charges first, subtract battery_charge from budget.
-        Battery discharging for home is fine (that's using stored solar).
-        """
-        if power.solar_power < 200:
-            return ("idle", f"self_consumption: solar={power.solar_power:.0f}W < 200W")
-
-        auto_start_soc = self.config.get("battery_auto_start_soc", 90)
-        available = power.solar_power - power.home_consumption_power
-
-        if power.battery_soc < auto_start_soc:
-            available -= power.battery_charge_power  # battery charges first
-
-        available = max(0, available)
-        zone = "Z4-redirect" if power.battery_soc >= auto_start_soc else f"Z{self._get_zone(power.battery_soc)}"
-        return ("solar_only", f"self_consumption ({zone}): surplus={available:.0f}W, solar={power.solar_power:.0f}W")
-
-    def _raw_zone(self, soc: float, auto_start: float, buffer: float, priority: float) -> int:
-        """Map SOC to a zone number using raw (un-debounced) thresholds."""
-        if soc >= auto_start: return 4
-        if soc >= buffer: return 3
-        if soc >= priority: return 2
-        return 1
-
-    def _get_zone(self, soc: float) -> int:
-        """Get SOC zone number for logging (raw, no debounce)."""
-        auto_start = self.config.get("battery_auto_start_soc", 90)
-        buffer = self.config.get("battery_buffer_soc", 70)
-        priority = self.config.get("battery_priority_soc", 30)
-        return self._raw_zone(soc, auto_start, buffer, priority)
-
-    def _debounce_zone(self, raw_zone: int, thresholds: tuple) -> int:
-        """Hold the stable SOC zone until raw_zone is seen for N cycles.
-
-        Returning a stable zone smooths over single-cycle blips that would
-        otherwise flip charging strategy from solar_only → idle → solar_only
-        (and bounce the battery Charging→Idle→Charging). The most common blip
-        is a user adjusting a threshold via a number entity; the second is
-        SOC noise around a zone boundary.
-
-        A change in `thresholds` resets the pending-candidate counter so the
-        new boundaries are evaluated from a clean slate without compounding
-        the blip caused by the change itself.
-        """
-        cycles = max(1, int(self.config.get("zone_debounce_cycles", 2)))
-
-        last_thresholds = getattr(self, "_last_zone_thresholds", None)
-        if last_thresholds is not None and last_thresholds != thresholds:
-            self._pending_zone = None
-            self._pending_zone_count = 0
-        self._last_zone_thresholds = thresholds
-
-        stable = getattr(self, "_stable_zone", None)
-        if stable is None:
-            self._stable_zone = raw_zone
-            return raw_zone
-
-        if raw_zone == stable:
-            self._pending_zone = None
-            self._pending_zone_count = 0
-            return stable
-
-        if raw_zone == getattr(self, "_pending_zone", None):
-            self._pending_zone_count = getattr(self, "_pending_zone_count", 0) + 1
-        else:
-            self._pending_zone = raw_zone
-            self._pending_zone_count = 1
-
-        if self._pending_zone_count >= cycles:
-            _LOGGER.info(
-                "SOC zone transition %d → %d applied after %d stable cycles",
-                stable, raw_zone, self._pending_zone_count,
-            )
-            self._stable_zone = raw_zone
-            self._pending_zone = None
-            self._pending_zone_count = 0
-            return raw_zone
-
-        _LOGGER.debug(
-            "SOC zone candidate %d (count=%d/%d), holding stable=%d",
-            raw_zone, self._pending_zone_count, cycles, stable,
-        )
-        return stable
 
     def _resolve_target(
         self, cfg: dict, base_key: str, bound: str, default: float, full: float,
@@ -3142,20 +2749,59 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         battery_capacity = self.battery_capacity_kwh
 
-        # Forecast-driven charging strategy (per-charger target via _primary_cfg).
-        # Run the strategy decision BEFORE the budget calc so the diagnostic
-        # ev_current sensor reflects the surplus-aware cap when strategy is
-        # solar_only — otherwise the dashboard shows a "calculated_current"
-        # that disagrees with what the charger is actually told to do (#282).
-        strategy, reason = self._determine_charging_strategy(power, energy, _primary_cfg)
-
-        # Canonical EV budget (#282 unification, Phase B). One method,
-        # one number, used by the state machine here, the published
-        # sensors below, and the actuator in ev_control. The strategy
-        # mapper translates the legacy strategy text into the canonical
-        # enum.
+        # Step 7: use the new architecture's decide() for the primary
+        # charger's strategy + reason. The legacy
+        # _determine_charging_strategy / _self_consumption_strategy /
+        # _zone_based_strategy / _canonical_strategy_from_legacy are
+        # gone — every per-charger decision flows through decide(view).
+        from .build_view import build_charger_view
+        from .charger_types import ChargerIntent as _CI
+        from .decide import decide as _decide
         from .flow_calculator import EVBudgetStrategy
-        canonical_strategy = self._canonical_strategy_from_legacy(strategy, reason)
+
+        _primary_view = build_charger_view(
+            charger_id=(_primary_cfg.get("id") or "ev_charger"),
+            charger_cfg=_primary_cfg,
+            mode=self._effective_charge_mode_for(_primary_cfg),
+            power_reading=power,
+            daily_ev_kwh=self._daily_ev_per_charger.get(
+                _primary_cfg.get("id") or "ev_charger", 0.0,
+            ),
+            is_night=self.time_manager.is_night_mode(),
+            config=self.config,
+            target_kwh=remaining_floor,
+        )
+        _primary_decision = _decide(_primary_view)
+        strategy = _primary_decision.intent.value
+        reason = _primary_decision.reason
+
+        # Map ChargerIntent → EVBudgetStrategy for the canonical budget
+        # consumer (sem_available_power, sem_calculated_current).
+        if _primary_decision.intent is _CI.DISABLE:
+            canonical_strategy = EVBudgetStrategy.IDLE
+        elif _primary_decision.intent is _CI.IDLE:
+            canonical_strategy = EVBudgetStrategy.IDLE
+        elif _primary_decision.intent is _CI.CHARGE_MAX:
+            canonical_strategy = EVBudgetStrategy.NOW
+        elif _primary_view.fleet.is_night and _primary_view.mode != "solar_only":
+            # min_plus_solar / solar_plus_cheap night top-up uses MIN_PV
+            canonical_strategy = EVBudgetStrategy.MIN_PV
+        elif _primary_view.mode == "solar_only":
+            canonical_strategy = EVBudgetStrategy.SOLAR_ONLY
+        else:
+            # min_plus_solar / solar_plus_cheap day → zone-aware
+            # battery-assist OR self-consumption.
+            from .decide import soc_zone as _zone
+            _z = _zone(
+                _primary_view.fleet.battery_soc,
+                _primary_view.fleet.auto_start_soc,
+                _primary_view.fleet.buffer_soc,
+                _primary_view.fleet.priority_soc,
+            )
+            canonical_strategy = (
+                EVBudgetStrategy.BATTERY_ASSIST if _z >= 3
+                else EVBudgetStrategy.SOLAR_ONLY
+            )
         # MIN_PV needs a min_power_floor; NOW needs an override. The
         # state machine doesn't read either, so leave them at defaults
         # here (the actuator's own dispatch fills those in when relevant —
