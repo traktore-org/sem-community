@@ -552,6 +552,14 @@ class DynamicTariffProvider(TariffProvider):
             "p75": _quantile(today_prices, 0.75),
             "p90": _quantile(today_prices, 0.90),
         }
+        # Degenerate distribution guard (M1 reviewer note): a flat or
+        # near-flat day collapses every break to the same value, which
+        # would classify every price as VERY_CHEAP and over-trigger
+        # any cheap-window logic downstream. Threshold = 1 ct/kWh —
+        # narrower than that is functionally flat, so fall through to
+        # the static path.
+        if (breaks["p90"] - breaks["p10"]) < 0.01:
+            return None
         self._percentile_breaks = breaks
         self._percentile_breaks_for = today_key
         return breaks

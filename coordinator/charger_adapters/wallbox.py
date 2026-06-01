@@ -154,14 +154,37 @@ class WallboxAdapter(GenericAdapter):
                 self._device.name, service, exc,
             )
 
+    async def command_current(self, amps: int) -> None:
+        """Set charging current — turn pause switch ON first.
+
+        The Wallbox ``pause_resume`` switch is latching: once toggled
+        off (by a previous ``command_idle`` / ``command_disable``),
+        any subsequent setpoint write is accepted by the number
+        entity but the contactor stays open. SEM sees the setpoint
+        change but no power flows — the silent stall the H1 reviewer
+        flagged on the beta.3 batch. Toggle the switch back on before
+        writing the setpoint so the contactor closes and current
+        starts flowing.
+        """
+        await self._toggle_pause_switch(turn_on=True)
+        await super().command_current(amps)
+
+    async def command_max(self) -> None:
+        """Set max charging — turn pause switch ON first."""
+        await self._toggle_pause_switch(turn_on=True)
+        await super().command_max()
+
     async def command_idle(self) -> None:
-        """Stop charging — set current to 0 AND pause the switch."""
+        """Stop charging — set current to 0 AND pause the switch.
+
+        ``super().command_idle()`` sets ``_last_intent``; we do not
+        re-assign it (M2 reviewer note) so future intent extensions
+        can't be overwritten here.
+        """
         await super().command_idle()
         await self._toggle_pause_switch(turn_on=False)
-        self._last_intent = ChargerIntent.IDLE
 
     async def command_disable(self) -> None:
         """User-explicit OFF — set current to 0 AND pause the switch."""
         await super().command_disable()
         await self._toggle_pause_switch(turn_on=False)
-        self._last_intent = ChargerIntent.DISABLE

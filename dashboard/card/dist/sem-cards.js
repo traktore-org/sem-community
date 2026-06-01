@@ -2853,7 +2853,13 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         `}
                     </div>
 
-                    ${this._chargers.length>=1?K:H`
+                    <!-- Session cost chip stays on for 0- and 1-charger
+                         installs (M3 reviewer note): the global
+                         sem_session_cost sensor IS the single charger's
+                         cost. Only hide for multi-charger setups where
+                         the global is a fleet aggregate and per-charger
+                         attribution lives in each section's metrics. -->
+                    ${this._chargers.length>1?K:H`
                         <div class="bottom-bar">
                             <div class="chip">
                                 <span class="chip-label">${this._t("session_cost")}</span>
