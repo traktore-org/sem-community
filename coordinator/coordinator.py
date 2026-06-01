@@ -1341,6 +1341,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         try:
                             from .build_view import build_charger_view
                             from .decide import decide as decide_v2
+                            # Verify the config_entry / per-cycle config see
+                            # the same mode the select entity wrote. Log
+                            # the raw cfg.charge_mode + the resolved per_mode
+                            # so any mismatch surfaces.
+                            raw_mode = charger_cfg.get("charge_mode") if isinstance(charger_cfg, dict) else None
+                            if raw_mode != per_mode:
+                                _LOGGER.warning(
+                                    "shadow-decide %s mode mismatch: raw_cfg=%r per_mode=%r",
+                                    cid, raw_mode, per_mode,
+                                )
                             shadow_view = build_charger_view(
                                 charger_id=cid,
                                 charger_cfg=charger_cfg,
