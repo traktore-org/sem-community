@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Mapping, Optional
+from typing import Any, Dict, Mapping, Optional
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -189,6 +189,179 @@ class BatteryPower:
     daily_discharge_kwh: float = 0.0
 
     name: str = ""
+
+
+# ─────────────────────────────────────────────────────────────────
+# Per-device RUNTIME state (Group A + B of the arch follow-up)
+# ─────────────────────────────────────────────────────────────────
+#
+# Runtime types are MUTABLE — they hold per-cycle state that evolves
+# across the coordinator's lifetime: daily kWh accumulators,
+# availability flags, last-known values used by smoothing fallbacks.
+# Live in ``SEMCoordinator._per_inverter`` / ``_per_battery`` dicts.
+#
+# Distinct from the FROZEN ``InverterPower`` / ``BatteryPower``
+# types above — those are snapshots of the per-cycle SENSOR reading.
+# The runtime is the persistent record across cycles.
+
+@dataclass
+class InverterRuntime:
+    """Coordinator-level state for ONE inverter.
+
+    Inverters are observed-only in SEM (no command surface — the
+    inverter integration owns its own modes). So the runtime is
+    thin: daily kWh accumulator, last-known availability, name for
+    display. No adapter, no intent, no decide loop — those concepts
+    have no inverter analog.
+    """
+
+    inverter_id: str
+    daily_kwh: float = 0.0
+    daily_kwh_date: str = ""
+    last_known_w: float = 0.0
+    """Last non-zero / non-stale power reading. Used by sensor
+    smoothing when an inverter goes briefly unavailable
+    mid-cycle (sensor lag, MQTT hiccup)."""
+    available: bool = True
+    """False when the inverter's primary sensor is
+    ``unavailable`` / ``unknown``. Drives the
+    ``sensor.sem_inverter_<id>_available`` binary sensor."""
+    name: str = ""
+
+
+@dataclass
+class BatteryRuntime:
+    """Coordinator-level state for ONE home battery.
+
+    Unlike inverters, batteries DO get the full decide/actuate
+    treatment (Group B of this PR) — they have a real command
+    surface (discharge limiting, forced charge). But the runtime
+    dataclass itself is just the persistent state; the adapter
+    holds the brand-specific service-call details.
+    """
+
+    battery_id: str
+    daily_charge_kwh: float = 0.0
+    daily_discharge_kwh: float = 0.0
+    daily_kwh_date: str = ""
+    last_known_soc: float = 0.0
+    last_known_w: float = 0.0
+    capacity_kwh: float = 0.0
+    """Nameplate capacity of this unit. Used by the fleet
+    capacity-weighted SOC and by the scheduler's deficit math."""
+    available: bool = True
+    name: str = ""
+
+
+# ─────────────────────────────────────────────────────────────────
+# Per-device flow attribution slices (Group A + B Step 5 mirror)
+# ─────────────────────────────────────────────────────────────────
+#
+# Mirror of ``ChargerFlows`` (per-charger EV-side share of the fleet
+# attribution). Strings are SOURCES; inverters are sources too;
+# batteries are bidirectional (source when discharging, destination
+# when charging). The attribution algorithm in
+# ``flow_calculator.calculate_power_flows`` produces these slices
+# in priority order, so the conservation invariant
+#   sum(flows.per_inverter[i].solar_to_X) == flows.solar_to_X
+# holds by construction.
+
+@dataclass(frozen=True)
+class InverterFlows:
+    """Per-inverter share of the fleet solar_to_X flows."""
+    inverter_id: str
+    solar_to_home: float = 0.0
+    solar_to_ev: float = 0.0
+    solar_to_battery: float = 0.0
+    solar_to_grid: float = 0.0
+
+
+@dataclass(frozen=True)
+class BatteryFlows:
+    """Per-battery share of battery_to_X flows (discharge side)."""
+    battery_id: str
+    battery_to_home: float = 0.0
+    battery_to_ev: float = 0.0
+
+
+# ─────────────────────────────────────────────────────────────────
+# Battery decide/actuate types (Group B Steps 2-4)
+# ─────────────────────────────────────────────────────────────────
+
+class BatteryIntent(Enum):
+    """What ``actuate_battery`` should ask the adapter to do.
+
+    Mirrors :class:`ChargerIntent` for batteries. One intent maps to
+    exactly one adapter method — the actuator doesn't branch on
+    brand or anything else.
+    """
+
+    NORMAL = "normal"
+    """Default discharge limit (the brand's hardware max).
+    Adapter calls ``number.set_value(max_discharge_w)`` or
+    equivalent. The "no protection active, no force charge" state."""
+
+    LIMIT_DISCHARGE = "limit_discharge"
+    """Reactive protection during night EV charging — hold
+    discharge to a specific watts value (typically home consumption,
+    1:1 limit). Today's ``BatteryProtectionMixin`` logic."""
+
+    FORCE_CHARGE = "force_charge"
+    """Proactive grid-to-battery charge with target SOC and power.
+    Today's ``BatteryChargeScheduler`` SCHEDULED state."""
+
+    STOP_FORCE_CHARGE = "stop_force_charge"
+    """End a forced charge — target reached, window ended, or
+    scheduler decided NOT_NEEDED. Different from ``NORMAL`` because
+    the adapter may need a brand-specific stop service
+    (``huawei_solar.stop_forcible_charge``) instead of just
+    setting back to default."""
+
+
+@dataclass(frozen=True)
+class BatteryDecision:
+    """The output of ``decide_battery(view)`` for ONE battery this
+    cycle. Immutable; consumed by ``actuate_battery``.
+    """
+
+    battery_id: str
+    intent: BatteryIntent
+    discharge_limit_w: float = 0.0
+    """Used iff intent == LIMIT_DISCHARGE."""
+    target_soc: float = 0.0
+    """Used iff intent == FORCE_CHARGE."""
+    charge_power_w: float = 0.0
+    duration_min: int = 0
+    reason: str = ""
+
+
+@dataclass(frozen=True)
+class BatteryView:
+    """All inputs needed to decide for ONE battery this cycle.
+
+    Built once per battery at the top of the coordinator's per-
+    battery loop. Pure ``decide_battery(view)`` reads only from
+    this view — no coordinator state.
+    """
+
+    runtime: "BatteryRuntime"
+    config: "Mapping[str, Any]"
+    fleet: "FleetContext"
+    charging_state: str
+    """Current SEM ChargingState (string form). Drives the
+    LIMIT_DISCHARGE gate (active iff NIGHT_CHARGING_ACTIVE)."""
+    ev_charging: bool
+    """Whether any charger in the fleet is currently drawing.
+    Combined with ``charging_state == NIGHT_CHARGING_ACTIVE`` for
+    the protection gate."""
+    home_consumption_w: float
+    """Used as the discharge limit when LIMIT_DISCHARGE fires
+    (the 1:1 protection)."""
+    scheduler_decision: "Any" = None
+    """The output of today's ``BatteryChargeScheduler.evaluate()``.
+    Typed as ``Any`` so importing scheduler types in this module
+    isn't load-bearing — the actual type is
+    :class:`SchedulerDecision` from ``battery_charge_scheduler.py``."""
 
 
 # ─────────────────────────────────────────────────────────────────

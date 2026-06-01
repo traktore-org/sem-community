@@ -1479,25 +1479,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 except ValueError as e:
                     _LOGGER.warning("EV control invalid value: %s", e)
 
-            # Step 7.5c: Battery discharge protection (night charging)
+            # Step 7.5c+d (unified): Battery control via decide_battery + actuate_battery
+            #
+            # Replaces the legacy split (7.5c BatteryProtectionMixin +
+            # 7.5d BatteryChargeScheduler.update) with one pure pipeline
+            # mirroring the EV-side rebuild.
             discharge_limit = None
             if not self._observer_mode:
                 try:
-                    discharge_limit = await self._apply_battery_discharge_protection(
-                        charging_state, power
-                    )
+                    await self._run_battery_pipeline(power, energy, charging_state)
+                    # Surface the most recent LIMIT_DISCHARGE for the sensor
+                    # that pre-architecture got it from
+                    # _apply_battery_discharge_protection's return value.
+                    adapter = getattr(self, "_battery_adapter", None)
+                    if adapter is not None:
+                        from .charger_types import BatteryIntent as _BI
+                        if adapter.last_intent is _BI.LIMIT_DISCHARGE:
+                            discharge_limit = adapter._last_discharge_limit_w
                 except (HomeAssistantError, ServiceValidationError) as e:
-                    _LOGGER.error(
-                        "Battery discharge protection service failed (resetting state): %s", e
+                    _LOGGER.error("Battery pipeline service failed: %s", e)
+                except Exception as e:  # noqa: BLE001
+                    _LOGGER.warning(
+                        "Battery pipeline error: %s", e, exc_info=True,
                     )
-                    self._battery_protection_active = False
-
-            # Step 7.5d: Battery charge scheduler (#6)
-            if not self._observer_mode and self._battery_charge_scheduler.enabled:
-                try:
-                    await self._execute_battery_charge_scheduler(power)
-                except Exception as e:
-                    _LOGGER.warning("Battery charge scheduler error: %s", e, exc_info=True)
 
             # Step 7.5b: Load management (peak tracking + device shedding, no EV)
             if self._load_manager:
@@ -2276,6 +2280,174 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return (
             forecast_data, tracker_data, tariff_data, surplus_data,
             pv_data, assistant_data, utility_data, heat_pump_data,
+        )
+
+    async def _run_battery_pipeline(self, power, energy, charging_state) -> None:
+        """Per-cycle battery control via decide_battery + actuate_battery.
+
+        Replaces the legacy 7.5c + 7.5d hooks
+        (``_apply_battery_discharge_protection`` from
+        BatteryProtectionMixin + ``_execute_battery_charge_scheduler``)
+        with the unified per-device-primary pipeline mirroring the EV
+        side rebuild (PR #358).
+
+        Pipeline:
+          1. (Re-)evaluate the scheduler if it's time (preserved verbatim
+             from the legacy hook).
+          2. Build a :class:`BatteryView` from the scheduler decision +
+             fleet state.
+          3. ``decide_battery(view)`` → :class:`BatteryDecision`.
+          4. ``actuate_battery(decision, adapter)`` invokes the adapter.
+
+        Adapter is cached on ``self._battery_adapter`` keyed by the
+        config — recreating each cycle would lose the
+        ``last_discharge_limit_w`` hysteresis state.
+        """
+        from .actuate_battery import actuate_battery
+        from .battery_adapters import adapter_for
+        from .charger_types import BatteryRuntime, BatteryView, FleetContext
+        from .decide_battery import decide_battery
+
+        # Cache adapter
+        adapter = getattr(self, "_battery_adapter", None)
+        if adapter is None:
+            adapter = adapter_for(self.hass, self.config)
+            self._battery_adapter = adapter
+
+        # 1. Trigger scheduler evaluation (preserve legacy schedule cycle)
+        scheduler = self._battery_charge_scheduler
+        if scheduler.enabled:
+            try:
+                await self._maybe_run_scheduler_evaluation(power)
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.warning(
+                    "Battery scheduler evaluate failed: %s", e, exc_info=True,
+                )
+
+        scheduler_decision = (
+            scheduler._decision if scheduler.enabled else None
+        )
+
+        # 2. Build the view
+        runtime = BatteryRuntime(
+            battery_id="primary",
+            last_known_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+            last_known_w=float(getattr(power, "battery_power", 0.0) or 0.0),
+            capacity_kwh=float(self.config.get("battery_capacity_kwh", 0.0)),
+            available=not bool(getattr(power, "battery_soc_unavailable", False)),
+        )
+        fleet = FleetContext(
+            solar_w=float(getattr(power, "solar_power", 0.0) or 0.0),
+            home_w=float(getattr(power, "home_consumption_power", 0.0) or 0.0),
+            battery_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+            is_night=self.time_manager.is_night_mode(),
+        )
+        view = BatteryView(
+            runtime=runtime,
+            config=self.config,
+            fleet=fleet,
+            charging_state=getattr(charging_state, "value", str(charging_state)),
+            ev_charging=bool(getattr(power, "ev_charging", False)),
+            home_consumption_w=float(
+                getattr(power, "home_consumption_power", 0.0) or 0.0
+            ),
+            scheduler_decision=scheduler_decision,
+        )
+
+        # 3. Decide
+        decision = decide_battery(view)
+        _LOGGER.debug(
+            "decide_battery → intent=%s :: %s",
+            decision.intent.value, decision.reason,
+        )
+
+        # 4. Actuate
+        await actuate_battery(decision, adapter)
+
+        # Reset scheduler when night ends — preserved from legacy
+        if (scheduler.enabled
+                and not self.time_manager.is_night_mode()
+                and scheduler.state.value not in ("idle", "not_needed", "not_profitable")):
+            scheduler.reset()
+
+    async def _maybe_run_scheduler_evaluation(self, power) -> None:
+        """Trigger the scheduler's ``evaluate()`` at the daily time.
+
+        Pure port of the daily-evaluation branch in the legacy
+        ``_execute_battery_charge_scheduler``. The scheduler's
+        ``evaluate()`` is itself a pure function; we just gather its
+        inputs the same way the legacy hook did.
+        """
+        scheduler = self._battery_charge_scheduler
+        now = dt_util.now()
+
+        if not scheduler.should_trigger_evaluation(now):
+            # Check for re-plan trigger (SOC drift / EV change)
+            ev_connected = bool(getattr(power, "ev_connected", False))
+            if scheduler.should_replan(power.battery_soc, ev_connected):
+                scheduler._last_evaluation_date = None
+                _LOGGER.info(
+                    "Battery scheduler: re-plan triggered, will re-evaluate"
+                )
+            return
+
+        forecast = self._forecast_reader.read_forecast()
+        forecast_tomorrow = forecast.forecast_tomorrow_kwh if forecast.available else 0.0
+        forecast_age = 0.0
+        if hasattr(forecast, "last_update") and forecast.last_update:
+            forecast_age = (now - forecast.last_update).total_seconds() / 3600
+
+        correction = self._forecast_tracker.correction_factor
+
+        expected_consumption = self._predictor.predict_consumption_today_kwh(now)
+        if expected_consumption <= 0:
+            expected_consumption = 12.0
+
+        off_peak_rate = (
+            self._tariff_provider.get_price_at(now.replace(hour=2, minute=0))
+            if hasattr(self._tariff_provider, "get_price_at")
+            else self.config.get("electricity_off_peak_rate")
+            or self.config.get("electricity_nt_rate", 0.22)
+        )
+        peak_rate = (
+            self._tariff_provider.get_price_at(now.replace(hour=14, minute=0))
+            if hasattr(self._tariff_provider, "get_price_at")
+            else self.config.get("electricity_import_rate", 0.30)
+        )
+
+        current_price = 0.0
+        if hasattr(self._tariff_provider, "get_current_import_rate"):
+            current_price = self._tariff_provider.get_current_import_rate()
+
+        ev_kwh_needed = 0.0
+        ev_max_power = 0.0
+        if self._ev_devices:
+            daily_target = self.config.get("daily_ev_target", 10)
+            ev_today = self._energy_calculator._get_daily("ev_charging")
+            ev_kwh_needed = max(0, daily_target - ev_today)
+            first_charger = next(iter(self._ev_devices.values()), None)
+            if first_charger and hasattr(first_charger, "max_power_w"):
+                ev_max_power = first_charger.max_power_w
+            else:
+                ev_max_power = self.config.get("ev_max_power_w", 11000)
+
+        tariff_provider = None
+        if hasattr(self._tariff_provider, "find_cheapest_hours"):
+            tariff_provider = self._tariff_provider
+
+        scheduler.evaluate(
+            current_soc=power.battery_soc,
+            forecast_tomorrow_kwh=forecast_tomorrow,
+            expected_consumption_kwh=expected_consumption,
+            off_peak_rate=off_peak_rate,
+            peak_rate=peak_rate,
+            tariff_provider=tariff_provider,
+            correction_factor=correction,
+            ev_kwh_needed=ev_kwh_needed,
+            ev_max_power_w=ev_max_power,
+            forecast_available=forecast.available,
+            forecast_age_hours=forecast_age,
+            current_price=current_price,
         )
 
     async def _execute_battery_charge_scheduler(self, power) -> None:
