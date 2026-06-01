@@ -358,36 +358,14 @@ class TestPeakAwareEdgeCases:
         # Should clamp to max charger capability (16A), not exceed it
         assert safe_current == DEFAULT_MAX_CHARGING_CURRENT
 
-    async def test_battery_protection_during_night_charging(self, coordinator, mock_hass):
-        """Test that battery discharge is limited during night charging."""
-        # Mock battery discharge control entity
-        mock_hass.states.get = Mock(return_value=Mock(state="5000"))
-        mock_hass.services.async_call = AsyncMock()
-
-        coordinator.config["battery_discharge_protection_enabled"] = True
-        coordinator.config["battery_discharge_control_entity"] = "number.battery_max_discharge"
-        coordinator.config["battery_max_discharge_power"] = 5000
-
-        values = {
-            "home_consumption_power": 1500,
-            "battery_power": -3000,  # Discharging 3kW
-            "ev_charging_power": 9000,  # Charging 9kW
-            "grid_power": -10500,  # Importing
-            "ev_charging": True,
-        }
-
-        # Apply battery protection
-        await coordinator._apply_battery_discharge_protection(
-            ChargingState.NIGHT_CHARGING_ACTIVE,
-            values
-        )
-
-        # Battery discharge should be limited to home consumption (1.5kW)
-        mock_hass.services.async_call.assert_called()
-        call_args = mock_hass.services.async_call.call_args
-
-        # Check that discharge limit was set to home consumption
-        assert call_args[1]["value"] == 1500  # Limited to home load
+    # ``test_battery_protection_during_night_charging`` was retired in
+    # v1.7.0 (PR G dead-code cleanup): the
+    # ``_apply_battery_discharge_protection`` method it exercised has
+    # been replaced by ``decide_battery`` →
+    # ``actuate_battery(LIMIT_DISCHARGE, adapter)``; equivalent
+    # coverage lives in ``tests/test_inverter_battery_arch.py`` (battery
+    # decide/actuate tests) and ``tests/test_step8_invariants.py`` (I17
+    # — LIMIT_DISCHARGE during night EV charging).
 
     async def test_integrates_with_load_management_sensors(self, coordinator, mock_hass):
         """Test that peak-aware charging updates load management sensors."""
