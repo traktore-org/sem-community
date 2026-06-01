@@ -144,6 +144,25 @@ export function semCardSurfaceCSS(theme, tintHex, glowAlpha) {
  * render nothing extra for single-string installs, preserving the
  * v1.6.x behaviour.
  */
+/**
+ * Compute a cheap dirty-check string from the per-PV-string sensor
+ * states. Cards whose hass setter normally throttles to imperative
+ * updates (sem-flow-card, sem-system-diagram-card) call this in their
+ * setter; on change they call ``requestUpdate()`` so the Lit-rendered
+ * chip strip refreshes alongside the SVG flow values.
+ *
+ * Returns an empty string when no per-string sensors are present
+ * (single-string installs). Joined with ``|`` so an unavailable state
+ * change is visible in the key. Cheap by design — 4 hash-map lookups.
+ */
+export function semPVStringStatesKey(hass, prefix) {
+    if (!hass?.states) return '';
+    const pfx = prefix || 'sensor.sem_';
+    return ['pv1', 'pv2', 'pv3', 'pv4']
+        .map(s => hass.states[`${pfx}pv_string_${s}_power`]?.state ?? '')
+        .join('|');
+}
+
 export function semDiscoverPVStrings(hass, prefix) {
     if (!hass || !hass.states) return [];
     const pfx = prefix || 'sensor.sem_';

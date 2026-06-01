@@ -40,6 +40,15 @@ const ENTITY_SUFFIXES = [
     'pv_performance_vs_forecast',
     'pv_estimated_annual_degradation',
     'pv_degradation_trend',
+    // v1.7.0 / #312: per-PV-string sensors. Watch all 4 slots —
+    // when fewer exist the lookup is a no-op + harmless. Watching
+    // them here makes the card re-render on every per-string sample
+    // change, keeping the chip strip + "Per string today" section
+    // in sync with sibling cards rendering the same sensors.
+    'pv_string_pv1_power', 'pv_string_pv1_daily_energy',
+    'pv_string_pv2_power', 'pv_string_pv2_daily_energy',
+    'pv_string_pv3_power', 'pv_string_pv3_daily_energy',
+    'pv_string_pv4_power', 'pv_string_pv4_daily_energy',
 ];
 
 function buildEntityIds(prefix) {
