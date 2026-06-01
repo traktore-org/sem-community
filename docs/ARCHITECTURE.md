@@ -4,6 +4,132 @@ This document covers the internal architecture of Solar Energy Management (SEM) 
 
 ---
 
+## v1.7.0 — Per-device primary pattern
+
+Every multi-device data point in SEM flows through one shape:
+**`Dict[str, X]` is the source of truth; fleet aggregates are
+`@property` views**. The pattern applies uniformly to chargers,
+inverters, batteries, and PV strings.
+
+```python
+class PowerReadings:
+    # PRIMARY per-device dicts
+    ev_power_per_charger: Dict[str, float]    # multi-charger
+    inverters: Dict[str, InverterPower]       # multi-inverter
+    batteries: Dict[str, BatteryPower]        # multi-battery
+    solar_power_per_string: Dict[str, float]  # per-PV-string
+
+    # COMPUTED fleet views (cannot drift from the dicts)
+    @property
+    def fleet_ev_w(self) -> FleetEvPower: ...
+    @property
+    def fleet_solar_w(self) -> float: ...
+    @property
+    def fleet_battery_w(self) -> float: ...
+
+class SEMCoordinator:
+    _per_charger: Dict[str, ChargerRuntime]   # consolidates ~8 legacy dicts
+    _per_inverter: Dict[str, InverterRuntime] # multi-inverter installs
+    _per_battery: Dict[str, BatteryRuntime]   # multi-battery installs
+    _charger_adapters: Dict[str, ChargerAdapter]
+    _battery_adapter: BatteryControlAdapter
+```
+
+### Decide → actuate → adapter (EV side)
+
+```
+PowerReadings + config
+       │
+       ▼
+build_charger_view(charger_id) ──► ChargerView (frozen, pure input)
+                                          │
+                                          ▼
+                                   decide(view)         ← pure function
+                                          │
+                                          ▼
+                                  ChargerDecision (frozen, pure output)
+                                          │
+                                          ▼
+                                   actuate(decision, adapter, power)
+                                          │
+                                          ▼
+                                  adapter.command_X()   ← brand-aware
+                                          │
+                                          ▼
+                                    HA service call
+```
+
+- **`decide(view)`** is pure. No `self`, no HA calls, no clock reads.
+  Each of the 5 charge modes (`off`, `solar_only`, `min_plus_solar`,
+  `always_max`, `solar_plus_cheap`) has its own `ModeStrategy` class.
+- **`ChargerAdapter`** encapsulates every brand-specific quirk.
+  `KebaAdapter` knows about the 6 A IEC 61851 minimum, that
+  `set_current(0)` is silently rejected (requires `keba.disable`),
+  self-resume detection, and the ~5 s `charging_state` sensor lag.
+  `GenericAdapter` covers brands whose firmware handles 0 A as stop
+  (Wallbox, Easee, go-eCharger, OCPP).
+- **`actuate(decision, adapter, power)`** dispatches by intent —
+  one method call per `ChargerIntent`. The self-resume guard
+  (#315/#346/#353) is one `adapter.is_self_charging()` check before
+  applying the new intent.
+
+### Decide → actuate → adapter (battery side)
+
+Symmetric to the EV side. Batteries have observed-only and commanded
+axes — `BatteryControlAdapter` unifies both:
+
+```python
+class BatteryControlAdapter(ABC):
+    @abstractmethod async def command_normal(self): ...
+    @abstractmethod async def command_limit_discharge(self, watts: float): ...
+    @abstractmethod async def command_force_charge(
+        self, target_soc, charge_power_w, duration_min): ...
+    @abstractmethod async def command_stop_force_charge(self): ...
+```
+
+Three brand implementations: `HuaweiBatteryAdapter` (wraps the
+existing `huawei_solar.forcible_charge_soc` service for force
+charge + `number.set_value` for discharge limiting),
+`GoodWeBatteryAdapter` (Eco Charge mode toggle), and
+`GenericBatteryAdapter` (switch + number target).
+
+`decide_battery(view) → BatteryDecision` produces one of four
+intents (`NORMAL`, `LIMIT_DISCHARGE`, `FORCE_CHARGE`,
+`STOP_FORCE_CHARGE`). The pure `BatteryChargeScheduler.evaluate()`
+that pre-v1.7.0 lived alongside is preserved verbatim — it
+produces the `SchedulerDecision` that feeds `BatteryView.scheduler_decision`.
+
+### Invariant suite — the safety net
+
+`tests/test_step8_invariants.py` pins 233 architectural contracts
+parametrised across the operating envelope (mode × solar × SOC ×
+home × is_night × num_chargers). Each invariant guarantees one
+property the architecture is supposed to enforce by construction.
+A breaking change fails CI immediately; no need to wait for HA-TEST.
+
+`tests/test_surplus_charging_scenarios.py` adds 93 behavioural
+scenarios that walk specific operating points (e.g. dawn → noon
+→ dusk for solar_only mode) and verify the right intent comes out
+at each step.
+
+This replaces the pre-v1.7.0 verification cycle, which depended on
+deploying to HA-TEST and watching log lines for the rare combination
+that triggered a bug. The deterministic CI scenarios run in under a
+second.
+
+### What's queued for v1.7.1
+
+- Per-inverter / per-battery dashboard sensors (gated on `len(...) >= 2`)
+- Per-inverter / per-battery flow attribution in `flow_calculator`
+- `sensor_reader` migration to populate `EnergyTotals.per_inverter` /
+  `per_battery` each cycle
+- Delete the `BatteryProtectionMixin` + `BatteryChargeAdapter` shells
+  (currently left in the tree as backward-compat wrappers; the
+  new `BatteryControlAdapter` already supersedes them)
+- Per-string-to-destination attribution (#312 deferred work)
+
+---
+
 ## Coordinator Module Structure
 
 ```
@@ -12,13 +138,23 @@ coordinator/
 ├── sensor_reader.py        — SensorReader (reads HA sensors → PowerReadings)
 ├── energy_calculator.py    — EnergyCalculator (power → energy integration)
 ├── flow_calculator.py      — FlowCalculator (power/energy flow distribution)
-├── charging_control.py     — ChargingStateMachine (solar/night/Min+PV FSM)
+├── charger_types.py        — Frozen per-device types (ChargerPower, ChargerDecision,
+│                             InverterRuntime, BatteryRuntime, BatteryDecision, …)
+├── charger_adapters/       — Per-brand EV-charger control surface (KEBA, Generic)
+├── battery_adapters/       — Per-brand battery control surface (Huawei, GoodWe, Generic)
+├── decide.py               — Pure decide(view) → ChargerDecision (5 ModeStrategy classes)
+├── decide_battery.py       — Pure decide_battery(view) → BatteryDecision
+├── actuate.py              — Intent dispatch onto ChargerAdapter
+├── actuate_battery.py      — Intent dispatch onto BatteryControlAdapter
+├── build_view.py           — Builds ChargerView from PowerReadings + config
+├── charging_control.py     — ChargingStateMachine (legacy; produces sensor display
+│                             state, no longer authoritative for control)
 ├── ev_taper_detector.py    — EVTaperDetector (taper detection, virtual SOC, skip logic)
 ├── surplus_controller.py   — SurplusController (multi-device surplus routing)
 ├── forecast_reader.py      — ForecastReader (Solcast / Forecast.Solar)
 ├── notifications.py        — NotificationManager (KEBA display + mobile/REST/webhook)
 ├── storage.py              — SEMStorage (persistent state)
-└── types.py                — All dataclasses (PowerReadings, SessionData, SEMData, etc.)
+└── types.py                — Fleet dataclasses (PowerReadings, SessionData, SEMData, …)
 ```
 
 The `SEMCoordinator` is a Home Assistant `DataUpdateCoordinator` that runs a 10-second update loop. Each cycle:

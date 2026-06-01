@@ -7,9 +7,177 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.7.0] — 2026-06-01
 
-Per-PV-string visibility (#312). Closes the long-standing
-@MRAK96 request for Sunsynk-style per-string display: SEM had
-the auto-discovery (`hardware_detection.discover_pv_strings_from_registry`,
+Major release. Two headline themes:
+
+1. **Multi-device architecture rebuild** — every multi-device data
+   point in SEM (chargers, inverters, batteries, PV strings) now
+   flows through the same per-device-primary pattern: `Dict[str, X]`
+   is the source of truth, fleet aggregates are `@property` views.
+   Brand hardware quirks (KEBA's 6 A minimum, set_current(0)
+   rejection, self-resume detection, Huawei/GoodWe battery force-
+   charge) are encapsulated in dedicated adapter modules. EV
+   control flows through one pure `decide(view) → ChargerDecision`
+   → `actuate(decision, adapter)` pipeline; batteries get the same
+   `decide_battery / actuate_battery / BatteryControlAdapter`
+   treatment. The strategy/state-machine disagreement class that
+   produced the 14-bug cluster between v1.6.0 and v1.6.17
+   (#243, #284, #289, #290, #291, #308, #315, #316, #318, #344,
+   #345, #346, #349, #353) is **structurally retired** — those
+   disagreements cannot exist by construction because there's only
+   one decision authority per device per cycle.
+
+2. **Per-PV-string visibility (#312)** — Sunsynk-style per-string
+   display on three SEM cards, plus V+I synthesis for inverters
+   that expose voltage and current but no per-string power.
+
+The architecture work shipped as four PRs into develop (#358 EV
+rebuild, #360 inverter+battery PowerReadings dicts, #361 battery
+decide/actuate/adapter, #362 EnergyTotals @property views, #363
+93 surplus-charging scenario tests). The per-PV-string work
+shipped as three PRs (#337 data layer, #338 cards, #339 docs).
+All consolidated under one release tag.
+
+### Architecture rebuild — what changed structurally
+
+**Per-charger primary** (PR #358, 8 steps):
+- New frozen types in `coordinator/charger_types.py`: `ChargerPower`,
+  `ChargerEnergy`, `ChargerIntent`, `ChargerDecision`, `ChargerView`,
+  `FleetContext`, `FleetView`, plus the symmetric inverter/battery
+  types (PR #360/#361).
+- `ChargerAdapter` ABC + `KebaAdapter` + `GenericAdapter` in
+  `coordinator/charger_adapters/`. Every KEBA quirk that bit
+  production (6 A min, set_current(0) rejection, self-resume on
+  plug-in, charging_state lag, 500 W handshake cutoff) is one
+  method on this protocol. New brands subclass; the actuator never
+  changes.
+- Pure `decide(view) → ChargerDecision` in `coordinator/decide.py`
+  with one `ModeStrategy` class per charge mode (`off`,
+  `solar_only`, `min_plus_solar`, `always_max`, `solar_plus_cheap`).
+  No `self`, no HA calls — same input always produces the same
+  output.
+- `actuate(decision, adapter)` in `coordinator/actuate.py` — pure
+  intent dispatch. One branch per `ChargerIntent`. The
+  #315/#346/#353 self-resume guards collapse into one
+  `adapter.is_self_charging()` check before the new intent is
+  applied.
+- Coordinator `_per_charger: Dict[str, ChargerRuntime]` consolidates
+  what used to be 8 parallel `_*_per_charger` dicts.
+- The legacy `_determine_charging_strategy`,
+  `_self_consumption_strategy`, `_zone_based_strategy`,
+  `_canonical_strategy_from_legacy`, and the `_raw_zone`/`_get_zone`/
+  `_debounce_zone` helpers — **deleted** (−354 lines in
+  `coordinator.py`). The new pipeline is the only control path.
+- Per-charger native priority flow attribution in
+  `flow_calculator.py`: when multiple chargers consume from the
+  same surplus, the priority allocator splits sources in order
+  (higher-priority chargers get first claim on solar, fall back to
+  battery, fall back to grid). Replaces the pre-#349 proportional
+  fraction-of-fleet split.
+
+**Per-inverter + per-battery primary** (PR #360, #361, #362):
+- `PowerReadings.inverters: Dict[str, InverterPower]` and
+  `PowerReadings.batteries: Dict[str, BatteryPower]` — populated by
+  `sensor_reader` for multi-device installs (`len(...list) > 1`).
+- `@property fleet_solar_w`, `fleet_battery_w`, `fleet_battery_soc`
+  on `PowerReadings` — sum / capacity-weighted-average from the
+  dicts. Empty dict on single-device installs → falls back to the
+  legacy `solar_power` / `battery_power` / `battery_soc` fields.
+  Zero churn for existing consumers.
+- `EnergyTotals.per_inverter` / `per_battery` dicts plus
+  `daily_solar_view` / `daily_battery_charge_view` /
+  `daily_battery_discharge_view` `@property` accessors. Same
+  fallback discipline.
+- New `coordinator/battery_adapters/` module unifies what used to
+  live in two separate places: discharge limiting (the legacy
+  `BatteryProtectionMixin`) and forced charging (the legacy
+  `BatteryChargeAdapter`). `BatteryControlAdapter` is one ABC with
+  four methods (`command_normal`, `command_limit_discharge`,
+  `command_force_charge`, `command_stop_force_charge`); each maps
+  1:1 to a `BatteryIntent`. Huawei, GoodWe, and Generic adapter
+  implementations wrap the existing brand-specific service calls.
+- `decide_battery(view) → BatteryDecision` and
+  `actuate_battery(decision, adapter)` — same pure-pipeline shape
+  as the EV side. Replaces the dual-axis legacy split
+  (`BatteryProtectionMixin._apply_battery_discharge_protection` +
+  `BatteryChargeScheduler.update`).
+- The pure planner `BatteryChargeScheduler.evaluate()` is preserved
+  verbatim — it produces a `SchedulerDecision` that feeds
+  `BatteryView.scheduler_decision`. Only the dispatch path changed.
+
+**Invariant test suite** (PR #358 + #363):
+- `tests/test_step8_invariants.py` — **233 architectural contracts**
+  parametrised across `(mode × solar × battery_soc × home ×
+  is_night × num_chargers)`. Each invariant pins one property the
+  architecture is supposed to guarantee by construction. A breaking
+  change in any module surfaces immediately at CI time, not in
+  production.
+- `tests/test_surplus_charging_scenarios.py` — **93 behavioural
+  scenarios** walking every (mode × battery SOC zone × time-of-day
+  × solar level) combination through `decide → actuate → adapter`.
+  Includes a full-day timeline (`dawn → morning → noon → afternoon
+  → evening → dusk`) with realistic numbers.
+- `tests/test_inverter_battery_arch.py` — **27 tests** pinning the
+  inverter/battery types, adapter dispatch, hysteresis, factory
+  selection.
+- `tests/test_multi_inverter_battery_primary.py` — **23 tests** for
+  the PowerReadings dicts + fleet `@property` accessors.
+
+Full suite: **2733 passed**, 7 skipped (was 2337 at v1.6.14
+baseline → **+396 new tests**). The simulation-driven verification
+approach replaces the previous "deploy and watch logs" cycle —
+hardware test windows are scarce; deterministic CI scenarios run
+in under a second and gate every PR.
+
+### Compatibility notes
+
+- **Zero user-visible behaviour change for single-device installs.**
+  The fleet `solar_power` / `battery_power` / `ev_power` fields stay
+  populated as cached sums; every existing sensor and dashboard
+  card continues to read them unchanged. The new `@property` views
+  are additive.
+- **Multi-device installs see better-quality flow attribution.**
+  A two-charger setup where one is in `solar_only` and the other in
+  `min_plus_solar` previously got a proportional split that
+  attributed grid to the solar-only charger; now the priority
+  allocator correctly routes solar to the higher-priority charger
+  first.
+- **`charge_mode = solar_only` no longer charges from grid at night.**
+  Fixed in v1.6.17 (#346) and structurally retired by the new
+  decide-time mode gate in v1.7.0.
+- **Storage format: backward-compatible.** Pre-v1.7.0 snapshots
+  restore unchanged (no new keys present → empty dicts → fallback
+  to legacy fields).
+- **Legacy code paths retired:** `_determine_charging_strategy`,
+  `_self_consumption_strategy`, `_zone_based_strategy`,
+  `_canonical_strategy_from_legacy`, `_raw_zone`, `_get_zone`,
+  `_debounce_zone`. `BatteryProtectionMixin` and the per-brand
+  `BatteryChargeAdapter` subclasses (`HuaweiChargeAdapter`,
+  `GoodWeChargeAdapter`, `GenericChargeAdapter`) are still in the
+  tree as backward-compat shells — the new `BatteryControlAdapter`
+  wraps them internally. They can be deleted in v1.7.1 after the
+  PROD soak window.
+
+### What's queued for v1.7.1
+
+- Per-inverter / per-battery dashboard sensors (gated on
+  `len(...) >= 2`).
+- Per-inverter / per-battery flow attribution in `flow_calculator`
+  (the destination-side view of "which inverter's solar fed where").
+- `sensor_reader` migration to populate
+  `EnergyTotals.per_inverter` / `per_battery` each cycle (so
+  `daily_solar_view` becomes authoritative on multi-inverter
+  installs).
+- Delete `BatteryProtectionMixin` + `BatteryChargeAdapter` shells
+  after PROD soak proves the new pipeline.
+- Per-string-to-destination attribution (#312 originally deferred —
+  now buildable on top of the per-inverter flow work).
+
+---
+
+### Per-PV-string visibility (#312)
+
+Closes the long-standing @MRAK96 request for Sunsynk-style per-string
+display: SEM had the auto-discovery (`hardware_detection.discover_pv_strings_from_registry`,
 8 inverter brands) for the optional HACS K-Flow card since v1.5.x
 but never promoted per-string to SEM's own surface. v1.7.0 ships
 the full stack: data layer, sensor entities, card rendering, and
