@@ -1,4 +1,9 @@
 name: "2026-05-29 budget unification — battery_assist regime (Phase C)"
+
+coverage:
+  - mode: min_plus_solar
+    regime: zone4_day_assist_drain
+    issue: "#282"
 description: |
   Phase C scenario for the #282 EV-budget unification. This is the
   regime where the legacy paths LATENTLY disagreed but no user

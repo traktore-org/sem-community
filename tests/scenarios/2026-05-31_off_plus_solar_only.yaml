@@ -1,4 +1,12 @@
 name: "2026-05-31 multi-charger off + solar_only — v1.6.9 dispatch + #315 regression"
+
+coverage:
+  - mode: multi_charger
+    regime: off_plus_solar_only_per_charger_state
+    issue: "#315"
+  - mode: "off"
+    regime: any
+    issue: "#315"
 description: |
   Built in v1.6.12 to close the senior-engineer review gap on the
   v1.6.7→v1.6.10 multi-charger cleanup arc — no scenario covered the

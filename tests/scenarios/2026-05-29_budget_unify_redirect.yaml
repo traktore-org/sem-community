@@ -1,4 +1,9 @@
 name: "2026-05-29 budget unification — redirect kicks in for SOLAR_ONLY (Phase C)"
+
+coverage:
+  - mode: solar_only
+    regime: zone3_day_redirect
+    issue: "#282"
 description: |
   Phase C scenario for the #282 EV-budget unification. Replays the
   regime where the three legacy paths historically diverged: modest

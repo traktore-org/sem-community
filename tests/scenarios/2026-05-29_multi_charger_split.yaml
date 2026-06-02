@@ -1,4 +1,9 @@
 name: "2026-05-29 multi-charger split — Phase B.5 distribution (#284)"
+
+coverage:
+  - mode: multi_charger
+    regime: split_canonical_total_equals_sum
+    issue: "#284"
 description: |
   Phase B.5 scenario for #284 (@RienduPre, two-charger Wallbox Pulsar
   on Growatt). When SEM has 2+ chargers, the multi-charger distribution
