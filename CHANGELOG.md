@@ -5,6 +5,31 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.9] — 2026-06-02
+
+**Hotfix on top of beta.8.** No SEM logic changes — purely a dashboard
+card render bug + a missing translation. Users who installed beta.8 saw
+an invisible `sem-solar-card` (the bug below) and a raw key
+`PV_STRINGS_TODAY` in the per-string section.
+
+### Fixed
+
+* **sem-solar-card was rendering as a 0x0 element on every viewport.**
+  The `html\`...\`` Lit template at `sem-solar-card.js:406` contained
+  literal backticks (markdown-quoted `nothing`). JavaScript read those
+  as terminating the outer template literal — Lit's minified `html` tag
+  threw `H(...) is not a function` at parse time. HA's lovelace renderer
+  swallowed the console error and left an empty shadowRoot, so the card
+  was conspicuously missing on mobile.
+* **Missing `pv_strings_today` translation.** The per-PV-string section
+  title rendered as the raw key `PV_STRINGS_TODAY` (CSS upper-casing the
+  missing key) instead of the translated string. Added to all 15
+  supported languages.
+
+Both fixes target the bundled card (`dashboard/card/dist/sem-cards.js`
+was rebuilt) — they take effect after the next browser cache-bust on
+upgrade.
+
 ## [1.7.0-beta.8] — 2026-06-02
 
 The **disagreement-audit close-out + KEBA solar-flicker resilience** release.
