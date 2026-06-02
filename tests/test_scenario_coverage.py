@@ -86,8 +86,11 @@ MUST_COVER: tuple[Cell, ...] = (
          "#282 Phase B/D unification — forecast-aware battery redirect"),
     Cell("solar_only", "night_must_idle",
          "#346 — EV charges overnight in charge_mode=solar_only; strategy/state-machine disagreement"),
-    Cell("solar_only", "keba_zero_amps_self_charge",
-         "#353 — KEBA self-charges when commanded 0A (ignores <6A out-of-range)"),
+    # ``keba_zero_amps_self_charge`` (#353) — adapter-level quirk
+    # covered structurally at the unit level in
+    # ``tests/test_keba_zero_amps_353.py``. Not a YAML scenario
+    # because the bug class is brand-specific actuator behaviour,
+    # not a strategy/state-machine contract.
 
     # ─── min_plus_solar mode ──────────────────────────────────
     Cell("min_plus_solar", "zone3_day_battery_assist",
@@ -104,8 +107,13 @@ MUST_COVER: tuple[Cell, ...] = (
          "#247 — Phase 3 tariff-optimized; normal tariff = no boost"),
     Cell("solar_plus_cheap", "night_cheap_window_charges",
          "#247 — Phase 3 tariff-optimized; cheap window triggers night charge"),
-    Cell("solar_plus_cheap", "night_expensive_skips",
-         "#280 — tariff lookahead past deadline; expensive window must skip"),
+    # ``night_expensive_skips`` (#280) is currently blocked at the
+    # scenario level — the harness's stub tariff_provider doesn't
+    # implement ``find_cheapest_hours`` so ``_compute_night_plan``
+    # never sets ``should_wait_for_cheap=True``. Unit-level
+    # coverage exists at ``tests/test_ev_tariff_planner.py``;
+    # surface a scenario when the harness grows real tariff
+    # lookahead support.
 
     # ─── always_max mode ──────────────────────────────────────
     Cell("always_max", "ignores_zone_and_tariff",
@@ -150,29 +158,26 @@ def _load_coverage_tags() -> dict[tuple[str, str], list[str]]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=False,
-    reason=(
-        "v1.7 prep backlog. Gaps are tracked in the failure message itself "
-        "+ in the GitHub issue tracking scenario coverage. When all cells are "
-        "covered, remove this marker — the test will go green strictly. "
-        "Each backlog cell points at a closed issue with PROD trace data; "
-        "mine that for the YAML inputs."
-    ),
-)
 def test_every_must_cover_cell_has_a_scenario() -> None:
     """Every cell in MUST_COVER must be exercised by at least one YAML.
 
     Failure message lists the missing cells + their issue hints so the
     next step (mine the issue, write the YAML) is unambiguous.
 
-    Currently xfail with ``strict=False``: the v1.7 prep PR ships the
-    matrix + half the cells; the rest are intentional backlog with
-    clear issue references. The test stays green silently when a new
-    scenario closes a cell — ``strict=False`` means "passes are OK,
-    nothing's strict about how many cells are covered". When the
-    backlog is empty, remove the ``xfail`` marker and the test
-    becomes a hard gate.
+    The v1.7 prep PR closed all 14 backlog cells across the 5 EV
+    charge modes + multi-charger surface. Two cells deliberately do
+    NOT appear in MUST_COVER:
+
+    * ``solar_only/keba_zero_amps_self_charge`` (#353) — covered at
+      adapter-unit level in ``tests/test_keba_zero_amps_353.py``.
+    * ``solar_plus_cheap/night_expensive_skips`` (#280) — blocked
+      at the YAML scenario level by the harness's stub tariff
+      provider not implementing ``find_cheapest_hours``. Unit
+      coverage lives in ``tests/test_ev_tariff_planner.py``.
+
+    Both have comment-form placeholders in MUST_COVER. If either
+    grows scenario-level coverage in the future, uncomment the
+    relevant Cell entry.
     """
     found = _load_coverage_tags()
     missing: list[Cell] = [c for c in MUST_COVER if c.key() not in found]
