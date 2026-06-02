@@ -3863,6 +3863,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             result[cid] = {
                 "estimated_soc": round(soc, 1) if soc is not None else None,
+                # #383: surface the real per-charger vehicle SOC reading
+                # so each charger card can display its own car's SOC
+                # instead of falling back to the global ``sem_vehicle_soc``
+                # sensor (which gets context-swap clobbered across the
+                # per-charger loop). ``None`` when no
+                # ``vehicle_soc_entity`` is configured for this charger.
+                "vehicle_soc": (
+                    round(per_charger_vehicle_soc, 1)
+                    if per_charger_vehicle_soc is not None else None
+                ),
                 "nights_until_charge": nights,
                 "charge_needed": charge_needed,
                 "charge_skip_reason": skip_reason,
