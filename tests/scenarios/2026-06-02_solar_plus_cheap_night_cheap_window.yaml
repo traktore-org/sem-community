@@ -1,0 +1,64 @@
+name: "2026-06-02 solar_plus_cheap night cheap window — top up at min (#247)"
+
+coverage:
+  - mode: solar_plus_cheap
+    regime: night_cheap_window_charges
+    issue: "#247"
+
+description: |
+  Phase 3 (#247) tariff-optimized charging: at night during a
+  cheap / very_cheap tariff window, ``solar_plus_cheap`` must
+  top up the EV at the Min current (delegates to
+  ``MinPlusSolarMode._decide_night``).
+
+  The complementary "expensive window must IDLE" case
+  (#280 mitigation) is currently blocked at the strategy level —
+  ``tariff_wait`` is computed by the night planner *after* the
+  primary view is built, so the primary charger's
+  ``SolarPlusCheapMode.decide()`` never sees the wait flag. That
+  arch gap is tracked separately; this scenario pins the
+  tariff_wait=false (cheap window) branch which IS reachable.
+
+  Inputs: solar=0 (overnight), modest grid draw allowed, battery
+  has charge, EV connected. Cheap tariff level set so the user
+  intent is "yes, charge during this window".
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  target_peak_limit: 6.0     # 6 kW peak — well above Min current (4.14 kW)
+  is_night: true
+  tariff_level: "very_cheap"
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_plus_cheap"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Steady-state night cycle. Grid available, EV draws at min.
+timeline:
+  - t: 0
+    solar_power: 0
+    grid_power: -4500          # -ve = importing (covers EV's Min)
+    battery_power: 0           # battery not charging at night
+    battery_soc: 50            # Zone 2 — battery has headroom
+    ev_power: 4140             # 6A * 3 * 230 — at Min
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  # solar_plus_cheap night → MinPlusSolarMode._decide_night → CHARGE_AT_AMPS.
+  # The coordinator's canonical-strategy mapper routes this to MIN_PV
+  # (line 2967 — is_night and mode != solar_only).
+  strategy_substring: "min_pv"

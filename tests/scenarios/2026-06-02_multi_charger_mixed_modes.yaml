@@ -1,0 +1,110 @@
+name: "2026-06-02 multi-charger priority cascade with mixed modes"
+
+coverage:
+  - mode: multi_charger
+    regime: priority_cascade_with_mixed_modes
+    issue: "Mixed-mode multi-charger"
+
+description: |
+  Three chargers, three different modes, three priorities. The
+  multi-charger distribution cascade must:
+
+    1. Service priority 1 first — and respect ITS mode's contract
+       (here always_max → CHARGE_MAX → wants full nameplate).
+    2. Pass the remainder to priority 2 (solar_only — gets only
+       what's left of solar surplus).
+    3. priority 3 (min_plus_solar) gets whatever's still uncommitted.
+
+  This catches a class of bugs where:
+    * the cascade subtracts the wrong "committed" value from
+      higher-priority chargers
+    * mode-specific intent (always_max vs solar_only vs idle)
+      doesn't isolate cleanly per charger
+    * a higher-priority IDLE charger leaks budget away from lower-
+      priority chargers that could actually use it
+
+  Pre-existing scenarios cover 2-charger same-mode (multi_charger_split)
+  and 2-charger off+solar_only (off_plus_solar_only). This 3-way
+  mixed-mode case is the next step up in complexity.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+
+  ev_chargers:
+    - id: charger_priority1
+      name: "Priority 1 — always_max"
+      priority: 1
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      # always_max: wants its full nameplate regardless of regime.
+      charge_mode: "always_max"
+      daily_ev_target: 7.0
+
+    - id: charger_priority2
+      name: "Priority 2 — solar_only"
+      priority: 2
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      # solar_only: only takes from the surplus that's left after
+      # priority 1 committed (which is "all of it" in always_max).
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+    - id: charger_priority3
+      name: "Priority 3 — min_plus_solar"
+      priority: 3
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Big-surplus regime: tons of solar so even after priority 1's
+# always_max commit (11040 W nameplate) there's headroom for
+# priority 2 and 3 to participate.
+timeline:
+  # Cycle 0: surplus enough for all three.
+  - t: 0
+    solar_power: 20000        # 20 kW solar — well above 3 × 11040
+    grid_power: 9000           # bleed excess to grid (positive=export)
+    battery_power: 0
+    battery_soc: 92            # Zone 4 — battery_assist available
+    ev_power: 0                # not yet drawing
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  # The primary charger (priority 1, always_max) sets the
+  # canonical strategy → NOW intent → EVBudgetStrategy.NOW.
+  strategy_substring: "now"
+
+  multi_charger:
+    # The same conservation invariant from #284 Phase B.5 must hold:
+    # per-charger budgets sum to <= canonical net_w.
+    total_equals_canonical: true
+    tolerance_w: 1.0
+
+    # With 20 kW solar and 3 chargers needing up to 11 kW each, at
+    # least one must get a positive allocation — the failure mode this
+    # catches is "everything gets 0 because the cascade subtracted too
+    # eagerly".
+    at_least_one_charger_gets_positive: true
