@@ -1399,13 +1399,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             else per_remaining_floor
                         )
                         view = build_charger_view(
+                            self._cycle_fleet_state,
                             charger_id=cid,
                             charger_cfg=charger_cfg,
                             mode=per_mode,
-                            power_reading=power,
                             daily_ev_kwh=self._daily_ev_per_charger.get(cid, 0.0),
-                            is_night=self.time_manager.is_night_mode(),
-                            config=self.config,
                             target_kwh=decide_target_kwh,
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
                             tariff_wait=bool(charging_context.night_tariff_wait),
@@ -1507,13 +1505,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     if self.config.get("ev_chargers") else {}
                 )
                 view = build_charger_view(
+                    self._cycle_fleet_state,
                     charger_id=cid,
                     charger_cfg={},
                     mode=per_mode,
-                    power_reading=power,
                     daily_ev_kwh=getattr(energy, "daily_ev", 0.0),
-                    is_night=self.time_manager.is_night_mode(),
-                    config=self.config,
                     target_kwh=getattr(charging_context, "night_target_kwh", None),
                     deadline_amps=int(getattr(charging_context, "night_deadline_amps", 0) or 0),
                     tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
@@ -2862,6 +2858,59 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
         return max(0, daily_target - energy.daily_ev)
 
+    def _build_fleet_cycle_state(
+        self, power: PowerReadings, energy: Any,
+    ) -> "FleetCycleState":
+        """Build the per-cycle FleetCycleState that every charger's
+        ``decide()`` sees this cycle.
+
+        The single point of resolution for ALL fleet-level inputs:
+        forecast_remaining, tariff_level, is_night, and the power
+        readings + config snapshot. Both ``_build_charging_context``
+        (for the primary view) and the multi-charger loop in
+        ``_async_update_data`` consume this same object — so a new
+        fleet input added here lands automatically in every charger's
+        view, no per-call kwarg threading required.
+
+        This eliminates the gap class that produced the v1.7 prep
+        SOLAR_ONLY redirect / tariff_level / night-plan ordering
+        regressions. The AST lint at
+        ``tests/test_fleet_state_completeness.py`` keeps the
+        invariant by forbidding any ``build_charger_view`` caller
+        from bypassing this state.
+        """
+        from .charger_types import FleetCycleState
+
+        # Forecast (dampened solar remaining today).
+        forecast_remaining = 0.0
+        try:
+            forecast = self._cycle_forecast
+            if forecast.available:
+                forecast_remaining = self._forecast_tracker.apply_dampening(
+                    forecast.forecast_remaining_today_kwh
+                )
+        except Exception:
+            pass
+
+        # Tariff price level.
+        tariff_level: Optional[str] = None
+        try:
+            provider = getattr(self, "_tariff_provider", None)
+            if provider is not None and getattr(provider, "available", True):
+                level = getattr(provider, "current_level", None)
+                if isinstance(level, str):
+                    tariff_level = level
+        except Exception:
+            tariff_level = None
+
+        return FleetCycleState(
+            power=power,
+            config=self.config,
+            is_night=self.time_manager.is_night_mode(),
+            tariff_level=tariff_level,
+            forecast_remaining_kwh=float(forecast_remaining),
+        )
+
     def _build_charging_context(
         self,
         power: PowerReadings,
@@ -2918,16 +2967,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Calculate excess solar
         excess_solar = power.solar_power - power.home_consumption_power - power.battery_charge_power
 
-        # Use EV budget (with battery redirect) instead of surplus-style available_power
-        forecast_remaining = 0
-        try:
-            forecast = self._cycle_forecast
-            if forecast.available:
-                forecast_remaining = self._forecast_tracker.apply_dampening(
-                    forecast.forecast_remaining_today_kwh
-                )
-        except Exception:
-            pass
+        # Build the FleetCycleState — the single source of truth for
+        # fleet inputs this cycle. Both the primary view (built below)
+        # and the multi-charger loop downstream derive their views
+        # from this SAME state object. Eliminates the post-#358
+        # plumbing-asymmetry class: any new fleet input lands as a
+        # field on FleetCycleState and is automatically visible to
+        # every charger's decide() in this cycle.
+        fleet_state = self._build_fleet_cycle_state(power, energy)
+        self._cycle_fleet_state = fleet_state
+        forecast_remaining = fleet_state.forecast_remaining_kwh
 
         battery_capacity = self.battery_capacity_kwh
 
@@ -2969,45 +3018,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         from .decide import decide as _decide
         from .flow_calculator import EVBudgetStrategy
 
-        # Resolve current tariff level for the primary view. Pre-this
-        # commit ``_primary_view`` was built without ``tariff_level``,
-        # so ``SolarPlusCheapMode.decide()`` always saw ``None`` and
-        # the daytime expensive-window pause + night cheap-window
-        # behaviour both no-op'd. The multi-charger loop downstream
-        # already passes its own tariff bits; this brings the primary
-        # path to parity.
-        _tariff_level: Optional[str] = None
-        try:
-            _provider = getattr(self, "_tariff_provider", None)
-            if _provider is not None and getattr(_provider, "available", True):
-                _level = getattr(_provider, "current_level", None)
-                if isinstance(_level, str):
-                    _tariff_level = _level
-        except Exception:
-            _tariff_level = None
-
+        # Primary view — built from the FleetCycleState above.
+        # All fleet inputs (power readings, is_night, tariff_level,
+        # forecast_remaining_kwh) come from fleet_state. Only per-
+        # charger overrides are direct kwargs.
         _primary_view = build_charger_view(
+            fleet_state,
             charger_id=(_primary_cfg.get("id") or "ev_charger"),
             charger_cfg=_primary_cfg,
             mode=self._effective_charge_mode_for(_primary_cfg),
-            power_reading=power,
             daily_ev_kwh=self._daily_ev_per_charger.get(
                 _primary_cfg.get("id") or "ev_charger", 0.0,
             ),
-            is_night=self.time_manager.is_night_mode(),
-            config=self.config,
             target_kwh=remaining_floor,
-            # Plumb dampened forecast so SolarOnlyMode can include the
-            # canonical battery_redirect_w in its surplus-vs-min check.
-            # Without this the bare surplus call collapses the strategy
-            # to IDLE for SOLAR_ONLY at Zone 3 + viable forecast — the
-            # regression captured by tests/scenarios/2026-05-29_budget_unify_redirect.yaml.
-            forecast_remaining_kwh=forecast_remaining,
-            tariff_level=_tariff_level,
             # Night plan flags (#246 deadline + #247 tariff_wait).
             # Computed above so the primary view's decide() sees the
             # same wait-for-cheap and deadline-floor info the
-            # multi-charger loop downstream already gets.
+            # multi-charger loop downstream gets.
             tariff_wait=tariff_wait,
             deadline_amps=deadline_amps,
         )

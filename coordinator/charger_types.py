@@ -538,6 +538,50 @@ class FleetContext:
 
 
 @dataclass(frozen=True)
+class FleetCycleState:
+    """The cycle's fleet inputs — built ONCE per cycle, consumed by
+    every ``build_charger_view`` call in that same cycle.
+
+    Single source of truth for fleet-level state. Both the primary
+    view (constructed inside ``coordinator._build_charging_context``)
+    and the multi-charger loop's per-charger views derive their
+    ``FleetContext`` from THE SAME ``FleetCycleState`` object —
+    eliminating the post-#358 plumbing-asymmetry class where some
+    callers passed ``tariff_level`` / ``forecast_remaining_kwh`` /
+    night-plan signals and others didn't.
+
+    The shape contains every FLEET-level input that any charger's
+    ``decide()`` could need:
+
+      * ``power`` — raw sensor readings (solar, home, battery,
+        grid, EV) with derived fields populated
+      * ``config`` — global config dict (SOC thresholds, capacity,
+        peak limit, etc.)
+      * ``is_night`` — ``time_manager.is_night_mode()``
+      * ``tariff_level`` — resolved from ``_tariff_provider``
+      * ``forecast_remaining_kwh`` — dampened solar forecast
+
+    PER-CHARGER overrides (``target_kwh``, ``deadline_amps``,
+    ``tariff_wait``, ``solar_committed_w``) stay as direct kwargs to
+    ``build_charger_view`` — they LEGITIMATELY vary across chargers
+    in the same cycle.
+
+    When a new fleet input is added: land it as a field here. The
+    AST lint at ``tests/test_fleet_state_completeness.py`` fails CI
+    if any ``build_charger_view`` call site bypasses this state and
+    passes a fleet-level kwarg directly.
+
+    See ``coordinator._build_fleet_cycle_state`` for the construction.
+    """
+
+    power: "PowerReadings"
+    config: "Mapping[str, Any]"
+    is_night: bool = False
+    tariff_level: "Optional[str]" = None
+    forecast_remaining_kwh: float = 0.0
+
+
+@dataclass(frozen=True)
 class ChargerView:
     """Everything one charger's decide() needs.
 
