@@ -42,35 +42,44 @@ _YAML_PATHS = sorted(SCENARIOS_DIR.glob("*.yaml"))
 
 
 # Scenarios that drift from current production behaviour. When the
-# framework adoption wired these scenarios into CI for the first time,
-# 2 of 5 surfaced regime mismatches between the YAML expectations and
-# the post-#358 arch decision path. The harness IS correctly exercising
-# production — these failures are real divergence, NOT harness bugs:
+# framework adoption first wired these scenarios into CI, 2 of 5 surfaced
+# regime mismatches against the post-#358 arch decision path. After
+# triage on develop:
 #
-#   * surplus_leak: scenario asserts 'solar_only' but production now
-#     emits 'battery_assist' for most cycles + 'idle' for some. The
-#     v1.6.2 fix this scenario was built for may have been superseded
-#     by the arch rewrite's stronger battery-priority logic.
+#   * surplus_leak — RESOLVED. The YAML used the legacy ``ev_charging_mode``
+#     key that the v6→v7 migration drops; without an explicit
+#     ``charge_mode``, the harness fell back to DEFAULT_EV_CHARGE_MODE
+#     ("min_plus_solar") which has a different surplus formula. Adding
+#     ``charge_mode: "solar_only"`` to the YAML put it back on the path
+#     the regression was originally pinned against. Now passing.
 #
-#   * budget_unify_redirect: scenario asserts 'solar_only' but every
-#     cycle now returns 'idle'. The scenario's input conditions don't
-#     trigger any charging at all under the new decide() path. Likely
-#     missing config field (auto_start_soc, ev_target, etc.) that the
-#     new arch requires for the charger to leave IDLE.
+#   * budget_unify_redirect — REAL ARCH REGRESSION (not scenario drift).
+#     Pre-arch (v1.6.x): ``solar_only`` strategy + Zone 3 SOC + generous
+#     forecast → ``flow_calculator._calculate_battery_redirect`` diverted
+#     part of the battery_charge_w to EV (1700W on this scenario's inputs).
+#     Post-arch (#358): ``decide.py::SolarOnlyMode`` computes surplus as
+#     ``solar - home - battery_charge_w`` for any SOC below auto_start_soc,
+#     returns IDLE when that's below the 4140W (6A) charger min, and
+#     canonical_strategy collapses to IDLE — so calculate_canonical_ev_budget
+#     never reaches its SOLAR_ONLY branch where the redirect would have
+#     fired. The forecast-aware redirect for SOLAR_ONLY is now dead code.
+#     Whether that's intentional or a regression is an open question —
+#     decide.py has TODOs about "Zone 3 forecast check deferred" but
+#     it's not clear whether someone consciously dropped redirect or
+#     it slipped. Leaving as xfail until the arch reviewer rules.
 #
-# Marked xfail so the develop suite stays green while the drift is
-# triaged. Remove the entry once the scenario YAML is reconciled
-# with the new arch (or once production is fixed if it turns out to
-# be a regression). ``strict=False`` so a future fix that makes them
-# pass doesn't accidentally fail CI.
+# ``strict=False`` so a future fix that makes them pass doesn't
+# accidentally fail CI.
 _XFAIL_DRIFT = {
-    "2026-05-28_surplus_leak": (
-        "scenario expects 'solar_only', production emits 'battery_assist'+'idle' "
-        "post arch-rewrite (#358) — triage: was the v1.6.2 fix superseded?"
-    ),
     "2026-05-29_budget_unify_redirect": (
-        "scenario expects 'solar_only', production stays 'idle' for all 9 cycles — "
-        "triage: missing config field that new decide() path requires?"
+        "Real arch regression: post-#358 decide.py::SolarOnlyMode subtracts "
+        "battery_charge_w from surplus for SOC < auto_start_soc, returns IDLE "
+        "when < 4140W (6A), and canonical_strategy collapses to IDLE — so "
+        "flow_calculator._calculate_battery_redirect (the SOLAR_ONLY branch) "
+        "is never reached. Forecast-aware redirect appears unreachable in the "
+        "new arch. Triage: intentional simplification or regression? "
+        "See tests/scenarios/2026-05-29_budget_unify_redirect.yaml for the "
+        "Phase B/D #282 unification contract this scenario pins."
     ),
 }
 

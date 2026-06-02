@@ -34,6 +34,12 @@ config:
   daily_ev_target: 7.0
   ev_chargers:
     - id: "ev_charger"
+      # Post #277 Phase C arch-rewrite: ``charge_mode`` is the
+      # authoritative user-intent input. The legacy ``"auto"`` /
+      # ``"pv"`` strings are dead. This scenario captures a surplus-
+      # leak regression in the SOLAR_ONLY regime, so we pin the mode
+      # to make the assertion target unambiguous.
+      charge_mode: "solar_only"
       ev_charging_mode: "auto"
       daily_ev_target: 7.0
 

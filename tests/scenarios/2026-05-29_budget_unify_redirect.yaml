@@ -41,6 +41,15 @@ config:
   daily_ev_target: 7.0
   ev_chargers:
     - id: "ev_charger"
+      # Post #277 Phase C arch-rewrite: the authoritative user-intent
+      # input is ``charge_mode`` (one of: off / solar_only /
+      # min_plus_solar / solar_plus_cheap / always_max). The legacy
+      # ``ev_charging_mode: "auto"`` is dead (dropped by the v6→v7
+      # migration). Without an explicit charge_mode the harness
+      # falls back to DEFAULT_EV_CHARGE_MODE="min_plus_solar" which
+      # demands 4140W min before exiting IDLE — and these scenario
+      # inputs (modest surplus) never reach that threshold.
+      charge_mode: "solar_only"
       ev_charging_mode: "auto"
       daily_ev_target: 7.0
 
