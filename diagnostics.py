@@ -211,6 +211,27 @@ async def async_get_config_entry_diagnostics(
             "grid_energy_device_resolved": grid_device_resolved,
         }
 
+    # PV string discovery result (#379 triage support).
+    # The discover_pv_strings_from_registry result lives on
+    # ``coordinator._sensor_reader._pv_strings`` (direct-power form)
+    # AND ``coordinator._sensor_reader._pv_vi_pairs`` (V+I synthesis
+    # form). When a user reports "PV2 is empty in the dashboard", the
+    # gap is almost always either:
+    #   * Discovery returned empty → ``_pv_strings = {}``
+    #   * Discovery returned 1 entry → fallback to multi-inverter
+    #     didn't fire (would have produced N entries)
+    #   * Both populated correctly → bug is in the dashboard card
+    #     rendering (not in this layer)
+    pv_strings_info = {}
+    if reader:
+        pv_strings_info = {
+            "discovered_direct": dict(getattr(reader, "_pv_strings", {}) or {}),
+            "discovered_vi_pairs": {
+                k: list(v) for k, v in
+                (getattr(reader, "_pv_vi_pairs", None) or {}).items()
+            },
+        }
+
     # Per-charger adapter state (#357 triage support).
     # Surface the brand the adapter resolved to + the brand-specific
     # discovery state. For Wallbox: the ``pause_resume`` switch entity
@@ -318,6 +339,7 @@ async def async_get_config_entry_diagnostics(
         "load_management": load_info,
         "energy_dashboard": ed_info,
         "split_grid_discovery": split_grid_info,
+        "pv_strings_discovery": pv_strings_info,
         "charger_adapters": charger_adapter_info,
         "forecast": {
             "today_kwh": data.get("forecast_today_kwh"),
