@@ -1743,12 +1743,73 @@ async def async_setup_entry(
             len(per_string_descriptions), len(pv_strings),
         )
 
+    # Phase A of per-battery card mirror — auto-discover the multi-
+    # battery surface from the coordinator's sensor reader (single-
+    # battery installs leave ``battery_power_list`` at length 1 and
+    # produce zero per-battery sensors, preserving today's fleet-
+    # sensor behaviour). Same gating + getattr pattern as per-PV-
+    # string surface above.
+    per_battery_descriptions = []
+    _ed = getattr(_sr, "_energy_dashboard_config", None) if _sr is not None else None
+    batt_list = list(getattr(_ed, "battery_power_list", []) or []) if _ed is not None else []
+    if len(batt_list) > 1:
+        for idx, batt_source_entity in enumerate(batt_list):
+            bid = f"b{idx + 1}"
+            # Friendly name: the source entity stripped of common
+            # ``sensor.`` / power-suffix noise so the device page
+            # reads "Battery b1 — battery_1_lade_entladeleistung"
+            # rather than a wall of slugs. Card overrides this via
+            # ``friendly_name`` anyway.
+            source_label = batt_source_entity.replace("sensor.", "").rstrip("_")
+            per_battery_descriptions.extend([
+                SensorEntityDescription(
+                    key=f"battery_{bid}_power",
+                    name=f"Battery {bid} Power",
+                    device_class=SensorDeviceClass.POWER,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=UnitOfPower.WATT,
+                    suggested_display_precision=0,
+                ),
+                SensorEntityDescription(
+                    key=f"battery_{bid}_soc",
+                    name=f"Battery {bid} SOC",
+                    device_class=SensorDeviceClass.BATTERY,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=PERCENTAGE,
+                    suggested_display_precision=0,
+                ),
+                SensorEntityDescription(
+                    key=f"battery_{bid}_status",
+                    name=f"Battery {bid} Status",
+                    # No device_class — values are localised strings
+                    # ("charging" / "discharging" / "idle"); same shape
+                    # as the existing fleet ``battery_status``.
+                ),
+                SensorEntityDescription(
+                    key=f"battery_{bid}_capacity_kwh",
+                    name=f"Battery {bid} Capacity",
+                    device_class=SensorDeviceClass.ENERGY_STORAGE,
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    suggested_display_precision=1,
+                ),
+            ])
+        for desc in per_battery_descriptions:
+            sensors.append(SEMSolarSensor(coordinator, desc, entry.entry_id))
+        _LOGGER.info(
+            "Created %d per-battery sensors for %d batter%s (Phase A)",
+            len(per_battery_descriptions), len(batt_list),
+            "y" if len(batt_list) == 1 else "ies",
+        )
+
     _LOGGER.info("Adding %d sensors to Home Assistant", len(sensors))
     async_add_entities(sensors)
 
     # Fix entity_ids from pre-translation installs and clean up stale entities
     all_descriptions = (
-        list(SENSOR_TYPES) + per_charger_descriptions + per_string_descriptions
+        list(SENSOR_TYPES)
+        + per_charger_descriptions
+        + per_string_descriptions
+        + per_battery_descriptions
     )
     _fix_entity_ids(hass, entry, all_descriptions, "sensor")
     _cleanup_stale_entities(hass, entry, all_descriptions, "sensor")
