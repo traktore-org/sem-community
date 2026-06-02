@@ -5,6 +5,40 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.6] — 2026-06-02
+
+Diagnostic surface expansion for two more reported issues — same
+pattern as beta.5's `per_source_lists` (one-shot triage from the
+diagnostics dump alone).
+
+### Diagnostics
+
+- **#379 — PV string discovery state.** New
+  `pv_strings_discovery` top-level block surfaces what the
+  `_sensor_reader` resolved from both the direct-power-pattern
+  scan and the V+I synthesis pair scan. Lets a "PV2 is empty"
+  report be triaged in one shot: empty dict → discovery missed
+  entirely; partial dict → one pattern matched but others didn't;
+  full dict → bug is downstream in the card rendering.
+
+- **#357 — Per-charger adapter state.** New `charger_adapters`
+  top-level block surfaces the resolved adapter class +
+  brand-specific discovery state per charger. For `WallboxAdapter`
+  specifically:
+  `wallbox.pause_switch_searched`, `pause_switch_entity`,
+  `pause_switch_discovered`. Lets a "Wallbox keeps charging
+  despite mode=off" report point at the failing step on the
+  first dump: false → the discovery couldn't find a
+  `switch.*pause_resume` entity for this Wallbox model;
+  true → adapter wired right, problem is downstream.
+
+### Verification
+
+2863 tests passing, 7 skipped, 0 failed, 0 xfailed (~35s runtime).
+4 new tests in ``tests/test_357_wallbox_diagnostics.py``.
+
+---
+
 ## [1.7.0-beta.5] — 2026-06-02
 
 Testing-framework adoption + three structural arch fixes + diagnostic
