@@ -85,6 +85,7 @@ class KebaAdapter(ChargerAdapter):
     """
 
     def __init__(self, device: "CurrentControlDevice") -> None:
+        super().__init__()  # initialise the IDLE debounce counter
         self._device = device
         self._last_intent: Optional[ChargerIntent] = None
         """The most recent intent the actuator commanded. Used by

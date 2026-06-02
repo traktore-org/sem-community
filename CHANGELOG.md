@@ -5,6 +5,120 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.8] — 2026-06-02
+
+The **disagreement-audit close-out + KEBA solar-flicker resilience** release.
+Lands every remaining item from the post-#349 umbrella audit (#351 — 13/13
+closed), the KEBA actuator IDLE debounce that prevents transient solar-sensor
+dropouts from cascading into "authorization rejected", and a multi-inverter
+PV-strings discovery fix surfaced by @RienduPre's #378 dump.
+
+### Fixed
+
+* **#351 H1** — Per-charger `_calculate_remaining_need` now reads
+  `self._daily_ev_per_charger.get(cid, energy.daily_ev)` when `charger_cfg`
+  is set. Pre-fix charger B's "target reached" check was polluted by
+  charger A's energy.
+* **#351 H2** — Forecast night-target reduction applied per-charger inside
+  the multi-charger loop, gated on `_mode_uses_smart_night(cfg)`. Secondary
+  chargers no longer ignore the "tomorrow is sunny → skip tonight" decision.
+* **#351 M1** — Cost accumulators (daily / monthly / yearly) now round-trip
+  through `Storage.export_energy_calculator_state`. Pre-fix `daily_savings`
+  silently reset to 0 mid-day after every HA restart while
+  `daily_solar` resumed from disk.
+* **#351 M2** — `CostData.daily_total_savings` (+ monthly / yearly variants)
+  now computed as the headline number spanning solar + battery savings.
+  Pre-fix `daily_savings` (solar-only) was the only surfaced number and
+  understated savings on battery-assist days.
+* **#351 M3** — Per-charger session reads `power_flows.per_charger[cid]`
+  directly when populated, preserving the priority-correct attribution.
+  Pre-fix the proportional re-split discarded the priority signal that the
+  flow calculator just computed.
+* **#351 M4** — Per-charger effective states surface as
+  `charger_<id>_charging_state` on `coord.data` and as the
+  `per_charger_states` dict on the `sem_charging_state` sensor. Mixed-mode
+  fleets now show the disagreement explicitly instead of hiding behind the
+  fleet headline.
+* **#351 M5** — `SurplusController.distribute_ev_budget` accepts an
+  `excluded_charger_ids` set; chargers in `charge_mode=off` get 0 W
+  allocation (dashboard still sees the entry).
+* **#351 M6** — `notify_ev_nearly_full` gates on this charger's
+  `power.ev_power_per_charger.get(cid)` instead of the fleet `ev_charging`
+  flag.
+* **#351 M7** — Per-charger session-end falls back to
+  `power.ev_connected_per_charger.get(cid)` when no per-charger plug
+  sensor is configured. Pre-fix per-charger sessions could never end while
+  another charger was plugged in.
+* **#351 M8** — `_skip_recorded_tonight` converted to
+  `Dict[str, bool]` keyed by charger_id; per-charger intel builder
+  records skips per-charger so charger A's skip no longer masks
+  charger B's independent counter.
+* **#351 M9** — Eliminated mutable-attr-read pattern in
+  `_build_charging_context` and the per-charger loop. Both call sites
+  now capture `self._cycle_vehicle_soc` into a local before the two
+  `_calculate_remaining_need` calls.
+* **#351 M10** — `SOLAR_PAUSE_STATES` clears `_ev_charge_started_at`.
+  Pre-fix the disable-delay timer was consumed during a battery-priority
+  pause and the very next cycle's terminal branch fired stop_session
+  even though we just resumed.
+* **#351 M11** — Night-skip notification gates on
+  `_mode_allows_night_charging(cfg)`. Modes `off` / `solar_only` no longer
+  get spurious "skipped night charge" pushes.
+* **#351 L1** — `_update_battery_session_tracking` integrates against
+  `self.update_interval.total_seconds()` (the actual cycle time) not
+  `config["update_interval"]` (the requested one). Under HA load the two
+  diverge and the battery-session counter drifted.
+* **#351 L2** — `FlowCalculator.calculate_energy_flows` emits
+  `DeprecationWarning` from the body. The proportional-allocation path is
+  un-canonical; `integrate_energy_flows` is the timing-aware production
+  path.
+* **#378** — `discover_pv_strings_from_registry` now honours the explicit
+  `solar_power_list` from the HA Energy Dashboard when it has ≥2 entries.
+  Pre-fix the discoverer scoped sibling-scan to the seed's `config_entry`,
+  silently dropping cross-inverter MPPTs and leaking entities not in the
+  user's dashboard. @RienduPre's multi-inverter setup (3 entries in
+  `solar_power_list`) now surfaces all 3 as `pv1`/`pv2`/`pv3`.
+
+### Added — KEBA solar-flicker resilience
+
+* **IDLE debounce in the actuator** (`coordinator/actuate.py` +
+  `ChargerAdapter.attempt_idle` + `reset_idle_debounce`). When a transient
+  solar-sensor reading triggers a 1-cycle `intent=idle`, the actuator
+  holds the previous setpoint instead of immediately calling `keba.disable`.
+  Default threshold = 4 cycles (~40 s grace). Catches the pattern observed
+  live on PROD 2026-06-02: Huawei sensor flicker 8 kW → 0 W → 8 kW within
+  10 s → `keba.disable` → KEBA stuck in "authorization rejected" until
+  physical replug. Real cloud passes (>40 s) still cross the threshold and
+  `command_idle` fires normally.
+* Debounce state lives on `ChargerAdapter` (per-charger, not a module-level
+  dict) so multi-charger fleets count independently per charger.
+* INFO-level log on both branches:
+  `actuate(<cid>): IDLE — count=N/4 — <reason>` (fired) or
+  `actuate(<cid>): IDLE DEBOUNCED — count=N/4, holding previous setpoint`
+  (absorbed).
+
+### Tests
+
+* `test_351_umbrella_regression.py` — 23 tests covering every umbrella
+  item (per-fix assertions + structural anchor lint).
+* `test_379_growatt_pv_strings.py` — 3 new tests for #378 (multi-inverter
+  list wins, single-entry falls through, empty list preserves legacy).
+* 3 new edge-case scenarios + harness extensions for per-cycle
+  `tariff_level` and the negative `strategy_not_substring` assertion.
+
+**Total suite: 2900 passed, 0 failed, 0 xfailed.**
+
+### Known not-fixed
+
+* **#356** — duplicate tiles in the EV dashboard. @RienduPre confirms the
+  symptom persists on beta.6 (which has the hero-collapse + bottom-bar
+  fixes). Needs a UI screenshot to identify the remaining duplication
+  source — replied on the issue asking for one. Target beta.9.
+* **Solar sensor flicker root cause** — the actuator debounce is a
+  band-aid. The Huawei inverter's intermittent 0 W readings should be
+  EMA-smoothed in `coordinator/sensor_reader.py`. Separate issue worth
+  filing.
+
 ## [1.7.0-beta.7] — 2026-06-02
 
 The v1.7 arch capstone — the **FleetCycleState refactor** that

@@ -45,9 +45,13 @@ class _Entry:
 
 
 class _CfgWithSolar:
-    def __init__(self, solar_power: str, solar_energy: str = "") -> None:
+    def __init__(
+        self, solar_power: str, solar_energy: str = "",
+        solar_power_list: list | None = None,
+    ) -> None:
         self.solar_power = solar_power
         self.solar_energy = solar_energy
+        self.solar_power_list = solar_power_list or []
 
 
 def _patch_registry(entries):
@@ -156,6 +160,121 @@ class Test379GrowattPVDiscovery:
         # Only inverter_1's PV1 is in the result. The PV1 from inverter_2
         # would be discovered as inverter_2's pv1 when that's the seed.
         assert result == {"pv1_power": "sensor.growatt_inv1_pv1_power"}
+
+
+# ---------------------------------------------------------------------------
+# #378 — explicit solar_power_list wins over single-inverter sibling scan
+# ---------------------------------------------------------------------------
+
+
+class Test378ExplicitSolarPowerListWins:
+    """Regression for #378 — multi-inverter user with per-MPPT entities
+    in their HA Energy Dashboard.
+
+    @RienduPre's setup (2026-06-02 diagnostic dump):
+      * Inverter ``dng0a4702r``: 2 MPPTs (East + West)
+      * Inverter ``cmg4bd702g``: 1 MPPT (South) in the dashboard
+      * ``solar_power_list`` = 3 explicit entries
+
+    Pre-fix, ``discover_pv_strings_from_registry`` scoped Phase 1 to
+    the seed entity's ``config_entry_id`` — only ``cmg4bd702g``'s
+    siblings were considered; the ``dng0a4702r`` MPPTs were filtered
+    out, and ``cmg4bd702g_pv2`` (NOT in the user's dashboard) leaked
+    in from the registry walk. Result: 2 wrong entities surfaced,
+    1 right entity dropped.
+
+    Post-fix Phase 0: if ``solar_power_list`` has > 1 entry, the user
+    has explicitly said "track these"; we honour their list and skip
+    the sibling scan.
+    """
+
+    def test_multi_inverter_list_wins_over_sibling_scan(self) -> None:
+        """The user's explicit 3-entry solar_power_list maps directly to
+        pv1/pv2/pv3 slots. The sibling scan that would otherwise return
+        only 2 cmg-inverter entries is bypassed."""
+        # Sibling entities exist in the registry but should NOT show up
+        # in the result — Phase 0 returns from solar_power_list directly.
+        entries = [
+            _Entry("sensor.cmg4bd702g_pv1_power", "huawei_solar",
+                   config_entry_id="cmg_cfg"),
+            _Entry("sensor.cmg4bd702g_pv2_power", "huawei_solar",
+                   config_entry_id="cmg_cfg"),
+            _Entry("sensor.dng0a4702r_pv1_power", "huawei_solar",
+                   config_entry_id="dng_cfg"),
+            _Entry("sensor.dng0a4702r_pv2_power", "huawei_solar",
+                   config_entry_id="dng_cfg"),
+        ]
+        cfg = _CfgWithSolar(
+            solar_power="sensor.cmg4bd702g_pv1_power",
+            solar_power_list=[
+                "sensor.cmg4bd702g_pv1_power",
+                "sensor.dng0a4702r_pv1_power",
+                "sensor.dng0a4702r_pv2_power",
+            ],
+        )
+
+        with _patch_registry(entries):
+            result = discover_pv_strings_from_registry(MagicMock(), cfg)
+
+        # All 3 explicit entries surface as pv1/pv2/pv3.
+        # The unwanted cmg_pv2 (not in the user's list) is NOT in
+        # the result.
+        assert result == {
+            "pv1_power": "sensor.cmg4bd702g_pv1_power",
+            "pv2_power": "sensor.dng0a4702r_pv1_power",
+            "pv3_power": "sensor.dng0a4702r_pv2_power",
+        }, (
+            f"#378 regression — explicit solar_power_list ignored. "
+            f"Got: {result}"
+        )
+
+    def test_single_entry_list_falls_through_to_sibling_scan(self) -> None:
+        """With only 1 entry in solar_power_list, Phase 0 doesn't fire
+        and Phase 1 sibling-scan still runs — preserves the
+        single-inverter case where the registry walk does the right
+        thing."""
+        entries = [
+            _Entry("sensor.growatt_inv1_solar_power", "growatt_local",
+                   config_entry_id="inv1"),
+            _Entry("sensor.growatt_inv1_pv1_power", "growatt_local",
+                   config_entry_id="inv1"),
+            _Entry("sensor.growatt_inv1_pv2_power", "growatt_local",
+                   config_entry_id="inv1"),
+        ]
+        cfg = _CfgWithSolar(
+            solar_power="sensor.growatt_inv1_solar_power",
+            solar_power_list=["sensor.growatt_inv1_solar_power"],
+        )
+
+        with _patch_registry(entries):
+            result = discover_pv_strings_from_registry(MagicMock(), cfg)
+
+        # Phase 1 sibling-scan ran — both PV strings surfaced.
+        assert result == {
+            "pv1_power": "sensor.growatt_inv1_pv1_power",
+            "pv2_power": "sensor.growatt_inv1_pv2_power",
+        }
+
+    def test_empty_list_preserves_legacy_behaviour(self) -> None:
+        """A legacy config dump with no ``solar_power_list`` attribute
+        falls through to the existing single-inverter path. This pins
+        backward compat with installs that haven't gone through the
+        post-#312 migration."""
+        entries = [
+            _Entry("sensor.huawei_solar_power", "huawei_solar",
+                   config_entry_id="huawei"),
+            _Entry("sensor.huawei_pv1_power", "huawei_solar",
+                   config_entry_id="huawei"),
+        ]
+        cfg = _CfgWithSolar(
+            solar_power="sensor.huawei_solar_power",
+            # No solar_power_list passed (defaults to []).
+        )
+
+        with _patch_registry(entries):
+            result = discover_pv_strings_from_registry(MagicMock(), cfg)
+
+        assert result == {"pv1_power": "sensor.huawei_pv1_power"}
 
 
 # ---------------------------------------------------------------------------

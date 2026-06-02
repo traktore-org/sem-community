@@ -727,7 +727,17 @@ class CurrentControlDevice(ControllableDevice):
                     await self.hass.services.async_call(domain, "disable", {}, blocking=True)
                     await asyncio.sleep(3)
 
-                # Enable charger
+                # Enable charger. The historically-working sequence
+                # (v1.5.0–v1.6.x) is: set_failsafe → set_energy →
+                # (optional pilot cycle) → enable. ``keba.authorize`` is
+                # NOT in this sequence — it's an RFID-flow primitive for
+                # installs that require per-session card auth, and adding
+                # it speculatively risks toggling KEBA into an
+                # auth-rejected state. The auth-rejected behaviour we
+                # observed on PROD 2026-06-02 15:08 UTC is mitigated
+                # structurally by ``ChargerAdapter.attempt_idle()`` (the
+                # IDLE-debounce — see ``actuate.py``), which prevents
+                # ``keba.disable`` from firing on transient solar dips.
                 if self.hass.services.has_service(domain, "enable"):
                     await self.hass.services.async_call(domain, "enable", {}, blocking=True)
 

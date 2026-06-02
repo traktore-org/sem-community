@@ -272,7 +272,13 @@ async def test_current_control_start_stop_session(current_device):
     """Test KEBA session management."""
     await current_device.start_session(energy_target_kwh=10.0)
     assert current_device._session_active is True
-    # Should have called set_failsafe, set_energy, and enable (no disable — needs_pilot_cycle=False)
+    # Should have called set_failsafe, set_energy, and enable (no disable
+    # — needs_pilot_cycle=False). This is the historically-working
+    # sequence shipped since v1.5.0. ``keba.authorize`` was tried briefly
+    # on 2026-06-02 as a speculative fix for an auth-rejected cascade —
+    # reverted same day after confirming git history shows authorize was
+    # never in the sequence; the real fix is the IDLE debounce in
+    # ``actuate.py`` / ``ChargerAdapter.attempt_idle``.
     assert current_device.hass.services.async_call.call_count == 3
 
     current_device.hass.services.async_call.reset_mock()

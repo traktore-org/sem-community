@@ -1434,7 +1434,34 @@ def discover_pv_strings_from_registry(
     if energy_dashboard_config is None:
         return {}
 
-    # --- Phase 1: try PV string detection from entity registry ---
+    # --- Phase 0: explicit user list wins (#378) ---
+    #
+    # If the user configured ≥2 entities in ``solar_power_list`` on
+    # the HA Energy Dashboard, that's an explicit signal — they want
+    # those exact entities tracked, not whatever Phase 1's
+    # config_entry-scoped sibling scan happens to find. Pre-fix,
+    # a multi-inverter user with per-MPPT entities (e.g. two Growatt
+    # inverters with pv1/pv2 each) would see Phase 1 return only
+    # *one* inverter's siblings — siblings on a second config_entry
+    # were filtered out by the ``entry.config_entry_id ==
+    # config_entry_id`` test, and the slot-number dedup
+    # (``string_num not in found``) silently dropped the cross-
+    # inverter overlap. RienduPre's 2026-06-02 diagnostic dump
+    # showed this exact pattern: 3 entries in solar_power_list, only
+    # 2 surfaced via discovered_direct, both from a different
+    # inverter than the user's primary one.
+    solar_power_list = getattr(energy_dashboard_config, "solar_power_list", [])
+    if isinstance(solar_power_list, list) and len(solar_power_list) > 1:
+        result = {}
+        for i, inverter_entity in enumerate(solar_power_list[:4], start=1):
+            result[f"pv{i}_power"] = inverter_entity
+            _LOGGER.info(
+                "PV slot %d (from solar_power_list, user-configured): %s",
+                i, inverter_entity,
+            )
+        return result
+
+    # --- Phase 1: single-inverter PV string detection from entity registry ---
     seed_candidates = [
         getattr(energy_dashboard_config, "solar_power", None),
         getattr(energy_dashboard_config, "solar_energy", None),
@@ -1489,8 +1516,11 @@ def discover_pv_strings_from_registry(
                 for n, eid in sorted(found.items())
             }
 
-    # --- Phase 2: fallback to multi-inverter totals ---
-    solar_power_list = getattr(energy_dashboard_config, "solar_power_list", [])
+    # --- Phase 2: multi-inverter fallback ---
+    #
+    # Now unreachable for the multi-entry case (Phase 0 above handles
+    # it). Kept as a safety-net for the single-entry case where Phase 1
+    # found nothing AND the list has exactly 1 item.
     if len(solar_power_list) > 1:
         result = {}
         for i, inverter_entity in enumerate(solar_power_list[:4], start=1):

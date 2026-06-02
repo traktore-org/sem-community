@@ -76,6 +76,14 @@ async def actuate(
         # cleanly).
 
     # === Intent dispatch ===
+    #
+    # IDLE is the only intent subject to the debounce. DISABLE is the
+    # user's explicit OFF — always execute. CHARGE_* obviously execute
+    # and reset the counter so a subsequent single IDLE cycle starts
+    # a fresh debounce window.
+    if decision.intent is not ChargerIntent.IDLE:
+        adapter.reset_idle_debounce()
+
     if decision.intent is ChargerIntent.DISABLE:
         await adapter.command_disable()
         _LOGGER.debug(
@@ -85,11 +93,31 @@ async def actuate(
         return
 
     if decision.intent is ChargerIntent.IDLE:
-        await adapter.command_idle()
-        _LOGGER.debug(
-            "actuate(%s): IDLE — %s",
-            decision.charger_id, decision.reason,
-        )
+        # Solar-flicker resilience — see ChargerAdapter docstring.
+        # On the 1st consecutive IDLE we HOLD the previous setpoint
+        # so a transient sensor flicker or 1-cycle surplus dip
+        # doesn't cascade into ``keba.disable`` → KEBA stuck in
+        # "authorization rejected" → contactor refuses subsequent
+        # ``set_current``. On the 2nd consecutive IDLE the dip is
+        # confirmed real (cloud, target reached, EV unplugged) and
+        # ``command_idle`` fires normally.
+        if adapter.attempt_idle():
+            await adapter.command_idle()
+            _LOGGER.info(
+                "actuate(%s): IDLE — count=%d/%d — %s",
+                decision.charger_id,
+                adapter._consecutive_idle_count,
+                adapter.IDLE_DEBOUNCE_THRESHOLD,
+                decision.reason,
+            )
+        else:
+            _LOGGER.info(
+                "actuate(%s): IDLE DEBOUNCED — count=%d/%d, holding previous setpoint — %s",
+                decision.charger_id,
+                adapter._consecutive_idle_count,
+                adapter.IDLE_DEBOUNCE_THRESHOLD,
+                decision.reason,
+            )
         return
 
     if decision.intent is ChargerIntent.CHARGE_MAX:
