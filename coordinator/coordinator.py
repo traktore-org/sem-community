@@ -1537,12 +1537,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 try:
                     await self._run_battery_pipeline(power, energy, charging_state)
                     # Surface the most recent LIMIT_DISCHARGE for the
-                    # discharge-limit sensor.
-                    adapter = getattr(self, "_battery_adapter", None)
-                    if adapter is not None:
+                    # discharge-limit sensor. #375: now reads across
+                    # the per-battery adapter dict — picks the
+                    # tightest active limit if multiple batteries are
+                    # currently in LIMIT_DISCHARGE (the protection
+                    # gate fires fleet-wide on EV night charging, so
+                    # in practice all adapters report the same value
+                    # — min() is just defensive).
+                    adapters = getattr(self, "_battery_adapters", None) or {}
+                    if adapters:
                         from .charger_types import BatteryIntent as _BI
-                        if adapter.last_intent is _BI.LIMIT_DISCHARGE:
-                            discharge_limit = adapter._last_discharge_limit_w
+                        active_limits = [
+                            a._last_discharge_limit_w for a in adapters.values()
+                            if a.last_intent is _BI.LIMIT_DISCHARGE
+                            and a._last_discharge_limit_w is not None
+                        ]
+                        if active_limits:
+                            discharge_limit = min(active_limits)
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("Battery pipeline service failed: %s", e)
                 except Exception as e:  # noqa: BLE001
@@ -2338,28 +2349,39 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         with the unified per-device-primary pipeline mirroring the EV
         side rebuild (PR #358).
 
-        Pipeline:
+        Pipeline (one iteration per battery in ``power.batteries``):
           1. (Re-)evaluate the scheduler if it's time (preserved verbatim
-             from the legacy hook).
-          2. Build a :class:`BatteryView` from the scheduler decision +
-             fleet state.
-          3. ``decide_battery(view)`` → :class:`BatteryDecision`.
-          4. ``actuate_battery(decision, adapter)`` invokes the adapter.
+             from the legacy hook). Fires ONCE per cycle — the scheduler
+             plans against the fleet, not per battery.
+          2. For each battery_id in ``power.batteries`` (or a synthetic
+             ``"primary"`` entry on legacy single-battery installs):
+                a. Build a :class:`BatteryView` from per-battery runtime
+                   + the shared scheduler decision + fleet context.
+                b. ``decide_battery(view)`` → :class:`BatteryDecision`.
+                c. ``actuate_battery(decision, adapter)`` invokes the
+                   per-battery adapter.
 
-        Adapter is cached on ``self._battery_adapter`` keyed by the
-        config — recreating each cycle would lose the
-        ``last_discharge_limit_w`` hysteresis state.
+        Adapters are cached per-battery in ``self._battery_adapters``
+        (#375) — keyed by ``battery_id`` so brand-specific hysteresis
+        state (``last_discharge_limit_w``) doesn't leak between
+        batteries. Recreating each cycle would lose that state.
+
+        Single-battery installs (the 99% case today) see exactly one
+        loop iteration and the same actuation pattern as v1.7.0 —
+        the only difference is the adapter cache is now a dict-of-one
+        keyed by ``"primary"``.
         """
         from .actuate_battery import actuate_battery
         from .battery_adapters import adapter_for
         from .charger_types import BatteryRuntime, BatteryView, FleetContext
         from .decide_battery import decide_battery
 
-        # Cache adapter
-        adapter = getattr(self, "_battery_adapter", None)
-        if adapter is None:
-            adapter = adapter_for(self.hass, self.config)
-            self._battery_adapter = adapter
+        # Per-battery adapter cache (#375 — was a single
+        # ``self._battery_adapter``). Adapters carry the
+        # ``last_discharge_limit_w`` hysteresis state, so they're
+        # cached for the coordinator's lifetime.
+        if not hasattr(self, "_battery_adapters"):
+            self._battery_adapters: Dict[str, "BatteryControlAdapter"] = {}
 
         # 1. Trigger scheduler evaluation (preserve legacy schedule cycle)
         scheduler = self._battery_charge_scheduler
@@ -2375,41 +2397,74 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             scheduler._decision if scheduler.enabled else None
         )
 
-        # 2. Build the view
-        runtime = BatteryRuntime(
-            battery_id="primary",
-            last_known_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
-            last_known_w=float(getattr(power, "battery_power", 0.0) or 0.0),
-            capacity_kwh=float(self.config.get("battery_capacity_kwh", 0.0)),
-            available=not bool(getattr(power, "battery_soc_unavailable", False)),
-        )
+        # Shared fleet context — same for every battery this cycle.
         fleet = FleetContext(
             solar_w=float(getattr(power, "solar_power", 0.0) or 0.0),
             home_w=float(getattr(power, "home_consumption_power", 0.0) or 0.0),
             battery_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
             is_night=self.time_manager.is_night_mode(),
         )
-        view = BatteryView(
-            runtime=runtime,
-            config=self.config,
-            fleet=fleet,
-            charging_state=getattr(charging_state, "value", str(charging_state)),
-            ev_charging=bool(getattr(power, "ev_charging", False)),
-            home_consumption_w=float(
-                getattr(power, "home_consumption_power", 0.0) or 0.0
-            ),
-            scheduler_decision=scheduler_decision,
-        )
 
-        # 3. Decide
-        decision = decide_battery(view)
-        _LOGGER.debug(
-            "decide_battery → intent=%s :: %s",
-            decision.intent.value, decision.reason,
-        )
+        # 2. Source per-battery iteration. Multi-battery installs
+        # populate ``power.batteries`` from the Energy Dashboard's
+        # battery_power_list (multi-meter setup). Single-battery
+        # installs leave it empty and we fall back to a synthetic
+        # ``"primary"`` entry built from the fleet sensors — identical
+        # behaviour to v1.7.0.
+        battery_items: list[tuple[str, BatteryRuntime]] = []
+        if power.batteries:
+            for battery_id, bp in power.batteries.items():
+                battery_items.append((battery_id, BatteryRuntime(
+                    battery_id=battery_id,
+                    last_known_soc=float(bp.soc_pct or 0.0),
+                    last_known_w=float(bp.power_w or 0.0),
+                    capacity_kwh=float(
+                        bp.capacity_kwh
+                        or self.config.get("battery_capacity_kwh", 0.0)
+                    ),
+                    available=True,  # populated → it reported this cycle
+                    name=bp.name or battery_id,
+                )))
+        else:
+            # Legacy single-battery fallback — synthesise one runtime.
+            battery_items.append(("primary", BatteryRuntime(
+                battery_id="primary",
+                last_known_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+                last_known_w=float(getattr(power, "battery_power", 0.0) or 0.0),
+                capacity_kwh=float(self.config.get("battery_capacity_kwh", 0.0)),
+                available=not bool(
+                    getattr(power, "battery_soc_unavailable", False)
+                ),
+            )))
 
-        # 4. Actuate
-        await actuate_battery(decision, adapter)
+        for battery_id, runtime in battery_items:
+            # Per-battery adapter cache.
+            adapter = self._battery_adapters.get(battery_id)
+            if adapter is None:
+                adapter = adapter_for(self.hass, self.config)
+                self._battery_adapters[battery_id] = adapter
+
+            view = BatteryView(
+                runtime=runtime,
+                config=self.config,
+                fleet=fleet,
+                charging_state=getattr(charging_state, "value", str(charging_state)),
+                ev_charging=bool(getattr(power, "ev_charging", False)),
+                home_consumption_w=float(
+                    getattr(power, "home_consumption_power", 0.0) or 0.0
+                ),
+                scheduler_decision=scheduler_decision,
+            )
+
+            # 3. Decide
+            decision = decide_battery(view)
+            _LOGGER.debug(
+                "decide_battery(%s) → intent=%s :: %s",
+                battery_id, decision.intent.value, decision.reason,
+            )
+
+            # 4. Actuate
+            await actuate_battery(decision, adapter)
 
         # Reset scheduler when night ends — preserved from legacy
         if (scheduler.enabled
