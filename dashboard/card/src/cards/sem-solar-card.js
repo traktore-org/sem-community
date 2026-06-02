@@ -257,6 +257,22 @@ class SEMSolarCard extends SEMLitBase {
                 }
                 @media (max-width: 400px) { .two-col { grid-template-columns: 1fr; } }
 
+                /* Mobile polish (added during the same fix as the
+                   render-bug repair): the existing 400px breakpoints
+                   only handle the very narrowest phones. The card is
+                   noticeably cramped on a typical 375–480px viewport
+                   without these — the 2-col flows grid produces two
+                   ~155px columns of dense kWh data. */
+                @media (max-width: 480px) {
+                    .hero { flex-direction: column; gap: 12px; align-items: stretch; }
+                    .solar-ring { width: 90px; height: 90px; margin: 0 auto; }
+                    .flows-grid { grid-template-columns: 1fr; gap: 6px; }
+                    .section { padding: 8px 10px; margin-top: 10px; }
+                    .metric-row { padding: 1px 0; }
+                    .chip { padding: 5px 6px; }
+                    .chip-value { font-size: 12px; }
+                }
+
                 /* ── Metric rows ── */
                 .metric-row {
                     display: flex; justify-content: space-between; align-items: baseline;
@@ -399,11 +415,16 @@ class SEMSolarCard extends SEMLitBase {
                         </div>
                     </div>
 
-                    <!-- v1.7.0 / #312: per-PV-string detail. Reuses the
-                         "flow row" style for visual consistency with
-                         the Today's Flows section above. Auto-shown
-                         when ≥ 2 strings are present; collapses to
-                         ``nothing`` on single-string installs. -->
+                    <!-- v1.7.0 / #312: per-PV-string detail. Reuses
+                         the "flow row" style for visual consistency
+                         with the Today's Flows section above. Auto-
+                         shown when 2+ strings are present; collapses
+                         to nothing on single-string installs.
+                         (Do NOT quote "nothing" with backticks here;
+                         this HTML comment lives inside an html
+                         tagged template literal, and a stray
+                         backtick terminates that template at parse
+                         time — see the 0x0 render bug we fixed.) -->
                     ${pvStrings.length >= 2 ? html`
                         <div class="section">
                             <div class="section-title">${this._t('pv_strings_today') || "Per string today"}</div>
