@@ -211,6 +211,39 @@ async def async_get_config_entry_diagnostics(
             "grid_energy_device_resolved": grid_device_resolved,
         }
 
+    # Per-charger adapter state (#357 triage support).
+    # Surface the brand the adapter resolved to + the brand-specific
+    # discovery state. For Wallbox: the ``pause_resume`` switch entity
+    # the adapter found (or didn't). When @RienduPre's "charge_mode=off
+    # but charger keeps charging" report drops in, this tells us at a
+    # glance whether the adapter failed to discover the pause switch
+    # (then ``command_disable`` silently no-ops on the pause action,
+    # leaving the contactor closed).
+    charger_adapter_info = {}
+    ev_devices = getattr(coordinator, "_ev_devices", None) or {}
+    if ev_devices:
+        from .coordinator.ev_control import EVControlMixin  # noqa: F401
+        adapters = getattr(coordinator, "_ev_adapters", {}) or {}
+        for cid, dev in ev_devices.items():
+            ad = adapters.get(cid)
+            entry_info = {
+                "device_name": getattr(dev, "name", None),
+                "device_max_current": getattr(dev, "max_current", None),
+                "device_min_current": getattr(dev, "min_current", None),
+                "charger_service": getattr(dev, "charger_service", None),
+                "adapter_class": type(ad).__name__ if ad else None,
+            }
+            # Brand-specific state — currently Wallbox is the only
+            # one with non-trivial discovery state. KEBA / generic
+            # don't have discovery, so this block stays small.
+            if ad is not None and type(ad).__name__ == "WallboxAdapter":
+                entry_info["wallbox"] = {
+                    "pause_switch_searched": getattr(ad, "_pause_switch_searched", False),
+                    "pause_switch_entity": getattr(ad, "_pause_switch_entity", None),
+                    "pause_switch_discovered": getattr(ad, "_pause_switch_entity", None) is not None,
+                }
+            charger_adapter_info[cid] = entry_info
+
     # v1.6.11: bundle the last ~80 SEM-related log lines into the
     # diagnostics dump so bug reports come pre-loaded with the
     # surrounding log context. See ``_get_recent_sem_logs`` for the
@@ -285,6 +318,7 @@ async def async_get_config_entry_diagnostics(
         "load_management": load_info,
         "energy_dashboard": ed_info,
         "split_grid_discovery": split_grid_info,
+        "charger_adapters": charger_adapter_info,
         "forecast": {
             "today_kwh": data.get("forecast_today_kwh"),
             "tomorrow_kwh": data.get("forecast_tomorrow_kwh"),
