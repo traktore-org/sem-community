@@ -70,10 +70,10 @@ VALID_HARDWARE_INPUT = {
 }
 
 
-def _create_flow(hass):
+def _create_flow(mock_hass):
     """Create and initialize a config flow instance with mocked hass."""
     flow = SolarEnergyManagementConfigFlow()
-    flow.hass = hass
+    flow.hass = mock_hass
     return flow
 
 
@@ -82,10 +82,10 @@ class TestSolarEnergyManagementConfigFlow:
     """Test the slim 3-step install flow."""
 
     @pytest.mark.asyncio
-    async def test_form_display(self, hass):
+    async def test_form_display(self, mock_hass):
         """async_step_user shows the form when Energy Dashboard is configured."""
         energy_config = _make_energy_dashboard_config()
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         with patch(
             "custom_components.solar_energy_management.config_flow.read_energy_dashboard_config",
@@ -99,9 +99,9 @@ class TestSolarEnergyManagementConfigFlow:
         assert "summary" in result.get("description_placeholders", {})
 
     @pytest.mark.asyncio
-    async def test_energy_dashboard_not_configured(self, hass):
+    async def test_energy_dashboard_not_configured(self, mock_hass):
         """Abort with reason energy_dashboard_not_configured."""
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         with patch(
             "custom_components.solar_energy_management.config_flow.read_energy_dashboard_config",
@@ -114,10 +114,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert result["reason"] == "energy_dashboard_not_configured"
 
     @pytest.mark.asyncio
-    async def test_energy_dashboard_incomplete(self, hass):
+    async def test_energy_dashboard_incomplete(self, mock_hass):
         """Abort when Energy Dashboard is missing solar."""
         energy_config = _make_energy_dashboard_config(has_solar=False, has_grid=True)
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         with patch(
             "custom_components.solar_energy_management.config_flow.read_energy_dashboard_config",
@@ -131,10 +131,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert "Solar" in result["description_placeholders"]["missing"]
 
     @pytest.mark.asyncio
-    async def test_energy_dashboard_incomplete_no_grid(self, hass):
+    async def test_energy_dashboard_incomplete_no_grid(self, mock_hass):
         """Abort when Energy Dashboard has solar but no grid."""
         energy_config = _make_energy_dashboard_config(has_solar=True, has_grid=False)
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         with patch(
             "custom_components.solar_energy_management.config_flow.read_energy_dashboard_config",
@@ -148,10 +148,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert "Grid" in result["description_placeholders"]["missing"]
 
     @pytest.mark.asyncio
-    async def test_user_step_proceeds_to_ev_charger(self, hass):
+    async def test_user_step_proceeds_to_ev_charger(self, mock_hass):
         """Submitting the user step (with observer_mode) advances to ev_charger."""
         energy_config = _make_energy_dashboard_config()
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         mock_detector = MagicMock()
         mock_detector.get_suggested_ev_defaults.return_value = {}
@@ -177,10 +177,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert flow._data.get("observer_mode") is False
 
     @pytest.mark.asyncio
-    async def test_user_step_observer_mode_persisted(self, hass):
+    async def test_user_step_observer_mode_persisted(self, mock_hass):
         """observer_mode=True survives into self._data."""
         energy_config = _make_energy_dashboard_config()
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         mock_detector = MagicMock()
         mock_detector.get_suggested_ev_defaults.return_value = {}
@@ -202,10 +202,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert flow._data.get("observer_mode") is True
 
     @pytest.mark.asyncio
-    async def test_ev_charger_step_validation(self, hass):
+    async def test_ev_charger_step_validation(self, mock_hass):
         """EV charger entity validation surfaces errors back to the form."""
         energy_config = _make_energy_dashboard_config()
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
         flow._energy_dashboard_config = energy_config
 
         mock_detector = MagicMock()
@@ -236,10 +236,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert "ev_charging_sensor" in result["errors"]
 
     @pytest.mark.asyncio
-    async def test_ev_charger_step_valid_advances_to_hardware(self, hass):
+    async def test_ev_charger_step_valid_advances_to_hardware(self, mock_hass):
         """Valid EV charger input now advances to the hardware step."""
         energy_config = _make_energy_dashboard_config()
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
         flow._energy_dashboard_config = energy_config
         flow._data = energy_config.to_dict()
 
@@ -263,10 +263,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert result["step_id"] == "hardware"
 
     @pytest.mark.asyncio
-    async def test_hardware_step_creates_entry(self, hass):
+    async def test_hardware_step_creates_entry(self, mock_hass):
         """Submitting the hardware step creates the config entry with merged defaults."""
         energy_config = _make_energy_dashboard_config()
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
         flow._energy_dashboard_config = energy_config
         flow._data = {
             **energy_config.to_dict(),
@@ -307,10 +307,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert data["observer_mode"] is False
 
     @pytest.mark.asyncio
-    async def test_hardware_step_no_inverter_detected_uses_empty(self, hass):
+    async def test_hardware_step_no_inverter_detected_uses_empty(self, mock_hass):
         """If discover_inverter_from_registry returns None, the key is set to ''."""
         energy_config = _make_energy_dashboard_config()
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
         flow._energy_dashboard_config = energy_config
         flow._data = {
             **energy_config.to_dict(),
@@ -331,10 +331,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert result["data"]["battery_discharge_control_entity"] == ""
 
     @pytest.mark.asyncio
-    async def test_full_flow_creates_entry(self, hass):
+    async def test_full_flow_creates_entry(self, mock_hass):
         """End-to-end walk through the slim 3-step install flow."""
         energy_config = _make_energy_dashboard_config()
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         mock_detector = MagicMock()
         mock_detector.get_suggested_ev_defaults.return_value = {}
@@ -379,9 +379,9 @@ class TestSolarEnergyManagementConfigFlow:
         assert data["enable_charger_notifications"] is True
 
     @pytest.mark.asyncio
-    async def test_duplicate_entry_prevention(self, hass):
+    async def test_duplicate_entry_prevention(self, mock_hass):
         """Duplicate setup is caught by the unique-id guard in the hardware step."""
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
         flow._data = {}
         flow._energy_dashboard_config = _make_energy_dashboard_config()
 
@@ -406,7 +406,7 @@ class TestSolarEnergyManagementConfigFlow:
         flow._abort_if_unique_id_configured.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_options_flow_exists(self, hass, config_entry):
+    async def test_options_flow_exists(self, mock_hass, config_entry):
         """The options flow handler is reachable from the config flow class."""
         options_flow = SolarEnergyManagementConfigFlow.async_get_options_flow(
             config_entry
@@ -414,10 +414,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert isinstance(options_flow, OptionsFlowHandler)
 
     @pytest.mark.asyncio
-    async def test_options_flow_init_shows_ev_charger(self, hass, config_entry):
+    async def test_options_flow_init_shows_ev_charger(self, mock_hass, config_entry):
         """OptionsFlow init still routes to the ev_charger sub-step."""
         options_flow = OptionsFlowHandler(config_entry)
-        options_flow.hass = hass
+        options_flow.hass = mock_hass
         config_entry.options = {}
 
         with patch.object(
@@ -431,12 +431,12 @@ class TestSolarEnergyManagementConfigFlow:
         assert result["step_id"] == "ev_charger"
 
     @pytest.mark.asyncio
-    async def test_energy_dashboard_summary_content(self, hass):
+    async def test_energy_dashboard_summary_content(self, mock_hass):
         """User-step summary lists every detected category."""
         energy_config = _make_energy_dashboard_config(
             has_solar=True, has_grid=True, has_battery=True, has_ev=True
         )
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         with patch(
             "custom_components.solar_energy_management.config_flow.read_energy_dashboard_config",
@@ -452,12 +452,12 @@ class TestSolarEnergyManagementConfigFlow:
         assert "EV" in summary
 
     @pytest.mark.asyncio
-    async def test_energy_dashboard_summary_without_optional(self, hass):
+    async def test_energy_dashboard_summary_without_optional(self, mock_hass):
         """Summary excludes categories that are not configured."""
         energy_config = _make_energy_dashboard_config(
             has_solar=True, has_grid=True, has_battery=False, has_ev=False
         )
-        flow = _create_flow(hass)
+        flow = _create_flow(mock_hass)
 
         with patch(
             "custom_components.solar_energy_management.config_flow.read_energy_dashboard_config",

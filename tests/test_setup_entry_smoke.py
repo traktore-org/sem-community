@@ -6,11 +6,11 @@ Phase 1 of the testing-framework adoption (see
 What this test proves
 ---------------------
 1. ``pytest-homeassistant-custom-component`` is installed and importable.
-2. The ``real_hass`` fixture spins up a real ``HomeAssistant`` instance
+2. The ``hass`` fixture spins up a real ``HomeAssistant`` instance
    (state machine, registries, service dispatch — not a MagicMock).
 3. The ``sem_config_entry`` fixture constructs a ``MockConfigEntry`` at
    SEM's current schema version (v7).
-4. The entry can be registered with ``real_hass`` and the SEM config
+4. The entry can be registered with ``hass`` and the SEM config
    entry lifecycle (``async_setup_entry`` → ``async_unload_entry``)
    runs without crashing under the new framework.
 
@@ -53,20 +53,21 @@ def test_pytest_homeassistant_custom_component_installed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_real_hass_fixture_yields_real_homeassistant(real_hass) -> None:
-    """The ``real_hass`` fixture must yield a true HomeAssistant instance.
+async def test_hass_fixture_yields_real_homeassistant(hass) -> None:
+    """The ``hass`` fixture must yield a true HomeAssistant instance.
 
-    Distinguish from the legacy ``hass`` fixture (MagicMock) by asserting
-    we got actual state-machine and registry surfaces — methods that the
-    MagicMock fixture doesn't simulate.
+    Pytest-HA's plugin ``hass`` (the one we want) supersedes the legacy
+    MagicMock fixture that was renamed to ``mock_hass``. We assert we
+    received an actual ``HomeAssistant`` instance with a working state
+    machine — surfaces the MagicMock fixture doesn't simulate.
     """
     from homeassistant.core import HomeAssistant
 
-    assert isinstance(real_hass, HomeAssistant)
+    assert isinstance(hass, HomeAssistant)
 
     # Real state machine — async_set works and is observable.
-    real_hass.states.async_set("sensor.canary", "42")
-    state = real_hass.states.get("sensor.canary")
+    hass.states.async_set("sensor.canary", "42")
+    state = hass.states.get("sensor.canary")
     assert state is not None
     assert state.state == "42"
 
@@ -93,8 +94,8 @@ def test_sem_config_entry_uses_current_schema_version(sem_config_entry) -> None:
 
 
 @pytest.mark.asyncio
-async def test_config_entry_can_register_with_real_hass(
-    real_hass, sem_config_entry
+async def test_config_entry_can_register_with_hass(
+    hass, sem_config_entry
 ) -> None:
     """``MockConfigEntry.add_to_hass`` must work against the real instance.
 
@@ -102,10 +103,10 @@ async def test_config_entry_can_register_with_real_hass(
     coordinator. If this fails, the rest of the framework migration
     can't proceed.
     """
-    sem_config_entry.add_to_hass(real_hass)
+    sem_config_entry.add_to_hass(hass)
 
     # The entry registry should now know about us.
-    entries = real_hass.config_entries.async_entries(DOMAIN)
+    entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
     assert entries[0].entry_id == sem_config_entry.entry_id
     assert entries[0].version == 7

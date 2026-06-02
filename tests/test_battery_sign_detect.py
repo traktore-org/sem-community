@@ -290,9 +290,9 @@ class TestBatterySignAutoDetect:
 class TestBatteryCapacityAutoDetect:
     """Tests for battery capacity auto-detection (#84)."""
 
-    def _make_reader(self, hass):
+    def _make_reader(self, mock_hass):
         config = {"battery_power_sensor": "sensor.battery_power"}
-        reader = SensorReader(hass, config)
+        reader = SensorReader(mock_hass, config)
         ed = _make_energy_dashboard_config()
         reader.set_energy_dashboard_config(ed)
         return reader
@@ -401,9 +401,9 @@ class TestBatteryCapacityAutoDetect:
 class TestSplitGridPowerDiscovery:
     """Test auto-discovery of split import/export grid power sensors (Growatt, etc.)."""
 
-    def _make_reader(self, hass):
+    def _make_reader(self, mock_hass):
         config = {"update_interval": 10}
-        return SensorReader(hass, config)
+        return SensorReader(mock_hass, config)
 
     def _make_power_state(self, entity_id, value=1000, unit="W"):
         state = Mock()

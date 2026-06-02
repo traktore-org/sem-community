@@ -19,8 +19,8 @@ def _entry(options, data=None, version=3):
     return e
 
 
-def _seeded_charger(hass, idx=0):
-    kwargs = hass.config_entries.async_update_entry.call_args.kwargs
+def _seeded_charger(mock_hass, idx=0):
+    kwargs = mock_hass.config_entries.async_update_entry.call_args.kwargs
     return kwargs["options"]["ev_chargers"][idx], kwargs
 
 

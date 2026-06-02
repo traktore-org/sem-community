@@ -161,16 +161,16 @@ class TestSEMSwitches:
         assert switch._is_on is False
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry(self, hass, config_entry, mock_coordinator):
+    async def test_async_setup_entry(self, mock_hass, config_entry, mock_coordinator):
         """Test switch setup creates exactly 2 switches."""
         from custom_components.solar_energy_management.const import DOMAIN
 
         config_entry.runtime_data = mock_coordinator
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
 
         try:
-            await async_setup_entry(hass, config_entry, add_entities)
+            await async_setup_entry(mock_hass, config_entry, add_entities)
             add_entities.assert_called_once()
             switches = add_entities.call_args[0][0]
             assert len(switches) == 2
