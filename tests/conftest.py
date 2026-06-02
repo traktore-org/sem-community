@@ -605,7 +605,26 @@ def sem_config_entry():
             "update_interval": 30,
             "electricity_import_rate": 0.30,
             "electricity_export_rate": 0.08,
-            "ev_chargers": [],
+            "ev_chargers": [{
+                # Need at least one EV charger so per-charger SELECT
+                # (charge_mode, target_type) and TIME (target_time)
+                # entities get instantiated — without one the
+                # ``test_setup_entry_forwards_all_platforms`` smoke
+                # test fails on those two platforms.
+                "id": "ev_charger",
+                "name": "Test Wallbox",
+                "ev_connected_sensor": "binary_sensor.test_ev_connected",
+                "ev_charging_sensor": "binary_sensor.test_ev_charging",
+                "ev_charging_power_sensor": "sensor.test_ev_charging_power",
+                "ev_charger_service": "number.set_value",
+                "ev_charger_service_entity_id": "number.test_charger_current",
+                "daily_ev_target": 10,
+                "daily_ev_target_max": 50,
+                "ev_target_soc": 80,
+                "ev_target_soc_max": 100,
+                "ev_target_type": "kwh",
+                "ev_target_time": "07:00",
+            }],
         },
         options={},
         title="SEM Test (real_hass)",
