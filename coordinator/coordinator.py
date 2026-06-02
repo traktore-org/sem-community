@@ -2576,6 +2576,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "daily_ev_energy": energy.daily_ev,
             "charging_strategy": charging_context.charging_strategy,
             "charging_strategy_reason": charging_context.charging_strategy_reason,
+            "canonical_strategy": charging_context.canonical_strategy,
             "discharge_limit": discharge_limit,
         }
         per_charger_states = getattr(self, "_effective_states_per_charger", None) or {}
@@ -3065,6 +3066,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             remaining_ev_energy=remaining,
             charging_strategy=strategy,
             charging_strategy_reason=reason,
+            # EVBudgetStrategy is a string-constant class (not an Enum),
+            # so canonical_strategy is already the value string.
+            canonical_strategy=canonical_strategy,
             night_target_kwh=night_target,
             soc_limit_active=soc_limit_active,
             night_deadline_amps=deadline_amps,
