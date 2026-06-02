@@ -22,6 +22,10 @@ def _make_coordinator():
             "update_interval": 10,
             "electricity_import_rate": 0.30,
         }
+        # Post-#351 L1, energy accumulators integrate against the
+        # actual update interval (DataUpdateCoordinator.update_interval)
+        # not the requested one in config. Mirror config here.
+        coord.update_interval = timedelta(seconds=10)
         coord._battery_session = BatterySessionData()
         coord._battery_session_idle_count = 0
         # Mock energy calculator with live import rate (used since #223 fix)

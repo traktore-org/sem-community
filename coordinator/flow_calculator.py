@@ -619,6 +619,15 @@ class FlowCalculator:
         timing doesn't matter (full-day overviews). Not wired into the
         coordinator update cycle anymore (#282).
         """
+        import warnings
+        warnings.warn(
+            "FlowCalculator.calculate_energy_flows is deprecated — "
+            "proportional allocation produces misleading attribution. "
+            "Use integrate_energy_flows() for the canonical, "
+            "timing-aware energy flows. #351 L2.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         flows = EnergyFlows()
 
         # Get source energies

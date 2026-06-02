@@ -95,11 +95,6 @@ class TestM6_NearlyFullGatesOnPerChargerDraw:
     fires for B even though B is idle. Correct: gate on B's own draw.
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#351 M6 — fleet ev_charging used as per-charger gate; "
-        "fix should read this charger's draw from per_charger snapshot.",
-    )
     @pytest.mark.asyncio
     async def test_nearly_full_skipped_when_this_charger_idle(self) -> None:
         # Build the stub coordinator with the exact surface the
@@ -184,13 +179,12 @@ class TestM11_NightSkipRespectsChargeMode:
     ``solar_plus_cheap``, ``always_max``).
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#351 M11 — night-skip notification fires even when "
-        "charger's mode disallows night charging.",
-    )
     @pytest.mark.asyncio
     async def test_skip_not_sent_for_solar_only_mode(self) -> None:
+        from custom_components.solar_energy_management.consts.ev_charge_modes import (
+            MODE_NIGHT_ALLOWED,
+        )
+
         coord = MagicMock()
         coord._notification_manager = MagicMock()
         coord._notification_manager.notify_ev_nearly_full = AsyncMock()
@@ -206,12 +200,24 @@ class TestM11_NightSkipRespectsChargeMode:
         coord._ev_devices["x"].name = "SolarOnly Charger"
 
         # X is in solar_only mode — should never get night skip.
+        # Use the canonical ``charge_mode`` key (post-#277 Phase B); the
+        # production gate reads it via ``effective_charge_mode_for``.
         coord.config = {
             "ev_chargers": [
-                {"id": "x", "ev_charging_mode": "solar_only"},
+                {"id": "x", "charge_mode": "solar_only"},
             ],
         }
         coord._effective_states_per_charger = {}
+
+        # Bind the per-mode predicate so the production call resolves
+        # against a real mode lookup instead of a MagicMock auto-truthy
+        # return.
+        coord._mode_allows_night_charging = MagicMock(
+            side_effect=lambda cfg: (
+                isinstance(cfg, dict)
+                and cfg.get("charge_mode") in MODE_NIGHT_ALLOWED
+            )
+        )
 
         coord._build_per_charger_intelligence = MagicMock(return_value={
             "x": {"minutes_to_full": 0, "estimated_soc": 45,
@@ -264,11 +270,6 @@ class TestL1_BatterySessionUsesWallClockInterval:
     and asserting the accumulator reflects the wall-clock value.
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#351 L1 — _update_battery_session_tracking reads "
-        "config[update_interval] instead of self.update_interval.",
-    )
     def test_session_kwh_tracks_actual_interval(self) -> None:
         from custom_components.solar_energy_management.coordinator.coordinator import (
             SEMCoordinator,
@@ -299,7 +300,7 @@ class TestL1_BatterySessionUsesWallClockInterval:
 
         SEMCoordinator._update_battery_session_tracking(coord, power, flows)
 
-        kwh = coord._battery_session.total_kwh
+        kwh = coord._battery_session.energy_kwh
         # If wall-clock is used: ~0.041–0.042 kWh after a single
         # 30 s cycle. If config is used: ~0.0139.
         assert 0.04 < kwh < 0.05, (
@@ -327,11 +328,6 @@ class TestL2_LegacyFlowsDeprecated:
        ``integrate_energy_flows``).
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="#351 L2 — calculate_energy_flows lacks deprecation "
-        "marker; risk of test pinning wrong attribution model.",
-    )
     def test_legacy_calculate_energy_flows_warns_or_is_removed(self) -> None:
         if not hasattr(FlowCalculator, "calculate_energy_flows"):
             # Acceptable fix shape #2 — method removed entirely.

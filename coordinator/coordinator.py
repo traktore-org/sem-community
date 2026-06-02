@@ -2615,6 +2615,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # EV Intelligence notifications — per-charger (#106, #193)
             per_charger_intel = self._build_per_charger_intelligence()
             is_night = self.time_manager.is_night_mode()
+            chargers_cfg_by_id = {
+                c["id"]: c for c in (self.config.get("ev_chargers") or [])
+                if isinstance(c, dict) and "id" in c
+            }
             for cid, intel in per_charger_intel.items():
                 charger_name = self._ev_devices[cid].name if cid in self._ev_devices else cid
                 charger_connected = self._last_ev_connected_per_charger.get(cid, False)
@@ -2630,15 +2634,46 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 charge_needed = intel.get("charge_needed") or False
                 nights = intel.get("nights_until_charge") or 0
 
+                # Per-charger draw — gate nearly-full on THIS charger's
+                # power, not the fleet flag. In a multi-charger fleet,
+                # ``power.ev_charging`` is True whenever any charger is
+                # drawing, which would fire nearly-full for an idle
+                # charger that happens to have a stale ``minutes_to_full``
+                # carry-over. ``ev_power_per_charger`` may be unpopulated
+                # on single-charger installs — fall back to the fleet
+                # flag in that case (still correct: one charger means
+                # the fleet flag IS that charger's flag). #351 M6.
+                per_charger_power = getattr(power, "ev_power_per_charger", None) or {}
+                this_charger_drawing = (
+                    (per_charger_power.get(cid) or 0) > 0
+                    if per_charger_power
+                    else bool(power.ev_charging)
+                )
+
+                # Per-charger night-allowed gate — modes ``off`` and
+                # ``solar_only`` are not eligible for night charging, so
+                # firing a "skipped night charge" notification on those
+                # is just noise. Default to allow-night when no cfg
+                # entry exists for this cid (legacy single-charger or
+                # config-list-empty cases). #351 M11.
+                cfg_for_cid = chargers_cfg_by_id.get(cid)
+                mode_allows_night = (
+                    self._mode_allows_night_charging(cfg_for_cid)
+                    if cfg_for_cid is not None
+                    else True
+                )
+
                 # 1. Nearly full: taper detector shows < 5 minutes remaining
-                if mins_to_full > 0 and mins_to_full < 5 and power.ev_charging:
+                if mins_to_full > 0 and mins_to_full < 5 and this_charger_drawing:
                     await self._notification_manager.notify_ev_nearly_full(
                         mins_to_full, charger_name=charger_name
                     )
 
-                # 2. Night charge skipped: night mode, EV connected, skip decided
+                # 2. Night charge skipped: night mode, EV connected, skip decided,
+                #    AND this charger's mode allows night charging at all.
                 if (is_night and charger_connected
-                        and not charge_needed and est_soc > 0):
+                        and not charge_needed and est_soc > 0
+                        and mode_allows_night):
                     await self._notification_manager.notify_ev_charge_skip(
                         est_soc, nights, charger_name=charger_name
                     )
@@ -3202,8 +3237,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             session = self._battery_session
             _LOGGER.debug("Battery session started: %s", current_type)
 
-        # Accumulate energy
-        interval_s = self.config.get("update_interval", 10)
+        # Accumulate energy. Use the actual update interval (the
+        # DataUpdateCoordinator base may throttle this under HA load —
+        # config["update_interval"] is the REQUESTED interval, not the
+        # observed one). #351 L1.
+        interval_s = self.update_interval.total_seconds()
         hours = interval_s / 3600.0
 
         if session.session_type == "charge":
