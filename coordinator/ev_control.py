@@ -585,6 +585,14 @@ class EVControlMixin:
         if state in self.SOLAR_PAUSE_STATES:
             if ev._current_setpoint > 0:
                 await ev._set_current(0)
+            # #351 M10 — clear the charge-started timestamp so the
+            # disable-delay counter doesn't consume its 300 s budget
+            # during a battery-priority pause. Without this, a 5-minute
+            # pause exhausts the timer and the very next cycle's
+            # terminal-branch fires stop_session even though we just
+            # resumed. Cleared here, re-armed on the next entry to
+            # an active charge state (lines 509 / 518).
+            self._ev_charge_started_at = None
             return
 
         # === TERMINAL STATES: full stop (EV disconnected, target reached, etc.) ===

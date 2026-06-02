@@ -450,16 +450,31 @@ class EnergyFlows:
 
 @dataclass
 class CostData:
-    """Cost and savings calculations."""
+    """Cost and savings calculations.
+
+    Savings split (#351 M2):
+
+    * ``daily_savings`` — SOLAR self-consumption savings only
+      (``solar_to_home`` + ``solar_to_ev``).
+    * ``daily_battery_savings`` — battery-discharge savings (any
+      destination: ``battery_to_home`` + ``battery_to_ev``).
+    * ``daily_total_savings`` — sum of the two; the headline number
+      users should compare against import costs. Pre-#351 M2 the
+      dashboard surfaced ``daily_savings`` as the headline which
+      understated savings by the ``battery_to_ev`` portion on
+      battery-assist days.
+    """
     daily_costs: float = 0.0
     daily_savings: float = 0.0
     daily_export_revenue: float = 0.0
     daily_net_cost: float = 0.0
     daily_battery_savings: float = 0.0
+    daily_total_savings: float = 0.0   # #351 M2 — solar + battery savings
 
     monthly_costs: float = 0.0
     monthly_savings: float = 0.0
     monthly_battery_savings: float = 0.0
+    monthly_total_savings: float = 0.0  # #351 M2
     monthly_export_revenue: float = 0.0
     monthly_net_cost: float = 0.0
 
@@ -467,6 +482,7 @@ class CostData:
     yearly_costs: float = 0.0
     yearly_savings: float = 0.0
     yearly_battery_savings: float = 0.0
+    yearly_total_savings: float = 0.0  # #351 M2
     yearly_export_revenue: float = 0.0
     yearly_net_cost: float = 0.0
 

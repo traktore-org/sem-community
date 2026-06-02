@@ -385,18 +385,29 @@ class SEMStorage:
 
     # State export/import for calculators
     def export_energy_calculator_state(self) -> Dict[str, Any]:
-        """Export state for EnergyCalculator."""
+        """Export state for EnergyCalculator.
+
+        #351 M1 — cost accumulators are now round-tripped alongside the
+        energy ones. Pre-fix the calculator emitted them via
+        ``get_state()`` but this layer dropped them on export and
+        ``import_energy_calculator_state`` discarded them; ``daily_savings``
+        silently reset to 0 mid-day after any HA restart while
+        ``daily_solar`` / ``daily_grid_import`` resumed from storage.
+        """
         return {
             "daily_accumulators": dict(self._daily_data.get("daily_accumulators", {})),
             "monthly_accumulators": dict(self._daily_data.get("monthly_accumulators", {})),
             "yearly_accumulators": dict(self._daily_data.get("yearly_accumulators", {})),
             "lifetime_accumulators": dict(self._daily_data.get("lifetime_accumulators", {})),
+            "daily_cost_accumulators": dict(self._daily_data.get("daily_cost_accumulators", {})),
+            "monthly_cost_accumulators": dict(self._daily_data.get("monthly_cost_accumulators", {})),
+            "yearly_cost_accumulators": dict(self._daily_data.get("yearly_cost_accumulators", {})),
             "last_update": self._energy_data.get("last_update"),
             "yearly_seeded": self._daily_data.get("yearly_seeded", False),
         }
 
     def import_energy_calculator_state(self, state: Dict[str, Any]) -> None:
-        """Import state from EnergyCalculator."""
+        """Import state from EnergyCalculator. See export docstring."""
         if "daily_accumulators" in state:
             self._daily_data["daily_accumulators"] = state["daily_accumulators"]
         if "monthly_accumulators" in state:
@@ -405,6 +416,13 @@ class SEMStorage:
             self._daily_data["yearly_accumulators"] = state["yearly_accumulators"]
         if "lifetime_accumulators" in state:
             self._daily_data["lifetime_accumulators"] = state["lifetime_accumulators"]
+        # #351 M1 — persist cost accumulators across restarts.
+        if "daily_cost_accumulators" in state:
+            self._daily_data["daily_cost_accumulators"] = state["daily_cost_accumulators"]
+        if "monthly_cost_accumulators" in state:
+            self._daily_data["monthly_cost_accumulators"] = state["monthly_cost_accumulators"]
+        if "yearly_cost_accumulators" in state:
+            self._daily_data["yearly_cost_accumulators"] = state["yearly_cost_accumulators"]
         if "yearly_seeded" in state:
             self._daily_data["yearly_seeded"] = state["yearly_seeded"]
 

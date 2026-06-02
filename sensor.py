@@ -2081,6 +2081,17 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
         # Add specific attributes based on sensor type
         if self.entity_description.key == "charging_state":
+            # #351 M4 — per-charger effective state map. Makes the
+            # disagreement visible: fleet ``charging_state`` may be
+            # NIGHT_CHARGING_ACTIVE even when a specific charger's
+            # ``charge_mode`` is solar_only (effective state SOLAR_IDLE).
+            # Built from the ``charger_<id>_charging_state`` result keys
+            # that the coordinator's per-charger loop emits.
+            _per_charger_states = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_charging_state"):
+                    cid = k[len("charger_"):-len("_charging_state")]
+                    _per_charger_states[cid] = v
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -2090,6 +2101,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "solar_sufficient": self.coordinator.data.get("solar_sufficient"),
                 "charging_strategy": self.coordinator.data.get("charging_strategy"),
                 "strategy_reason": self.coordinator.data.get("charging_strategy_reason"),
+                "per_charger_states": _per_charger_states,
                 # EV charge-target deadline (#246) + tariff-optimized status (#247)
                 "ev_target_time": self.coordinator.data.get("ev_target_time"),
                 "ev_tariff_optimized": self.coordinator.data.get("ev_tariff_optimized"),

@@ -317,6 +317,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._battery_session = BatterySessionData()
         self._battery_session_idle_count = 0
 
+        # Per-charger night-skip safety counter latch (#351 M8). Maps
+        # charger_id → bool; the legacy single-charger path uses the
+        # ``"_fleet"`` sentinel key. Prevents charger A's skip-recorded
+        # flag from masking charger B's independent skip count.
+        self._skip_recorded_tonight_per_charger: Dict[str, bool] = {}
+
         # Zone-transition debounce: holds the last stable SOC zone and the
         # candidate zone being observed. A new zone is only applied after it
         # is seen for N consecutive cycles (zone_debounce_cycles, default 2).
@@ -1020,8 +1026,33 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         self._session_data_per_charger[cid] = SessionData()
                     if cid not in self._last_ev_connected_per_charger:
                         self._last_ev_connected_per_charger[cid] = False
-                    # Scale power flows proportionally to each charger's share (#15)
-                    if total_charger_power > 0:
+                    # #351 M3 — prefer the flow_calculator's native
+                    # priority-correct per-charger attribution
+                    # (``power_flows.per_charger[cid]``) when populated.
+                    # Higher-priority chargers got first claim on solar
+                    # there; this re-proportionalisation by power share
+                    # would otherwise mix the priority signal back out.
+                    # Falls back to the proportional split when
+                    # per_charger isn't populated (single-charger or
+                    # missing per-charger power data).
+                    pc_flows = (power_flows.per_charger or {}).get(cid)
+                    if pc_flows is not None:
+                        from .types import PowerFlows as _PF
+                        charger_flows = _PF(
+                            solar_to_ev=pc_flows.solar_to_ev,
+                            grid_to_ev=pc_flows.grid_to_ev,
+                            battery_to_ev=pc_flows.battery_to_ev,
+                            solar_to_home=power_flows.solar_to_home,
+                            solar_to_battery=power_flows.solar_to_battery,
+                            solar_to_grid=power_flows.solar_to_grid,
+                            grid_to_home=power_flows.grid_to_home,
+                            grid_to_battery=power_flows.grid_to_battery,
+                            battery_to_home=power_flows.battery_to_home,
+                        )
+                    elif total_charger_power > 0:
+                        # Legacy fallback — fraction of fleet (pre-Step 5
+                        # behaviour, kept for single-charger installs and
+                        # cases where per_charger wasn't populated).
                         frac = charger_powers[cid] / total_charger_power
                         from .types import PowerFlows as _PF
                         charger_flows = _PF(
@@ -1066,10 +1097,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         pc_state = self.hass.states.get(pc_conn_sensor)
                         if pc_state and pc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                             power.ev_connected = pc_state.state == "on"
+                    else:
+                        # #351 M7 — without a per-charger plug sensor the
+                        # session-end check (which reads ``power.ev_connected``)
+                        # would otherwise see the fleet-OR and never fire on
+                        # THIS charger's unplug while another car remains
+                        # connected. Fall back to ``ev_connected_per_charger``
+                        # if populated (the per-charger field on PowerReadings).
+                        pc_conn_map = getattr(power, "ev_connected_per_charger", None) or {}
+                        if cid in pc_conn_map:
+                            power.ev_connected = bool(pc_conn_map[cid])
                     if pc_chrg_sensor:
                         pc_state = self.hass.states.get(pc_chrg_sensor)
                         if pc_state and pc_state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                             power.ev_charging = pc_state.state == "on"
+                    else:
+                        # Symmetric fallback for ev_charging (#351 M7).
+                        pc_chg_map = getattr(power, "ev_charging_per_charger", None) or {}
+                        if cid in pc_chg_map:
+                            power.ev_charging = bool(pc_chg_map[cid])
                     self._update_session_tracking(power, charger_flows)
                     # Save back per-charger state
                     self._session_data_per_charger[cid] = self._session_data
@@ -1197,8 +1243,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         total_budget = 0.0
                     else:
                         total_budget = cycle_budget.net_w
+                    # #351 M5 — chargers in ``off`` mode must NOT receive
+                    # an allocation. The actuator's #346 guard already
+                    # refuses to actuate them, but the dashboard reads
+                    # the distribution output directly and would otherwise
+                    # show ``sem_charger_<id>_allocated_w > 0``.
+                    excluded_cids = {
+                        c["id"] for c in (self.config.get("ev_chargers") or [])
+                        if isinstance(c, dict) and "id" in c
+                        and self._effective_charge_mode_for(c) == "off"
+                    }
                     ev_budget_per_charger = self._surplus_controller.distribute_ev_budget(
-                        total_budget, self._ev_devices
+                        total_budget, self._ev_devices,
+                        excluded_charger_ids=excluded_cids,
                     )
 
                 sorted_chargers = sorted(
@@ -1280,19 +1337,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                     self._cycle_vehicle_soc = float(soc_st.state)
                                 except (ValueError, TypeError):
                                     _LOGGER.debug("Vehicle SOC %s not numeric: %r (#259)", per_soc_entity, soc_st.state)
-                        # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245)
+                        # Ceiling (Max) gates surplus; floor (Min) drives night top-up (#245).
+                        # #351 M9 — capture the per-charger SOC into a
+                        # local before the calls so both reads see the
+                        # same value. Pre-fix both calls read
+                        # ``self._cycle_vehicle_soc`` directly — fine
+                        # under the current synchronous path, but a
+                        # latent re-entry hazard mirroring the #345
+                        # disagreement-class pattern.
+                        cycle_soc_local = self._cycle_vehicle_soc
                         per_remaining = self._calculate_remaining_need(
-                            energy, self._cycle_vehicle_soc, charger_cfg, bound="max"
+                            energy, cycle_soc_local, charger_cfg, bound="max"
                         )
                         per_remaining_floor = self._calculate_remaining_need(
-                            energy, self._cycle_vehicle_soc, charger_cfg, bound="min"
+                            energy, cycle_soc_local, charger_cfg, bound="min"
                         )
                         # Surplus stops at this charger's Max ceiling (default full) (#245)
                         per_target_reached = per_remaining <= 0.1
                         charging_context.soc_limit_active = per_target_reached
                         charging_context.daily_target_reached = per_target_reached
                         charging_context.remaining_ev_energy = per_remaining
-                        charging_context.night_target_kwh = per_charger_target if per_charger_target is not None else per_remaining_floor
+                        # #351 H2 — apply the forecast-aware night-target
+                        # reduction to THIS charger too (the primary path
+                        # does this at the equivalent line in
+                        # ``_build_charging_context``). Pre-fix only the
+                        # primary charger saw the "tomorrow is sunny → skip
+                        # tonight" reduction; secondary chargers in
+                        # min_plus_solar / solar_plus_cheap mode then
+                        # night-charged unconditionally.
+                        per_night_floor = per_remaining_floor
+                        if (
+                            self.time_manager.is_night_mode()
+                            and self._mode_uses_smart_night(charger_cfg)
+                        ):
+                            per_night_floor = self._calculate_forecast_night_target(
+                                per_remaining_floor, energy, charger_cfg,
+                            )
+                        charging_context.night_target_kwh = (
+                            per_charger_target
+                            if per_charger_target is not None
+                            else per_night_floor
+                        )
 
                         # Per-charger deadline + tariff plan (#246/#247): recompute
                         # for THIS charger and pick its effective night state. Each car
@@ -1731,6 +1816,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 result[f"charger_{cid}_power"] = round(charger_power, 0)
                 result[f"charger_{cid}_name"] = ev_dev.name
                 result[f"charger_{cid}_connected"] = self._last_ev_connected_per_charger.get(cid, False)
+                # #351 M4 — surface per-charger effective state so the
+                # fleet ``sem_charging_state`` no longer hides per-charger
+                # disagreements (e.g. fleet says NIGHT_CHARGING_ACTIVE
+                # while a solar_only charger's effective state is
+                # SOLAR_IDLE). The pair comes from
+                # ``_effective_states_per_charger`` populated by the
+                # per-charger loop.
+                _pcs_entry = (
+                    getattr(self, "_effective_states_per_charger", None) or {}
+                ).get(cid)
+                if _pcs_entry is not None:
+                    _eff_state, _ = _pcs_entry
+                    # ChargingState is a str-enum; store the value for JSON
+                    # serialisability.
+                    result[f"charger_{cid}_charging_state"] = str(
+                        getattr(_eff_state, "value", _eff_state)
+                    )
                 # Per-charger SEM-commanded current (#291). Authoritative
                 # "what did SEM ask the charger to do" — diagnostic counterpart
                 # to the upstream max_current sensor which can read stale.
@@ -2891,7 +2993,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return max(0, (soc_target - vehicle_soc) / 100 * ev_capacity)
         # kWh ceiling defaults to 100 kWh/day (≈ unlimited); floor default 10.
         daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
-        return max(0, daily_target - energy.daily_ev)
+        # #351 H1 — for a per-charger call (``charger_cfg`` provided),
+        # subtract THIS charger's daily energy, not the fleet total.
+        # Pre-fix charger B's "target reached" check was polluted by
+        # charger A's energy: ``daily_target - energy.daily_ev`` would
+        # underreport B's remaining need (or fire target-reached
+        # spuriously) the moment A drew any energy.
+        cid = cfg.get("id") if cfg else None
+        pc_daily = getattr(self, "_daily_ev_per_charger", None) or {}
+        consumed = pc_daily.get(cid, energy.daily_ev) if cid else energy.daily_ev
+        return max(0, daily_target - consumed)
 
     def _build_fleet_cycle_state(
         self, power: PowerReadings, energy: Any,
@@ -2984,12 +3095,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # night top-up (#245). Resolve the (primary) charger's config so the base
         # context honors the PER-CHARGER targets, not just global. One car per
         # charger; the multi-charger loop still overrides per charger downstream.
+        # #351 M9 — capture the cycle SOC into a local before the two
+        # calls so both reads see the same value (mirrors the
+        # per-charger-loop fix above).
         _primary_cfg = (self.config.get("ev_chargers") or [{}])[0]
+        cycle_soc_local = self._cycle_vehicle_soc
         remaining = self._calculate_remaining_need(
-            energy, self._cycle_vehicle_soc, _primary_cfg, bound="max"
+            energy, cycle_soc_local, _primary_cfg, bound="max"
         )
         remaining_floor = self._calculate_remaining_need(
-            energy, self._cycle_vehicle_soc, _primary_cfg, bound="min"
+            energy, cycle_soc_local, _primary_cfg, bound="min"
         )
         # "daily_target_reached" here means the surplus CEILING (Max) is reached.
         daily_target_reached = remaining <= 0.1
@@ -3651,17 +3766,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             predicted_daily, self._cycle_vehicle_soc,
         )
 
-        # Track consecutive skips for safety net (once per night, not every cycle)
+        # Track consecutive skips for safety net (once per night, not every cycle).
+        # #351 M8 — keyed per-charger; this legacy single-charger path uses
+        # the ``"_fleet"`` sentinel. The per-charger intel builder uses
+        # per-charger keys so charger A's skip doesn't mask charger B's.
+        skip_flags = self._skip_recorded_tonight_per_charger
         if self.time_manager.is_night_mode() and power.ev_connected:
             if not charge_needed:
-                if not getattr(self, '_skip_recorded_tonight', False):
+                if not skip_flags.get("_fleet", False):
                     self._ev_taper_detector.record_skip()
-                    self._skip_recorded_tonight = True
+                    skip_flags["_fleet"] = True
             else:
                 self._ev_taper_detector.reset_skips()
-                self._skip_recorded_tonight = False
+                skip_flags["_fleet"] = False
         elif not self.time_manager.is_night_mode():
-            self._skip_recorded_tonight = False
+            skip_flags["_fleet"] = False
 
         # No real SOC and no calibration yet → the virtual 100% default is
         # misleading. Report None so the sensor shows "unknown" until a real
@@ -3721,6 +3840,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 predicted_daily, per_charger_vehicle_soc,
             )
             taper_data = detector.get_taper_data() if hasattr(detector, 'get_taper_data') else None
+
+            # Per-charger night-skip latch (#351 M8). Each charger maintains
+            # its own skip counter against its own taper detector. The
+            # per-charger flag in ``_skip_recorded_tonight_per_charger``
+            # prevents this cycle from recording skip again on the same
+            # detector, BUT a skip on charger A no longer blocks charger
+            # B's legitimate independent record (the legacy fleet flag
+            # did).
+            charger_connected = self._last_ev_connected_per_charger.get(cid, False)
+            skip_flags = self._skip_recorded_tonight_per_charger
+            if self.time_manager.is_night_mode() and charger_connected:
+                if not charge_needed:
+                    if not skip_flags.get(cid, False):
+                        detector.record_skip()
+                        skip_flags[cid] = True
+                else:
+                    detector.reset_skips()
+                    skip_flags[cid] = False
+            elif not self.time_manager.is_night_mode():
+                skip_flags[cid] = False
 
             result[cid] = {
                 "estimated_soc": round(soc, 1) if soc is not None else None,

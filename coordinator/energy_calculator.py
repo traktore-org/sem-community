@@ -674,6 +674,12 @@ class EnergyCalculator:
         costs.daily_net_cost = round(costs.daily_costs - costs.daily_export_revenue, 2)
         costs.daily_savings = max(0, self._get_daily_cost("cost_savings", today))
         costs.daily_battery_savings = self._get_daily_cost("cost_batt_savings", today)
+        # #351 M2 — headline total spans both. Pre-fix users comparing
+        # daily_savings to import costs saw battery_to_ev portion
+        # missing.
+        costs.daily_total_savings = round(
+            costs.daily_savings + costs.daily_battery_savings, 2,
+        )
 
         # Monthly calculations
         costs.monthly_costs = self._get_monthly_cost("cost_import", month_key)
@@ -681,6 +687,9 @@ class EnergyCalculator:
         costs.monthly_net_cost = round(costs.monthly_costs - costs.monthly_export_revenue, 2)
         costs.monthly_savings = max(0, self._get_monthly_cost("cost_savings", month_key))
         costs.monthly_battery_savings = self._get_monthly_cost("cost_batt_savings", month_key)
+        costs.monthly_total_savings = round(
+            costs.monthly_savings + costs.monthly_battery_savings, 2,
+        )
 
         # Yearly calculations
         costs.yearly_costs = self._get_yearly_cost("cost_import", year_key)
@@ -688,6 +697,9 @@ class EnergyCalculator:
         costs.yearly_net_cost = round(costs.yearly_costs - costs.yearly_export_revenue, 2)
         costs.yearly_savings = max(0, self._get_yearly_cost("cost_savings", year_key))
         costs.yearly_battery_savings = self._get_yearly_cost("cost_batt_savings", year_key)
+        costs.yearly_total_savings = round(
+            costs.yearly_savings + costs.yearly_battery_savings, 2,
+        )
 
         # Environmental impact (CO2 avoided by self-consuming solar)
         daily_self_consumed = max(0, energy.daily_solar - energy.daily_grid_export)

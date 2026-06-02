@@ -133,6 +133,7 @@ class SurplusController:
         self,
         budget_w: float,
         ev_devices: Dict[str, "ControllableDevice"],
+        excluded_charger_ids: Optional[set[str]] = None,
     ) -> Dict[str, float]:
         """Distribute EV charging budget across multiple chargers by priority.
 
@@ -143,6 +144,12 @@ class SurplusController:
         Args:
             budget_w: Total watts available for EV charging.
             ev_devices: Dict of charger_id → CurrentControlDevice.
+            excluded_charger_ids: Charger IDs that must NOT receive any
+                allocation regardless of priority (e.g. ``charge_mode=off``).
+                Returned in the output dict with ``0`` so dashboards still
+                see the entry. The actuator's #346 mode guard is the
+                last-line defence; this gate stops the dashboard from
+                misreporting allocated W on disabled chargers. #351 M5.
 
         Returns:
             Dict of charger_id → allocated watts.
@@ -150,9 +157,13 @@ class SurplusController:
         if not ev_devices:
             return {}
 
+        excluded = excluded_charger_ids or set()
+
         import time as _time
 
-        # Sort by priority (lower = higher priority)
+        # Sort by priority (lower = higher priority); excluded chargers
+        # are still iterated so they appear in the output with 0 W —
+        # but they're filtered out of the budget cascade.
         sorted_chargers = sorted(ev_devices.items(), key=lambda x: x[1].priority)
 
         # Hysteresis: don't reallocate more than once per 60s
@@ -172,6 +183,12 @@ class SurplusController:
         remaining = budget_w
 
         for charger_id, device in sorted_chargers:
+            if charger_id in excluded:
+                # Mode-disabled chargers (#351 M5) — appear in the output
+                # with 0 W so dashboards see the entry, but don't consume
+                # any of the budget cascade.
+                allocations[charger_id] = 0
+                continue
             if remaining <= 0:
                 allocations[charger_id] = 0
                 continue
