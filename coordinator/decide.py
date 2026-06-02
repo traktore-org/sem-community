@@ -232,8 +232,27 @@ class SolarOnlyMode(ModeStrategy):
                 ),
             )
 
-        # Compute surplus available to EV
-        surplus_w = self_consumption_surplus_w(view)
+        # Compute surplus available to EV. Bare surplus subtracts
+        # battery_charge_w when SOC < auto_start_soc — the battery
+        # has priority on solar in that band.
+        bare_surplus_w = self_consumption_surplus_w(view)
+
+        # Forecast-aware battery_charge redirect. The v1.6.x
+        # ``calculate_canonical_ev_budget(SOLAR_ONLY)`` branch added
+        # this on top of bare surplus; ported here so the strategy
+        # decision sees the same effective budget the canonical
+        # method will compute. Without the parity, a viable
+        # SOLAR_ONLY cycle (high forecast, modest surplus) collapses
+        # to IDLE before the canonical SOLAR_ONLY math gets a chance
+        # to run — the regression
+        # ``tests/scenarios/2026-05-29_budget_unify_redirect.yaml``
+        # pins.
+        from .flow_calculator import battery_redirect_w as _redirect
+        redirect_w = _redirect(
+            f.battery_charge_w, f.battery_soc,
+            f.battery_capacity_kwh, f.forecast_remaining_kwh,
+        )
+        surplus_w = bare_surplus_w + redirect_w
 
         # The actuator/adapter knows the real min — for the decide
         # we use a sensible fallback (6 A × 3 × 230 V = 4140 W) so
@@ -254,8 +273,9 @@ class SolarOnlyMode(ModeStrategy):
                 intent=ChargerIntent.IDLE,
                 budget_w=surplus_w,
                 reason=(
-                    f"solar_only: surplus={surplus_w:.0f}W < "
-                    f"min={min_w}W (={min_amps}A) — idle"
+                    f"solar_only: surplus={surplus_w:.0f}W "
+                    f"(bare={bare_surplus_w:.0f}W + redirect={redirect_w:.0f}W) "
+                    f"< min={min_w}W (={min_amps}A) — idle"
                 ),
             )
 
@@ -267,8 +287,9 @@ class SolarOnlyMode(ModeStrategy):
             intent=ChargerIntent.CHARGE_AT_AMPS,
             commanded_amps=amps, budget_w=surplus_w,
             reason=(
-                f"solar_only: surplus={surplus_w:.0f}W → {amps}A "
-                f"(solar={f.solar_w:.0f}W, home={f.home_w:.0f}W, "
+                f"solar_only: surplus={surplus_w:.0f}W "
+                f"(bare={bare_surplus_w:.0f}W + redirect={redirect_w:.0f}W) "
+                f"→ {amps}A (solar={f.solar_w:.0f}W, home={f.home_w:.0f}W, "
                 f"batt_chg={f.battery_charge_w:.0f}W)"
             ),
         )
