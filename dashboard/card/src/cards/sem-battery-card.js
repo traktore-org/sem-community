@@ -515,11 +515,6 @@ class SEMBatteryCard extends SEMLitBase {
                         </div>
                     </div>
 
-                    <!-- Phase B per-battery sections. Empty (no DOM
-                         output) on single-battery installs because
-                         ``_batteries`` stays empty when the Energy
-                         Dashboard exposes only one battery; legacy
-                         hero-only layout unchanged. -->
                     ${this._batteries.length >= 1 ? html`
                         <div class="battery-sections">
                             ${this._batteries.map(
