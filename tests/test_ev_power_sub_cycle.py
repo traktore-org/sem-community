@@ -72,7 +72,7 @@ class TestSubscriptionResolution:
         """Legacy single-charger: ``config['ev_power_sensor']`` is the
         one upstream to subscribe to."""
         captured = {}
-        def fake_track(hass, entity_ids, callback):
+        def fake_track(mock_hass, entity_ids, callback):
             captured["entity_ids"] = entity_ids
             return MagicMock()  # the unsub callable
         monkeypatch.setattr(
@@ -94,7 +94,7 @@ class TestSubscriptionResolution:
         ``ev_charging_power_sensor`` — the same set ``SensorReader``
         sums on every cycle."""
         captured = {}
-        def fake_track(hass, entity_ids, callback):
+        def fake_track(mock_hass, entity_ids, callback):
             captured["entity_ids"] = entity_ids
             return MagicMock()
         monkeypatch.setattr(
@@ -138,7 +138,7 @@ class TestSubscriptionResolution:
         ``ev_chargers[0]`` rather than ``ev_power_sensor`` — fall back
         to it before giving up."""
         captured = {}
-        def fake_track(hass, entity_ids, callback):
+        def fake_track(mock_hass, entity_ids, callback):
             captured["entity_ids"] = entity_ids
             return MagicMock()
         monkeypatch.setattr(

@@ -15,7 +15,7 @@ from custom_components.solar_energy_management.const import ChargingState
 # ──────────────────────────────────────────────
 
 @pytest.fixture
-def hass():
+def mock_hass():
     """Return a mocked Home Assistant instance."""
     h = MagicMock()
     h.config = MagicMock()
@@ -43,9 +43,9 @@ def config():
 
 
 @pytest.fixture
-def notifier(hass, config):
+def notifier(mock_hass, config):
     """Return a NotificationManager with both KEBA and mobile enabled."""
-    nm = NotificationManager(hass, config)
+    nm = NotificationManager(mock_hass, config)
     # Pre-validate services to skip cached validation in tests
     nm._charger_notify_checked = True
     nm._charger_notify_available = True
@@ -69,10 +69,10 @@ def sample_data():
     }
 
 
-def _make_notifier(hass, config, keba_on=True, mobile_on=True):
+def _make_notifier(mock_hass, config, keba_on=True, mobile_on=True):
     """Helper to create notifier with specific notification settings."""
     cfg = {**config, "enable_charger_notifications": keba_on, "enable_mobile_notifications": mobile_on}
-    nm = NotificationManager(hass, cfg)
+    nm = NotificationManager(mock_hass, cfg)
     # Pre-validate services to skip cached validation in tests
     nm._charger_notify_checked = True
     nm._charger_notify_available = True
@@ -200,58 +200,58 @@ async def test_notify_duplicate_suppressed(notifier, sample_data):
 # ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_notify_both_disabled(hass, config, sample_data):
+async def test_notify_both_disabled(mock_hass, config, sample_data):
     """Test no notifications when both switches off."""
-    nm = _make_notifier(hass, config, keba_on=False, mobile_on=False)
+    nm = _make_notifier(mock_hass, config, keba_on=False, mobile_on=False)
     _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
-    hass.services.async_call.assert_not_called()
+    mock_hass.services.async_call.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_notify_keba_only(hass, config, sample_data):
+async def test_notify_keba_only(mock_hass, config, sample_data):
     """Test only KEBA notification when mobile disabled."""
-    nm = _make_notifier(hass, config, keba_on=True, mobile_on=False)
+    nm = _make_notifier(mock_hass, config, keba_on=True, mobile_on=False)
     _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
-    calls = hass.services.async_call.call_args_list
+    calls = mock_hass.services.async_call.call_args_list
     assert len(calls) == 1
     assert calls[0][0][1] == "keba_display"
 
 
 @pytest.mark.asyncio
-async def test_notify_mobile_only(hass, config, sample_data):
+async def test_notify_mobile_only(mock_hass, config, sample_data):
     """Test only mobile notification when KEBA disabled."""
-    nm = _make_notifier(hass, config, keba_on=False, mobile_on=True)
+    nm = _make_notifier(mock_hass, config, keba_on=False, mobile_on=True)
     _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
-    calls = hass.services.async_call.call_args_list
+    calls = mock_hass.services.async_call.call_args_list
     assert len(calls) == 1
     assert calls[0][0][1] == "mobile_app_phone"
 
 
 @pytest.mark.asyncio
-async def test_notify_mobile_no_service(hass, sample_data):
+async def test_notify_mobile_no_service(mock_hass, sample_data):
     """Test no mobile notification when no service configured."""
     cfg = {"daily_ev_target": 10, "battery_priority_soc": 80, "mobile_notification_service": ""}
-    nm = _make_notifier(hass, cfg, keba_on=False, mobile_on=True)
+    nm = _make_notifier(mock_hass, cfg, keba_on=False, mobile_on=True)
     _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
     # Only the KEBA display is not enabled, and mobile has no service -> no calls
-    hass.services.async_call.assert_not_called()
+    mock_hass.services.async_call.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_notify_mobile_service_not_found(hass, config, sample_data):
+async def test_notify_mobile_service_not_found(mock_hass, config, sample_data):
     """Test mobile notification skipped when service validation fails."""
-    hass.services.has_service = MagicMock(return_value=False)
-    nm = _make_notifier(hass, config, keba_on=False, mobile_on=True)
+    mock_hass.services.has_service = MagicMock(return_value=False)
+    nm = _make_notifier(mock_hass, config, keba_on=False, mobile_on=True)
     # Override cached service availability to let validation run
     nm._mobile_service_checked = False
     nm._charger_notify_checked = False
     _bypass_flap_suppression(nm, ChargingState.SOLAR_CHARGING_ACTIVE)
     await nm.notify_state_change(ChargingState.SOLAR_CHARGING_ACTIVE, sample_data)
-    hass.services.async_call.assert_not_called()
+    mock_hass.services.async_call.assert_not_called()
 
 
 # ──────────────────────────────────────────────
@@ -349,22 +349,22 @@ def test_messages_idle_with_session(notifier):
 # ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_ev_nearly_full_sends_once(notifier, hass):
+async def test_ev_nearly_full_sends_once(notifier, mock_hass):
     """notify_ev_nearly_full fires once, then deduplicates."""
     await notifier.notify_ev_nearly_full(3.0)
-    assert hass.bus.async_fire.call_count == 1
-    event_data = hass.bus.async_fire.call_args[0][1]
+    assert mock_hass.bus.async_fire.call_count == 1
+    event_data = mock_hass.bus.async_fire.call_args[0][1]
     assert event_data["event"] == "ev_nearly_full"
     assert event_data["minutes_remaining"] == 3.0
 
     # Second call should be deduplicated
-    hass.bus.async_fire.reset_mock()
+    mock_hass.bus.async_fire.reset_mock()
     await notifier.notify_ev_nearly_full(2.0)
-    assert hass.bus.async_fire.call_count == 0
+    assert mock_hass.bus.async_fire.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_ev_nearly_full_resets_when_above_threshold(notifier, hass):
+async def test_ev_nearly_full_resets_when_above_threshold(notifier, mock_hass):
     """notify_ev_nearly_full resets flag when minutes > 10."""
     await notifier.notify_ev_nearly_full(3.0)
     assert "ev_nearly_full" in notifier._notified_flags
@@ -374,44 +374,44 @@ async def test_ev_nearly_full_resets_when_above_threshold(notifier, hass):
     assert "ev_nearly_full" not in notifier._notified_flags
 
     # Now it can fire again
-    hass.bus.async_fire.reset_mock()
+    mock_hass.bus.async_fire.reset_mock()
     await notifier.notify_ev_nearly_full(4.0)
-    assert hass.bus.async_fire.call_count == 1
+    assert mock_hass.bus.async_fire.call_count == 1
 
 
 @pytest.mark.asyncio
-async def test_ev_charge_skip_sends_once(notifier, hass):
+async def test_ev_charge_skip_sends_once(notifier, mock_hass):
     """notify_ev_charge_skip fires once per night."""
     await notifier.notify_ev_charge_skip(85.0, 3)
-    assert hass.bus.async_fire.call_count == 1
-    event_data = hass.bus.async_fire.call_args[0][1]
+    assert mock_hass.bus.async_fire.call_count == 1
+    event_data = mock_hass.bus.async_fire.call_args[0][1]
     assert event_data["event"] == "ev_charge_skip"
     assert event_data["estimated_soc"] == 85
     assert event_data["nights_remaining"] == 3
 
     # Deduplicated
-    hass.bus.async_fire.reset_mock()
+    mock_hass.bus.async_fire.reset_mock()
     await notifier.notify_ev_charge_skip(85.0, 3)
-    assert hass.bus.async_fire.call_count == 0
+    assert mock_hass.bus.async_fire.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_ev_charge_recommended_sends_once(notifier, hass):
+async def test_ev_charge_recommended_sends_once(notifier, mock_hass):
     """notify_ev_charge_recommended fires once per night."""
     await notifier.notify_ev_charge_recommended(25.0)
-    assert hass.bus.async_fire.call_count == 1
-    event_data = hass.bus.async_fire.call_args[0][1]
+    assert mock_hass.bus.async_fire.call_count == 1
+    event_data = mock_hass.bus.async_fire.call_args[0][1]
     assert event_data["event"] == "ev_charge_recommended"
     assert event_data["estimated_soc"] == 25
 
     # Deduplicated
-    hass.bus.async_fire.reset_mock()
+    mock_hass.bus.async_fire.reset_mock()
     await notifier.notify_ev_charge_recommended(25.0)
-    assert hass.bus.async_fire.call_count == 0
+    assert mock_hass.bus.async_fire.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_ev_notifications_reset_on_notifier_reset(notifier, hass):
+async def test_ev_notifications_reset_on_notifier_reset(notifier, mock_hass):
     """All EV flags should clear on notifier.reset()."""
     await notifier.notify_ev_nearly_full(3.0)
     await notifier.notify_ev_charge_skip(85.0, 3)
@@ -427,7 +427,7 @@ async def test_ev_notifications_reset_on_notifier_reset(notifier, hass):
 # ──────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_rest_command_service_detection(hass, sample_data):
+async def test_rest_command_service_detection(mock_hass, sample_data):
     """Test that rest_command services are detected and used correctly."""
     cfg = {
         "daily_ev_target": 10,
@@ -438,9 +438,9 @@ async def test_rest_command_service_detection(hass, sample_data):
     # rest_command.send_matrix_notification exists, notify.send_matrix_notification does not
     def has_service(domain, name):
         return domain == "rest_command" and name == "send_matrix_notification"
-    hass.services.has_service = MagicMock(side_effect=has_service)
+    mock_hass.services.has_service = MagicMock(side_effect=has_service)
 
-    nm = NotificationManager(hass, cfg)
+    nm = NotificationManager(mock_hass, cfg)
     await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
 
     assert nm._mobile_service_domain == "rest_command"
@@ -448,7 +448,7 @@ async def test_rest_command_service_detection(hass, sample_data):
     assert nm._mobile_service_is_companion is False
 
     # Verify the call went to rest_command domain
-    call = hass.services.async_call.call_args
+    call = mock_hass.services.async_call.call_args
     assert call[0][0] == "rest_command"
     assert call[0][1] == "send_matrix_notification"
     # No Android data payload for rest_command
@@ -456,7 +456,7 @@ async def test_rest_command_service_detection(hass, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_notify_service_detection(hass, sample_data):
+async def test_notify_service_detection(mock_hass, sample_data):
     """Test that notify.* (non-mobile_app) services send without Android data."""
     cfg = {
         "daily_ev_target": 10,
@@ -467,9 +467,9 @@ async def test_notify_service_detection(hass, sample_data):
     # notify.matrix exists, rest_command.matrix does not
     def has_service(domain, name):
         return domain == "notify" and name == "matrix"
-    hass.services.has_service = MagicMock(side_effect=has_service)
+    mock_hass.services.has_service = MagicMock(side_effect=has_service)
 
-    nm = NotificationManager(hass, cfg)
+    nm = NotificationManager(mock_hass, cfg)
     await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
 
     assert nm._mobile_service_domain == "notify"
@@ -477,7 +477,7 @@ async def test_notify_service_detection(hass, sample_data):
     assert nm._mobile_service_is_companion is False
 
     # Verify message + title only, no Android data
-    call = hass.services.async_call.call_args
+    call = mock_hass.services.async_call.call_args
     assert call[0][0] == "notify"
     assert call[0][1] == "matrix"
     assert "data" not in call[0][2]
@@ -485,7 +485,7 @@ async def test_notify_service_detection(hass, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_mobile_app_service_sends_android_data(hass, sample_data):
+async def test_mobile_app_service_sends_android_data(mock_hass, sample_data):
     """Test that mobile_app_* services get full Android companion payload."""
     cfg = {
         "daily_ev_target": 10,
@@ -495,16 +495,16 @@ async def test_mobile_app_service_sends_android_data(hass, sample_data):
     }
     def has_service(domain, name):
         return domain == "notify" and name == "mobile_app_phone"
-    hass.services.has_service = MagicMock(side_effect=has_service)
+    mock_hass.services.has_service = MagicMock(side_effect=has_service)
 
-    nm = NotificationManager(hass, cfg)
+    nm = NotificationManager(mock_hass, cfg)
     await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
 
     assert nm._mobile_service_domain == "notify"
     assert nm._mobile_service_is_companion is True
 
     # Verify Android data payload is present
-    call = hass.services.async_call.call_args
+    call = mock_hass.services.async_call.call_args
     assert call[0][0] == "notify"
     assert "data" in call[0][2]
     assert call[0][2]["data"]["channel"] == "sem_charging"
@@ -513,7 +513,7 @@ async def test_mobile_app_service_sends_android_data(hass, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_rest_command_preferred_over_notify(hass, sample_data):
+async def test_rest_command_preferred_over_notify(mock_hass, sample_data):
     """Test that rest_command is preferred when both exist for same name."""
     cfg = {
         "daily_ev_target": 10,
@@ -522,9 +522,9 @@ async def test_rest_command_preferred_over_notify(hass, sample_data):
         "enable_mobile_notifications": True,
     }
     # Both rest_command.matrix and notify.matrix exist
-    hass.services.has_service = MagicMock(return_value=True)
+    mock_hass.services.has_service = MagicMock(return_value=True)
 
-    nm = NotificationManager(hass, cfg)
+    nm = NotificationManager(mock_hass, cfg)
     await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
 
     # rest_command should be preferred
@@ -532,7 +532,7 @@ async def test_rest_command_preferred_over_notify(hass, sample_data):
 
 
 @pytest.mark.asyncio
-async def test_service_unavailable_neither_domain(hass, sample_data):
+async def test_service_unavailable_neither_domain(mock_hass, sample_data):
     """Test graceful handling when service exists in neither domain."""
     cfg = {
         "daily_ev_target": 10,
@@ -540,17 +540,17 @@ async def test_service_unavailable_neither_domain(hass, sample_data):
         "enable_charger_notifications": False,
         "enable_mobile_notifications": True,
     }
-    hass.services.has_service = MagicMock(return_value=False)
+    mock_hass.services.has_service = MagicMock(return_value=False)
 
-    nm = NotificationManager(hass, cfg)
+    nm = NotificationManager(mock_hass, cfg)
     await nm.notify_state_change(ChargingState.NIGHT_CHARGING_ACTIVE, sample_data)
 
     assert nm._mobile_service_available is False
-    hass.services.async_call.assert_not_called()
+    mock_hass.services.async_call.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_rest_command_battery_full_no_actions(hass):
+async def test_rest_command_battery_full_no_actions(mock_hass):
     """Test battery_full via rest_command omits action buttons."""
     cfg = {
         "daily_ev_target": 10,
@@ -559,12 +559,12 @@ async def test_rest_command_battery_full_no_actions(hass):
     }
     def has_service(domain, name):
         return domain == "rest_command" and name == "send_matrix_notification"
-    hass.services.has_service = MagicMock(side_effect=has_service)
+    mock_hass.services.has_service = MagicMock(side_effect=has_service)
 
-    nm = NotificationManager(hass, cfg)
+    nm = NotificationManager(mock_hass, cfg)
     await nm.notify_battery_full(100.0)
 
-    call = hass.services.async_call.call_args
+    call = mock_hass.services.async_call.call_args
     assert call[0][0] == "rest_command"
     # No "data" key with actions for rest_command
     assert "data" not in call[0][2]

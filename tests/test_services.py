@@ -152,30 +152,30 @@ views:
             assert True
 
     @staticmethod
-    def _capture_service_handlers(hass):
+    def _capture_service_handlers(mock_hass):
         """Register services and capture handlers into a dict keyed by service name.
 
         This avoids fragile index-based lookups into call_args_list.
         """
         handlers = {}
-        original_register = hass.services.async_register
+        original_register = mock_hass.services.async_register
 
         def capturing_register(domain, service_name, handler, **kwargs):
             handlers[service_name] = handler
             return original_register(domain, service_name, handler, **kwargs)
 
-        hass.services.async_register = MagicMock(side_effect=capturing_register)
+        mock_hass.services.async_register = MagicMock(side_effect=capturing_register)
         return handlers
 
     @pytest.mark.asyncio
-    async def test_service_registration(self, hass, mock_coordinator):
+    async def test_service_registration(self, mock_hass, mock_coordinator):
         """Test that services are properly registered."""
         from custom_components.solar_energy_management import _async_register_services
 
-        hass.services.has_service = MagicMock(return_value=False)
-        handlers = self._capture_service_handlers(hass)
+        mock_hass.services.has_service = MagicMock(return_value=False)
+        handlers = self._capture_service_handlers(mock_hass)
 
-        await _async_register_services(hass, mock_coordinator)
+        await _async_register_services(mock_hass, mock_coordinator)
 
         expected_services = [
             "generate_dashboard",
@@ -189,19 +189,19 @@ views:
             assert service in handlers, f"Service '{service}' was not registered"
 
     @pytest.mark.asyncio
-    async def test_service_handler_valid_service(self, hass, mock_coordinator):
+    async def test_service_handler_valid_service(self, mock_hass, mock_coordinator):
         """Test sync_priorities_from_dashboard handler with valid dashboard file."""
         from custom_components.solar_energy_management import _async_register_services
 
-        hass.services.has_service = MagicMock(return_value=False)
-        handlers = self._capture_service_handlers(hass)
+        mock_hass.services.has_service = MagicMock(return_value=False)
+        handlers = self._capture_service_handlers(mock_hass)
 
         # Mock the load manager
         mock_coordinator._load_manager = MagicMock()
         mock_coordinator._load_manager._devices = {"load_device_washer": MagicMock()}
         mock_coordinator._load_manager.update_device_priority = AsyncMock()
 
-        await _async_register_services(hass, mock_coordinator)
+        await _async_register_services(mock_hass, mock_coordinator)
 
         handler = handlers["sync_priorities_from_dashboard"]
 
@@ -236,16 +236,16 @@ views:
         mock_coordinator._load_manager.update_device_priority.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_service_handler_invalid_service(self, hass, mock_coordinator):
+    async def test_service_handler_invalid_service(self, mock_hass, mock_coordinator):
         """Test sync_priorities_from_dashboard handles missing dashboard file gracefully."""
         from custom_components.solar_energy_management import _async_register_services
 
-        hass.services.has_service = MagicMock(return_value=False)
-        handlers = self._capture_service_handlers(hass)
+        mock_hass.services.has_service = MagicMock(return_value=False)
+        handlers = self._capture_service_handlers(mock_hass)
 
         mock_coordinator._load_manager = MagicMock()
 
-        await _async_register_services(hass, mock_coordinator)
+        await _async_register_services(mock_hass, mock_coordinator)
 
         handler = handlers["sync_priorities_from_dashboard"]
 

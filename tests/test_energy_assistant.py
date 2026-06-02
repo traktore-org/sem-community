@@ -13,8 +13,8 @@ from custom_components.solar_energy_management.analytics.energy_assistant import
 class TestEnergyAssistantInit:
     """Test EnergyAssistant initialization."""
 
-    def test_init(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_init(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         assert ea._tips == []
         assert ea._tip_rotation_index == 0
         assert ea._last_analysis is None
@@ -28,8 +28,8 @@ class TestEnergyAssistantInit:
 class TestEnergyAssistantAnalyze:
     """Test EnergyAssistant.analyze() method."""
 
-    def test_analyze_basic(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_analyze_basic(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         data = ea.analyze(
             daily_solar_kwh=20.0,
             daily_home_kwh=10.0,
@@ -41,9 +41,9 @@ class TestEnergyAssistantAnalyze:
         assert isinstance(data, EnergyAssistantData)
         assert 0 <= data.optimization_score <= 100
 
-    def test_ev_charging_low_solar_tip(self, hass):
+    def test_ev_charging_low_solar_tip(self, mock_hass):
         """solar < 50% of EV -> generates tip."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         data = ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=3.0,  # 30% solar
@@ -55,9 +55,9 @@ class TestEnergyAssistantAnalyze:
         assert len(ev_tips) >= 1
         assert any("grid" in t["description"].lower() for t in ev_tips)
 
-    def test_ev_charging_good_forecast_tip(self, hass):
+    def test_ev_charging_good_forecast_tip(self, mock_hass):
         """forecast > 2x EV need -> generates tip."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         data = ea.analyze(
             daily_ev_kwh=5.0,
             solar_to_ev_kwh=1.0,
@@ -69,9 +69,9 @@ class TestEnergyAssistantAnalyze:
         ev_tips = [t for t in tips if t["category"] == "ev"]
         assert any("solar" in t["description"].lower() or "forecast" in t["description"].lower() for t in ev_tips)
 
-    def test_surplus_high_export_no_hot_water(self, hass):
+    def test_surplus_high_export_no_hot_water(self, mock_hass):
         """export > 50% -> hot water tip when no hot water."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         ea.analyze(
             daily_solar_kwh=20.0,
             daily_grid_export_kwh=12.0,  # 60% export
@@ -81,9 +81,9 @@ class TestEnergyAssistantAnalyze:
         surplus_tips = [t for t in tips if t["category"] == "surplus"]
         assert any("hot water" in t["description"].lower() for t in surplus_tips)
 
-    def test_surplus_high_export_no_heat_pump(self, hass):
+    def test_surplus_high_export_no_heat_pump(self, mock_hass):
         """export > 60% -> heat pump tip when no heat pump."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         ea.analyze(
             daily_solar_kwh=20.0,
             daily_grid_export_kwh=14.0,  # 70% export
@@ -93,9 +93,9 @@ class TestEnergyAssistantAnalyze:
         surplus_tips = [t for t in tips if t["category"] == "surplus"]
         assert any("heat pump" in t["description"].lower() for t in surplus_tips)
 
-    def test_self_consumption_excellent(self, hass):
+    def test_self_consumption_excellent(self, mock_hass):
         """> 80% -> positive tip."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         ea.analyze(
             self_consumption_rate=85.0,
             daily_solar_kwh=20.0,
@@ -104,9 +104,9 @@ class TestEnergyAssistantAnalyze:
         general_tips = [t for t in tips if t["category"] == "general"]
         assert any("excellent" in t["title"].lower() or "well optimized" in t["description"].lower() for t in general_tips)
 
-    def test_self_consumption_low(self, hass):
+    def test_self_consumption_low(self, mock_hass):
         """< 40% with solar > 5kWh -> improvement tip."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         ea.analyze(
             self_consumption_rate=30.0,
             daily_solar_kwh=10.0,
@@ -116,25 +116,25 @@ class TestEnergyAssistantAnalyze:
         general_tips = [t for t in tips if t["category"] == "general"]
         assert any("low" in t["title"].lower() or "shifting" in t["description"].lower() for t in general_tips)
 
-    def test_price_cheap_tip(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_price_cheap_tip(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         ea.analyze(current_price_level="cheap")
         tips = ea.get_all_tips()
         price_tips = [t for t in tips if t["category"] == "price"]
         assert len(price_tips) >= 1
         assert any("cheap" in t["description"].lower() for t in price_tips)
 
-    def test_price_expensive_tip(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_price_expensive_tip(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         ea.analyze(current_price_level="expensive")
         tips = ea.get_all_tips()
         price_tips = [t for t in tips if t["category"] == "price"]
         assert len(price_tips) >= 1
         assert any("expensive" in t["description"].lower() for t in price_tips)
 
-    def test_battery_underutilized_tip(self, hass):
+    def test_battery_underutilized_tip(self, mock_hass):
         """discharge < grid_import/2."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         ea.analyze(
             daily_battery_charge_kwh=5.0,
             daily_battery_discharge_kwh=2.0,
@@ -148,8 +148,8 @@ class TestEnergyAssistantAnalyze:
 class TestOptimizationScore:
     """Test optimization score calculation."""
 
-    def test_optimization_score_perfect(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_optimization_score_perfect(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         data = ea.analyze(
             self_consumption_rate=100.0,
             autarky_rate=100.0,
@@ -160,8 +160,8 @@ class TestOptimizationScore:
         )
         assert data.optimization_score == 100
 
-    def test_optimization_score_zero(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_optimization_score_zero(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         data = ea.analyze(
             self_consumption_rate=0.0,
             autarky_rate=0.0,
@@ -172,9 +172,9 @@ class TestOptimizationScore:
         )
         assert data.optimization_score == 0
 
-    def test_optimization_score_no_ev(self, hass):
+    def test_optimization_score_no_ev(self, mock_hass):
         """No EV gives 10 bonus points."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         data = ea.analyze(
             self_consumption_rate=0.0,
             autarky_rate=0.0,
@@ -189,9 +189,9 @@ class TestOptimizationScore:
 class TestTipRotation:
     """Test tip rotation and sorting."""
 
-    def test_tip_rotation(self, hass):
+    def test_tip_rotation(self, mock_hass):
         """Multiple calls rotate through tips."""
-        ea = EnergyAssistant(hass)
+        ea = EnergyAssistant(mock_hass)
         # First call generates tips
         data1 = ea.analyze(
             daily_ev_kwh=10.0,
@@ -214,8 +214,8 @@ class TestTipRotation:
         # With multiple tips, rotation index increments
         assert ea._tip_rotation_index >= 2
 
-    def test_get_all_tips_sorted(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_get_all_tips_sorted(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         ea.analyze(
             daily_ev_kwh=10.0,
             solar_to_ev_kwh=2.0,
@@ -234,8 +234,8 @@ class TestTipRotation:
 class TestDailyStatsTrend:
     """Test daily stats and trend detection."""
 
-    def test_daily_stats_trend_rising(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_daily_stats_trend_rising(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         # Simulate multiple days with rising self_consumption
         for i in range(7):
             day = date.today() - timedelta(days=6 - i)
@@ -252,8 +252,8 @@ class TestDailyStatsTrend:
         trend = ea._get_trend("grid_import")
         assert trend == "rising"
 
-    def test_daily_stats_trend_falling(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_daily_stats_trend_falling(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         for i in range(7):
             day = date.today() - timedelta(days=6 - i)
             with patch("custom_components.solar_energy_management.analytics.energy_assistant.date") as mock_date:
@@ -269,8 +269,8 @@ class TestDailyStatsTrend:
         trend = ea._get_trend("grid_import")
         assert trend == "falling"
 
-    def test_daily_stats_trend_stable(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_daily_stats_trend_stable(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         for i in range(7):
             day = date.today() - timedelta(days=6 - i)
             with patch("custom_components.solar_energy_management.analytics.energy_assistant.date") as mock_date:
@@ -286,8 +286,8 @@ class TestDailyStatsTrend:
         trend = ea._get_trend("grid_import")
         assert trend == "stable"
 
-    def test_daily_stats_max_30_days(self, hass):
-        ea = EnergyAssistant(hass)
+    def test_daily_stats_max_30_days(self, mock_hass):
+        ea = EnergyAssistant(mock_hass)
         for i in range(35):
             day = date.today() - timedelta(days=34 - i)
             with patch("custom_components.solar_energy_management.analytics.energy_assistant.date") as mock_date:

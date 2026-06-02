@@ -60,43 +60,43 @@ def _mock_get(entities):
 
 
 @pytest.fixture
-def detector_keba(hass):
+def detector_keba(mock_hass):
     """Return an EVChargerDetector with KEBA entities available."""
-    hass.states.async_entity_ids = MagicMock(return_value=KEBA_ENTITIES)
-    hass.states.get = _mock_get(KEBA_ENTITIES)
+    mock_hass.states.async_entity_ids = MagicMock(return_value=KEBA_ENTITIES)
+    mock_hass.states.get = _mock_get(KEBA_ENTITIES)
     with patch(
         "custom_components.solar_energy_management.hardware_detection.entity_registry"
     ) as mock_er:
         mock_er.async_get = MagicMock(return_value=MagicMock())
-        yield EVChargerDetector(hass)
+        yield EVChargerDetector(mock_hass)
 
 
 @pytest.fixture
-def detector_easee(hass):
+def detector_easee(mock_hass):
     """Return an EVChargerDetector with Easee entities available."""
-    hass.states.async_entity_ids = MagicMock(return_value=EASEE_ENTITIES)
-    hass.states.get = _mock_get(EASEE_ENTITIES)
+    mock_hass.states.async_entity_ids = MagicMock(return_value=EASEE_ENTITIES)
+    mock_hass.states.get = _mock_get(EASEE_ENTITIES)
     with patch(
         "custom_components.solar_energy_management.hardware_detection.entity_registry"
     ) as mock_er:
         mock_er.async_get = MagicMock(return_value=MagicMock())
-        yield EVChargerDetector(hass)
+        yield EVChargerDetector(mock_hass)
 
 
 @pytest.fixture
-def detector_empty(hass):
+def detector_empty(mock_hass):
     """Return an EVChargerDetector with no entities."""
-    hass.states.async_entity_ids = MagicMock(return_value=[])
-    hass.states.get = MagicMock(return_value=None)
+    mock_hass.states.async_entity_ids = MagicMock(return_value=[])
+    mock_hass.states.get = MagicMock(return_value=None)
     with patch(
         "custom_components.solar_energy_management.hardware_detection.entity_registry"
     ) as mock_er:
         mock_er.async_get = MagicMock(return_value=MagicMock())
-        yield EVChargerDetector(hass)
+        yield EVChargerDetector(mock_hass)
 
 
 @pytest.fixture
-def detector_generic(hass):
+def detector_generic(mock_hass):
     """Return a detector with generic charger entities (no integration-specific names)."""
     generic_entities = [
         "sensor.my_charger_power_total",
@@ -106,13 +106,13 @@ def detector_generic(hass):
         "sensor.charger_session_kwh",
         "sensor.ev_total_energy_counter",
     ]
-    hass.states.async_entity_ids = MagicMock(return_value=generic_entities)
-    hass.states.get = _mock_get(generic_entities)
+    mock_hass.states.async_entity_ids = MagicMock(return_value=generic_entities)
+    mock_hass.states.get = _mock_get(generic_entities)
     with patch(
         "custom_components.solar_energy_management.hardware_detection.entity_registry"
     ) as mock_er:
         mock_er.async_get = MagicMock(return_value=MagicMock())
-        yield EVChargerDetector(hass)
+        yield EVChargerDetector(mock_hass)
 
 
 # --- Tests ---
@@ -121,9 +121,9 @@ def detector_generic(hass):
 class TestInit:
     """Test EVChargerDetector initialization."""
 
-    def test_init(self, detector_keba, hass):
+    def test_init(self, detector_keba, mock_hass):
         """Detector stores hass and entity_registry."""
-        assert detector_keba.hass is hass
+        assert detector_keba.hass is mock_hass
 
     def test_hardware_detector_alias(self):
         """HardwareDetector is an alias for EVChargerDetector."""
@@ -189,18 +189,18 @@ class TestValidateEntity:
             "sensor.keba_p30_charging_power", "ev_charging_power"
         ) is True
 
-    def test_validate_entity_power_out_of_range(self, hass):
+    def test_validate_entity_power_out_of_range(self, mock_hass):
         """Power value > 20000 returns False."""
-        hass.states.async_entity_ids = MagicMock(return_value=[])
+        mock_hass.states.async_entity_ids = MagicMock(return_value=[])
         state = MagicMock()
         state.state = "25000"
         state.attributes = {}
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
         with patch(
             "custom_components.solar_energy_management.hardware_detection.entity_registry"
         ) as mock_er:
             mock_er.async_get = MagicMock(return_value=MagicMock())
-            det = EVChargerDetector(hass)
+            det = EVChargerDetector(mock_hass)
         assert det._validate_entity("sensor.x", "ev_charging_power") is False
 
     def test_validate_entity_binary_valid(self, detector_keba):
@@ -209,32 +209,32 @@ class TestValidateEntity:
             "binary_sensor.keba_p30_plug_connected", "ev_connected"
         ) is True
 
-    def test_validate_entity_binary_invalid_state(self, hass):
+    def test_validate_entity_binary_invalid_state(self, mock_hass):
         """Binary sensor with non-boolean state returns False."""
         state = MagicMock()
         state.state = "maybe"
         state.attributes = {}
-        hass.states.get = MagicMock(return_value=state)
-        hass.states.async_entity_ids = MagicMock(return_value=[])
+        mock_hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.async_entity_ids = MagicMock(return_value=[])
         with patch(
             "custom_components.solar_energy_management.hardware_detection.entity_registry"
         ) as mock_er:
             mock_er.async_get = MagicMock(return_value=MagicMock())
-            det = EVChargerDetector(hass)
+            det = EVChargerDetector(mock_hass)
         assert det._validate_entity("binary_sensor.x", "ev_connected") is False
 
-    def test_validate_entity_unavailable(self, hass):
+    def test_validate_entity_unavailable(self, mock_hass):
         """Unavailable entity returns False."""
         state = MagicMock()
         state.state = "unavailable"
         state.attributes = {}
-        hass.states.get = MagicMock(return_value=state)
-        hass.states.async_entity_ids = MagicMock(return_value=[])
+        mock_hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.async_entity_ids = MagicMock(return_value=[])
         with patch(
             "custom_components.solar_energy_management.hardware_detection.entity_registry"
         ) as mock_er:
             mock_er.async_get = MagicMock(return_value=MagicMock())
-            det = EVChargerDetector(hass)
+            det = EVChargerDetector(mock_hass)
         assert det._validate_entity("sensor.x", "ev_charging_power") is False
 
     def test_validate_entity_not_found(self, detector_keba):
@@ -243,18 +243,18 @@ class TestValidateEntity:
             "sensor.does_not_exist", "ev_charging_power"
         ) is False
 
-    def test_validate_entity_unknown_state(self, hass):
+    def test_validate_entity_unknown_state(self, mock_hass):
         """Entity with 'unknown' state returns False."""
         state = MagicMock()
         state.state = "unknown"
         state.attributes = {}
-        hass.states.get = MagicMock(return_value=state)
-        hass.states.async_entity_ids = MagicMock(return_value=[])
+        mock_hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.async_entity_ids = MagicMock(return_value=[])
         with patch(
             "custom_components.solar_energy_management.hardware_detection.entity_registry"
         ) as mock_er:
             mock_er.async_get = MagicMock(return_value=MagicMock())
-            det = EVChargerDetector(hass)
+            det = EVChargerDetector(mock_hass)
         assert det._validate_entity("sensor.x", "ev_current") is False
 
     def test_validate_entity_other_type_always_true(self, detector_keba):

@@ -87,7 +87,7 @@ TEST_HARDWARE_VALUES = {
 
 
 @pytest.fixture
-def hass():
+def mock_hass():
     """Return a mocked Home Assistant instance."""
     hass_mock = MagicMock(spec=HomeAssistant)
     hass_mock.config = MagicMock()
@@ -541,18 +541,12 @@ def charging_state_scenarios():
 
 
 # ============================================================================
-# pytest-homeassistant-custom-component opt-in fixtures (Phase 1 bootstrap)
+# pytest-homeassistant-custom-component framework fixtures
 # ============================================================================
-# Coexist with the MagicMock-based ``hass``/``config_entry`` fixtures above.
-# Existing tests requesting ``hass`` still get the MagicMock — backwards-
-# compatible. New tests opt into the real framework by requesting
-# ``real_hass`` and ``sem_config_entry``.
-#
-# We deliberately do NOT load pytest-homeassistant-custom-component as a
-# plugin (``pytest_plugins = [...]``) because its conftest exposes a ``hass``
-# fixture that would collide with the legacy MagicMock fixture and break the
-# ~2000 existing tests. Using ``async_test_home_assistant`` directly gives
-# us the same real HomeAssistant instance under a non-colliding name.
+# Legacy MagicMock-based fixture has been renamed ``mock_hass``. New tests
+# (config flow, services, scenarios) request ``hass`` — pytest-HA's plugin
+# fixture, which yields a real HomeAssistant instance with full state
+# machine, registries, and service dispatch.
 # ============================================================================
 
 
@@ -561,57 +555,14 @@ def expected_lingering_timers() -> bool:
     """Override pytest-HA's ``verify_cleanup`` strict timer check.
 
     Core HA schedules background timers (e.g. ``_async_setup_cleanup`` at
-    a 24h interval) the moment ``async_test_home_assistant`` starts. Those
-    timers are not bugs in SEM — they're core's own bookkeeping — but the
+    a 24h interval) the moment the ``hass`` fixture starts. Those timers
+    are not bugs in SEM — they're core's own bookkeeping — but the
     auto-applied ``verify_cleanup`` would fail tests that observe them.
     Returning True downgrades the failure to a warning. Lingering-task
-    detection (the real signal for SEM leaks) stays strict via the default
-    ``expected_lingering_tasks=False``.
+    detection (the real signal for SEM leaks) stays strict via the
+    default ``expected_lingering_tasks=False``.
     """
     return True
-
-
-@pytest.fixture
-async def real_hass():
-    """A real ``HomeAssistant`` instance for integration-style tests.
-
-    Provides the full state machine, entity registry, device registry, and
-    service dispatch — what dict-mocks can't fake. Use for config flow,
-    services, entity setup, and the scenario harness (Phase 2).
-
-    Lifecycle: drives ``async_test_home_assistant`` manually rather than
-    via ``async with`` so the teardown is robust against the function-
-    scoped event loop closing before ``__aexit__`` completes. pytest-HA's
-    ``verify_cleanup`` auto-plugin observes ``INSTANCES`` (module-level
-    list in pytest_homeassistant_custom_component.common) and aborts the
-    run if more than one instance leaks across tests — so this fixture
-    explicitly removes its instance even when the loop teardown errors.
-
-    Example::
-
-        async def test_my_thing(real_hass):
-            real_hass.states.async_set("sensor.solar", "1500")
-            ...
-    """
-    from pytest_homeassistant_custom_component.common import (
-        async_test_home_assistant,
-        INSTANCES,
-    )
-
-    ctx = async_test_home_assistant()
-    hass = await ctx.__aenter__()
-    try:
-        yield hass
-    finally:
-        try:
-            await ctx.__aexit__(None, None, None)
-        except Exception:
-            # Loop may already be closed during teardown — best-effort
-            # cleanup. The INSTANCES.remove below is what verify_cleanup
-            # actually cares about.
-            pass
-        if hass in INSTANCES:
-            INSTANCES.remove(hass)
 
 
 @pytest.fixture
@@ -620,13 +571,13 @@ def sem_config_entry():
 
     Pre-seeded with a multi-charger-ready config (``ev_chargers`` list,
     not legacy flat keys). Test-specific tweaks can mutate ``.data`` /
-    ``.options`` before calling ``entry.add_to_hass(real_hass)``.
+    ``.options`` before calling ``entry.add_to_hass(hass)``.
 
-    Use with ``real_hass``::
+    Use with the real ``hass`` fixture::
 
-        async def test_setup(real_hass, sem_config_entry):
-            sem_config_entry.add_to_hass(real_hass)
-            assert await real_hass.config_entries.async_setup(
+        async def test_setup(hass, sem_config_entry):
+            sem_config_entry.add_to_hass(hass)
+            assert await hass.config_entries.async_setup(
                 sem_config_entry.entry_id
             )
     """

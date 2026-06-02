@@ -77,7 +77,7 @@ class TestEMSBinarySensors:
         assert hasattr(sensor, 'is_on')
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry(self, hass, config_entry, mock_coordinator):
+    async def test_async_setup_entry(self, mock_hass, config_entry, mock_coordinator):
         """Test binary sensor setup from config entry."""
         # Set runtime_data for the entry (quality scale: runtime-data)
         config_entry.runtime_data = mock_coordinator
@@ -87,7 +87,7 @@ class TestEMSBinarySensors:
 
         # Test that setup can be called without errors
         try:
-            await async_setup_entry(hass, config_entry, add_entities)
+            await async_setup_entry(mock_hass, config_entry, add_entities)
             # If we get here, setup worked
             assert True
             # Verify add_entities was called with binary sensor entities

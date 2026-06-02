@@ -43,7 +43,7 @@ def config_entry_disabled():
 
 
 @pytest.fixture
-def lm(hass, config_entry_lm):
+def lm(mock_hass, config_entry_lm):
     """Return a LoadManagementCoordinator with mocked dependencies."""
     with patch(
         "custom_components.solar_energy_management.features.load_management.LoadDeviceDiscovery"
@@ -65,7 +65,7 @@ def lm(hass, config_entry_lm):
         mock_store.async_save = AsyncMock()
         MockStore.return_value = mock_store
 
-        coordinator = LoadManagementCoordinator(hass, config_entry_lm)
+        coordinator = LoadManagementCoordinator(mock_hass, config_entry_lm)
         # Replace the store that was created in __init__
         coordinator._store = mock_store
         coordinator._device_discovery = mock_discovery
@@ -73,7 +73,7 @@ def lm(hass, config_entry_lm):
 
 
 @pytest.fixture
-def lm_disabled(hass, config_entry_disabled):
+def lm_disabled(mock_hass, config_entry_disabled):
     """Return a disabled LoadManagementCoordinator."""
     with patch(
         "custom_components.solar_energy_management.features.load_management.LoadDeviceDiscovery"
@@ -85,7 +85,7 @@ def lm_disabled(hass, config_entry_disabled):
         mock_store.async_load = AsyncMock(return_value=None)
         mock_store.async_save = AsyncMock()
         MockStore.return_value = mock_store
-        coordinator = LoadManagementCoordinator(hass, config_entry_disabled)
+        coordinator = LoadManagementCoordinator(mock_hass, config_entry_disabled)
         coordinator._store = mock_store
         yield coordinator
 

@@ -32,7 +32,7 @@ from custom_components.solar_energy_management.coordinator.notifications import 
 
 
 @pytest.fixture
-def hass():
+def mock_hass():
     h = MagicMock()
     h.services = MagicMock()
     h.services.async_call = AsyncMock()
@@ -52,8 +52,8 @@ def config():
 
 
 @pytest.fixture
-def nm(hass, config):
-    n = NotificationManager(hass, config)
+def nm(mock_hass, config):
+    n = NotificationManager(mock_hass, config)
     # Skip service validation in tests.
     n._charger_notify_checked = True
     n._charger_notify_available = True
