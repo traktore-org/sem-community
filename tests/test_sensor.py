@@ -254,18 +254,18 @@ class TestEMSSensors:
         assert len(a["upcoming"]) == 1
 
     @pytest.mark.asyncio
-    async def test_async_setup_entry(self, hass, config_entry, mock_coordinator):
+    async def test_async_setup_entry(self, mock_hass, config_entry, mock_coordinator):
         """Test sensor setup from config entry."""
         from custom_components.solar_energy_management.const import DOMAIN
         from homeassistant.helpers import entity_registry as er
 
         # Mock the coordinator in runtime_data (quality scale: runtime-data)
         config_entry.runtime_data = mock_coordinator
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
 
         # Mock the entity registry to prevent KeyError
         mock_entity_registry = MagicMock()
-        hass.data[er.DATA_REGISTRY] = mock_entity_registry
+        mock_hass.data[er.DATA_REGISTRY] = mock_entity_registry
 
         # Mock the add_entities function
         add_entities = MagicMock()
@@ -274,7 +274,7 @@ class TestEMSSensors:
         # without errors, even if the actual sensor creation logic
         # requires a real coordinator
         try:
-            await async_setup_entry(hass, config_entry, add_entities)
+            await async_setup_entry(mock_hass, config_entry, add_entities)
             # If we get here without exception, the setup is working
             assert True
             # Verify add_entities was called with sensor entities

@@ -15,10 +15,10 @@ from custom_components.solar_energy_management.coordinator.surplus_controller im
 )
 
 
-def _make_switch(hass, device_id, name, priority=5, depends_on=None):
+def _make_switch(mock_hass, device_id, name, priority=5, depends_on=None):
     """Create a mock switch device."""
     device = SwitchDevice(
-        hass=hass, device_id=device_id, name=name,
+        hass=mock_hass, device_id=device_id, name=name,
         priority=priority, entity_id=f"switch.{device_id}",
         power_entity_id=f"sensor.{device_id}_power",
         rated_power=1000,
@@ -28,14 +28,14 @@ def _make_switch(hass, device_id, name, priority=5, depends_on=None):
     return device
 
 
-def _make_controller(hass):
+def _make_controller(mock_hass):
     """Create a surplus controller."""
-    controller = SurplusController(hass, {})
+    controller = SurplusController(mock_hass, {})
     return controller
 
 
 @pytest.fixture
-def hass():
+def mock_hass():
     h = MagicMock()
     h.services = MagicMock()
     h.services.async_call = AsyncMock()
@@ -51,19 +51,19 @@ def hass():
 class TestActivationGate:
     """Device cannot activate unless all dependencies are met."""
 
-    def test_no_dependencies_can_activate(self, hass):
+    def test_no_dependencies_can_activate(self, mock_hass):
         """Device without dependencies can always activate."""
-        device = _make_switch(hass, "heater", "Heater")
-        controller = _make_controller(hass)
+        device = _make_switch(mock_hass, "heater", "Heater")
+        controller = _make_controller(mock_hass)
         controller.register_device(device)
         assert device.can_activate() is True
 
-    def test_blocked_when_dependency_inactive(self, hass):
+    def test_blocked_when_dependency_inactive(self, mock_hass):
         """Device blocked when depends_on device is not active."""
-        pump = _make_switch(hass, "pump", "Pool Pump", priority=1)
-        heater = _make_switch(hass, "heater", "Pool Heater", priority=2, depends_on=["pump"])
+        pump = _make_switch(mock_hass, "pump", "Pool Pump", priority=1)
+        heater = _make_switch(mock_hass, "heater", "Pool Heater", priority=2, depends_on=["pump"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
         controller.register_device(heater)
 
@@ -71,12 +71,12 @@ class TestActivationGate:
         assert heater.can_activate() is False
         assert heater.blocked_by_dependency == "pump"
 
-    def test_allowed_when_dependency_active(self, hass):
+    def test_allowed_when_dependency_active(self, mock_hass):
         """Device can activate when depends_on device is active."""
-        pump = _make_switch(hass, "pump", "Pool Pump", priority=1)
-        heater = _make_switch(hass, "heater", "Pool Heater", priority=2, depends_on=["pump"])
+        pump = _make_switch(mock_hass, "pump", "Pool Pump", priority=1)
+        heater = _make_switch(mock_hass, "heater", "Pool Heater", priority=2, depends_on=["pump"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
         controller.register_device(heater)
 
@@ -86,13 +86,13 @@ class TestActivationGate:
         assert heater.can_activate() is True
         assert heater.blocked_by_dependency is None
 
-    def test_must_inactive_mode(self, hass):
+    def test_must_inactive_mode(self, mock_hass):
         """Device with must_inactive blocks when dependency IS active."""
-        main = _make_switch(hass, "main", "Main Heater", priority=1)
-        backup = _make_switch(hass, "backup", "Backup Heater", priority=2, depends_on=["main"])
+        main = _make_switch(mock_hass, "main", "Main Heater", priority=1)
+        backup = _make_switch(mock_hass, "backup", "Backup Heater", priority=2, depends_on=["main"])
         backup.dependency_mode = "must_inactive"
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(main)
         controller.register_device(backup)
 
@@ -104,13 +104,13 @@ class TestActivationGate:
         main._status.state = DeviceState.IDLE
         assert backup.can_activate() is True
 
-    def test_multiple_dependencies(self, hass):
+    def test_multiple_dependencies(self, mock_hass):
         """Device with multiple dependencies needs ALL satisfied."""
-        pump = _make_switch(hass, "pump", "Pump", priority=1)
-        valve = _make_switch(hass, "valve", "Valve", priority=2)
-        heater = _make_switch(hass, "heater", "Heater", priority=3, depends_on=["pump", "valve"])
+        pump = _make_switch(mock_hass, "pump", "Pump", priority=1)
+        valve = _make_switch(mock_hass, "valve", "Valve", priority=2)
+        heater = _make_switch(mock_hass, "heater", "Heater", priority=3, depends_on=["pump", "valve"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
         controller.register_device(valve)
         controller.register_device(heater)
@@ -131,14 +131,14 @@ class TestActivationGate:
 class TestDeactivationCascade:
     """Deactivating a device should cascade to its dependents."""
 
-    def test_get_dependents(self, hass):
+    def test_get_dependents(self, mock_hass):
         """get_dependents returns all devices that depend on given ID."""
-        pump = _make_switch(hass, "pump", "Pump")
-        heater = _make_switch(hass, "heater", "Heater", depends_on=["pump"])
-        fan = _make_switch(hass, "fan", "Fan", depends_on=["pump"])
-        light = _make_switch(hass, "light", "Light")  # No dependency
+        pump = _make_switch(mock_hass, "pump", "Pump")
+        heater = _make_switch(mock_hass, "heater", "Heater", depends_on=["pump"])
+        fan = _make_switch(mock_hass, "fan", "Fan", depends_on=["pump"])
+        light = _make_switch(mock_hass, "light", "Light")  # No dependency
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         for d in [pump, heater, fan, light]:
             controller.register_device(d)
 
@@ -148,10 +148,10 @@ class TestDeactivationCascade:
         assert "fan" in dep_ids
         assert "light" not in dep_ids
 
-    def test_no_dependents(self, hass):
+    def test_no_dependents(self, mock_hass):
         """Device with no dependents returns empty list."""
-        pump = _make_switch(hass, "pump", "Pump")
-        controller = _make_controller(hass)
+        pump = _make_switch(mock_hass, "pump", "Pump")
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
 
         assert controller.get_dependents("pump") == []
@@ -164,25 +164,25 @@ class TestDeactivationCascade:
 class TestCircularDetection:
     """Circular dependencies should be detected."""
 
-    def test_no_circular(self, hass):
+    def test_no_circular(self, mock_hass):
         """Linear chain has no circular dependencies."""
-        a = _make_switch(hass, "a", "A")
-        b = _make_switch(hass, "b", "B", depends_on=["a"])
-        c = _make_switch(hass, "c", "C", depends_on=["b"])
+        a = _make_switch(mock_hass, "a", "A")
+        b = _make_switch(mock_hass, "b", "B", depends_on=["a"])
+        c = _make_switch(mock_hass, "c", "C", depends_on=["b"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         for d in [a, b, c]:
             controller.register_device(d)
 
         errors = controller.validate_dependencies()
         assert len(errors) == 0
 
-    def test_direct_circular(self, hass):
+    def test_direct_circular(self, mock_hass):
         """A→B→A is circular."""
-        a = _make_switch(hass, "a", "A", depends_on=["b"])
-        b = _make_switch(hass, "b", "B", depends_on=["a"])
+        a = _make_switch(mock_hass, "a", "A", depends_on=["b"])
+        b = _make_switch(mock_hass, "b", "B", depends_on=["a"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(a)
         controller.register_device(b)
 
@@ -190,13 +190,13 @@ class TestCircularDetection:
         assert len(errors) > 0
         assert "Circular" in errors[0]
 
-    def test_indirect_circular(self, hass):
+    def test_indirect_circular(self, mock_hass):
         """A→B→C→A is circular."""
-        a = _make_switch(hass, "a", "A", depends_on=["c"])
-        b = _make_switch(hass, "b", "B", depends_on=["a"])
-        c = _make_switch(hass, "c", "C", depends_on=["b"])
+        a = _make_switch(mock_hass, "a", "A", depends_on=["c"])
+        b = _make_switch(mock_hass, "b", "B", depends_on=["a"])
+        c = _make_switch(mock_hass, "c", "C", depends_on=["b"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         for d in [a, b, c]:
             controller.register_device(d)
 
@@ -211,12 +211,12 @@ class TestCircularDetection:
 class TestSerialization:
     """Dependency info appears in device serialization."""
 
-    def test_to_dict_with_dependencies(self, hass):
+    def test_to_dict_with_dependencies(self, mock_hass):
         """to_dict includes depends_on and blocked_by."""
-        pump = _make_switch(hass, "pump", "Pump")
-        heater = _make_switch(hass, "heater", "Heater", depends_on=["pump"])
+        pump = _make_switch(mock_hass, "pump", "Pump")
+        heater = _make_switch(mock_hass, "heater", "Heater", depends_on=["pump"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
         controller.register_device(heater)
 
@@ -224,10 +224,10 @@ class TestSerialization:
         assert d["depends_on"] == ["pump"]
         assert d["blocked_by"] == "pump"
 
-    def test_to_dict_without_dependencies(self, hass):
+    def test_to_dict_without_dependencies(self, mock_hass):
         """to_dict omits dependency fields when not configured."""
-        pump = _make_switch(hass, "pump", "Pump")
-        controller = _make_controller(hass)
+        pump = _make_switch(mock_hass, "pump", "Pump")
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
 
         d = pump.to_dict()
@@ -241,12 +241,12 @@ class TestSerialization:
 class TestDependencyLifecycle:
     """Test setting and releasing dependencies at runtime."""
 
-    def test_set_dependency_runtime(self, hass):
+    def test_set_dependency_runtime(self, mock_hass):
         """Setting depends_on at runtime blocks activation."""
-        pump = _make_switch(hass, "pump", "Pump", priority=1)
-        heater = _make_switch(hass, "heater", "Heater", priority=2)
+        pump = _make_switch(mock_hass, "pump", "Pump", priority=1)
+        heater = _make_switch(mock_hass, "heater", "Heater", priority=2)
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
         controller.register_device(heater)
 
@@ -261,12 +261,12 @@ class TestDependencyLifecycle:
         pump._status.state = DeviceState.ACTIVE
         assert heater.can_activate() is True
 
-    def test_release_dependency(self, hass):
+    def test_release_dependency(self, mock_hass):
         """Clearing depends_on releases the device."""
-        pump = _make_switch(hass, "pump", "Pump", priority=1)
-        heater = _make_switch(hass, "heater", "Heater", priority=2, depends_on=["pump"])
+        pump = _make_switch(mock_hass, "pump", "Pump", priority=1)
+        heater = _make_switch(mock_hass, "heater", "Heater", priority=2, depends_on=["pump"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
         controller.register_device(heater)
 
@@ -278,22 +278,22 @@ class TestDependencyLifecycle:
         assert heater.can_activate() is True
         assert heater.blocked_by_dependency is None
 
-    def test_unknown_dependency_does_not_block(self, hass):
+    def test_unknown_dependency_does_not_block(self, mock_hass):
         """Depending on a non-existent device does not block."""
-        heater = _make_switch(hass, "heater", "Heater", depends_on=["nonexistent"])
+        heater = _make_switch(mock_hass, "heater", "Heater", depends_on=["nonexistent"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(heater)
 
         # Unknown device — don't block
         assert heater.can_activate() is True
 
-    def test_parent_below_child_priority(self, hass):
+    def test_parent_below_child_priority(self, mock_hass):
         """Even if parent has lower priority (higher number), dependency still works."""
-        pump = _make_switch(hass, "pump", "Pump", priority=5)
-        heater = _make_switch(hass, "heater", "Heater", priority=1, depends_on=["pump"])
+        pump = _make_switch(mock_hass, "pump", "Pump", priority=5)
+        heater = _make_switch(mock_hass, "heater", "Heater", priority=1, depends_on=["pump"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(pump)
         controller.register_device(heater)
 
@@ -303,13 +303,13 @@ class TestDependencyLifecycle:
         pump._status.state = DeviceState.ACTIVE
         assert heater.can_activate() is True
 
-    def test_chain_dependency(self, hass):
+    def test_chain_dependency(self, mock_hass):
         """A→B→C: C can only activate when both A and B are active."""
-        a = _make_switch(hass, "a", "A", priority=1)
-        b = _make_switch(hass, "b", "B", priority=2, depends_on=["a"])
-        c = _make_switch(hass, "c", "C", priority=3, depends_on=["b"])
+        a = _make_switch(mock_hass, "a", "A", priority=1)
+        b = _make_switch(mock_hass, "b", "B", priority=2, depends_on=["a"])
+        c = _make_switch(mock_hass, "c", "C", priority=3, depends_on=["b"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         for d in [a, b, c]:
             controller.register_device(d)
 
@@ -334,26 +334,26 @@ class TestDependencyLifecycle:
 class TestSiblingDependencies:
     """B and C both depend on A — independent of each other."""
 
-    def test_siblings_both_blocked(self, hass):
+    def test_siblings_both_blocked(self, mock_hass):
         """Both siblings blocked when parent inactive."""
-        parent = _make_switch(hass, "hp", "Heat Pump", priority=1)
-        circ = _make_switch(hass, "circ", "Circulation", priority=2, depends_on=["hp"])
-        valve = _make_switch(hass, "valve", "Valve", priority=3, depends_on=["hp"])
+        parent = _make_switch(mock_hass, "hp", "Heat Pump", priority=1)
+        circ = _make_switch(mock_hass, "circ", "Circulation", priority=2, depends_on=["hp"])
+        valve = _make_switch(mock_hass, "valve", "Valve", priority=3, depends_on=["hp"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         for d in [parent, circ, valve]:
             controller.register_device(d)
 
         assert circ.can_activate() is False
         assert valve.can_activate() is False
 
-    def test_siblings_both_unblocked(self, hass):
+    def test_siblings_both_unblocked(self, mock_hass):
         """Both siblings can activate when parent active."""
-        parent = _make_switch(hass, "hp", "Heat Pump", priority=1)
-        circ = _make_switch(hass, "circ", "Circulation", priority=2, depends_on=["hp"])
-        valve = _make_switch(hass, "valve", "Valve", priority=3, depends_on=["hp"])
+        parent = _make_switch(mock_hass, "hp", "Heat Pump", priority=1)
+        circ = _make_switch(mock_hass, "circ", "Circulation", priority=2, depends_on=["hp"])
+        valve = _make_switch(mock_hass, "valve", "Valve", priority=3, depends_on=["hp"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         for d in [parent, circ, valve]:
             controller.register_device(d)
 
@@ -361,13 +361,13 @@ class TestSiblingDependencies:
         assert circ.can_activate() is True
         assert valve.can_activate() is True
 
-    def test_sibling_independence(self, hass):
+    def test_sibling_independence(self, mock_hass):
         """Deactivating one sibling doesn't affect the other."""
-        parent = _make_switch(hass, "hp", "Heat Pump", priority=1)
-        circ = _make_switch(hass, "circ", "Circulation", priority=2, depends_on=["hp"])
-        valve = _make_switch(hass, "valve", "Valve", priority=3, depends_on=["hp"])
+        parent = _make_switch(mock_hass, "hp", "Heat Pump", priority=1)
+        circ = _make_switch(mock_hass, "circ", "Circulation", priority=2, depends_on=["hp"])
+        valve = _make_switch(mock_hass, "valve", "Valve", priority=3, depends_on=["hp"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         for d in [parent, circ, valve]:
             controller.register_device(d)
 
@@ -379,14 +379,14 @@ class TestSiblingDependencies:
         circ._status.state = DeviceState.IDLE
         assert valve.can_activate() is True
 
-    def test_get_dependents_siblings(self, hass):
+    def test_get_dependents_siblings(self, mock_hass):
         """get_dependents returns all siblings."""
-        parent = _make_switch(hass, "hp", "Heat Pump")
-        circ = _make_switch(hass, "circ", "Circulation", depends_on=["hp"])
-        valve = _make_switch(hass, "valve", "Valve", depends_on=["hp"])
-        other = _make_switch(hass, "other", "Other")
+        parent = _make_switch(mock_hass, "hp", "Heat Pump")
+        circ = _make_switch(mock_hass, "circ", "Circulation", depends_on=["hp"])
+        valve = _make_switch(mock_hass, "valve", "Valve", depends_on=["hp"])
+        other = _make_switch(mock_hass, "other", "Other")
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         for d in [parent, circ, valve, other]:
             controller.register_device(d)
 
@@ -401,10 +401,10 @@ class TestSiblingDependencies:
 class TestEdgeCases:
     """Edge cases that should be handled gracefully."""
 
-    def test_self_dependency_ignored(self, hass):
+    def test_self_dependency_ignored(self, mock_hass):
         """Device depending on itself should not block."""
-        device = _make_switch(hass, "a", "A", depends_on=["a"])
-        controller = _make_controller(hass)
+        device = _make_switch(mock_hass, "a", "A", depends_on=["a"])
+        controller = _make_controller(mock_hass)
         controller.register_device(device)
 
         # Self-reference: device looks itself up, sees it's not active
@@ -416,12 +416,12 @@ class TestEdgeCases:
         errors = controller.validate_dependencies()
         assert len(errors) > 0  # Self-reference IS circular
 
-    def test_remove_parent_unblocks_child(self, hass):
+    def test_remove_parent_unblocks_child(self, mock_hass):
         """Unregistering parent should not crash children."""
-        parent = _make_switch(hass, "pump", "Pump")
-        child = _make_switch(hass, "heater", "Heater", depends_on=["pump"])
+        parent = _make_switch(mock_hass, "pump", "Pump")
+        child = _make_switch(mock_hass, "heater", "Heater", depends_on=["pump"])
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(parent)
         controller.register_device(child)
 
@@ -433,19 +433,19 @@ class TestEdgeCases:
         # Child should now be able to activate (unknown dep = don't block)
         assert child.can_activate() is True
 
-    def test_empty_depends_on(self, hass):
+    def test_empty_depends_on(self, mock_hass):
         """Empty depends_on list should not block."""
-        device = _make_switch(hass, "a", "A")
+        device = _make_switch(mock_hass, "a", "A")
         device.depends_on = []
 
-        controller = _make_controller(hass)
+        controller = _make_controller(mock_hass)
         controller.register_device(device)
 
         assert device.can_activate() is True
         assert device.blocked_by_dependency is None
 
-    def test_dependency_with_no_controller(self, hass):
+    def test_dependency_with_no_controller(self, mock_hass):
         """Device with depends_on but no controller reference."""
-        device = _make_switch(hass, "a", "A", depends_on=["b"])
+        device = _make_switch(mock_hass, "a", "A", depends_on=["b"])
         # Don't register — no controller reference
         assert device.can_activate() is True  # No controller = can't check = allow

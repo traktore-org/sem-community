@@ -11,7 +11,7 @@ from custom_components.solar_energy_management.diagnostics import (
 
 
 @pytest.fixture
-def hass(tmp_path):
+def mock_hass(tmp_path):
     hass = MagicMock()
     # v1.6.11 ``_get_recent_sem_logs`` reads
     # ``hass.config.config_dir / home-assistant.log``. Point it at a
@@ -73,11 +73,11 @@ def coordinator():
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_returns_data(hass, entry, coordinator):
+async def test_diagnostics_returns_data(mock_hass, entry, coordinator):
     """Diagnostics should return structured data."""
     entry.runtime_data = coordinator
-    hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
-    result = await async_get_config_entry_diagnostics(hass, entry)
+    mock_hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
+    result = await async_get_config_entry_diagnostics(mock_hass, entry)
 
     assert "config_entry" in result
     assert "coordinator" in result
@@ -89,11 +89,11 @@ async def test_diagnostics_returns_data(hass, entry, coordinator):
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_redacts_sensitive_fields(hass, entry, coordinator):
+async def test_diagnostics_redacts_sensitive_fields(mock_hass, entry, coordinator):
     """Diagnostics should redact entity ID fields."""
     entry.runtime_data = coordinator
-    hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
-    result = await async_get_config_entry_diagnostics(hass, entry)
+    mock_hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
+    result = await async_get_config_entry_diagnostics(mock_hass, entry)
 
     config_data = result["config_entry"]["data"]
     # Redacted fields should be "**REDACTED**"
@@ -104,34 +104,34 @@ async def test_diagnostics_redacts_sensitive_fields(hass, entry, coordinator):
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_power_values(hass, entry, coordinator):
+async def test_diagnostics_power_values(mock_hass, entry, coordinator):
     """Diagnostics should include current power values."""
     entry.runtime_data = coordinator
-    hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
-    result = await async_get_config_entry_diagnostics(hass, entry)
+    mock_hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
+    result = await async_get_config_entry_diagnostics(mock_hass, entry)
 
     assert result["power"]["solar_w"] == 5000.0
     assert result["power"]["battery_soc"] == 72.0
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_yearly_environmental(hass, entry, coordinator):
+async def test_diagnostics_yearly_environmental(mock_hass, entry, coordinator):
     """Diagnostics should include yearly environmental data."""
     entry.runtime_data = coordinator
-    hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
-    result = await async_get_config_entry_diagnostics(hass, entry)
+    mock_hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
+    result = await async_get_config_entry_diagnostics(mock_hass, entry)
 
     assert result["energy_yearly"]["co2_avoided_kg"] == 1.7
     assert result["energy_yearly"]["trees_equivalent"] == 0.1
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_empty_coordinator_data(hass, entry, coordinator):
+async def test_diagnostics_empty_coordinator_data(mock_hass, entry, coordinator):
     """Diagnostics should handle empty coordinator data gracefully."""
     coordinator.data = None
     entry.runtime_data = coordinator
-    hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
-    result = await async_get_config_entry_diagnostics(hass, entry)
+    mock_hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
+    result = await async_get_config_entry_diagnostics(mock_hass, entry)
 
     assert result["power"]["solar_w"] is None
     assert result["charging"]["state"] == "None"
@@ -160,80 +160,80 @@ from custom_components.solar_energy_management.diagnostics import (
 )
 
 
-def _write_log(hass, lines: list[str]) -> Path:
+def _write_log(mock_hass, lines: list[str]) -> Path:
     """Write a synthetic ``home-assistant.log`` into the temp config_dir."""
-    p = Path(hass.config.config_dir) / "home-assistant.log"
+    p = Path(mock_hass.config.config_dir) / "home-assistant.log"
     p.write_text("\n".join(lines) + "\n")
     return p
 
 
 @pytest.mark.asyncio
-async def test_recent_logs_returns_only_sem_lines(hass):
+async def test_recent_logs_returns_only_sem_lines(mock_hass):
     """Filter must select only lines that mention
     ``solar_energy_management`` — other integrations' chatter is
     excluded."""
-    _write_log(hass, [
+    _write_log(mock_hass, [
         "2026-05-31 17:42:01.000 INFO (MainThread) [homeassistant.core] starting",
         "2026-05-31 17:42:02.000 DEBUG (MainThread) [custom_components.solar_energy_management.coordinator] cycle ok",
         "2026-05-31 17:42:03.000 WARNING (MainThread) [homeassistant.components.wled] WLED unreachable",
         "2026-05-31 17:42:04.000 INFO (MainThread) [custom_components.solar_energy_management.devices.base] Charging session stopped via keba.disable",
     ])
-    out = await _get_recent_sem_logs(hass)
+    out = await _get_recent_sem_logs(mock_hass)
     assert len(out) == 2
     assert all("solar_energy_management" in line for line in out)
 
 
 @pytest.mark.asyncio
-async def test_recent_logs_caps_lines(hass):
+async def test_recent_logs_caps_lines(mock_hass):
     """Even if the log has thousands of SEM lines, only the last
     ``_LOG_MAX_LINES`` (80) are returned."""
     many = [
         f"2026-05-31 17:42:00.{i:03d} INFO (MainThread) [custom_components.solar_energy_management] msg {i}"
         for i in range(_LOG_MAX_LINES * 3)
     ]
-    _write_log(hass, many)
-    out = await _get_recent_sem_logs(hass)
+    _write_log(mock_hass, many)
+    out = await _get_recent_sem_logs(mock_hass)
     assert len(out) == _LOG_MAX_LINES
     # Last line returned is the actual last matching line.
     assert f"msg {_LOG_MAX_LINES * 3 - 1}" in out[-1]
 
 
 @pytest.mark.asyncio
-async def test_recent_logs_missing_file_returns_placeholder(hass):
+async def test_recent_logs_missing_file_returns_placeholder(mock_hass):
     """Supervisor installs and other no-file setups must not crash
     and must explain themselves to the bug reporter."""
     # No log file written → ``_get_recent_sem_logs`` returns a single
     # explanatory line instead of raising.
-    out = await _get_recent_sem_logs(hass)
+    out = await _get_recent_sem_logs(mock_hass)
     assert len(out) == 1
     assert "no flat log file" in out[0]
     assert "ha core logs" in out[0]
 
 
 @pytest.mark.asyncio
-async def test_recent_logs_truncates_huge_file(hass):
+async def test_recent_logs_truncates_huge_file(mock_hass):
     """Files bigger than ``_LOG_TAIL_KB`` are only tailed — we must
     not OOM on multi-GB logs. The leading partial line gets discarded
     so we never emit a half-line."""
     # Write a > 2 MB log: padding non-SEM lines + SEM lines at the end.
     padding = "x" * (_LOG_TAIL_KB * 1024 + 50_000)  # bigger than the tail
     sem_marker = "2026-05-31 17:42:00.999 INFO [custom_components.solar_energy_management] late"
-    _write_log(hass, [padding, sem_marker])
-    out = await _get_recent_sem_logs(hass)
+    _write_log(mock_hass, [padding, sem_marker])
+    out = await _get_recent_sem_logs(mock_hass)
     # The SEM line near the end MUST be returned.
     assert any("late" in line for line in out)
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_includes_recent_logs(hass, entry, coordinator):
+async def test_diagnostics_includes_recent_logs(mock_hass, entry, coordinator):
     """End-to-end: the diagnostics dump now carries a ``recent_logs``
     key. Bug reports come pre-loaded with surrounding context."""
-    _write_log(hass, [
+    _write_log(mock_hass, [
         "2026-05-31 17:42:00.000 INFO [custom_components.solar_energy_management.coordinator] success: True",
     ])
     entry.runtime_data = coordinator
-    hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
-    result = await async_get_config_entry_diagnostics(hass, entry)
+    mock_hass.data = {"solar_energy_management": {entry.entry_id: coordinator}}
+    result = await async_get_config_entry_diagnostics(mock_hass, entry)
     assert "recent_logs" in result
     assert isinstance(result["recent_logs"], list)
     assert any("success: True" in line for line in result["recent_logs"])

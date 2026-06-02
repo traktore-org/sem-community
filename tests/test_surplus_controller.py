@@ -69,47 +69,47 @@ def _make_device(
 class TestSurplusControllerInit:
     """Test SurplusController initialization."""
 
-    def test_init_defaults(self, hass):
-        sc = SurplusController(hass)
+    def test_init_defaults(self, mock_hass):
+        sc = SurplusController(mock_hass)
         assert sc.price_responsive_mode is False
         assert sc.regulation_offset == DEFAULT_REGULATION_OFFSET
         assert sc.allocation_data.total_surplus_w == 0.0
 
-    def test_init_custom_offset(self, hass):
-        sc = SurplusController(hass, regulation_offset=100)
+    def test_init_custom_offset(self, mock_hass):
+        sc = SurplusController(mock_hass, regulation_offset=100)
         assert sc.regulation_offset == 100
 
 
 class TestDeviceRegistration:
     """Test device register/unregister/get."""
 
-    def test_register_and_get_device(self, hass):
-        sc = SurplusController(hass)
+    def test_register_and_get_device(self, mock_hass):
+        sc = SurplusController(mock_hass)
         dev = _make_device(device_id="hw1", name="Hot Water")
         sc.register_device(dev)
         assert sc.get_device("hw1") is dev
 
-    def test_unregister_device(self, hass):
-        sc = SurplusController(hass)
+    def test_unregister_device(self, mock_hass):
+        sc = SurplusController(mock_hass)
         dev = _make_device(device_id="hw1")
         sc.register_device(dev)
         sc.unregister_device("hw1")
         assert sc.get_device("hw1") is None
 
-    def test_unregister_nonexistent(self, hass):
-        sc = SurplusController(hass)
+    def test_unregister_nonexistent(self, mock_hass):
+        sc = SurplusController(mock_hass)
         sc.unregister_device("nonexistent")  # Should not raise
 
-    def test_get_device_not_found(self, hass):
-        sc = SurplusController(hass)
+    def test_get_device_not_found(self, mock_hass):
+        sc = SurplusController(mock_hass)
         assert sc.get_device("missing") is None
 
 
 class TestGetDevicesSorted:
     """Test priority sorting and filtering."""
 
-    def test_sorted_by_priority(self, hass):
-        sc = SurplusController(hass)
+    def test_sorted_by_priority(self, mock_hass):
+        sc = SurplusController(mock_hass)
         d1 = _make_device(device_id="d1", priority=5)
         d2 = _make_device(device_id="d2", priority=1)
         d3 = _make_device(device_id="d3", priority=3)
@@ -119,8 +119,8 @@ class TestGetDevicesSorted:
         sorted_devs = sc.get_devices_sorted()
         assert [d.device_id for d in sorted_devs] == ["d2", "d3", "d1"]
 
-    def test_excludes_disabled(self, hass):
-        sc = SurplusController(hass)
+    def test_excludes_disabled(self, mock_hass):
+        sc = SurplusController(mock_hass)
         d1 = _make_device(device_id="d1", enabled=True, priority=1)
         d2 = _make_device(device_id="d2", enabled=False, priority=2)
         sc.register_device(d1)
@@ -129,8 +129,8 @@ class TestGetDevicesSorted:
         assert len(sorted_devs) == 1
         assert sorted_devs[0].device_id == "d1"
 
-    def test_excludes_externally_managed(self, hass):
-        sc = SurplusController(hass)
+    def test_excludes_externally_managed(self, mock_hass):
+        sc = SurplusController(mock_hass)
         d1 = _make_device(device_id="d1", managed_externally=False, priority=1)
         d2 = _make_device(device_id="d2", managed_externally=True, priority=2)
         sc.register_device(d1)
@@ -144,8 +144,8 @@ class TestUpdateActivation:
     """Test device activation by priority."""
 
     @pytest.mark.asyncio
-    async def test_activates_by_priority(self, hass):
-        sc = SurplusController(hass)
+    async def test_activates_by_priority(self, mock_hass):
+        sc = SurplusController(mock_hass)
 
         d1 = _make_device(device_id="d1", priority=1, min_power=500)
         d1.activate = AsyncMock(return_value=500.0)
@@ -163,8 +163,8 @@ class TestUpdateActivation:
         assert result.active_devices == 2
 
     @pytest.mark.asyncio
-    async def test_skips_device_below_threshold(self, hass):
-        sc = SurplusController(hass)
+    async def test_skips_device_below_threshold(self, mock_hass):
+        sc = SurplusController(mock_hass)
 
         d1 = _make_device(device_id="d1", priority=1, min_power=800)
         d1.activate = AsyncMock(return_value=800.0)
@@ -184,8 +184,8 @@ class TestUpdateDeactivation:
     """Test LIFO deactivation when surplus drops."""
 
     @pytest.mark.asyncio
-    async def test_deactivation_lifo(self, hass):
-        sc = SurplusController(hass)
+    async def test_deactivation_lifo(self, mock_hass):
+        sc = SurplusController(mock_hass)
 
         # Both devices active; adjust_power returns MORE than current consumption
         # so remaining_surplus goes very negative, triggering LIFO deactivation.
@@ -213,39 +213,39 @@ class TestUpdateDeactivation:
 class TestPriceAdjustment:
     """Test price-responsive surplus adjustments."""
 
-    def _make_controller(self, hass):
-        sc = SurplusController(hass)
+    def _make_controller(self, mock_hass):
+        sc = SurplusController(mock_hass)
         sc.price_responsive_mode = True
         return sc
 
-    def test_negative_price_adds_10kw(self, hass):
-        sc = self._make_controller(hass)
+    def test_negative_price_adds_10kw(self, mock_hass):
+        sc = self._make_controller(mock_hass)
         result = sc._apply_price_adjustment(500.0, "negative")
         assert result == 10500.0
 
-    def test_cheap_price_adds_3kw(self, hass):
-        sc = self._make_controller(hass)
+    def test_cheap_price_adds_3kw(self, mock_hass):
+        sc = self._make_controller(mock_hass)
         result = sc._apply_price_adjustment(500.0, "cheap")
         assert result == 3500.0
 
-    def test_expensive_price_reduces_by_500(self, hass):
-        sc = self._make_controller(hass)
+    def test_expensive_price_reduces_by_500(self, mock_hass):
+        sc = self._make_controller(mock_hass)
         result = sc._apply_price_adjustment(1000.0, "expensive")
         assert result == 500.0
 
-    def test_expensive_price_floors_at_zero(self, hass):
-        sc = self._make_controller(hass)
+    def test_expensive_price_floors_at_zero(self, mock_hass):
+        sc = self._make_controller(mock_hass)
         result = sc._apply_price_adjustment(200.0, "expensive")
         assert result == 0.0
 
-    def test_normal_price_no_change(self, hass):
-        sc = self._make_controller(hass)
+    def test_normal_price_no_change(self, mock_hass):
+        sc = self._make_controller(mock_hass)
         result = sc._apply_price_adjustment(1000.0, "normal")
         assert result == 1000.0
 
     @pytest.mark.asyncio
-    async def test_price_applied_during_update(self, hass):
-        sc = self._make_controller(hass)
+    async def test_price_applied_during_update(self, mock_hass):
+        sc = self._make_controller(mock_hass)
         dev = _make_device(device_id="d1", priority=1, min_power=100)
         dev.activate = AsyncMock(return_value=100.0)
         sc.register_device(dev)
@@ -259,8 +259,8 @@ class TestDeactivateAll:
     """Test emergency deactivation."""
 
     @pytest.mark.asyncio
-    async def test_deactivate_all(self, hass):
-        sc = SurplusController(hass)
+    async def test_deactivate_all(self, mock_hass):
+        sc = SurplusController(mock_hass)
 
         d1 = _make_device(device_id="d1", priority=1, is_active=True)
         d2 = _make_device(device_id="d2", priority=2, is_active=True)
@@ -329,9 +329,9 @@ class TestDeactivationAntiFlicker:
     """Test that deactivation respects anti-flicker (min_on_time)."""
 
     @pytest.mark.asyncio
-    async def test_antiflicker_blocks_deactivation(self, hass):
+    async def test_antiflicker_blocks_deactivation(self, mock_hass):
         """When device.deactivate() doesn't flip is_active, surplus should NOT be recovered."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
 
         # Device is active but anti-flicker will block deactivation
         d1 = _make_device(
@@ -355,9 +355,9 @@ class TestDeactivationAntiFlicker:
         assert result.allocations[0].state != "idle"
 
     @pytest.mark.asyncio
-    async def test_successful_deactivation_recovers_surplus(self, hass):
+    async def test_successful_deactivation_recovers_surplus(self, mock_hass):
         """When deactivation succeeds, surplus IS recovered for other devices."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
 
         d1 = _make_device(
             device_id="d1", priority=1, min_power=200,
@@ -387,9 +387,9 @@ class TestDeltaTracking:
     """Test that active device consumption changes are tracked correctly (Step 3)."""
 
     @pytest.mark.asyncio
-    async def test_active_device_increase_reduces_remaining(self, hass):
+    async def test_active_device_increase_reduces_remaining(self, mock_hass):
         """An active device increasing consumption must reduce surplus for lower-priority devices."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
 
         # d1 is active, consuming 500W, will increase to 800W
         d1 = _make_device(
@@ -416,9 +416,9 @@ class TestDeltaTracking:
         assert result.active_devices == 2
 
     @pytest.mark.asyncio
-    async def test_active_device_blocks_lower_priority(self, hass):
+    async def test_active_device_blocks_lower_priority(self, mock_hass):
         """If d1 consumes most surplus, d2 should NOT activate."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
 
         d1 = _make_device(
             device_id="d1", priority=1, min_power=500,
@@ -445,11 +445,11 @@ class TestScheduleDeviceBudgetLeak:
     """Test that force-started ScheduleDevice subtracts from surplus (Step 4)."""
 
     @pytest.mark.asyncio
-    async def test_force_start_subtracts_consumption(self, hass):
+    async def test_force_start_subtracts_consumption(self, mock_hass):
         """Force-started device should subtract from surplus and update allocation."""
         from custom_components.solar_energy_management.devices.base import ScheduleDevice
 
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
 
         # Create a mock ScheduleDevice
         sched = MagicMock(spec=ScheduleDevice)
@@ -495,9 +495,9 @@ class TestOffpeakActivation:
     """Test off-peak forced activation/deactivation of devices with runtime deficit."""
 
     @pytest.mark.asyncio
-    async def test_offpeak_activates_device_with_deficit(self, hass):
+    async def test_offpeak_activates_device_with_deficit(self, mock_hass):
         """price_level='cheap', device needs runtime => activated."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
         dev = _make_device(device_id="hw1", priority=5, min_power=2000)
         dev.needs_offpeak_activation = True
         dev._offpeak_forced = False
@@ -512,9 +512,9 @@ class TestOffpeakActivation:
         assert result.active_devices >= 1
 
     @pytest.mark.asyncio
-    async def test_offpeak_skips_during_ht(self, hass):
+    async def test_offpeak_skips_during_ht(self, mock_hass):
         """price_level='normal' => no forced activation."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
         dev = _make_device(device_id="hw1", priority=5, min_power=2000)
         dev.needs_offpeak_activation = True
         dev._offpeak_forced = False
@@ -526,9 +526,9 @@ class TestOffpeakActivation:
         dev.activate.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_offpeak_deactivates_on_tariff_change(self, hass):
+    async def test_offpeak_deactivates_on_tariff_change(self, mock_hass):
         """Forced device deactivated when HT starts."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
         dev = _make_device(
             device_id="hw1", priority=5, min_power=2000,
             is_active=True, consumption=2000.0,
@@ -543,9 +543,9 @@ class TestOffpeakActivation:
         assert dev._offpeak_forced is False
 
     @pytest.mark.asyncio
-    async def test_offpeak_respects_antiflicker(self, hass):
+    async def test_offpeak_respects_antiflicker(self, mock_hass):
         """Deactivation blocked by anti-flicker => stays active gracefully."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
         dev = _make_device(
             device_id="hw1", priority=5, min_power=2000,
             is_active=True, consumption=2000.0,
@@ -562,9 +562,9 @@ class TestOffpeakActivation:
         assert dev._offpeak_forced is True
 
     @pytest.mark.asyncio
-    async def test_offpeak_skips_already_active(self, hass):
+    async def test_offpeak_skips_already_active(self, mock_hass):
         """Surplus-activated device should not be double-activated by off-peak."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
         dev = _make_device(
             device_id="hw1", priority=5, min_power=2000,
             is_active=True, consumption=2000.0,
@@ -584,9 +584,9 @@ class TestEMASmoothing:
     """Test exponential moving average smoothing of surplus input (Step 5)."""
 
     @pytest.mark.asyncio
-    async def test_first_call_seeds_directly(self, hass):
+    async def test_first_call_seeds_directly(self, mock_hass):
         """First update should use raw value (no smoothing)."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
         dev = _make_device(device_id="d1", priority=1, min_power=100)
         dev.activate = AsyncMock(return_value=100.0)
         sc.register_device(dev)
@@ -596,9 +596,9 @@ class TestEMASmoothing:
         assert result.distributable_surplus_w == 950.0
 
     @pytest.mark.asyncio
-    async def test_smoothing_dampens_spike(self, hass):
+    async def test_smoothing_dampens_spike(self, mock_hass):
         """Second update with lower value should be smoothed."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
         dev = _make_device(device_id="d1", priority=1, min_power=100)
         dev.activate = AsyncMock(return_value=100.0)
         sc.register_device(dev)
@@ -612,9 +612,9 @@ class TestEMASmoothing:
         assert result.distributable_surplus_w == 1500.0
 
     @pytest.mark.asyncio
-    async def test_raw_surplus_unsmoothed(self, hass):
+    async def test_raw_surplus_unsmoothed(self, mock_hass):
         """total_surplus_w should remain the raw (unsmoothed) value."""
-        sc = SurplusController(hass)
+        sc = SurplusController(mock_hass)
         dev = _make_device(device_id="d1", priority=1, min_power=100)
         dev.activate = AsyncMock(return_value=100.0)
         sc.register_device(dev)

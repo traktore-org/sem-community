@@ -23,30 +23,30 @@ def _make_state(value, unit="W"):
     return state
 
 
-def _make_reader(hass, config=None):
+def _make_reader(mock_hass, config=None):
     """Create a SensorReader with mocked hass."""
-    reader = SensorReader(hass, config or {})
+    reader = SensorReader(mock_hass, config or {})
     return reader
 
 
 class TestReadSensorsSum:
     """Test _read_sensors_sum helper."""
 
-    def test_sum_two_sensors(self, hass):
+    def test_sum_two_sensors(self, mock_hass):
         def mock_get(entity_id):
             return {
                 "sensor.inv1_power": _make_state(3000),
                 "sensor.inv2_power": _make_state(2000),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
         total = reader._read_sensors_sum(
             ["sensor.inv1_power", "sensor.inv2_power"], "solar"
         )
         assert total == 5000.0
 
-    def test_sum_three_sensors(self, hass):
+    def test_sum_three_sensors(self, mock_hass):
         def mock_get(entity_id):
             return {
                 "sensor.inv1_power": _make_state(1000),
@@ -54,14 +54,14 @@ class TestReadSensorsSum:
                 "sensor.inv3_power": _make_state(3000),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
         total = reader._read_sensors_sum(
             ["sensor.inv1_power", "sensor.inv2_power", "sensor.inv3_power"], "solar"
         )
         assert total == 6000.0
 
-    def test_sum_with_unavailable_sensor(self, hass):
+    def test_sum_with_unavailable_sensor(self, mock_hass):
         """Unavailable sensor contributes 0, others still counted."""
         def mock_get(entity_id):
             if entity_id == "sensor.inv2_power":
@@ -73,14 +73,14 @@ class TestReadSensorsSum:
                 "sensor.inv1_power": _make_state(3000),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
         total = reader._read_sensors_sum(
             ["sensor.inv1_power", "sensor.inv2_power"], "solar"
         )
         assert total == 3000.0
 
-    def test_sum_with_kw_conversion(self, hass):
+    def test_sum_with_kw_conversion(self, mock_hass):
         """Sensors in kW are converted to W before summing."""
         def mock_get(entity_id):
             return {
@@ -88,22 +88,22 @@ class TestReadSensorsSum:
                 "sensor.inv2_power": _make_state(2.5, "kW"),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
         total = reader._read_sensors_sum(
             ["sensor.inv1_power", "sensor.inv2_power"], "solar"
         )
         assert total == 5500.0
 
-    def test_sum_empty_list(self, hass):
-        reader = _make_reader(hass)
+    def test_sum_empty_list(self, mock_hass):
+        reader = _make_reader(mock_hass)
         total = reader._read_sensors_sum([], "solar")
         assert total == 0.0
 
-    def test_sum_single_sensor_same_as_read(self, hass):
+    def test_sum_single_sensor_same_as_read(self, mock_hass):
         """Single sensor in list gives same result as _read_sensor."""
-        hass.states.get = MagicMock(return_value=_make_state(4200))
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(return_value=_make_state(4200))
+        reader = _make_reader(mock_hass)
         sum_result = reader._read_sensors_sum(["sensor.inv1_power"], "solar")
         single_result = reader._read_sensor("sensor.inv1_power", "solar")
         assert sum_result == single_result == 4200.0
@@ -112,7 +112,7 @@ class TestReadSensorsSum:
 class TestMultiSolarAggregation:
     """Test solar power aggregation with multiple inverters."""
 
-    def test_two_inverters_summed(self, hass):
+    def test_two_inverters_summed(self, mock_hass):
         """Two solar inverters → power is summed."""
         def mock_get(entity_id):
             return {
@@ -120,8 +120,8 @@ class TestMultiSolarAggregation:
                 "sensor.inverter2_power": _make_state(2000),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             solar_power="sensor.inverter1_power",
@@ -134,10 +134,10 @@ class TestMultiSolarAggregation:
         readings = reader._read_from_energy_dashboard()
         assert readings.solar_power == 5000.0
 
-    def test_single_inverter_unchanged(self, hass):
+    def test_single_inverter_unchanged(self, mock_hass):
         """Single inverter → same behavior as before."""
-        hass.states.get = MagicMock(return_value=_make_state(4000))
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(return_value=_make_state(4000))
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             solar_power="sensor.solar_power",
@@ -153,7 +153,7 @@ class TestMultiSolarAggregation:
 class TestMultiBatteryAggregation:
     """Test battery power aggregation with multiple battery units."""
 
-    def test_two_batteries_summed(self, hass):
+    def test_two_batteries_summed(self, mock_hass):
         """Two batteries → power is summed."""
         def mock_get(entity_id):
             return {
@@ -161,8 +161,8 @@ class TestMultiBatteryAggregation:
                 "sensor.sessy2_power": _make_state(300),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             battery_power="sensor.sessy1_power",
@@ -177,7 +177,7 @@ class TestMultiBatteryAggregation:
         readings = reader._read_from_energy_dashboard()
         assert readings.battery_power == 800.0
 
-    def test_two_batteries_one_charging_one_discharging(self, hass):
+    def test_two_batteries_one_charging_one_discharging(self, mock_hass):
         """Mixed: one battery charging (+500), one discharging (-300)."""
         def mock_get(entity_id):
             return {
@@ -185,8 +185,8 @@ class TestMultiBatteryAggregation:
                 "sensor.sessy2_power": _make_state(-300),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             battery_power="sensor.sessy1_power",
@@ -200,10 +200,10 @@ class TestMultiBatteryAggregation:
         # Net: 500 + (-300) = 200W charging
         assert readings.battery_power == 200.0
 
-    def test_single_battery_unchanged(self, hass):
+    def test_single_battery_unchanged(self, mock_hass):
         """Single battery → same behavior as before."""
-        hass.states.get = MagicMock(return_value=_make_state(-400))
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(return_value=_make_state(-400))
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             battery_power="sensor.battery_power",
@@ -220,7 +220,7 @@ class TestMultiBatteryAggregation:
 class TestBatterySocAverage:
     """Test battery SOC averaging across multiple units."""
 
-    def test_two_batteries_soc_averaged(self, hass):
+    def test_two_batteries_soc_averaged(self, mock_hass):
         """Two batteries with auto-detected SOC → averaged."""
         def mock_get(entity_id):
             states = {
@@ -231,8 +231,8 @@ class TestBatterySocAverage:
             }
             return states.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             battery_power="sensor.sessy_1_power",
@@ -246,7 +246,7 @@ class TestBatterySocAverage:
         # Average of 80 and 60
         assert readings.battery_soc == 70.0
 
-    def test_soc_with_one_unavailable(self, hass):
+    def test_soc_with_one_unavailable(self, mock_hass):
         """One SOC unavailable → uses the available one only."""
         def mock_get(entity_id):
             states = {
@@ -257,8 +257,8 @@ class TestBatterySocAverage:
             }
             return states.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             battery_power="sensor.sessy_1_power",
@@ -271,7 +271,7 @@ class TestBatterySocAverage:
         readings = reader._read_from_energy_dashboard()
         assert readings.battery_soc == 80.0
 
-    def test_config_soc_overrides_average(self, hass):
+    def test_config_soc_overrides_average(self, mock_hass):
         """Explicit SOC config takes precedence over averaging."""
         def mock_get(entity_id):
             states = {
@@ -281,8 +281,8 @@ class TestBatterySocAverage:
             }
             return states.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass, {"battery_soc_sensor": "sensor.custom_soc"})
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass, {"battery_soc_sensor": "sensor.custom_soc"})
 
         ed = EnergyDashboardConfig(
             battery_power="sensor.sessy_1_power",
@@ -300,7 +300,7 @@ class TestBatterySocAverage:
 class TestFullMultiDeviceSetup:
     """Integration test: full multi-device setup like issue #112."""
 
-    def test_issue_112_growatt_sessy_wallbox(self, hass):
+    def test_issue_112_growatt_sessy_wallbox(self, mock_hass):
         """Simulate the #112 user: 2 Growatt inverters + 2 Sessy batteries."""
         def mock_get(entity_id):
             states = {
@@ -319,8 +319,8 @@ class TestFullMultiDeviceSetup:
             }
             return states.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             # Primary (first) sensors
@@ -357,7 +357,7 @@ class TestFullMultiDeviceSetup:
         # EV: single sensor, unchanged
         assert readings.ev_power == 4000.0
 
-    def test_full_multi_device_with_multi_grid(self, hass):
+    def test_full_multi_device_with_multi_grid(self, mock_hass):
         """Full setup: 2 inverters + 2 batteries + 2 grid meters + 2 chargers."""
         def mock_get(entity_id):
             states = {
@@ -378,8 +378,8 @@ class TestFullMultiDeviceSetup:
             }
             return states.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass, {
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass, {
             "ev_chargers": [
                 {"id": "c1", "ev_charging_power_sensor": "sensor.charger1_power"},
                 {"id": "c2", "ev_charging_power_sensor": "sensor.charger2_power"},
@@ -416,7 +416,7 @@ class TestFullMultiDeviceSetup:
 class TestMultiGridAggregation:
     """Test grid power aggregation with multiple grid power sensors."""
 
-    def test_two_grid_sensors_summed(self, hass):
+    def test_two_grid_sensors_summed(self, mock_hass):
         """Two grid power sensors → power is summed."""
         def mock_get(entity_id):
             return {
@@ -424,8 +424,8 @@ class TestMultiGridAggregation:
                 "sensor.grid_meter2_power": _make_state(-300),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             grid_import_power="sensor.grid_meter1_power",
@@ -443,7 +443,7 @@ class TestMultiGridAggregation:
         # Sum: -500 + -300 = -800W importing
         assert readings.grid_power == -800.0
 
-    def test_two_grid_sensors_mixed_import_export(self, hass):
+    def test_two_grid_sensors_mixed_import_export(self, mock_hass):
         """One meter importing, one exporting → net is summed."""
         def mock_get(entity_id):
             return {
@@ -451,8 +451,8 @@ class TestMultiGridAggregation:
                 "sensor.grid_meter2_power": _make_state(400),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             grid_import_power="sensor.grid_meter1_power",
@@ -469,10 +469,10 @@ class TestMultiGridAggregation:
         # Net: -1000 + 400 = -600W importing
         assert readings.grid_power == -600.0
 
-    def test_single_grid_sensor_unchanged(self, hass):
+    def test_single_grid_sensor_unchanged(self, mock_hass):
         """Single grid sensor → same behavior as before."""
-        hass.states.get = MagicMock(return_value=_make_state(-750))
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(return_value=_make_state(-750))
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             grid_import_power="sensor.grid_power",
@@ -484,7 +484,7 @@ class TestMultiGridAggregation:
         readings = reader._read_from_energy_dashboard()
         assert readings.grid_power == -750.0
 
-    def test_three_grid_sensors_summed(self, hass):
+    def test_three_grid_sensors_summed(self, mock_hass):
         """Three grid sensors (multi-meter commercial site)."""
         def mock_get(entity_id):
             return {
@@ -493,8 +493,8 @@ class TestMultiGridAggregation:
                 "sensor.meter_l3_power": _make_state(-1000),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             grid_import_power="sensor.meter_l1_power",
@@ -510,7 +510,7 @@ class TestMultiGridAggregation:
         readings = reader._read_from_energy_dashboard()
         assert readings.grid_power == -4500.0
 
-    def test_grid_manual_override_takes_precedence(self, hass):
+    def test_grid_manual_override_takes_precedence(self, mock_hass):
         """Manual grid_import/export_power_entity overrides list aggregation."""
         def mock_get(entity_id):
             return {
@@ -520,8 +520,8 @@ class TestMultiGridAggregation:
                 "sensor.grid_meter2_power": _make_state(-300),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass, {
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass, {
             "grid_import_power_entity": "sensor.manual_import",
             "grid_export_power_entity": "sensor.manual_export",
         })
@@ -540,7 +540,7 @@ class TestMultiGridAggregation:
         # Manual override: export(0) - import(800) = -800
         assert readings.grid_power == -800.0
 
-    def test_grid_with_unavailable_sensor(self, hass):
+    def test_grid_with_unavailable_sensor(self, mock_hass):
         """One grid sensor unavailable → only valid ones counted."""
         def mock_get(entity_id):
             if entity_id == "sensor.grid_meter2_power":
@@ -552,8 +552,8 @@ class TestMultiGridAggregation:
                 "sensor.grid_meter1_power": _make_state(-1200),
             }.get(entity_id)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        reader = _make_reader(hass)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        reader = _make_reader(mock_hass)
 
         ed = EnergyDashboardConfig(
             grid_import_power="sensor.grid_meter1_power",

@@ -417,15 +417,15 @@ class TestReadEnergyDashboardConfig:
     """Test read_energy_dashboard_config() async function."""
 
     @pytest.mark.asyncio
-    async def test_read_energy_dashboard_config_success(self, hass):
+    async def test_read_energy_dashboard_config_success(self, mock_hass):
         async def run_func(func):
             return func()
 
-        hass.async_add_executor_job = AsyncMock(side_effect=run_func)
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=run_func)
 
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=json.dumps(SAMPLE_ENERGY_DATA))):
-                config = await read_energy_dashboard_config(hass)
+                config = await read_energy_dashboard_config(mock_hass)
 
         assert config is not None
         assert config.has_solar is True
@@ -441,41 +441,41 @@ class TestReadEnergyDashboardConfig:
         assert config.ev_energy == "sensor.keba_total_energy"
 
     @pytest.mark.asyncio
-    async def test_read_energy_dashboard_config_no_file(self, hass):
+    async def test_read_energy_dashboard_config_no_file(self, mock_hass):
         async def run_func(func):
             return func()
 
-        hass.async_add_executor_job = AsyncMock(side_effect=run_func)
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=run_func)
 
         with patch("os.path.exists", return_value=False):
-            config = await read_energy_dashboard_config(hass)
+            config = await read_energy_dashboard_config(mock_hass)
 
         assert config is None
 
     @pytest.mark.asyncio
-    async def test_read_energy_dashboard_config_parse_error(self, hass):
+    async def test_read_energy_dashboard_config_parse_error(self, mock_hass):
         async def run_func(func):
             return func()
 
-        hass.async_add_executor_job = AsyncMock(side_effect=run_func)
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=run_func)
 
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data="not valid json {")):
-                config = await read_energy_dashboard_config(hass)
+                config = await read_energy_dashboard_config(mock_hass)
 
         assert config is None
 
     @pytest.mark.asyncio
-    async def test_read_energy_dashboard_config_no_data_section(self, hass):
+    async def test_read_energy_dashboard_config_no_data_section(self, mock_hass):
         async def run_func(func):
             return func()
 
-        hass.async_add_executor_job = AsyncMock(side_effect=run_func)
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=run_func)
         no_data = {"version": 1}
 
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=json.dumps(no_data))):
-                config = await read_energy_dashboard_config(hass)
+                config = await read_energy_dashboard_config(mock_hass)
 
         assert config is None
 
@@ -536,16 +536,16 @@ class TestReadMultiDeviceConfig:
     """Test read_energy_dashboard_config() with multi-device setups."""
 
     @pytest.mark.asyncio
-    async def test_multi_device_full(self, hass):
+    async def test_multi_device_full(self, mock_hass):
         """Full multi-device setup: 2 inverters, 2 tariffs, 2 batteries, 2 wallboxes."""
         async def run_func(func):
             return func()
 
-        hass.async_add_executor_job = AsyncMock(side_effect=run_func)
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=run_func)
 
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=json.dumps(SAMPLE_MULTI_DEVICE_DATA))):
-                config = await read_energy_dashboard_config(hass)
+                config = await read_energy_dashboard_config(mock_hass)
 
         assert config is not None
         # Solar: 2 inverters
@@ -567,16 +567,16 @@ class TestReadMultiDeviceConfig:
         assert config.ev_power == "sensor.wallbox_links_power"
 
     @pytest.mark.asyncio
-    async def test_single_device_backward_compat(self, hass):
+    async def test_single_device_backward_compat(self, mock_hass):
         """Single-device setup still works — lists have exactly one entry."""
         async def run_func(func):
             return func()
 
-        hass.async_add_executor_job = AsyncMock(side_effect=run_func)
+        mock_hass.async_add_executor_job = AsyncMock(side_effect=run_func)
 
         with patch("os.path.exists", return_value=True):
             with patch("builtins.open", mock_open(read_data=json.dumps(SAMPLE_ENERGY_DATA))):
-                config = await read_energy_dashboard_config(hass)
+                config = await read_energy_dashboard_config(mock_hass)
 
         assert config is not None
         assert len(config.solar_power_list) == 1
@@ -633,10 +633,10 @@ class TestValidateEnergyDashboardSensors:
     """Test validate_energy_dashboard_sensors()."""
 
     @pytest.mark.asyncio
-    async def test_validate_sensors_all_valid(self, hass):
+    async def test_validate_sensors_all_valid(self, mock_hass):
         mock_state = MagicMock()
         mock_state.state = "100"
-        hass.states.get = MagicMock(return_value=mock_state)
+        mock_hass.states.get = MagicMock(return_value=mock_state)
 
         config = EnergyDashboardConfig(
             solar_power="sensor.solar_power",
@@ -644,14 +644,14 @@ class TestValidateEnergyDashboardSensors:
             grid_import_power="sensor.grid_power",
             grid_import_energy="sensor.grid_import_energy",
         )
-        results = await validate_energy_dashboard_sensors(hass, config)
+        results = await validate_energy_dashboard_sensors(mock_hass, config)
         assert results["solar_power"] is True
         assert results["solar_energy"] is True
         assert results["grid_import_power"] is True
         assert results["grid_import_energy"] is True
 
     @pytest.mark.asyncio
-    async def test_validate_sensors_some_missing(self, hass):
+    async def test_validate_sensors_some_missing(self, mock_hass):
         def mock_get(entity_id):
             if entity_id == "sensor.solar_power":
                 state = MagicMock()
@@ -659,20 +659,20 @@ class TestValidateEnergyDashboardSensors:
                 return state
             return None
 
-        hass.states.get = MagicMock(side_effect=mock_get)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
 
         config = EnergyDashboardConfig(
             solar_power="sensor.solar_power",
             solar_energy="sensor.solar_energy_missing",
         )
-        results = await validate_energy_dashboard_sensors(hass, config)
+        results = await validate_energy_dashboard_sensors(mock_hass, config)
         assert results["solar_power"] is True
         assert results["solar_energy"] is False
 
     @pytest.mark.asyncio
-    async def test_validate_sensors_not_configured(self, hass):
+    async def test_validate_sensors_not_configured(self, mock_hass):
         config = EnergyDashboardConfig()
-        results = await validate_energy_dashboard_sensors(hass, config)
+        results = await validate_energy_dashboard_sensors(mock_hass, config)
         # All should be False since nothing is configured
         for key, value in results.items():
             assert value is False

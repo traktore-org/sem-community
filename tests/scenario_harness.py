@@ -93,10 +93,20 @@ class ScenarioRun:
     cycles: List[CycleRecord]
 
     def cycles_where(self, strategy_substring: str) -> List[CycleRecord]:
+        """Cycles where ``canonical_strategy`` contains the substring.
+
+        The YAML scenarios use ``strategy_substring`` like ``"solar_only"``,
+        ``"battery_assist"`` — these are EVBudgetStrategy values, the
+        budget-input regime. Post arch-rewrite (#358), ``charging_strategy``
+        on the coord.data dict now stores ChargerIntent values
+        (``"charge_at_amps"``, ``"idle"``, etc.) — actuator commands, NOT
+        the regime. ``canonical_strategy`` is what the YAML expectations
+        actually mean, exposed on coord.data since the v1.7 prep.
+        """
         return [
             c for c in self.cycles
             if strategy_substring.lower() in
-                str(c.result.get("charging_strategy") or "").lower()
+                str(c.result.get("canonical_strategy") or "").lower()
         ]
 
     def cumulative_kwh(self, key: str, cycle_seconds: int) -> float:
@@ -260,6 +270,21 @@ def _build_coordinator(scenario: Dict[str, Any]):
     coord._ev_device = None
     coord._cycle_night_plan = None
     coord._cycle_vehicle_soc = None  # No external vehicle SOC entity in scenario
+    coord._cycle_ev_budget = None  # populated by _build_charging_context per cycle
+
+    # _calculate_remaining_need's SOC fallback path reads these via getattr;
+    # explicit empty defaults keep the harness deterministic.
+    coord._ev_taper_detector = None
+    coord._ev_taper_detectors = {}
+
+    # Night-charging path (``_build_charging_context`` calls
+    # ``_compute_night_plan`` when ``is_night and night_target > 0.1``)
+    # reaches into ``_load_manager`` for the peak limit and
+    # ``_peak_consumption_15min`` for the rolling 15-min peak (#288).
+    # Provide ``None`` stubs so the truthy-check fallbacks fire — the
+    # harness uses the config-default peak limit instead.
+    coord._load_manager = None
+    coord._peak_consumption_15min = None
     # Forecast stub — Zone 3 needs ``forecast.available`` and
     # ``forecast.forecast_remaining_today_kwh`` to decide solar_only vs
     # battery_assist. With dampening_factor=1.0 and surplus_factor=0.5
@@ -292,7 +317,21 @@ def _build_coordinator(scenario: Dict[str, Any]):
     coord._state_machine = MagicMock()
     coord._state_machine.current_state = None
     coord.time_manager = MagicMock()
-    coord.time_manager.is_night_mode = MagicMock(return_value=False)
+    # Scenario-controlled night flag (default day). Set ``is_night: true`` in
+    # the YAML's top-level config block to flip into night mode — required
+    # for night-charging deadline + tariff-window scenarios (#246/#247/#268).
+    scenario_is_night = bool(cfg.get("is_night", False))
+    coord.time_manager.is_night_mode = MagicMock(return_value=scenario_is_night)
+    # Scenario-controlled tariff level for solar_plus_cheap regime. One of
+    # very_cheap / cheap / normal / expensive / very_expensive (matches
+    # consts.tariff.PriceLevel). Plumbed onto a stub tariff_provider so
+    # build_charger_view can populate FleetContext.tariff_level.
+    scenario_tariff = cfg.get("tariff_level")
+    if scenario_tariff is not None:
+        tariff_stub = MagicMock()
+        tariff_stub.current_level = str(scenario_tariff)
+        tariff_stub.available = True
+        coord._tariff_provider = tariff_stub
     coord._sensor_reader = MagicMock()
     return coord
 
@@ -386,70 +425,52 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
         # Power flows (per-cycle, correctly attributed)
         power_flows = coord._flow_calculator.calculate_power_flows(readings)
 
-        # Strategy decision — what does Auto/Zone-N return given these inputs?
-        # _determine_charging_strategy needs a few more inputs; build the
-        # minimum that lets the method run without IndexError. Energy totals
-        # are zero because we don't need cost/savings math for this scenario.
+        # ── Strategy + canonical budget via the production decision path ──
+        #
+        # Pre-arch-rewrite the harness called the long-removed
+        # ``_determine_charging_strategy`` directly and re-implemented the
+        # legacy→canonical mapping inline (the exact pattern v1.6.2 caught).
+        # Post-#358 we go through ``_build_charging_context`` instead, which
+        # is what coordinator._async_update_data also calls (line 1114).
+        # That gives us:
+        #   * ``charging_context.charging_strategy`` — ChargerIntent.value
+        #     (the actuator command: idle / charge_at_amps / charge_max /
+        #     disable). New since PR #358.
+        #   * ``charging_context.canonical_strategy`` — EVBudgetStrategy.value
+        #     (the budget-input regime: solar_only / battery_assist /
+        #     self_consumption / now / min_pv / idle). Added to ChargingContext
+        #     specifically so the harness doesn't need to re-derive it.
+        #   * ``coord._cycle_ev_budget`` — the EVBudget cached on coord by
+        #     _build_charging_context for the actuator. ``.net_w`` and
+        #     ``.current_a`` are what production reads.
+        #
+        # Any failure here is now LOUD (raised), not swallowed. The whole
+        # point of the harness is to catch decision-vs-enforcement drift —
+        # silently catching the SUT call defeats that.
         from custom_components.solar_energy_management.coordinator.types import (
             EnergyTotals,
         )
         energy = EnergyTotals(daily_ev=0.0, daily_solar=0.0)
-        primary_cfg = (coord.config.get("ev_chargers") or [{}])[0]
 
-        strategy = None
-        strategy_reason = None
-        try:
-            strategy, strategy_reason = coord._determine_charging_strategy(
-                readings, energy, primary_cfg,
-            )
-        except Exception as e:
-            strategy_reason = f"strategy_call_failed: {type(e).__name__}: {e}"
+        charging_context = coord._build_charging_context(readings, energy)
+        strategy = charging_context.charging_strategy
+        strategy_reason = charging_context.charging_strategy_reason
+        canonical_strat_value = charging_context.canonical_strategy
 
-        # Map the legacy strategy string to the canonical enum (same
-        # rules as ``coordinator._canonical_strategy_from_legacy``).
-        # Inline here so the harness doesn't depend on a real coordinator
-        # instance. The reason text is what disambiguates the two flavours
-        # of ``"solar_only"`` (Zone 2 self-consumption vs Zone 3+ surplus).
-        from custom_components.solar_energy_management.coordinator.flow_calculator import (
-            EVBudgetStrategy,
-        )
-        if strategy is None or strategy == "idle":
-            canonical_strat = EVBudgetStrategy.IDLE
-        elif strategy == "now":
-            canonical_strat = EVBudgetStrategy.NOW
-        # ``min_pv`` mapping removed in #305 — production mapper no
-        # longer accepts the tuple either; the night_grid path is the
-        # only producer of canonical MIN_PV.
-        elif strategy == "battery_assist":
-            canonical_strat = EVBudgetStrategy.BATTERY_ASSIST
-        elif strategy == "solar_only":
-            reason_text = str(strategy_reason or "")
-            if "self_consumption" in reason_text or "Zone 2" in reason_text:
-                canonical_strat = EVBudgetStrategy.SELF_CONSUMPTION
-            else:
-                canonical_strat = EVBudgetStrategy.SOLAR_ONLY
-        else:
-            canonical_strat = EVBudgetStrategy.IDLE  # unknown → no charge
+        # EVBudgetStrategy is a string-constant class (not an Enum), so
+        # canonical_strategy on the context IS the canonical value string
+        # already. Existing downstream code in this harness uses the
+        # string directly, so the previous "map to enum" step is moot.
+        canonical_strat = canonical_strat_value
 
-        # Canonical EV budget — single source of truth post-Phase-D.2.
-        # Returns an ``EVBudget`` with ``net_w`` (the watts setpoint) and
-        # ``current_a`` (the amps setpoint, already floor'd in surplus
-        # regimes to avoid the rounding-to-grid boundary captured by
-        # Scenario 0 #282). Both values are used directly — no separate
-        # round-trip through ``calculate_charging_current`` like pre-D.2.
-        ev_budget_obj = coord._flow_calculator.calculate_canonical_ev_budget(
-            readings,
-            strategy=canonical_strat,
-            battery_soc=readings.battery_soc,
-            battery_capacity_kwh=coord.config.get("battery_capacity_kwh", 15.0),
-            forecast_remaining_kwh=0.0,
-            battery_auto_start_soc=coord.config.get("battery_auto_start_soc", 90),
-            battery_buffer_soc=coord.config.get("battery_buffer_soc", 70),
-            battery_assist_floor_soc=coord.config.get("battery_assist_floor_soc", 60),
-            battery_assist_max_power_w=coord.config.get(
-                "battery_assist_max_power",
-                coord.config.get("super_charger_power", 4500),
-            ),
+        ev_budget_obj = coord._cycle_ev_budget
+        # _build_charging_context unconditionally computes and caches the
+        # budget (the contract since #282 Phase B/D). If this is None
+        # something is wrong with the harness setup — fail loudly so the
+        # next caller can see it.
+        assert ev_budget_obj is not None, (
+            "coord._cycle_ev_budget was not populated by "
+            "_build_charging_context — harness setup is incomplete"
         )
         budget_w = ev_budget_obj.net_w
         amps = ev_budget_obj.current_a
@@ -461,10 +482,13 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
                 "keba", "set_current", {"current": amps}, blocking=False,
             )
 
-        # Cycle-level captured outputs (flat dict mirrors coord.data shape)
+        # Cycle-level captured outputs (flat dict mirrors coord.data shape).
+        # ``canonical_strategy`` is what YAML ``strategy_substring`` expectations
+        # match against — populate for every cycle, not just multi-charger.
         result = {
             "charging_strategy": strategy,
             "charging_strategy_reason": strategy_reason,
+            "canonical_strategy": canonical_strat_value,
             "calculated_current": amps,
             "ev_budget_w": budget_w,
             "flow_solar_to_ev_power": power_flows.solar_to_ev,
@@ -509,9 +533,14 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
             # actively charging; the override turns a per-charger
             # ``off`` mode into SOLAR_IDLE (terminate) and leaves
             # ``solar_only`` / ``min_plus_solar`` untouched.
+            #
+            # Drive the baseline off ``canonical_strategy`` (the budget-
+            # regime intent), NOT ``charging_strategy`` — the latter is
+            # ChargerIntent post-#358 ("charge_at_amps" etc.) and never
+            # equals "solar_only".
             global_state = (
                 ChargingState.SOLAR_CHARGING_ACTIVE
-                if strategy == "solar_only" else ChargingState.SOLAR_IDLE
+                if canonical_strat_value == "solar_only" else ChargingState.SOLAR_IDLE
             )
             per_charger_states: Dict[str, str] = {}
             for c in ev_chargers_cfg:
@@ -576,16 +605,18 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
     expect = scenario.get("expect", {}) or {}
     cycle_seconds = int(scenario.get("cycle_seconds", 30))
 
-    # 1. Strategy substring — at least one cycle's strategy must contain it
+    # 1. Strategy substring — at least one cycle's canonical_strategy must contain it.
+    # See ``cycles_where`` docstring for the canonical/charging strategy split.
     sub = expect.get("strategy_substring")
     if sub:
         matched = run.cycles_where(sub)
         assert matched, (
-            f"No cycle had a strategy containing '{sub}'. Got: "
-            f"{[c.result.get('charging_strategy') for c in run.cycles]}"
+            f"No cycle had a canonical_strategy containing '{sub}'. Got: "
+            f"{[c.result.get('canonical_strategy') for c in run.cycles]}"
         )
 
-    # 2. Actuator current constraint — for cycles where the strategy matches
+    # 2. Actuator current constraint — for cycles where the canonical strategy matches.
+    # Same canonical/charging split as ``cycles_where``.
     ac = expect.get("actuator_current_a") or {}
     if ac:
         when_strategy = ac.get("when_strategy", "")
@@ -594,7 +625,7 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
         voltage = 230.0
         phases = 3.0
         for c in run.cycles:
-            strat = str(c.result.get("charging_strategy") or "").lower()
+            strat = str(c.result.get("canonical_strategy") or "").lower()
             if when_strategy.lower() not in strat:
                 continue
             # Evaluate the formula in the readings dict's namespace

@@ -514,6 +514,20 @@ class FleetContext:
     Same constant as ``_zone_based_strategy`` uses at
     ``coordinator.py:2709``."""
 
+    forecast_remaining_kwh: float = 0.0
+    """Solar forecast remaining today (kWh), dampened by the
+    ``ForecastTracker``. The ``solar_only`` regime uses this to
+    decide whether the battery can be charged later from solar — if
+    so, divert some of the current ``battery_charge_w`` to the EV
+    via the canonical redirect (see ``flow_calculator.battery_redirect_w``).
+
+    Pre-arch (v1.6.x) the legacy ``_determine_charging_strategy``
+    let the SOLAR_ONLY canonical budget compute the redirect, so
+    ``decide()`` didn't need this field. Post-#358 the redirect
+    has to live in the strategy decision too — otherwise a viable
+    SOLAR_ONLY cycle collapses to IDLE because the bare surplus
+    falls under the charger min."""
+
     # ─── Tariff (Step 3) ───────────────────────────────────────
     tariff_level: "Optional[str]" = None
     """``None`` when no dynamic tariff configured; otherwise one

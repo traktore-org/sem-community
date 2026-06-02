@@ -93,6 +93,18 @@ class ChargingContext:
     charging_strategy: str = "idle"
     charging_strategy_reason: str = ""
 
+    # Canonical strategy (EVBudgetStrategy.value string) — the input the
+    # canonical EV budget calc consumed in this cycle. Distinct from
+    # ``charging_strategy`` (which is now the ChargerIntent enum value
+    # post arch-rewrite — "idle" / "charge_at_amps" / "charge_max" /
+    # "disable" — the actuator command). The canonical strategy is the
+    # *intent* in EV-budget terms ("solar_only" / "battery_assist" /
+    # "self_consumption" / "now" / "min_pv" / "idle"). Exposed so the
+    # scenario harness and any future consumer can pin the budget-input
+    # decision without re-deriving the mapping (the v1.6.2 vacuous-pass
+    # class). Default "idle" mirrors ``charging_strategy``.
+    canonical_strategy: str = "idle"
+
     # Night charging context
     night_target_kwh: float = 0
 

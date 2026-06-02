@@ -1,0 +1,57 @@
+name: "2026-06-02 min_plus_solar day Zone 3 — battery-assist enters"
+
+coverage:
+  - mode: min_plus_solar
+    regime: zone3_day_battery_assist
+    issue: "#282 Phase B/D — battery_assist regime"
+
+description: |
+  Zone 3 (SOC between buffer=70 and auto_start=90) + day mode is
+  the BATTERY_ASSIST regime for min_plus_solar / solar_plus_cheap /
+  always_max. The budget is ``surplus + battery_discharge`` so the
+  battery can bridge the gap between modest surplus and EV demand.
+
+  Pre-#358 the Zone 3 transition was guarded by a forecast check
+  (legacy ``_zone_based_strategy`` line 2742-2750). Post-#358
+  decide.py's ``battery_assist_budget_w`` treats Zone 3 and Zone 4
+  the same way (the "deferred to Step 5" TODO in decide.py:109).
+  This scenario pins the current behaviour so a future Step 5
+  re-introduction of the forecast gate doesn't silently change it
+  without notice.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Zone 3 SOC (75), modest solar surplus, battery actively
+# discharging at 5 kW. battery_assist_budget_w should compute
+# surplus + battery_discharge >= charger min → CHARGE.
+timeline:
+  - t: 0
+    solar_power: 2000
+    grid_power: 2000         # +ve = export
+    battery_power: -5000     # -ve = discharging at 5 kW
+    battery_soc: 75
+    ev_power: 0              # not yet drawing
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  strategy_substring: "battery_assist"

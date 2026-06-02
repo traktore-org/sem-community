@@ -11,7 +11,7 @@ from custom_components.solar_energy_management.coordinator.storage import (
 
 
 @pytest.fixture
-def hass():
+def mock_hass():
     """Return a mocked Home Assistant instance."""
     h = MagicMock()
     h.config = MagicMock()
@@ -40,14 +40,14 @@ def mock_stores():
 
 
 @pytest.fixture
-def storage(hass, mock_stores):
+def storage(mock_hass, mock_stores):
     """Create SEMStorage with mocked Store instances."""
     energy_store, daily_store = mock_stores
     with patch(
         "custom_components.solar_energy_management.coordinator.storage.Store"
     ) as MockStore:
         MockStore.side_effect = [energy_store, daily_store]
-        s = SEMStorage(hass, "test_entry")
+        s = SEMStorage(mock_hass, "test_entry")
     # Replace internal stores with our mocks
     s._energy_store = energy_store
     s._daily_store = daily_store
@@ -58,16 +58,16 @@ def storage(hass, mock_stores):
 # Initialization
 # ──────────────────────────────────────────────
 
-def test_init(hass):
+def test_init(mock_hass):
     """Test SEMStorage creates two Store instances with correct keys."""
     with patch(
         "custom_components.solar_energy_management.coordinator.storage.Store"
     ) as MockStore:
-        storage = SEMStorage(hass, "my_entry")
+        storage = SEMStorage(mock_hass, "my_entry")
         assert MockStore.call_count == 2
         calls = MockStore.call_args_list
-        assert calls[0][0] == (hass, STORAGE_VERSION, "solar_energy_management_my_entry_energy")
-        assert calls[1][0] == (hass, STORAGE_VERSION, "solar_energy_management_my_entry_daily")
+        assert calls[0][0] == (mock_hass, STORAGE_VERSION, "solar_energy_management_my_entry_energy")
+        assert calls[1][0] == (mock_hass, STORAGE_VERSION, "solar_energy_management_my_entry_daily")
 
 
 def test_is_loaded_property(storage):

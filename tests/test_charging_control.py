@@ -14,7 +14,7 @@ from custom_components.solar_energy_management.const import ChargingState
 # ──────────────────────────────────────────────
 
 @pytest.fixture
-def hass():
+def mock_hass():
     """Return a mocked Home Assistant instance."""
     h = MagicMock()
     h.states = MagicMock()
@@ -49,9 +49,9 @@ def config():
 
 
 @pytest.fixture
-def sm(hass, config, time_manager):
+def sm(mock_hass, config, time_manager):
     """Return a ChargingStateMachine."""
-    return ChargingStateMachine(hass, config, time_manager)
+    return ChargingStateMachine(mock_hass, config, time_manager)
 
 
 def _ctx(**kwargs):
