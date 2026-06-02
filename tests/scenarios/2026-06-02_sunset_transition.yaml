@@ -1,0 +1,86 @@
+name: "2026-06-02 sunset transition — day→night handover"
+
+coverage:
+  - mode: solar_only
+    regime: night_must_idle
+    issue: "transition / is_night gate"
+
+description: |
+  Real PROD pattern: solar drops to zero as the sun sets, and at
+  some point the time-of-day flips ``is_night = true``. The
+  strategy must transition from solar_only-active to solar_only-idle
+  in lockstep — no period where the EV keeps being commanded
+  current after the user-intent contract ("solar_only never imports
+  grid") would be violated.
+
+  This pins the day→night handover for solar_only specifically.
+  Pre-flip cycles (solar still > min) → CHARGE_AT_AMPS. Solar
+  going to 0 → IDLE (no surplus). is_night flipping true with
+  solar=0 → still IDLE (correct). The interesting case is the
+  CORRECT MOMENT — what happens when is_night flips while solar
+  briefly still has a bit left:
+
+    * SolarOnlyMode at night still returns CHARGE_AT_AMPS if surplus
+      clears min. (The mode's docstring: "strict surplus, never grid
+      import" — night just means solar is usually 0.)
+    * If at the moment is_night=true the solar is still 1 kW for
+      one cycle (sunset isn't instant), solar_only correctly charges
+      from that 1 kW IF it clears min. With 1 kW + redirect, it
+      probably doesn't. So the realistic case is: night-mode-flip
+      cycle has too little surplus → IDLE.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  is_night: false  # config-level default
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  # ── Late afternoon: still solar, day mode
+  - t: 0
+    solar_power: 6000
+    grid_power: 3500
+    battery_power: 1000
+    battery_soc: 75
+    ev_power: 0
+    ev_connected: true
+    is_night: false
+
+  - t: 30
+  - t: 60
+
+  # ── Sun dropping: solar tanks. Still day.
+  - t: 90
+    solar_power: 1500
+
+  - t: 120
+    solar_power: 500
+
+  # ── Night mode kicks in (clock-driven, not solar-driven)
+  - t: 150
+    solar_power: 100
+    is_night: true
+
+  - t: 180
+    solar_power: 0
+
+  - t: 210
+
+expect:
+  # At least one cycle must register the night-mode IDLE state.
+  # Without that, "is_night was honoured" silently regresses if
+  # someone caches the day-mode decision.
+  strategy_substring: "idle"
