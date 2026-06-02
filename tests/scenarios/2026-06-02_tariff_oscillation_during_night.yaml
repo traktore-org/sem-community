@@ -1,0 +1,100 @@
+name: "2026-06-02 tariff oscillation during night — strategy must stay stable"
+
+coverage:
+  - mode: solar_plus_cheap
+    regime: night_tariff_oscillation
+    issue: "#351 edge-case backfill"
+
+description: |
+  Edge case for the #247 tariff-aware night charging. Real EPEX
+  data sometimes oscillates between adjacent price tiers (cheap ↔
+  very_cheap; cheap ↔ normal) on 5-minute granularity — the
+  classifier in ``tariff_provider`` is percentile-based after
+  #373, but the upstream price still bounces around the boundary.
+
+  This scenario walks the level through:
+
+    cycle 0  very_cheap   (cheap-window: charge)
+    cycle 1  cheap        (still cheap-window — charge continues)
+    cycle 2  normal       (expensive — would-be skip)
+    cycle 3  cheap        (back inside cheap-window — resume)
+    cycle 4  expensive    (would-be skip)
+    cycle 5  very_cheap   (back inside)
+
+  What the contract pins: across these 6 cycles, NO ``thrashing``
+  behaviour shows up — the strategy alternates correctly with the
+  tariff level rather than getting stuck in one mode, AND no cycle
+  produces an obviously-wrong "battery_assist" / "self_consumption"
+  decision (the user picked solar_plus_cheap explicitly; their
+  intent is tariff-gated charging).
+
+  Specifically the harness asserts:
+    * At least one cycle produces a min_pv strategy (cheap window).
+    * No cycle produces a battery_assist strategy (wrong mode for
+      this user setting, would mean the tariff dispatcher leaked
+      to a non-tariff branch).
+
+  Pre-#247 the legacy ``solar_plus_cheap`` path didn't consult
+  tariff_level at all — all night cycles would charge regardless.
+  This scenario won't catch THAT regression directly (it asserts
+  charging IS allowed in cheap cycles), but it pins the new
+  classifier doesn't oscillate strategies wildly.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_charging_mode: "solar_plus_cheap"
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  target_peak_limit: 6.0
+  is_night: true
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_plus_cheap"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Steady-state night cycle with the tariff level oscillating.
+# Solar = 0 (overnight), grid available, EV at Min if charging.
+timeline:
+  - t: 0
+    solar_power: 0
+    grid_power: -4500
+    battery_power: 0
+    battery_soc: 50
+    ev_power: 4140
+    ev_connected: true
+    tariff_level: "very_cheap"
+
+  - t: 30
+    tariff_level: "cheap"
+
+  - t: 60
+    tariff_level: "normal"
+
+  - t: 90
+    tariff_level: "cheap"
+
+  - t: 120
+    tariff_level: "expensive"
+
+  - t: 150
+    tariff_level: "very_cheap"
+
+expect:
+  # At least one cycle must hit the cheap-window charge branch.
+  # The substring matches the canonical-strategy mapping for
+  # solar_plus_cheap night + cheap tariff
+  # (coord._canonical_strategy_from_legacy → MIN_PV).
+  strategy_substring: "min_pv"
+
+  # No cycle may resolve to battery_assist — that would mean the
+  # tariff dispatcher leaked into a non-tariff strategy branch.
+  strategy_not_substring: "battery_assist"

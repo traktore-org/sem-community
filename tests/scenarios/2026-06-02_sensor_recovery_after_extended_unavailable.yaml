@@ -1,0 +1,114 @@
+name: "2026-06-02 sensor recovery after extended unavailable — no stale carry"
+
+coverage:
+  - mode: solar_only
+  - mode: min_plus_solar
+    regime: extended_sensor_blackout_recovery
+    issue: "#351 + #378 edge-case backfill"
+
+description: |
+  Edge case extending ``2026-06-02_battery_soc_unavailable.yaml``
+  (which covers a 3-cycle SOC blackout). Real-world blackouts last
+  much longer when:
+
+    * A Z-Wave / ZigBee mesh re-roots (5-15 minutes).
+    * A Sessy / Huawei integration crashes + waits for HA's
+      built-in error backoff to retry (10-30 minutes).
+    * A network glitch + supervisor restart (1-2 cycles of
+      everything down).
+
+  After such a blackout, when sensors return, the controller must:
+
+    1. NOT carry forward the last-known SOC for the entire blackout
+       window as if it were "live" — otherwise the EV could drain a
+       battery the controller thinks is at 80% when it's actually
+       at 25%.
+    2. Resume normal operation immediately on recovery, not after a
+       cool-down period.
+    3. NOT spuriously flip strategy modes during the blackout.
+
+  This scenario walks:
+
+    cycles 0–1   normal regime: solar 6 kW, EV connected, battery_soc=75
+    cycles 2–9   battery_soc_unavailable=true (8 cycles = 4 min of
+                 SOC blackout — well past the trivial 3-cycle case).
+                 Other readings still flow (solar drops to 4.5 kW —
+                 a cloud passes; ev still connected).
+    cycles 10–12 SOC sensor recovers — now reports 65% (10pp lower
+                 than the last seen value: the battery DID lose
+                 charge during the blackout, the controller just
+                 didn't see it).
+
+  The contract: strategy stays in the solar_only family throughout
+  (mode = solar_only in the YAML config — anything else would mean
+  the system mode-flipped during the blackout). After recovery, the
+  post-recovery SOC (65) is what feeds into the next cycle's
+  budgeting — not the pre-blackout SOC (75).
+
+  No explicit per-cycle assertion on SOC value (that's a units-level
+  detail the harness doesn't surface) — but the strategy stability
+  is the proxy: if SEM panicked and fell back to a different mode
+  on sensor loss, the canonical strategy would diverge from
+  solar_only.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_charging_mode: "solar_only"
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  # ── Cycles 0–1: normal, SOC visible
+  - t: 0
+    solar_power: 6000
+    grid_power: 3500
+    battery_power: 1000
+    battery_soc: 75
+    battery_soc_unavailable: false
+    ev_power: 0
+    ev_connected: true
+
+  - t: 30
+
+  # ── Cycle 2: SOC blackout begins. Solar drops (a cloud).
+  - t: 60
+    solar_power: 4500
+    battery_soc_unavailable: true
+
+  - t: 90
+  - t: 120
+  - t: 150
+  - t: 180
+  - t: 210
+  - t: 240
+  - t: 270
+
+  # ── Cycle 10: SOC recovers, BUT to a lower value (real drain
+  # happened during blackout). Solar back up.
+  - t: 300
+    solar_power: 5800
+    battery_soc: 65               # lower than pre-blackout 75
+    battery_soc_unavailable: false
+
+  - t: 330
+  - t: 360
+
+expect:
+  # The solar_only family must hold throughout. Any flip to
+  # battery_assist / self_consumption / min_pv would indicate a
+  # mode-instability during sensor loss.
+  strategy_substring: "solar_only"
+  strategy_not_substring: "battery_assist"

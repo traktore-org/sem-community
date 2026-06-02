@@ -84,6 +84,12 @@ TIMELINE_FIELDS = {
     # flips mid-timeline. Falls back to the config-level ``is_night``
     # when not set on the row.
     "is_night",
+    # 2026-06-02: per-cycle ``tariff_level`` override. Lets scenarios
+    # test tariff oscillation during a night charge (cheap→expensive→cheap)
+    # to pin that the strategy is stable across rapid level changes.
+    # One of very_cheap / cheap / normal / expensive / very_expensive.
+    # Falls back to the config-level ``tariff_level`` when omitted.
+    "tariff_level",
 }
 
 
@@ -290,10 +296,18 @@ def _build_coordinator(scenario: Dict[str, Any]):
     # Real SurplusController for distribute_ev_budget — it's a small pure
     # function on (budget_w, devices) so we want the production version,
     # not a mock. Build with the minimal hass mock SurplusController needs.
+    #
+    # NOTE: SurplusController.__init__ signature is (hass, regulation_offset).
+    # An earlier version of this harness passed ``coord.config`` (a dict)
+    # as the second positional, which silently became ``regulation_offset``.
+    # That was a real bug — masked by the fact that ``distribute_ev_budget``
+    # doesn't read ``regulation_offset``, so the harness's only use of
+    # the controller wasn't affected. Future use of ``.update()`` would
+    # have crashed. Fixed: pass hass only and let regulation_offset default.
     from custom_components.solar_energy_management.coordinator.surplus_controller import (
         SurplusController,
     )
-    coord._surplus_controller = SurplusController(coord.hass, coord.config)
+    coord._surplus_controller = SurplusController(coord.hass)
 
     coord._ev_device = None
     coord._cycle_night_plan = None
@@ -442,6 +456,18 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
             coord.time_manager.is_night_mode = MagicMock(
                 return_value=bool(effective["is_night"]),
             )
+        # 2026-06-02: per-cycle ``tariff_level`` override. Update the
+        # stub tariff_provider in place so each cycle's strategy sees
+        # the correct level. Creating the stub here if absent lets a
+        # scenario rely entirely on per-cycle tariff (no config-level
+        # default required).
+        if "tariff_level" in effective:
+            provider = getattr(coord, "_tariff_provider", None)
+            if provider is None:
+                provider = MagicMock()
+                provider.available = True
+                coord._tariff_provider = provider
+            provider.current_level = str(effective["tariff_level"])
         readings = _build_power_readings(effective)
 
         # Record raw + derived
@@ -650,6 +676,20 @@ def assert_expectations(run: ScenarioRun, scenario: Dict[str, Any]) -> None:
         assert matched, (
             f"No cycle had a canonical_strategy containing '{sub}'. Got: "
             f"{[c.result.get('canonical_strategy') for c in run.cycles]}"
+        )
+
+    # 1b. Negative strategy assertion — NO cycle's canonical_strategy may
+    # contain the substring. Lets edge-case scenarios pin a regression
+    # boundary without dictating which fallback (idle / solar_only /
+    # self_consumption) is chosen. Used by e.g. battery-protection
+    # scenarios that just need "definitely not battery_assist".
+    not_sub = expect.get("strategy_not_substring")
+    if not_sub:
+        violators = run.cycles_where(not_sub)
+        assert not violators, (
+            f"Strategy contained forbidden substring '{not_sub}' in "
+            f"{len(violators)} cycle(s): "
+            f"{[c.result.get('canonical_strategy') for c in violators]}"
         )
 
     # 2. Actuator current constraint — for cycles where the canonical strategy matches.
