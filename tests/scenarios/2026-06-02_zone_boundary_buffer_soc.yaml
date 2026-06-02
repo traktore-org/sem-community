@@ -1,0 +1,76 @@
+name: "2026-06-02 battery SOC crosses buffer_soc — Zone 2 → Zone 3 transition"
+
+coverage:
+  - mode: min_plus_solar
+    regime: zone3_day_battery_assist
+    issue: "boundary"
+
+description: |
+  The 4-zone SOC model has hard thresholds: priority_soc (30),
+  buffer_soc (70), auto_start_soc (90). Behaviour switches at
+  each boundary — Zone 2 is pure self-consumption (no redirect),
+  Zone 3 enables forecast-aware redirect, Zone 4 enables full
+  battery_assist.
+
+  When the SOC reading hovers RIGHT at a boundary (e.g.
+  battery_soc = 70 exactly, buffer_soc = 70 exactly), small
+  noise on the source sensor can cause the SOC to flip
+  69 → 70 → 69 → 70 across cycles. Without hysteresis (which
+  the post-#358 arch chose NOT to add), the strategy can flicker.
+
+  This scenario walks the SOC up from 65 to 75 — through the
+  exact buffer_soc=70 threshold — and asserts that the resulting
+  strategy is internally consistent. With min_plus_solar mode +
+  is_night=false:
+    * Zone 2 (SOC < 70) → solar_only branch (Z2 strategy)
+    * Zone 3 (70 ≤ SOC < 90) → battery_assist branch
+  The transition cycle (SOC=70) should land in Zone 3
+  (buffer_soc is the FLOOR of Zone 3, inclusive).
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Walk SOC from 65 (Zone 2) through 70 (boundary) up to 75
+# (Zone 3 proper). Battery actively discharging to power EV in
+# Zone 3 so the budget clears charger min.
+timeline:
+  - t: 0
+    solar_power: 2000
+    grid_power: 2000
+    battery_power: -5000
+    battery_soc: 65
+    ev_power: 0
+    ev_connected: true
+
+  - t: 30
+    battery_soc: 68
+
+  - t: 60
+    battery_soc: 70
+
+  - t: 90
+    battery_soc: 73
+
+  - t: 120
+    battery_soc: 75
+
+expect:
+  # At Zone 3 SOC (≥70), min_plus_solar day path produces the
+  # battery_assist canonical strategy.
+  strategy_substring: "battery_assist"

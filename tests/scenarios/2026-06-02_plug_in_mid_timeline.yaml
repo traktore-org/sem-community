@@ -1,0 +1,72 @@
+name: "2026-06-02 EV plug-in mid-timeline — solar_only goes from idle to active"
+
+coverage:
+  - mode: solar_only
+    regime: zone3_day_redirect
+    issue: "transition"
+
+description: |
+  Real PROD pattern that none of the existing steady-state
+  scenarios cover: EV gets PLUGGED IN mid-timeline.
+
+  The contract:
+
+    * Pre-plug-in (ev_connected=false): solar_only must IDLE
+      regardless of surplus (no car to charge).
+    * Post-plug-in (ev_connected=true): the strategy reconsiders
+      and, if surplus + redirect clears charger min, transitions
+      to CHARGE_AT_AMPS.
+
+  Catches a class of bugs where the decision pipeline doesn't
+  re-evaluate on connection-state change — e.g. a cached
+  "idle" decision sticks even after plug-in.
+
+  Inputs are sized so the post-plug-in cycles have enough
+  surplus + redirect to clear the charger min. Pre-plug-in
+  cycles have the same fleet conditions but ev_connected=false.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  # ── Pre-plug-in: same surplus regime, but no car
+  - t: 0
+    solar_power: 6000
+    grid_power: 3500
+    battery_power: 1000
+    battery_soc: 75
+    ev_power: 0
+    ev_connected: false
+
+  - t: 30
+  - t: 60
+
+  # ── Plug event at t=90: ev_connected flips true. Same other inputs.
+  - t: 90
+    ev_connected: true
+
+  - t: 120
+  - t: 150
+  - t: 180
+
+expect:
+  # At least one cycle must show canonical_strategy=solar_only
+  # — that's the post-plug-in transition working. If the strategy
+  # stays IDLE for ALL cycles, the connection-state change wasn't
+  # honoured.
+  strategy_substring: "solar_only"
