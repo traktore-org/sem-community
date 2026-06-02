@@ -1061,6 +1061,35 @@ class SEMData:
         except Exception as e:
             _LOGGER.warning("Per-charger to_dict failed: %s", e)
 
+        # Per-battery flat-dict unpack (Phase A of #TBD fleet/per-battery
+        # card mirror). Mirrors the per-charger pattern above. Powered
+        # by ``PowerReadings.batteries`` (populated by sensor_reader
+        # only when ``battery_power_list`` length > 1 — single-battery
+        # installs leave it empty and produce zero per-battery keys,
+        # preserving today's fleet-sensor behaviour). Status is
+        # derived from the sign of power_w (positive = charging,
+        # negative = discharging, near-zero = idle); the
+        # ``_BATTERY_STATUS_DEADBAND_W`` mirrors the session-tracking
+        # dead-band so the per-battery status doesn't toggle on
+        # inverter rebalance noise.
+        try:
+            _STATUS_DEADBAND_W = 50.0
+            for bid, bp in self.power.batteries.items():
+                if bp.power_w > _STATUS_DEADBAND_W:
+                    status = "charging"
+                elif bp.power_w < -_STATUS_DEADBAND_W:
+                    status = "discharging"
+                else:
+                    status = "idle"
+                data.update({
+                    f"battery_{bid}_power": round(bp.power_w, 1),
+                    f"battery_{bid}_soc": round(bp.soc_pct, 1),
+                    f"battery_{bid}_status": status,
+                    f"battery_{bid}_capacity_kwh": round(bp.capacity_kwh, 1),
+                })
+        except Exception as e:
+            _LOGGER.warning("Per-battery to_dict failed: %s", e)
+
         # Per-charger intelligence from taper detectors (#193)
         try:
             per_charger_intel = self.per_charger_intelligence

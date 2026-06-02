@@ -26,7 +26,23 @@ const WATCHED_SUFFIXES = [
     'monthly_battery_charge_energy', 'monthly_battery_discharge_energy',
 ];
 
+// Phase B of per-battery card mirror — same shape as the EV card
+// ``CHARGER_COLORS`` palette: one stable colour per discovered
+// battery, indexed by discovery order. Drawn from the SEM device
+// palette so it visually rhymes with the EV side.
+const BATTERY_COLORS = ['#4db6ac', '#FFB74D', '#BA68C8', '#64B5F6'];
+
 class SEMBatteryCard extends SEMLitBase {
+    constructor() {
+        super();
+        // Phase B: dynamic per-battery discovery. ``_batteries`` is
+        // the list of short slugs found in ``hass.states`` (``b1``,
+        // ``b2`` …); empty on single-battery installs so the card
+        // renders the legacy hero-only layout unchanged.
+        this._batteries = [];
+        this._lastStateCount = 0;
+    }
+
     static get watchedEntities() {
         return WATCHED_SUFFIXES.map(s => `${DEFAULT_PREFIX}${s}`);
     }
@@ -49,6 +65,21 @@ class SEMBatteryCard extends SEMLitBase {
             localeChanged = true;
         }
 
+        // Re-discover per-battery sensors when the entity count
+        // changes. Single-battery installs find zero matches and the
+        // render stays the legacy hero-only layout.
+        const stateCount = Object.keys(hass.states).length;
+        if (stateCount !== this._lastStateCount) {
+            this._lastStateCount = stateCount;
+            const batteries = [];
+            for (const eid of Object.keys(hass.states)) {
+                const m = eid.match(/^sensor\.sem_battery_(b\d+)_power$/);
+                if (m) batteries.push(m[1]);
+            }
+            batteries.sort();
+            this._batteries = batteries;
+        }
+
         // Skip while frozen (optimistic update in progress)
         if (this._isFrozen() && !localeChanged) return;
 
@@ -60,9 +91,19 @@ class SEMBatteryCard extends SEMLitBase {
             if (!localeChanged) return;
         }
 
-        const key = WATCHED_SUFFIXES
+        let key = WATCHED_SUFFIXES
             .map(s => hass?.states[`${this._prefix}${s}`]?.state || '')
             .join(',') + '|' + lang;
+
+        // Per-battery reactivity — re-render whenever any per-battery
+        // sensor value changes. No-op on single-battery installs
+        // (``_batteries`` is empty).
+        if (this._batteries.length) {
+            key += '|' + this._batteries.map(bid => [
+                `battery_${bid}_power`, `battery_${bid}_soc`,
+                `battery_${bid}_status`, `battery_${bid}_capacity_kwh`,
+            ].map(s => hass?.states[`${this._prefix}${s}`]?.state || '').join(':')).join('|');
+        }
 
         if (key === this._lastBattKey && !localeChanged) return;
         this._lastBattKey = key;
@@ -83,6 +124,97 @@ class SEMBatteryCard extends SEMLitBase {
     _fmt(val, decimals = 1) {
         if (val == null || isNaN(val)) return '—';
         return val.toFixed(decimals);
+    }
+
+    /* ── Per-battery section helpers (Phase B) ── */
+    _batteryName(bid) {
+        const e = this._hass?.states[`${this._prefix}battery_${bid}_power`];
+        let name = bid.toUpperCase();
+        if (e?.attributes?.friendly_name) {
+            // Strip the SEM prefix + "Power" suffix that HA adds so the
+            // section header reads cleanly ("B1" instead of "Battery
+            // B1 Power"). Keeps the user's chosen battery name when
+            // they override it via the entity registry.
+            name = e.attributes.friendly_name
+                .replace(/^SEM\s+/i, '')
+                .replace(/\s+Power$/i, '');
+        }
+        return name;
+    }
+
+    _renderMiniSocRing(soc, color) {
+        const socVal = soc != null ? Math.max(0, Math.min(100, soc)) : 0;
+        const r = 22;
+        const circumference = 2 * Math.PI * r;
+        const offset = circumference * (1 - socVal / 100);
+        return html`
+            <svg viewBox="0 0 56 56" width="56" height="56"
+                 style="display:block;">
+                <circle cx="28" cy="28" r="${r}" fill="none"
+                        stroke="rgba(255,255,255,0.12)" stroke-width="4" />
+                <circle cx="28" cy="28" r="${r}" fill="none"
+                        stroke="${color}" stroke-width="4"
+                        stroke-linecap="round"
+                        stroke-dasharray="${circumference.toFixed(1)}"
+                        stroke-dashoffset="${offset.toFixed(1)}"
+                        transform="rotate(-90 28 28)" />
+                <text x="28" y="32" text-anchor="middle"
+                      fill="white" font-size="13" font-weight="700"
+                      font-family="'Segoe UI','Roboto',sans-serif"
+                      opacity="0.95">
+                    ${soc != null ? Math.round(socVal) + '%' : '—'}
+                </text>
+            </svg>
+        `;
+    }
+
+    _renderBatterySection(bid, idx) {
+        const color = BATTERY_COLORS[idx % BATTERY_COLORS.length];
+        const power = this._val(`battery_${bid}_power`, 0);
+        const soc = this._val(`battery_${bid}_soc`, null);
+        const status = this._valStr(`battery_${bid}_status`) || 'idle';
+        const capacity = this._val(`battery_${bid}_capacity_kwh`, 0);
+        const name = this._batteryName(bid);
+
+        const statusKey = status === 'charging'
+            ? 'charging'
+            : status === 'discharging' ? 'discharging' : 'idle';
+        const statusColor = status === 'charging' ? '#f06292'
+            : status === 'discharging' ? '#4db6ac' : '#999';
+
+        return html`
+            <div class="battery-section">
+                <div class="battery-section-header">
+                    <div class="battery-dot" style="background:${color}"></div>
+                    <span class="battery-section-name">${name}</span>
+                    <span class="battery-section-status"
+                          style="color:${statusColor}">
+                        ${this._t(statusKey)}
+                    </span>
+                </div>
+                <div class="battery-section-body">
+                    <div class="battery-section-ring">
+                        ${this._renderMiniSocRing(soc, color)}
+                        <span class="battery-section-soc-label">SOC</span>
+                    </div>
+                    <div class="battery-section-metrics">
+                        <div class="bs-row">
+                            <span class="bs-label">${this._t('power')}</span>
+                            <span class="bs-val"
+                                  style="color:${power > 50 || power < -50 ? color : ''}">
+                                ${semFormatPower(Math.abs(power))}
+                            </span>
+                        </div>
+                        ${capacity > 0 ? html`
+                            <div class="bs-row">
+                                <span class="bs-label">${this._t('capacity')}</span>
+                                <span class="bs-val">${this._fmt(capacity, 1)} kWh</span>
+                            </div>
+                        ` : nothing}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     /* ── Render ── */
@@ -233,6 +365,78 @@ class SEMBatteryCard extends SEMLitBase {
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                 }
                 .monthly-section { display: flex; gap: 8px; margin-top: 10px; }
+
+                /* ── Per-battery sections (Phase B). Same structural
+                       shape as the EV card's per-charger sections so
+                       a user who already knows the EV tab reads the
+                       battery tab without re-learning the layout. ── */
+                .battery-sections {
+                    margin-top: 16px;
+                    display: flex; flex-direction: column;
+                    gap: 12px;
+                }
+                .battery-section {
+                    background: ${surfaceCol};
+                    border: 1px solid ${surfBorder};
+                    border-radius: 12px;
+                    padding: 12px 14px;
+                }
+                .battery-section-header {
+                    display: flex; align-items: center; gap: 8px;
+                    margin-bottom: 10px;
+                }
+                .battery-dot {
+                    width: 8px; height: 8px;
+                    border-radius: 50%;
+                    flex-shrink: 0;
+                }
+                .battery-section-name {
+                    flex: 1; font-weight: 600; font-size: 0.95em;
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
+                }
+                .battery-section-status {
+                    font-size: 0.75em; font-weight: 500;
+                    text-transform: uppercase; letter-spacing: 0.05em;
+                }
+                .battery-section-body {
+                    display: flex; align-items: center; gap: 12px;
+                }
+                .battery-section-ring {
+                    flex-shrink: 0; width: 56px; text-align: center;
+                }
+                .battery-section-soc-label {
+                    display: block;
+                    font-size: 9px; color: ${textSecCol};
+                    margin-top: 2px;
+                    text-transform: uppercase; letter-spacing: 0.05em;
+                }
+                .battery-section-metrics {
+                    flex: 1;
+                    display: flex; flex-direction: column; gap: 2px;
+                }
+                .bs-row {
+                    display: flex; justify-content: space-between; align-items: baseline;
+                    padding: 1px 0;
+                }
+                .bs-label {
+                    font-size: 10px; color: ${textSecCol};
+                    font-weight: 500;
+                }
+                .bs-val {
+                    font-size: 11px; font-weight: 600;
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
+                    font-variant-numeric: tabular-nums;
+                }
+                /* Phase B mobile breakpoint — single column from the
+                   ring + metrics layout collapses to stacked at
+                   < 480 px (mirrors the sem-solar-card pattern). */
+                @media (max-width: 480px) {
+                    .battery-section-body {
+                        flex-direction: column;
+                        align-items: stretch;
+                    }
+                    .battery-section-ring { margin: 0 auto; }
+                }
                 .month-chip {
                     flex: 1; text-align: center; padding: 6px 8px;
                     background: var(--secondary-background-color, ${surfaceCol});
@@ -310,6 +514,19 @@ class SEMBatteryCard extends SEMLitBase {
                             </div>
                         </div>
                     </div>
+
+                    <!-- Phase B per-battery sections. Empty (no DOM
+                         output) on single-battery installs because
+                         ``_batteries`` stays empty when the Energy
+                         Dashboard exposes only one battery; legacy
+                         hero-only layout unchanged. -->
+                    ${this._batteries.length >= 1 ? html`
+                        <div class="battery-sections">
+                            ${this._batteries.map(
+                                (bid, idx) => this._renderBatterySection(bid, idx),
+                            )}
+                        </div>
+                    ` : nothing}
 
                     <div class="session-section">
                         <div class="sess-header">
