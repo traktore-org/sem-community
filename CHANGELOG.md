@@ -5,6 +5,138 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.5] — 2026-06-02
+
+Testing-framework adoption + three structural arch fixes + diagnostic
+surface for fleet-aggregation bug triage. Built on top of beta.4.
+
+### Production fixes (post-#358 arch follow-up)
+
+- **`SOLAR_ONLY` forecast-aware battery redirect restored.** Post-arch
+  `decide.py::SolarOnlyMode` was checking bare surplus against the
+  charger min (4140W), returning IDLE, and the canonical strategy
+  chain collapsed to IDLE — so the redirect branch in
+  `flow_calculator.calculate_canonical_ev_budget` was unreachable.
+  Fix: extracted `battery_redirect_w` as a module-level helper,
+  plumbed `forecast_remaining_kwh` through `FleetContext` +
+  `build_charger_view`, made `SolarOnlyMode.decide()` add redirect
+  to its surplus calculation BEFORE the min check. Caught by
+  scenario `tests/scenarios/2026-05-29_budget_unify_redirect.yaml`.
+
+- **`tariff_level` plumbed into primary view.**
+  `SolarPlusCheapMode.decide()` reads `view.fleet.tariff_level` for
+  the expensive-window pause (#247), but the primary view was being
+  built without it (was `None`). Fix: pull `current_level` from
+  `_tariff_provider` and pass to `build_charger_view`.
+
+- **Night-plan ordering — hoisted before primary view.**
+  `_compute_night_plan` was computed AFTER the primary view's
+  `decide()` ran, so `tariff_wait` (#247) and `deadline_amps`
+  (#246) didn't reach `SolarPlusCheapMode` / `MinPlusSolarMode`
+  for the primary charger. Fix: hoisted the plan to before the
+  primary view in `_build_charging_context`.
+
+All three are the same class — info the legacy
+`_determine_charging_strategy` had access to wasn't fully plumbed
+into the new `decide.py` path. A structural refactor to eliminate
+the gap class (single `FleetCycleState` builder + AST lint) is
+planned for v1.8.
+
+### Diagnostics — #378 triage support
+
+- `diagnostics.py` now captures `energy_dashboard.per_source_lists`
+  (`solar_power_list` / `battery_power_list` / `grid_power_list`
+  from the Energy Dashboard config) AND
+  `energy_dashboard.per_source_readings` (each entity's current
+  state, or `{"state": "missing"}` if it disappeared from
+  `hass.states`). For multi-inverter / multi-battery / multi-grid
+  setups, this makes "fleet sensor underreports" reports one-shot
+  triagable from the diagnostics dump alone.
+
+  Triage flow: open `per_source_lists.battery_power_list`, compare
+  against what the user reports they have. If the list is missing
+  an entity → bug is in discovery / HA Energy Dashboard config. If
+  the list has the entity but reading is `"missing"` or
+  `"unavailable"` → bug is in the sensor source itself.
+
+### Testing framework adoption
+
+Adopted `pytest-homeassistant-custom-component==0.13.205` (the
+official HA test framework — used by HACS itself, ~30 of Frenck's
+integrations, required by Quality Scale Silver+). SEM is already
+declared `quality_scale: platinum`; this work validates that claim
+structurally.
+
+- Real `HomeAssistant` fixture for config-flow, services, migrations,
+  and the scenario harness — replaces dict-mock approach where it
+  matters for end-to-end correctness.
+- Legacy `hass` fixture renamed to `mock_hass` via AST-aware libcst
+  rewrite (35 files, 419 test signatures). No behaviour change in
+  existing tests; the framework's `hass` fixture is now usable.
+- Migration chain (`async_migrate_entry` v1→v7) now has 8 real-hass
+  tests covering every hop + the full chain composition.
+
+### Scenario suite — wired into CI for the first time
+
+The 5 scenario YAMLs in `tests/scenarios/` had been silently broken
+since PR #358: the harness called the deleted
+`_determine_charging_strategy` inside a bare `try/except: pass`, so
+every cycle produced `strategy=None`, `budget=0`, `amps=0` — and the
+scenarios "passed" on the null outputs. The harness now drives the
+real production decision path (`coord._build_charging_context`),
+raises loudly on `AttributeError`, and is wired into pytest
+discovery via `tests/test_scenarios.py`.
+
+Eight new YAML scenarios mined from closed bug issues — one per
+EV-charge-mode × regime cell:
+
+- `solar_only/night_must_idle` (#346)
+- `solar_only/zone3_day_redirect` (#282)
+- `min_plus_solar/zone3_day_battery_assist` (#282)
+- `min_plus_solar/night_top_up_at_min` (#268)
+- `min_plus_solar/night_deadline_floor` (#246)
+- `solar_plus_cheap/day_normal_tariff` (#247)
+- `solar_plus_cheap/night_cheap_window_charges` (#247)
+- `always_max/ignores_zone_and_tariff`
+- `multi_charger/priority_cascade_with_mixed_modes`
+
+Plus `tests/test_scenario_coverage.py` — a matrix test that fails
+listing missing cells with their issue hints. New EV-charge modes or
+regimes that land without scenario coverage fail CI with a clear
+to-do.
+
+### Property-based invariants
+
+`tests/test_budget_invariants.py` — 10 `hypothesis`-driven tests over
+the canonical EV budget math. Invariants: `net_w >= 0` and finite
+across all 6 strategies, IDLE always zero, NOW returns override,
+`SELF_CONSUMPTION` never includes redirect, `SOLAR_ONLY net_w ==
+solar_surplus + battery_redirect`, amps floored not rounded.
+
+### User-reported regression guards
+
+- **#378** (multi-battery aggregation) — 6 tests pinning
+  `PowerReadings` + `fleet_battery_w` so future arch changes can't
+  silently drop a battery from the sum.
+- **#379** (Growatt PV-string discovery) — 5 tests pinning Growatt
+  naming patterns + the "missing entity" diagnostic path.
+- **#307** (pool heat pump as surplus device) — 7 tests verifying
+  `SurplusController` dispatch to non-EV devices.
+- **#49** (surplus controller restart safety) — 5 tests pinning that
+  `ControllableDevice` defaults to `PEAK_ONLY` (so SEM never
+  proactively activates a device the user didn't opt into).
+- **#353** (KEBA 0A self-charge) — 19 adapter-unit tests pinning that
+  `command_current(<6A)` always routes to `command_idle()` (=
+  `keba.disable`), never `set_current(0)`.
+
+### Internal
+
+- 2859 tests passing, 7 skipped, 0 failed, 0 xfailed (~34s runtime).
+- Release workflow now installs from `tests/requirements_test.txt`
+  (was a hardcoded list missing `pytest-homeassistant-custom-component`).
+
+---
+
 ## [1.7.0-beta.4] — 2026-06-02
 
 Private beta (not published to HACS) — bundles the multi-device
