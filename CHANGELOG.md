@@ -5,6 +5,55 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.10] — 2026-06-02
+
+The **#356 ghost-charger** fix.
+
+### Fixed
+
+* **#356** — EV / charger status cards rendered ghost sections per real
+  charger, appearing as duplicate cards titled `<Charger Name> Solar → EV`,
+  `<Charger Name> Grid → EV`, `<Charger Name> Battery → EV`. Each ghost
+  duplicated the SOC gauge, charge target slider, mode dropdown and
+  `Klaar om` timer — only the power value differed, matching the per-flow
+  attribution.
+
+  Root cause: the charger auto-discovery regex in both
+  `dashboard/card/src/cards/sem-ev-status-card.js` and
+  `sem-charger-status-card.js` was greedy:
+
+  ```javascript
+  const match = eid.match(/^sensor\.sem_charger_(.+)_power$/);
+  ```
+
+  It matched both real charger sensors (`sensor.sem_charger_<id>_power`)
+  AND the per-charger flow sensors
+  (`sensor.sem_charger_<id>_flow_solar_to_ev_power` etc.). The flow
+  sensors were added in v1.6.9 (`feature/169-per-charger-flows`) for the
+  flow card — they were never meant to register as chargers. Every
+  multi-charger install where `sensor.py:1633-1695` emits flow sensors
+  (gated on `len(ev_chargers) > 1`) got 3 ghost sections per real charger.
+
+  Fix: `if (eid.includes('_flow_')) continue;` guard before the regex
+  match in both card files. Bundle rebuilt — content-hashed resource URL
+  invalidates browser cache on upgrade.
+
+  Earlier #356 fixes (`e733212` PR #371 hero-collapse, `68cee34` M3
+  bottom-bar gate) targeted a different (real but smaller) duplication
+  pattern inside one card; they couldn't address the ghost-section
+  cascade because the source was upstream in the discovery loop.
+
+### Tests
+
+`tests/test_356_charger_discovery_filter.py` — source-level lint
+asserting both card files contain the `_flow_` guard inside the
+discovery window, plus a property-style test feeding sample entity IDs
+through the regex+guard combination to confirm flow sensors are rejected
+and real charger IDs (including those with legitimate underscores like
+`laadpaal_links`, `ev_charger`, `keba_p30`) still resolve correctly.
+
+**Total suite: 2904 passed, 0 failed, 0 xfailed.**
+
 ## [1.7.0-beta.9] — 2026-06-02
 
 **Hotfix on top of beta.8.** No SEM logic changes — purely a dashboard

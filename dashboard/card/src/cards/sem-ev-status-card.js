@@ -49,6 +49,11 @@ class SEMEVStatusCard extends SEMLitBase {
             this._lastStateCount = stateCount;
             const chargers = [];
             for (const eid of Object.keys(hass.states)) {
+                // #356 — per-charger flow sensors (sensor.sem_charger_<id>_flow_*_power)
+                // are NOT chargers. The discovery regex below greedily matched them
+                // as separate ids, spawning "Solar → EV", "Grid → EV", "Battery → EV"
+                // ghost sections per real charger. Filter them out at the source.
+                if (eid.includes('_flow_')) continue;
                 const match = eid.match(/^sensor\.sem_charger_(.+)_power$/);
                 if (match) chargers.push(match[1]);
             }
