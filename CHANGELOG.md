@@ -5,6 +5,21 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.4] — 2026-06-02
+
+Private beta (not published to HACS) — bundles the multi-device
+architecture follow-up on top of beta.3 for an internal PROD soak.
+
+### Fixed
+- **#375** — True per-battery control loop. `_battery_adapter`
+  (singular) → `_battery_adapters: Dict[str, BatteryControlAdapter]`;
+  `_run_battery_pipeline` iterates `power.batteries`, dispatching
+  `decide_battery` / `actuate_battery` per battery with its own
+  cached adapter. Closes the architectural gap the v1.7.0 rebuild
+  left behind for 2× same-brand installs (2× Huawei LUNA2000,
+  2× GoodWe). Single-battery installs see zero behavioural change
+  (PR #376).
+
 ## [1.7.0-beta.3] — 2026-06-01
 
 Beta batch addressing 5 open user-reported issues + dead-code cleanup
