@@ -2952,6 +2952,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             is_night=self.time_manager.is_night_mode(),
             config=self.config,
             target_kwh=remaining_floor,
+            # Plumb dampened forecast so SolarOnlyMode can include the
+            # canonical battery_redirect_w in its surplus-vs-min check.
+            # Without this the bare surplus call collapses the strategy
+            # to IDLE for SOLAR_ONLY at Zone 3 + viable forecast — the
+            # regression captured by tests/scenarios/2026-05-29_budget_unify_redirect.yaml.
+            forecast_remaining_kwh=forecast_remaining,
         )
         _primary_decision = _decide(_primary_view)
         strategy = _primary_decision.intent.value
