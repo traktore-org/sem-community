@@ -316,6 +316,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Battery session tracking
         self._battery_session = BatterySessionData()
         self._battery_session_idle_count = 0
+        # #TBD — direction-change hysteresis counter. Counts cycles
+        # spent in the opposite direction of the active session;
+        # session only ends when this reaches OPPOSITE_CYCLES_TO_FLIP.
+        self._battery_session_opposite_count = 0
 
         # Per-charger night-skip safety counter latch (#351 M8). Maps
         # charger_id → bool; the legacy single-charger path uses the
@@ -3298,14 +3302,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     ) -> None:
         """Track battery charge/discharge sessions with source attribution.
 
-        Similar to EV session tracking but adapted for battery:
-        - Charge session: starts when charge_power > 50W
-        - Discharge session: starts when discharge_power > 50W
-        - Session ends when power drops below 50W for 3 consecutive cycles
-        - Direction change ends current session and starts new one
+        Hysteresis on three axes so the session reflects the
+        user-visible continuous flow, not the inverter's micro-
+        rebalancing during sunset / cloud transits / load steps:
+
+        - **Power dead-band** = 200 W. Below this the cycle counts as
+          idle. Wider than the inverter's idle-state drift; still well
+          below any meaningful charge/discharge.
+        - **Idle cycles to end** = 18 (~3 min at the default 10 s
+          interval). A 30 s gap that comes back into discharge keeps
+          the session intact; 3 min of true idle ends it.
+        - **Direction-change cycles to flip** = 3. A single cycle of
+          the opposite direction (briefly +50 W of charge during a
+          discharge transient) does NOT end the session. Three in a
+          row does.
+
+        Pre-hysteresis (50 W / 3 idle / 1-cycle flip) caused
+        screenshots where the user's 1-hour continuous discharge was
+        reported as a 2-minute session because the inverter briefly
+        rebalanced through 0 W during the sunset transition (#TBD).
         """
-        POWER_THRESHOLD = 50.0
-        IDLE_CYCLES_TO_END = 3
+        POWER_THRESHOLD = 200.0
+        IDLE_CYCLES_TO_END = 18
+        OPPOSITE_CYCLES_TO_FLIP = 3
 
         charging = power.battery_charge_power > POWER_THRESHOLD
         discharging = power.battery_discharge_power > POWER_THRESHOLD
@@ -3319,13 +3338,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         else:
             current_type = "idle"
 
-        # Handle direction change — end current session, start new one
-        if session.active and current_type != "idle" and current_type != session.session_type:
-            session.active = False
-            _LOGGER.debug(
-                "Battery session ended (direction change): %s, %.2f kWh, %d min",
-                session.session_type, session.energy_kwh, session.duration_minutes,
-            )
+        # Direction-change hysteresis — require N consecutive cycles
+        # in the opposite direction before treating it as a real flip.
+        if (
+            session.active
+            and current_type != "idle"
+            and current_type != session.session_type
+        ):
+            self._battery_session_opposite_count += 1
+            if self._battery_session_opposite_count >= OPPOSITE_CYCLES_TO_FLIP:
+                session.active = False
+                self._battery_session_opposite_count = 0
+                _LOGGER.debug(
+                    "Battery session ended (direction flip after %d cycles): %s, %.2f kWh, %d min",
+                    OPPOSITE_CYCLES_TO_FLIP,
+                    session.session_type,
+                    session.energy_kwh,
+                    session.duration_minutes,
+                )
+            else:
+                # Transient opposite-direction blip — keep session
+                # alive but skip accumulation this cycle.
+                return
+        elif current_type == session.session_type:
+            # Matched the active session direction → reset the counter.
+            self._battery_session_opposite_count = 0
 
         # Handle idle — count consecutive idle cycles
         if current_type == "idle":
@@ -3333,6 +3370,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._battery_session_idle_count += 1
                 if self._battery_session_idle_count >= IDLE_CYCLES_TO_END:
                     session.active = False
+                    self._battery_session_opposite_count = 0
                     _LOGGER.debug(
                         "Battery session ended (idle): %s, %.2f kWh, %d min",
                         session.session_type, session.energy_kwh, session.duration_minutes,
