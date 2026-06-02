@@ -166,7 +166,6 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SELECT,
     Platform.TIME,
-    Platform.BUTTON,
 ]
 
 
@@ -647,6 +646,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
     # Idempotent; only acts while the legacy key is present.
     _migrate_limit_surplus_to_max(hass, entry)
+
+    # Remove orphaned per-charger set-default button entities — the
+    # button itself was retired in v1.7.0-beta.11 (#355 follow-up).
+    # Idempotent; only fires on installs that still have the registry
+    # entry from a previous version.
+    try:
+        from homeassistant.helpers import entity_registry as er
+        registry = er.async_get(hass)
+        for ent in list(er.async_entries_for_config_entry(registry, entry.entry_id)):
+            if ent.domain == "button" and (ent.unique_id or "").endswith(
+                "_set_default_target",
+            ):
+                _LOGGER.info(
+                    "Removing retired set-default button %s", ent.entity_id,
+                )
+                registry.async_remove(ent.entity_id)
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.debug("Set-default button cleanup skipped: %s", exc)
 
     # Merge entry.data and entry.options for complete configuration
     full_config = {**entry.data, **entry.options}

@@ -338,6 +338,20 @@ class SEMEVStatusCard extends SEMLitBase {
         const minPct = ((minVal - scaleMin) / span) * 100;
         const maxPct = ((maxVal - scaleMin) / span) * 100;
         const atFull = maxVal >= scaleMax - 1e-6;
+        // #355: split affordance for handles that VISUALLY overlap.
+        // The threshold is the larger of one step OR 2% of the slider
+        // span — kWh mode has step=0.5 over a 0-200 span (0.25% per
+        // step) so users routinely land both handles within 0.25% of
+        // each other yet visually identical. SOC % mode has step=5
+        // over a 50-100 span (10% per step) so one step IS visible
+        // separation. Using percent-of-scale instead of raw value
+        // makes the tolerance unit-agnostic and the post-tap result
+        // always visually separated.
+        const stepNudge = parseFloat(
+            this._hass?.states[minEntityId]?.attributes?.step,
+        ) || (scaleMax > 50 ? 1 : 5);
+        const minVisualGap = Math.max(stepNudge, (scaleMax - scaleMin) * 0.02);
+        const stacked = (maxVal - minVal) < minVisualGap - 1e-6;
 
         return html`
             <div class="range-wrap">
@@ -351,6 +365,33 @@ class SEMEVStatusCard extends SEMLitBase {
                         @pointerdown=${(e) => this._rangeHandleStart(e, 'min', minEntityId, maxEntityId, scaleMin, scaleMax)}></div>
                     <div class="range-handle range-handle-max" style="left:${maxPct}%"
                         @pointerdown=${(e) => this._rangeHandleStart(e, 'max', minEntityId, maxEntityId, scaleMin, scaleMax)}></div>
+                    ${stacked ? html`
+                        <span class="range-split"
+                              style="left:${minPct}%"
+                              title="${this._t('separate_handles')}"
+                              @click=${(ev) => {
+                                  ev.stopPropagation();
+                                  // Drop Min so the post-action visual
+                                  // gap is at least ``minVisualGap`` —
+                                  // matches the same threshold used by
+                                  // ``stacked`` so the icon reliably
+                                  // disappears after one tap. If Min
+                                  // can't drop (already at the floor),
+                                  // push Max up by the same amount.
+                                  const target = maxVal - minVisualGap;
+                                  if (target >= scaleMin) {
+                                      this._setNumber(minEntityId, target);
+                                  } else {
+                                      this._setNumber(
+                                          maxEntityId,
+                                          Math.min(scaleMax, minVal + minVisualGap),
+                                      );
+                                  }
+                              }}>
+                            <ha-icon icon="mdi:arrow-split-vertical"
+                                     style="--mdc-icon-size:14px"></ha-icon>
+                        </span>
+                    ` : nothing}
                 </div>
             </div>`;
     }
@@ -470,7 +511,6 @@ class SEMEVStatusCard extends SEMLitBase {
         const targetTimeId = `time.sem_charger_${id}_target_time`;
         const targetTimeRaw = this._stateStr(targetTimeId);  // "HH:MM:SS"
         const targetTimeLabel = targetTimeRaw ? targetTimeRaw.slice(0, 5) : '—';
-        const setDefaultBtnId = `button.sem_charger_${id}_set_default_target`;
         // Deadline / cheap-window status live on the charging_state sensor (primary).
         const csAttrs = this._stateAttrs(`${this._prefix}charging_state`);
         const deadlineUnreachable = csAttrs.ev_deadline_reachable === false;
@@ -606,13 +646,6 @@ class SEMEVStatusCard extends SEMLitBase {
                         </div>
                     ` : nothing}
                     ${this._renderPlanStrip()}
-                    <div class="ct-row">
-                        <span class="ct-set-default"
-                            @click=${() => this._callService('button', 'press', { entity_id: setDefaultBtnId })}>
-                            <ha-icon icon="mdi:content-save-cog" style="--mdc-icon-size:13px"></ha-icon>
-                            ${this._t('set_as_default')}
-                        </span>
-                    </div>
                 </div>
 
                 <div class="charger-settings">
@@ -1150,12 +1183,23 @@ class SEMEVStatusCard extends SEMLitBase {
                 width: 8px; height: 8px; border-radius: 2px;
                 display: inline-block;
             }
-            .ct-set-default {
-                margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
-                font-size: 11px; color: var(--secondary-text-color, #999);
-                cursor: pointer; padding: 2px 0;
+            /* #355 — split affordance shown only when the two range
+               handles share a value. Sits on top of the stacked
+               handles; tapping it drops Min by one step so the
+               handles become individually grabbable again. */
+            .range-split {
+                position: absolute; top: 50%;
+                transform: translate(-50%, -50%);
+                width: 22px; height: 22px; border-radius: 50%;
+                display: flex; align-items: center; justify-content: center;
+                background: rgba(0,0,0,0.55);
+                color: #fff;
+                cursor: pointer;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+                pointer-events: auto;
+                z-index: 2;
             }
-            .ct-set-default:hover { color: #8DC892; }
+            .range-split:hover { background: rgba(0,0,0,0.75); }
             .ct-val {
                 background: rgba(141,200,146,0.14); color: #8DC892;
                 border: 1px solid rgba(141,200,146,0.35);

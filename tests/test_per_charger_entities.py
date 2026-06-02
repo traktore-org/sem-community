@@ -264,38 +264,12 @@ class TestPerChargerTargetTime:
         assert _parse_hhmm("junk") == dt_time(7, 0)
 
 
-@pytest.mark.unit
-class TestSetDefaultButton:
-    """Per-charger 'set target as default' button (#246B)."""
-
-    @pytest.mark.asyncio
-    async def test_press_copies_target_to_global(self):
-        from custom_components.solar_energy_management.button import (
-            SEMPerChargerSetDefaultButton,
-        )
-        from homeassistant.components.button import ButtonEntityDescription
-
-        chargers = [{
-            "id": "ev_charger_1", "name": "Wallbox",
-            "daily_ev_target": 15, "daily_ev_target_max": 40,
-            "ev_target_soc": 70, "ev_target_soc_max": 90,
-            "ev_target_type": "kwh", "ev_target_time": "06:00",
-        }]
-        coord = _mock_coordinator(chargers)
-        coord.config = {"ev_chargers": chargers}
-        entry = _mock_entry(chargers)
-        desc = ButtonEntityDescription(key="charger_ev_charger_1_set_default_target")
-        btn = SEMPerChargerSetDefaultButton(coord, desc, entry, "ev_charger_1")
-        btn.hass = coord.hass
-
-        await btn.async_press()
-
-        call = coord.hass.config_entries.async_update_entry.call_args
-        new_options = call[1]["options"]
-        assert new_options["daily_ev_target"] == 15
-        assert new_options["daily_ev_target_max"] == 40
-        assert new_options["ev_target_soc"] == 70
-        assert new_options["ev_target_time"] == "06:00"
+# TestSetDefaultButton — RETIRED v1.7.0-beta.11 (#355 follow-up).
+# The per-charger "Set target as default" button was retired; HA's number-
+# entity state restoration already persists the current slider values, and
+# the inherit-on-new-charger flow served a niche workflow that nobody
+# observed using. The button.py module is now a cleanup-only stub that
+# removes orphaned set-default button entities from the entity registry.
 
 
 @pytest.mark.unit
