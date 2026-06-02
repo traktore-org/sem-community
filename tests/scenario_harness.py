@@ -276,6 +276,15 @@ def _build_coordinator(scenario: Dict[str, Any]):
     # explicit empty defaults keep the harness deterministic.
     coord._ev_taper_detector = None
     coord._ev_taper_detectors = {}
+
+    # Night-charging path (``_build_charging_context`` calls
+    # ``_compute_night_plan`` when ``is_night and night_target > 0.1``)
+    # reaches into ``_load_manager`` for the peak limit and
+    # ``_peak_consumption_15min`` for the rolling 15-min peak (#288).
+    # Provide ``None`` stubs so the truthy-check fallbacks fire — the
+    # harness uses the config-default peak limit instead.
+    coord._load_manager = None
+    coord._peak_consumption_15min = None
     # Forecast stub — Zone 3 needs ``forecast.available`` and
     # ``forecast.forecast_remaining_today_kwh`` to decide solar_only vs
     # battery_assist. With dampening_factor=1.0 and surplus_factor=0.5
@@ -308,7 +317,21 @@ def _build_coordinator(scenario: Dict[str, Any]):
     coord._state_machine = MagicMock()
     coord._state_machine.current_state = None
     coord.time_manager = MagicMock()
-    coord.time_manager.is_night_mode = MagicMock(return_value=False)
+    # Scenario-controlled night flag (default day). Set ``is_night: true`` in
+    # the YAML's top-level config block to flip into night mode — required
+    # for night-charging deadline + tariff-window scenarios (#246/#247/#268).
+    scenario_is_night = bool(cfg.get("is_night", False))
+    coord.time_manager.is_night_mode = MagicMock(return_value=scenario_is_night)
+    # Scenario-controlled tariff level for solar_plus_cheap regime. One of
+    # very_cheap / cheap / normal / expensive / very_expensive (matches
+    # consts.tariff.PriceLevel). Plumbed onto a stub tariff_provider so
+    # build_charger_view can populate FleetContext.tariff_level.
+    scenario_tariff = cfg.get("tariff_level")
+    if scenario_tariff is not None:
+        tariff_stub = MagicMock()
+        tariff_stub.current_level = str(scenario_tariff)
+        tariff_stub.available = True
+        coord._tariff_provider = tariff_stub
     coord._sensor_reader = MagicMock()
     return coord
 
