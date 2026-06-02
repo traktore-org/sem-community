@@ -1,0 +1,85 @@
+name: "2026-06-02 solar_only at night must idle (#346)"
+
+coverage:
+  - mode: solar_only
+    regime: night_must_idle
+    issue: "#346"
+
+description: |
+  Pins the #346 contract: ``charge_mode = solar_only`` MUST NOT
+  charge the EV at night, regardless of what the legacy strategy
+  layer used to do.
+
+  PROD bug evidence (single KEBA, charge_mode=solar_only, 22:07
+  → 00:48):
+  - solar = 0 W the entire window
+  - grid swung between import and 0
+  - battery discharged 4474 W → 475 W
+  - EV charged ~4 kWh from the home battery + grid
+  - ``sensor.sem_charging_state`` correctly read "Night charging
+    disabled" — the state machine knew solar_only is not in
+    ``MODE_NIGHT_ALLOWED`` — but the strategy short-circuited
+    to ``night_grid`` BEFORE the per-charger mode dispatch (legacy
+    ``_determine_charging_strategy`` line 2552).
+
+  Post arch-rewrite (#358) ``SolarOnlyMode.decide()`` is the
+  authoritative path; solar=0 + is_night=true MUST return IDLE
+  no matter what the rest of the legacy flow used to do. This
+  scenario locks that in.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  # Scenario-controlled time flag (new in v1.7 prep). The legacy
+  # bug fired only in night mode — set the flag here.
+  is_night: true
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Replays the PROD trace's three sample points + steady-state padding
+# between them so any "charged for one cycle then stopped" regression
+# fails on the cumulative-energy assertion.
+timeline:
+  - t: 0       # 22:07 in the trace
+    solar_power: 0
+    grid_power: -353       # -ve = import
+    battery_power: -4474   # -ve = discharge
+    battery_soc: 80
+    ev_power: 0            # SEM correctly commanded 0 — EV pulls only what SEM allows
+    ev_connected: true
+
+  - t: 1380    # 22:30 (23 minutes later)
+    grid_power: -3350
+    battery_power: -527
+    battery_soc: 75
+
+  - t: 9660    # 00:48 (PROD says charge stopped here; we use it
+                # as the final assertion point)
+    grid_power: 0
+    battery_power: -475
+    battery_soc: 70
+
+expect:
+  # The headline assertion: canonical_strategy must be IDLE the
+  # entire window. NOT solar_only (which would imply day-mode
+  # forecast logic), NOT min_pv (which the legacy night-grid path
+  # produced and is what made the EV draw in PROD).
+  strategy_substring: "idle"
+
+  # Cumulative: zero grid → EV energy. The PROD bug delivered
+  # ~4 kWh of grid-to-EV; lock it at 0 (with a 100Wh slack for
+  # round-off).
+  cumulative:
+    flow_grid_to_ev_kwh_max: 0.1

@@ -2941,6 +2941,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         from .decide import decide as _decide
         from .flow_calculator import EVBudgetStrategy
 
+        # Resolve current tariff level for the primary view. Pre-this
+        # commit ``_primary_view`` was built without ``tariff_level``,
+        # so ``SolarPlusCheapMode.decide()`` always saw ``None`` and
+        # the daytime expensive-window pause + night cheap-window
+        # behaviour both no-op'd. The multi-charger loop downstream
+        # already passes its own tariff bits; this brings the primary
+        # path to parity.
+        _tariff_level: Optional[str] = None
+        try:
+            _provider = getattr(self, "_tariff_provider", None)
+            if _provider is not None and getattr(_provider, "available", True):
+                _level = getattr(_provider, "current_level", None)
+                if isinstance(_level, str):
+                    _tariff_level = _level
+        except Exception:
+            _tariff_level = None
+
         _primary_view = build_charger_view(
             charger_id=(_primary_cfg.get("id") or "ev_charger"),
             charger_cfg=_primary_cfg,
@@ -2958,6 +2975,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # to IDLE for SOLAR_ONLY at Zone 3 + viable forecast — the
             # regression captured by tests/scenarios/2026-05-29_budget_unify_redirect.yaml.
             forecast_remaining_kwh=forecast_remaining,
+            tariff_level=_tariff_level,
         )
         _primary_decision = _decide(_primary_view)
         strategy = _primary_decision.intent.value
