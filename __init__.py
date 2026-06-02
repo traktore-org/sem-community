@@ -910,11 +910,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         else:
             _LOGGER.debug("Heat pump not configured (no relay entities)")
 
-    except Exception as err:
-        _LOGGER.warning(
-            "Load management initialization failed (non-critical): %s. "
-            "Load management features will be unavailable.",
-            err
+    except Exception:
+        # Optional feature — keep setup alive so SEM still loads with
+        # solar / EV / battery control. Use ``exception`` so the full
+        # stack trace is captured in the log; the previous ``warning``
+        # printed only the str() of the error, which made
+        # post-incident debugging hard. Downstream code guards every
+        # ``coordinator._load_manager`` access with an ``if`` check —
+        # leaving it None is a supported state.
+        _LOGGER.exception(
+            "Load management initialization failed (non-critical). "
+            "Load management features will be unavailable."
         )
 
     # Setup platforms (critical - must succeed)
@@ -1106,7 +1112,18 @@ async def async_remove_config_entry_device(
 
 async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Unload a config entry."""
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        # Clear the SurplusController's registered device list so a
+        # subsequent setup doesn't see the prior cycle's EV / heat-pump
+        # / switch devices still in the dispatch table. Each reload
+        # would otherwise grow the list. Guarded — coordinator may be
+        # missing if setup never completed.
+        if coordinator is not None:
+            sc = getattr(coordinator, "_surplus_controller", None)
+            if sc is not None and hasattr(sc, "clear_devices"):
+                sc.clear_devices()
+
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
         # Remove all registered services (quality scale: config-entry-unloading)

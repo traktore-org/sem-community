@@ -263,6 +263,20 @@ class SurplusController:
             del self._devices[device_id]
             _LOGGER.info("Unregistered device: %s", device_id)
 
+    def clear_devices(self) -> None:
+        """Drop every registered device.
+
+        Called from ``async_unload_entry`` so a HA-side reload doesn't
+        leak the prior cycle's device registrations into the next setup.
+        Pre-fix, reloads left the registered EV charger / heat pump /
+        switch devices in ``self._devices`` — the new setup re-registered
+        them on top, causing each reload to grow the dispatch list.
+        """
+        if self._devices:
+            count = len(self._devices)
+            self._devices.clear()
+            _LOGGER.info("Cleared %d registered devices on unload", count)
+
     def get_device(self, device_id: str) -> Optional[ControllableDevice]:
         """Get a registered device by ID."""
         return self._devices.get(device_id)
