@@ -17,6 +17,7 @@ from .charger_types import (
     ChargerPower,
     ChargerView,
     FleetContext,
+    FleetCycleState,
 )
 
 if TYPE_CHECKING:  # pragma: no cover — type-only
@@ -24,45 +25,59 @@ if TYPE_CHECKING:  # pragma: no cover — type-only
 
 
 def build_charger_view(
+    fleet_state: FleetCycleState,
+    *,
     charger_id: str,
     charger_cfg: Mapping[str, Any],
     mode: str,
-    power_reading: "PowerReadings",
     daily_ev_kwh: float,
-    is_night: bool,
-    config: Mapping[str, Any],
-    *,
     target_kwh: Optional[float] = None,
     target_soc: Optional[float] = None,
     deadline_amps: int = 0,
-    tariff_level: Optional[str] = None,
     tariff_wait: bool = False,
     solar_committed_w: float = 0.0,
-    forecast_remaining_kwh: float = 0.0,
 ) -> ChargerView:
-    """Construct a ChargerView from the coordinator's per-cycle state.
+    """Construct a ChargerView from a per-cycle FleetCycleState +
+    per-charger overrides.
+
+    The :class:`FleetCycleState` is the single source of truth for
+    fleet-level inputs (power readings, SOC thresholds, is_night,
+    tariff_level, forecast_remaining_kwh). Every ``decide()`` for
+    every charger in the same cycle sees the SAME ``fleet_state`` —
+    eliminating the post-#358 plumbing-asymmetry class where some
+    callers passed ``tariff_level`` / ``forecast_remaining_kwh`` /
+    night-plan signals and others didn't.
+
+    Per-charger fields stay as direct kwargs because they LEGITIMATELY
+    vary across chargers in the same cycle:
+
+      * ``target_kwh`` / ``target_soc`` — per-charger remaining need
+      * ``deadline_amps`` — per-charger night-plan floor (#246)
+      * ``tariff_wait`` — per-charger night-plan wait flag (#247)
+      * ``solar_committed_w`` — solar already claimed by
+        higher-priority chargers in the cascade
 
     Args:
+        fleet_state: The cycle's fleet inputs. Built ONCE per cycle
+            by ``coordinator._build_fleet_cycle_state``.
         charger_id: The charger's id (matches ``ev_chargers[i]["id"]``).
         charger_cfg: The per-charger config dict.
         mode: Resolved per-charger charge mode (from
             ``effective_charge_mode_for``).
-        power_reading: The fleet PowerReadings; we extract this
-            charger's slice via ``ev_power_per_charger[id]`` and
-            ``ev_connected_per_charger[id]``.
-        daily_ev_kwh: Per-charger calendar-reset kWh today (from
-            ``_daily_ev_per_charger[id]``).
-        is_night: ``time_manager.is_night_mode()``.
-        config: The global config dict (for SOC thresholds, etc.).
+        daily_ev_kwh: Per-charger calendar-reset kWh today.
         target_kwh: Per-charger remaining-to-Min kWh, or None.
         target_soc: Per-charger SOC target, or None.
         deadline_amps: Pre-computed deadline floor amps (#246), or 0.
-        tariff_level: Tariff price level string, or None.
-        tariff_wait: Night planner says wait for cheap (#247).
+        tariff_wait: Per-charger night-planner wait flag (#247).
+        solar_committed_w: Solar already committed to higher-priority
+            chargers in this cycle.
 
     Returns:
         An immutable :class:`ChargerView` for ``decide()``.
     """
+    power_reading = fleet_state.power
+    config = fleet_state.config
+
     # Per-charger power slice
     ev_power_per_charger = getattr(power_reading, "ev_power_per_charger", None) or {}
     this_charger_w = float(ev_power_per_charger.get(charger_id, 0.0))
@@ -91,9 +106,15 @@ def build_charger_view(
 
     ce = ChargerEnergy(charger_id=charger_id, day_kwh=daily_ev_kwh)
 
-    # Fleet context — same object across every ChargerView in a cycle
-    # (the coordinator should build it ONCE outside the per-charger
-    # loop and pass it in; the test fixture builds one here).
+    # FleetContext — derived ENTIRELY from fleet_state. The ONLY
+    # per-call variable is ``solar_committed_w`` (carries the
+    # priority cascade state from higher-priority chargers).
+    #
+    # Adding a new fleet input is a ONE-PLACE change: add the field
+    # to FleetCycleState (in charger_types.py) + read it here. The
+    # AST lint at ``tests/test_fleet_state_completeness.py`` fails
+    # CI if any ``build_charger_view`` call site bypasses this state
+    # and passes a fleet-level kwarg directly.
     fleet = FleetContext(
         solar_w=float(getattr(power_reading, "solar_power", 0.0) or 0.0),
         home_w=float(getattr(power_reading, "home_consumption_power", 0.0) or 0.0),
@@ -102,15 +123,15 @@ def build_charger_view(
         battery_soc=float(getattr(power_reading, "battery_soc", 0.0) or 0.0),
         grid_import_w=float(getattr(power_reading, "grid_import_power", 0.0) or 0.0),
         grid_export_w=float(getattr(power_reading, "grid_export_power", 0.0) or 0.0),
-        is_night=bool(is_night),
-        tariff_level=tariff_level,
+        is_night=fleet_state.is_night,
+        tariff_level=fleet_state.tariff_level,
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),
         battery_floor_soc=float(config.get("battery_assist_floor_soc", 60)),
         battery_capacity_kwh=float(config.get("battery_capacity_kwh", 15)),
         solar_committed_w=float(solar_committed_w),
-        forecast_remaining_kwh=float(forecast_remaining_kwh),
+        forecast_remaining_kwh=fleet_state.forecast_remaining_kwh,
     )
 
     # Merge per-charger config with the tariff_wait flag so

@@ -5,6 +5,98 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.7] — 2026-06-02
+
+The v1.7 arch capstone — the **FleetCycleState refactor** that
+structurally retires the gap class behind the three production fixes
+shipped in beta.5 (SOLAR_ONLY redirect, tariff_level, night-plan
+ordering). Plus 4 more transition-class scenarios.
+
+### Production refactor — FleetCycleState as single source of truth
+
+The three beta.5 production fixes were tactical patches for one
+structural smell: `build_charger_view` had each call site
+re-resolving fleet-level inputs (forecast, tariff, is_night, etc.)
+independently. The primary view in `_build_charging_context` and
+the multi-charger loop each handled this differently — and any
+new fleet input added would land in only one of them.
+
+The fix: **`FleetCycleState`** — an immutable per-cycle struct
+holding every fleet-level input that any charger's `decide()` could
+need. Built ONCE per cycle by
+`coordinator._build_fleet_cycle_state`. `build_charger_view` now
+takes it as the first positional arg and derives the per-view
+`FleetContext` from it. Per-charger overrides (`target_kwh`,
+`deadline_amps`, `tariff_wait`, `solar_committed_w`) stay as direct
+kwargs because they legitimately vary across chargers in the same
+cycle.
+
+What this eliminates:
+
+* The 3 separate inline blocks resolving forecast/tariff/is_night
+  per call site
+* The asymmetry where multi-charger loop saw `tariff_level` but
+  primary didn't (and similar for other fields)
+* The "did I remember to plumb the new field?" mental load every
+  PR that touches fleet state
+
+The structural guarantee: any future fleet-level input is a
+**one-place change** (add the field to `FleetCycleState`).
+
+### Enforcement — AST lint as a CI gate
+
+`tests/test_fleet_state_completeness.py` walks `coordinator/` AST
+and fails CI if any `build_charger_view` caller:
+
+  * Forgets the `fleet_state` positional, OR
+  * Passes any of the deprecated fleet-level kwargs (`power_reading`,
+    `is_night`, `config`, `tariff_level`, `forecast_remaining_kwh`)
+
+Catches the regression class on PR review, not at runtime. Same
+shape as the existing FLEET-READ AST lint at
+`tests/test_ev_control_fleet_reads.py`.
+
+### Invariant tests
+
+`tests/test_fleet_cycle_state.py` pins the behavioural contract:
+
+  * `FleetCycleState` is frozen — instances cannot mutate
+  * Equal inputs produce equal instances (value-type semantics)
+  * Two views built from the same `FleetCycleState` in the same
+    cycle agree on every fleet-level field (only
+    `solar_committed_w` differs per view, by design)
+
+### Transition-class scenarios
+
+Four new YAML scenarios in `tests/scenarios/` covering state
+transitions that steady-state scenarios miss:
+
+* `sunset_transition` — solar drops + `is_night` flips false→true.
+  solar_only must IDLE on the night-mode flip.
+* `sunrise_transition` — mirror: `is_night` true→false + solar
+  rising. min_plus_solar transitions cleanly out of MIN_PV.
+* `multi_charger_plug_events` — two solar_only chargers, one
+  unplugs mid-timeline. Pins per-charger budget conservation
+  under plug-state changes.
+* `full_day_replay` — 24h walkthrough on 10-min cycles (144
+  cycles, runs <1s). Catches daily-integrator drift, state
+  machine blips on zone boundaries.
+
+Plus two harness extensions enabling these:
+`ev_connected_per_charger` / `ev_charging_per_charger` (per-charger
+plug state) and a per-row `is_night` override (for sunset/sunrise
+walks).
+
+### Verification
+
+2879 tests passing, 7 skipped, 0 failed, 0 xfailed (~35s runtime).
++16 tests since beta.6 (4 scenarios + 7 FleetCycleState contract
+tests + 4 misc + the AST lint's 3).
+
+22 scenarios total now.
+
+---
+
 ## [1.7.0-beta.6] — 2026-06-02
 
 Diagnostic surface expansion for two more reported issues — same
