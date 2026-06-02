@@ -1,0 +1,66 @@
+name: "2026-06-02 EV unplug mid-charge — strategy must idle immediately"
+
+coverage:
+  - mode: solar_only
+    regime: night_must_idle
+    issue: "transition"
+
+description: |
+  Mirror of plug-in: while SEM is actively charging the EV in
+  solar_only mode, the user unplugs. The strategy must IDLE on
+  the very next cycle — no "ghost session" where SEM keeps
+  trying to push current to a disconnected charger.
+
+  This is the failure mode #243 was the worst case of (full car
+  plugged in, SEM keeps offering current → log spam). Unplug
+  should be the clean fast path.
+
+  What this pins:
+    * Cycles 0-2: ev_connected=true, charging actively (~6A).
+    * Cycle 3+: ev_connected=false. Strategy MUST move to IDLE
+      (no continuing commands).
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  # ── Charging happily
+  - t: 0
+    solar_power: 6000
+    grid_power: 3500
+    battery_power: 1000
+    battery_soc: 75
+    ev_power: 4140
+    ev_connected: true
+
+  - t: 30
+  - t: 60
+
+  # ── Unplug at t=90
+  - t: 90
+    ev_power: 0
+    ev_connected: false
+
+  - t: 120
+  - t: 150
+
+expect:
+  # Across the run, at least ONE cycle must register IDLE — that's
+  # the post-unplug behavior. (Without it, "EV disconnected but
+  # SEM kept trying to charge" passes silently.)
+  strategy_substring: "idle"
