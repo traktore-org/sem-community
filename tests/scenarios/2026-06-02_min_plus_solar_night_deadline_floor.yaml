@@ -1,0 +1,67 @@
+name: "2026-06-02 min_plus_solar night deadline floor (#246)"
+
+coverage:
+  - mode: min_plus_solar
+    regime: night_deadline_floor
+    issue: "#246"
+
+description: |
+  Phase 2 (#246) target-time deadline: when the user sets a
+  ``target_time`` (default 07:00) and we're charging overnight,
+  the night planner computes a current floor needed to reach Min
+  by the deadline. The planner exposes this on
+  ``NightChargePlan.deadline_amps``; ``MinPlusSolarMode._decide_night``
+  reads it via ``view.deadline_amps`` and commands at least that
+  many amps as the floor.
+
+  Pre-this-commit the deadline_amps signal wasn't reaching the
+  primary view's ``decide()`` because ``_compute_night_plan`` was
+  invoked AFTER the primary view was built. Hoisted in the same
+  commit that fixed the SolarPlusCheapMode tariff_wait gap.
+
+  Distinct from ``night_top_up_at_min`` (#268 scenario) — that one
+  verifies the canonical_strategy MIN_PV routing; this one
+  verifies the deadline path specifically commands the deadline
+  floor amps.
+
+  Without a real tariff data feed, the harness's planner falls
+  through to plain deadline-mode and computes ``deadline_amps=6``
+  (Min) so the EV reaches Min by 07:00 from now-ish. The reason
+  text confirms via "deadline floor 6A".
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  target_peak_limit: 10.0    # high so peak doesn't constrain the test
+  is_night: true
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  - t: 0
+    solar_power: 0
+    grid_power: -4500
+    battery_power: 0
+    battery_soc: 50
+    ev_power: 4140             # 6A at Min
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  # Deadline-driven night charging routes to canonical MIN_PV
+  # (line 2967 of coordinator: is_night + mode != solar_only).
+  strategy_substring: "min_pv"

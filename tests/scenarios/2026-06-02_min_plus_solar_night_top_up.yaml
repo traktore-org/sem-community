@@ -1,0 +1,63 @@
+name: "2026-06-02 min_plus_solar night top-up at Min current (#268)"
+
+coverage:
+  - mode: min_plus_solar
+    regime: night_top_up_at_min
+    issue: "#268"
+
+description: |
+  ``min_plus_solar`` at night with EV connected + remaining
+  daily target must top up at the Min current floor (6A * 3 *
+  230 = 4140W) — the canonical-strategy mapper routes this to
+  ``EVBudgetStrategy.MIN_PV`` which floors net_w at
+  ``min_power_floor_w``.
+
+  Related to #268's peak-limit-breach class: the *strategy*
+  selecting MIN_PV is correct; the *actuator* (ev_control.py)
+  is the layer that previously over-commanded grid by deriving
+  house load from grid_import - ev_power instead of
+  home_consumption_power. The actuator-level repro lives in
+  ``tests/test_charging_control.py`` — this YAML pins the
+  strategy-side prereq so a future arch change that drops the
+  MIN_PV night path (and silently routes night charging
+  through something else) fails here.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  target_peak_limit: 6.0
+  is_night: true
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Overnight: no solar, EV connected, daily target not yet met.
+# MinPlusSolarMode._decide_night runs; deadline path is OFF (no
+# target_time set), so it falls into the plain top-up branch
+# at Min current.
+timeline:
+  - t: 0
+    solar_power: 0
+    grid_power: -4500          # importing to cover EV at Min
+    battery_power: 0
+    battery_soc: 50            # battery has headroom for assist
+    ev_power: 4140             # 6A at 3-phase 230V
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  # Night top-up routes to canonical EVBudgetStrategy.MIN_PV.
+  strategy_substring: "min_pv"

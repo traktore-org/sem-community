@@ -1,4 +1,9 @@
 name: "2026-05-28 surplus leak — Zone 3 solar_only, EV pulled grid"
+
+coverage:
+  - mode: solar_only
+    regime: zone3_day_surplus_leak
+    issue: "#284"
 description: |
   PROD plug-in 16:12 local (14:12 UTC). Battery SOC 75% (Zone 3, above
   the 70% buffer SOC), Auto mode, late-afternoon solar 5.2 kW dropping
@@ -34,6 +39,12 @@ config:
   daily_ev_target: 7.0
   ev_chargers:
     - id: "ev_charger"
+      # Post #277 Phase C arch-rewrite: ``charge_mode`` is the
+      # authoritative user-intent input. The legacy ``"auto"`` /
+      # ``"pv"`` strings are dead. This scenario captures a surplus-
+      # leak regression in the SOLAR_ONLY regime, so we pin the mode
+      # to make the assertion target unambiguous.
+      charge_mode: "solar_only"
       ev_charging_mode: "auto"
       daily_ev_target: 7.0
 

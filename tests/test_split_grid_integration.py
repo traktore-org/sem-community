@@ -63,7 +63,7 @@ def _make_energy_dashboard_config(
     return ed
 
 
-def _make_reader_with_states(hass, states_dict, ed_config, extra_config=None):
+def _make_reader_with_states(mock_hass, states_dict, ed_config, extra_config=None):
     """Create a SensorReader with mock states and Energy Dashboard config."""
     def mock_get(entity_id):
         return states_dict.get(entity_id)
@@ -79,14 +79,14 @@ def _make_reader_with_states(hass, states_dict, ed_config, extra_config=None):
                 all_states.append(s)
         return all_states
 
-    hass.states.get = mock_get
-    hass.states.async_all = mock_async_all
+    mock_hass.states.get = mock_get
+    mock_hass.states.async_all = mock_async_all
 
     config = {"update_interval": 10}
     if extra_config:
         config.update(extra_config)
 
-    reader = SensorReader(hass, config)
+    reader = SensorReader(mock_hass, config)
     reader._energy_dashboard_config = ed_config
     return reader
 

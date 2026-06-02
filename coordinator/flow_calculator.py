@@ -144,6 +144,57 @@ class EVBudget:
             self.current_a = 0
 
 
+def battery_redirect_w(
+    battery_charge_w: float,
+    battery_soc: float,
+    battery_capacity_kwh: float,
+    forecast_remaining_kwh: float,
+) -> float:
+    """How much battery charge power can be redirected to EV.
+
+    Forecast-aware: if the remaining solar today can still refill the
+    battery, divert some of the current battery_charge_w to the EV
+    instead — proportional to how much "extra" forecast exists beyond
+    the battery's need. Without a forecast, fall back to the 80% SOC
+    threshold (battery full enough that redirect is safe).
+
+    Module-level (not a method on FlowCalculator) so the strategy
+    decision path in ``decide.py`` can compute the same redirect for
+    the intent decision WITHOUT instantiating a FlowCalculator —
+    avoiding the regression where ``SolarOnlyMode.decide()`` checked
+    bare surplus against the charger min, returned IDLE, and so
+    ``calculate_canonical_ev_budget(SOLAR_ONLY)``'s redirect branch
+    was never reached even though it had a viable budget. See the
+    triage in ``tests/test_scenarios.py::_XFAIL_DRIFT`` for the
+    scenario this restores.
+    """
+    if battery_charge_w <= 0:
+        return 0
+
+    battery_need_kwh = max(0, (100 - battery_soc) / 100 * battery_capacity_kwh)
+
+    if forecast_remaining_kwh > 0:
+        # Forecast available: redirect proportional to excess forecast
+        if forecast_remaining_kwh >= battery_need_kwh and battery_need_kwh > 0:
+            # Forecast covers battery — redirect proportionally.
+            # Use max(0.05, ratio) so we always redirect at least 5%
+            # at the exact boundary (forecast == battery_need gives
+            # ratio=0 without this).
+            ratio = min(1.0, 1.0 - battery_need_kwh / forecast_remaining_kwh)
+            return battery_charge_w * max(0.05, ratio)
+        elif battery_need_kwh <= 0.5:
+            # Battery nearly full — redirect all
+            return battery_charge_w
+        else:
+            # Forecast can't cover battery need — keep charging
+            return 0
+    else:
+        # No forecast — SOC threshold fallback
+        if battery_soc >= 80:
+            return battery_charge_w  # Battery full enough, redirect all
+        return 0
+
+
 class FlowCalculator:
     """Calculates power and energy flows using proportional allocation."""
 
@@ -646,35 +697,16 @@ class FlowCalculator:
                                      battery_soc: float,
                                      battery_capacity_kwh: float,
                                      forecast_remaining_kwh: float) -> float:
-        """How much battery charge power can be redirected to EV.
+        """Thin wrapper kept for method-call call sites.
 
-        Uses forecast when available: if remaining solar can still fill battery,
-        redirect proportionally. Falls back to SOC threshold without forecast.
+        Delegates to the module-level free function so the strategy
+        decision path (``decide.py``) can compute the same value
+        without instantiating a ``FlowCalculator``.
         """
-        if battery_charge_w <= 0:
-            return 0
-
-        battery_need_kwh = max(0, (100 - battery_soc) / 100 * battery_capacity_kwh)
-
-        if forecast_remaining_kwh > 0:
-            # Forecast available: redirect proportional to excess forecast
-            if forecast_remaining_kwh >= battery_need_kwh and battery_need_kwh > 0:
-                # Forecast covers battery — redirect proportionally.
-                # Use max(0.05, ratio) to always redirect at least 5% at the
-                # exact boundary (forecast == battery_need gives ratio=0 without this).
-                ratio = min(1.0, 1.0 - battery_need_kwh / forecast_remaining_kwh)
-                return battery_charge_w * max(0.05, ratio)
-            elif battery_need_kwh <= 0.5:
-                # Battery nearly full — redirect all
-                return battery_charge_w
-            else:
-                # Forecast can't cover battery need — keep charging
-                return 0
-        else:
-            # No forecast — SOC threshold fallback
-            if battery_soc >= 80:
-                return battery_charge_w  # Battery full enough, redirect all
-            return 0
+        return battery_redirect_w(
+            battery_charge_w, battery_soc,
+            battery_capacity_kwh, forecast_remaining_kwh,
+        )
 
     # ``calculate_available_power`` removed in Phase D.2 (#282). Zero
     # production callers as of v1.6.0 — the canonical EVBudget supersedes

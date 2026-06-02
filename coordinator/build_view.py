@@ -38,6 +38,7 @@ def build_charger_view(
     tariff_level: Optional[str] = None,
     tariff_wait: bool = False,
     solar_committed_w: float = 0.0,
+    forecast_remaining_kwh: float = 0.0,
 ) -> ChargerView:
     """Construct a ChargerView from the coordinator's per-cycle state.
 
@@ -109,6 +110,7 @@ def build_charger_view(
         battery_floor_soc=float(config.get("battery_assist_floor_soc", 60)),
         battery_capacity_kwh=float(config.get("battery_capacity_kwh", 15)),
         solar_committed_w=float(solar_committed_w),
+        forecast_remaining_kwh=float(forecast_remaining_kwh),
     )
 
     # Merge per-charger config with the tariff_wait flag so

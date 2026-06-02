@@ -2576,6 +2576,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             "daily_ev_energy": energy.daily_ev,
             "charging_strategy": charging_context.charging_strategy,
             "charging_strategy_reason": charging_context.charging_strategy_reason,
+            "canonical_strategy": charging_context.canonical_strategy,
             "discharge_limit": discharge_limit,
         }
         per_charger_states = getattr(self, "_effective_states_per_charger", None) or {}
@@ -2930,6 +2931,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         battery_capacity = self.battery_capacity_kwh
 
+        # Compute the night plan BEFORE the primary view so its
+        # deadline_amps + should_wait_for_cheap (tariff_wait) flow
+        # into the primary charger's ``decide()`` call. Pre-this
+        # commit the night plan was computed at the END of
+        # ``_build_charging_context``, after ``decide()`` had
+        # already run — so the primary charger never saw the
+        # tariff wait flag and ``SolarPlusCheapMode`` could only
+        # take the non-wait branch. Multi-charger loop downstream
+        # already had access via the cached ChargingContext; this
+        # brings the primary to parity.
+        night_target = remaining_floor
+        if self.time_manager.is_night_mode() and self._smart_night_charging_enabled():
+            night_target = self._calculate_forecast_night_target(
+                remaining_floor, energy, _primary_cfg,
+            )
+        night_plan = None
+        deadline_amps = 0
+        deadline_active = False
+        tariff_wait = False
+        deadline_reachable = True
+        if self.time_manager.is_night_mode() and night_target > 0.1:
+            night_plan = self._compute_night_plan(_primary_cfg, night_target, energy)
+            deadline_amps = night_plan.deadline_amps
+            deadline_active = night_plan.deadline_active
+            tariff_wait = night_plan.should_wait_for_cheap
+            deadline_reachable = night_plan.reachable
+        self._cycle_night_plan = night_plan
+
         # Step 7: use the new architecture's decide() for the primary
         # charger's strategy + reason. The legacy
         # _determine_charging_strategy / _self_consumption_strategy /
@@ -2939,6 +2968,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         from .charger_types import ChargerIntent as _CI
         from .decide import decide as _decide
         from .flow_calculator import EVBudgetStrategy
+
+        # Resolve current tariff level for the primary view. Pre-this
+        # commit ``_primary_view`` was built without ``tariff_level``,
+        # so ``SolarPlusCheapMode.decide()`` always saw ``None`` and
+        # the daytime expensive-window pause + night cheap-window
+        # behaviour both no-op'd. The multi-charger loop downstream
+        # already passes its own tariff bits; this brings the primary
+        # path to parity.
+        _tariff_level: Optional[str] = None
+        try:
+            _provider = getattr(self, "_tariff_provider", None)
+            if _provider is not None and getattr(_provider, "available", True):
+                _level = getattr(_provider, "current_level", None)
+                if isinstance(_level, str):
+                    _tariff_level = _level
+        except Exception:
+            _tariff_level = None
 
         _primary_view = build_charger_view(
             charger_id=(_primary_cfg.get("id") or "ev_charger"),
@@ -2951,6 +2997,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             is_night=self.time_manager.is_night_mode(),
             config=self.config,
             target_kwh=remaining_floor,
+            # Plumb dampened forecast so SolarOnlyMode can include the
+            # canonical battery_redirect_w in its surplus-vs-min check.
+            # Without this the bare surplus call collapses the strategy
+            # to IDLE for SOLAR_ONLY at Zone 3 + viable forecast — the
+            # regression captured by tests/scenarios/2026-05-29_budget_unify_redirect.yaml.
+            forecast_remaining_kwh=forecast_remaining,
+            tariff_level=_tariff_level,
+            # Night plan flags (#246 deadline + #247 tariff_wait).
+            # Computed above so the primary view's decide() sees the
+            # same wait-for-cheap and deadline-floor info the
+            # multi-charger loop downstream already gets.
+            tariff_wait=tariff_wait,
+            deadline_amps=deadline_amps,
         )
         _primary_decision = _decide(_primary_view)
         strategy = _primary_decision.intent.value
@@ -3026,29 +3085,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             strategy, reason,
         )
 
-        # Night charging tops up to the floor (Min), optionally reduced by forecast (#245)
-        night_target = remaining_floor
-        forecast_reduction = self._smart_night_charging_enabled()
-        if self.time_manager.is_night_mode() and forecast_reduction:
-            night_target = self._calculate_forecast_night_target(
-                remaining_floor, energy, _primary_cfg,
-            )
-
-        # Deadline (#246) + tariff-optimized timing (#247) plan for the (primary)
-        # charger — drives the displayed state and the single-charger control path.
-        # The multi-charger loop recomputes this per charger downstream.
-        night_plan = None
-        deadline_amps = 0
-        deadline_active = False
-        tariff_wait = False
-        deadline_reachable = True
-        if self.time_manager.is_night_mode() and night_target > 0.1:
-            night_plan = self._compute_night_plan(_primary_cfg, night_target, energy)
-            deadline_amps = night_plan.deadline_amps
-            deadline_active = night_plan.deadline_active
-            tariff_wait = night_plan.should_wait_for_cheap
-            deadline_reachable = night_plan.reachable
-        self._cycle_night_plan = night_plan
+        # Night plan was computed earlier (before primary view's decide())
+        # — variables ``night_target``, ``deadline_amps``,
+        # ``deadline_active``, ``tariff_wait``, ``deadline_reachable``
+        # are already populated and consumed below.
 
         return ChargingContext(
             ev_connected=power.ev_connected,
@@ -3065,6 +3105,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             remaining_ev_energy=remaining,
             charging_strategy=strategy,
             charging_strategy_reason=reason,
+            # EVBudgetStrategy is a string-constant class (not an Enum),
+            # so canonical_strategy is already the value string.
+            canonical_strategy=canonical_strategy,
             night_target_kwh=night_target,
             soc_limit_active=soc_limit_active,
             night_deadline_amps=deadline_amps,

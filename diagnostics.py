@@ -131,6 +131,37 @@ async def async_get_config_entry_diagnostics(
                 return "derived"
             return "stat_rate" if entity_id else None
 
+        # Per-source sensor lists (#378 diagnostic gap). The cached single
+        # ``solar_power`` / ``battery_power`` / ``grid_import_power`` field
+        # is the PRIMARY entity SEM reads, but for multi-inverter /
+        # multi-battery / multi-grid setups the ACTUAL aggregated value
+        # comes from the ``*_list`` fields — each entity in the list is
+        # read and summed. If a user reports "fleet sensor underreports",
+        # the gap is almost always either:
+        #   (a) the list is missing an entity (autodiscovery missed it,
+        #       or HA Energy Dashboard config doesn't include it), or
+        #   (b) one of the entities is unavailable / returns non-numeric.
+        # Capturing the lists + each entity's current state makes the
+        # triage one-shot from the diagnostics dump alone.
+        def _read_state(eid):
+            if not eid:
+                return None
+            s = hass.states.get(eid)
+            if s is None:
+                return {"state": "missing"}
+            return {"state": s.state, "unit": s.attributes.get("unit_of_measurement")}
+
+        per_source_lists = {
+            "solar_power_list": list(getattr(ed_config, "solar_power_list", []) or []),
+            "battery_power_list": list(getattr(ed_config, "battery_power_list", []) or []),
+            "grid_power_list": list(getattr(ed_config, "grid_power_list", []) or []),
+        }
+        per_source_readings = {
+            "solar": {eid: _read_state(eid) for eid in per_source_lists["solar_power_list"]},
+            "battery": {eid: _read_state(eid) for eid in per_source_lists["battery_power_list"]},
+            "grid": {eid: _read_state(eid) for eid in per_source_lists["grid_power_list"]},
+        }
+
         ed_info = {
             "has_solar": ed_config.has_solar,
             "has_grid": ed_config.has_grid,
@@ -147,6 +178,8 @@ async def async_get_config_entry_diagnostics(
                 "grid": _power_source("grid", ed_config.grid_import_power),
                 "battery": _power_source("battery", ed_config.battery_power),
             },
+            "per_source_lists": per_source_lists,
+            "per_source_readings": per_source_readings,
             "energy_sensors": {
                 "solar": ed_config.solar_energy,
                 "grid_import": ed_config.grid_import_energy,
