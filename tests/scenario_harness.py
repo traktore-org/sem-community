@@ -72,6 +72,18 @@ TIMELINE_FIELDS = {
     # multi-charger scenarios. ``ev_power`` is still the fleet sum; the
     # values here should add to it (the harness does NOT auto-derive).
     "ev_power_per_charger",
+    # 2026-06-02: per-charger plug state ``{cid: bool}``. Lets
+    # multi-charger scenarios test plug-in / plug-out independently
+    # per charger. Populates ``PowerReadings.ev_connected_per_charger``
+    # / ``ev_charging_per_charger`` which ``build_charger_view`` reads
+    # via ``getattr`` with fleet-OR fallback.
+    "ev_connected_per_charger",
+    "ev_charging_per_charger",
+    # 2026-06-02: per-cycle ``is_night`` override. Lets scenarios test
+    # sunset / sunrise transitions where ``time_manager.is_night_mode()``
+    # flips mid-timeline. Falls back to the config-level ``is_night``
+    # when not set on the row.
+    "is_night",
 }
 
 
@@ -190,6 +202,22 @@ def _build_power_readings(effective: Dict[str, Any]):
         if isinstance(per_charger, dict):
             pr.ev_power_per_charger = {
                 str(k): float(v) for k, v in per_charger.items()
+            }
+    # 2026-06-02: per-charger plug + charging state. ``build_charger_view``
+    # reads these via ``getattr`` with fleet-OR fallback. When YAML
+    # supplies the mapping, the per-charger value wins; absent keys
+    # fall through to ``pr.ev_connected`` / ``pr.ev_charging``.
+    if "ev_connected_per_charger" in effective:
+        m = effective["ev_connected_per_charger"]
+        if isinstance(m, dict):
+            pr.ev_connected_per_charger = {
+                str(k): bool(v) for k, v in m.items()
+            }
+    if "ev_charging_per_charger" in effective:
+        m = effective["ev_charging_per_charger"]
+        if isinstance(m, dict):
+            pr.ev_charging_per_charger = {
+                str(k): bool(v) for k, v in m.items()
             }
     return pr
 
@@ -405,6 +433,15 @@ async def run_scenario(yaml_path: Path) -> ScenarioRun:
         dt_util.now = lambda st=sim_time: st  # noqa: E731
 
         effective = _resolve_sticky_row(timeline, t)
+        # 2026-06-02: per-cycle ``is_night`` override. Lets a single
+        # scenario walk through sunset/sunrise by flipping the flag
+        # mid-timeline. Falls back to the config-level ``is_night``
+        # (set in ``_build_coordinator``) when the timeline row
+        # doesn't override.
+        if "is_night" in effective:
+            coord.time_manager.is_night_mode = MagicMock(
+                return_value=bool(effective["is_night"]),
+            )
         readings = _build_power_readings(effective)
 
         # Record raw + derived

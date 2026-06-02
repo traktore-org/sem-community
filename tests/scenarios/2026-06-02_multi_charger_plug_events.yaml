@@ -1,0 +1,91 @@
+name: "2026-06-02 multi-charger plug events — one plugs in, other unplugs"
+
+coverage:
+  - mode: multi_charger
+    regime: split_canonical_total_equals_sum
+    issue: "transition"
+
+description: |
+  Two-charger setup where the plug events are STAGGERED — the
+  classic two-car household where car A is unplugging just as
+  car B is plugging in (or vice versa). The cascade must:
+
+    * Honour each charger's per-charger ``ev_connected`` flag
+      (not the fleet OR fallback)
+    * Reallocate budget to the active charger when one disconnects
+    * Not silently send commands to a disconnected charger
+
+  Uses the new TIMELINE_FIELDS ``ev_connected_per_charger`` to
+  stagger the events. Pre-this-commit the harness only exposed
+  the fleet-level ``ev_connected`` so this scenario class wasn't
+  testable.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: charger_left
+      name: "Wallbox Left"
+      priority: 1
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+    - id: charger_right
+      name: "Wallbox Right"
+      priority: 2
+      min_current: 6
+      max_current: 16
+      phases: 3
+      voltage: 230
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  # ── Both connected. Generous solar so the cascade has surplus
+  #   to distribute.
+  - t: 0
+    solar_power: 14000
+    grid_power: 11000     # +ve = export
+    battery_power: 200
+    battery_soc: 92
+    ev_power: 0
+    ev_connected: true    # fleet OR fallback
+    ev_connected_per_charger:
+      charger_left: true
+      charger_right: true
+
+  - t: 30
+  - t: 60
+
+  # ── charger_right unplugs at t=90. charger_left still active.
+  - t: 90
+    ev_connected_per_charger:
+      charger_left: true
+      charger_right: false
+
+  - t: 120
+  - t: 150
+
+expect:
+  # Both chargers in solar_only mode → canonical strategy is solar_only.
+  # Phase B.5 invariant: per-charger budgets sum to <= canonical.
+  strategy_substring: "solar_only"
+
+  multi_charger:
+    total_equals_canonical: true
+    tolerance_w: 1.0
+    at_least_one_charger_gets_positive: true
