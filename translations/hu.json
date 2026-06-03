@@ -13,7 +13,7 @@
       },
       "ev_charger": {
         "title": "EV Töltő",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
+        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.\n\nPick ONE control path: either a Number Entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) OR a Service Call (KEBA, Easee, Zaptec, OCPP, …).",
         "data": {
           "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
           "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
@@ -21,16 +21,34 @@
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
           "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
+          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
+          "ev_current_control_entity": "Number Entity for Current Control (Wallbox-style chargers)",
+          "ev_surplus_priority": "Surplus Priority",
+          "daily_ev_target": "Daily Charge Target (kWh)",
+          "daily_ev_target_max": "Solar Charge Ceiling (kWh)",
+          "ev_night_initial_current": "Night Start Current (A)",
+          "ev_min_current": "Minimum Charging Current (A)",
+          "ev_target_soc": "Target SOC Floor (%)",
+          "ev_target_soc_max": "Target SOC Ceiling (%)",
+          "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
           "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
           "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
+          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
           "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking."
+          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
+          "ev_current_control_entity": "Number entity SEM writes to so it can change the charging current (e.g. number.wallbox_charging_current). Use this for chargers that expose a number entity instead of a service call. Leave blank if you fill in the Service path below.",
+          "ev_surplus_priority": "Priority of this charger when distributing solar surplus among multiple loads. 1 = lowest priority, 10 = highest. Default 5. Mostly relevant if you later add a second charger or heat pump.",
+          "daily_ev_target": "Minimum kWh SEM tries to deliver per night when night charging is enabled. The night-charge logic stops once this number has been reached for the day. Default 8 kWh.",
+          "daily_ev_target_max": "Upper kWh ceiling for solar surplus charging. 100 kWh effectively means \"charge freely from the sun\". Lower it if you don't want the car to absorb every spare watt during the day.",
+          "ev_night_initial_current": "Starting current (A) used at the beginning of a night-charging session. Default 10 A.",
+          "ev_min_current": "Hardware minimum (A) below which SEM will pause charging instead of trying to keep going. 6 A is the EV-charging standard floor.",
+          "ev_target_soc": "Vehicle SOC floor (%) — SEM will charge at least up to this if a vehicle SOC sensor is configured later in Options. Default 80 %.",
+          "ev_target_soc_max": "Vehicle SOC ceiling (%) for solar surplus charging. Default 100 % = charge to full from the sun. Lower it for battery longevity.",
+          "ev_battery_capacity_kwh": "Usable battery capacity of the vehicle in kWh. Used by SEM to convert between kWh targets and % SOC. Check the car's spec sheet."
         }
       },
       "hardware": {
