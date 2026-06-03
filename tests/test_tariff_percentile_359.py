@@ -191,3 +191,103 @@ class TestPercentileCaching:
         breaks2 = p._get_percentile_breaks()
         assert breaks2 is not None
         assert breaks2["p10"] != breaks1["p10"]
+
+
+class TestTimezoneSkew359Followup:
+    """#359 follow-up — RienduPre reported €0.30 still showing as ``normal``
+    after the percentile fix shipped in beta.3. Root cause was the date
+    filter doing ``p.timestamp.date()`` directly: providers like Nordpool
+    emit UTC timestamps, so on a non-UTC HA install the array filtered
+    by 'today' could come up empty or partial → percentiles return None →
+    silent fall-through to static thresholds → 0.30 = NORMAL.
+    """
+
+    def test_utc_timestamps_count_as_local_today(self):
+        """Provider emits UTC, HA tz = Europe/Amsterdam (+02:00). A
+        full 24h of prices tagged in UTC must still be recognised as
+        'today' once converted to local."""
+        from datetime import timezone
+        try:
+            import zoneinfo
+            ams = zoneinfo.ZoneInfo("Europe/Amsterdam")
+        except Exception:
+            pytest.skip("zoneinfo unavailable")
+
+        original_tz = dt_util.get_default_time_zone()
+        dt_util.set_default_time_zone(ams)
+        try:
+            # Local "today" — anchor at noon local so the day boundary
+            # isn't ambiguous regardless of when the test runs.
+            local_today_noon = dt_util.now().replace(
+                hour=12, minute=0, second=0, microsecond=0
+            )
+            # Build 24 hourly prices in UTC for the LOCAL today, spanning
+            # 00:00 → 23:00 local. The first and last entries land on
+            # different UTC dates, which is precisely the case the
+            # pre-fix code lost.
+            local_midnight = local_today_noon.replace(hour=0)
+            prices = []
+            for i in range(24):
+                local_dt = local_midnight + timedelta(hours=i)
+                # Convert to UTC — this is what Nordpool stores.
+                utc_dt = local_dt.astimezone(timezone.utc)
+                prices.append(PricePoint(
+                    timestamp=utc_dt,
+                    price=0.10 + i * 0.025,  # 0.10 → 0.685, full spread
+                    currency="EUR",
+                    level=PriceLevel.NORMAL,
+                ))
+
+            p = _make_provider("percentile")
+            p._prices_cache = prices
+
+            breaks = p._get_percentile_breaks()
+            assert breaks is not None, (
+                "TZ skew: UTC-tagged prices for today must be "
+                "recognised after as_local() conversion"
+            )
+            # With prices 0.10..0.685 step 0.025, p75 ≈ 0.525. Use a
+            # value that's clearly above p75 to confirm we're really
+            # using percentile (and not silently fell back to static
+            # where 0.55 would also be EXPENSIVE; the load-bearing
+            # assertion is `breaks is not None` above).
+            assert p._classify_price(0.60) is PriceLevel.EXPENSIVE
+        finally:
+            dt_util.set_default_time_zone(original_tz)
+
+    def test_utc_timestamps_pre_fix_would_have_emptied_today_array(self):
+        """Sanity test: without the as_local() fix, the old filter
+        ``p.timestamp.date() == today`` would lose every UTC point
+        whose UTC date differs from local. We can't easily run the
+        pre-fix code here, but we can prove that today's-local date
+        ≠ UTC date for some of the points and verify the FIXED filter
+        still picks them up."""
+        from datetime import timezone
+        try:
+            import zoneinfo
+            ams = zoneinfo.ZoneInfo("Europe/Amsterdam")
+        except Exception:
+            pytest.skip("zoneinfo unavailable")
+
+        original_tz = dt_util.get_default_time_zone()
+        dt_util.set_default_time_zone(ams)
+        try:
+            local_today_noon = dt_util.now().replace(
+                hour=12, minute=0, second=0, microsecond=0
+            )
+            local_today = local_today_noon.date()
+            # The early-morning local slot (01:00 local) is the previous
+            # UTC date in summer (DST +02:00) — i.e. 23:00 UTC the day before.
+            local_01 = local_today_noon.replace(hour=1)
+            utc_repr = local_01.astimezone(timezone.utc)
+            # The naive comparison would treat utc_repr.date() as
+            # yesterday — that's the bug we're guarding against.
+            naive_date = utc_repr.date()
+            fixed_date = dt_util.as_local(utc_repr).date()
+            assert fixed_date == local_today
+            # If this assertion fails the test environment isn't on +02:00,
+            # in which case the pitfall doesn't apply.
+            if naive_date != fixed_date:
+                assert naive_date < local_today  # would be lost pre-fix
+        finally:
+            dt_util.set_default_time_zone(original_tz)

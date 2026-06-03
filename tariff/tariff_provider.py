@@ -21,6 +21,24 @@ from homeassistant.util import dt as dt_util
 _LOGGER = logging.getLogger(__name__)
 
 
+def _local_date(timestamp: datetime):
+    """Return the calendar date of ``timestamp`` in HA's local tz.
+
+    #359: providers vary on what tz they emit — Tibber uses local,
+    Nordpool is often UTC. A bare ``timestamp.date()`` on a UTC-tagged
+    datetime returns the UTC date, which silently mismatches the local
+    ``today`` (Europe/Amsterdam, +02:00 in summer) and empties the
+    'today's prices' array → percentile breaks return None → static
+    thresholds apply → €0.30 reported as ``normal`` (RienduPre).
+
+    Naive datetimes (no tz info) pass through unchanged so old tests
+    and call sites that build their own clocks aren't disturbed.
+    """
+    if timestamp.tzinfo is None:
+        return timestamp.date()
+    return dt_util.as_local(timestamp).date()
+
+
 class PriceLevel(Enum):
     """Electricity price classification."""
     NEGATIVE = "negative"
@@ -525,11 +543,24 @@ class DynamicTariffProvider(TariffProvider):
         ):
             return self._percentile_breaks
 
+        # #359 follow-up: convert each timestamp into HA's local tz before
+        # taking .date(). Providers vary on what tz they emit — Tibber is
+        # local, Nordpool is often UTC — and a naked .date() on a UTC
+        # timestamp returns the UTC date, which doesn't match the local
+        # ``today`` and silently empties the array → fall-through to the
+        # static thresholds → €0.30 reported as ``normal`` even on a day
+        # where it's the peak (RienduPre, NL, #359 "Not solved").
         today_prices = sorted(
             p.price for p in self._prices_cache
-            if p.timestamp.date() == today and p.price is not None
+            if _local_date(p.timestamp) == today
+            and p.price is not None
         )
         if len(today_prices) < 4:
+            _LOGGER.debug(
+                "tariff/#359: percentile fallback — today's price array "
+                "has %d / %d points (need ≥4); using static thresholds",
+                len(today_prices), len(self._prices_cache),
+            )
             return None
 
         def _quantile(sorted_values: List[float], q: float) -> float:
@@ -559,7 +590,18 @@ class DynamicTariffProvider(TariffProvider):
         # narrower than that is functionally flat, so fall through to
         # the static path.
         if (breaks["p90"] - breaks["p10"]) < 0.01:
+            _LOGGER.debug(
+                "tariff/#359: degenerate distribution — p90-p10=%.4f < 0.01 "
+                "(%d today points); using static thresholds",
+                breaks["p90"] - breaks["p10"], len(today_prices),
+            )
             return None
+        _LOGGER.debug(
+            "tariff/#359: percentile breaks for %s — p10=%.4f p25=%.4f "
+            "p75=%.4f p90=%.4f (%d today points)",
+            today_key, breaks["p10"], breaks["p25"], breaks["p75"],
+            breaks["p90"], len(today_prices),
+        )
         self._percentile_breaks = breaks
         self._percentile_breaks_for = today_key
         return breaks
@@ -612,7 +654,13 @@ class DynamicTariffProvider(TariffProvider):
         )
 
         if prices:
-            today_prices = [p.price for p in prices if p.timestamp.date() == dt_util.now().date()]
+            # #359: use the timestamp's local-tz date — see _get_percentile_breaks
+            # for the same UTC-vs-local pitfall.
+            today = dt_util.now().date()
+            today_prices = [
+                p.price for p in prices
+                if _local_date(p.timestamp) == today
+            ]
             if today_prices:
                 data.today_min_price = min(today_prices)
                 data.today_max_price = max(today_prices)
