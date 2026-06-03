@@ -5,6 +5,81 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.12] — 2026-06-03
+
+Per-charger refinements + EV config-flow parity. Bundles the
+undocumented beta.11 (#355 affordance) so the changelog is complete from
+beta.10 to beta.12.
+
+### Fixed
+
+- **#383** (PR #385) — In multi-charger installs every per-charger card
+  showed the same vehicle SOC. The coordinator was overwriting one
+  shared `_cycle_vehicle_soc` from each charger's `vehicle_soc_entity`
+  inside the per-charger loop; the global sensor reported whichever
+  charger ran last, and the card's `_val('charger_<id>_vehicle_soc') ??
+  _val('vehicle_soc')` lookup chain always fell through to the global.
+  Now publishes per-charger SOC via `charger_<cid>_vehicle_soc`, with
+  the unconfigured case returning `None` (not a fabricated zero).
+
+- **#384** Part 1 (PR #388) — The "Add EV Charger" options-flow step had
+  translation coverage for only two fields (Solar charge limit kWh /
+  SOC%); the rest of the form fell back to the raw key on non-English
+  installs. Mirrored `ev_charger_edit` `data` / `data_description` into
+  `ev_charger_add` for all 15 languages.
+
+- **#384** Part 2 (PR #390) — The initial setup flow couldn't configure
+  Wallbox-style chargers (number entity for current control) because it
+  lacked `ev_current_control_entity`. The user had to finish setup with
+  a partial config and then drop into Options → Edit. Initial flow now
+  exposes the full per-charger override set: `ev_current_control_entity`,
+  `ev_surplus_priority`, `daily_ev_target` + `_max`,
+  `ev_night_initial_current`, `ev_min_current`, `ev_target_soc` + `_max`,
+  `ev_battery_capacity_kwh`. `_EV_KEYS` bridge extended so they migrate
+  into `ev_chargers[0]`. `vehicle_soc_entity` deliberately stays in
+  OptionsFlow only — asking on install creates a dead input for users
+  without a vehicle SOC sensor.
+
+- **EV stall detector** (PR #389) — Detector was anchoring SOC=100% even
+  in cycles where SEM had never commanded charge, producing false-stall
+  alerts when the EV was simply sitting fully-charged with the cable
+  plugged in. The anchor now requires a SEM-issued charge command.
+
+### Added
+
+- **Per-battery sensors + fleet/per-battery card** (PR #386 — Phase A + B)
+  — first cut of a multi-battery model. Adds per-battery state, energy
+  and power sensors, plus a dashboard card that shows fleet totals and
+  per-battery detail.
+
+- **Battery card session duration** (PR #387) — sessions over 90 minutes
+  are shown as hours (`2h 15m`) instead of `135m`, matching how users
+  think about long battery discharges.
+
+- **#355 split affordance on stacked range handles** (PR #380) — a
+  tappable split (↔) icon appears whenever the Min/Max handles of the
+  EV target range slider visually overlap (within 2 % of the slider
+  span). One tap drops Min by 2 % so the stacked handles become
+  individually grabbable. Works in kWh and SOC % modes.
+
+- **`per_charger: true` on `sem-chart-card` EV preset** — optional
+  per-charger color breakdown driven by discovered
+  `sensor.sem_charger_<id>_power` entities.
+
+### Changed
+
+- **EV chart "today" period** (in PR #380) — was rolling 24h, which
+  painted yesterday-evening charges as a phantom second event. Now
+  anchored at local midnight to match `daily_ev_energy`.
+
+### Removed
+
+- Per-charger **"Set target as default"** button (PR #380). HA's
+  number-entity state restoration already persists slider values across
+  restarts; the button's "copy to global defaults" workflow was niche on
+  installs that grow new chargers later. Existing entries are
+  auto-cleaned on the next setup.
+
 ## [1.7.0-beta.10] — 2026-06-02
 
 The **#356 ghost-charger** fix.
