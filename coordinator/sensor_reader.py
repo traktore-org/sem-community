@@ -525,11 +525,31 @@ class SensorReader:
         from .charger_types import BatteryPower
         if len(ed.battery_power_list) > 1:
             total = 0.0
-            for entity in ed.battery_power_list:
+            # Phase A of per-battery card mirror: assign short stable
+            # slugs (``b1``, ``b2`` …) keyed by the Energy Dashboard
+            # battery_power_list order so the SEM-side sensor IDs are
+            # predictable at setup time (``sensor.sem_battery_b1_power``
+            # rather than echoing the source entity). The full source
+            # entity stays in ``name`` for display + as the friendly
+            # name override the card uses.
+            for idx, entity in enumerate(ed.battery_power_list):
+                bid = f"b{idx + 1}"
                 w = self._read_sensor(entity, "battery")
                 total += w
-                readings.batteries[entity] = BatteryPower(
-                    battery_id=entity, power_w=w, name=entity,
+                # Per-battery SOC via the same auto-detect heuristic
+                # the fleet average uses. Falls through to 0.0 when no
+                # matching SOC sensor is discoverable — card displays
+                # ``—`` in that case rather than fabricating a value.
+                soc_entity = self._auto_detect_battery_soc(entity)
+                soc_val = 0.0
+                if soc_entity:
+                    s = self._read_sensor(
+                        soc_entity, "battery_soc", allow_none=True,
+                    )
+                    if s is not None and s >= 0:
+                        soc_val = s
+                readings.batteries[bid] = BatteryPower(
+                    battery_id=bid, power_w=w, soc_pct=soc_val, name=entity,
                 )
             readings.battery_power = total
         elif ed.battery_power:

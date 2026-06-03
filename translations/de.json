@@ -371,11 +371,29 @@
         }
       },
       "ev_charger_add": {
+        "title": "EV-Lader hinzufügen",
+        "description": "Einen neuen EV-Lader konfigurieren. SEM verteilt den Solarüberschuss nach Priorität auf alle Lader.\n\nFür die Stromsteuerung ENTWEDER die Number-Entität (Wallbox, go-eCharger) ODER den Service (KEBA) verwenden. Das jeweils andere Feld leer lassen.",
         "data": {
+          "charger_name": "Ladername",
+          "ev_connected_sensor": "EV Verbindungsstatus",
+          "ev_charging_sensor": "EV Ladestatus",
+          "ev_charging_power_sensor": "EV Ladeleistung",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Überschuss-Priorität (1=höchste)",
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Solar-Ladelimit (kWh)",
           "ev_target_soc_max": "Solar-Ladelimit (SOC %)"
         },
         "data_description": {
+          "charger_name": "Friendly name for this charger shown in the dashboard.",
+          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
+          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
+          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
+          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
+          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
+          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
           "daily_ev_target_max": "Solarüberschuss lädt bis hierhin, dann Stopp. Auf Voll lassen, um frei aus der Sonne zu laden.",
           "ev_target_soc_max": "Solarüberschuss lädt bis zu diesem SOC, dann Stopp. Auf 100% lassen, um frei aus der Sonne zu laden."
         }
