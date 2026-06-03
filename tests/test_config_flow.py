@@ -307,6 +307,90 @@ class TestSolarEnergyManagementConfigFlow:
         assert data["observer_mode"] is False
 
     @pytest.mark.asyncio
+    async def test_ev_charger_step_schema_exposes_per_charger_fields(self, mock_hass):
+        """#384 Part 2: the initial flow exposes the per-charger override fields.
+
+        Without `ev_current_control_entity`, Wallbox-style chargers (number
+        entity, no service call) couldn't be configured at install — the user
+        had to finish setup then edit. The full per-charger override set is
+        also exposed so the install doesn't lag behind the Add/Edit flow.
+        """
+        energy_config = _make_energy_dashboard_config()
+        flow = _create_flow(mock_hass)
+        flow._energy_dashboard_config = energy_config
+
+        mock_detector = MagicMock()
+        mock_detector.get_suggested_ev_defaults.return_value = {}
+
+        with patch(
+            "custom_components.solar_energy_management.config_flow.HardwareDetector",
+            return_value=mock_detector,
+        ), patch(
+            "custom_components.solar_energy_management.config_flow.discover_ev_charger_from_registry",
+            return_value={},
+        ):
+            result = await flow.async_step_ev_charger(user_input=None)
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "ev_charger"
+        schema_keys = {str(k) for k in result["data_schema"].schema.keys()}
+        for key in (
+            "ev_current_control_entity",
+            "ev_surplus_priority",
+            "daily_ev_target",
+            "daily_ev_target_max",
+            "ev_night_initial_current",
+            "ev_min_current",
+            "ev_target_soc",
+            "ev_target_soc_max",
+            "ev_battery_capacity_kwh",
+        ):
+            assert key in schema_keys, f"#384: {key} missing from initial ev_charger schema"
+
+    @pytest.mark.asyncio
+    async def test_hardware_step_migrates_per_charger_fields(self, mock_hass):
+        """#384 Part 2: per-charger overrides set at install land in ev_chargers[0]."""
+        energy_config = _make_energy_dashboard_config()
+        flow = _create_flow(mock_hass)
+        flow._energy_dashboard_config = energy_config
+        flow._data = {
+            **energy_config.to_dict(),
+            **VALID_EV_INPUT,
+            "observer_mode": False,
+            # New per-charger overrides set in the initial flow
+            "ev_current_control_entity": "number.wallbox_max_charging_current",
+            "ev_surplus_priority": 7,
+            "daily_ev_target": 12.5,
+            "daily_ev_target_max": 30.0,
+            "ev_night_initial_current": 16,
+            "ev_min_current": 8,
+            "ev_target_soc": 85,
+            "ev_target_soc_max": 95,
+            "ev_battery_capacity_kwh": 60,
+        }
+
+        flow.async_set_unique_id = AsyncMock()
+        flow._abort_if_unique_id_configured = MagicMock()
+
+        with patch(
+            "custom_components.solar_energy_management.config_flow.discover_inverter_from_registry",
+            return_value="number.batteries_maximale_entladeleistung",
+        ):
+            result = await flow.async_step_hardware(user_input=VALID_HARDWARE_INPUT)
+
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        charger_0 = result["data"]["ev_chargers"][0]
+        assert charger_0["ev_current_control_entity"] == "number.wallbox_max_charging_current"
+        assert charger_0["ev_surplus_priority"] == 7
+        assert charger_0["daily_ev_target"] == 12.5
+        assert charger_0["daily_ev_target_max"] == 30.0
+        assert charger_0["ev_night_initial_current"] == 16
+        assert charger_0["ev_min_current"] == 8
+        assert charger_0["ev_target_soc"] == 85
+        assert charger_0["ev_target_soc_max"] == 95
+        assert charger_0["ev_battery_capacity_kwh"] == 60
+
+    @pytest.mark.asyncio
     async def test_hardware_step_no_inverter_detected_uses_empty(self, mock_hass):
         """If discover_inverter_from_registry returns None, the key is set to ''."""
         energy_config = _make_energy_dashboard_config()
