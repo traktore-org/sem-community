@@ -126,6 +126,18 @@ class SEMBatteryCard extends SEMLitBase {
         return val.toFixed(decimals);
     }
 
+    // Show sub-90-minute sessions as plain minutes ("47 min"); switch
+    // to "Hh Mm" once the user is past the point where the minute
+    // count stops reading at a glance.
+    _fmtDuration(min) {
+        if (min == null || isNaN(min)) return '—';
+        const m = Math.round(min);
+        if (m < 90) return `${m} min`;
+        const h = Math.floor(m / 60);
+        const rem = m - h * 60;
+        return rem === 0 ? `${h} h` : `${h} h ${rem} min`;
+    }
+
     /* ── Per-battery section helpers (Phase B) ── */
     _batteryName(bid) {
         const e = this._hass?.states[`${this._prefix}battery_${bid}_power`];
@@ -542,7 +554,7 @@ class SEMBatteryCard extends SEMLitBase {
                             </div>
                             <div>
                                 <div class="sess-item-label">${this._t('duration')}</div>
-                                <div class="sess-item-value">${Math.round(sDuration)} min</div>
+                                <div class="sess-item-value">${this._fmtDuration(sDuration)}</div>
                             </div>
                             <div>
                                 <div class="sess-item-label">${this._t('avg_power')}</div>
