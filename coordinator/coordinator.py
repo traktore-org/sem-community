@@ -306,6 +306,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # False-stall guard: consecutive failed re-enables + "car full" latch (#243)
         self._ev_reenable_attempts: int = 0
         self._ev_charge_refused: bool = False
+        # Highest commanded amps across all chargers in the most recent
+        # decide() cycle. Gates the fleet-level "0W means full" stall
+        # path so it can't fire when SEM itself decided not to charge
+        # (e.g. solar_only with surplus below the 3-phase 6 A floor —
+        # the stall detector would otherwise falsely anchor SOC at 100 %).
+        self._last_commanded_amps_fleet: int = 0
 
         # Session cost tracking (primary charger + per-charger dict)
         self._session_data = SessionData()
@@ -1277,6 +1283,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # Reset before the loop so a removed charger's stale
                 # state doesn't fire on the next cycle.
                 self._effective_states_per_charger = {}
+                # Reset the fleet-level commanded-amps tracker so the
+                # stall path can tell "SEM isn't asking for charge this
+                # cycle" from "SEM asked but EV refused" (see comment on
+                # ``_last_commanded_amps_fleet`` in __init__).
+                self._last_commanded_amps_fleet = 0
                 # Pre-cache the per-charger configs once for the night
                 # gate below — inline lookup is the same pattern other
                 # branches use here. (#277 Phase B)
@@ -1495,6 +1506,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             solar_committed_w=self._solar_committed_w_per_cycle,
                         )
                         decision = decide_v2(view)
+                        # Track the highest commanded current across the
+                        # fleet so the stall-detection path (line ~3725)
+                        # can distinguish "SEM idle, EV at 0W is correct"
+                        # from "SEM commanding, EV refused → really full".
+                        if decision.commanded_amps > self._last_commanded_amps_fleet:
+                            self._last_commanded_amps_fleet = decision.commanded_amps
                         _LOGGER.debug(
                             "decide %s mode=%s → intent=%s amps=%d budget=%.0fW :: %s",
                             cid, per_mode, decision.intent.value,
@@ -3715,8 +3732,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     })
             self._ev_taper_detector.reset_session()
 
-        # Stall detection → full charge: if car is connected, SEM is sending current,
-        # but power stays 0W for extended period, the car is full (BMS refusing).
+        # Stall detection → full charge: if car is connected AND SEM has
+        # been commanding a charge AND the EV still draws 0 W for ~3 min,
+        # the BMS is refusing further current and the car is genuinely
+        # full. The ``commanded_amps_fleet >= 6`` gate is the load-bearing
+        # bit: without it, ``solar_only`` with insufficient surplus
+        # (e.g. cloudy day, 869 W < 3-phase 4 140 W floor) trips the
+        # stall and falsely anchors SOC at 100 %, after which
+        # ``charge_needed`` stays False forever and the EV never starts.
         # Legacy single-detector stall path; runs only when multi-charger
         # isn't configured (per-charger stall lives on
         # ``_ev_stalled_since_per_charger``). Demo of the v1.6.16
@@ -3724,6 +3747,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # bytecode rather than a comment line above the read.
         if (power.ev_connected and not power.ev_charging
                 and power.ev_power.as_fleet_total("legacy single-detector stall path") < 50
+                and self._last_commanded_amps_fleet >= 6
                 and not self._ev_taper_detector._full_detected):
             stall_count = getattr(self, '_full_stall_count', 0) + 1
             self._full_stall_count = stall_count
