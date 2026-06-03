@@ -5,6 +5,43 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0-beta.13] — 2026-06-03
+
+The **#359 percentile classifier follow-up**.
+
+### Fixed
+
+- **#359** (PR #391) — RienduPre reopened #359 with screenshots showing
+  €0.30 still labelled `normal` / `cheap` after the percentile fix
+  shipped in beta.3. Root cause: `_get_percentile_breaks` and
+  `get_tariff_data` filtered today's prices with a bare
+  `p.timestamp.date()`. Providers differ on the tz they emit — Tibber
+  is local, Nordpool-class integrations (incl. several Dutch dynamic-
+  tariff implementations) are often UTC. On +02:00 (Europe/Amsterdam
+  summer), a UTC-tagged price at 22:00 UTC = 00:00 local-next-day,
+  and a bare `.date()` returns the UTC date. Today's filtered array
+  dropped below the 4-point minimum, percentile breaks returned
+  `None`, and the classifier silently fell back to the static
+  €0.15 / €0.35 cutoffs — where €0.30 < 0.35 = `normal`. Exactly the
+  symptom.
+
+  Fix: new `_local_date(timestamp)` helper converts via
+  `dt_util.as_local` for tz-aware datetimes and passes naive
+  datetimes through unchanged (keeps the existing tariff tests, which
+  mock `dt_util` and build naive clocks, green without modification).
+
+### Added
+
+- **Tariff diagnostics** (PR #391) — three DEBUG log lines under the
+  `tariff/#359` tag so a repro is now trivial:
+  - `percentile fallback — today's price array has X/Y points` when
+    the array drops below the 4-point minimum (the typical failure
+    mode pre-fix).
+  - `degenerate distribution — p90-p10=X` when the M1 flat-day guard
+    trips.
+  - `percentile breaks for <date> — p10/p25/p75/p90` on the happy
+    path so users can sanity-check the math against their tariff.
+
 ## [1.7.0-beta.12] — 2026-06-03
 
 Per-charger refinements + EV config-flow parity. Bundles the
