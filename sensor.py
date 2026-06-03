@@ -1612,6 +1612,22 @@ async def async_setup_entry(
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
+            # #383: real per-charger vehicle SOC. Populated from the
+            # charger's ``vehicle_soc_entity`` config; ``None`` /
+            # unavailable when not configured. Multi-charger cards
+            # used to mirror each other's SOC because the global
+            # ``sem_vehicle_soc`` got context-swap clobbered across
+            # the per-charger update loop; this sensor exposes the
+            # correct per-charger value so the card stops needing
+            # the global fallback.
+            SensorEntityDescription(
+                key=f"charger_{cid}_vehicle_soc",
+                name=f"{cname} Vehicle SOC",
+                device_class=SensorDeviceClass.BATTERY,
+                state_class=SensorStateClass.MEASUREMENT,
+                native_unit_of_measurement=PERCENTAGE,
+                suggested_display_precision=0,
+            ),
             SensorEntityDescription(
                 key=f"charger_{cid}_nights_until_charge",
                 name=f"{cname} Nights Until Charge",

@@ -78,8 +78,8 @@ class SEMEVStatusCard extends SEMLitBase {
             key += '|' + this._chargers.map(id => [
                 `charger_${id}_power`, `charger_${id}_session_energy`,
                 `charger_${id}_daily_energy`, `charger_${id}_session_solar_share`,
-                `charger_${id}_estimated_soc`, `charger_${id}_nights_until_charge`,
-                `charger_${id}_charge_needed`,
+                `charger_${id}_estimated_soc`, `charger_${id}_vehicle_soc`,
+                `charger_${id}_nights_until_charge`, `charger_${id}_charge_needed`,
             ].map(s => hass.states[`${prefix}${s}`]?.state || '').join(':')).join('|');
 
             key += '|' + this._chargers.map(id =>
@@ -434,14 +434,15 @@ class SEMEVStatusCard extends SEMLitBase {
         const session = this._val(`charger_${id}_session_energy`, 0);
         const dailyEnergy = this._val(`charger_${id}_daily_energy`, 0);
         const solar = this._val(`charger_${id}_session_solar_share`, 0);
-        // Prefer real vehicle SOC over estimated (#193). The per-charger
-        // `sensor.sem_charger_<id>_vehicle_soc` was never created — the
-        // coordinator publishes a single global `sensor.sem_vehicle_soc`
-        // and context-swaps its value per charger each update. For the
-        // primary charger that's the right value; for secondary chargers
-        // it represents whichever was evaluated last in the cycle (close
-        // enough for display, and the estimated_soc fallback covers
-        // setups without any vehicle_soc_entity at all). (#282 audit)
+        // Prefer real vehicle SOC over estimated (#193). The per-
+        // charger ``sensor.sem_charger_<id>_vehicle_soc`` now exists
+        // (#383) — each card reads its own charger's SOC directly
+        // instead of falling back to the global ``sem_vehicle_soc``
+        // sensor, which used to get context-swap clobbered across the
+        // per-charger update loop and produced the "both chargers
+        // show car 1's SOC" report. Global fallback retained for
+        // legacy single-charger installs that haven't configured a
+        // per-charger ``vehicle_soc_entity``.
         const vehicleSoc = this._val(`charger_${id}_vehicle_soc`, null)
             ?? this._val('vehicle_soc', null);
         const estimatedSoc = this._val(`charger_${id}_estimated_soc`, null);

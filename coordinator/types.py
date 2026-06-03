@@ -1096,6 +1096,12 @@ class SEMData:
             for cid, intel in per_charger_intel.items():
                 data.update({
                     f"charger_{cid}_estimated_soc": intel.get("estimated_soc", 0),
+                    # #383: real vehicle SOC reading per charger (None
+                    # when no per-charger ``vehicle_soc_entity`` is
+                    # configured). The card prefers this over the
+                    # global ``sensor.sem_vehicle_soc`` which gets
+                    # clobbered across the per-charger update loop.
+                    f"charger_{cid}_vehicle_soc": intel.get("vehicle_soc"),
                     f"charger_{cid}_nights_until_charge": intel.get("nights_until_charge", 0),
                     f"charger_{cid}_charge_needed": intel.get("charge_needed", False),
                     f"charger_{cid}_taper_minutes_to_full": intel.get("minutes_to_full"),
