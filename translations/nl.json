@@ -371,11 +371,29 @@
         }
       },
       "ev_charger_add": {
+        "title": "EV-lader toevoegen",
+        "description": "Configureer een nieuwe EV-lader. SEM verdeelt zonneoverschot over laders op basis van prioriteit.\n\nGebruik voor stroomregeling OFWEL de number-entiteit (Wallbox, go-eCharger) OFWEL de service (KEBA). Laat de andere leeg.",
         "data": {
+          "charger_name": "Ladernaam",
+          "ev_connected_sensor": "EV verbonden status",
+          "ev_charging_sensor": "EV laadstatus",
+          "ev_charging_power_sensor": "EV laadvermogen",
+          "ev_charger_service": "Lader stroom-instel service (optioneel)",
+          "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
+          "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         },
         "data_description": {
+          "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
+          "ev_connected_sensor": "Binaire sensor die aangeeft of een voertuig is aangesloten op deze laadpaal.",
+          "ev_charging_sensor": "Binaire sensor die aangeeft of deze laadpaal actief vermogen levert.",
+          "ev_charging_power_sensor": "Numerieke sensor (W) die het vermogen toont dat door deze laadpaal wordt geleverd.",
+          "ev_charger_service": "HA-service die wordt gebruikt om de laadstroom in te stellen. Gebruiken voor KEBA of Easee.",
+          "ev_charger_service_entity_id": "Entiteit-ID dat als doel van de serviceaanroep wordt meegegeven. Laat leeg indien niet nodig.",
+          "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
+          "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
           "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
         }
