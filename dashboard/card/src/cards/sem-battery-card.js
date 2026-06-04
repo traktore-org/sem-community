@@ -518,12 +518,20 @@ class SEMBatteryCard extends SEMLitBase {
                                 <span class="metric-label">${this._t('cycles')}</span>
                                 <span class="metric-val">${this._fmt(cycles, 1)}</span>
                             </div>
-                            <div class="metric-row">
-                                <span class="metric-label">${this._t('temperature')}</span>
-                                <span class="metric-val">
-                                    ${temp != null ? `${this._fmt(temp, 1)} °C` : '—'}
-                                </span>
-                            </div>
+                            ${this._batteries.length > 1 ? '' : html`
+                                <div class="metric-row">
+                                    <span class="metric-label">${this._t('temperature')}</span>
+                                    <span class="metric-val">
+                                        ${temp != null ? `${this._fmt(temp, 1)} °C` : '—'}
+                                    </span>
+                                </div>
+                            `}
+                            <!-- #404: On multi-battery installs (length > 1)
+                                 the fleet-tile temperature is hidden because
+                                 each battery has its own temperature shown in
+                                 its per-battery section. Per RienduPre's UX
+                                 confirmation 2026-06-04. Single-battery
+                                 installs (today's PROD majority) unchanged. -->
                         </div>
                     </div>
 
