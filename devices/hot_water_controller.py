@@ -97,6 +97,17 @@ class HotWaterController(SwitchDevice):
         self._legionella_cycle_active: bool = False
         self._legionella_hold_start: Optional[datetime] = None
 
+        # #420 — telemetry surface mirroring #359/#416 classifier_path
+        # pattern. Each decision branch sets the corresponding ``*_path``
+        # string so the ``load_management_status`` sensor's ``devices``
+        # dict can publish them for self-diagnosis. No behavior change.
+        self._last_legionella_path: str = "uninitialized"
+        self._last_temperature_safety_path: str = "uninitialized"
+        self._last_temperature_reading_path: str = "uninitialized"
+        self._last_activation_path: str = "uninitialized"
+        self._last_deactivation_path: str = "uninitialized"
+        self._last_temperature_reading: Optional[float] = None
+
     @property
     def entity_domain(self) -> Optional[str]:
         """Return the entity domain (water_heater, climate, or switch)."""
@@ -126,7 +137,13 @@ class HotWaterController(SwitchDevice):
         return 3  # 80°C+ = 3 minutes
 
     def get_current_temperature(self) -> Optional[float]:
-        """Read water temperature from sensor or entity attributes."""
+        """Read water temperature from sensor or entity attributes.
+
+        Records which source produced the reading on
+        ``self._last_temperature_reading_path`` (#420 telemetry).
+        """
+        attribute_invalid = False
+
         # For water_heater and climate: read from entity attributes
         if self._entity_domain in ("water_heater", "climate") and self.entity_id:
             state = self.hass.states.get(self.entity_id)
@@ -134,18 +151,46 @@ class HotWaterController(SwitchDevice):
                 temp = state.attributes.get("current_temperature")
                 if temp is not None:
                     try:
-                        return float(temp)
+                        val = float(temp)
+                        self._last_temperature_reading_path = "entity_attribute"
+                        self._last_temperature_reading = val
+                        return val
                     except (ValueError, TypeError):
-                        pass
+                        # Attribute present but non-numeric — fall
+                        # through to the separate sensor path so we
+                        # can still produce a reading. Remember that
+                        # we saw a bad attribute so the diagnostic
+                        # path captures it if the fallback also fails.
+                        attribute_invalid = True
 
         # For switch or fallback: use separate temperature sensor
         if self.temperature_entity_id:
             state = self.hass.states.get(self.temperature_entity_id)
             if state and state.state not in ("unknown", "unavailable"):
                 try:
-                    return float(state.state)
+                    val = float(state.state)
+                    self._last_temperature_reading_path = "separate_sensor"
+                    self._last_temperature_reading = val
+                    return val
                 except (ValueError, TypeError):
-                    pass
+                    self._last_temperature_reading_path = "separate_sensor_invalid"
+            elif state:
+                self._last_temperature_reading_path = "separate_sensor_unavailable"
+            else:
+                self._last_temperature_reading_path = "separate_sensor_missing"
+        elif attribute_invalid:
+            # Entity attribute was unparseable and no separate sensor
+            # is configured to fall back to.
+            self._last_temperature_reading_path = "entity_attribute_invalid"
+        else:
+            # Neither entity attribute usable nor a separate sensor
+            # configured — we operate "blind" and rely on the device's
+            # own thermostat. Important to surface this state on every
+            # call, not just the first (the prior ``uninitialized``
+            # guard was too narrow — flagged by reviewer).
+            self._last_temperature_reading_path = "no_source_configured"
+
+        self._last_temperature_reading = None
         return None
 
     def is_temperature_safe(self) -> bool:
@@ -153,13 +198,29 @@ class HotWaterController(SwitchDevice):
 
         During normal solar boost: cutoff is solar_target_temp.
         During Legionella cycle: cutoff is legionella_target_temp.
+
+        Records which branch fired on
+        ``self._last_temperature_safety_path`` (#420). The
+        ``no_sensor_assume_safe`` path is the silent-failure surface to
+        watch — when the configured temperature sensor breaks SEM keeps
+        activating the heater relying only on the device's internal
+        thermostat. Telemetry attribute makes this state visible.
         """
         temp = self.get_current_temperature()
         if temp is None:
+            self._last_temperature_safety_path = "no_sensor_assume_safe"
             return True  # No sensor — allow operation (rely on thermostat)
         if self._legionella_cycle_active:
-            return temp < self.legionella_target_temp
-        return temp < self.solar_target_temp
+            if temp < self.legionella_target_temp:
+                self._last_temperature_safety_path = "in_legionella_cycle_below_target"
+                return True
+            self._last_temperature_safety_path = "in_legionella_cycle_at_target"
+            return False
+        if temp < self.solar_target_temp:
+            self._last_temperature_safety_path = "normal_below_solar_target"
+            return True
+        self._last_temperature_safety_path = "normal_at_solar_target"
+        return False
 
     def needs_heating(self) -> bool:
         """Check if water temperature is below minimum."""
@@ -178,30 +239,45 @@ class HotWaterController(SwitchDevice):
         return True
 
     async def activate(self, available_watts: float) -> float:
-        """Activate hot water heating with temperature safety check."""
+        """Activate hot water heating with temperature safety check.
+
+        Records the activation branch on ``self._last_activation_path`` (#420):
+        ``blocked_unsafe`` / ``water_heater`` / ``climate`` / ``switch_fallback``.
+        """
         if not self.is_temperature_safe():
             _LOGGER.info(
                 "Hot water at %.1f°C — above max %.1f°C, skipping",
                 self.get_current_temperature() or 0,
                 self.legionella_target_temp if self._legionella_cycle_active else self.max_temperature,
             )
+            self._last_activation_path = "blocked_unsafe"
             return 0.0
 
         # Use appropriate control method based on entity type
         if self._entity_domain == "water_heater":
+            self._last_activation_path = "water_heater"
             return await self._activate_water_heater()
         elif self._entity_domain == "climate":
+            self._last_activation_path = "climate"
             return await self._activate_climate()
         else:
+            self._last_activation_path = "switch_fallback"
             return await super().activate(available_watts)
 
     async def deactivate(self) -> None:
-        """Deactivate hot water heating."""
+        """Deactivate hot water heating.
+
+        Records the deactivation branch on
+        ``self._last_deactivation_path`` (#420).
+        """
         if self._entity_domain == "water_heater":
+            self._last_deactivation_path = "water_heater"
             await self._deactivate_water_heater()
         elif self._entity_domain == "climate":
+            self._last_deactivation_path = "climate"
             await self._deactivate_climate()
         else:
+            self._last_deactivation_path = "switch_fallback"
             await super().deactivate()
 
     async def _activate_water_heater(self) -> float:
@@ -297,12 +373,18 @@ class HotWaterController(SwitchDevice):
         1. If tank naturally reached ≥60°C → record timestamp, no forced cycle
         2. If overdue (>interval hours) → force heat to target, hold, record
         3. If cycle active → check hold duration, complete when done
+
+        Records which branch fired on ``self._last_legionella_path`` (#420):
+        ``natural_achievement`` / ``hold_reached_target`` /
+        ``hold_in_progress`` / ``heating_to_target`` / ``overdue_start`` /
+        ``overdue_no_sensor`` / ``idle``.
         """
         temp = self.get_current_temperature()
 
         # 1. Natural achievement: solar heated to ≥60°C
         if temp is not None and temp >= DEFAULT_LEGIONELLA_MIN_TEMP and not self._legionella_cycle_active:
             self._last_legionella_time = dt_util.now()
+            self._last_legionella_path = "natural_achievement"
             return None
 
         # 2. Cycle in progress — check hold
@@ -314,6 +396,7 @@ class HotWaterController(SwitchDevice):
                         "Legionella cycle: target %.0f°C reached, holding for %d min",
                         self.legionella_target_temp, self.legionella_hold_minutes,
                     )
+                    self._last_legionella_path = "hold_reached_target"
                     return f"legionella_holding:{self.legionella_hold_minutes}"
 
                 elapsed = (dt_util.now() - self._legionella_hold_start).total_seconds() / 60
@@ -324,15 +407,20 @@ class HotWaterController(SwitchDevice):
                     self._last_legionella_time = dt_util.now()
                     await self.deactivate()
                     _LOGGER.info("Legionella prevention cycle completed at %.0f°C", temp)
+                    self._last_legionella_path = "hold_complete"
                     return "legionella_complete"
+                self._last_legionella_path = "hold_in_progress"
+                return "legionella_holding"
             else:
                 # Still heating towards target
+                self._last_legionella_path = "heating_to_target"
                 return "legionella_heating"
 
         # 3. Check if overdue — start forced cycle
         if self.legionella_overdue:
             if temp is None:
                 _LOGGER.warning("Legionella cycle overdue but no temperature sensor — skipping")
+                self._last_legionella_path = "overdue_no_sensor"
                 return "legionella_no_sensor"
 
             _LOGGER.info(
@@ -346,13 +434,44 @@ class HotWaterController(SwitchDevice):
             self._legionella_hold_start = None
             # Force activate regardless of solar surplus
             await self.activate(self.rated_power)
+            self._last_legionella_path = "overdue_start"
             return "legionella_started"
 
+        self._last_legionella_path = "idle"
         return None
 
     def record_legionella_cycle(self, timestamp: Optional[datetime] = None) -> None:
         """Manually record a Legionella cycle (e.g. from storage restore)."""
         self._last_legionella_time = timestamp or dt_util.now()
+
+    @property
+    def legionella_hold_elapsed_minutes(self) -> Optional[float]:
+        """Minutes elapsed in the current legionella hold, or None.
+
+        Returns ``None`` when no hold is in progress. While a hold is
+        running this surfaces ``elapsed_minutes`` so users can see
+        progress against ``legionella_hold_minutes`` rather than just
+        a binary ``legionella_cycle_active`` flag (#420).
+        """
+        if self._legionella_hold_start is None:
+            return None
+        delta = dt_util.now() - self._legionella_hold_start
+        return round(delta.total_seconds() / 60, 1)
+
+    @property
+    def hours_since_legionella_or_none(self) -> Optional[float]:
+        """Hours since last legionella cycle, ``None`` when never run.
+
+        Companion to ``hours_since_legionella`` which returns a 999.0
+        sentinel when ``_last_legionella_time`` is None. The sentinel
+        is convenient for the overdue check (``999 > interval`` always
+        fires) but leaks into sensors and ``to_dict``, making it
+        indistinguishable from a genuinely very-stale reading. This
+        property exposes the unambiguous ``None`` for diagnostics (#420).
+        """
+        if self._last_legionella_time is None:
+            return None
+        return round(self.hours_since_legionella, 1)
 
     def to_dict(self) -> Dict[str, Any]:
         d = super().to_dict()
@@ -369,6 +488,17 @@ class HotWaterController(SwitchDevice):
             "legionella_overdue": self.legionella_overdue,
             "legionella_cycle_active": self._legionella_cycle_active,
             "hours_since_legionella": round(self.hours_since_legionella, 1),
+            "hours_since_legionella_or_none": self.hours_since_legionella_or_none,
+            "legionella_hold_elapsed_minutes": self.legionella_hold_elapsed_minutes,
             "last_legionella_time": self._last_legionella_time.isoformat() if self._last_legionella_time else None,
+            # #420 — telemetry surface (mirrors #359/#416 classifier_path
+            # pattern). Each ``*_path`` string is set by the corresponding
+            # method on every call; reading them tells users which branch
+            # fired without needing a debug log.
+            "legionella_path": self._last_legionella_path,
+            "temperature_safety_path": self._last_temperature_safety_path,
+            "temperature_reading_path": self._last_temperature_reading_path,
+            "activation_path": self._last_activation_path,
+            "deactivation_path": self._last_deactivation_path,
         })
         return d

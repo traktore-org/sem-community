@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.23] - 04.06.2026
+
+## 🧪 Beta Release — first v1.7.1 audit
+
+_Changes since [1.7.0-beta.22](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.22)_
+
+First behavioral audit of the v1.7.1 stabilization program (umbrella #419). Pure additive observability on `HotWaterController` — zero behavior change.
+
+### 🔍 Diagnostics
+
+- `HotWaterController` now publishes five decision-path strings on every call, all surfaced via `sensor.sem_load_management_status.devices.<hot_water_id>` — mirrors the #359 / #416 `classifier_path` pattern. New attributes per device: `legionella_path` (idle / natural_achievement / hold_reached_target / hold_in_progress / hold_complete / heating_to_target / overdue_start / overdue_no_sensor), `temperature_safety_path` (no_sensor_assume_safe / in_legionella_cycle_below_target / in_legionella_cycle_at_target / normal_below_solar_target / normal_at_solar_target), `temperature_reading_path` (entity_attribute / entity_attribute_invalid / separate_sensor / separate_sensor_invalid / separate_sensor_unavailable / separate_sensor_missing / no_source_configured), `activation_path` (blocked_unsafe / water_heater / climate / switch_fallback), `deactivation_path` (water_heater / climate / switch_fallback). The biggest silent-failure surface the audit identified — temperature sensor breaks → SEM keeps heating, relying only on the device's internal thermostat — is now visible as `temperature_safety_path = no_sensor_assume_safe` (by @traktore-org, refs #420)
+- New `legionella_hold_elapsed_minutes` property — surfaces `5/30 min` style progress against the legionella hold target rather than a binary `legionella_cycle_active` flag. `None` when no hold is in progress (by @traktore-org, refs #420)
+- New `hours_since_legionella_or_none` property — disambiguates the existing `999.0` sentinel (which means "never run") from a genuinely very-stale reading. Returns `None` cleanly when no legionella cycle has been recorded yet (by @traktore-org, refs #420)
+
 # [1.7.0-beta.22] - 04.06.2026
 
 ## 🧪 Beta Release
