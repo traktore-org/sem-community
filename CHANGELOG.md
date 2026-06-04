@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.22] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.21](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.21)_
+
+### 🔍 Diagnostics
+
+- Forecast correction and dampening pipeline now publish their decision path as sensor attributes — mirrors the #359 `classifier_path` pattern. `sensor.sem_forecast_dampening_factor` carries `dampening_path` (one of `outside_daylight` / `no_forecast` / `early_morning_floor` / `blended_live`, with `+clamped_high` / `+clamped_low` suffix when the bound fires) plus `confidence`, `live_ratio`, `normalized_ratio`, `pre_clamp`, and `correction_factor_historical`. `sensor.sem_forecast_correction_factor` carries `correction_path` (one of `no_history` / `weather_month_bucket` / `weather_only_bucket` / `month_only_bucket` / `rolling_7d_fallback`, with the same clamp suffix) plus `bucket_size`, `weather_category`, and `history_days`. Lets installs hitting an unexpected ceiling self-diagnose without a maintainer reading the debug log. PROD telemetry on 2026-06-04 showed 35 % of historical correction factors pinned at the post-shrinkage ceiling with no visible signal — this attribute is the signal (by @traktore-org, refs #416)
+- Daily history records now persist `dampening_factor`, `confidence`, and `live_ratio` alongside the existing `forecast / actual / weather / factor` fields, captured during the last confident mid-day cycle of each day. Pre-beta.22 records that lack these fields restore as `None` so downstream consumers can distinguish "never recorded" from "recorded as zero" (by @traktore-org, refs #416)
+
+### 🧹 Code hygiene
+
+- Replaced the misleading `Decay toward neutral: 25 % per day — converges in ~7 days` comment with accurate one-shot-shrinkage prose. The historical correction factor is recomputed fresh each ~10 s coordinator cycle — there is no recursive state to decay; the 0.75 weight is a one-shot ridge-regression pull toward neutral 1.0 so noisy short histories don't publish a wild correction. Numeric behaviour unchanged; constant renamed `DECAY` → `SHRINKAGE` (by @traktore-org, refs #416)
+
 # [1.7.0-beta.21] - 04.06.2026
 
 ## 🧪 Beta Release

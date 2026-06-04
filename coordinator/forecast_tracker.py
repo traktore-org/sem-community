@@ -49,6 +49,12 @@ class DailyForecastRecord:
     weather: str = "unknown"  # sunny, cloudy, rainy, etc.
     accuracy_pct: float = 0.0  # actual/forecast * 100
     correction_factor: float = 1.0  # actual/forecast ratio
+    # #416: end-of-day snapshot of the dampening pipeline so we can
+    # reconstruct *why* a given day landed where it did. ``None`` on
+    # entries written by pre-beta.22 code.
+    dampening_factor: Optional[float] = None
+    confidence: Optional[float] = None
+    live_ratio: Optional[float] = None
 
 
 class ForecastTracker:
@@ -63,6 +69,26 @@ class ForecastTracker:
         self._correction_factor: float = 1.0
         self._weather_today: str = "unknown"
         self._hass: Any = None
+        # #416 — telemetry surface mirroring #359's classifier_path.
+        # Last-computed path + intermediate values so the sensor can
+        # publish them as extra_state_attributes for self-diagnosis.
+        self._correction_path: str = "uninitialized"
+        self._correction_bucket_size: int = 0
+        self._dampening_path: str = "uninitialized"
+        self._last_confidence: float = 0.0
+        self._last_live_ratio: float = 0.0
+        self._last_normalized_ratio: float = 0.0
+        self._last_blended_pre_clamp: float = 1.0
+        # #416: most-recent end-of-confident-day snapshot. Updated only
+        # while the dampening calculation is in the ``blended_live``
+        # branch — i.e. when intraday confidence is meaningful. At day
+        # rollover ``_save_day_record`` reads this rather than calling
+        # ``_calculate_dampening_factor()`` afresh, because by then
+        # ``dt_util.now()`` is in the new day's pre-sunrise window and
+        # would always return the ``outside_daylight`` path.
+        self._dampening_snapshot: Optional[float] = None
+        self._snapshot_confidence: Optional[float] = None
+        self._snapshot_live_ratio: Optional[float] = None
 
     def set_hass(self, hass: Any) -> None:
         """Set Home Assistant instance for reading sun.sun entity."""
@@ -111,6 +137,11 @@ class ForecastTracker:
         # Day rollover — save yesterday's record
         if self._today_date and self._today_date != today:
             self._save_day_record()
+            # New day: clear yesterday's mid-day snapshot so today's
+            # record only carries readings from today's own cycles.
+            self._dampening_snapshot = None
+            self._snapshot_confidence = None
+            self._snapshot_live_ratio = None
 
         # Update today's values
         self._today_date = today
@@ -120,6 +151,12 @@ class ForecastTracker:
 
         # Recalculate correction factor from history
         self._update_correction_factor()
+        # Refresh the dampening calc so ``_dampening_path`` and the
+        # mid-day snapshot stay in sync with this cycle. Without this
+        # the snapshot only updates when ``sensor.py`` happens to read
+        # the ``dampening_factor`` property, which is unreliable in
+        # tests and during HA startup before the sensor entities exist.
+        self._calculate_dampening_factor()
 
     def _save_day_record(self) -> None:
         """Save yesterday's forecast vs actual to history."""
@@ -146,12 +183,24 @@ class ForecastTracker:
             weather=self._weather_today,
             accuracy_pct=round(accuracy, 1),
             correction_factor=round(ratio, 3),
+            # #416: dampening snapshot captured during the last
+            # confident (``blended_live``) mid-day cycle. ``None`` when
+            # the day never reached confident-blend (e.g. forecast
+            # always below MIN_FORECAST_KWH, or HA was restarted late
+            # in the day). Reading the live ``_calculate_dampening_factor()``
+            # here would always land in ``outside_daylight`` because
+            # rollover fires post-midnight, pre-sunrise.
+            dampening_factor=self._dampening_snapshot,
+            confidence=self._snapshot_confidence,
+            live_ratio=self._snapshot_live_ratio,
         )
         self._history.append(record)
         _LOGGER.info(
-            "Forecast record saved: %s forecast=%.1f actual=%.1f accuracy=%.0f%% factor=%.3f weather=%s",
+            "Forecast record saved: %s forecast=%.1f actual=%.1f accuracy=%.0f%% "
+            "factor=%.3f dampening=%.3f weather=%s",
             record.date, record.forecast_kwh, record.actual_kwh,
-            record.accuracy_pct, record.correction_factor, record.weather,
+            record.accuracy_pct, record.correction_factor,
+            record.dampening_factor, record.weather,
         )
 
     def _update_correction_factor(self) -> None:
@@ -162,9 +211,15 @@ class ForecastTracker:
         2. Same weather category (any month)
         3. Same month (any weather)
         4. Rolling 7-day average (fallback)
+
+        Records the selected path on ``self._correction_path`` so the
+        sensor can publish it as a diagnostic attribute (#416, mirrors
+        the #359 ``classifier_path`` pattern).
         """
         if not self._history:
             self._correction_factor = 1.0
+            self._correction_path = "no_history"
+            self._correction_bucket_size = 0
             return
 
         now = dt_util.now()
@@ -172,33 +227,48 @@ class ForecastTracker:
         current_weather = self._normalize_weather(self._weather_today)
 
         # Try weather + month match (most accurate)
-        factor = self._factor_for_conditions(current_weather, current_month)
+        factor, n = self._factor_for_conditions(current_weather, current_month)
+        path = "weather_month_bucket"
 
         if factor is None:
-            # Try weather-only match
-            factor = self._factor_for_conditions(current_weather, None)
+            factor, n = self._factor_for_conditions(current_weather, None)
+            path = "weather_only_bucket"
 
         if factor is None:
-            # Try month-only match
-            factor = self._factor_for_conditions(None, current_month)
+            factor, n = self._factor_for_conditions(None, current_month)
+            path = "month_only_bucket"
 
         if factor is None:
-            # Fallback: rolling 7-day weighted average
             factor = self._rolling_7d_factor()
+            n = sum(1 for r in list(self._history)[-7:] if r.forecast_kwh >= MIN_FORECAST_KWH)
+            path = "rolling_7d_fallback"
 
         # Tighten bounds: ±40% max correction (industry standard is ±10-30%)
-        factor = max(0.6, min(1.4, factor))
-        # Decay toward neutral (1.0): 25% per day — converges in ~7 days
-        # Fast enough to correct overcorrection, stable enough to hold genuine offsets
-        DECAY = 0.75
-        self._correction_factor = round(factor * DECAY + 1.0 * (1 - DECAY), 4)
+        raw_factor = factor
+        clamped = max(0.6, min(1.4, factor))
+        if raw_factor != clamped:
+            path = f"{path}+clamped_{'high' if raw_factor > clamped else 'low'}"
+        # #416: this is a one-shot shrinkage of the freshly-computed
+        # historical factor toward 1.0, NOT a per-day decay. ``factor``
+        # is recomputed from history every coordinator cycle (~10 s);
+        # there is no recursive state to decay. The 0.75 weight is a
+        # ridge-regression-style pull toward neutral so noisy short
+        # histories don't publish a wild correction.
+        SHRINKAGE = 0.75
+        self._correction_factor = round(clamped * SHRINKAGE + 1.0 * (1 - SHRINKAGE), 4)
+        self._correction_path = path
+        self._correction_bucket_size = n
 
     def _factor_for_conditions(
         self, weather: Optional[str], month: Optional[int]
-    ) -> Optional[float]:
+    ) -> tuple[Optional[float], int]:
         """Calculate correction factor for specific conditions.
 
-        Returns None if fewer than 3 matching records exist.
+        Returns ``(factor, matching_count)``. ``factor`` is ``None``
+        when fewer than 3 matching records exist; ``matching_count`` is
+        always the number of records that matched the bucket (so callers
+        can record bucket size for diagnostics even when the bucket is
+        too thin to use).
         """
         matching = []
         for record in self._history:
@@ -209,8 +279,9 @@ class ForecastTracker:
             if record.forecast_kwh >= MIN_FORECAST_KWH:
                 matching.append(record.correction_factor)
 
-        if len(matching) < 3:
-            return None
+        n = len(matching)
+        if n < 3:
+            return None, n
 
         # Use last 10 matching records, weighted by recency
         recent = matching[-10:]
@@ -221,7 +292,7 @@ class ForecastTracker:
             weighted_sum += factor * weight
             total_weight += weight
 
-        return weighted_sum / total_weight if total_weight > 0 else None
+        return (weighted_sum / total_weight if total_weight > 0 else None), n
 
     def _rolling_7d_factor(self) -> float:
         """Simple rolling 7-day weighted average fallback."""
@@ -358,6 +429,10 @@ class ForecastTracker:
         Uses actual sunrise/sunset from sun.sun entity so the daylight window
         is correct in polar regions. Falls back to hardcoded defaults when
         sun.sun is unavailable (HA startup, polar night).
+
+        Records which branch fired on ``self._dampening_path`` (#416,
+        mirrors #359's ``classifier_path``) so the sensor can expose it
+        as a diagnostic attribute.
         """
         now = dt_util.now()
         hour = now.hour + now.minute / 60.0
@@ -367,9 +442,19 @@ class ForecastTracker:
 
         # Outside daylight hours: use historical correction only
         if hour < sunrise_hour or hour > sunset_hour + 1:
+            self._dampening_path = "outside_daylight"
+            self._last_confidence = 0.0
+            self._last_live_ratio = 0.0
+            self._last_normalized_ratio = 0.0
+            self._last_blended_pre_clamp = self._correction_factor
             return self._correction_factor
 
         if self._today_forecast < MIN_FORECAST_KWH:
+            self._dampening_path = "no_forecast"
+            self._last_confidence = 0.0
+            self._last_live_ratio = 0.0
+            self._last_normalized_ratio = 0.0
+            self._last_blended_pre_clamp = self._correction_factor
             return self._correction_factor
 
         # How many solar hours have elapsed
@@ -381,6 +466,11 @@ class ForecastTracker:
 
         # Too early to judge — not enough expected production yet
         if expected_so_far < MIN_FORECAST_KWH:
+            self._dampening_path = "early_morning_floor"
+            self._last_confidence = 0.0
+            self._last_live_ratio = self._today_actual / self._today_forecast if self._today_forecast else 0.0
+            self._last_normalized_ratio = 0.0
+            self._last_blended_pre_clamp = self._correction_factor
             return self._correction_factor
 
         # Confidence ramps from 0 to 1 over CONFIDENCE_RAMP_HOURS of solar time
@@ -393,8 +483,23 @@ class ForecastTracker:
 
         # Blend: historical correction × (1 - confidence) + live ratio × confidence
         blended = (1 - confidence) * self._correction_factor + confidence * normalized_ratio
+        clamped = max(0.5, min(1.5, blended))
 
-        return max(0.5, min(1.5, blended))
+        if clamped != blended:
+            self._dampening_path = f"blended_live+clamped_{'high' if blended > clamped else 'low'}"
+        else:
+            self._dampening_path = "blended_live"
+        self._last_confidence = round(confidence, 3)
+        self._last_live_ratio = round(live_ratio, 4)
+        self._last_normalized_ratio = round(normalized_ratio, 4)
+        self._last_blended_pre_clamp = round(blended, 4)
+        # Capture the latest mid-day reading so the day-rollover
+        # snapshot reflects what the algorithm was actually publishing,
+        # not the midnight pre-sunrise reading.
+        self._dampening_snapshot = round(clamped, 3)
+        self._snapshot_confidence = self._last_confidence
+        self._snapshot_live_ratio = self._last_live_ratio
+        return clamped
 
     def apply_dampening(self, forecast_kwh: float) -> float:
         """Apply real-time dampening factor to a forecast value."""
@@ -412,6 +517,16 @@ class ForecastTracker:
             "forecast_corrected_tomorrow": 0.0,  # Set by caller
             "forecast_history_days": len(self._history),
             "forecast_dampening_factor": self.dampening_factor,
+            # #416 — diagnostics surface, consumed by the
+            # extra_state_attributes branches for ``forecast_dampening_factor``
+            # and ``forecast_correction_factor`` in sensor.py.
+            "forecast_dampening_path": self._dampening_path,
+            "forecast_correction_path": self._correction_path,
+            "forecast_correction_bucket_size": self._correction_bucket_size,
+            "forecast_dampening_confidence": self._last_confidence,
+            "forecast_dampening_live_ratio": self._last_live_ratio,
+            "forecast_dampening_normalized_ratio": self._last_normalized_ratio,
+            "forecast_dampening_pre_clamp": self._last_blended_pre_clamp,
         }
 
     def get_state(self) -> Dict[str, Any]:
@@ -425,6 +540,12 @@ class ForecastTracker:
                     "weather": r.weather,
                     "accuracy": r.accuracy_pct,
                     "factor": r.correction_factor,
+                    # #416: end-of-day dampening snapshot. Older entries
+                    # written by pre-beta.22 code have ``None`` for these
+                    # — restore_state tolerates absence.
+                    "dampening_factor": r.dampening_factor,
+                    "confidence": r.confidence,
+                    "live_ratio": r.live_ratio,
                 }
                 for r in self._history
             ],
@@ -443,6 +564,12 @@ class ForecastTracker:
                 weather=record.get("weather", "unknown"),
                 accuracy_pct=record.get("accuracy", 0),
                 correction_factor=record.get("factor", 1.0),
+                # #416: tolerate pre-beta.22 records that lack the
+                # dampening snapshot — leave ``None`` so downstream
+                # consumers can tell "never recorded" from "recorded 0".
+                dampening_factor=record.get("dampening_factor"),
+                confidence=record.get("confidence"),
+                live_ratio=record.get("live_ratio"),
             ))
         self._correction_factor = state.get("correction_factor", 1.0)
         _LOGGER.info(

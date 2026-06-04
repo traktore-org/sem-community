@@ -2235,6 +2235,32 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "is_dynamic": d.get("tariff_is_dynamic"),
                 "current_import_rate": d.get("tariff_current_import_rate"),
             })
+        elif self.entity_description.key == "forecast_dampening_factor":
+            # #416: mirror the #359 ``classifier_path`` pattern — expose
+            # WHICH branch of the dampening calculation produced the
+            # current value so installs hitting an unexpected ceiling /
+            # floor can self-diagnose without a maintainer reading the
+            # debug log. PROD telemetry on 2026-06-04 showed 35% of
+            # ``correction_factor`` records pinned at the post-shrinkage
+            # ceiling without any visible signal — this attribute is the
+            # signal.
+            d = self.coordinator.data
+            attrs.update({
+                "dampening_path": d.get("forecast_dampening_path"),
+                "confidence": d.get("forecast_dampening_confidence"),
+                "live_ratio": d.get("forecast_dampening_live_ratio"),
+                "normalized_ratio": d.get("forecast_dampening_normalized_ratio"),
+                "pre_clamp": d.get("forecast_dampening_pre_clamp"),
+                "correction_factor_historical": d.get("forecast_correction_factor"),
+            })
+        elif self.entity_description.key == "forecast_correction_factor":
+            d = self.coordinator.data
+            attrs.update({
+                "correction_path": d.get("forecast_correction_path"),
+                "bucket_size": d.get("forecast_correction_bucket_size"),
+                "weather_category": d.get("forecast_weather_category"),
+                "history_days": d.get("forecast_history_days"),
+            })
         elif self.entity_description.key == "load_management_status":
             # Add device list details for dashboard table
             devices = self.coordinator.data.get("load_management_devices", {})
