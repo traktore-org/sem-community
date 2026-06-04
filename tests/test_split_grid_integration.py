@@ -560,8 +560,10 @@ class TestAlphaESSCombined:
 
         reader = _make_reader_with_states(hass, states, ed)
         # Pattern C: grid +=export (same as SEM), battery +=discharge (opposite of SEM)
-        reader._battery_sign_inverted = True
-        reader._battery_sign_detected = True
+        # #404: state is per-battery-id keyed. Fleet/single-battery
+        # path uses the ``_FLEET_BID`` sentinel.
+        reader._battery_sign_inverted = {reader._FLEET_BID: True}
+        reader._battery_sign_detected = {reader._FLEET_BID: True}
         power = reader.read_power()
         power.calculate_derived()
 
@@ -653,9 +655,10 @@ class TestRCTPowerCombined:
         reader = _make_reader_with_states(hass, states, ed)
         # Pattern B: grid +=import, battery +=discharge — both opposite of SEM
         reader._grid_sign_inverted = True
-        reader._battery_sign_inverted = True
+        # #404: state is per-battery-id keyed. Fleet path uses ``_FLEET_BID``.
+        reader._battery_sign_inverted = {reader._FLEET_BID: True}
         reader._grid_sign_detected = True
-        reader._battery_sign_detected = True
+        reader._battery_sign_detected = {reader._FLEET_BID: True}
         power = reader.read_power()
         power.calculate_derived()
 
@@ -979,9 +982,10 @@ class TestCombinedGridSensor:
         reader = _make_reader_with_states(hass, states, ed)
         # Simulate sign correction (normally done by auto-detect over multiple cycles)
         reader._grid_sign_inverted = True
-        reader._battery_sign_inverted = True
+        # #404: state is per-battery-id keyed. Fleet path uses ``_FLEET_BID``.
+        reader._battery_sign_inverted = {reader._FLEET_BID: True}
         reader._grid_sign_detected = True
-        reader._battery_sign_detected = True
+        reader._battery_sign_detected = {reader._FLEET_BID: True}
         power = reader.read_power()
         power.calculate_derived()
 
@@ -1006,8 +1010,10 @@ class TestCombinedGridSensor:
             "sensor.battery_power": _state(800),    # +800W discharge (opposite)
         }
         reader = _make_reader_with_states(hass, states, ed)
-        reader._battery_sign_inverted = True
-        reader._battery_sign_detected = True
+        # #404: state is per-battery-id keyed. Fleet/single-battery
+        # path uses the ``_FLEET_BID`` sentinel.
+        reader._battery_sign_inverted = {reader._FLEET_BID: True}
+        reader._battery_sign_detected = {reader._FLEET_BID: True}
         power = reader.read_power()
         power.calculate_derived()
 
