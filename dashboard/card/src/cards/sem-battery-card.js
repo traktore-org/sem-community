@@ -171,9 +171,9 @@ class SEMBatteryCard extends SEMLitBase {
                         stroke-dashoffset="${offset.toFixed(1)}"
                         transform="rotate(-90 28 28)" />
                 <text x="28" y="32" text-anchor="middle"
-                      fill="white" font-size="13" font-weight="700"
+                      fill="${color}" font-size="13" font-weight="800"
                       font-family="'Segoe UI','Roboto',sans-serif"
-                      opacity="0.95">
+                      style="paint-order:stroke;stroke:rgba(0,0,0,0.45);stroke-width:0.5px;">
                     ${soc != null ? Math.round(socVal) + '%' : '—'}
                 </text>
             </svg>
@@ -214,7 +214,7 @@ class SEMBatteryCard extends SEMLitBase {
                             <span class="bs-label">${this._t('power')}</span>
                             <span class="bs-val"
                                   style="color:${power > 50 || power < -50 ? color : ''}">
-                                ${semFormatPower(Math.abs(power))}
+                                ${semFormatPower(power)}
                             </span>
                         </div>
                         ${capacity > 0 ? html`

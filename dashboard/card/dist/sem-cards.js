@@ -1339,9 +1339,9 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         stroke-dashoffset="${r.toFixed(1)}"
                         transform="rotate(-90 28 28)" />
                 <text x="28" y="32" text-anchor="middle"
-                      fill="white" font-size="13" font-weight="700"
+                      fill="${e}" font-size="13" font-weight="800"
                       font-family="'Segoe UI','Roboto',sans-serif"
-                      opacity="0.95">
+                      style="paint-order:stroke;stroke:rgba(0,0,0,0.45);stroke-width:0.5px;">
                     ${null!=t?Math.round(i)+"%":"—"}
                 </text>
             </svg>
@@ -1365,7 +1365,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                             <span class="bs-label">${this._t("power")}</span>
                             <span class="bs-val"
                                   style="color:${s>50||s<-50?i:""}">
-                                ${ht(Math.abs(s))}
+                                ${ht(s)}
                             </span>
                         </div>
                         ${o>0?H`
