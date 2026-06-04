@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.19] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.18](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.18)_
+
+### 🐛 Bugfixes
+
+- Per-battery sign autodetect: when ≥ 2 batteries are configured, each battery now runs the sign-convention detection independently using its own `battery_charge_energy_list[i]` / `discharge_energy_list[i]` counters from the Energy Dashboard. Fleet `battery_power` is rebuilt as the sum of corrected per-battery values, guaranteeing fleet ↔ per-battery agreement by construction. Supersedes the same-flip-for-all approach from #408 which would have broken dual-brand installs (e.g., Sessy + Huawei) where each battery needs an independent flip decision. Single-battery / combined-sensor installs fall back to the legacy fleet-level path via a `_FLEET_BID` sentinel — behaviour identical to today (by @traktore-org in #413, closes #404)
+
+### 🧰 Maintenance and dependency bumps
+
+- 7 new tests in `TestPerBatterySignAutoDetect404` covering independent per-battery state, dual-brand asymmetric flip, both-invert, neither-inverts, fallback without counters, voting threshold, and fleet/per-battery isolation. 4 existing pipeline-test monkeypatches in `test_split_grid_integration.py` updated to use the new dict-keyed state shape (by @traktore-org in #413)
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for the careful diagnostic screenshots that exposed the fleet-vs-per-battery sign asymmetry on his Sessy install
+
 # [1.7.0-beta.18] - 04.06.2026
 
 ## 🧪 Beta Release
