@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.21] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.20](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.20)_
+
+### 🐛 Bugfixes
+
+- Auto-migrate stored `tariff_classification_mode` from `static` → `percentile` for dynamic-tariff users on schema bump v7 → v8. Percentile became the install default in beta.12 (#373), but entries created before that still carried `static` in storage and silently fired the static-CHF-cutoff branch — visible symptom: `sensor.sem_tariff_price_level` attribute reading `classifier_path=static_fixed_cutoffs` while the live price sat well outside any reasonable static band. Calendar / explicit-static users are untouched (migration gated on `tariff_mode == "dynamic"`). Reported by @RienduPre (by @traktore-org, fixes #359)
+- Cheap and expensive price-threshold number entities now accept values up to `5.00` (was `1.00`) to cover high-priced markets — Slovak prices around 1.69 €/kWh were rejected by the upper bound. Reported by @zlakes01 (by @traktore-org, fixes #417)
+- Add the missing `vehicle_range_entity` and `ev_kwh_per_100km` fields to the Add Charger and Edit Charger options-flow steps. Both fields existed on the primary `ev_charger` step but were never carried over to the per-charger Add/Edit forms when #397 split the install flow in beta.16 — secondary chargers couldn't configure their own range sensor or vehicle consumption. Reported by @RienduPre (by @traktore-org, fixes #384)
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for the precise `classifier_path` diagnosis on #359 and the Add/Edit charger flow gap on #384
+- @zlakes01 for the high-tariff-market signal on #417
+
 # [1.7.0-beta.20] - 04.06.2026
 
 ## 🧪 Beta Release

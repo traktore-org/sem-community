@@ -144,7 +144,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     Phase A's derivation silently dropped.
     # v7 (#277 Phase C): drop the dead ev_charging_mode key (charge_mode is
     #     authoritative now; the legacy select + 3 legacy switches are gone).
-    VERSION = 7
+    VERSION = 8
 
     @staticmethod
     @callback
@@ -1068,6 +1068,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                # Optional real range sensor; else range is derived from
+                # SOC × capacity ÷ consumption (kWh/100km) (#245, #384).
+                vol.Optional(
+                    "vehicle_range_entity",
+                    description={"suggested_value": suggestions.get("vehicle_range_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="distance")
+                ),
+                vol.Optional(
+                    "ev_kwh_per_100km",
+                    default=self._data.get("ev_kwh_per_100km", 18),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=8, max=50, step=0.5,
+                        unit_of_measurement="kWh/100km", mode="box",
+                    )
+                ),
                 # Per-charger SOC target (#215): Min floor + Max solar ceiling (#245)
                 vol.Optional(
                     "ev_target_soc",
@@ -1213,6 +1230,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     description={"suggested_value": charger.get("vehicle_soc_entity")},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
+                ),
+                # Optional real range sensor; else range is derived from
+                # SOC × capacity ÷ consumption (kWh/100km) (#245, #384).
+                vol.Optional(
+                    "vehicle_range_entity",
+                    description={"suggested_value": charger.get("vehicle_range_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="distance")
+                ),
+                vol.Optional(
+                    "ev_kwh_per_100km",
+                    default=charger.get("ev_kwh_per_100km", self._data.get("ev_kwh_per_100km", 18)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=8, max=50, step=0.5,
+                        unit_of_measurement="kWh/100km", mode="box",
+                    )
                 ),
                 # Per-charger SOC target (#215)
                 vol.Optional(

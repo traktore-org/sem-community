@@ -498,6 +498,49 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 8:
+        try:
+            # v7 → v8 (#359): flip stored ``tariff_classification_mode``
+            # from "static" to "percentile" when ``tariff_mode == "dynamic"``.
+            # Background: percentile became the install default in beta.12
+            # (#373) because the static 0.15/0.35 CHF cutoffs misclassify
+            # dynamic-tariff prices across every non-Swiss market. Entries
+            # created before that still carry "static" in storage even after
+            # the install default changed, and the static branch in
+            # ``tariff_provider._classify_price`` keeps firing — visible
+            # symptom (#359): RienduPre's ``classifier_path`` attribute
+            # reading ``static_fixed_cutoffs`` while the live price is well
+            # outside any reasonable static band. Idempotent: a user who
+            # explicitly wants static classification on a calendar/static
+            # tariff is untouched (gated on dynamic mode).
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            full = {**new_data, **new_options}
+            if full.get("tariff_mode") == "dynamic":
+                flipped = False
+                if new_options.get("tariff_classification_mode") == "static":
+                    new_options["tariff_classification_mode"] = "percentile"
+                    flipped = True
+                if new_data.get("tariff_classification_mode") == "static":
+                    new_data["tariff_classification_mode"] = "percentile"
+                    flipped = True
+                if flipped:
+                    _LOGGER.info(
+                        "Migrated tariff_classification_mode static→percentile "
+                        "for dynamic tariff (#359)"
+                    )
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=8, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v8 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 

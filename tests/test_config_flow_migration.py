@@ -66,7 +66,7 @@ async def test_v1_to_v2_remaps_legacy_battery_priority_soc(hass) -> None:
     # Re-read from the registry, not the local var — the entry registry
     # owns the post-migration truth.
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 7  # all hops compose
+    assert updated.version == 8  # all hops compose
     assert updated.data["battery_priority_soc"] == 30
 
 
@@ -256,7 +256,7 @@ async def test_full_chain_v1_to_v7(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 7
+    assert updated.version == 8
     # v1→v2 effect
     assert updated.data["battery_priority_soc"] == 30
     # v2→v3 effect — flat → list
@@ -280,18 +280,67 @@ async def test_full_chain_v1_to_v7(hass) -> None:
 
 
 # ---------------------------------------------------------------------------
+# v7 → v8 (#359) — flip stale ``tariff_classification_mode`` to "percentile"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_v7_to_v8_flips_static_to_percentile_for_dynamic_tariff(hass) -> None:
+    """Stored ``tariff_classification_mode='static'`` is upgraded when dynamic."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=7,
+        data={"battery_priority_soc": 30},
+        options={
+            "ev_chargers": [{"id": "ev_charger", "charge_mode": "solar_only"}],
+            "tariff_mode": "dynamic",
+            "tariff_classification_mode": "static",  # legacy default, #359
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.version == 8
+    assert updated.options["tariff_classification_mode"] == "percentile"
+
+
+@pytest.mark.asyncio
+async def test_v7_to_v8_keeps_static_when_tariff_mode_is_not_dynamic(hass) -> None:
+    """Calendar/static tariff users keep their chosen mode untouched."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=7,
+        data={"battery_priority_soc": 30},
+        options={
+            "ev_chargers": [{"id": "ev_charger", "charge_mode": "solar_only"}],
+            "tariff_mode": "static",
+            "tariff_classification_mode": "static",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.version == 8
+    assert updated.options["tariff_classification_mode"] == "static"
+
+
+# ---------------------------------------------------------------------------
 # Migration already at current version — no-op
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_v7_already_current_is_noop(hass) -> None:
-    """An entry already at v7 sails through every ``if version < N`` gate."""
+async def test_v8_already_current_is_noop(hass) -> None:
+    """An entry already at v8 sails through every ``if version < N`` gate."""
     payload_data = {"battery_priority_soc": 30}
     payload_options = {"ev_chargers": [{"id": "ev_charger", "charge_mode": "solar_only"}]}
     entry = MockConfigEntry(
         domain=DOMAIN,
-        version=7,
+        version=8,
         data=payload_data,
         options=payload_options,
     )
@@ -300,6 +349,6 @@ async def test_v7_already_current_is_noop(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 7
+    assert updated.version == 8
     assert updated.data == payload_data
     assert updated.options == payload_options
