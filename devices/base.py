@@ -11,11 +11,21 @@ Device Types:
 """
 import asyncio
 import logging
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, Optional
+
+# #392: KEBA's failsafe watchdog (and similar device-side timers on other
+# chargers) requires periodic *writes* to refresh — reads alone don't
+# count. SEM's _set_current dedup used to suppress writes when the
+# commanded value hadn't changed, which silently starved the watchdog
+# during steady-state charging until the device dropped to fallback and
+# charging halted. Heartbeat at half KEBA's default 300 s timeout.
+# Confirmed by KEBA Energy Automation support in evcc-io/evcc#21093.
+WRITE_HEARTBEAT_INTERVAL_S = 60.0
 
 from homeassistant.core import HomeAssistant
 
@@ -520,6 +530,11 @@ class CurrentControlDevice(ControllableDevice):
         self._phase_switch_hysteresis_up: float = 500  # W above 3p threshold to switch up
         self._phase_switch_hysteresis_down: float = 200  # W below 3p threshold to switch down
         self._current_setpoint: float = 0.0
+        # #392: monotonic timestamp of the last successful write to the
+        # device's current-control surface. Used by _set_current to decide
+        # whether to skip a same-value write (recent) or force a heartbeat
+        # refresh (interval elapsed).
+        self._last_write_at: float = 0.0
         self._session_active: bool = False
         self._min_power_change_interval = min_power_change_interval
 
@@ -598,6 +613,7 @@ class CurrentControlDevice(ControllableDevice):
         self._status.current_consumption_w = 0.0
         self._status.allocated_power_w = 0.0
         self._current_setpoint = 0.0
+        self._last_write_at = 0.0  # #392: reset heartbeat tracker on full stop
 
     async def adjust_power(self, available_watts: float) -> float:
         if not self.is_active:
@@ -615,8 +631,20 @@ class CurrentControlDevice(ControllableDevice):
         """Set charging current via entity or service."""
         current = round(current, 0)
 
-        # Skip if no change
-        if abs(current - self._current_setpoint) < 1.0 and self.is_active:
+        # #392 heartbeat dedup: skip the write only when the value didn't
+        # change AND we've written recently. Without the time guard, a long
+        # steady-state period (always_max holding 16 A, solar plateau) would
+        # silently starve KEBA's failsafe watchdog → device drops to fallback
+        # current → SEM still thinks it commanded 16 A and never re-writes.
+        # Forcing a same-value re-write at WRITE_HEARTBEAT_INTERVAL_S keeps
+        # the device watchdog refreshed and re-converges state after any
+        # silent device-side reset (replug, KEBA reboot, failsafe trip).
+        now = time.monotonic()
+        if (
+            abs(current - self._current_setpoint) < 1.0
+            and self.is_active
+            and (now - self._last_write_at) < WRITE_HEARTBEAT_INTERVAL_S
+        ):
             return self._status.current_consumption_w
 
         try:
@@ -644,6 +672,7 @@ class CurrentControlDevice(ControllableDevice):
                 )
 
             self._current_setpoint = current
+            self._last_write_at = now  # #392: heartbeat tracker
             self._record_power_change()
             consumed = self.current_to_watts(current) if current >= self.min_current else 0.0
             self._status.current_consumption_w = consumed
@@ -812,6 +841,7 @@ class CurrentControlDevice(ControllableDevice):
             self._status.state = DeviceState.IDLE
             self._status.current_consumption_w = 0.0
             self._current_setpoint = 0.0
+            self._last_write_at = 0.0  # #392: reset heartbeat tracker on session stop
 
             if stop_method is None:
                 # No brand-specific stop fired — relying on _set_current(0) alone.
