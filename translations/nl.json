@@ -201,9 +201,9 @@
           "smart_night_charging": "Indien AAN, slaat SEM nachtelijk laden slim over of vermindert dit op basis van geschatte EV SOC, zonneverwachting, temperatuurgecorrigeerde verbruiksvoorspelling en geleerde rijpatronen.",
           "battery_discharge_control_entity": "Nummer-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig.",
           "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren).",
-          "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
-          "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up."
+          "hot_water_solar_target": "Doeltemperatuur (°C) voor zonnegenereerde warmwaterverwarming. SEM activeert de ketel wanneer er overschot beschikbaar is.",
+          "legionella_target_temp": "Temperatuur (°C) die het warmwatersysteem moet bereiken tijdens een legionella-desinfectiecyclus.",
+          "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert."
         }
       },
       "settings_ev": {
