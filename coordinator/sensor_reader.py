@@ -72,11 +72,28 @@ class SensorReader:
         self._grid_sign_votes: int = 0  # Consecutive same-sign detections needed
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
-        self._battery_sign_inverted = False
-        self._battery_sign_detected = False
-        self._battery_sign_votes: int = 0  # Consecutive same-sign detections needed
-        self._battery_charge_baseline: Optional[float] = None
-        self._battery_discharge_baseline: Optional[float] = None
+        # Battery sign autodetect — #404: per-battery state.
+        # Multi-battery installs (≥ 2 ``battery_power_list`` entries) run
+        # the detection independently per battery using each one's own
+        # ``battery_charge_energy_list[i]`` / ``discharge_energy_list[i]``
+        # counters, so a dual-brand fleet (e.g., Sessy + Huawei) with
+        # opposite sign conventions ends up canonical for both. Each
+        # dict is keyed by the stable per-battery slug (``b1``, ``b2`` …)
+        # assigned in the read-power loop below.
+        #
+        # Single-battery / combined-sensor installs fall back to the
+        # legacy fleet-level detection using the ``ed.battery_*_energy``
+        # (singular) counters. Both code paths share the same voting +
+        # threshold heuristic — only the input scope differs.
+        self._battery_sign_inverted: Dict[str, bool] = {}
+        self._battery_sign_detected: Dict[str, bool] = {}
+        self._battery_sign_votes: Dict[str, int] = {}
+        self._battery_charge_baseline: Dict[str, Optional[float]] = {}
+        self._battery_discharge_baseline: Dict[str, Optional[float]] = {}
+        # Sentinel key for the legacy single-battery / fleet-sensor path.
+        # Keeps the per-battery and fleet paths in one data model
+        # without spreading two parallel sets of state across the class.
+        self._FLEET_BID = "__fleet__"
         # Track sensor availability transitions (#5: robustness)
         self._sensor_unavailable: set[str] = set()
         # Cache last valid SOC to avoid 0% during sensor gaps
@@ -236,11 +253,54 @@ class SensorReader:
 
         # Auto-detect battery sign convention using Energy Dashboard counters.
         # SEM convention: positive = charge, negative = discharge.
-        battery_needs_negate = self._detect_battery_sign(readings)
+        #
+        # #404: when the install has ≥ 2 per-battery power sensors AND
+        # the matching per-battery energy counters, run the detection
+        # independently per battery and rebuild the fleet sum from the
+        # corrected per-battery values — this guarantees fleet ↔ per-
+        # battery consistency by construction AND handles dual-brand
+        # fleets (e.g., Sessy + Huawei) that need different per-battery
+        # flip decisions.
+        #
+        # Single-battery / combined-sensor installs fall back to the
+        # legacy fleet-level path.
+        ed = self._energy_dashboard_config
+        per_battery_mode = (
+            ed is not None
+            and len(ed.battery_power_list) >= 2
+            and len(readings.batteries) == len(ed.battery_power_list)
+        )
 
-        if battery_needs_negate:
-            readings.battery_power = -readings.battery_power
+        if per_battery_mode:
+            from dataclasses import replace
+            corrected_total = 0.0
+            for idx, entity in enumerate(ed.battery_power_list):
+                bid = f"b{idx + 1}"
+                bp = readings.batteries.get(bid)
+                if bp is None:
+                    continue
+                charge_entity = (
+                    ed.battery_charge_energy_list[idx]
+                    if idx < len(ed.battery_charge_energy_list) else None
+                )
+                discharge_entity = (
+                    ed.battery_discharge_energy_list[idx]
+                    if idx < len(ed.battery_discharge_energy_list) else None
+                )
+                needs_negate = self._detect_battery_sign_for(
+                    bid, bp.power_w, charge_entity, discharge_entity,
+                )
+                if needs_negate:
+                    bp = replace(bp, power_w=-bp.power_w)
+                    readings.batteries[bid] = bp
+                corrected_total += bp.power_w
+            readings.battery_power = corrected_total
             readings.calculate_derived()
+        else:
+            battery_needs_negate = self._detect_battery_sign(readings)
+            if battery_needs_negate:
+                readings.battery_power = -readings.battery_power
+                readings.calculate_derived()
 
         return readings
 
@@ -351,42 +411,73 @@ class SensorReader:
 
         charge_entity = ed.battery_charge_energy
         discharge_entity = ed.battery_discharge_energy
+        return self._detect_battery_sign_for(
+            self._FLEET_BID,
+            readings.battery_power,
+            charge_entity,
+            discharge_entity,
+        )
+
+    def _detect_battery_sign_for(
+        self,
+        bid: str,
+        power: float,
+        charge_entity: Optional[str],
+        discharge_entity: Optional[str],
+    ) -> bool:
+        """Run the sign-autodetect correlation against one (battery_id,
+        power, charge_counter, discharge_counter) tuple.
+
+        Used both by the legacy fleet path (``bid = _FLEET_BID``) and by
+        the per-battery loop introduced in #404. Each ``bid`` gets its
+        own voting deque + baselines, so dual-brand multi-battery installs
+        end up with each battery independently corrected.
+
+        Returns True if ``power`` should be negated for this ``bid``.
+        """
+        # ``setdefault`` keeps the existing per-bid state stable across
+        # cycles while letting new bids appear lazily (e.g., a second
+        # battery added mid-session).
+        self._battery_sign_inverted.setdefault(bid, False)
+        self._battery_sign_detected.setdefault(bid, False)
+        self._battery_sign_votes.setdefault(bid, 0)
+        self._battery_charge_baseline.setdefault(bid, None)
+        self._battery_discharge_baseline.setdefault(bid, None)
 
         if not charge_entity or not discharge_entity:
-            return False
+            return self._battery_sign_inverted[bid]
 
         # Need meaningful power to detect (ignore noise)
-        power = readings.battery_power
         if abs(power) < 100:
-            return self._battery_sign_inverted  # Keep last known state
+            return self._battery_sign_inverted[bid]  # Keep last known state
 
         # Read energy counter values
         charge_state = self.hass.states.get(charge_entity)
         discharge_state = self.hass.states.get(discharge_entity)
 
         if not charge_state or charge_state.state in ("unknown", "unavailable"):
-            return self._battery_sign_inverted
+            return self._battery_sign_inverted[bid]
         if not discharge_state or discharge_state.state in ("unknown", "unavailable"):
-            return self._battery_sign_inverted
+            return self._battery_sign_inverted[bid]
 
         try:
             charge_val = float(charge_state.state)
             discharge_val = float(discharge_state.state)
         except (ValueError, TypeError):
-            return self._battery_sign_inverted
+            return self._battery_sign_inverted[bid]
 
         # First call: store baselines, don't correct yet
-        if self._battery_charge_baseline is None:
-            self._battery_charge_baseline = charge_val
-            self._battery_discharge_baseline = discharge_val
+        if self._battery_charge_baseline[bid] is None:
+            self._battery_charge_baseline[bid] = charge_val
+            self._battery_discharge_baseline[bid] = discharge_val
             return False
 
-        charge_delta = charge_val - self._battery_charge_baseline
-        discharge_delta = discharge_val - self._battery_discharge_baseline
+        charge_delta = charge_val - self._battery_charge_baseline[bid]
+        discharge_delta = discharge_val - self._battery_discharge_baseline[bid]
 
         # Update baselines for next cycle
-        self._battery_charge_baseline = charge_val
-        self._battery_discharge_baseline = discharge_val
+        self._battery_charge_baseline[bid] = charge_val
+        self._battery_discharge_baseline[bid] = discharge_val
 
         # Determine convention from correlation:
         # power > 0 + charge growing → SEM convention (+ = charge) → no negate
@@ -402,31 +493,32 @@ class SensorReader:
             detected = power > 0  # If power positive during discharge → negate
 
         if detected is None:
-            return self._battery_sign_inverted
+            return self._battery_sign_inverted[bid]
 
         # Require 3 consecutive consistent detections before locking in.
         # This prevents false sign flips from transient energy counter
         # jitter after reboots (e.g. both counters ticking simultaneously
         # during HA recorder settling).
-        if not self._battery_sign_detected:
-            if detected == (self._battery_sign_votes > 0):
+        if not self._battery_sign_detected[bid]:
+            if detected == (self._battery_sign_votes[bid] > 0):
                 # Same direction as previous votes (True=negate votes positive)
-                self._battery_sign_votes += 1 if detected else -1
+                self._battery_sign_votes[bid] += 1 if detected else -1
             else:
                 # Direction changed — reset
-                self._battery_sign_votes = 1 if detected else -1
+                self._battery_sign_votes[bid] = 1 if detected else -1
 
-            if abs(self._battery_sign_votes) >= 3:
-                self._battery_sign_inverted = detected
-                self._battery_sign_detected = True
+            if abs(self._battery_sign_votes[bid]) >= 3:
+                self._battery_sign_inverted[bid] = detected
+                self._battery_sign_detected[bid] = True
                 _LOGGER.info(
-                    "Battery sign detected from Energy Dashboard counters: %s "
+                    "Battery sign detected for %s from Energy Dashboard counters: %s "
                     "(power=%.0fW, charge_delta=%.3f, discharge_delta=%.3f)",
+                    bid,
                     "negating (opposite convention)" if detected else "no correction (SEM convention)",
                     power, charge_delta, discharge_delta,
                 )
 
-        return self._battery_sign_inverted
+        return self._battery_sign_inverted[bid]
 
     def _read_sensors_sum(self, entity_ids: list, name: str) -> float:
         """Sum values from multiple sensors of the same type."""

@@ -110,8 +110,15 @@ class TestBatterySignAutoDetect:
         readings = PowerReadings(battery_power=500.0)
         result = sensor_reader._detect_battery_sign(readings)
         assert result is False
-        assert sensor_reader._battery_charge_baseline == 100.0
-        assert sensor_reader._battery_discharge_baseline == 50.0
+        # #404: state is keyed by battery_id; the fleet path uses the
+        # ``_FLEET_BID`` sentinel so legacy single-battery / combined-
+        # sensor installs still funnel through one entry.
+        assert sensor_reader._battery_charge_baseline[
+            sensor_reader._FLEET_BID
+        ] == 100.0
+        assert sensor_reader._battery_discharge_baseline[
+            sensor_reader._FLEET_BID
+        ] == 50.0
 
     def test_huawei_sem_convention_no_negate(self, sensor_reader, mock_hass):
         """Huawei Solar: positive=charge matches SEM → no negation needed.
@@ -489,3 +496,240 @@ class TestSplitGridPowerDiscovery:
         imp, exp, _conf = reader._discover_split_grid_power(ed)
         assert imp == "sensor.growatt_import_from_grid"
         assert exp is None
+
+
+def _make_multi_battery_ed(
+    battery_power_list,
+    battery_charge_energy_list,
+    battery_discharge_energy_list,
+):
+    """Build a multi-battery EnergyDashboardConfig mock for #404 tests.
+
+    Mirrors the parallel-list shape ``ha_energy_reader.py`` populates
+    when the HA Energy Dashboard has multiple battery sources configured.
+    """
+    config = Mock()
+    config.battery_power = None  # No combined sensor in multi-battery mode
+    config.battery_charge_energy = None
+    config.battery_discharge_energy = None
+    config.battery_power_list = list(battery_power_list)
+    config.battery_charge_energy_list = list(battery_charge_energy_list)
+    config.battery_discharge_energy_list = list(battery_discharge_energy_list)
+    config.solar_power = "sensor.solar_power"
+    config.solar_power_list = []
+    config.grid_power = "sensor.grid_power"
+    config.grid_power_list = []
+    config.grid_import_power = "sensor.grid_power"
+    config.grid_import_energy = "sensor.grid_import_total"
+    config.grid_export_energy = "sensor.grid_export_total"
+    config.ev_power = None
+    config.has_battery = True
+    config.has_solar = True
+    config.has_grid = True
+    config.has_ev = False
+    return config
+
+
+class TestPerBatterySignAutoDetect404:
+    """#404 — per-battery sign autodetect.
+
+    Single boolean ``_battery_sign_inverted`` doesn't work for dual-brand
+    installs (Sessy + Huawei in one fleet). The autodetect now runs
+    independently per battery, keyed by the ``b1`` / ``b2`` … slugs
+    assigned in the read-power loop. Fleet ``battery_power`` is rebuilt
+    from the corrected per-battery values — fleet ↔ per-battery agreement
+    is guaranteed by construction.
+    """
+
+    @staticmethod
+    def _make_reader_with_multi_ed(charge_vals, discharge_vals):
+        """Build a SensorReader pre-loaded with multi-battery EnergyDashboardConfig.
+
+        ``charge_vals`` / ``discharge_vals`` are lists of cumulative
+        energy counter values (kWh) — one per battery, in the same
+        order as ``battery_power_list``.
+        """
+        hass = Mock()
+        hass.states = Mock()
+        reader = SensorReader(hass, {})
+        ed = _make_multi_battery_ed(
+            battery_power_list=[f"sensor.b{i+1}_power" for i in range(len(charge_vals))],
+            battery_charge_energy_list=[f"sensor.b{i+1}_charge" for i in range(len(charge_vals))],
+            battery_discharge_energy_list=[f"sensor.b{i+1}_discharge" for i in range(len(charge_vals))],
+        )
+        reader.set_energy_dashboard_config(ed)
+        # Populate hass.states with the per-battery counters
+        states_map = {}
+        for i, (c, d) in enumerate(zip(charge_vals, discharge_vals)):
+            states_map[f"sensor.b{i+1}_charge"] = _make_sensor_state(c, "kWh")
+            states_map[f"sensor.b{i+1}_discharge"] = _make_sensor_state(d, "kWh")
+        hass.states.get = lambda eid: states_map.get(eid)
+        return reader, ed
+
+    def test_independent_per_battery_state(self):
+        """Each battery_id has its own baseline + voting state.
+
+        Two batteries see different power values and different counter
+        deltas — neither should pollute the other's state.
+        """
+        reader, _ed = self._make_reader_with_multi_ed(
+            charge_vals=[100.0, 200.0], discharge_vals=[50.0, 75.0],
+        )
+
+        # Prime baselines for both
+        reader._detect_battery_sign_for("b1", 500.0, "sensor.b1_charge", "sensor.b1_discharge")
+        reader._detect_battery_sign_for("b2", -500.0, "sensor.b2_charge", "sensor.b2_discharge")
+
+        assert reader._battery_charge_baseline["b1"] == 100.0
+        assert reader._battery_charge_baseline["b2"] == 200.0
+        assert reader._battery_discharge_baseline["b1"] == 50.0
+        assert reader._battery_discharge_baseline["b2"] == 75.0
+        # Each starts fresh — neither flipped on the first call.
+        assert reader._battery_sign_inverted["b1"] is False
+        assert reader._battery_sign_inverted["b2"] is False
+
+    def test_dual_brand_one_flipped_one_not(self):
+        """Battery 1 reports opposite convention (Sessy-shape: positive
+        during discharge → needs flip). Battery 2 reports canonical
+        (Huawei-shape: positive during charge → no flip).
+
+        After 3 consecutive correlation votes per battery, only b1's
+        ``_battery_sign_inverted`` flag flips. b2 stays at False.
+        """
+        reader, _ed = self._make_reader_with_multi_ed(
+            charge_vals=[100.0, 200.0], discharge_vals=[50.0, 75.0],
+        )
+        hass = reader.hass
+
+        # 4 cycles: each cycle advances both batteries' counters in
+        # opposite directions relative to their reported power.
+        for cycle in range(4):
+            states_map = {
+                "sensor.b1_charge": _make_sensor_state(100.0 + cycle * 0.0000001, "kWh"),
+                # b1 discharge counter growing while power is POSITIVE → opposite convention → flip
+                "sensor.b1_discharge": _make_sensor_state(50.0 + (cycle + 1) * 0.5, "kWh"),
+                # b2 charge counter growing while power is POSITIVE → canonical → no flip
+                "sensor.b2_charge": _make_sensor_state(200.0 + (cycle + 1) * 0.5, "kWh"),
+                "sensor.b2_discharge": _make_sensor_state(75.0 + cycle * 0.0000001, "kWh"),
+            }
+            hass.states.get = lambda eid, _m=states_map: _m.get(eid)
+            reader._detect_battery_sign_for("b1", 500.0, "sensor.b1_charge", "sensor.b1_discharge")
+            reader._detect_battery_sign_for("b2", 500.0, "sensor.b2_charge", "sensor.b2_discharge")
+
+        assert reader._battery_sign_inverted["b1"] is True, (
+            "b1 (Sessy-shape: positive during discharge) should be flipped"
+        )
+        assert reader._battery_sign_inverted["b2"] is False, (
+            "b2 (Huawei-shape: positive during charge) should NOT be flipped"
+        )
+
+    def test_both_invert_both_canonical_after_correction(self):
+        """RienduPre's actual install: both batteries Sessy-shape, both
+        need flipping. After autodetect locks in, both per-battery
+        entries report the canonical SEM sign for the user-visible direction.
+        """
+        reader, _ed = self._make_reader_with_multi_ed(
+            charge_vals=[100.0, 200.0], discharge_vals=[50.0, 75.0],
+        )
+        hass = reader.hass
+
+        for cycle in range(4):
+            states_map = {
+                "sensor.b1_charge": _make_sensor_state(100.0 + cycle * 0.0000001, "kWh"),
+                "sensor.b1_discharge": _make_sensor_state(50.0 + (cycle + 1) * 0.4, "kWh"),
+                "sensor.b2_charge": _make_sensor_state(200.0 + cycle * 0.0000001, "kWh"),
+                "sensor.b2_discharge": _make_sensor_state(75.0 + (cycle + 1) * 0.3, "kWh"),
+            }
+            hass.states.get = lambda eid, _m=states_map: _m.get(eid)
+            # Both report POSITIVE power while their discharge counter
+            # is growing → Sessy-shape → autodetect votes "flip".
+            reader._detect_battery_sign_for("b1", 712.0, "sensor.b1_charge", "sensor.b1_discharge")
+            reader._detect_battery_sign_for("b2", 300.0, "sensor.b2_charge", "sensor.b2_discharge")
+
+        assert reader._battery_sign_inverted["b1"] is True
+        assert reader._battery_sign_inverted["b2"] is True
+
+    def test_neither_inverts_canonical_baseline(self):
+        """Two canonical batteries (Huawei-shape): neither flips."""
+        reader, _ed = self._make_reader_with_multi_ed(
+            charge_vals=[100.0, 200.0], discharge_vals=[50.0, 75.0],
+        )
+        hass = reader.hass
+
+        for cycle in range(4):
+            states_map = {
+                "sensor.b1_charge": _make_sensor_state(100.0 + (cycle + 1) * 0.5, "kWh"),
+                "sensor.b1_discharge": _make_sensor_state(50.0 + cycle * 0.0000001, "kWh"),
+                "sensor.b2_charge": _make_sensor_state(200.0 + (cycle + 1) * 0.4, "kWh"),
+                "sensor.b2_discharge": _make_sensor_state(75.0 + cycle * 0.0000001, "kWh"),
+            }
+            hass.states.get = lambda eid, _m=states_map: _m.get(eid)
+            reader._detect_battery_sign_for("b1", 500.0, "sensor.b1_charge", "sensor.b1_discharge")
+            reader._detect_battery_sign_for("b2", 400.0, "sensor.b2_charge", "sensor.b2_discharge")
+
+        assert reader._battery_sign_inverted["b1"] is False
+        assert reader._battery_sign_inverted["b2"] is False
+
+    def test_fallback_when_per_battery_counters_missing(self):
+        """If a battery is missing its energy counters (user didn't
+        configure them in the Energy Dashboard), per-battery autodetect
+        returns the stored default (False) for that battery — no crash.
+        """
+        reader = SensorReader(Mock(states=Mock()), {})
+        # No charge/discharge entities provided
+        result = reader._detect_battery_sign_for("b1", 500.0, None, None)
+        assert result is False
+        # State entry created lazily so subsequent calls work
+        assert reader._battery_sign_inverted["b1"] is False
+
+    def test_voting_threshold_prevents_premature_flip(self):
+        """One-off readings don't flip a battery's sign — need 3
+        consecutive votes per battery (heuristic carried over from the
+        fleet-level autodetect).
+        """
+        reader, _ed = self._make_reader_with_multi_ed(
+            charge_vals=[100.0], discharge_vals=[50.0],
+        )
+        hass = reader.hass
+
+        # Cycle 1: prime baseline.
+        reader._detect_battery_sign_for("b1", 500.0, "sensor.b1_charge", "sensor.b1_discharge")
+
+        # Cycle 2: one Sessy-shape vote. NOT enough.
+        states = {
+            "sensor.b1_charge": _make_sensor_state(100.0000001, "kWh"),
+            "sensor.b1_discharge": _make_sensor_state(50.5, "kWh"),
+        }
+        hass.states.get = lambda eid, _m=states: _m.get(eid)
+        reader._detect_battery_sign_for("b1", 500.0, "sensor.b1_charge", "sensor.b1_discharge")
+        assert reader._battery_sign_inverted["b1"] is False, (
+            "single vote should not flip"
+        )
+
+        # Cycles 3-4: two more Sessy-shape votes → 3 total → locks in.
+        for cycle in range(2):
+            states = {
+                "sensor.b1_charge": _make_sensor_state(100.0000001 + cycle * 0.0000001, "kWh"),
+                "sensor.b1_discharge": _make_sensor_state(50.5 + (cycle + 1) * 0.5, "kWh"),
+            }
+            hass.states.get = lambda eid, _m=states: _m.get(eid)
+            reader._detect_battery_sign_for("b1", 500.0, "sensor.b1_charge", "sensor.b1_discharge")
+
+        assert reader._battery_sign_inverted["b1"] is True
+        assert reader._battery_sign_detected["b1"] is True
+
+    def test_fleet_sentinel_separate_from_per_battery_state(self):
+        """Legacy single-battery installs use ``_FLEET_BID`` as the key
+        and stay isolated from per-battery state — switching modes
+        doesn't cross-contaminate.
+        """
+        reader = SensorReader(Mock(states=Mock()), {})
+        # Prime fleet path
+        reader._detect_battery_sign_for("b1", 500.0, None, None)
+        reader._detect_battery_sign_for(reader._FLEET_BID, 500.0, None, None)
+        assert reader._battery_sign_inverted["b1"] == reader._battery_sign_inverted[
+            reader._FLEET_BID
+        ] == False
+        # The dicts have separate entries
+        assert "b1" in reader._battery_sign_inverted
+        assert reader._FLEET_BID in reader._battery_sign_inverted
