@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.17] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.16](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.16)_
+
+### 🐛 Bugfixes
+
+- Battery card top tile no longer shows the temperature of one arbitrary battery on multi-battery installs — temperature row only renders when exactly one battery is configured. The per-battery list below already shows the correct values; the top-tile temperature was confusing because it was a fleet `max()`. Reported by @RienduPre with a 2-Sessy-battery install where the top tile temperature stayed pinned at one battery's reading (by @traktore-org in #409, closes #404)
+- Battery-sign autodetect now flips each battery in the per-battery `PowerReadings.batteries` dict, not just the fleet-summed `battery_power` field — fixes a 2-Sessy regression where the per-battery list showed the wrong charge/discharge direction even though the fleet sensor was correct. Brand-agnostic fix in `sensor_reader.py` (by @traktore-org in #408, closes #404)
+
+### 🚀 Features and enhancements
+
+- New `classifier_path` attribute on `sensor.sem_tariff_price_level` documents WHICH branch of the tariff classifier produced the current `price_level`. Path string is one of: `percentile_active(p10=..,p25=..,p75=..,p90=..,n=..)` (happy path), `percentile_fallback_cache_empty`, `percentile_fallback_too_few_prices(n=..)`, `percentile_fallback_flat_day(spread=..)`, `static_fixed_cutoffs`, `static_ht_nt`, `calendar_schedule`, or `negative_price_shortcircuit`. Lets users in cold-start / wrong-attribute-shape / derivative-template setups self-diagnose why their level stays on `normal` (by @traktore-org in #410, refs #359)
+
+### 🧰 Maintenance and dependency bumps
+
+- 4 regression-lock tests in `test_per_battery_loop_375.py::TestPerBatteryDirectionStatus404` pin down the per-battery direction/status logic in `coordinator/types.py:1077-1087` (by @traktore-org in #407, refs #404)
+- 4 regression-lock tests in `test_battery_sign_detect.py::TestPerBatteryDictGetsAutodetectFlip404` prove the per-battery dict gets flipped alongside the fleet field on negate-detected installs (by @traktore-org in #408, refs #404)
+- 10 new tests in `test_tariff_percentile_359.py::TestClassifierPathDiagnostic` cover all 9 classifier-path strings + the end-to-end TariffData → coordinator → sensor round-trip (by @traktore-org in #410, refs #359)
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for the multi-battery temperature-row report (#404) — exactly the kind of "looks wrong on 2 batteries" feedback that's hard to catch on a 1-battery test install
+
 # [1.7.0-beta.16] - 04.06.2026
 
 ## 🧪 Beta Release
