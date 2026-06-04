@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict, Optional
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -240,20 +240,6 @@ class SensorReader:
 
         if battery_needs_negate:
             readings.battery_power = -readings.battery_power
-            # #404: the autodetect previously flipped only the cached fleet
-            # field, leaving each ``readings.batteries[bid].power_w`` with
-            # its raw un-flipped value. Downstream the per-battery status
-            # string in ``types.py:1077-1087`` then reported "discharging"
-            # while batteries were physically charging — exactly
-            # RienduPre's Growatt-multi-battery symptom (fleet correct,
-            # per-battery tiles inverted). Widen the flip to cover every
-            # per-battery dict entry so the autodetect's scope matches
-            # the canonical-convention contract.
-            # ``BatteryPower`` is a frozen dataclass — replace each entry
-            # with a new one carrying the negated ``power_w`` rather than
-            # mutating in place.
-            for bid, bp in list(readings.batteries.items()):
-                readings.batteries[bid] = replace(bp, power_w=-bp.power_w)
             readings.calculate_derived()
 
         return readings
