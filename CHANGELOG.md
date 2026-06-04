@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.16] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.15](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.15)_
+
+### 🐛 Bugfixes
+
+- Percentile tariff classifier no longer silently falls back to the CHF-calibrated static cutoffs (`< €0.15 = cheap`, `> €0.35 = expensive`) when today's price array is empty (cold start), too small (< 4 prices), or perfectly flat — returns `NORMAL` instead. RienduPre's Tibber NL install was reporting €0.30 as `normal` for hours after restart because €0.30 < €0.35 in the silent fallback. Validated via the synthetic-data reproduction script (`/tmp/sem-359-repro.py`, 5 scenarios) (by @traktore-org in #403, closes #359)
+- Battery session hysteresis: a 1-hour continuous discharge no longer rolls over to a fresh 2-minute session every time the inverter rebalances. `POWER_THRESHOLD` 50 W → 200 W (dead-band wider than inverter idle drift); `IDLE_CYCLES_TO_END` 3 → 18 cycles (~3 min — covers cloud transits and sunset transitions); single-cycle opposite-direction blips no longer end the session (requires 3 consecutive opposite cycles) (by @traktore-org in #406, closes #405)
+- `de.json` ev_charger config-flow step translated to native German end-to-end — title, description, 8 labels, 8 descriptions. Closes the PR #388 "out of scope" deferred sweep (by @traktore-org in #402, refs #400)
+- `nl.json` `ev_current_control_entity` label + description translated to native Dutch — closes the PR #390 English-placeholder gap that hit RienduPre's Wallbox setup directly (by @traktore-org in #402, refs #400)
+
+### 🚀 Features and enhancements
+
+- Slim config-flow screenshots embedded in `docs/SETUP_GUIDE.md` step 1 / 2 / 3, plus a new "First-run welcome notification" subsection documenting the `_welcome_notification_fired` one-shot behaviour from #397 (by @traktore-org in #401)
+- `docs/SETUP_GUIDE.md` gains a "Price classification" subsection under Tariff and Pricing settings — explains percentile vs static modes + the cold-start NORMAL behaviour so users on non-CHF tariffs see the documented behaviour first instead of filing #359 again (by @traktore-org in #403)
+
+### 🧰 Maintenance and dependency bumps
+
+- 7 tests in `tests/test_tariff_provider.py` updated to pass `classification_mode="static"` explicitly — they were asserting the static-cutoff bucketing but constructing a percentile-default provider, only passing because of the silent CHF fallback we just removed (by @traktore-org in #403)
+
+## Known follow-ups under #400
+
+13 other languages (fr, es, it, pt, pl, cs, da, fi, hu, no, ro, sv) still carry English placeholders for `ev_current_control_entity`. Native translations welcome on a per-language basis.
+
+## :bow: Thanks to our contributors
+
+Special thanks to the following users who helped with this release:
+
+@traktore-org, @RienduPre (for the diagnostic-data thread that exposed the percentile classifier's cold-start path)
+
 # [1.7.0-beta.15] - 04.06.2026
 
 ## 🧪 Beta Release
