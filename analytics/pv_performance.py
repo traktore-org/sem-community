@@ -42,6 +42,15 @@ class PVPerformanceData:
     system_size_kwp: float = 0.0
     system_age_years: float = 0.0
 
+    # #422 — telemetry attribution per metric. Each ``*_path`` records
+    # which branch produced the value (e.g. ``no_size_configured`` vs
+    # ``computed``), so users hitting unexpected zeros can self-diagnose.
+    yield_path: str = "uninitialized"
+    performance_path: str = "uninitialized"
+    clipping_path: str = "uninitialized"
+    degradation_path: str = "uninitialized"
+    system_age_path: str = "uninitialized"
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "pv_daily_specific_yield": round(self.daily_specific_yield, 2),
@@ -53,6 +62,12 @@ class PVPerformanceData:
             "pv_degradation_trend": self.degradation_trend,
             "pv_clipping_losses_kwh": round(self.clipping_losses_kwh, 2),
             "pv_curtailment_kwh": round(self.curtailment_kwh, 2),
+            # #422 — telemetry surface (mirrors #359/#416/#420 pattern).
+            "pv_yield_path": self.yield_path,
+            "pv_performance_path": self.performance_path,
+            "pv_clipping_path": self.clipping_path,
+            "pv_degradation_path": self.degradation_path,
+            "pv_system_age_path": self.system_age_path,
         }
 
 
@@ -107,8 +122,11 @@ class PVPerformanceAnalyzer:
             try:
                 install = datetime.fromisoformat(self.system_install_date)
                 data.system_age_years = (datetime.now() - install).days / 365.25
+                data.system_age_path = "computed"
             except ValueError:
-                pass
+                data.system_age_path = "install_date_invalid"
+        else:
+            data.system_age_path = "no_install_date"
 
         # Specific yield (kWh/kWp)
         if self.system_size_kwp > 0:
@@ -116,15 +134,25 @@ class PVPerformanceAnalyzer:
             data.monthly_specific_yield = monthly_solar_kwh / self.system_size_kwp
             # Annualize from monthly (rough estimate)
             today = date.today()
-            days_in_month = 30
             if data.monthly_specific_yield > 0 and today.day > 0:
                 daily_avg = data.monthly_specific_yield / today.day
                 data.annual_specific_yield = daily_avg * 365
+                data.yield_path = "computed_with_annual_projection"
+            else:
+                data.yield_path = "computed_no_annual"
+        else:
+            # Silent-failure surface: zero yield because system_size_kwp
+            # wasn't configured, not because production was zero. Users
+            # seeing pv_daily_specific_yield = 0 need to know which.
+            data.yield_path = "no_system_size_configured"
 
         # Performance vs forecast
         if forecast_today_kwh > 0:
             data.performance_vs_forecast = (daily_solar_kwh / forecast_today_kwh) * 100
             data.daily_performance_ratio = data.performance_vs_forecast
+            data.performance_path = "computed"
+        else:
+            data.performance_path = "no_forecast"
 
         # Clipping detection
         if current_solar_power_w >= self.inverter_max_power_w * 0.95:
@@ -133,6 +161,11 @@ class PVPerformanceAnalyzer:
                 self._clipping_minutes * 10 / 3600 *
                 (current_solar_power_w - self.inverter_max_power_w * 0.95) / 1000
             )
+            data.clipping_path = "clipping_active"
+        elif self._clipping_minutes > 0:
+            data.clipping_path = "post_clipping_idle"
+        else:
+            data.clipping_path = "idle"
 
         # Track daily peak
         if current_solar_power_w > self._daily_peak_power:
@@ -140,12 +173,17 @@ class PVPerformanceAnalyzer:
 
         # Degradation analysis from monthly history
         data.estimated_annual_degradation = self._estimate_degradation()
-        if data.estimated_annual_degradation > 2.0:
+        if len(self._monthly_history) < 13:
+            data.degradation_path = "insufficient_history"
+        elif data.estimated_annual_degradation > 2.0:
             data.degradation_trend = "critical"
+            data.degradation_path = "critical"
         elif data.estimated_annual_degradation > 1.0:
             data.degradation_trend = "warning"
+            data.degradation_path = "warning"
         elif data.estimated_annual_degradation >= 0:
             data.degradation_trend = "normal"
+            data.degradation_path = "normal"
 
         self._last_data = data
         return data

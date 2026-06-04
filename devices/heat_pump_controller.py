@@ -101,6 +101,17 @@ class HeatPumpController(SetpointDevice):
         self.force_on_threshold = force_on_threshold
         self._hp_status = HeatPumpStatus()
 
+        # #421 — telemetry surface mirroring #359/#416/#420
+        # classifier_path / dampening_path / legionella_path patterns.
+        # Each decision branch sets the corresponding ``*_path`` string
+        # so the ``load_management_status`` sensor's ``devices`` dict
+        # can publish them for self-diagnosis. No behavior change.
+        self._last_activation_path: str = "uninitialized"
+        self._last_deactivation_path: str = "uninitialized"
+        self._last_relay_path: str = "uninitialized"
+        self._last_temperature_reading_path: str = "uninitialized"
+        self._last_offpeak_path: str = "uninitialized"
+
     @property
     def sg_ready_state(self) -> SGReadyState:
         return self._hp_status.sg_ready_state
@@ -111,22 +122,39 @@ class HeatPumpController(SetpointDevice):
 
     @property
     def needs_offpeak_activation(self) -> bool:
-        """Temperature-aware override: don't force-boost if already warm."""
+        """Temperature-aware override: don't force-boost if already warm.
+
+        Records the decision branch on ``self._last_offpeak_path`` (#421):
+        ``parent_declines`` / ``already_warm_skip`` / ``activate``.
+        """
         if not super().needs_offpeak_activation:
+            self._last_offpeak_path = "parent_declines"
             return False
         temp = self.get_current_temperature()
         if temp is not None and temp >= self.max_setpoint - self.boost_offset:
+            self._last_offpeak_path = "already_warm_skip"
             return False
+        self._last_offpeak_path = "activate"
         return True
 
     async def activate(self, available_watts: float) -> float:
-        """Activate heat pump in boost or force-on mode based on surplus."""
+        """Activate heat pump in boost or force-on mode based on surplus.
+
+        Records the SG-Ready branch on ``self._last_activation_path`` (#421):
+        ``boost`` (surplus < force_on_threshold) or
+        ``force_on`` (surplus >= threshold). Climate boost is composed via
+        a ``+climate`` suffix when ``climate_entity_id`` is configured.
+        """
         if available_watts >= self.force_on_threshold:
             target_state = SGReadyState.FORCE_ON
+            self._last_activation_path = "force_on"
         else:
             target_state = SGReadyState.BOOST
+            self._last_activation_path = "boost"
 
         await self._set_sg_ready_state(target_state)
+        if self.climate_entity_id:
+            self._last_activation_path += "+climate"
 
         # Also boost temperature setpoint if climate entity configured
         if self.climate_entity_id:
@@ -147,12 +175,18 @@ class HeatPumpController(SetpointDevice):
         return self.rated_power
 
     async def deactivate(self) -> None:
-        """Return heat pump to normal operation."""
+        """Return heat pump to normal operation.
+
+        Sets ``self._last_deactivation_path = "normal"`` (#421).
+        ``+climate`` suffix when climate boost is also reverted.
+        """
         await self._set_sg_ready_state(SGReadyState.NORMAL)
+        self._last_deactivation_path = "normal"
 
         # Restore normal temperature
         if self.climate_entity_id:
             await super().deactivate()
+            self._last_deactivation_path += "+climate"
 
         self._status.state = DeviceState.IDLE
         self._status.current_consumption_w = 0.0
@@ -163,20 +197,37 @@ class HeatPumpController(SetpointDevice):
         _LOGGER.info("Heat pump returned to normal operation")
 
     async def block(self) -> None:
-        """Block heat pump (utility signal / load shedding)."""
+        """Block heat pump (utility signal / load shedding).
+
+        Sets ``self._last_deactivation_path = "blocked"`` (#421).
+        """
         await self._set_sg_ready_state(SGReadyState.BLOCKED)
         self._status.state = DeviceState.BLOCKED
+        self._last_deactivation_path = "blocked"
         _LOGGER.info("Heat pump blocked by utility signal")
 
     async def unblock(self) -> None:
-        """Unblock heat pump (return to normal)."""
+        """Unblock heat pump (return to normal).
+
+        Sets ``self._last_deactivation_path = "unblocked"`` (#421).
+        """
         await self._set_sg_ready_state(SGReadyState.NORMAL)
         self._status.state = DeviceState.IDLE
+        self._last_deactivation_path = "unblocked"
         _LOGGER.info("Heat pump unblocked")
 
     async def _set_sg_ready_state(self, state: SGReadyState) -> None:
-        """Set SG-Ready state via relay entities."""
+        """Set SG-Ready state via relay entities.
+
+        Records the relay branch on ``self._last_relay_path`` (#421):
+        ``both_relays`` / ``relay1_only`` / ``relay2_only`` /
+        ``no_relays_configured`` / ``relay1_failed`` / ``relay2_failed``.
+        The ``no_relays_configured`` path is the silent-failure surface
+        — SG-Ready state mutates internally but no physical relay
+        actuates. The audit's biggest finding.
+        """
         relay1_on, relay2_on = SG_READY_RELAY_MAP[state]
+        relay1_called = False
 
         if self.relay1_entity_id:
             service = "turn_on" if relay1_on else "turn_off"
@@ -186,8 +237,10 @@ class HeatPumpController(SetpointDevice):
                     {"entity_id": self.relay1_entity_id},
                     blocking=True,
                 )
+                relay1_called = True
             except Exception as e:
                 _LOGGER.error("Failed to set SG-Ready relay 1: %s", e)
+                self._last_relay_path = "relay1_failed"
                 return
 
         if self.relay2_entity_id:
@@ -198,22 +251,43 @@ class HeatPumpController(SetpointDevice):
                     {"entity_id": self.relay2_entity_id},
                     blocking=True,
                 )
+                if relay1_called:
+                    self._last_relay_path = "both_relays"
+                else:
+                    self._last_relay_path = "relay2_only"
             except Exception as e:
                 _LOGGER.error("Failed to set SG-Ready relay 2: %s", e)
+                self._last_relay_path = "relay2_failed"
                 return
+        elif relay1_called:
+            self._last_relay_path = "relay1_only"
+        else:
+            self._last_relay_path = "no_relays_configured"
 
         self._hp_status.sg_ready_state = state
         _LOGGER.debug("SG-Ready state set to %s", state.name)
 
     def get_current_temperature(self) -> Optional[float]:
-        """Read current temperature from sensor."""
+        """Read current temperature from sensor.
+
+        Records the source path on
+        ``self._last_temperature_reading_path`` (#421).
+        """
         if self.temperature_entity_id:
             state = self.hass.states.get(self.temperature_entity_id)
             if state and state.state not in ("unknown", "unavailable"):
                 try:
-                    return float(state.state)
+                    val = float(state.state)
+                    self._last_temperature_reading_path = "sensor"
+                    return val
                 except (ValueError, TypeError):
-                    pass
+                    self._last_temperature_reading_path = "sensor_invalid"
+            elif state:
+                self._last_temperature_reading_path = "sensor_unavailable"
+            else:
+                self._last_temperature_reading_path = "sensor_missing"
+        else:
+            self._last_temperature_reading_path = "no_sensor_configured"
         return None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -224,5 +298,11 @@ class HeatPumpController(SetpointDevice):
             "is_solar_boosted": self._hp_status.is_solar_boosted,
             "current_temperature": self.get_current_temperature(),
             "force_on_threshold": self.force_on_threshold,
+            # #421 — telemetry surface (mirrors #359/#416/#420 pattern).
+            "activation_path": self._last_activation_path,
+            "deactivation_path": self._last_deactivation_path,
+            "relay_path": self._last_relay_path,
+            "temperature_reading_path": self._last_temperature_reading_path,
+            "offpeak_path": self._last_offpeak_path,
         })
         return d

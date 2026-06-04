@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.24] - 04.06.2026
+
+## 🧪 Beta Release — v1.7.1 audit batch 2
+
+_Changes since [1.7.0-beta.23](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.23)_
+
+Second batch of v1.7.1 audit telemetry — four modules in one beta because they don't share state. Pure additive observability, zero behavior change in published return values.
+
+### 🔍 Diagnostics
+
+- **#421 `HeatPumpController`** — five decision-path attributes on `to_dict` → surfaces via `sensor.sem_load_management_status.devices.<heat_pump_id>`: `activation_path` (boost / force_on, with `+climate` suffix when climate boost composes), `deactivation_path` (normal / blocked / unblocked, with `+climate` suffix), `relay_path` (both_relays / relay1_only / relay2_only / **no_relays_configured** / relay1_failed / relay2_failed — the no_relays_configured branch is the audit's biggest silent-failure surface: SG-Ready state mutates internally but no physical relay actuates), `temperature_reading_path` (sensor / sensor_unavailable / sensor_invalid / sensor_missing / no_sensor_configured), `offpeak_path` (parent_declines / already_warm_skip / activate) (by @traktore-org, refs #421)
+- **#422 `PVPerformanceAnalyzer`** — five decision-path fields on `PVPerformanceData.to_dict`: `pv_yield_path` (**no_system_size_configured** silent-failure surface — yield = 0 because size not configured, not because production was zero / computed_with_annual_projection / computed_no_annual), `pv_performance_path` (computed / no_forecast), `pv_clipping_path` (idle / clipping_active / post_clipping_idle), `pv_degradation_path` (insufficient_history / normal / warning / critical), `pv_system_age_path` (computed / no_install_date / install_date_invalid) (by @traktore-org, refs #422)
+- **#425 `ConsumptionPredictor`** — new `get_diagnostics()` method exposing five prediction-path enums: `consumption_prediction_path` and `solar_prediction_path` (cold_start_empty / trained_full / trained_with_fallback:N / trained_all_fallback), `surplus_window_path` (no_data / no_surplus / found_window / no_contiguous_window), `ev_prediction_path` (no_data / weekday_match / hour_fallback), `observation_path` (recorded / deduplicated). Plus training-status and sample-count counters (by @traktore-org, refs #425)
+- **#424 `TimeManager`** — new `get_diagnostics()` method exposing seven time-of-day paths: `sunrise_source` and `sunset_source` (sun_integration / fallback_default — silent-failure surface when sun.sun is unavailable and TimeManager falls back to hardcoded 06:00/20:30), `sunrise_correction` (none / **next_rising_was_tomorrow** — same class of bug as #416 forecast_tracker, tracking how often it fires / fallback_default_06_00), `night_window_path` (pre_midnight_in_night / post_midnight_in_night / outside_night_window), `night_hours_path` (crosses_midnight / same_day / **parse_failed_fallback_8h**), `meter_day_path`, `offset_parse_path` (by @traktore-org, refs #424)
+
+### 📁 Audit framework
+
+- Closed #423 (`utils/helpers.py`) as no-change. Pure stateless utility functions are an appropriate exception to the telemetry-first rule. The audit playbook explicitly recognizes "current behavior is correct, telemetry surface is sufficient" as a valid audit outcome (Step 7). Future audits of similar pure-helper modules can follow the same default (by @traktore-org, closes #423)
+
 # [1.7.0-beta.23] - 04.06.2026
 
 ## 🧪 Beta Release — first v1.7.1 audit
