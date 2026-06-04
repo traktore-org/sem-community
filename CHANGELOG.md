@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.20] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.19](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.19)_
+
+### 🐛 Bugfixes
+
+- Per-battery power tile no longer strips the sign via `Math.abs()`. The fleet tile shows `−65 W` (signed) while the per-battery tile was showing `65 W` (unsigned magnitude) — same direction badge but contradictory numbers. The underlying `power_w` values agreed (beta.19's per-battery autodetect is doing its job); the display layer was the inconsistency. Now both tiles render the raw signed value end-to-end (by @traktore-org in commit `ad198f1`, refs #404)
+- Per-battery SOC ring text was `fill="white"` against the white per-battery section background → invisible on light themes. Now uses the battery accent color with a subtle dark stroke for legibility on both light and dark themes. Reported by @RienduPre (by @traktore-org in commit `ad198f1`, refs #404)
+
+### 🚀 Features and enhancements
+
+- Native `ev_current_control_entity` translations for the 12 remaining languages: fr, es, it, pt, pl, cs, da, fi, hu, ro, sv, no. Closes the last #400 gap — every translation file now carries the field in its own language, joining de + nl from beta.16 (by @traktore-org in #414, closes #400)
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for catching both card-render quirks immediately after the beta.19 deploy — the sign mismatch and the unreadable SOC ring
+
 # [1.7.0-beta.19] - 04.06.2026
 
 ## 🧪 Beta Release
