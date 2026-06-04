@@ -211,11 +211,11 @@ The audit issue closes when:
    conclusion is "current behavior is correct, telemetry surface is
    sufficient" (this is a valid outcome — not every audit yields code
    changes)
-3. The umbrella `v1.7.1 — systematic module audit` issue gets its
+3. The umbrella `v1.7.0 stable — systematic module audit` issue gets its
    checkbox ticked
 
 When all umbrella checkboxes are ticked: bump `manifest.json` to
-`1.7.1` (no beta suffix), CHANGELOG block in
+`1.7.0` (no beta suffix), CHANGELOG block in
 [music-assistant style](../../.claude/projects/-home-sem-sem-community/memory/feedback_release_notes_format.md),
 push to develop, ask user "tag it?".
 
