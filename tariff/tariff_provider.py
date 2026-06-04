@@ -494,6 +494,16 @@ class DynamicTariffProvider(TariffProvider):
 
         ``static`` preserves the legacy fixed-cutoff behaviour for
         users with flat tariffs or unpredictable spike markets.
+
+        #359 follow-up (beta.16): when the user picked ``percentile``
+        but the breaks can't be computed (cold start, < 4 points, flat
+        day), DO NOT silently fall through to the static cutoffs.
+        Those thresholds are calibrated for CHF (0.15 / 0.35) and
+        silently mis-classify any other currency — RienduPre's
+        Tibber NL install reported €0.30 as ``normal`` for this exact
+        reason. Return ``NORMAL`` instead: a neutral default that
+        doesn't trigger cheap-window or expensive-window automation
+        until we actually have data to classify against.
         """
         if price < 0:
             return PriceLevel.NEGATIVE
@@ -510,10 +520,22 @@ class DynamicTariffProvider(TariffProvider):
                 if price >= breaks["p75"]:
                     return PriceLevel.EXPENSIVE
                 return PriceLevel.NORMAL
-            # Fall through to static when we can't compute percentiles
-            # yet (cold start, single price point).
+            # #359: percentile requested but no breaks available.
+            # Return NORMAL as a safe default. NEVER apply the
+            # CHF-calibrated static cutoffs here — they're wrong for
+            # any non-CHF tariff and silently produce confusing
+            # classifications that look like a SEM bug.
+            _LOGGER.debug(
+                "tariff/#359: percentile mode but no breaks — returning "
+                "NORMAL (safe default). Static cutoffs are CHF-calibrated "
+                "and would mis-classify other currencies.",
+            )
+            return PriceLevel.NORMAL
 
-        # Static thresholds (legacy + fallback).
+        # Static thresholds (legacy + explicit opt-in).
+        # Only reached when classification_mode == "static" — the user
+        # has explicitly chosen fixed cutoffs because their tariff is
+        # flat or their CHF/EUR scale matches the defaults.
         if price < self.cheap_threshold * 0.5:
             return PriceLevel.VERY_CHEAP
         if price < self.cheap_threshold:
