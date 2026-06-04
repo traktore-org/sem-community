@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.18] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.17](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.17)_
+
+### ⏪ Reverts
+
+- Revert PR #408 from beta.17. The fix was based on the assumption that SEM's `_detect_battery_sign` autodetect was flipping the fleet field but leaving the per-battery dict un-flipped — RienduPre's diagnostic screenshots on #404 show the opposite: per-battery is already canonical (`Battery b1 Power = +712 W` → charging ✓) while the fleet sensor (`Batterijvermogen = −712 W`) is the one being wrongly negated. PR #408 would have broken the already-correct per-battery tiles on Sessy installs. Re-investigating the actual root cause as a follow-up (by @traktore-org in #411, refs #404)
+
+### 🚀 Features and enhancements
+
+- Carries forward the temperature-row hide on multi-battery (#409) and the `classifier_path` diagnostic attribute (#410) from beta.17 — both unaffected by the #408 revert
+
+## Known limitation
+
+The #404 per-battery direction bug on Sessy installs is **not fixed yet** in this build — beta.18 only undoes the wrong-direction fix from beta.17. A properly-targeted fix is in flight; see [#404](https://github.com/traktore-org/sem-community/issues/404).
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for the careful screenshots that made the revert obvious
+
 # [1.7.0-beta.17] - 04.06.2026
 
 ## 🧪 Beta Release
