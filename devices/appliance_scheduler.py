@@ -46,6 +46,12 @@ class ApplianceScheduler:
         self._devices: Dict[str, ScheduleDevice] = {}
         self._history: List[ApplianceScheduleEntry] = []
 
+        # #426 — telemetry surface mirroring the established
+        # classifier_path / dampening_path / legionella_path pattern.
+        # Per-device transitions are silent today; this records which
+        # branch of ``update_schedules`` fired for each device.
+        self._last_transitions: Dict[str, str] = {}  # device_id → path string
+
     def register_appliance(
         self,
         device_id: str,
@@ -112,24 +118,40 @@ class ApplianceScheduler:
         return False
 
     def update_schedules(self) -> None:
-        """Update schedule statuses (called during coordinator update)."""
+        """Update schedule statuses (called during coordinator update).
+
+        Records the transition path per device on
+        ``self._last_transitions[device_id]`` (#426):
+        ``no_op`` / ``scheduled_to_running`` /
+        ``running_completed_by_runtime`` /
+        ``running_completed_by_low_consumption`` /
+        ``running_too_short_skip`` /
+        ``scheduled_to_missed`` / ``device_missing``.
+        """
         now = datetime.now()
         for device_id, schedule in list(self._schedules.items()):
             device = self._devices.get(device_id)
             if not device:
+                self._last_transitions[device_id] = "device_missing"
                 continue
+
+            fired = False
 
             # Check if device started
             if device._started and schedule.status == "scheduled":
                 schedule.status = "running"
                 schedule.started_at = now
                 _LOGGER.info("Appliance %s started running", schedule.appliance_name)
+                self._last_transitions[device_id] = "scheduled_to_running"
+                fired = True
 
             # Check if device finished (started and no longer consuming)
             if schedule.status == "running" and schedule.started_at:
                 elapsed = (now - schedule.started_at).total_seconds() / 60
                 consumption = device.get_current_consumption()
-                if elapsed >= schedule.estimated_runtime_minutes or consumption < 10:
+                runtime_reached = elapsed >= schedule.estimated_runtime_minutes
+                low_consumption = consumption < 10
+                if runtime_reached or low_consumption:
                     if elapsed >= 5:  # At least 5 minutes run time
                         schedule.status = "completed"
                         schedule.completed_at = now
@@ -140,6 +162,30 @@ class ApplianceScheduler:
                             "Appliance %s completed (ran %.0f min)",
                             schedule.appliance_name, elapsed,
                         )
+                        # Both branches can satisfy the outer if. Record
+                        # the dominant signal so users can tell whether a
+                        # short cycle (low_consumption) or a long one
+                        # (runtime_reached) ended the run.
+                        if runtime_reached:
+                            self._last_transitions[device_id] = "running_completed_by_runtime"
+                        else:
+                            self._last_transitions[device_id] = "running_completed_by_low_consumption"
+                        fired = True
+                    elif not fired:
+                        # Silent-failure surface — appliance "completed"
+                        # after < 5 min is treated as a transient power
+                        # blip and SKIPPED here. The 5-minute floor is a
+                        # heuristic; on a fast-cycle appliance this
+                        # branch could fire repeatedly and the run would
+                        # never close. Telemetry exposes the case so
+                        # users can spot it.
+                        #
+                        # Gated on ``not fired`` so this never overwrites
+                        # an earlier ``scheduled_to_running`` from this
+                        # same cycle — both transitions fire on the very
+                        # first ``update_schedules`` after device start.
+                        self._last_transitions[device_id] = "running_too_short_skip"
+                        fired = True
 
             # Check for missed deadlines (not started, past deadline)
             if schedule.status == "scheduled" and now > schedule.deadline:
@@ -151,6 +197,11 @@ class ApplianceScheduler:
                     "Appliance %s missed deadline %s",
                     schedule.appliance_name, schedule.deadline,
                 )
+                self._last_transitions[device_id] = "scheduled_to_missed"
+                fired = True
+
+            if not fired:
+                self._last_transitions[device_id] = "no_op"
 
     def get_pending_schedules(self) -> List[ApplianceScheduleEntry]:
         """Get all pending schedules."""
@@ -186,5 +237,13 @@ class ApplianceScheduler:
                 if h.status == "completed"
                 and h.completed_at
                 and h.completed_at.date() == datetime.now().date()
+            ),
+            # #426 — per-device transition paths from the last
+            # ``update_schedules`` call. Surfaces silent state changes.
+            "appliance_transitions": dict(self._last_transitions),
+            "appliance_missed_today": sum(
+                1 for h in self._history
+                if h.status == "missed"
+                and h.deadline.date() == datetime.now().date()
             ),
         }

@@ -36,6 +36,12 @@ class UtilitySignalData:
         if self.loads_blocked is None:
             self.loads_blocked = []
 
+    # #427 — telemetry surface mirroring classifier_path / dampening_path
+    # pattern. Tracks edge-detection branches that fire silently today.
+    update_path: str = "uninitialized"
+    block_path: str = "uninitialized"
+    signal_read_path: str = "uninitialized"
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "utility_signal_active": self.signal_active,
@@ -43,6 +49,10 @@ class UtilitySignalData:
             "utility_signal_count_today": self.signal_count_today,
             "utility_loads_blocked": ", ".join(self.loads_blocked) if self.loads_blocked else "none",
             "utility_solar_exempt": self.solar_loads_exempt,
+            # #427 — telemetry surface
+            "utility_update_path": self.update_path,
+            "utility_block_path": self.block_path,
+            "utility_signal_read_path": self.signal_read_path,
         }
 
 
@@ -75,17 +85,37 @@ class UtilitySignalMonitor:
 
     @property
     def is_signal_active(self) -> bool:
-        """Check if utility signal is currently active."""
+        """Check if utility signal is currently active.
+
+        Sets ``self._data.signal_read_path`` to one of (#427):
+        ``no_entity_configured`` / ``entity_missing`` / ``active`` /
+        ``inactive``. Important: ``no_entity_configured`` is the
+        silent-failure surface — SEM treats utility-signal as
+        permanently inactive when no entity is configured, so users
+        with a configuration mistake never see any blocking behavior.
+        """
         if not self.signal_entity_id:
+            self._data.signal_read_path = "no_entity_configured"
             return False
 
         state = self.hass.states.get(self.signal_entity_id)
-        if state and state.state in ("on", "true", "1", "active"):
+        if state is None:
+            self._data.signal_read_path = "entity_missing"
+            return False
+        if state.state in ("on", "true", "1", "active"):
+            self._data.signal_read_path = "active"
             return True
+        self._data.signal_read_path = "inactive"
         return False
 
     def update(self, solar_power_w: float = 0.0) -> UtilitySignalData:
-        """Update signal status (called during coordinator update)."""
+        """Update signal status (called during coordinator update).
+
+        Records the edge-detection branch on
+        ``self._data.update_path`` (#427): ``signal_started`` /
+        ``signal_ended`` / ``signal_continues_active`` /
+        ``signal_continues_inactive``.
+        """
         active = self.is_signal_active
 
         # Detect signal start
@@ -93,14 +123,19 @@ class UtilitySignalMonitor:
             self._data.last_signal_start = datetime.now()
             self._data.signal_count_today += 1
             self._data.signal_source = "ripple_control"
+            self._data.update_path = "signal_started"
             _LOGGER.warning(
                 "Utility ripple control signal ACTIVE — shedding non-critical loads"
             )
-
         # Detect signal end
-        if not active and self._was_active:
+        elif not active and self._was_active:
             self._data.last_signal_end = datetime.now()
+            self._data.update_path = "signal_ended"
             _LOGGER.info("Utility ripple control signal ended")
+        elif active:
+            self._data.update_path = "signal_continues_active"
+        else:
+            self._data.update_path = "signal_continues_inactive"
 
         self._was_active = active
         self._data.signal_active = active
@@ -116,17 +151,28 @@ class UtilitySignalMonitor:
 
         If solar_loads_exempt is True, devices currently powered by solar
         are allowed to continue operating.
+
+        Records the path on ``self._data.block_path`` (#427):
+        ``signal_inactive_no_block`` / ``solar_exempt_partial`` /
+        ``all_blocked``.
         """
         if not self.is_signal_active:
+            self._data.block_path = "signal_inactive_no_block"
             return []
 
         blocked = []
+        exempted = 0
         for device_id in all_device_ids:
             if self.solar_loads_exempt and device_id in solar_powered_device_ids:
+                exempted += 1
                 continue
             blocked.append(device_id)
 
         self._data.loads_blocked = blocked
+        if exempted > 0:
+            self._data.block_path = f"solar_exempt_partial:{exempted}"
+        else:
+            self._data.block_path = "all_blocked"
         return blocked
 
     def reset_daily_counters(self) -> None:

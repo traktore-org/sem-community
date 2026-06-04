@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.25] - 04.06.2026
+
+## 🧪 Beta Release — v1.7.1 audit batch 3
+
+_Changes since [1.7.0-beta.24](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.24)_
+
+Third batch of v1.7.1 audit telemetry. Closes the rest of the Top-12 backlog: two modules get telemetry surfaces, four close as no-change (pure data registries + a stateless translation helper that doesn't fit the path-attribute pattern). Pure additive observability, zero behavior change.
+
+### 🔍 Diagnostics
+
+- **#426 `ApplianceScheduler`** — `update_schedules()` now records per-device transition paths on `self._last_transitions[device_id]`, surfaced via `get_schedule_summary()["appliance_transitions"]`. Branches: `no_op` / `device_missing` / `scheduled_to_running` / `running_completed_by_runtime` / `running_completed_by_low_consumption` / **`running_too_short_skip`** (silent-failure surface — fast-cycle appliance under 5 min is treated as transient blip and skipped) / `scheduled_to_missed`. The `scheduled_to_running` branch is preserved when both it and `running_too_short_skip` could fire in the same cycle (caught in testing — `elif not fired` gate). New summary key `appliance_missed_today` (by @traktore-org, refs #426)
+- **#427 `UtilitySignalMonitor`** — three new path strings on `UtilitySignalData.to_dict`: `utility_signal_read_path` (**`no_entity_configured`** silent-failure surface — when no entity is configured SEM treats utility-signal as permanently inactive / `entity_missing` / `active` / `inactive`), `utility_update_path` (`signal_started` / `signal_ended` / `signal_continues_active` / `signal_continues_inactive`), `utility_block_path` (`signal_inactive_no_block` / `solar_exempt_partial:N` / `all_blocked`) (by @traktore-org, refs #427)
+
+### 📁 Audit framework
+
+- Closed #428 (`utils/translate.py`) as no-change — pure stateless translation function. The `_load_translations` exception path already logs; the language-fallback and format-error paths are silent-but-benign. Same audit pattern as #423 helpers (by @traktore-org, closes #428)
+- Closed #429 (`consts/devices.py`), #430 (`consts/labels.py`), #431 (`consts/sensors.py`) as no-change — pure data registries with 0 decision branches. No behavior to instrument; the audit's structural value for data registries is the data review itself, no findings. Top-12 backlog complete (by @traktore-org, closes #429 #430 #431)
+
 # [1.7.0-beta.24] - 04.06.2026
 
 ## 🧪 Beta Release — v1.7.1 audit batch 2
