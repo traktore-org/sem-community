@@ -3,39 +3,3 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 # Prevent pytest from collecting __init__.py in repo root
 collect_ignore = ["__init__.py", "setup.py"]
-
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-exclude = [
-  "dashboard/card/dist",
-  "dashboard/card/node_modules",
-  ".gstack",
-]
-
-[tool.ruff.lint]
-# Curated set — enough to catch real bugs, not enough to drown the
-# diff in style noise. Expand once the baseline is clean.
-select = [
-  "E",    # pycodestyle errors
-  "F",    # pyflakes (undefined names, unused imports)
-  "W",    # pycodestyle warnings
-  "I",    # isort
-  "UP",   # pyupgrade — use modern syntax
-  "B",    # flake8-bugbear — likely-bug patterns
-  "SIM",  # flake8-simplify
-  "RUF",  # ruff-native rules
-]
-ignore = [
-  "E501",   # line-too-long — let formatter handle it
-  "B008",   # function call in arg defaults — HA selectors do this all over
-  "SIM108", # ternary suggestion — often less readable for HA code
-]
-
-[tool.ruff.lint.per-file-ignores]
-# Tests can use star-imports and assert without restriction
-"tests/**/*.py" = ["F401", "F403", "F405", "B011"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
