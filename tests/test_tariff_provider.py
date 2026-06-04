@@ -181,27 +181,33 @@ class TestDynamicTariffProvider:
         assert provider._classify_price(-0.05) == PriceLevel.NEGATIVE
 
     def test_classify_price_very_cheap(self, mock_hass):
-        provider = DynamicTariffProvider(mock_hass)
+        """#359 follow-up: these tests were exercising the static-cutoff
+        buckets but constructing a percentile-default provider, so they
+        only passed because of the silent CHF fallback that we just
+        removed. Pass ``classification_mode='static'`` to make the
+        original intent explicit — testing the fixed-cutoff bucketing.
+        """
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # cheap_threshold default = 0.15, very_cheap < 0.075
         assert provider._classify_price(0.05) == PriceLevel.VERY_CHEAP
 
     def test_classify_price_cheap(self, mock_hass):
-        provider = DynamicTariffProvider(mock_hass)
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # 0.075 <= price < 0.15
         assert provider._classify_price(0.10) == PriceLevel.CHEAP
 
     def test_classify_price_normal(self, mock_hass):
-        provider = DynamicTariffProvider(mock_hass)
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # 0.15 <= price <= 0.35
         assert provider._classify_price(0.25) == PriceLevel.NORMAL
 
     def test_classify_price_expensive(self, mock_hass):
-        provider = DynamicTariffProvider(mock_hass)
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # > 0.35 and <= 0.525
         assert provider._classify_price(0.40) == PriceLevel.EXPENSIVE
 
     def test_classify_price_very_expensive(self, mock_hass):
-        provider = DynamicTariffProvider(mock_hass)
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # > 0.525 (1.5 * 0.35)
         assert provider._classify_price(0.60) == PriceLevel.VERY_EXPENSIVE
 
@@ -515,7 +521,14 @@ class TestAmberElectricProvider:
         assert prices[0].level == PriceLevel.NEGATIVE
 
     def test_amber_forecast_spike_detection(self, mock_hass):
-        """Classify spike prices as very_expensive."""
+        """Classify spike prices as very_expensive.
+
+        #359 follow-up: tests the static-cutoff branch explicitly (the
+        2-point forecast is too small for percentile mode, so under the
+        post-fix default the spike would be classified as NORMAL too).
+        Static mode is the correct shape for testing the literal 'a
+        price > 0.525 is very_expensive' assertion.
+        """
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
             {"start_time": now.isoformat(), "per_kwh": 0.25},
@@ -524,7 +537,11 @@ class TestAmberElectricProvider:
         state = _make_price_state(0.25, attributes={"forecasts": forecasts})
         mock_hass.states.get = MagicMock(return_value=state)
 
-        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
+        provider = DynamicTariffProvider(
+            mock_hass,
+            price_entity="sensor.amber_general_price",
+            classification_mode="static",
+        )
         prices = provider._read_prices_list()
 
         assert prices[0].level == PriceLevel.NORMAL
@@ -949,7 +966,14 @@ class TestDynamicTariffSchedule:
         assert schedule[1]["tariff"] == "HT"
 
     def test_schedule_all_cheap(self, mock_hass):
-        """All prices cheap → single NT block."""
+        """All prices cheap → single NT block.
+
+        #359 follow-up: flat days (24 × €0.05) trip the degenerate-
+        distribution guard, so percentile mode returns NORMAL = HT
+        for every hour. Use static mode here — the test's semantics
+        are about schedule generation from a flat-cheap day, which is
+        exactly what static cutoffs were designed to encode.
+        """
         now = datetime(2026, 5, 3, 0, 0, 0)
         prices = [
             {"start": now.replace(hour=h).isoformat(), "total": 0.05}
@@ -960,7 +984,11 @@ class TestDynamicTariffSchedule:
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(
+                mock_hass,
+                price_entity="sensor.price",
+                classification_mode="static",
+            )
             schedule = provider.get_schedule_for_day(now)
 
         assert len(schedule) == 1
@@ -981,7 +1009,13 @@ class TestDynamicTariffSchedule:
         assert schedule == []
 
     def test_schedule_with_spikes(self, mock_hass):
-        """Spike prices map to HT."""
+        """Spike prices map to HT.
+
+        #359 follow-up: 3 prices is below the 4-point percentile
+        minimum, so percentile mode returns NORMAL for every hour and
+        the spike doesn't get singled out. Use static mode — the test
+        is about absolute-magnitude spike detection.
+        """
         now = datetime(2026, 5, 3, 14, 0, 0)
         prices = [
             {"start": now.isoformat(), "total": 0.10},           # Cheap
@@ -993,7 +1027,11 @@ class TestDynamicTariffSchedule:
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(
+                mock_hass,
+                price_entity="sensor.price",
+                classification_mode="static",
+            )
             schedule = provider.get_schedule_for_day(now)
 
         assert len(schedule) == 3

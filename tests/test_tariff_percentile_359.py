@@ -101,47 +101,54 @@ class TestPercentileBucketing:
         # Negative price (spot-market overproduction).
         assert p._classify_price(-0.05) is PriceLevel.NEGATIVE
 
-    def test_cold_start_falls_back_to_static(self):
-        """Before _prices_cache is populated, percentile mode must
-        fall back to the legacy static thresholds — otherwise the
-        very first sensor read would be unclassified."""
+    def test_cold_start_returns_normal(self):
+        """#359 follow-up: before _prices_cache is populated, percentile
+        mode must return NORMAL — not fall through to the static
+        thresholds, which are CHF-calibrated (0.15 / 0.35) and silently
+        mis-classify any other currency. RienduPre's Tibber NL install
+        hit this and reported €0.30 as ``normal`` for hours before the
+        Tibber sensor populated."""
         p = _make_provider("percentile")
         # No cache yet.
         assert p._prices_cache == []
-        # Static says < 0.15 = CHEAP, > 0.35 = EXPENSIVE.
-        assert p._classify_price(0.10) is PriceLevel.CHEAP
-        assert p._classify_price(0.50) is PriceLevel.EXPENSIVE
+        # NORMAL is the safe default until we have data.
+        assert p._classify_price(0.10) is PriceLevel.NORMAL
+        assert p._classify_price(0.50) is PriceLevel.NORMAL
         assert p._classify_price(0.25) is PriceLevel.NORMAL
+        # Negative prices remain NEGATIVE even pre-data.
+        assert p._classify_price(-0.05) is PriceLevel.NEGATIVE
 
-    def test_insufficient_data_falls_back_to_static(self):
-        """3 prices isn't enough for meaningful percentiles — fall
-        back to static."""
+    def test_insufficient_data_returns_normal(self):
+        """#359 follow-up: 3 prices isn't enough for percentiles — return
+        NORMAL, not the CHF-calibrated static fallback."""
         p = _make_provider("percentile")
         p._prices_cache = _today_prices([0.10, 0.20, 0.30])
 
-        # Bucket using static thresholds.
-        assert p._classify_price(0.10) is PriceLevel.CHEAP
+        assert p._classify_price(0.10) is PriceLevel.NORMAL
+        assert p._classify_price(0.50) is PriceLevel.NORMAL
 
-    def test_flat_distribution_falls_back_to_static(self):
-        """M1 reviewer note: a flat day collapses p10 == p90 and would
-        silently classify every price as VERY_CHEAP, over-triggering
-        cheap-window logic. Spread < 1 ct/kWh must fall through."""
+    def test_flat_distribution_returns_normal(self):
+        """#359 follow-up: a flat day collapses p90-p10 < 1 ct/kWh; the
+        degenerate guard returns None. In percentile mode that now
+        means NORMAL, not the CHF-calibrated static fallback."""
         p = _make_provider("percentile")
         # 24-point flat day at 0.20 €/kWh.
         p._prices_cache = _today_prices([0.20] * 24)
 
-        # Static says 0.20 lies in 0.15..0.35 → NORMAL (not
-        # VERY_CHEAP which the degenerate percentile path would
-        # produce).
         assert p._classify_price(0.20) is PriceLevel.NORMAL
+        # Even values that would static-classify differently come back
+        # as NORMAL because we have no real distribution to compare to.
+        assert p._classify_price(0.05) is PriceLevel.NORMAL
+        assert p._classify_price(0.40) is PriceLevel.NORMAL
 
-    def test_near_flat_distribution_falls_back(self):
-        """Spread under the 1 ct threshold also falls back."""
+    def test_near_flat_distribution_returns_normal(self):
+        """Spread under the 1 ct threshold also returns NORMAL."""
         p = _make_provider("percentile")
         prices = [0.20 + i * 0.0001 for i in range(24)]  # ~0.20 → ~0.2023
         p._prices_cache = _today_prices(prices)
 
         assert p._classify_price(0.20) is PriceLevel.NORMAL
+        assert p._classify_price(0.40) is PriceLevel.NORMAL
 
 
 class TestStaticMode:
@@ -291,3 +298,69 @@ class TestTimezoneSkew359Followup:
                 assert naive_date < local_today  # would be lost pre-fix
         finally:
             dt_util.set_default_time_zone(original_tz)
+
+
+class TestRienduPreRegressionFromReproScript:
+    """#359 follow-up — regression tests that mirror the live reproduction
+    on HA-TEST against synthetic Tibber-NL data, validated 2026-06-04.
+    Each test reproduces one of the three scenarios that caused €0.30 to
+    render as ``normal`` for RienduPre's install before the fix."""
+
+    @pytest.mark.parametrize("hour, price, expected", [
+        # Cherry-picked from the 24h synthetic Tibber NL curve in
+        # /tmp/sem-359-repro.py (scenario A). Breaks compute to
+        # p10=0.140, p25=0.180, p75=0.300, p90=0.400.
+        (4, 0.13, PriceLevel.VERY_CHEAP),     # below p10
+        (2, 0.15, PriceLevel.CHEAP),          # at p25 boundary (0.180)
+        (10, 0.32, PriceLevel.EXPENSIVE),     # above p75
+        (18, 0.45, PriceLevel.VERY_EXPENSIVE),  # above p90
+        # RienduPre's exact symptom price — at p75 = 0.30 → EXPENSIVE,
+        # NOT NORMAL (which is what static-fallback was producing).
+        (8, 0.30, PriceLevel.EXPENSIVE),
+    ])
+    def test_a_realistic_tibber_nl_percentile(self, hour, price, expected):
+        """Scenario A from the repro script: realistic 24h Tibber NL curve,
+        percentile mode, breaks compute cleanly."""
+        p = _make_provider("percentile")
+        curve = [
+            0.18, 0.16, 0.15, 0.14, 0.13, 0.14, 0.18, 0.24,
+            0.30, 0.32, 0.28, 0.25, 0.22, 0.20, 0.22, 0.26,
+            0.32, 0.42, 0.45, 0.40, 0.34, 0.28, 0.22, 0.18,
+        ]
+        p._prices_cache = _today_prices(curve)
+        assert p._classify_price(price) is expected
+
+    def test_b_static_mode_user_choice(self):
+        """Scenario B: user explicitly chose static mode. Their choice is
+        respected — the CHF-calibrated cutoffs apply. This is the only
+        scenario where €0.30 → NORMAL is the correct outcome (because
+        the user opted in to those thresholds)."""
+        p = _make_provider("static")
+        p._prices_cache = _today_prices([0.18, 0.30, 0.45])
+        assert p._classify_price(0.30) is PriceLevel.NORMAL
+
+    def test_d_cold_start_no_silent_fallback(self):
+        """Scenario D: percentile mode but cache is empty (cold start
+        before Tibber populates). Pre-fix: silently used CHF cutoffs and
+        €0.30 → NORMAL. Post-fix: returns NORMAL as a safe default
+        rather than running through the wrong-currency thresholds."""
+        p = _make_provider("percentile")
+        p._prices_cache = []
+        # NORMAL because we have no data — NOT because a stray €0.15
+        # CHF threshold happened to put €0.30 in the middle.
+        assert p._classify_price(0.30) is PriceLevel.NORMAL
+        # The point: every value comes back as NORMAL during cold
+        # start, no matter the magnitude. That's the safe behaviour.
+        assert p._classify_price(0.05) is PriceLevel.NORMAL
+        assert p._classify_price(0.80) is PriceLevel.NORMAL
+
+    def test_e_flat_day_no_silent_fallback(self):
+        """Scenario E: 24h of perfectly-flat €0.30 pricing. The
+        degenerate-distribution guard returns None; percentile mode
+        should return NORMAL — NOT use the CHF cutoffs and pretend
+        anything below €0.15 is CHEAP."""
+        p = _make_provider("percentile")
+        p._prices_cache = _today_prices([0.30] * 24)
+        assert p._classify_price(0.30) is PriceLevel.NORMAL
+        assert p._classify_price(0.10) is PriceLevel.NORMAL  # would have been CHEAP pre-fix
+        assert p._classify_price(0.50) is PriceLevel.NORMAL  # would have been EXPENSIVE pre-fix

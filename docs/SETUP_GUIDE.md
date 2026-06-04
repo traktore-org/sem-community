@@ -340,6 +340,31 @@ The options flow is organized into these pages:
 - **Calendar**: You define cheap/expensive periods via a HA calendar entity.
   Useful for fixed time-of-use tariffs without a dynamic price API.
 
+#### Price classification — how the dynamic-tariff "cheap" / "expensive" labels are computed
+
+When tariff mode is **Dynamic**, SEM bucketises every price reading into one of
+**very_cheap / cheap / normal / expensive / very_expensive / negative**. Two modes:
+
+- **Percentile** (default since v1.7.0-beta.3): buckets are computed from
+  today's 24-hour price array. Bottom 10% = `very_cheap`, bottom 25% = `cheap`,
+  25–75% = `normal`, top 25% = `expensive`, top 10% = `very_expensive`. Works
+  on any currency / any market — the breaks adapt to your tariff's actual range.
+- **Static**: bucketises against fixed cutoffs (`< 0.075 = very_cheap`,
+  `< 0.15 = cheap`, `> 0.35 = expensive`, `> 0.525 = very_expensive`).
+  Calibrated for CHF — change to your currency only if you've explicitly opted
+  in to this mode in Settings → Configure → Tariff settings.
+
+**Cold start / sparse data (#359)**: in percentile mode, if SEM has fewer than
+4 price points for today (cold start before your dynamic-tariff integration
+populates, or a perfectly flat day), the classifier returns `normal` as a safe
+default. **It will not silently apply the static cutoffs**, which would
+mis-classify any non-CHF tariff (RienduPre's Tibber NL install was reporting
+€0.30 as `normal` for hours after restart before this was fixed in
+v1.7.0-beta.16).
+
+Switch modes from **Settings → Devices & Services → Solar Energy Management
+→ Configure → Tariff settings → "Price classification mode"**.
+
 ### Notification settings
 
 | Setting | Default | What it does and when to change it |
