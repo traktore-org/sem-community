@@ -81,6 +81,20 @@ class TariffData:
     # Upcoming prices
     upcoming_prices: List[PricePoint] = field(default_factory=list)
 
+    # #359 follow-up — diagnostic: which classifier path produced the
+    # current ``price_level``. Exposed as the ``tariff_classifier_path``
+    # sensor attribute so users hitting RienduPre's
+    # derivative-entity-without-prices_today scenario can see WHY their
+    # classification is NORMAL instead of filing a duplicate bug.
+    # Values:
+    #   percentile_active(p10=0.14,p25=..,p75=..,p90=..)
+    #   percentile_fallback_cache_empty
+    #   percentile_fallback_too_few_prices(n=3)
+    #   percentile_fallback_flat_day(spread=0.0008)
+    #   static_fixed_cutoffs
+    #   negative_price_shortcircuit
+    classifier_path: str = "unknown"
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "tariff_current_import_rate": round(self.current_import_rate, 4),
@@ -89,6 +103,7 @@ class TariffData:
             "tariff_currency": self.currency,
             "tariff_provider": self.provider,
             "tariff_is_dynamic": self.is_dynamic,
+            "tariff_classifier_path": self.classifier_path,
             "tariff_next_cheap_start": (
                 self.next_cheap_window_start.isoformat()
                 if self.next_cheap_window_start else None
@@ -187,6 +202,7 @@ class StaticTariffProvider(TariffProvider):
             currency=self.currency,
             provider="static",
             is_dynamic=False,
+            classifier_path="static_ht_nt",
             today_min_price=self.off_peak_rate,
             today_max_price=self.peak_rate,
             today_avg_price=(self.peak_rate + self.off_peak_rate) / 2,
@@ -267,6 +283,12 @@ class DynamicTariffProvider(TariffProvider):
         # array changes. Keys: ``p10``, ``p25``, ``p75``, ``p90``.
         self._percentile_breaks: Optional[Dict[str, float]] = None
         self._percentile_breaks_for: Optional[str] = None  # date iso
+        # #359 follow-up — surface which classifier path produced the most
+        # recent ``price_level`` via the ``tariff_classifier_path`` sensor
+        # attribute. Lets users see WHY their classification is what it
+        # is (especially the cold-start / no-prices_today fallback paths
+        # that produce NORMAL silently).
+        self._last_classifier_path: str = "unknown"
 
     def detect_provider(self) -> Optional[str]:
         """Auto-detect available price integration."""
@@ -506,11 +528,14 @@ class DynamicTariffProvider(TariffProvider):
         until we actually have data to classify against.
         """
         if price < 0:
+            self._last_classifier_path = "negative_price_shortcircuit"
             return PriceLevel.NEGATIVE
 
         if self.classification_mode == "percentile":
             breaks = self._get_percentile_breaks()
             if breaks is not None:
+                # _get_percentile_breaks sets the active-path string in
+                # the happy case; just return the bucketed level.
                 if price <= breaks["p10"]:
                     return PriceLevel.VERY_CHEAP
                 if price <= breaks["p25"]:
@@ -525,10 +550,12 @@ class DynamicTariffProvider(TariffProvider):
             # CHF-calibrated static cutoffs here — they're wrong for
             # any non-CHF tariff and silently produce confusing
             # classifications that look like a SEM bug.
+            # _last_classifier_path already set by _get_percentile_breaks
+            # to one of the fallback_* values that explain why.
             _LOGGER.debug(
-                "tariff/#359: percentile mode but no breaks — returning "
-                "NORMAL (safe default). Static cutoffs are CHF-calibrated "
-                "and would mis-classify other currencies.",
+                "tariff/#359: percentile mode but no breaks (%s) — "
+                "returning NORMAL (safe default).",
+                self._last_classifier_path,
             )
             return PriceLevel.NORMAL
 
@@ -536,6 +563,7 @@ class DynamicTariffProvider(TariffProvider):
         # Only reached when classification_mode == "static" — the user
         # has explicitly chosen fixed cutoffs because their tariff is
         # flat or their CHF/EUR scale matches the defaults.
+        self._last_classifier_path = "static_fixed_cutoffs"
         if price < self.cheap_threshold * 0.5:
             return PriceLevel.VERY_CHEAP
         if price < self.cheap_threshold:
@@ -553,8 +581,15 @@ class DynamicTariffProvider(TariffProvider):
 
         Cached per calendar date so the calculation runs at most once
         per day (the underlying ``_prices_cache`` is updated by the
-        usual cache-invalidation path)."""
+        usual cache-invalidation path).
+
+        Side-effect: sets ``self._last_classifier_path`` to a string
+        explaining which path was taken so users see WHY their
+        classification ended up where it did (#359 follow-up — exposed
+        via the ``tariff_classifier_path`` sensor attribute).
+        """
         if not self._prices_cache:
+            self._last_classifier_path = "percentile_fallback_cache_empty"
             return None
 
         today = dt_util.now().date()
@@ -578,6 +613,9 @@ class DynamicTariffProvider(TariffProvider):
             and p.price is not None
         )
         if len(today_prices) < 4:
+            self._last_classifier_path = (
+                f"percentile_fallback_too_few_prices(n={len(today_prices)})"
+            )
             _LOGGER.debug(
                 "tariff/#359: percentile fallback — today's price array "
                 "has %d / %d points (need ≥4); using static thresholds",
@@ -612,12 +650,22 @@ class DynamicTariffProvider(TariffProvider):
         # narrower than that is functionally flat, so fall through to
         # the static path.
         if (breaks["p90"] - breaks["p10"]) < 0.01:
+            self._last_classifier_path = (
+                f"percentile_fallback_flat_day("
+                f"spread={breaks['p90'] - breaks['p10']:.4f})"
+            )
             _LOGGER.debug(
                 "tariff/#359: degenerate distribution — p90-p10=%.4f < 0.01 "
                 "(%d today points); using static thresholds",
                 breaks["p90"] - breaks["p10"], len(today_prices),
             )
             return None
+        self._last_classifier_path = (
+            f"percentile_active("
+            f"p10={breaks['p10']:.4f},p25={breaks['p25']:.4f},"
+            f"p75={breaks['p75']:.4f},p90={breaks['p90']:.4f},"
+            f"n={len(today_prices)})"
+        )
         _LOGGER.debug(
             "tariff/#359: percentile breaks for %s — p10=%.4f p25=%.4f "
             "p75=%.4f p90=%.4f (%d today points)",
@@ -665,13 +713,19 @@ class DynamicTariffProvider(TariffProvider):
         current_price = self._read_current_price()
         prices = self._read_prices_list()
 
+        # ``_classify_price`` (via ``_get_percentile_breaks``) sets
+        # ``self._last_classifier_path`` as a side-effect describing
+        # which path produced the level — surface it on TariffData so
+        # the sensor attribute documents the path.
+        price_level = self._classify_price(current_price)
         data = TariffData(
             current_import_rate=current_price,
             current_export_rate=self.get_current_export_rate(),
-            price_level=self._classify_price(current_price),
+            price_level=price_level,
             currency=self.currency,
             provider=self._provider_name,
             is_dynamic=True,
+            classifier_path=self._last_classifier_path,
             upcoming_prices=prices[:24],  # Next 24 hours
         )
 

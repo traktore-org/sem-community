@@ -364,3 +364,101 @@ class TestRienduPreRegressionFromReproScript:
         assert p._classify_price(0.30) is PriceLevel.NORMAL
         assert p._classify_price(0.10) is PriceLevel.NORMAL  # would have been CHEAP pre-fix
         assert p._classify_price(0.50) is PriceLevel.NORMAL  # would have been EXPENSIVE pre-fix
+
+
+class TestClassifierPathDiagnostic:
+    """#359 follow-up — surface WHICH classifier branch produced each
+    ``price_level`` value via ``self._last_classifier_path``. RienduPre's
+    install hits the cold-start branch because his Tibber price entity is a
+    derivative template that doesn't pass through ``prices_today``, so the
+    classifier has nothing to compute breaks from. Without this attribute he
+    had no way to self-diagnose; with it, the ``tariff_price_level`` sensor
+    carries the reason as an attribute."""
+
+    def test_default_path_is_unknown(self):
+        """Before any classification runs, the path should be 'unknown' so
+        users in broken-tariff-config setups see a clear signal that the
+        classifier never executed."""
+        p = _make_provider("percentile")
+        assert p._last_classifier_path == "unknown"
+
+    def test_negative_price_short_circuits(self):
+        p = _make_provider("percentile")
+        p._classify_price(-0.05)
+        assert p._last_classifier_path == "negative_price_shortcircuit"
+
+    def test_static_mode_records_fixed_cutoffs(self):
+        p = _make_provider("static")
+        p._prices_cache = _today_prices([0.18, 0.30, 0.45])
+        p._classify_price(0.30)
+        assert p._last_classifier_path == "static_fixed_cutoffs"
+
+    def test_cold_start_records_cache_empty(self):
+        """RienduPre's exact case: cache empty → fallback path documented."""
+        p = _make_provider("percentile")
+        p._prices_cache = []
+        p._classify_price(0.30)
+        assert p._last_classifier_path == "percentile_fallback_cache_empty"
+
+    def test_too_few_prices_records_count(self):
+        p = _make_provider("percentile")
+        p._prices_cache = _today_prices([0.20, 0.30])  # n=2 < 4
+        p._classify_price(0.30)
+        assert p._last_classifier_path.startswith(
+            "percentile_fallback_too_few_prices("
+        )
+        assert "n=2" in p._last_classifier_path
+
+    def test_flat_day_records_spread(self):
+        p = _make_provider("percentile")
+        p._prices_cache = _today_prices([0.30] * 24)
+        p._classify_price(0.30)
+        assert p._last_classifier_path.startswith(
+            "percentile_fallback_flat_day("
+        )
+        assert "spread=" in p._last_classifier_path
+
+    def test_happy_path_records_breaks(self):
+        """When the classifier produces a real bucket, the path string
+        embeds p10/p25/p75/p90 + n so debugging support tickets is trivial:
+        a screenshot of the attribute proves the buckets were computed."""
+        p = _make_provider("percentile")
+        curve = [
+            0.18, 0.16, 0.15, 0.14, 0.13, 0.14, 0.18, 0.24,
+            0.30, 0.32, 0.28, 0.25, 0.22, 0.20, 0.22, 0.26,
+            0.32, 0.42, 0.45, 0.40, 0.34, 0.28, 0.22, 0.18,
+        ]
+        p._prices_cache = _today_prices(curve)
+        p._classify_price(0.30)
+        assert p._last_classifier_path.startswith("percentile_active(")
+        # All four break keys + n should be visible.
+        for token in ("p10=", "p25=", "p75=", "p90=", "n=24"):
+            assert token in p._last_classifier_path
+
+    def test_get_tariff_data_surfaces_path_on_tariffdata(self):
+        """End-to-end: get_tariff_data() copies _last_classifier_path onto
+        TariffData.classifier_path so the coordinator → sensor pipeline can
+        publish it as an entity attribute."""
+        p = _make_provider("percentile")
+        p._prices_cache = []
+        # Make _read_current_price return 0.30 (cold-start scenario).
+        p._read_current_price = lambda: 0.30
+        p._read_prices_list = lambda: []
+        td = p.get_tariff_data()
+        assert td.classifier_path == "percentile_fallback_cache_empty"
+        assert td.to_dict()["tariff_classifier_path"] == (
+            "percentile_fallback_cache_empty"
+        )
+
+    def test_static_provider_path_is_static_ht_nt(self):
+        """StaticTariffProvider hard-codes 'static_ht_nt' — gives users a
+        clear indicator that their classification mode never engaged the
+        percentile machinery at all."""
+        from custom_components.solar_energy_management.tariff.tariff_provider import (
+            StaticTariffProvider,
+        )
+        sp = StaticTariffProvider(
+            peak_rate=0.35, off_peak_rate=0.15, export_rate=0.08,
+        )
+        td = sp.get_tariff_data()
+        assert td.classifier_path == "static_ht_nt"
