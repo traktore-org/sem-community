@@ -5,6 +5,29 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> From v1.7.0-beta.14 onward, release entries follow the
+> [music-assistant addon](https://github.com/music-assistant/home-assistant-addon)
+> style: DD.MM.YYYY dates, emoji-prefixed sections, one-liner bullets with
+> `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
+> prose-paragraph style they were written in.
+
+# [1.7.0-beta.14] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.13](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.13)_
+
+### 🐛 Bugfixes
+
+- KEBA failsafe watchdog drop after steady-state charging: same-value `set_current` writes now refresh past a 60 s heartbeat window so the device watchdog stays alive. Generalised to all current-controlled chargers (by @traktore-org in #393, closes #392)
+- Same-value heartbeat write also re-converges device-side and SEM-side state after silent device resets (replug fallback, KEBA reboot, failsafe trip) — no more "SEM thinks 16 A, KEBA at 6 A, stuck forever" mode (by @traktore-org in #393)
+
+## :bow: Thanks to our contributors
+
+Special thanks to the following users who helped with this release:
+
+@traktore-org
+
 ## [1.7.0-beta.13] — 2026-06-03
 
 The **#359 percentile classifier follow-up**.
