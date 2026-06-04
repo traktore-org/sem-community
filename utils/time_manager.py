@@ -40,6 +40,21 @@ class TimeManager:
         self.hass = hass
         self._config = config or {}
 
+        # #424 — telemetry surface mirroring #359/#416/#420/#421/#422/#423
+        # classifier_path / dampening_path patterns. Each method sets the
+        # corresponding ``*_path`` string so the coordinator can publish
+        # them as a diagnostic attribute on the existing night-window /
+        # forecast sensors. Without these, a wrong sunrise/sunset →
+        # wrong night window → wrong EV / battery charging behavior, but
+        # the symptom appears at the actuator with no breadcrumb trail.
+        self._last_sunrise_source: str = "uninitialized"
+        self._last_sunset_source: str = "uninitialized"
+        self._last_sunrise_correction: str = "uninitialized"
+        self._last_night_window_path: str = "uninitialized"
+        self._last_meter_day_path: str = "uninitialized"
+        self._last_night_hours_path: str = "uninitialized"
+        self._last_offset_parse_path: str = "uninitialized"
+
     def _get_night_earliest_start(self) -> str:
         """Get the floor for night start as HH:MM.
 
@@ -74,12 +89,23 @@ class TimeManager:
         daytime. The latest_end ceiling (default 07:00) stops night charging
         even if sunrise is later in winter.
 
+        Records the branch on ``self._last_night_window_path`` (#424):
+        ``pre_midnight_in_night`` / ``post_midnight_in_night`` /
+        ``outside_night_window``.
+
         Returns:
             True if currently in night mode
         """
         current_time = dt_util.now().strftime("%H:%M")
         night_start, night_end = self.get_night_window()
-        return current_time >= night_start or current_time < night_end
+        if current_time >= night_start:
+            self._last_night_window_path = "pre_midnight_in_night"
+            return True
+        if current_time < night_end:
+            self._last_night_window_path = "post_midnight_in_night"
+            return True
+        self._last_night_window_path = "outside_night_window"
+        return False
 
     def get_night_window(self) -> tuple:
         """Get the computed night window (start, end) as HH:MM strings.
@@ -101,6 +127,9 @@ class TimeManager:
 
         Accounts for midnight crossing (e.g., 21:00 to 06:00 = 9 hours).
 
+        Records branch on ``self._last_night_hours_path`` (#424):
+        ``crosses_midnight`` / ``same_day`` / ``parse_failed_fallback_8h``.
+
         Returns:
             Available hours as float (e.g., 9.5)
         """
@@ -113,10 +142,13 @@ class TimeManager:
             if end_mins <= start_mins:
                 # Crosses midnight
                 duration = (24 * 60 - start_mins) + end_mins
+                self._last_night_hours_path = "crosses_midnight"
             else:
                 duration = end_mins - start_mins
+                self._last_night_hours_path = "same_day"
             return duration / 60.0
         except (ValueError, AttributeError):
+            self._last_night_hours_path = "parse_failed_fallback_8h"
             return 8.0  # Safe fallback
 
     def get_night_end_time(self) -> str:
@@ -131,6 +163,9 @@ class TimeManager:
     def get_sunrise_time(self) -> str:
         """Get sunrise time from Home Assistant sun integration.
 
+        Records the source on ``self._last_sunrise_source`` (#424):
+        ``sun_integration`` / ``fallback_default``.
+
         Returns:
             Sunrise time in HH:MM format (local time), or "06:00" as fallback
         """
@@ -144,15 +179,20 @@ class TimeManager:
                         # Parse ISO format string to datetime
                         next_rising = datetime.fromisoformat(next_rising.replace('Z', '+00:00'))
                     # Convert to local time string
+                    self._last_sunrise_source = "sun_integration"
                     return dt_util.as_local(next_rising).strftime("%H:%M")
         except Exception as e:
             _LOGGER.debug(f"Could not get sunrise time, using default: {e}")
 
         # Fallback to default
+        self._last_sunrise_source = "fallback_default"
         return "06:00"
 
     def get_sunset_plus_10_time(self) -> str:
         """Get sunset + 10 minutes time from Home Assistant sun integration.
+
+        Records the source on ``self._last_sunset_source`` (#424):
+        ``sun_integration`` / ``fallback_default``.
 
         Returns:
             Sunset+10 time in HH:MM format (local time), or "20:30" as fallback
@@ -168,11 +208,13 @@ class TimeManager:
                         next_setting = datetime.fromisoformat(next_setting.replace('Z', '+00:00'))
                     # Add 10 minutes and convert to local time string
                     sunset_plus_10 = dt_util.as_local(next_setting) + timedelta(minutes=10)
+                    self._last_sunset_source = "sun_integration"
                     return sunset_plus_10.strftime("%H:%M")
         except Exception as e:
             _LOGGER.debug(f"Could not get sunset time, using default: {e}")
 
         # Fallback to default
+        self._last_sunset_source = "fallback_default"
         return "20:30"
 
     def get_sunrise_datetime(self) -> datetime:
@@ -198,12 +240,19 @@ class TimeManager:
                     now = dt_util.now()
                     if sunrise.date() > now.date():
                         sunrise = sunrise - timedelta(days=1)
+                        # Same class of bug as #416 forecast_tracker.
+                        # Tracking here so we can see how often the
+                        # next_rising-is-tomorrow case fires in practice.
+                        self._last_sunrise_correction = "next_rising_was_tomorrow"
+                    else:
+                        self._last_sunrise_correction = "none"
 
                     return sunrise
         except Exception as e:
             _LOGGER.debug(f"Could not get sunrise datetime, using default: {e}")
 
         # Fallback: 06:00 today in local time
+        self._last_sunrise_correction = "fallback_default_06_00"
         now = dt_util.now()
         return now.replace(hour=6, minute=0, second=0, microsecond=0)
 
@@ -231,9 +280,11 @@ class TimeManager:
 
         if now < sunrise_today:
             # Before sunrise: still in yesterday's meter day
+            self._last_meter_day_path = "before_sunrise"
             return (now.date() - timedelta(days=1))
         else:
             # After sunrise: in today's meter day
+            self._last_meter_day_path = "after_sunrise"
             return now.date()
 
     def get_offset_time(self, offset: str = "00:00") -> datetime:
@@ -259,9 +310,11 @@ class TimeManager:
                 second=0,
                 microsecond=0
             )
+            self._last_offset_parse_path = "parsed"
             return offset_time
         except (ValueError, AttributeError):
             _LOGGER.warning(f"Invalid offset format '{offset}', using midnight")
+            self._last_offset_parse_path = "parse_failed_fallback_midnight"
             return now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     def get_current_meter_day_offset_based(self, offset: str = "00:00") -> date:
@@ -287,7 +340,26 @@ class TimeManager:
 
         if now < offset_time:
             # Before offset time: still in yesterday's meter day
+            self._last_meter_day_path = "before_offset"
             return (now.date() - timedelta(days=1))
         else:
             # After offset time: in today's meter day
+            self._last_meter_day_path = "after_offset"
             return now.date()
+
+    def get_diagnostics(self) -> dict:
+        """Return the audit telemetry surface (#424).
+
+        Used by the coordinator to expose ``*_path`` strings on the
+        existing night-window / forecast sensor surfaces. Mirrors the
+        ``get_data`` pattern in ``forecast_tracker.py`` from #416.
+        """
+        return {
+            "sunrise_source": self._last_sunrise_source,
+            "sunset_source": self._last_sunset_source,
+            "sunrise_correction": self._last_sunrise_correction,
+            "night_window_path": self._last_night_window_path,
+            "meter_day_path": self._last_meter_day_path,
+            "night_hours_path": self._last_night_hours_path,
+            "offset_parse_path": self._last_offset_parse_path,
+        }

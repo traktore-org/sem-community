@@ -13,7 +13,7 @@ from custom_components.solar_energy_management.devices.base import (
 
 
 @pytest.fixture
-def hass():
+def mock_hass():
     """Return a mocked Home Assistant instance."""
     h = MagicMock()
     h.config = MagicMock()
@@ -32,10 +32,10 @@ class TestCooldownBlocksRapidAdjust:
     """Test that cooldown prevents rapid adjust_power calls."""
 
     @pytest.mark.asyncio
-    async def test_cooldown_blocks_rapid_adjust(self, hass):
+    async def test_cooldown_blocks_rapid_adjust(self, mock_hass):
         """Two adjust_power calls within 30s: second returns unchanged."""
         dev = CurrentControlDevice(
-            hass, "ev1", "EV Charger",
+            mock_hass, "ev1", "EV Charger",
             min_current=6, max_current=16, phases=3, voltage=230,
             min_power_change_interval=30.0,
         )
@@ -52,10 +52,10 @@ class TestCooldownBlocksRapidAdjust:
         assert result2 == result1  # unchanged
 
     @pytest.mark.asyncio
-    async def test_cooldown_allows_after_interval(self, hass):
+    async def test_cooldown_allows_after_interval(self, mock_hass):
         """After cooldown elapses, adjust_power proceeds."""
         dev = CurrentControlDevice(
-            hass, "ev1", "EV Charger",
+            mock_hass, "ev1", "EV Charger",
             min_current=6, max_current=16, phases=3, voltage=230,
             min_power_change_interval=30.0,
         )
@@ -74,10 +74,10 @@ class TestCooldownBlocksRapidAdjust:
         assert result > 0
 
     @pytest.mark.asyncio
-    async def test_activate_ignores_cooldown(self, hass):
+    async def test_activate_ignores_cooldown(self, mock_hass):
         """activate() should work even during cooldown window."""
         dev = CurrentControlDevice(
-            hass, "ev1", "EV Charger",
+            mock_hass, "ev1", "EV Charger",
             min_current=6, max_current=16, phases=3, voltage=230,
             min_power_change_interval=30.0,
         )
@@ -90,10 +90,10 @@ class TestCooldownBlocksRapidAdjust:
         assert dev.is_active
 
     @pytest.mark.asyncio
-    async def test_deactivate_ignores_cooldown(self, hass):
+    async def test_deactivate_ignores_cooldown(self, mock_hass):
         """deactivate() should work even during cooldown window."""
         dev = CurrentControlDevice(
-            hass, "ev1", "EV Charger",
+            mock_hass, "ev1", "EV Charger",
             min_current=6, max_current=16, phases=3, voltage=230,
             min_power_change_interval=30.0,
         )
@@ -109,20 +109,20 @@ class TestCooldownBlocksRapidAdjust:
 class TestSetpointCooldown:
     """Test SetpointDevice cooldown defaults."""
 
-    def test_setpoint_default_300s(self, hass):
+    def test_setpoint_default_300s(self, mock_hass):
         """SetpointDevice should have 300s default cooldown."""
         dev = SetpointDevice(
-            hass, "hp1", "Heat Pump",
+            mock_hass, "hp1", "Heat Pump",
             rated_power=2000,
         )
         assert dev._min_power_change_interval == 300.0
 
-    def test_heat_pump_inherits_cooldown(self, hass):
+    def test_heat_pump_inherits_cooldown(self, mock_hass):
         """HeatPumpController should inherit 300s cooldown."""
         from custom_components.solar_energy_management.devices.heat_pump_controller import (
             HeatPumpController,
         )
-        dev = HeatPumpController(hass)
+        dev = HeatPumpController(mock_hass)
         assert dev._min_power_change_interval == 300.0
 
 
@@ -132,16 +132,16 @@ class TestSetpointCooldown:
 class TestDailyRuntime:
     """Test daily runtime tracking on ControllableDevice."""
 
-    def _make_switch(self, hass, daily_min=3600):
+    def _make_switch(self, mock_hass, daily_min=3600):
         return SwitchDevice(
-            hass, "hw1", "Hot Water", rated_power=2000,
+            mock_hass, "hw1", "Hot Water", rated_power=2000,
             entity_id="switch.hot_water",
             daily_min_runtime_sec=daily_min,
         )
 
-    def test_runtime_accumulates_when_active(self, hass):
+    def test_runtime_accumulates_when_active(self, mock_hass):
         """Active device should accumulate runtime."""
-        dev = self._make_switch(hass)
+        dev = self._make_switch(mock_hass)
         dev._status.state = DeviceState.ACTIVE
         today = date(2026, 3, 21)
 
@@ -158,9 +158,9 @@ class TestDailyRuntime:
 
         assert dev._daily_runtime_accumulated_sec == pytest.approx(10.0, abs=0.1)
 
-    def test_runtime_no_accumulate_when_idle(self, hass):
+    def test_runtime_no_accumulate_when_idle(self, mock_hass):
         """Idle device should not accumulate runtime."""
-        dev = self._make_switch(hass)
+        dev = self._make_switch(mock_hass)
         today = date(2026, 3, 21)
 
         t1 = datetime(2026, 3, 21, 12, 0, 0)
@@ -176,9 +176,9 @@ class TestDailyRuntime:
 
         assert dev._daily_runtime_accumulated_sec == 0.0
 
-    def test_runtime_resets_on_meter_day_rollover(self, hass):
+    def test_runtime_resets_on_meter_day_rollover(self, mock_hass):
         """Runtime should reset when meter day changes."""
-        dev = self._make_switch(hass)
+        dev = self._make_switch(mock_hass)
         dev._status.state = DeviceState.ACTIVE
         day1 = date(2026, 3, 21)
         day2 = date(2026, 3, 22)
@@ -205,9 +205,9 @@ class TestDailyRuntime:
 
         assert dev._daily_runtime_accumulated_sec == 0.0
 
-    def test_runtime_ignores_large_jumps(self, hass):
+    def test_runtime_ignores_large_jumps(self, mock_hass):
         """Gaps > 120s should be ignored (restart recovery)."""
-        dev = self._make_switch(hass)
+        dev = self._make_switch(mock_hass)
         dev._status.state = DeviceState.ACTIVE
         today = date(2026, 3, 21)
 
@@ -224,52 +224,52 @@ class TestDailyRuntime:
 
         assert dev._daily_runtime_accumulated_sec == 0.0
 
-    def test_remaining_daily_runtime(self, hass):
+    def test_remaining_daily_runtime(self, mock_hass):
         """Test remaining runtime calculation."""
-        dev = self._make_switch(hass, daily_min=3600)
+        dev = self._make_switch(mock_hass, daily_min=3600)
         dev._daily_runtime_accumulated_sec = 1800
         assert dev.remaining_daily_runtime_sec == 1800
 
-    def test_needs_offpeak_true(self, hass):
+    def test_needs_offpeak_true(self, mock_hass):
         """Device with deficit, enabled, not active => needs off-peak."""
-        dev = self._make_switch(hass, daily_min=3600)
+        dev = self._make_switch(mock_hass, daily_min=3600)
         dev._daily_runtime_accumulated_sec = 1800
         assert dev.needs_offpeak_activation is True
 
-    def test_needs_offpeak_false_target_met(self, hass):
+    def test_needs_offpeak_false_target_met(self, mock_hass):
         """Runtime target met => no off-peak needed."""
-        dev = self._make_switch(hass, daily_min=3600)
+        dev = self._make_switch(mock_hass, daily_min=3600)
         dev._daily_runtime_accumulated_sec = 3600
         assert dev.needs_offpeak_activation is False
 
-    def test_needs_offpeak_false_disabled(self, hass):
+    def test_needs_offpeak_false_disabled(self, mock_hass):
         """Disabled device => no off-peak."""
-        dev = self._make_switch(hass, daily_min=3600)
+        dev = self._make_switch(mock_hass, daily_min=3600)
         dev._daily_runtime_accumulated_sec = 1800
         dev._enabled = False
         assert dev.needs_offpeak_activation is False
 
-    def test_needs_offpeak_false_no_target(self, hass):
+    def test_needs_offpeak_false_no_target(self, mock_hass):
         """Target=0 => no off-peak."""
-        dev = self._make_switch(hass, daily_min=0)
+        dev = self._make_switch(mock_hass, daily_min=0)
         assert dev.needs_offpeak_activation is False
 
-    def test_daily_energy_budget(self, hass):
+    def test_daily_energy_budget(self, mock_hass):
         """2000W rated, 3600s target => 2.0 kWh budget."""
-        dev = self._make_switch(hass, daily_min=3600)
+        dev = self._make_switch(mock_hass, daily_min=3600)
         assert dev.daily_energy_budget_kwh == pytest.approx(2.0)
 
 
 class TestHotWaterOffpeakTemperature:
     """Test HotWaterController temperature-aware needs_offpeak_activation."""
 
-    def test_hot_water_offpeak_respects_temperature(self, hass):
+    def test_hot_water_offpeak_respects_temperature(self, mock_hass):
         """At max temp, needs_offpeak_activation should return False."""
         from custom_components.solar_energy_management.devices.hot_water_controller import (
             HotWaterController,
         )
         dev = HotWaterController(
-            hass,
+            mock_hass,
             temperature_entity_id="sensor.water_temp",
             max_temperature=60.0,
             daily_min_runtime_sec=3600,
@@ -279,17 +279,17 @@ class TestHotWaterOffpeakTemperature:
         # At max temp => is_temperature_safe() returns False
         state = MagicMock()
         state.state = "61.0"
-        hass.states.get.return_value = state
+        mock_hass.states.get.return_value = state
 
         assert dev.needs_offpeak_activation is False
 
-    def test_hot_water_offpeak_allows_when_cold(self, hass):
+    def test_hot_water_offpeak_allows_when_cold(self, mock_hass):
         """Below max temp, needs_offpeak_activation should return True."""
         from custom_components.solar_energy_management.devices.hot_water_controller import (
             HotWaterController,
         )
         dev = HotWaterController(
-            hass,
+            mock_hass,
             temperature_entity_id="sensor.water_temp",
             max_temperature=60.0,
             daily_min_runtime_sec=3600,
@@ -298,6 +298,6 @@ class TestHotWaterOffpeakTemperature:
 
         state = MagicMock()
         state.state = "45.0"
-        hass.states.get.return_value = state
+        mock_hass.states.get.return_value = state
 
         assert dev.needs_offpeak_activation is True

@@ -13,7 +13,7 @@
       },
       "ev_charger": {
         "title": "EV Lader",
-        "description": "SEM heeft je EV Lader(s) automatisch ingelezen vanuit de Home Assistant entity registry. Controleer of deze kloppen en klik op **Submit** — normaal gesproken zou alles moeten kloppen. Optionele velden kunnen leeg gelaten worden.",
+        "description": "SEM heeft je EV Lader(s) automatisch ingelezen vanuit de Home Assistant entity registry. Controleer of deze kloppen en klik op **Submit** — normaal gesproken zou alles moeten kloppen. Optionele velden kunnen leeg gelaten worden.\n\nPick ONE control path: either a Number Entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) OR a Service Call (KEBA, Easee, Zaptec, OCPP, …).",
         "data": {
           "ev_connected_sensor": "🔌 EV Verbonden — voertuig stekker",
           "ev_charging_sensor": "⚡ EV Laden Actief — huidige laadstatus",
@@ -21,16 +21,18 @@
           "ev_charger_service": "EV Lader Stroom Service (optioneel)",
           "ev_charger_service_entity_id": "EV Lader Service Entiteit (optioneel)",
           "ev_current_sensor": "⚡ EV Laadstroom — amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Totale Energie — geleverde energie (kWh)"
+          "ev_total_energy_sensor": "🔋 EV Totale Energie — geleverde energie (kWh)",
+          "ev_current_control_entity": "Number-entiteit voor laadstroom-besturing (Wallbox-achtige laders)"
         },
         "data_description": {
           "ev_connected_sensor": "Binaire sensor die aangeeft we je electrische auto is aangesloten op de lader. Automatische detectie voor de volgende merken: KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
           "ev_charging_sensor": "Binaire sensor die aangeeft of je lader actief aan opladen is. Automatische detectie vanuit je lader intergratie.",
           "ev_charging_power_sensor": "Numerieke sensor (W) die rapporteert met hoeveel vermogen je electrische auto oplaadt. Automatische detectie vanuit je lader intergratie.",
-          "ev_charger_service": "Home Assistant service die aangeroepen moet worden om de lader amperage aan te passent (bijvoorbeeld keba.set_current, easee.set_charger_max_limit). Automatisch ingevuld voor KEBA. Laat dit veld leeg voor laders die een number entiry gebruiken.",
+          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
           "ev_charger_service_entity_id": "Entiteits ID die gebruikt wordt in de service call.",
           "ev_current_sensor": "Optioneell. Numerieke sensor (A) die het werkelijke stroomverbruik rapporteert. Wordt gebruikt voor diagnostiek.",
-          "ev_total_energy_sensor": "Optioneel. Cumulatieve kWh sensor voor de totale energie die je electrische auto heeft ontvangen."
+          "ev_total_energy_sensor": "Optioneel. Cumulatieve kWh sensor voor de totale energie die je electrische auto heeft ontvangen.",
+          "ev_current_control_entity": "Number-entiteit waarnaar SEM schrijft om de laadstroom aan te passen (bv. number.wallbox_charging_current). Gebruik dit voor laders die een Number-entiteit aanbieden in plaats van een service-aanroep. Leeg laten als je hieronder het Service-pad invult."
         }
       },
       "hardware": {
@@ -199,9 +201,9 @@
           "smart_night_charging": "Indien AAN, slaat SEM nachtelijk laden slim over of vermindert dit op basis van geschatte EV SOC, zonneverwachting, temperatuurgecorrigeerde verbruiksvoorspelling en geleerde rijpatronen.",
           "battery_discharge_control_entity": "Nummer-entiteit die het ontlaadvermogen van de omvormer regelt (bijv. number.batteries_maximale_entladeleistung op Huawei). Wordt automatisch gedetecteerd bij installatie; hier handmatig aan te passen indien nodig.",
           "diagram_style": "Kies welke systeemdiagramkaart op het Home-tabblad wordt gebruikt. 'SEM' gebruikt het ingebouwde geanimeerde diagram. 'K-Flow' gebruikt de K-Flow HACS-kaart (apart te installeren).",
-          "hot_water_solar_target": "Target temperature (°C) for solar-assisted hot water heating. SEM boosts the boiler when surplus is available.",
-          "legionella_target_temp": "Temperature (°C) the hot water system must reach during a legionella disinfection cycle.",
-          "legionella_interval_hours": "Maximum hours between legionella disinfection cycles before SEM forces a heat-up."
+          "hot_water_solar_target": "Doeltemperatuur (°C) voor zonnegenereerde warmwaterverwarming. SEM activeert de ketel wanneer er overschot beschikbaar is.",
+          "legionella_target_temp": "Temperatuur (°C) die het warmwatersysteem moet bereiken tijdens een legionella-desinfectiecyclus.",
+          "legionella_interval_hours": "Maximaal aantal uren tussen legionella-desinfectiecycli voordat SEM een opwarmcyclus forceert."
         }
       },
       "settings_ev": {
@@ -371,11 +373,29 @@
         }
       },
       "ev_charger_add": {
+        "title": "EV-lader toevoegen",
+        "description": "Configureer een nieuwe EV-lader. SEM verdeelt zonneoverschot over laders op basis van prioriteit.\n\nGebruik voor stroomregeling OFWEL de number-entiteit (Wallbox, go-eCharger) OFWEL de service (KEBA). Laat de andere leeg.",
         "data": {
+          "charger_name": "Ladernaam",
+          "ev_connected_sensor": "EV verbonden status",
+          "ev_charging_sensor": "EV laadstatus",
+          "ev_charging_power_sensor": "EV laadvermogen",
+          "ev_charger_service": "Lader stroom-instel service (optioneel)",
+          "ev_charger_service_entity_id": "Doel-entiteit voor laderservice (optioneel)",
+          "ev_surplus_priority": "Overschotprioriteit (1 = hoogste)",
+          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Zonne-laadlimiet (kWh)",
           "ev_target_soc_max": "Zonne-laadlimiet (SOC %)"
         },
         "data_description": {
+          "charger_name": "Weergavenaam voor deze laadpaal in het dashboard.",
+          "ev_connected_sensor": "Binaire sensor die aangeeft of een voertuig is aangesloten op deze laadpaal.",
+          "ev_charging_sensor": "Binaire sensor die aangeeft of deze laadpaal actief vermogen levert.",
+          "ev_charging_power_sensor": "Numerieke sensor (W) die het vermogen toont dat door deze laadpaal wordt geleverd.",
+          "ev_charger_service": "HA-service die wordt gebruikt om de laadstroom in te stellen. Gebruiken voor KEBA of Easee.",
+          "ev_charger_service_entity_id": "Entiteit-ID dat als doel van de serviceaanroep wordt meegegeven. Laat leeg indien niet nodig.",
+          "ev_surplus_priority": "Volgorde van overschotverdeling over meerdere laadpalen. Lager getal = hogere prioriteit.",
+          "ev_current_control_entity": "Number-entiteit die wordt gebruikt om de laadstroom (A) in te stellen. Gebruiken voor Wallbox, go-eCharger en vergelijkbare laadpalen.",
           "daily_ev_target_max": "Zonne-overschot laadt tot deze waarde en stopt dan. Laat op vol staan om vrij op zon te laden.",
           "ev_target_soc_max": "Zonne-overschot laadt tot deze SOC en stopt dan. Laat op 100% staan om vrij op zon te laden."
         }

@@ -13,7 +13,7 @@
       },
       "ev_charger": {
         "title": "Carregador EV",
-        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.",
+        "description": "SEM auto-detected your EV charger from the Home Assistant entity registry. Review the entries below and click **Submit** — there is usually nothing to change. Optional fields can be left blank.\n\nPick ONE control path: either a Number Entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …) OR a Service Call (KEBA, Easee, Zaptec, OCPP, …).",
         "data": {
           "ev_connected_sensor": "🔌 EV Connected Status — vehicle plug connection",
           "ev_charging_sensor": "⚡ EV Charging Active — current charging state",
@@ -21,16 +21,18 @@
           "ev_charger_service": "EV Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "EV Charger Service Target Entity (optional)",
           "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
-          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)"
+          "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
+          "ev_current_control_entity": "Entidade Number para o controlo de corrente (carregadores tipo Wallbox)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
           "ev_charging_sensor": "Binary sensor that reports whether SEM should consider charging active. Auto-detected from your charger integration.",
           "ev_charging_power_sensor": "Numeric sensor (W) reporting how much power is currently flowing into the vehicle. Auto-detected from your charger integration.",
-          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank for chargers controlled via a number entity.",
+          "ev_charger_service": "Home Assistant service called to set the charging current (e.g. keba.set_current, easee.set_charger_max_limit). Auto-filled for KEBA. Leave blank if you fill in the Number Entity path above.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
           "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
-          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking."
+          "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
+          "ev_current_control_entity": "Entidade Number que o SEM utiliza para alterar a corrente de carregamento (por ex. number.wallbox_charging_current). Use para carregadores que expõem uma entidade Number em vez de uma chamada de serviço. Deixe em branco se preencher o caminho de Serviço abaixo."
         }
       },
       "hardware": {
@@ -353,7 +355,7 @@
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
           "ev_surplus_priority": "Surplus Priority (1=highest)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_current_control_entity": "Entidade de controlo de corrente (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limite de carga solar (kWh)",
           "ev_target_soc_max": "Limite de carga solar (SOC %)"
         },
@@ -365,17 +367,35 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "ev_current_control_entity": "Entidade Number usada para definir a corrente de carregamento (A). Para Wallbox, go-eCharger e carregadores semelhantes.",
           "daily_ev_target_max": "O excedente solar carrega até este valor e depois para. Deixe no máximo para carregar livremente com o sol.",
           "ev_target_soc_max": "O excedente solar carrega até este SOC e depois para. Deixe a 100% para carregar livremente com o sol."
         }
       },
       "ev_charger_add": {
+        "title": "Adicionar carregador EV",
+        "description": "Configure um novo carregador EV. O SEM distribui o excedente solar pelos carregadores por ordem de prioridade.\n\nPara o controlo de corrente, use OU a entidade number (Wallbox, go-eCharger) OU o serviço (KEBA). Deixe o outro em branco.",
         "data": {
+          "charger_name": "Nome do carregador",
+          "ev_connected_sensor": "Estado de conexão VE",
+          "ev_charging_sensor": "Estado de carregamento VE",
+          "ev_charging_power_sensor": "Potência de carregamento VE",
+          "ev_charger_service": "Charger Set-Current Service (optional)",
+          "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
+          "ev_surplus_priority": "Surplus Priority (1=highest)",
+          "ev_current_control_entity": "Entidade de controlo de corrente (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limite de carga solar (kWh)",
           "ev_target_soc_max": "Limite de carga solar (SOC %)"
         },
         "data_description": {
+          "charger_name": "Friendly name for this charger shown in the dashboard.",
+          "ev_connected_sensor": "Binary sensor that reports whether a vehicle is plugged into this charger.",
+          "ev_charging_sensor": "Binary sensor that reports whether this charger is actively delivering power.",
+          "ev_charging_power_sensor": "Numeric sensor (W) reporting power delivered by this charger.",
+          "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
+          "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
+          "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
+          "ev_current_control_entity": "Entidade Number usada para definir a corrente de carregamento (A). Para Wallbox, go-eCharger e carregadores semelhantes.",
           "daily_ev_target_max": "O excedente solar carrega até este valor e depois para. Deixe no máximo para carregar livremente com o sol.",
           "ev_target_soc_max": "O excedente solar carrega até este SOC e depois para. Deixe a 100% para carregar livremente com o sol."
         }

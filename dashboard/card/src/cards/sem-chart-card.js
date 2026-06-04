@@ -100,7 +100,11 @@ const PRESETS = {
         ],
     },
     ev: {
-        title: 'ev_charging', y_label: 'W', stacked: true, defaultPeriod: '24h',
+        // ``defaultPeriod: 'today'`` (since-midnight) instead of '24h'
+        // (rolling) so the chart matches ``daily_ev_energy``. Rolling
+        // 24h includes yesterday-evening charges as a "phantom second
+        // charge" in the morning view.
+        title: 'ev_charging', y_label: 'W', stacked: true, defaultPeriod: 'today',
         hourly:  [
             { suffix: 'flow_solar_to_ev_power',   name: 'solar',   color: C.solar,      type: 'area' },
             { suffix: 'flow_battery_to_ev_power',  name: 'battery', color: C.batteryOut, type: 'area' },
@@ -233,11 +237,17 @@ class SEMChartCard extends SEMLitBase {
     _setDefaultPeriod() {
         const now = new Date();
         const p = this._preset;
-        // Presets with defaultPeriod: '24h' or hourly-only presets default to 24h
-        const isHourly = p && (p.defaultPeriod === '24h' || (p.hourly && !p.daily));
+        // Presets with defaultPeriod 'today' (since-midnight) or '24h'
+        // (rolling) or hourly-only presets default to an hourly view.
+        const wantToday = p && p.defaultPeriod === 'today';
+        const isHourly = p && (wantToday || p.defaultPeriod === '24h' || (p.hourly && !p.daily));
         if (isHourly) {
-            const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-            this._onPeriodChange({ start, end: now, granularity: 'hour', labelKey: 'last_24h', key: '24h' });
+            const start = wantToday
+                ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                : new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const labelKey = wantToday ? 'period_today' : 'last_24h';
+            const key = wantToday ? 'today' : '24h';
+            this._onPeriodChange({ start, end: now, granularity: 'hour', labelKey, key });
         } else {
             const dow = now.getDay() || 7;
             const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -270,6 +280,18 @@ class SEMChartCard extends SEMLitBase {
         const p = this._preset;
         if (!p) return [];
         const g = this._period?.granularity || 'day';
+        // ``per_charger: true`` on the dashboard card config replaces
+        // the default solar/battery/grid breakdown of the EV chart
+        // with one series per discovered charger (multi-charger
+        // installs). Each charger gets a distinct color from the
+        // palette so the user can see which charger ran when.
+        if (
+            this._config?.per_charger
+            && this._config?.preset === 'ev'
+            && g === 'hour'
+        ) {
+            return this._discoverPerChargerSeries();
+        }
         const defs = (g === 'hour' && p.hourly)
             ? p.hourly
             : (g === 'month' && p.monthly) ? p.monthly : (p.daily || p.hourly || []);
@@ -277,6 +299,33 @@ class SEMChartCard extends SEMLitBase {
             entity: `${this._prefix}${d.suffix}`,
             name:   this._t(d.name),
             color:  d.color, type: d.type, y_axis: d.y_axis || 0,
+        }));
+    }
+
+    _discoverPerChargerSeries() {
+        const states = this._hass?.states || {};
+        const palette = [
+            '#8DC892', '#64B5F6', '#FFB74D', '#BA68C8',
+            '#4DB6AC', '#F06292', '#A1887F', '#7986CB',
+        ];
+        const re = /^sensor\.sem_charger_(.+)_power$/;
+        const found = [];
+        for (const eid of Object.keys(states)) {
+            const m = eid.match(re);
+            if (!m) continue;
+            const id = m[1];
+            const friendly = states[eid]?.attributes?.friendly_name
+                ?.replace(/^SEM\s+/i, '').replace(/\s+Power$/i, '')
+                || id.replace(/_/g, ' ');
+            found.push({ id, eid, friendly });
+        }
+        found.sort((a, b) => a.id.localeCompare(b.id));
+        return found.map((c, i) => ({
+            entity: c.eid,
+            name:   c.friendly,
+            color:  palette[i % palette.length],
+            type:   'area',
+            y_axis: 0,
         }));
     }
 

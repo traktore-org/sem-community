@@ -411,7 +411,7 @@ class TestMigrateEntryV6:
             ],
         }, hass=hass)
         assert captured["options"]["ev_chargers"][0]["charge_mode"] == "solar_plus_cheap"
-        assert captured["version"] == 7  # bumped in v6→v7 (#277 Phase C)
+        assert captured["version"] == 8  # bumped in v7→v8 (#359)  # bumped in v6→v7 (#277 Phase C)
 
     async def test_preserves_explicit_min_plus_solar_without_tariff(self):
         """User explicitly picked min_plus_solar in the new selector
@@ -482,7 +482,7 @@ class TestMigrateEntryV6:
 
     async def test_no_chargers_safe_bumps_version(self):
         captured = await self._run(options={})
-        assert captured["version"] == 7  # bumped in v6→v7 (#277 Phase C)
+        assert captured["version"] == 8  # bumped in v7→v8 (#359)  # bumped in v6→v7 (#277 Phase C)
 
 
 # ──────────────────────────────────────────────────────────────────────

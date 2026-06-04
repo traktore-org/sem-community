@@ -5,43 +5,1264 @@ All notable changes to SEM are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.17] — 2026-06-01
+> From v1.7.0-beta.14 onward, release entries follow the
+> [music-assistant addon](https://github.com/music-assistant/home-assistant-addon)
+> style: DD.MM.YYYY dates, emoji-prefixed sections, one-liner bullets with
+> `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
+> prose-paragraph style they were written in.
 
-Hotfix release. Single bug fix for #346 — `solar_only` charge mode
-was silently importing grid + draining the home battery overnight.
+# [1.7.0] - 04.06.2026
+
+## 🚀 Stable Release
+
+First stable cut of the 1.7 line. Consolidates the work from 26 beta
+releases since [v1.6.17](https://github.com/traktore-org/sem-community/releases/tag/v1.6.17).
+Each beta's release notes remain below for the per-fix detail; this
+block summarises the themes.
+
+### 🏗️ Architecture
+
+- **FleetCycleState refactor** (beta.7) — single source of truth for fleet-level coordinator inputs; eliminates an entire class of fleet-vs-per-charger read bugs that produced four hotfixes between v1.6.0 and v1.6.6
+- **9 Architecture Decision Records** committed under `docs/adr/` (PerChargerContext, EVBudget, sign-convention boundary, home_consumption clamp, per-brand pipeline test, FleetCycleState, real-hass test framework, FleetEvPower newtype, multi-charger priority cascade)
+- **`v7 → v8` config schema migration** (#359) — auto-flips stored `tariff_classification_mode` from legacy `static` to `percentile` for dynamic-tariff users on first restart after upgrade
+
+### 🔍 Audit telemetry surfaces — 10 modules instrumented
+
+Following the `classifier_path` pattern introduced in #359, **10 stale modules** now publish decision-path enums as sensor attributes so users can self-diagnose without us reading a debug log. Modules covered: `forecast_tracker` (#416), `hot_water_controller` (#420), `heat_pump_controller` (#421), `pv_performance` (#422), `time_manager` (#424), `consumption_predictor` (#425), `appliance_scheduler` (#426), `utility_signals` (#427), `load_management` (#433), `forecast_reader` (#434). Plus 4 modules audited and closed as no-change (pure data registries + stateless helpers: #423 #428 #429 #430 #431). Pure additive observability — zero behavior change in any of the published numeric outputs. Full framework lives in `docs/AUDIT_PLAYBOOK.md` and `tools/audit_candidates.py`. v1.7.1 then opens for the algorithmic improvements step once 2–4 weeks of real-world PROD telemetry accumulates.
+
+### 🐛 User-reported fixes
+
+- **#359** `tariff_classification_mode` stuck on `static` for dynamic-tariff users → v7→v8 schema migration (beta.21)
+- **#384** missing `vehicle_range_entity` + `ev_kwh_per_100km` fields in the Add/Edit Charger flow (beta.21)
+- **#404** per-battery power sign + SOC ring readability (beta.18-20)
+- **#417** `cheap_price_threshold` / `expensive_price_threshold` max bumped 1.0 → 5.0 to cover high-priced markets (beta.21)
+- **#356** ghost charger discovery (per-charger `_flow_` sensors matched as chargers) (beta.10)
+- **#378** PV strings i18n fix (beta.8)
+- **#383** per-charger `vehicle_soc` sensor (beta.19)
+- **#392** KEBA failsafe watchdog heartbeat (beta.14)
+- **#400** native `ev_current_control_entity` translations for 12 languages (beta.16, beta.20)
+- **#405** battery session hysteresis (1-hour discharge → 2-min bug) (beta.16)
+
+### 🎨 UX
+
+- **Slim config flow** (#397) — 5 essential fields at install; advanced options moved to OptionsFlow. ~30 second setup
+- **First-run welcome notification** (beta.15)
+- **Per-battery sensors + fleet/per-battery card** (#404)
+- **KEBA flicker debounce** (beta.8) — eliminates the on/off oscillation on edge-of-surplus
+- **Multi-charger SOC clobber fix** (#383) — per-charger SOC sensor surfaces independent values
+
+### 🙇 Thanks to our contributors
+
+- @RienduPre for the precise `classifier_path` diagnosis on #359, the Add/Edit charger flow gap on #384, the multi-battery sign issue on #404, and weeks of high-signal beta reports
+- @zlakes01 for the high-tariff-market signal on #417 and the multi-Easee dashboard report on #415 (under continued investigation)
+- Everyone else who filed an issue this cycle — the user reports are what made the audit telemetry necessary AND useful
+
+---
+
+> **Per-beta detail follows. The notes for each `1.7.0-beta.N` below remain unchanged and may be consulted for the granular per-fix changes that rolled up into this stable.**
+
+# [1.7.0-beta.26] - 04.06.2026
+
+## 🧪 Beta Release — v1.7.1 audit batch 4
+
+_Changes since [1.7.0-beta.25](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.25)_
+
+Two more modules audited beyond the original Top-12, picked up by widening the staleness cutoff from 30 days to 2 weeks. Big-module focus on highest-leverage decisions, medium-module full coverage.
+
+### 🔍 Diagnostics
+
+- **#433 `LoadManagementCoordinator`** (1056 LOC, 118 branches — biggest module on the backlog) — **focused** telemetry on the highest-leverage decision points rather than exhaustive attribution. Four new keys on `sensor.sem_load_management_status`: `state_decision_path` (`emergency` / `above_target_shedding` / `warning_zone_keep_shedding` / `warning_zone_clean` / `below_restore_threshold_normal` / `in_hysteresis_band_with_shed_devices_restore` / `in_hysteresis_band_clean_normal`), `process_path` (`disabled_skip` / `state_changed:<old>_to_<new>` / `state_stable:<state>` / `error_caught`), `action_path` (`emergency_shedding` / `progressive_shedding` / `restore` / `no_action:<state>`), plus `last_error` (truncated catch-all exception message — previously this was log-only with no sensor surface) (by @traktore-org, refs #433)
+- **#434 `ForecastReader`** — new `get_diagnostics()` method exposing: `source_detection_path` (`custom` / `solcast` / `forecast_solar` / **`none_available`** silent-failure surface — no forecast integration detected), `read_path` (`cold_detect` / `cached_source_valid` / `cached_source_lost_redetected` / `no_source_after_detect` / `read_complete`), `recommendation_path` (`target_reached` / `no_forecast` / `solar_only` / `solar_plus_cheap` / `immediate`), plus `unit_conversion_count` — counts how many of the 3 Solcast kW→W magic-number conversions fired this cycle (by @traktore-org, refs #434)
+
+### 📁 Audit findings
+
+- **Dead-code branch surfaced**: the `in_hysteresis_band_with_shed_devices_restore` path in `_determine_load_management_state` is **unreachable with default config** (target=5.0, hysteresis=0.3, warning=4.5 → restore_threshold=4.7 > warning_level=4.5). Inline comment documents this; future audit can fix the inverted-band config or remove the branch (reviewer-flagged on #433)
+
+# [1.7.0-beta.25] - 04.06.2026
+
+## 🧪 Beta Release — v1.7.1 audit batch 3
+
+_Changes since [1.7.0-beta.24](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.24)_
+
+Third batch of v1.7.1 audit telemetry. Closes the rest of the Top-12 backlog: two modules get telemetry surfaces, four close as no-change (pure data registries + a stateless translation helper that doesn't fit the path-attribute pattern). Pure additive observability, zero behavior change.
+
+### 🔍 Diagnostics
+
+- **#426 `ApplianceScheduler`** — `update_schedules()` now records per-device transition paths on `self._last_transitions[device_id]`, surfaced via `get_schedule_summary()["appliance_transitions"]`. Branches: `no_op` / `device_missing` / `scheduled_to_running` / `running_completed_by_runtime` / `running_completed_by_low_consumption` / **`running_too_short_skip`** (silent-failure surface — fast-cycle appliance under 5 min is treated as transient blip and skipped) / `scheduled_to_missed`. The `scheduled_to_running` branch is preserved when both it and `running_too_short_skip` could fire in the same cycle (caught in testing — `elif not fired` gate). New summary key `appliance_missed_today` (by @traktore-org, refs #426)
+- **#427 `UtilitySignalMonitor`** — three new path strings on `UtilitySignalData.to_dict`: `utility_signal_read_path` (**`no_entity_configured`** silent-failure surface — when no entity is configured SEM treats utility-signal as permanently inactive / `entity_missing` / `active` / `inactive`), `utility_update_path` (`signal_started` / `signal_ended` / `signal_continues_active` / `signal_continues_inactive`), `utility_block_path` (`signal_inactive_no_block` / `solar_exempt_partial:N` / `all_blocked`) (by @traktore-org, refs #427)
+
+### 📁 Audit framework
+
+- Closed #428 (`utils/translate.py`) as no-change — pure stateless translation function. The `_load_translations` exception path already logs; the language-fallback and format-error paths are silent-but-benign. Same audit pattern as #423 helpers (by @traktore-org, closes #428)
+- Closed #429 (`consts/devices.py`), #430 (`consts/labels.py`), #431 (`consts/sensors.py`) as no-change — pure data registries with 0 decision branches. No behavior to instrument; the audit's structural value for data registries is the data review itself, no findings. Top-12 backlog complete (by @traktore-org, closes #429 #430 #431)
+
+# [1.7.0-beta.24] - 04.06.2026
+
+## 🧪 Beta Release — v1.7.1 audit batch 2
+
+_Changes since [1.7.0-beta.23](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.23)_
+
+Second batch of v1.7.1 audit telemetry — four modules in one beta because they don't share state. Pure additive observability, zero behavior change in published return values.
+
+### 🔍 Diagnostics
+
+- **#421 `HeatPumpController`** — five decision-path attributes on `to_dict` → surfaces via `sensor.sem_load_management_status.devices.<heat_pump_id>`: `activation_path` (boost / force_on, with `+climate` suffix when climate boost composes), `deactivation_path` (normal / blocked / unblocked, with `+climate` suffix), `relay_path` (both_relays / relay1_only / relay2_only / **no_relays_configured** / relay1_failed / relay2_failed — the no_relays_configured branch is the audit's biggest silent-failure surface: SG-Ready state mutates internally but no physical relay actuates), `temperature_reading_path` (sensor / sensor_unavailable / sensor_invalid / sensor_missing / no_sensor_configured), `offpeak_path` (parent_declines / already_warm_skip / activate) (by @traktore-org, refs #421)
+- **#422 `PVPerformanceAnalyzer`** — five decision-path fields on `PVPerformanceData.to_dict`: `pv_yield_path` (**no_system_size_configured** silent-failure surface — yield = 0 because size not configured, not because production was zero / computed_with_annual_projection / computed_no_annual), `pv_performance_path` (computed / no_forecast), `pv_clipping_path` (idle / clipping_active / post_clipping_idle), `pv_degradation_path` (insufficient_history / normal / warning / critical), `pv_system_age_path` (computed / no_install_date / install_date_invalid) (by @traktore-org, refs #422)
+- **#425 `ConsumptionPredictor`** — new `get_diagnostics()` method exposing five prediction-path enums: `consumption_prediction_path` and `solar_prediction_path` (cold_start_empty / trained_full / trained_with_fallback:N / trained_all_fallback), `surplus_window_path` (no_data / no_surplus / found_window / no_contiguous_window), `ev_prediction_path` (no_data / weekday_match / hour_fallback), `observation_path` (recorded / deduplicated). Plus training-status and sample-count counters (by @traktore-org, refs #425)
+- **#424 `TimeManager`** — new `get_diagnostics()` method exposing seven time-of-day paths: `sunrise_source` and `sunset_source` (sun_integration / fallback_default — silent-failure surface when sun.sun is unavailable and TimeManager falls back to hardcoded 06:00/20:30), `sunrise_correction` (none / **next_rising_was_tomorrow** — same class of bug as #416 forecast_tracker, tracking how often it fires / fallback_default_06_00), `night_window_path` (pre_midnight_in_night / post_midnight_in_night / outside_night_window), `night_hours_path` (crosses_midnight / same_day / **parse_failed_fallback_8h**), `meter_day_path`, `offset_parse_path` (by @traktore-org, refs #424)
+
+### 📁 Audit framework
+
+- Closed #423 (`utils/helpers.py`) as no-change. Pure stateless utility functions are an appropriate exception to the telemetry-first rule. The audit playbook explicitly recognizes "current behavior is correct, telemetry surface is sufficient" as a valid audit outcome (Step 7). Future audits of similar pure-helper modules can follow the same default (by @traktore-org, closes #423)
+
+# [1.7.0-beta.23] - 04.06.2026
+
+## 🧪 Beta Release — first v1.7.1 audit
+
+_Changes since [1.7.0-beta.22](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.22)_
+
+First behavioral audit of the v1.7.1 stabilization program (umbrella #419). Pure additive observability on `HotWaterController` — zero behavior change.
+
+### 🔍 Diagnostics
+
+- `HotWaterController` now publishes five decision-path strings on every call, all surfaced via `sensor.sem_load_management_status.devices.<hot_water_id>` — mirrors the #359 / #416 `classifier_path` pattern. New attributes per device: `legionella_path` (idle / natural_achievement / hold_reached_target / hold_in_progress / hold_complete / heating_to_target / overdue_start / overdue_no_sensor), `temperature_safety_path` (no_sensor_assume_safe / in_legionella_cycle_below_target / in_legionella_cycle_at_target / normal_below_solar_target / normal_at_solar_target), `temperature_reading_path` (entity_attribute / entity_attribute_invalid / separate_sensor / separate_sensor_invalid / separate_sensor_unavailable / separate_sensor_missing / no_source_configured), `activation_path` (blocked_unsafe / water_heater / climate / switch_fallback), `deactivation_path` (water_heater / climate / switch_fallback). The biggest silent-failure surface the audit identified — temperature sensor breaks → SEM keeps heating, relying only on the device's internal thermostat — is now visible as `temperature_safety_path = no_sensor_assume_safe` (by @traktore-org, refs #420)
+- New `legionella_hold_elapsed_minutes` property — surfaces `5/30 min` style progress against the legionella hold target rather than a binary `legionella_cycle_active` flag. `None` when no hold is in progress (by @traktore-org, refs #420)
+- New `hours_since_legionella_or_none` property — disambiguates the existing `999.0` sentinel (which means "never run") from a genuinely very-stale reading. Returns `None` cleanly when no legionella cycle has been recorded yet (by @traktore-org, refs #420)
+
+# [1.7.0-beta.22] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.21](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.21)_
+
+### 🔍 Diagnostics
+
+- Forecast correction and dampening pipeline now publish their decision path as sensor attributes — mirrors the #359 `classifier_path` pattern. `sensor.sem_forecast_dampening_factor` carries `dampening_path` (one of `outside_daylight` / `no_forecast` / `early_morning_floor` / `blended_live`, with `+clamped_high` / `+clamped_low` suffix when the bound fires) plus `confidence`, `live_ratio`, `normalized_ratio`, `pre_clamp`, and `correction_factor_historical`. `sensor.sem_forecast_correction_factor` carries `correction_path` (one of `no_history` / `weather_month_bucket` / `weather_only_bucket` / `month_only_bucket` / `rolling_7d_fallback`, with the same clamp suffix) plus `bucket_size`, `weather_category`, and `history_days`. Lets installs hitting an unexpected ceiling self-diagnose without a maintainer reading the debug log. PROD telemetry on 2026-06-04 showed 35 % of historical correction factors pinned at the post-shrinkage ceiling with no visible signal — this attribute is the signal (by @traktore-org, refs #416)
+- Daily history records now persist `dampening_factor`, `confidence`, and `live_ratio` alongside the existing `forecast / actual / weather / factor` fields, captured during the last confident mid-day cycle of each day. Pre-beta.22 records that lack these fields restore as `None` so downstream consumers can distinguish "never recorded" from "recorded as zero" (by @traktore-org, refs #416)
+
+### 🧹 Code hygiene
+
+- Replaced the misleading `Decay toward neutral: 25 % per day — converges in ~7 days` comment with accurate one-shot-shrinkage prose. The historical correction factor is recomputed fresh each ~10 s coordinator cycle — there is no recursive state to decay; the 0.75 weight is a one-shot ridge-regression pull toward neutral 1.0 so noisy short histories don't publish a wild correction. Numeric behaviour unchanged; constant renamed `DECAY` → `SHRINKAGE` (by @traktore-org, refs #416)
+
+# [1.7.0-beta.21] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.20](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.20)_
+
+### 🐛 Bugfixes
+
+- Auto-migrate stored `tariff_classification_mode` from `static` → `percentile` for dynamic-tariff users on schema bump v7 → v8. Percentile became the install default in beta.12 (#373), but entries created before that still carried `static` in storage and silently fired the static-CHF-cutoff branch — visible symptom: `sensor.sem_tariff_price_level` attribute reading `classifier_path=static_fixed_cutoffs` while the live price sat well outside any reasonable static band. Calendar / explicit-static users are untouched (migration gated on `tariff_mode == "dynamic"`). Reported by @RienduPre (by @traktore-org, fixes #359)
+- Cheap and expensive price-threshold number entities now accept values up to `5.00` (was `1.00`) to cover high-priced markets — Slovak prices around 1.69 €/kWh were rejected by the upper bound. Reported by @zlakes01 (by @traktore-org, fixes #417)
+- Add the missing `vehicle_range_entity` and `ev_kwh_per_100km` fields to the Add Charger and Edit Charger options-flow steps. Both fields existed on the primary `ev_charger` step but were never carried over to the per-charger Add/Edit forms when #397 split the install flow in beta.16 — secondary chargers couldn't configure their own range sensor or vehicle consumption. Reported by @RienduPre (by @traktore-org, fixes #384)
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for the precise `classifier_path` diagnosis on #359 and the Add/Edit charger flow gap on #384
+- @zlakes01 for the high-tariff-market signal on #417
+
+# [1.7.0-beta.20] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.19](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.19)_
+
+### 🐛 Bugfixes
+
+- Per-battery power tile no longer strips the sign via `Math.abs()`. The fleet tile shows `−65 W` (signed) while the per-battery tile was showing `65 W` (unsigned magnitude) — same direction badge but contradictory numbers. The underlying `power_w` values agreed (beta.19's per-battery autodetect is doing its job); the display layer was the inconsistency. Now both tiles render the raw signed value end-to-end (by @traktore-org in commit `ad198f1`, refs #404)
+- Per-battery SOC ring text was `fill="white"` against the white per-battery section background → invisible on light themes. Now uses the battery accent color with a subtle dark stroke for legibility on both light and dark themes. Reported by @RienduPre (by @traktore-org in commit `ad198f1`, refs #404)
+
+### 🚀 Features and enhancements
+
+- Native `ev_current_control_entity` translations for the 12 remaining languages: fr, es, it, pt, pl, cs, da, fi, hu, ro, sv, no. Closes the last #400 gap — every translation file now carries the field in its own language, joining de + nl from beta.16 (by @traktore-org in #414, closes #400)
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for catching both card-render quirks immediately after the beta.19 deploy — the sign mismatch and the unreadable SOC ring
+
+# [1.7.0-beta.19] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.18](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.18)_
+
+### 🐛 Bugfixes
+
+- Per-battery sign autodetect: when ≥ 2 batteries are configured, each battery now runs the sign-convention detection independently using its own `battery_charge_energy_list[i]` / `discharge_energy_list[i]` counters from the Energy Dashboard. Fleet `battery_power` is rebuilt as the sum of corrected per-battery values, guaranteeing fleet ↔ per-battery agreement by construction. Supersedes the same-flip-for-all approach from #408 which would have broken dual-brand installs (e.g., Sessy + Huawei) where each battery needs an independent flip decision. Single-battery / combined-sensor installs fall back to the legacy fleet-level path via a `_FLEET_BID` sentinel — behaviour identical to today (by @traktore-org in #413, closes #404)
+
+### 🧰 Maintenance and dependency bumps
+
+- 7 new tests in `TestPerBatterySignAutoDetect404` covering independent per-battery state, dual-brand asymmetric flip, both-invert, neither-inverts, fallback without counters, voting threshold, and fleet/per-battery isolation. 4 existing pipeline-test monkeypatches in `test_split_grid_integration.py` updated to use the new dict-keyed state shape (by @traktore-org in #413)
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for the careful diagnostic screenshots that exposed the fleet-vs-per-battery sign asymmetry on his Sessy install
+
+# [1.7.0-beta.18] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.17](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.17)_
+
+### ⏪ Reverts
+
+- Revert PR #408 from beta.17. The fix was based on the assumption that SEM's `_detect_battery_sign` autodetect was flipping the fleet field but leaving the per-battery dict un-flipped — RienduPre's diagnostic screenshots on #404 show the opposite: per-battery is already canonical (`Battery b1 Power = +712 W` → charging ✓) while the fleet sensor (`Batterijvermogen = −712 W`) is the one being wrongly negated. PR #408 would have broken the already-correct per-battery tiles on Sessy installs. Re-investigating the actual root cause as a follow-up (by @traktore-org in #411, refs #404)
+
+### 🚀 Features and enhancements
+
+- Carries forward the temperature-row hide on multi-battery (#409) and the `classifier_path` diagnostic attribute (#410) from beta.17 — both unaffected by the #408 revert
+
+## Known limitation
+
+The #404 per-battery direction bug on Sessy installs is **not fixed yet** in this build — beta.18 only undoes the wrong-direction fix from beta.17. A properly-targeted fix is in flight; see [#404](https://github.com/traktore-org/sem-community/issues/404).
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for the careful screenshots that made the revert obvious
+
+# [1.7.0-beta.17] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.16](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.16)_
+
+### 🐛 Bugfixes
+
+- Battery card top tile no longer shows the temperature of one arbitrary battery on multi-battery installs — temperature row only renders when exactly one battery is configured. The per-battery list below already shows the correct values; the top-tile temperature was confusing because it was a fleet `max()`. Reported by @RienduPre with a 2-Sessy-battery install where the top tile temperature stayed pinned at one battery's reading (by @traktore-org in #409, closes #404)
+- Battery-sign autodetect now flips each battery in the per-battery `PowerReadings.batteries` dict, not just the fleet-summed `battery_power` field — fixes a 2-Sessy regression where the per-battery list showed the wrong charge/discharge direction even though the fleet sensor was correct. Brand-agnostic fix in `sensor_reader.py` (by @traktore-org in #408, closes #404)
+
+### 🚀 Features and enhancements
+
+- New `classifier_path` attribute on `sensor.sem_tariff_price_level` documents WHICH branch of the tariff classifier produced the current `price_level`. Path string is one of: `percentile_active(p10=..,p25=..,p75=..,p90=..,n=..)` (happy path), `percentile_fallback_cache_empty`, `percentile_fallback_too_few_prices(n=..)`, `percentile_fallback_flat_day(spread=..)`, `static_fixed_cutoffs`, `static_ht_nt`, `calendar_schedule`, or `negative_price_shortcircuit`. Lets users in cold-start / wrong-attribute-shape / derivative-template setups self-diagnose why their level stays on `normal` (by @traktore-org in #410, refs #359)
+
+### 🧰 Maintenance and dependency bumps
+
+- 4 regression-lock tests in `test_per_battery_loop_375.py::TestPerBatteryDirectionStatus404` pin down the per-battery direction/status logic in `coordinator/types.py:1077-1087` (by @traktore-org in #407, refs #404)
+- 4 regression-lock tests in `test_battery_sign_detect.py::TestPerBatteryDictGetsAutodetectFlip404` prove the per-battery dict gets flipped alongside the fleet field on negate-detected installs (by @traktore-org in #408, refs #404)
+- 10 new tests in `test_tariff_percentile_359.py::TestClassifierPathDiagnostic` cover all 9 classifier-path strings + the end-to-end TariffData → coordinator → sensor round-trip (by @traktore-org in #410, refs #359)
+
+## :bow: Thanks to our contributors
+
+- @RienduPre for the multi-battery temperature-row report (#404) — exactly the kind of "looks wrong on 2 batteries" feedback that's hard to catch on a 1-battery test install
+
+# [1.7.0-beta.16] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.15](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.15)_
+
+### 🐛 Bugfixes
+
+- Percentile tariff classifier no longer silently falls back to the CHF-calibrated static cutoffs (`< €0.15 = cheap`, `> €0.35 = expensive`) when today's price array is empty (cold start), too small (< 4 prices), or perfectly flat — returns `NORMAL` instead. RienduPre's Tibber NL install was reporting €0.30 as `normal` for hours after restart because €0.30 < €0.35 in the silent fallback. Validated via the synthetic-data reproduction script (`/tmp/sem-359-repro.py`, 5 scenarios) (by @traktore-org in #403, closes #359)
+- Battery session hysteresis: a 1-hour continuous discharge no longer rolls over to a fresh 2-minute session every time the inverter rebalances. `POWER_THRESHOLD` 50 W → 200 W (dead-band wider than inverter idle drift); `IDLE_CYCLES_TO_END` 3 → 18 cycles (~3 min — covers cloud transits and sunset transitions); single-cycle opposite-direction blips no longer end the session (requires 3 consecutive opposite cycles) (by @traktore-org in #406, closes #405)
+- `de.json` ev_charger config-flow step translated to native German end-to-end — title, description, 8 labels, 8 descriptions. Closes the PR #388 "out of scope" deferred sweep (by @traktore-org in #402, refs #400)
+- `nl.json` `ev_current_control_entity` label + description translated to native Dutch — closes the PR #390 English-placeholder gap that hit RienduPre's Wallbox setup directly (by @traktore-org in #402, refs #400)
+
+### 🚀 Features and enhancements
+
+- Slim config-flow screenshots embedded in `docs/SETUP_GUIDE.md` step 1 / 2 / 3, plus a new "First-run welcome notification" subsection documenting the `_welcome_notification_fired` one-shot behaviour from #397 (by @traktore-org in #401)
+- `docs/SETUP_GUIDE.md` gains a "Price classification" subsection under Tariff and Pricing settings — explains percentile vs static modes + the cold-start NORMAL behaviour so users on non-CHF tariffs see the documented behaviour first instead of filing #359 again (by @traktore-org in #403)
+
+### 🧰 Maintenance and dependency bumps
+
+- 7 tests in `tests/test_tariff_provider.py` updated to pass `classification_mode="static"` explicitly — they were asserting the static-cutoff bucketing but constructing a percentile-default provider, only passing because of the silent CHF fallback we just removed (by @traktore-org in #403)
+
+## Known follow-ups under #400
+
+13 other languages (fr, es, it, pt, pl, cs, da, fi, hu, no, ro, sv) still carry English placeholders for `ev_current_control_entity`. Native translations welcome on a per-language basis.
+
+## :bow: Thanks to our contributors
+
+Special thanks to the following users who helped with this release:
+
+@traktore-org, @RienduPre (for the diagnostic-data thread that exposed the percentile classifier's cold-start path)
+
+# [1.7.0-beta.15] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.14](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.14)_
+
+### 🐛 Bugfixes
+
+- Config flow step 2 (EV charger) slimmed from 16 fields back to 5: 8 per-charger tunables from PR #390 reverted to OptionsFlow where they belong by design. `ev_current_control_entity` stays for Wallbox-style chargers (by @traktore-org in #398, closes #397)
+
+### 🚀 Features and enhancements
+
+- First-run persistent notification with dashboard deep-link + 3-item checklist; gated to one-shot per install via `_welcome_notification_fired` options flag; skipped on `observer_mode` (by @traktore-org in #398, refs #397)
+- ADR 0002 split into 0002 (data-model: `EVBudget` unification) + 0009 (distribution: multi-charger allocation) — each ADR now accurate to its scope (by @traktore-org in `aca2a00`)
+- ADRs 0006-0008 added: real-hass test framework, dashboard bundle architecture, and the architecture-record meta-decision (by @traktore-org in #396)
+- `CONTRIBUTING.md` test pyramid updated from 3 layers to 4 (unit / scenario / **real-hass** / live), referencing ADR 0007 (by @traktore-org in `aca2a00`)
+
+### 🧰 Maintenance and dependency bumps
+
+- ADR code-link drift fixed in 0002 + 0004 — references the actual function/file anchors now (by @traktore-org in #396)
+- First 5 ADRs (0001-0005) added in `docs/adr/` — PerChargerContext, EVBudget unification, sign convention boundary, home_consumption_power clamp, pipeline-test-per-brand mandate (by @traktore-org in #394, kept in #395)
+
+## :bow: Thanks to our contributors
+
+Special thanks to the following users who helped with this release:
+
+@traktore-org
+
+# [1.7.0-beta.14] - 04.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.0-beta.13](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.13)_
+
+### 🐛 Bugfixes
+
+- KEBA failsafe watchdog drop after steady-state charging: same-value `set_current` writes now refresh past a 60 s heartbeat window so the device watchdog stays alive. Generalised to all current-controlled chargers (by @traktore-org in #393, closes #392)
+- Same-value heartbeat write also re-converges device-side and SEM-side state after silent device resets (replug fallback, KEBA reboot, failsafe trip) — no more "SEM thinks 16 A, KEBA at 6 A, stuck forever" mode (by @traktore-org in #393)
+
+## :bow: Thanks to our contributors
+
+Special thanks to the following users who helped with this release:
+
+@traktore-org
+
+## [1.7.0-beta.13] — 2026-06-03
+
+The **#359 percentile classifier follow-up**.
 
 ### Fixed
 
-- **EV charges overnight in `charge_mode=solar_only` (#346)** — PROD
-  incident 2026-05-31: a KEBA configured with `charge_mode =
-  solar_only` drew ~4 kWh from battery + grid between 22:07 → 00:48
-  despite solar being 0 W since 21:19. `sensor.sem_charging_state`
-  correctly read "Night charging disabled" the entire window, so the
-  bug was invisible from the dashboard.
+- **#359** (PR #391) — RienduPre reopened #359 with screenshots showing
+  €0.30 still labelled `normal` / `cheap` after the percentile fix
+  shipped in beta.3. Root cause: `_get_percentile_breaks` and
+  `get_tariff_data` filtered today's prices with a bare
+  `p.timestamp.date()`. Providers differ on the tz they emit — Tibber
+  is local, Nordpool-class integrations (incl. several Dutch dynamic-
+  tariff implementations) are often UTC. On +02:00 (Europe/Amsterdam
+  summer), a UTC-tagged price at 22:00 UTC = 00:00 local-next-day,
+  and a bare `.date()` returns the UTC date. Today's filtered array
+  dropped below the 4-point minimum, percentile breaks returned
+  `None`, and the classifier silently fell back to the static
+  €0.15 / €0.35 cutoffs — where €0.30 < 0.35 = `normal`. Exactly the
+  symptom.
 
-  Root cause: `_determine_charging_strategy` returned `"night_grid"`
-  unconditionally when `is_night_mode()` was True, ignoring the
-  per-charger `charge_mode`. The named-mode dispatch (`mode ==
-  "solar_only"`) only ran in the day branch. The legacy mapper then
-  converted `night_grid` → `EVBudgetStrategy.MIN_PV` (≈1380 W floor).
-  In parallel `_night_state_machine` correctly returned
-  `NIGHT_DISABLED`, but the actuator's terminal branch could not kill
-  a session SEM didn't own. Latent since April 2026 — any HACS user
-  on `solar_only` mode has been affected.
+  Fix: new `_local_date(timestamp)` helper converts via
+  `dt_util.as_local` for tz-aware datetimes and passes naive
+  datetimes through unchanged (keeps the existing tariff tests, which
+  mock `dt_util` and build naive clocks, green without modification).
 
-  Fix is two layers:
-  1. **Strategy mode-gate** — consult `MODE_NIGHT_ALLOWED` before the
-     `is_night_mode()` branch. `solar_only` at night → `idle`; `off`
-     → `disabled`. Other modes unchanged.
-  2. **Defence in depth** — extend the #315 self-resume actuator
-     guard from `{"disabled"}` to `{"disabled", "idle"}` so future
-     strategy disagreements land safely.
+### Added
 
-  6 new tests in `tests/test_346_solar_only_night.py` pin both
-  layers. The pre-existing `test_idle_strategy_does_not_trigger_
-  override` (which pinned the OLD restrictive actuator behaviour
-  that made this bug possible) was inverted to assert the new
-  contract.
+- **Tariff diagnostics** (PR #391) — three DEBUG log lines under the
+  `tariff/#359` tag so a repro is now trivial:
+  - `percentile fallback — today's price array has X/Y points` when
+    the array drops below the 4-point minimum (the typical failure
+    mode pre-fix).
+  - `degenerate distribution — p90-p10=X` when the M1 flat-day guard
+    trips.
+  - `percentile breaks for <date> — p10/p25/p75/p90` on the happy
+    path so users can sanity-check the math against their tariff.
+
+## [1.7.0-beta.12] — 2026-06-03
+
+Per-charger refinements + EV config-flow parity. Bundles the
+undocumented beta.11 (#355 affordance) so the changelog is complete from
+beta.10 to beta.12.
+
+### Fixed
+
+- **#383** (PR #385) — In multi-charger installs every per-charger card
+  showed the same vehicle SOC. The coordinator was overwriting one
+  shared `_cycle_vehicle_soc` from each charger's `vehicle_soc_entity`
+  inside the per-charger loop; the global sensor reported whichever
+  charger ran last, and the card's `_val('charger_<id>_vehicle_soc') ??
+  _val('vehicle_soc')` lookup chain always fell through to the global.
+  Now publishes per-charger SOC via `charger_<cid>_vehicle_soc`, with
+  the unconfigured case returning `None` (not a fabricated zero).
+
+- **#384** Part 1 (PR #388) — The "Add EV Charger" options-flow step had
+  translation coverage for only two fields (Solar charge limit kWh /
+  SOC%); the rest of the form fell back to the raw key on non-English
+  installs. Mirrored `ev_charger_edit` `data` / `data_description` into
+  `ev_charger_add` for all 15 languages.
+
+- **#384** Part 2 (PR #390) — The initial setup flow couldn't configure
+  Wallbox-style chargers (number entity for current control) because it
+  lacked `ev_current_control_entity`. The user had to finish setup with
+  a partial config and then drop into Options → Edit. Initial flow now
+  exposes the full per-charger override set: `ev_current_control_entity`,
+  `ev_surplus_priority`, `daily_ev_target` + `_max`,
+  `ev_night_initial_current`, `ev_min_current`, `ev_target_soc` + `_max`,
+  `ev_battery_capacity_kwh`. `_EV_KEYS` bridge extended so they migrate
+  into `ev_chargers[0]`. `vehicle_soc_entity` deliberately stays in
+  OptionsFlow only — asking on install creates a dead input for users
+  without a vehicle SOC sensor.
+
+- **EV stall detector** (PR #389) — Detector was anchoring SOC=100% even
+  in cycles where SEM had never commanded charge, producing false-stall
+  alerts when the EV was simply sitting fully-charged with the cable
+  plugged in. The anchor now requires a SEM-issued charge command.
+
+### Added
+
+- **Per-battery sensors + fleet/per-battery card** (PR #386 — Phase A + B)
+  — first cut of a multi-battery model. Adds per-battery state, energy
+  and power sensors, plus a dashboard card that shows fleet totals and
+  per-battery detail.
+
+- **Battery card session duration** (PR #387) — sessions over 90 minutes
+  are shown as hours (`2h 15m`) instead of `135m`, matching how users
+  think about long battery discharges.
+
+- **#355 split affordance on stacked range handles** (PR #380) — a
+  tappable split (↔) icon appears whenever the Min/Max handles of the
+  EV target range slider visually overlap (within 2 % of the slider
+  span). One tap drops Min by 2 % so the stacked handles become
+  individually grabbable. Works in kWh and SOC % modes.
+
+- **`per_charger: true` on `sem-chart-card` EV preset** — optional
+  per-charger color breakdown driven by discovered
+  `sensor.sem_charger_<id>_power` entities.
+
+### Changed
+
+- **EV chart "today" period** (in PR #380) — was rolling 24h, which
+  painted yesterday-evening charges as a phantom second event. Now
+  anchored at local midnight to match `daily_ev_energy`.
+
+### Removed
+
+- Per-charger **"Set target as default"** button (PR #380). HA's
+  number-entity state restoration already persists slider values across
+  restarts; the button's "copy to global defaults" workflow was niche on
+  installs that grow new chargers later. Existing entries are
+  auto-cleaned on the next setup.
+
+## [1.7.0-beta.10] — 2026-06-02
+
+The **#356 ghost-charger** fix.
+
+### Fixed
+
+* **#356** — EV / charger status cards rendered ghost sections per real
+  charger, appearing as duplicate cards titled `<Charger Name> Solar → EV`,
+  `<Charger Name> Grid → EV`, `<Charger Name> Battery → EV`. Each ghost
+  duplicated the SOC gauge, charge target slider, mode dropdown and
+  `Klaar om` timer — only the power value differed, matching the per-flow
+  attribution.
+
+  Root cause: the charger auto-discovery regex in both
+  `dashboard/card/src/cards/sem-ev-status-card.js` and
+  `sem-charger-status-card.js` was greedy:
+
+  ```javascript
+  const match = eid.match(/^sensor\.sem_charger_(.+)_power$/);
+  ```
+
+  It matched both real charger sensors (`sensor.sem_charger_<id>_power`)
+  AND the per-charger flow sensors
+  (`sensor.sem_charger_<id>_flow_solar_to_ev_power` etc.). The flow
+  sensors were added in v1.6.9 (`feature/169-per-charger-flows`) for the
+  flow card — they were never meant to register as chargers. Every
+  multi-charger install where `sensor.py:1633-1695` emits flow sensors
+  (gated on `len(ev_chargers) > 1`) got 3 ghost sections per real charger.
+
+  Fix: `if (eid.includes('_flow_')) continue;` guard before the regex
+  match in both card files. Bundle rebuilt — content-hashed resource URL
+  invalidates browser cache on upgrade.
+
+  Earlier #356 fixes (`e733212` PR #371 hero-collapse, `68cee34` M3
+  bottom-bar gate) targeted a different (real but smaller) duplication
+  pattern inside one card; they couldn't address the ghost-section
+  cascade because the source was upstream in the discovery loop.
+
+### Tests
+
+`tests/test_356_charger_discovery_filter.py` — source-level lint
+asserting both card files contain the `_flow_` guard inside the
+discovery window, plus a property-style test feeding sample entity IDs
+through the regex+guard combination to confirm flow sensors are rejected
+and real charger IDs (including those with legitimate underscores like
+`laadpaal_links`, `ev_charger`, `keba_p30`) still resolve correctly.
+
+**Total suite: 2904 passed, 0 failed, 0 xfailed.**
+
+## [1.7.0-beta.9] — 2026-06-02
+
+**Hotfix on top of beta.8.** No SEM logic changes — purely a dashboard
+card render bug + a missing translation. Users who installed beta.8 saw
+an invisible `sem-solar-card` (the bug below) and a raw key
+`PV_STRINGS_TODAY` in the per-string section.
+
+### Fixed
+
+* **sem-solar-card was rendering as a 0x0 element on every viewport.**
+  The `html\`...\`` Lit template at `sem-solar-card.js:406` contained
+  literal backticks (markdown-quoted `nothing`). JavaScript read those
+  as terminating the outer template literal — Lit's minified `html` tag
+  threw `H(...) is not a function` at parse time. HA's lovelace renderer
+  swallowed the console error and left an empty shadowRoot, so the card
+  was conspicuously missing on mobile.
+* **Missing `pv_strings_today` translation.** The per-PV-string section
+  title rendered as the raw key `PV_STRINGS_TODAY` (CSS upper-casing the
+  missing key) instead of the translated string. Added to all 15
+  supported languages.
+
+Both fixes target the bundled card (`dashboard/card/dist/sem-cards.js`
+was rebuilt) — they take effect after the next browser cache-bust on
+upgrade.
+
+## [1.7.0-beta.8] — 2026-06-02
+
+The **disagreement-audit close-out + KEBA solar-flicker resilience** release.
+Lands every remaining item from the post-#349 umbrella audit (#351 — 13/13
+closed), the KEBA actuator IDLE debounce that prevents transient solar-sensor
+dropouts from cascading into "authorization rejected", and a multi-inverter
+PV-strings discovery fix surfaced by @RienduPre's #378 dump.
+
+### Fixed
+
+* **#351 H1** — Per-charger `_calculate_remaining_need` now reads
+  `self._daily_ev_per_charger.get(cid, energy.daily_ev)` when `charger_cfg`
+  is set. Pre-fix charger B's "target reached" check was polluted by
+  charger A's energy.
+* **#351 H2** — Forecast night-target reduction applied per-charger inside
+  the multi-charger loop, gated on `_mode_uses_smart_night(cfg)`. Secondary
+  chargers no longer ignore the "tomorrow is sunny → skip tonight" decision.
+* **#351 M1** — Cost accumulators (daily / monthly / yearly) now round-trip
+  through `Storage.export_energy_calculator_state`. Pre-fix `daily_savings`
+  silently reset to 0 mid-day after every HA restart while
+  `daily_solar` resumed from disk.
+* **#351 M2** — `CostData.daily_total_savings` (+ monthly / yearly variants)
+  now computed as the headline number spanning solar + battery savings.
+  Pre-fix `daily_savings` (solar-only) was the only surfaced number and
+  understated savings on battery-assist days.
+* **#351 M3** — Per-charger session reads `power_flows.per_charger[cid]`
+  directly when populated, preserving the priority-correct attribution.
+  Pre-fix the proportional re-split discarded the priority signal that the
+  flow calculator just computed.
+* **#351 M4** — Per-charger effective states surface as
+  `charger_<id>_charging_state` on `coord.data` and as the
+  `per_charger_states` dict on the `sem_charging_state` sensor. Mixed-mode
+  fleets now show the disagreement explicitly instead of hiding behind the
+  fleet headline.
+* **#351 M5** — `SurplusController.distribute_ev_budget` accepts an
+  `excluded_charger_ids` set; chargers in `charge_mode=off` get 0 W
+  allocation (dashboard still sees the entry).
+* **#351 M6** — `notify_ev_nearly_full` gates on this charger's
+  `power.ev_power_per_charger.get(cid)` instead of the fleet `ev_charging`
+  flag.
+* **#351 M7** — Per-charger session-end falls back to
+  `power.ev_connected_per_charger.get(cid)` when no per-charger plug
+  sensor is configured. Pre-fix per-charger sessions could never end while
+  another charger was plugged in.
+* **#351 M8** — `_skip_recorded_tonight` converted to
+  `Dict[str, bool]` keyed by charger_id; per-charger intel builder
+  records skips per-charger so charger A's skip no longer masks
+  charger B's independent counter.
+* **#351 M9** — Eliminated mutable-attr-read pattern in
+  `_build_charging_context` and the per-charger loop. Both call sites
+  now capture `self._cycle_vehicle_soc` into a local before the two
+  `_calculate_remaining_need` calls.
+* **#351 M10** — `SOLAR_PAUSE_STATES` clears `_ev_charge_started_at`.
+  Pre-fix the disable-delay timer was consumed during a battery-priority
+  pause and the very next cycle's terminal branch fired stop_session
+  even though we just resumed.
+* **#351 M11** — Night-skip notification gates on
+  `_mode_allows_night_charging(cfg)`. Modes `off` / `solar_only` no longer
+  get spurious "skipped night charge" pushes.
+* **#351 L1** — `_update_battery_session_tracking` integrates against
+  `self.update_interval.total_seconds()` (the actual cycle time) not
+  `config["update_interval"]` (the requested one). Under HA load the two
+  diverge and the battery-session counter drifted.
+* **#351 L2** — `FlowCalculator.calculate_energy_flows` emits
+  `DeprecationWarning` from the body. The proportional-allocation path is
+  un-canonical; `integrate_energy_flows` is the timing-aware production
+  path.
+* **#378** — `discover_pv_strings_from_registry` now honours the explicit
+  `solar_power_list` from the HA Energy Dashboard when it has ≥2 entries.
+  Pre-fix the discoverer scoped sibling-scan to the seed's `config_entry`,
+  silently dropping cross-inverter MPPTs and leaking entities not in the
+  user's dashboard. @RienduPre's multi-inverter setup (3 entries in
+  `solar_power_list`) now surfaces all 3 as `pv1`/`pv2`/`pv3`.
+
+### Added — KEBA solar-flicker resilience
+
+* **IDLE debounce in the actuator** (`coordinator/actuate.py` +
+  `ChargerAdapter.attempt_idle` + `reset_idle_debounce`). When a transient
+  solar-sensor reading triggers a 1-cycle `intent=idle`, the actuator
+  holds the previous setpoint instead of immediately calling `keba.disable`.
+  Default threshold = 4 cycles (~40 s grace). Catches the pattern observed
+  live on PROD 2026-06-02: Huawei sensor flicker 8 kW → 0 W → 8 kW within
+  10 s → `keba.disable` → KEBA stuck in "authorization rejected" until
+  physical replug. Real cloud passes (>40 s) still cross the threshold and
+  `command_idle` fires normally.
+* Debounce state lives on `ChargerAdapter` (per-charger, not a module-level
+  dict) so multi-charger fleets count independently per charger.
+* INFO-level log on both branches:
+  `actuate(<cid>): IDLE — count=N/4 — <reason>` (fired) or
+  `actuate(<cid>): IDLE DEBOUNCED — count=N/4, holding previous setpoint`
+  (absorbed).
+
+### Tests
+
+* `test_351_umbrella_regression.py` — 23 tests covering every umbrella
+  item (per-fix assertions + structural anchor lint).
+* `test_379_growatt_pv_strings.py` — 3 new tests for #378 (multi-inverter
+  list wins, single-entry falls through, empty list preserves legacy).
+* 3 new edge-case scenarios + harness extensions for per-cycle
+  `tariff_level` and the negative `strategy_not_substring` assertion.
+
+**Total suite: 2900 passed, 0 failed, 0 xfailed.**
+
+### Known not-fixed
+
+* **#356** — duplicate tiles in the EV dashboard. @RienduPre confirms the
+  symptom persists on beta.6 (which has the hero-collapse + bottom-bar
+  fixes). Needs a UI screenshot to identify the remaining duplication
+  source — replied on the issue asking for one. Target beta.9.
+* **Solar sensor flicker root cause** — the actuator debounce is a
+  band-aid. The Huawei inverter's intermittent 0 W readings should be
+  EMA-smoothed in `coordinator/sensor_reader.py`. Separate issue worth
+  filing.
+
+## [1.7.0-beta.7] — 2026-06-02
+
+The v1.7 arch capstone — the **FleetCycleState refactor** that
+structurally retires the gap class behind the three production fixes
+shipped in beta.5 (SOLAR_ONLY redirect, tariff_level, night-plan
+ordering). Plus 4 more transition-class scenarios.
+
+### Production refactor — FleetCycleState as single source of truth
+
+The three beta.5 production fixes were tactical patches for one
+structural smell: `build_charger_view` had each call site
+re-resolving fleet-level inputs (forecast, tariff, is_night, etc.)
+independently. The primary view in `_build_charging_context` and
+the multi-charger loop each handled this differently — and any
+new fleet input added would land in only one of them.
+
+The fix: **`FleetCycleState`** — an immutable per-cycle struct
+holding every fleet-level input that any charger's `decide()` could
+need. Built ONCE per cycle by
+`coordinator._build_fleet_cycle_state`. `build_charger_view` now
+takes it as the first positional arg and derives the per-view
+`FleetContext` from it. Per-charger overrides (`target_kwh`,
+`deadline_amps`, `tariff_wait`, `solar_committed_w`) stay as direct
+kwargs because they legitimately vary across chargers in the same
+cycle.
+
+What this eliminates:
+
+* The 3 separate inline blocks resolving forecast/tariff/is_night
+  per call site
+* The asymmetry where multi-charger loop saw `tariff_level` but
+  primary didn't (and similar for other fields)
+* The "did I remember to plumb the new field?" mental load every
+  PR that touches fleet state
+
+The structural guarantee: any future fleet-level input is a
+**one-place change** (add the field to `FleetCycleState`).
+
+### Enforcement — AST lint as a CI gate
+
+`tests/test_fleet_state_completeness.py` walks `coordinator/` AST
+and fails CI if any `build_charger_view` caller:
+
+  * Forgets the `fleet_state` positional, OR
+  * Passes any of the deprecated fleet-level kwargs (`power_reading`,
+    `is_night`, `config`, `tariff_level`, `forecast_remaining_kwh`)
+
+Catches the regression class on PR review, not at runtime. Same
+shape as the existing FLEET-READ AST lint at
+`tests/test_ev_control_fleet_reads.py`.
+
+### Invariant tests
+
+`tests/test_fleet_cycle_state.py` pins the behavioural contract:
+
+  * `FleetCycleState` is frozen — instances cannot mutate
+  * Equal inputs produce equal instances (value-type semantics)
+  * Two views built from the same `FleetCycleState` in the same
+    cycle agree on every fleet-level field (only
+    `solar_committed_w` differs per view, by design)
+
+### Transition-class scenarios
+
+Four new YAML scenarios in `tests/scenarios/` covering state
+transitions that steady-state scenarios miss:
+
+* `sunset_transition` — solar drops + `is_night` flips false→true.
+  solar_only must IDLE on the night-mode flip.
+* `sunrise_transition` — mirror: `is_night` true→false + solar
+  rising. min_plus_solar transitions cleanly out of MIN_PV.
+* `multi_charger_plug_events` — two solar_only chargers, one
+  unplugs mid-timeline. Pins per-charger budget conservation
+  under plug-state changes.
+* `full_day_replay` — 24h walkthrough on 10-min cycles (144
+  cycles, runs <1s). Catches daily-integrator drift, state
+  machine blips on zone boundaries.
+
+Plus two harness extensions enabling these:
+`ev_connected_per_charger` / `ev_charging_per_charger` (per-charger
+plug state) and a per-row `is_night` override (for sunset/sunrise
+walks).
+
+### Verification
+
+2879 tests passing, 7 skipped, 0 failed, 0 xfailed (~35s runtime).
++16 tests since beta.6 (4 scenarios + 7 FleetCycleState contract
+tests + 4 misc + the AST lint's 3).
+
+22 scenarios total now.
+
+---
+
+## [1.7.0-beta.6] — 2026-06-02
+
+Diagnostic surface expansion for two more reported issues — same
+pattern as beta.5's `per_source_lists` (one-shot triage from the
+diagnostics dump alone).
+
+### Diagnostics
+
+- **#379 — PV string discovery state.** New
+  `pv_strings_discovery` top-level block surfaces what the
+  `_sensor_reader` resolved from both the direct-power-pattern
+  scan and the V+I synthesis pair scan. Lets a "PV2 is empty"
+  report be triaged in one shot: empty dict → discovery missed
+  entirely; partial dict → one pattern matched but others didn't;
+  full dict → bug is downstream in the card rendering.
+
+- **#357 — Per-charger adapter state.** New `charger_adapters`
+  top-level block surfaces the resolved adapter class +
+  brand-specific discovery state per charger. For `WallboxAdapter`
+  specifically:
+  `wallbox.pause_switch_searched`, `pause_switch_entity`,
+  `pause_switch_discovered`. Lets a "Wallbox keeps charging
+  despite mode=off" report point at the failing step on the
+  first dump: false → the discovery couldn't find a
+  `switch.*pause_resume` entity for this Wallbox model;
+  true → adapter wired right, problem is downstream.
+
+### Verification
+
+2863 tests passing, 7 skipped, 0 failed, 0 xfailed (~35s runtime).
+4 new tests in ``tests/test_357_wallbox_diagnostics.py``.
+
+---
+
+## [1.7.0-beta.5] — 2026-06-02
+
+Testing-framework adoption + three structural arch fixes + diagnostic
+surface for fleet-aggregation bug triage. Built on top of beta.4.
+
+### Production fixes (post-#358 arch follow-up)
+
+- **`SOLAR_ONLY` forecast-aware battery redirect restored.** Post-arch
+  `decide.py::SolarOnlyMode` was checking bare surplus against the
+  charger min (4140W), returning IDLE, and the canonical strategy
+  chain collapsed to IDLE — so the redirect branch in
+  `flow_calculator.calculate_canonical_ev_budget` was unreachable.
+  Fix: extracted `battery_redirect_w` as a module-level helper,
+  plumbed `forecast_remaining_kwh` through `FleetContext` +
+  `build_charger_view`, made `SolarOnlyMode.decide()` add redirect
+  to its surplus calculation BEFORE the min check. Caught by
+  scenario `tests/scenarios/2026-05-29_budget_unify_redirect.yaml`.
+
+- **`tariff_level` plumbed into primary view.**
+  `SolarPlusCheapMode.decide()` reads `view.fleet.tariff_level` for
+  the expensive-window pause (#247), but the primary view was being
+  built without it (was `None`). Fix: pull `current_level` from
+  `_tariff_provider` and pass to `build_charger_view`.
+
+- **Night-plan ordering — hoisted before primary view.**
+  `_compute_night_plan` was computed AFTER the primary view's
+  `decide()` ran, so `tariff_wait` (#247) and `deadline_amps`
+  (#246) didn't reach `SolarPlusCheapMode` / `MinPlusSolarMode`
+  for the primary charger. Fix: hoisted the plan to before the
+  primary view in `_build_charging_context`.
+
+All three are the same class — info the legacy
+`_determine_charging_strategy` had access to wasn't fully plumbed
+into the new `decide.py` path. A structural refactor to eliminate
+the gap class (single `FleetCycleState` builder + AST lint) is
+planned for v1.8.
+
+### Diagnostics — #378 triage support
+
+- `diagnostics.py` now captures `energy_dashboard.per_source_lists`
+  (`solar_power_list` / `battery_power_list` / `grid_power_list`
+  from the Energy Dashboard config) AND
+  `energy_dashboard.per_source_readings` (each entity's current
+  state, or `{"state": "missing"}` if it disappeared from
+  `hass.states`). For multi-inverter / multi-battery / multi-grid
+  setups, this makes "fleet sensor underreports" reports one-shot
+  triagable from the diagnostics dump alone.
+
+  Triage flow: open `per_source_lists.battery_power_list`, compare
+  against what the user reports they have. If the list is missing
+  an entity → bug is in discovery / HA Energy Dashboard config. If
+  the list has the entity but reading is `"missing"` or
+  `"unavailable"` → bug is in the sensor source itself.
+
+### Testing framework adoption
+
+Adopted `pytest-homeassistant-custom-component==0.13.205` (the
+official HA test framework — used by HACS itself, ~30 of Frenck's
+integrations, required by Quality Scale Silver+). SEM is already
+declared `quality_scale: platinum`; this work validates that claim
+structurally.
+
+- Real `HomeAssistant` fixture for config-flow, services, migrations,
+  and the scenario harness — replaces dict-mock approach where it
+  matters for end-to-end correctness.
+- Legacy `hass` fixture renamed to `mock_hass` via AST-aware libcst
+  rewrite (35 files, 419 test signatures). No behaviour change in
+  existing tests; the framework's `hass` fixture is now usable.
+- Migration chain (`async_migrate_entry` v1→v7) now has 8 real-hass
+  tests covering every hop + the full chain composition.
+
+### Scenario suite — wired into CI for the first time
+
+The 5 scenario YAMLs in `tests/scenarios/` had been silently broken
+since PR #358: the harness called the deleted
+`_determine_charging_strategy` inside a bare `try/except: pass`, so
+every cycle produced `strategy=None`, `budget=0`, `amps=0` — and the
+scenarios "passed" on the null outputs. The harness now drives the
+real production decision path (`coord._build_charging_context`),
+raises loudly on `AttributeError`, and is wired into pytest
+discovery via `tests/test_scenarios.py`.
+
+Eight new YAML scenarios mined from closed bug issues — one per
+EV-charge-mode × regime cell:
+
+- `solar_only/night_must_idle` (#346)
+- `solar_only/zone3_day_redirect` (#282)
+- `min_plus_solar/zone3_day_battery_assist` (#282)
+- `min_plus_solar/night_top_up_at_min` (#268)
+- `min_plus_solar/night_deadline_floor` (#246)
+- `solar_plus_cheap/day_normal_tariff` (#247)
+- `solar_plus_cheap/night_cheap_window_charges` (#247)
+- `always_max/ignores_zone_and_tariff`
+- `multi_charger/priority_cascade_with_mixed_modes`
+
+Plus `tests/test_scenario_coverage.py` — a matrix test that fails
+listing missing cells with their issue hints. New EV-charge modes or
+regimes that land without scenario coverage fail CI with a clear
+to-do.
+
+### Property-based invariants
+
+`tests/test_budget_invariants.py` — 10 `hypothesis`-driven tests over
+the canonical EV budget math. Invariants: `net_w >= 0` and finite
+across all 6 strategies, IDLE always zero, NOW returns override,
+`SELF_CONSUMPTION` never includes redirect, `SOLAR_ONLY net_w ==
+solar_surplus + battery_redirect`, amps floored not rounded.
+
+### User-reported regression guards
+
+- **#378** (multi-battery aggregation) — 6 tests pinning
+  `PowerReadings` + `fleet_battery_w` so future arch changes can't
+  silently drop a battery from the sum.
+- **#379** (Growatt PV-string discovery) — 5 tests pinning Growatt
+  naming patterns + the "missing entity" diagnostic path.
+- **#307** (pool heat pump as surplus device) — 7 tests verifying
+  `SurplusController` dispatch to non-EV devices.
+- **#49** (surplus controller restart safety) — 5 tests pinning that
+  `ControllableDevice` defaults to `PEAK_ONLY` (so SEM never
+  proactively activates a device the user didn't opt into).
+- **#353** (KEBA 0A self-charge) — 19 adapter-unit tests pinning that
+  `command_current(<6A)` always routes to `command_idle()` (=
+  `keba.disable`), never `set_current(0)`.
+
+### Internal
+
+- 2859 tests passing, 7 skipped, 0 failed, 0 xfailed (~34s runtime).
+- Release workflow now installs from `tests/requirements_test.txt`
+  (was a hardcoded list missing `pytest-homeassistant-custom-component`).
+
+---
+
+## [1.7.0-beta.4] — 2026-06-02
+
+Private beta (not published to HACS) — bundles the multi-device
+architecture follow-up on top of beta.3 for an internal PROD soak.
+
+### Fixed
+- **#375** — True per-battery control loop. `_battery_adapter`
+  (singular) → `_battery_adapters: Dict[str, BatteryControlAdapter]`;
+  `_run_battery_pipeline` iterates `power.batteries`, dispatching
+  `decide_battery` / `actuate_battery` per battery with its own
+  cached adapter. Closes the architectural gap the v1.7.0 rebuild
+  left behind for 2× same-brand installs (2× Huawei LUNA2000,
+  2× GoodWe). Single-battery installs see zero behavioural change
+  (PR #376).
+
+## [1.7.0-beta.3] — 2026-06-01
+
+Beta batch addressing 5 open user-reported issues + dead-code cleanup
+from #351's audit deferred list.
+
+### Fixed
+- **#352** — Manual `grid_sign_invert` config option for Enphase and
+  other inverters where the energy-counter auto-detect can't
+  stabilise on the grid power polarity (PR #370).
+- **#355** — Bumped EV target slider max from 100 to 200 kWh so the
+  Min and Max handles have drag-room when both sit at the previous
+  cap (PR #368).
+- **#356** — Collapsed the duplicated hero metrics on the EV status
+  card when per-charger sections render — the gate was `> 1`
+  instead of `>= 1`, so 1-charger installs saw both layers. Hero
+  now shows only Status + Power when ≥1 charger sections will
+  render below (PR #371).
+- **#357** — New dedicated `WallboxAdapter` that auto-discovers the
+  Wallbox `pause_resume` switch from the HA entity registry and
+  toggles it explicitly on `command_idle` / `command_disable` in
+  addition to `_set_current(0)` + `stop_session()`. Closes the
+  v1.6.17 reporter's bug where mode=off didn't stop the Pulsar
+  (PR #372).
+- **#359** — Percentile-based tariff price classification (default
+  for dynamic tariffs). The legacy static 0.15/0.35 CHF cutoffs
+  mis-bucketed everything on Tibber/Octopus/Amber/Nordpool where
+  daily ranges span €0.05–€0.80. Buckets now compute relative to
+  today's 24h distribution. Static mode preserved as opt-out
+  (PR #373).
+
+### Removed
+- `coordinator._execute_battery_charge_scheduler` (91 LOC) and
+  `coordinator.BatteryProtectionMixin._apply_battery_discharge_protection`
+  (66 LOC) — both retired by the v1.7.0 per-device-primary
+  rebuild; zero live callers since the `_run_battery_pipeline`
+  flip. `BatteryProtectionMixin` survives this release with only
+  `_restore_battery_discharge_limit_on_startup` (planned full
+  retirement in v1.7.1) (PR #369).
+
+## [1.7.0] — 2026-06-01
+
+Major release. Two headline themes:
+
+1. **Multi-device architecture rebuild** — every multi-device data
+   point in SEM (chargers, inverters, batteries, PV strings) now
+   flows through the same per-device-primary pattern: `Dict[str, X]`
+   is the source of truth, fleet aggregates are `@property` views.
+   Brand hardware quirks (KEBA's 6 A minimum, set_current(0)
+   rejection, self-resume detection, Huawei/GoodWe battery force-
+   charge) are encapsulated in dedicated adapter modules. EV
+   control flows through one pure `decide(view) → ChargerDecision`
+   → `actuate(decision, adapter)` pipeline; batteries get the same
+   `decide_battery / actuate_battery / BatteryControlAdapter`
+   treatment. The strategy/state-machine disagreement class that
+   produced the 14-bug cluster between v1.6.0 and v1.6.17
+   (#243, #284, #289, #290, #291, #308, #315, #316, #318, #344,
+   #345, #346, #349, #353) is **structurally retired** — those
+   disagreements cannot exist by construction because there's only
+   one decision authority per device per cycle.
+
+2. **Per-PV-string visibility (#312)** — Sunsynk-style per-string
+   display on three SEM cards, plus V+I synthesis for inverters
+   that expose voltage and current but no per-string power.
+
+The architecture work shipped as four PRs into develop (#358 EV
+rebuild, #360 inverter+battery PowerReadings dicts, #361 battery
+decide/actuate/adapter, #362 EnergyTotals @property views, #363
+93 surplus-charging scenario tests). The per-PV-string work
+shipped as three PRs (#337 data layer, #338 cards, #339 docs).
+All consolidated under one release tag.
+
+### Architecture rebuild — what changed structurally
+
+**Per-charger primary** (PR #358, 8 steps):
+- New frozen types in `coordinator/charger_types.py`: `ChargerPower`,
+  `ChargerEnergy`, `ChargerIntent`, `ChargerDecision`, `ChargerView`,
+  `FleetContext`, `FleetView`, plus the symmetric inverter/battery
+  types (PR #360/#361).
+- `ChargerAdapter` ABC + `KebaAdapter` + `GenericAdapter` in
+  `coordinator/charger_adapters/`. Every KEBA quirk that bit
+  production (6 A min, set_current(0) rejection, self-resume on
+  plug-in, charging_state lag, 500 W handshake cutoff) is one
+  method on this protocol. New brands subclass; the actuator never
+  changes.
+- Pure `decide(view) → ChargerDecision` in `coordinator/decide.py`
+  with one `ModeStrategy` class per charge mode (`off`,
+  `solar_only`, `min_plus_solar`, `always_max`, `solar_plus_cheap`).
+  No `self`, no HA calls — same input always produces the same
+  output.
+- `actuate(decision, adapter)` in `coordinator/actuate.py` — pure
+  intent dispatch. One branch per `ChargerIntent`. The
+  #315/#346/#353 self-resume guards collapse into one
+  `adapter.is_self_charging()` check before the new intent is
+  applied.
+- Coordinator `_per_charger: Dict[str, ChargerRuntime]` consolidates
+  what used to be 8 parallel `_*_per_charger` dicts.
+- The legacy `_determine_charging_strategy`,
+  `_self_consumption_strategy`, `_zone_based_strategy`,
+  `_canonical_strategy_from_legacy`, and the `_raw_zone`/`_get_zone`/
+  `_debounce_zone` helpers — **deleted** (−354 lines in
+  `coordinator.py`). The new pipeline is the only control path.
+- Per-charger native priority flow attribution in
+  `flow_calculator.py`: when multiple chargers consume from the
+  same surplus, the priority allocator splits sources in order
+  (higher-priority chargers get first claim on solar, fall back to
+  battery, fall back to grid). Replaces the pre-#349 proportional
+  fraction-of-fleet split.
+
+**Per-inverter + per-battery primary** (PR #360, #361, #362):
+- `PowerReadings.inverters: Dict[str, InverterPower]` and
+  `PowerReadings.batteries: Dict[str, BatteryPower]` — populated by
+  `sensor_reader` for multi-device installs (`len(...list) > 1`).
+- `@property fleet_solar_w`, `fleet_battery_w`, `fleet_battery_soc`
+  on `PowerReadings` — sum / capacity-weighted-average from the
+  dicts. Empty dict on single-device installs → falls back to the
+  legacy `solar_power` / `battery_power` / `battery_soc` fields.
+  Zero churn for existing consumers.
+- `EnergyTotals.per_inverter` / `per_battery` dicts plus
+  `daily_solar_view` / `daily_battery_charge_view` /
+  `daily_battery_discharge_view` `@property` accessors. Same
+  fallback discipline.
+- New `coordinator/battery_adapters/` module unifies what used to
+  live in two separate places: discharge limiting (the legacy
+  `BatteryProtectionMixin`) and forced charging (the legacy
+  `BatteryChargeAdapter`). `BatteryControlAdapter` is one ABC with
+  four methods (`command_normal`, `command_limit_discharge`,
+  `command_force_charge`, `command_stop_force_charge`); each maps
+  1:1 to a `BatteryIntent`. Huawei, GoodWe, and Generic adapter
+  implementations wrap the existing brand-specific service calls.
+- `decide_battery(view) → BatteryDecision` and
+  `actuate_battery(decision, adapter)` — same pure-pipeline shape
+  as the EV side. Replaces the dual-axis legacy split
+  (`BatteryProtectionMixin._apply_battery_discharge_protection` +
+  `BatteryChargeScheduler.update`).
+- The pure planner `BatteryChargeScheduler.evaluate()` is preserved
+  verbatim — it produces a `SchedulerDecision` that feeds
+  `BatteryView.scheduler_decision`. Only the dispatch path changed.
+
+**Invariant test suite** (PR #358 + #363):
+- `tests/test_step8_invariants.py` — **233 architectural contracts**
+  parametrised across `(mode × solar × battery_soc × home ×
+  is_night × num_chargers)`. Each invariant pins one property the
+  architecture is supposed to guarantee by construction. A breaking
+  change in any module surfaces immediately at CI time, not in
+  production.
+- `tests/test_surplus_charging_scenarios.py` — **93 behavioural
+  scenarios** walking every (mode × battery SOC zone × time-of-day
+  × solar level) combination through `decide → actuate → adapter`.
+  Includes a full-day timeline (`dawn → morning → noon → afternoon
+  → evening → dusk`) with realistic numbers.
+- `tests/test_inverter_battery_arch.py` — **27 tests** pinning the
+  inverter/battery types, adapter dispatch, hysteresis, factory
+  selection.
+- `tests/test_multi_inverter_battery_primary.py` — **23 tests** for
+  the PowerReadings dicts + fleet `@property` accessors.
+
+Full suite: **2733 passed**, 7 skipped (was 2337 at v1.6.14
+baseline → **+396 new tests**). The simulation-driven verification
+approach replaces the previous "deploy and watch logs" cycle —
+hardware test windows are scarce; deterministic CI scenarios run
+in under a second and gate every PR.
+
+### Compatibility notes
+
+- **Zero user-visible behaviour change for single-device installs.**
+  The fleet `solar_power` / `battery_power` / `ev_power` fields stay
+  populated as cached sums; every existing sensor and dashboard
+  card continues to read them unchanged. The new `@property` views
+  are additive.
+- **Multi-device installs see better-quality flow attribution.**
+  A two-charger setup where one is in `solar_only` and the other in
+  `min_plus_solar` previously got a proportional split that
+  attributed grid to the solar-only charger; now the priority
+  allocator correctly routes solar to the higher-priority charger
+  first.
+- **`charge_mode = solar_only` no longer charges from grid at night.**
+  Fixed in v1.6.17 (#346) and structurally retired by the new
+  decide-time mode gate in v1.7.0.
+- **Storage format: backward-compatible.** Pre-v1.7.0 snapshots
+  restore unchanged (no new keys present → empty dicts → fallback
+  to legacy fields).
+- **Legacy code paths retired:** `_determine_charging_strategy`,
+  `_self_consumption_strategy`, `_zone_based_strategy`,
+  `_canonical_strategy_from_legacy`, `_raw_zone`, `_get_zone`,
+  `_debounce_zone`. `BatteryProtectionMixin` and the per-brand
+  `BatteryChargeAdapter` subclasses (`HuaweiChargeAdapter`,
+  `GoodWeChargeAdapter`, `GenericChargeAdapter`) are still in the
+  tree as backward-compat shells — the new `BatteryControlAdapter`
+  wraps them internally. They can be deleted in v1.7.1 after the
+  PROD soak window.
+
+### What's queued for v1.7.1
+
+- Per-inverter / per-battery dashboard sensors (gated on
+  `len(...) >= 2`).
+- Per-inverter / per-battery flow attribution in `flow_calculator`
+  (the destination-side view of "which inverter's solar fed where").
+- `sensor_reader` migration to populate
+  `EnergyTotals.per_inverter` / `per_battery` each cycle (so
+  `daily_solar_view` becomes authoritative on multi-inverter
+  installs).
+- Delete `BatteryProtectionMixin` + `BatteryChargeAdapter` shells
+  after PROD soak proves the new pipeline.
+- Per-string-to-destination attribution (#312 originally deferred —
+  now buildable on top of the per-inverter flow work).
+
+---
+
+### Per-PV-string visibility (#312)
+
+Closes the long-standing @MRAK96 request for Sunsynk-style per-string
+display: SEM had the auto-discovery (`hardware_detection.discover_pv_strings_from_registry`,
+8 inverter brands) for the optional HACS K-Flow card since v1.5.x
+but never promoted per-string to SEM's own surface. v1.7.0 ships
+the full stack: data layer, sensor entities, card rendering, and
+user docs — internally implemented as three discrete phases so
+each piece could be reviewed and tested independently on HA-TEST,
+but published as one user-visible release.
+
+### Added
+
+- **Per-PV-string power + daily-energy sensors** (gated on
+  `len(strings) >= 2`):
+  - `sensor.sem_pv_string_<slot>_power` (W, MEASUREMENT)
+  - `sensor.sem_pv_string_<slot>_daily_energy` (kWh, TOTAL,
+    daily-reset)
+  where `<slot>` is the normalised label `pv1`, `pv2`, … (max 4
+  per discovery's slot cap). Single-string installs see no
+  change.
+- `PowerReadings.solar_power_per_string: Dict[str, float]` — the
+  source-side mirror of v1.6.9's `ev_power_per_charger`. Sum
+  invariant: `sum(values) ≈ solar_power` within rounding.
+- `EnergyFlows.per_string: Dict[str, StringEnergy]` — daily kWh
+  per string, integrated by `FlowCalculator.integrate_energy_flows`
+  alongside the fleet and per-charger accumulators.
+- `PowerFlows.solar_per_string: Dict[str, float]` — pass-through
+  carrier from readings to the integrator (strings are sources,
+  no destination attribution math required).
+- `StringEnergy` dataclass (1 field: `energy_kwh`).
+- `SensorReader.set_pv_strings(...)` registers the discovered
+  per-string sensors; the per-cycle read loops in both the
+  Energy-Dashboard and legacy paths populate
+  `readings.solar_power_per_string` when the gate trips.
+- Auto-discovery wired through coordinator: the existing
+  `hardware_detection.discover_pv_strings_from_registry`
+  (Huawei / GoodWe / Growatt / Kostal / Sungrow / Fronius /
+  SolarEdge / Victron) now also feeds SEM's own sensors.
+- **V+I synthesis fallback**
+  `hardware_detection.discover_pv_string_vi_pairs` — when an
+  inverter exposes per-string voltage + current but no
+  per-string power sensor (Huawei Solar Modbus, generic
+  Modbus drivers, Solarman bridges), SEM detects sibling
+  `pv_N_voltage` + `pv_N_current` pairs and multiplies V × I
+  at read time to synthesise the per-string watts. Surfaces
+  the same `sensor.sem_pv_string_<slot>_power` entities as
+  the direct-power path; downstream consumers (cards, energy
+  accumulator, sum invariant) don't know which way the value
+  was sourced. Voltage / current patterns accept English
+  (`voltage` / `current` / `volt` / `amp`) and German
+  (`spannung` / `strom`) suffixes. When the same slot has
+  BOTH a direct power sensor AND a V+I pair, the direct
+  sensor wins (slightly more accurate — accounts for the
+  inverter's MPPT efficiency math). Confirmed on HA-PROD
+  2026-06-01: Huawei `inverter_pv_1_spannung` +
+  `..._strom` pair now feeds `sensor.sem_pv_string_pv1_power`
+  via this path.
+- **Per-PV-string chip strip** on three cards, auto-shown when
+  ≥ 2 strings are present. Each chip shows `PVn N.NN kW` and
+  links to the underlying sensor entity on tap.
+  - `sem-flow-card`: chips above the SVG flow diagram.
+  - `sem-solar-card`: chips above the hero arc ring.
+  - `sem-system-diagram-card`: chips above the illustrated
+    diagram as a compact HUD.
+- `semDiscoverPVStrings(hass, prefix)` shared card helper —
+  reads `sensor.{prefix}pv_string_pv1_power` … `pv4_power`,
+  returns `[]` when fewer than 2 present so callers can pass
+  the result straight to a Lit `html` template.
+- `semPVStringsCSS` shared style block.
+- **New user reference doc**
+  [`docs/PV_STRINGS.md`](docs/PV_STRINGS.md) — what sensors get
+  created, supported inverter brands with regex pattern table,
+  how discovery works, "what if I don't see my strings"
+  troubleshooting flow, internals pointer table, and the
+  out-of-scope list (per-string-to-destination attribution,
+  per-string cost, Solcast multi-plane — file-an-issue links).
+
+### Fixed
+
+- **Flow attribution: priority-based instead of proportional (#349)** —
+  HA-PROD 2026-06-01 dashboard showed `flow_grid_to_ev_energy =
+  6.633 kWh` on a day when the actuator's `session_solar_share` said
+  the car was 91 % solar. Root cause: SEM split every source across
+  every destination by demand percentage, attributing grid to the EV
+  whenever the home battery was simultaneously charging (the battery
+  was actually the grid-paid consumer; EV was on solar). The model
+  also overshot destinations when supply ≠ demand exactly.
+
+  New model: sources drain in priority `solar → battery_discharge →
+  grid_import`; destinations served in priority `home → ev →
+  battery_charge → grid_export`. Each watt is attributed to exactly
+  one (source, destination) pair. The conservation invariants hold:
+  for each destination, sum of (source→destination) flows = demand;
+  for each source, sum of (source→destination) flows = supply. 14
+  new tests in `tests/test_349_flow_priority_attribution.py` pin
+  both. The previously misleading `flow_grid_to_ev` should now match
+  user intent — solar covers EV first when there's enough.
+
+- **EV charges overnight in `charge_mode=solar_only` (#346)** —
+  also shipped as the v1.6.17 hotfix. `_determine_charging_strategy`
+  returned `"night_grid"` unconditionally when `is_night_mode()` was
+  True, ignoring the per-charger `charge_mode`. Strategy now consults
+  `MODE_NIGHT_ALLOWED` first: `solar_only` at night → `idle`; `off` →
+  `disabled`; other modes unchanged. Defence in depth: actuator self-
+  resume guard extended from `{"disabled"}` to `{"disabled", "idle"}`
+  so future strategy disagreements land safely.
+- **Autarky reported 0% when battery overnight-charged from grid
+  (#344, #345)** — fleet-summed `daily_grid_import` was treated as
+  unconditional autarky penalty, including the grid-to-battery slice
+  that doesn't displace home consumption. Then a second pass (#345)
+  switched the formula to fully flow-attributed accumulators
+  (`solar_to_home + solar_to_ev + battery_to_home + battery_to_ev`
+  over total consumption) so the temporal mismatch between sunrise-
+  reset `daily_ev` and calendar-reset `flow_grid_to_ev` no longer
+  drowns the numerator.
+
+### Changed
+
+- Day rollover in `FlowCalculator.integrate_energy_flows` now
+  also clears `_per_string_accumulators` alongside fleet and
+  per-charger.
+- Snapshot persistence (`get_flow_accumulator_state` /
+  `restore_flow_accumulator_state`) gains a `per_string` key,
+  emitted only when non-empty. Pre-v1.7.0 snapshots restore
+  bit-for-bit identical (no `per_string` key → no per-string
+  state).
+
+### Tests (18 new)
+
+`tests/test_per_string_energy.py`:
+- Back-compat: empty per_string dict in single-string setups.
+- Sum invariant: 2-string and 4-string splits.
+- Multi-cycle accumulation.
+- Day rollover clears per-string accumulator.
+- Persistence round-trip (4 tests, incl. legacy snapshot
+  back-compat).
+- Bad-snapshot defence (3 tests: non-dict per_string, non-dict
+  per-slot entry, non-numeric values).
+- Idle-string preservation (clouded string keeps its surfaced
+  kWh — no regression to 0 on the user-visible counter).
+- `SEMData.to_dict` emission (key present when populated,
+  omitted when empty).
+- `SensorReader` gate (1 string → no pollution; ≥2 → populated).
+
+Full suite 2281 green on Python 3.12 (2263 v1.6.14 baseline +
+18 new). Bundle (`dist/sem-cards.js`) rebuilt with the chip
+strip rendering for all three cards.
+
+### Phase trail (internal)
+
+Implementation shipped to develop as three feature PRs for
+focused review, then consolidated to one user-visible v1.7.0
+release per maintainer policy:
+- PR #337 — data layer (sensors, types, sensor reader,
+  flow calculator persistence).
+- PR #338 — card rendering (3 cards, shared helper, bundle).
+- PR #339 — user reference doc.
+
+Manifest stays at 1.7.0.
 
 ## [1.6.14] — 2026-05-31
 

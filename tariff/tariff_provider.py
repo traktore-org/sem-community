@@ -21,6 +21,24 @@ from homeassistant.util import dt as dt_util
 _LOGGER = logging.getLogger(__name__)
 
 
+def _local_date(timestamp: datetime):
+    """Return the calendar date of ``timestamp`` in HA's local tz.
+
+    #359: providers vary on what tz they emit — Tibber uses local,
+    Nordpool is often UTC. A bare ``timestamp.date()`` on a UTC-tagged
+    datetime returns the UTC date, which silently mismatches the local
+    ``today`` (Europe/Amsterdam, +02:00 in summer) and empties the
+    'today's prices' array → percentile breaks return None → static
+    thresholds apply → €0.30 reported as ``normal`` (RienduPre).
+
+    Naive datetimes (no tz info) pass through unchanged so old tests
+    and call sites that build their own clocks aren't disturbed.
+    """
+    if timestamp.tzinfo is None:
+        return timestamp.date()
+    return dt_util.as_local(timestamp).date()
+
+
 class PriceLevel(Enum):
     """Electricity price classification."""
     NEGATIVE = "negative"
@@ -63,6 +81,20 @@ class TariffData:
     # Upcoming prices
     upcoming_prices: List[PricePoint] = field(default_factory=list)
 
+    # #359 follow-up — diagnostic: which classifier path produced the
+    # current ``price_level``. Exposed as the ``tariff_classifier_path``
+    # sensor attribute so users hitting RienduPre's
+    # derivative-entity-without-prices_today scenario can see WHY their
+    # classification is NORMAL instead of filing a duplicate bug.
+    # Values:
+    #   percentile_active(p10=0.14,p25=..,p75=..,p90=..)
+    #   percentile_fallback_cache_empty
+    #   percentile_fallback_too_few_prices(n=3)
+    #   percentile_fallback_flat_day(spread=0.0008)
+    #   static_fixed_cutoffs
+    #   negative_price_shortcircuit
+    classifier_path: str = "unknown"
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "tariff_current_import_rate": round(self.current_import_rate, 4),
@@ -71,6 +103,7 @@ class TariffData:
             "tariff_currency": self.currency,
             "tariff_provider": self.provider,
             "tariff_is_dynamic": self.is_dynamic,
+            "tariff_classifier_path": self.classifier_path,
             "tariff_next_cheap_start": (
                 self.next_cheap_window_start.isoformat()
                 if self.next_cheap_window_start else None
@@ -169,6 +202,7 @@ class StaticTariffProvider(TariffProvider):
             currency=self.currency,
             provider="static",
             is_dynamic=False,
+            classifier_path="static_ht_nt",
             today_min_price=self.off_peak_rate,
             today_max_price=self.peak_rate,
             today_avg_price=(self.peak_rate + self.off_peak_rate) / 2,
@@ -223,11 +257,21 @@ class DynamicTariffProvider(TariffProvider):
         cheap_threshold: float = 0.15,
         expensive_threshold: float = 0.35,
         currency: str = "CHF",
+        classification_mode: str = "percentile",
     ):
         self.hass = hass
         self.export_rate = export_rate
         self.cheap_threshold = cheap_threshold
         self.expensive_threshold = expensive_threshold
+        # #359: switch the default classification away from the static
+        # 0.15 / 0.35 CHF thresholds (worthless on Tibber-style tariffs
+        # ranging 0.10–0.80) to percentile-based bucketing over today's
+        # 24-hour price array. ``static`` preserved as an opt-out for
+        # users with flat tariffs / spike-prone markets.
+        self.classification_mode = (
+            classification_mode if classification_mode in ("static", "percentile")
+            else "percentile"
+        )
         self.currency = currency
         self._price_entity = price_entity
         self._provider_name = "unknown"
@@ -235,6 +279,16 @@ class DynamicTariffProvider(TariffProvider):
         self._feedin_entity: Optional[str] = feedin_entity
         self._prices_cache: List[PricePoint] = []
         self._last_cache_update: Optional[datetime] = None
+        # Cached percentile breakpoints, recomputed when today's price
+        # array changes. Keys: ``p10``, ``p25``, ``p75``, ``p90``.
+        self._percentile_breaks: Optional[Dict[str, float]] = None
+        self._percentile_breaks_for: Optional[str] = None  # date iso
+        # #359 follow-up — surface which classifier path produced the most
+        # recent ``price_level`` via the ``tariff_classifier_path`` sensor
+        # attribute. Lets users see WHY their classification is what it
+        # is (especially the cold-start / no-prices_today fallback paths
+        # that produce NORMAL silently).
+        self._last_classifier_path: str = "unknown"
 
     def detect_provider(self) -> Optional[str]:
         """Auto-detect available price integration."""
@@ -425,12 +479,91 @@ class DynamicTariffProvider(TariffProvider):
                 if prices:
                     break  # Found data in this source, stop
 
-        return sorted(prices, key=lambda p: p.timestamp)
+        prices = sorted(prices, key=lambda p: p.timestamp)
+
+        # #359: write back to the cache so ``_get_percentile_breaks``
+        # can compute today's distribution. The classification done
+        # in-line above used the cold cache (static fallback); now
+        # reclassify with percentile breaks if there's enough data.
+        # Single pass — cheap relative to the dozens of HA-state
+        # reads above. Date guard inside ``_get_percentile_breaks``
+        # keeps the calculation to once per day.
+        self._prices_cache = prices
+        self._percentile_breaks = None  # invalidate to force recompute
+        self._percentile_breaks_for = None
+        if self.classification_mode == "percentile" and prices:
+            for p in prices:
+                p.level = self._classify_price(p.price)
+
+        return prices
 
     def _classify_price(self, price: float) -> PriceLevel:
-        """Classify a price into levels."""
+        """Classify a price into levels.
+
+        v1.7.0 / #359: when ``classification_mode == "percentile"``,
+        bucket relative to today's price distribution:
+
+        - ``very_cheap`` — bottom 10%
+        - ``cheap``      — bottom 25%
+        - ``normal``     — 25 – 75%
+        - ``expensive``  — top 25%
+        - ``very_expensive`` — top 90%+
+
+        That works on Tibber / Octopus / Amber / Nordpool where the
+        absolute price range varies daily and the static 0.15 / 0.35
+        CHF cutoffs flag everything as ``normal`` (UK summer) or
+        ``very_expensive`` (winter peaks).
+
+        ``static`` preserves the legacy fixed-cutoff behaviour for
+        users with flat tariffs or unpredictable spike markets.
+
+        #359 follow-up (beta.16): when the user picked ``percentile``
+        but the breaks can't be computed (cold start, < 4 points, flat
+        day), DO NOT silently fall through to the static cutoffs.
+        Those thresholds are calibrated for CHF (0.15 / 0.35) and
+        silently mis-classify any other currency — RienduPre's
+        Tibber NL install reported €0.30 as ``normal`` for this exact
+        reason. Return ``NORMAL`` instead: a neutral default that
+        doesn't trigger cheap-window or expensive-window automation
+        until we actually have data to classify against.
+        """
         if price < 0:
+            self._last_classifier_path = "negative_price_shortcircuit"
             return PriceLevel.NEGATIVE
+
+        if self.classification_mode == "percentile":
+            breaks = self._get_percentile_breaks()
+            if breaks is not None:
+                # _get_percentile_breaks sets the active-path string in
+                # the happy case; just return the bucketed level.
+                if price <= breaks["p10"]:
+                    return PriceLevel.VERY_CHEAP
+                if price <= breaks["p25"]:
+                    return PriceLevel.CHEAP
+                if price >= breaks["p90"]:
+                    return PriceLevel.VERY_EXPENSIVE
+                if price >= breaks["p75"]:
+                    return PriceLevel.EXPENSIVE
+                return PriceLevel.NORMAL
+            # #359: percentile requested but no breaks available.
+            # Return NORMAL as a safe default. NEVER apply the
+            # CHF-calibrated static cutoffs here — they're wrong for
+            # any non-CHF tariff and silently produce confusing
+            # classifications that look like a SEM bug.
+            # _last_classifier_path already set by _get_percentile_breaks
+            # to one of the fallback_* values that explain why.
+            _LOGGER.debug(
+                "tariff/#359: percentile mode but no breaks (%s) — "
+                "returning NORMAL (safe default).",
+                self._last_classifier_path,
+            )
+            return PriceLevel.NORMAL
+
+        # Static thresholds (legacy + explicit opt-in).
+        # Only reached when classification_mode == "static" — the user
+        # has explicitly chosen fixed cutoffs because their tariff is
+        # flat or their CHF/EUR scale matches the defaults.
+        self._last_classifier_path = "static_fixed_cutoffs"
         if price < self.cheap_threshold * 0.5:
             return PriceLevel.VERY_CHEAP
         if price < self.cheap_threshold:
@@ -440,6 +573,108 @@ class DynamicTariffProvider(TariffProvider):
         if price > self.expensive_threshold:
             return PriceLevel.EXPENSIVE
         return PriceLevel.NORMAL
+
+    def _get_percentile_breaks(self) -> Optional[Dict[str, float]]:
+        """Compute today's percentile breakpoints from the cached
+        price array. Returns ``None`` when there's not enough data
+        (< 4 points) for percentiles to be meaningful.
+
+        Cached per calendar date so the calculation runs at most once
+        per day (the underlying ``_prices_cache`` is updated by the
+        usual cache-invalidation path).
+
+        Side-effect: sets ``self._last_classifier_path`` to a string
+        explaining which path was taken so users see WHY their
+        classification ended up where it did (#359 follow-up — exposed
+        via the ``tariff_classifier_path`` sensor attribute).
+        """
+        if not self._prices_cache:
+            self._last_classifier_path = "percentile_fallback_cache_empty"
+            return None
+
+        today = dt_util.now().date()
+        today_key = today.isoformat()
+        if (
+            self._percentile_breaks is not None
+            and self._percentile_breaks_for == today_key
+        ):
+            return self._percentile_breaks
+
+        # #359 follow-up: convert each timestamp into HA's local tz before
+        # taking .date(). Providers vary on what tz they emit — Tibber is
+        # local, Nordpool is often UTC — and a naked .date() on a UTC
+        # timestamp returns the UTC date, which doesn't match the local
+        # ``today`` and silently empties the array → fall-through to the
+        # static thresholds → €0.30 reported as ``normal`` even on a day
+        # where it's the peak (RienduPre, NL, #359 "Not solved").
+        today_prices = sorted(
+            p.price for p in self._prices_cache
+            if _local_date(p.timestamp) == today
+            and p.price is not None
+        )
+        if len(today_prices) < 4:
+            self._last_classifier_path = (
+                f"percentile_fallback_too_few_prices(n={len(today_prices)})"
+            )
+            _LOGGER.debug(
+                "tariff/#359: percentile fallback — today's price array "
+                "has %d / %d points (need ≥4); using static thresholds",
+                len(today_prices), len(self._prices_cache),
+            )
+            return None
+
+        def _quantile(sorted_values: List[float], q: float) -> float:
+            # Plain nearest-rank quantile — good enough for 24/48-point
+            # arrays; avoids a numpy dependency.
+            if not sorted_values:
+                return 0.0
+            idx = max(
+                0,
+                min(
+                    len(sorted_values) - 1,
+                    int(round(q * (len(sorted_values) - 1))),
+                ),
+            )
+            return sorted_values[idx]
+
+        breaks = {
+            "p10": _quantile(today_prices, 0.10),
+            "p25": _quantile(today_prices, 0.25),
+            "p75": _quantile(today_prices, 0.75),
+            "p90": _quantile(today_prices, 0.90),
+        }
+        # Degenerate distribution guard (M1 reviewer note): a flat or
+        # near-flat day collapses every break to the same value, which
+        # would classify every price as VERY_CHEAP and over-trigger
+        # any cheap-window logic downstream. Threshold = 1 ct/kWh —
+        # narrower than that is functionally flat, so fall through to
+        # the static path.
+        if (breaks["p90"] - breaks["p10"]) < 0.01:
+            self._last_classifier_path = (
+                f"percentile_fallback_flat_day("
+                f"spread={breaks['p90'] - breaks['p10']:.4f})"
+            )
+            _LOGGER.debug(
+                "tariff/#359: degenerate distribution — p90-p10=%.4f < 0.01 "
+                "(%d today points); using static thresholds",
+                breaks["p90"] - breaks["p10"], len(today_prices),
+            )
+            return None
+        self._last_classifier_path = (
+            f"percentile_active("
+            f"p10={breaks['p10']:.4f},p25={breaks['p25']:.4f},"
+            f"p75={breaks['p75']:.4f},p90={breaks['p90']:.4f},"
+            f"n={len(today_prices)})"
+        )
+        _LOGGER.debug(
+            "tariff/#359: percentile breaks for %s — p10=%.4f p25=%.4f "
+            "p75=%.4f p90=%.4f (%d today points)",
+            today_key, breaks["p10"], breaks["p25"], breaks["p75"],
+            breaks["p90"], len(today_prices),
+        )
+        self._percentile_breaks = breaks
+        self._percentile_breaks_for = today_key
+        return breaks
 
     def get_current_import_rate(self) -> float:
         return self._read_current_price()
@@ -478,18 +713,30 @@ class DynamicTariffProvider(TariffProvider):
         current_price = self._read_current_price()
         prices = self._read_prices_list()
 
+        # ``_classify_price`` (via ``_get_percentile_breaks``) sets
+        # ``self._last_classifier_path`` as a side-effect describing
+        # which path produced the level — surface it on TariffData so
+        # the sensor attribute documents the path.
+        price_level = self._classify_price(current_price)
         data = TariffData(
             current_import_rate=current_price,
             current_export_rate=self.get_current_export_rate(),
-            price_level=self._classify_price(current_price),
+            price_level=price_level,
             currency=self.currency,
             provider=self._provider_name,
             is_dynamic=True,
+            classifier_path=self._last_classifier_path,
             upcoming_prices=prices[:24],  # Next 24 hours
         )
 
         if prices:
-            today_prices = [p.price for p in prices if p.timestamp.date() == dt_util.now().date()]
+            # #359: use the timestamp's local-tz date — see _get_percentile_breaks
+            # for the same UTC-vs-local pitfall.
+            today = dt_util.now().date()
+            today_prices = [
+                p.price for p in prices
+                if _local_date(p.timestamp) == today
+            ]
             if today_prices:
                 data.today_min_price = min(today_prices)
                 data.today_max_price = max(today_prices)

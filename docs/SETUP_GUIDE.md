@@ -146,6 +146,7 @@ The config flow has three steps. You can change any setting later via the
 
 ### Step 1: Energy Dashboard Detection
 
+![Step 1 — Energy Dashboard detection](screenshots/setup-flow/01-step1-energy-dashboard.png)
 
 SEM scans your Energy Dashboard and auto-detects all configured sensors:
 solar production, grid import/export, battery charge/discharge, and EV charger.
@@ -160,10 +161,18 @@ solar production, grid import/export, battery charge/discharge, and EV charger.
 
 ### Step 2: EV Charger (optional)
 
+![Step 2 — EV Charger (slim 5-field form)](screenshots/setup-flow/02-step2-ev-charger-slim.png)
 
 If you have an EV charger, this step configures how SEM controls it. SEM
 auto-detects your charger from the HA entity registry — review the pre-filled
 values and correct anything that looks wrong.
+
+Step 2 is intentionally minimal — only the 3 required sensors plus the one
+control-path field your charger needs (number entity OR service call). All
+per-charger tunables (daily target kWh, target SOC, surplus priority,
+night-charging current, battery capacity) live in **Configure** after install,
+with sensible defaults until you change them. See
+[Per-charger tunables](#per-charger-tunables) below.
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -188,6 +197,7 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
 ### Step 3: Hardware and Dashboard Settings
 
+![Step 3 — Hardware and dashboard](screenshots/setup-flow/03-step3-hardware.png)
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -201,6 +211,21 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
 Click **Submit**. SEM starts running immediately. The SEM dashboard appears
 in your sidebar within a few seconds if dashboard generation is enabled.
+
+### First-run welcome notification
+
+From v1.7.0-beta.15 onward, the very first install fires a one-shot
+**persistent notification** with a deep link to the SEM dashboard and a
+three-item starter checklist:
+
+1. Confirm solar is reporting on the Energy tab
+2. Pick an EV charge mode on the EV tab
+3. Set your battery reserve on the Battery tab
+
+The notification only fires once per install (gated by
+`_welcome_notification_fired` in the entry options), survives HA restarts, and
+is skipped on `observer_mode` test installs. Dismiss it from the notifications
+panel any time.
 
 ---
 
@@ -292,6 +317,7 @@ The options flow is organized into these pages:
 | Assist floor SOC (%) | 60% | Once battery assist starts, it stays on until SOC drops here. This prevents rapid on/off cycling. Raise it if the battery cycles too often. |
 | Battery capacity (kWh) | 10 kWh | Your battery's usable capacity. Used for SOC target calculations and cost attribution. |
 | Max assist power (W) | 4500 W | Maximum battery discharge power allowed for EV charging. Set it to the lower of your battery's rated discharge power and your charger's maximum input. |
+| Invert grid sign | Off | Manual override for grid power polarity. SEM expects `negative = import, positive = export`. Enphase and a handful of other inverters report the opposite. Turn this on **only** if your "Daily Grid Import" stays at 0 while you are clearly drawing from the grid, or if the system diagram shows export when you are importing — see #352. When this is on the auto-detect path is bypassed. |
 
 ### Tariff and Pricing settings
 
@@ -313,6 +339,31 @@ The options flow is organized into these pages:
   automatically.
 - **Calendar**: You define cheap/expensive periods via a HA calendar entity.
   Useful for fixed time-of-use tariffs without a dynamic price API.
+
+#### Price classification — how the dynamic-tariff "cheap" / "expensive" labels are computed
+
+When tariff mode is **Dynamic**, SEM bucketises every price reading into one of
+**very_cheap / cheap / normal / expensive / very_expensive / negative**. Two modes:
+
+- **Percentile** (default since v1.7.0-beta.3): buckets are computed from
+  today's 24-hour price array. Bottom 10% = `very_cheap`, bottom 25% = `cheap`,
+  25–75% = `normal`, top 25% = `expensive`, top 10% = `very_expensive`. Works
+  on any currency / any market — the breaks adapt to your tariff's actual range.
+- **Static**: bucketises against fixed cutoffs (`< 0.075 = very_cheap`,
+  `< 0.15 = cheap`, `> 0.35 = expensive`, `> 0.525 = very_expensive`).
+  Calibrated for CHF — change to your currency only if you've explicitly opted
+  in to this mode in Settings → Configure → Tariff settings.
+
+**Cold start / sparse data (#359)**: in percentile mode, if SEM has fewer than
+4 price points for today (cold start before your dynamic-tariff integration
+populates, or a perfectly flat day), the classifier returns `normal` as a safe
+default. **It will not silently apply the static cutoffs**, which would
+mis-classify any non-CHF tariff (RienduPre's Tibber NL install was reporting
+€0.30 as `normal` for hours after restart before this was fixed in
+v1.7.0-beta.16).
+
+Switch modes from **Settings → Devices & Services → Solar Energy Management
+→ Configure → Tariff settings → "Price classification mode"**.
 
 ### Notification settings
 

@@ -52,8 +52,8 @@ def _make_hass(sensor_map: dict = None) -> Mock:
     return hass
 
 
-def _make_time_manager(hass) -> TimeManager:
-    return TimeManager(hass)
+def _make_time_manager(mock_hass) -> TimeManager:
+    return TimeManager(mock_hass)
 
 
 # ===========================================================================
@@ -188,12 +188,12 @@ class TestLayer3HardwareReconciliation:
     """EnergyCalculator reconciles integrated EV energy with KEBA counter."""
 
     @pytest.fixture
-    def hass(self):
+    def mock_hass(self):
         return _make_hass()
 
     @pytest.fixture
-    def time_manager(self, hass):
-        return _make_time_manager(hass)
+    def time_manager(self, mock_hass):
+        return _make_time_manager(mock_hass)
 
     @pytest.fixture
     def config(self):
@@ -212,7 +212,7 @@ class TestLayer3HardwareReconciliation:
         assert energy.daily_ev == 0.0
 
     @pytest.mark.skip(reason="Reconciliation disabled - midnight/sunrise date mismatch")
-    def test_reconciliation_adopts_higher_hardware(self, calc, hass):
+    def test_reconciliation_adopts_higher_hardware(self, calc, mock_hass):
         """Hardware counter 15.5 kWh > integrated 0.0 → adopt 15.5."""
         sensors = {"sensor.keba_p30_charging_daily": (15.5, {})}
         hw_hass = _make_hass(sensors)
@@ -226,7 +226,7 @@ class TestLayer3HardwareReconciliation:
 
         assert energy.daily_ev == 15.5
 
-    def test_reconciliation_ignores_small_delta(self, calc, hass):
+    def test_reconciliation_ignores_small_delta(self, calc, mock_hass):
         """Hardware 0.3 kWh > integrated 0.0 → below threshold, don't adopt."""
         sensors = {"sensor.keba_p30_charging_daily": (0.3, {})}
         hw_hass = _make_hass(sensors)

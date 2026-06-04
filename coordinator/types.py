@@ -13,8 +13,13 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import TYPE_CHECKING, Dict, Any, List, Optional
 from enum import Enum
+
+if TYPE_CHECKING:  # pragma: no cover — type-only
+    from .charger_types import (
+        BatteryPower, BatteryRuntime, InverterPower, InverterRuntime,
+    )
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -88,7 +93,22 @@ class FleetEvPower(float):
 
 @dataclass
 class PowerReadings:
-    """Current power readings from sensors."""
+    """Current power readings from sensors.
+
+    v1.7.0 arch/multi-device-primary: the per-device dicts
+    (``inverters``, ``batteries``, ``ev_power_per_charger``,
+    ``solar_power_per_string``) are the PRIMARY representation.
+    The legacy fleet float fields (``solar_power``, ``battery_power``,
+    ``ev_power``) are kept as cached sums for backward compat with
+    downstream consumers; ``sensor_reader`` populates both. The
+    ``fleet_solar_w`` / ``fleet_battery_w`` / ``fleet_ev_w``
+    properties are the sanctioned way to read the fleet sum going
+    forward — they recompute from the dict and so cannot drift.
+
+    Pin: ``solar_power == fleet_solar_w`` and
+    ``battery_power == fleet_battery_w`` whenever the dicts are
+    populated. Enforced by the Step 8 invariant test suite.
+    """
     solar_power: float = 0.0
     grid_power: float = 0.0  # Negative = import, Positive = export
     battery_power: float = 0.0  # Positive = charge, Negative = discharge
@@ -110,6 +130,43 @@ class PowerReadings:
     # empty (see ``flow_calculator.calculate_power_flows``). Drives the
     # per-charger flow attribution that closes the #316 family.
     ev_power_per_charger: "Dict[str, float]" = field(default_factory=dict)
+
+    # Per-PV-string solar power (v1.7.0 / #312). Populated by
+    # ``sensor_reader`` when the entity registry auto-discovery (see
+    # ``hardware_detection.discover_pv_strings_from_registry``) found
+    # ≥ 2 string sensors. Each key is a stable slot label (``"pv1"``,
+    # ``"pv2"``, …) and the value is that string's instantaneous power
+    # in watts. The structural mirror of ``ev_power_per_charger`` —
+    # strings are SOURCES so the sum invariant is
+    # ``sum(solar_power_per_string.values()) ≈ solar_power`` (within
+    # rounding); chargers are DESTINATIONS so the per-charger sum
+    # equals ``ev_power``. Empty dict in single-string / single-
+    # inverter setups; downstream readers must fall back to
+    # ``solar_power``.
+    solar_power_per_string: "Dict[str, float]" = field(default_factory=dict)
+
+    # v1.7.0 arch/multi-inverter-battery-primary.
+    #
+    # Per-inverter and per-battery dicts are now the PRIMARY
+    # representation of multi-device fleets. ``sensor_reader``
+    # populates them whenever the config lists more than one
+    # source (``solar_power_list`` length > 1 or
+    # ``battery_power_list`` length > 1). The fleet ``solar_power``
+    # and ``battery_power`` fields above stay as cached sums for
+    # backward compat — every downstream consumer that adds up
+    # ``solar_power`` continues to work — but new code should
+    # read the dicts via ``fleet_solar_w`` / ``fleet_battery_w``
+    # (the ``@property`` accessors below) so a future refactor
+    # can swap the cached sums to computed-on-read without a
+    # consumer churn.
+    #
+    # Sum invariants pinned by ``tests/test_step8_invariants.py``:
+    #   ``solar_power == fleet_solar_w`` (cached == computed)
+    #   ``battery_power == fleet_battery_w``
+    # The invariant doesn't fire on single-device setups (dict
+    # empty) — they keep the fleet field semantics unchanged.
+    inverters: "Dict[str, InverterPower]" = field(default_factory=dict)
+    batteries: "Dict[str, BatteryPower]" = field(default_factory=dict)
 
     # Derived values
     grid_import_power: float = 0.0
@@ -147,6 +204,47 @@ class PowerReadings:
         energy_in = self.solar_power + self.grid_import_power + self.battery_discharge_power
         energy_out = self.ev_power + self.grid_export_power + self.battery_charge_power
         self.home_consumption_power = max(0, energy_in - energy_out)
+
+    # ─── arch/multi-inverter-battery-primary @property views ───
+    #
+    # ``fleet_*_w`` accessors compute from the per-device dict —
+    # the sanctioned way to obtain a fleet sum going forward.
+    # New code reads these; legacy ``solar_power``/``battery_power``
+    # consumers continue to work via the cached field.
+
+    @property
+    def fleet_solar_w(self) -> float:
+        """Fleet-aggregated solar AC power (W). Computed from the
+        per-inverter dict. Empty dict (single-inverter or pre-v1.7.0
+        snapshot) falls back to the cached ``solar_power``."""
+        if not self.inverters:
+            return self.solar_power
+        return sum(i.power_w for i in self.inverters.values())
+
+    @property
+    def fleet_battery_w(self) -> float:
+        """Fleet-aggregated battery power (W; + = charge,
+        − = discharge). Computed from the per-battery dict."""
+        if not self.batteries:
+            return self.battery_power
+        return sum(b.power_w for b in self.batteries.values())
+
+    @property
+    def fleet_battery_soc(self) -> float:
+        """Capacity-weighted fleet SOC (0-100). Falls back to the
+        single ``battery_soc`` field when the per-battery dict is
+        empty or no unit reports its capacity."""
+        if not self.batteries:
+            return self.battery_soc
+        total_capacity = sum(b.capacity_kwh for b in self.batteries.values())
+        if total_capacity <= 0:
+            # No capacity → simple arithmetic mean (better than 0)
+            socs = [b.soc_pct for b in self.batteries.values()]
+            return sum(socs) / len(socs) if socs else self.battery_soc
+        weighted_sum = sum(
+            b.soc_pct * b.capacity_kwh for b in self.batteries.values()
+        )
+        return weighted_sum / total_capacity
 
 
 @dataclass
@@ -195,10 +293,36 @@ class PowerFlows:
     # that only know about the fleet-level fields.
     per_charger: "Dict[str, ChargerFlows]" = field(default_factory=dict)
 
+    # Per-PV-string raw power carrier (v1.7.0 / #312). NOT a flow —
+    # strings don't have destination attribution; this just carries
+    # the per-string power from ``PowerReadings`` to
+    # ``integrate_energy_flows`` without expanding the integrator's
+    # signature. Populated by ``calculate_power_flows`` when the
+    # readings include ``solar_power_per_string``. Sum invariant
+    # holds at the read level (sum ≈ ``solar_power``); the integrator
+    # owns the persistence of per-string kWh.
+    solar_per_string: "Dict[str, float]" = field(default_factory=dict)
+
 
 @dataclass
 class EnergyTotals:
-    """Daily/monthly energy totals."""
+    """Daily/monthly energy totals.
+
+    v1.7.0 arch follow-up: ``daily_solar`` / ``daily_battery_charge``
+    / ``daily_battery_discharge`` are populated as plain fields by
+    sensor_reader for single-device installs. Multi-device installs
+    populate ``per_inverter`` / ``per_battery`` dicts and the
+    legacy fields stay at 0 — the ``daily_solar_view`` /
+    ``daily_battery_charge_view`` / ``daily_battery_discharge_view``
+    @property accessors compute from the dicts and fall back to the
+    legacy field when the dict is empty.
+
+    The properties don't shadow the fields (Python dataclass
+    semantics) — consumers must read ``.daily_solar_view`` etc.
+    to get the per-device-aware value. ``to_dict()`` already emits
+    the legacy fields; the view properties become the canonical
+    sensor source once multi-device installs are common.
+    """
     # Daily totals (kWh)
     daily_solar: float = 0.0
     daily_home: float = 0.0
@@ -224,6 +348,51 @@ class EnergyTotals:
     yearly_battery_charge: float = 0.0
     yearly_battery_discharge: float = 0.0
     yearly_ev: float = 0.0
+
+    # v1.7.0 arch follow-up — per-device runtime dicts.
+    # Populated by sensor_reader on multi-device installs. Empty on
+    # single-device installs → the view properties fall back to the
+    # legacy fields. See ``coordinator/charger_types.py`` for the
+    # runtime dataclass shapes.
+    per_inverter: "Dict[str, InverterRuntime]" = field(default_factory=dict)
+    per_battery: "Dict[str, BatteryRuntime]" = field(default_factory=dict)
+
+    @property
+    def daily_solar_view(self) -> float:
+        """Per-device-aware daily solar kWh. Falls back to
+        ``daily_solar`` when no per-inverter data."""
+        if not self.per_inverter:
+            return self.daily_solar
+        return sum(i.daily_kwh for i in self.per_inverter.values())
+
+    @property
+    def daily_battery_charge_view(self) -> float:
+        if not self.per_battery:
+            return self.daily_battery_charge
+        return sum(b.daily_charge_kwh for b in self.per_battery.values())
+
+    @property
+    def daily_battery_discharge_view(self) -> float:
+        if not self.per_battery:
+            return self.daily_battery_discharge
+        return sum(b.daily_discharge_kwh for b in self.per_battery.values())
+
+
+@dataclass
+class StringEnergy:
+    """Per-PV-string daily energy total (v1.7.0 / #312).
+
+    Mirror of :class:`ChargerEnergyFlows` for the source side. Each
+    PV string accumulates its own daily kWh, integrated over time by
+    ``FlowCalculator.integrate_energy_flows`` from
+    ``PowerReadings.solar_power_per_string``. Sum invariant:
+    ``sum(per_string.values()) ≈ energy_flows.solar_to_*`` total
+    (the per-string aggregate equals the fleet solar contribution).
+
+    Empty dict in single-string setups; the fleet
+    ``EnergyTotals.daily_solar`` is authoritative there.
+    """
+    energy_kwh: float = 0.0
 
 
 @dataclass
@@ -271,19 +440,41 @@ class EnergyFlows:
     # within rounding tolerance.
     per_charger: "Dict[str, ChargerEnergyFlows]" = field(default_factory=dict)
 
+    # Per-PV-string daily energy contribution (v1.7.0 / #312).
+    # Integrated by ``FlowCalculator.integrate_energy_flows`` from
+    # ``PowerReadings.solar_power_per_string`` over time. Empty dict
+    # in single-string setups. Sum invariant within rounding:
+    # ``sum(s.energy_kwh) ≈ aggregate solar integration this day``.
+    per_string: "Dict[str, StringEnergy]" = field(default_factory=dict)
+
 
 @dataclass
 class CostData:
-    """Cost and savings calculations."""
+    """Cost and savings calculations.
+
+    Savings split (#351 M2):
+
+    * ``daily_savings`` — SOLAR self-consumption savings only
+      (``solar_to_home`` + ``solar_to_ev``).
+    * ``daily_battery_savings`` — battery-discharge savings (any
+      destination: ``battery_to_home`` + ``battery_to_ev``).
+    * ``daily_total_savings`` — sum of the two; the headline number
+      users should compare against import costs. Pre-#351 M2 the
+      dashboard surfaced ``daily_savings`` as the headline which
+      understated savings by the ``battery_to_ev`` portion on
+      battery-assist days.
+    """
     daily_costs: float = 0.0
     daily_savings: float = 0.0
     daily_export_revenue: float = 0.0
     daily_net_cost: float = 0.0
     daily_battery_savings: float = 0.0
+    daily_total_savings: float = 0.0   # #351 M2 — solar + battery savings
 
     monthly_costs: float = 0.0
     monthly_savings: float = 0.0
     monthly_battery_savings: float = 0.0
+    monthly_total_savings: float = 0.0  # #351 M2
     monthly_export_revenue: float = 0.0
     monthly_net_cost: float = 0.0
 
@@ -291,6 +482,7 @@ class CostData:
     yearly_costs: float = 0.0
     yearly_savings: float = 0.0
     yearly_battery_savings: float = 0.0
+    yearly_total_savings: float = 0.0  # #351 M2
     yearly_export_revenue: float = 0.0
     yearly_net_cost: float = 0.0
 
@@ -392,6 +584,11 @@ class TariffSensorData:
     tariff_today_max_price: Optional[float] = None
     tariff_today_avg_price: Optional[float] = None
     tariff_next_cheap_start: Optional[str] = None
+    # #359: diagnostic — which classifier branch produced ``tariff_price_level``.
+    # Exposed as an attribute on ``sensor.sem_tariff_price_level`` so users in
+    # cold-start / unit-mismatch / derivative-entity setups can self-diagnose
+    # why they don't see ``cheap``/``expensive`` even with a dynamic tariff.
+    tariff_classifier_path: str = "unknown"
 
 
 @dataclass
@@ -666,6 +863,19 @@ class SEMData:
                 for cid, cef in (self.energy_flows.per_charger or {}).items()
             },
 
+            # Per-PV-string surface (v1.7.0 / #312). Emit only when
+            # multi-string discovery populated these. Single-string
+            # / single-inverter setups skip the keys and the fleet
+            # ``sensor.sem_solar_power`` stays authoritative.
+            **{
+                f"pv_string_{sid}_power": w
+                for sid, w in (self.power.solar_power_per_string or {}).items()
+            },
+            **{
+                f"pv_string_{sid}_daily_energy": se.energy_kwh
+                for sid, se in (self.energy_flows.per_string or {}).items()
+            },
+
             # Costs
             "daily_costs": self.costs.daily_costs,
             "daily_savings": self.costs.daily_savings,
@@ -790,6 +1000,7 @@ class SEMData:
             "tariff_today_max_price": self.tariff.tariff_today_max_price,
             "tariff_today_avg_price": self.tariff.tariff_today_avg_price,
             "tariff_next_cheap_start": self.tariff.tariff_next_cheap_start,
+            "tariff_classifier_path": self.tariff.tariff_classifier_path,
 
             # Heat pump (Phase 2)
             "heat_pump_mode": self.heat_pump.heat_pump_mode,
@@ -856,12 +1067,47 @@ class SEMData:
         except Exception as e:
             _LOGGER.warning("Per-charger to_dict failed: %s", e)
 
+        # Per-battery flat-dict unpack (Phase A of #TBD fleet/per-battery
+        # card mirror). Mirrors the per-charger pattern above. Powered
+        # by ``PowerReadings.batteries`` (populated by sensor_reader
+        # only when ``battery_power_list`` length > 1 — single-battery
+        # installs leave it empty and produce zero per-battery keys,
+        # preserving today's fleet-sensor behaviour). Status is
+        # derived from the sign of power_w (positive = charging,
+        # negative = discharging, near-zero = idle); the
+        # ``_BATTERY_STATUS_DEADBAND_W`` mirrors the session-tracking
+        # dead-band so the per-battery status doesn't toggle on
+        # inverter rebalance noise.
+        try:
+            _STATUS_DEADBAND_W = 50.0
+            for bid, bp in self.power.batteries.items():
+                if bp.power_w > _STATUS_DEADBAND_W:
+                    status = "charging"
+                elif bp.power_w < -_STATUS_DEADBAND_W:
+                    status = "discharging"
+                else:
+                    status = "idle"
+                data.update({
+                    f"battery_{bid}_power": round(bp.power_w, 1),
+                    f"battery_{bid}_soc": round(bp.soc_pct, 1),
+                    f"battery_{bid}_status": status,
+                    f"battery_{bid}_capacity_kwh": round(bp.capacity_kwh, 1),
+                })
+        except Exception as e:
+            _LOGGER.warning("Per-battery to_dict failed: %s", e)
+
         # Per-charger intelligence from taper detectors (#193)
         try:
             per_charger_intel = self.per_charger_intelligence
             for cid, intel in per_charger_intel.items():
                 data.update({
                     f"charger_{cid}_estimated_soc": intel.get("estimated_soc", 0),
+                    # #383: real vehicle SOC reading per charger (None
+                    # when no per-charger ``vehicle_soc_entity`` is
+                    # configured). The card prefers this over the
+                    # global ``sensor.sem_vehicle_soc`` which gets
+                    # clobbered across the per-charger update loop.
+                    f"charger_{cid}_vehicle_soc": intel.get("vehicle_soc"),
                     f"charger_{cid}_nights_until_charge": intel.get("nights_until_charge", 0),
                     f"charger_{cid}_charge_needed": intel.get("charge_needed", False),
                     f"charger_{cid}_taper_minutes_to_full": intel.get("minutes_to_full"),

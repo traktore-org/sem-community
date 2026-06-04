@@ -39,7 +39,7 @@ from custom_components.solar_energy_management.coordinator.battery_charge_schedu
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def hass():
+def mock_hass():
     """Mocked Home Assistant instance."""
     mock = MagicMock()
     mock.config = MagicMock()
@@ -132,34 +132,34 @@ def mock_tariff_provider():
 class TestAdapterFactory:
     """Test create_charge_adapter factory."""
 
-    def test_explicit_huawei(self, hass, huawei_config):
-        adapter = create_charge_adapter(hass, huawei_config)
+    def test_explicit_huawei(self, mock_hass, huawei_config):
+        adapter = create_charge_adapter(mock_hass, huawei_config)
         assert isinstance(adapter, HuaweiChargeAdapter)
 
-    def test_explicit_goodwe(self, hass, goodwe_config):
-        adapter = create_charge_adapter(hass, goodwe_config)
+    def test_explicit_goodwe(self, mock_hass, goodwe_config):
+        adapter = create_charge_adapter(mock_hass, goodwe_config)
         assert isinstance(adapter, GoodWeChargeAdapter)
 
-    def test_explicit_generic(self, hass, generic_config):
-        adapter = create_charge_adapter(hass, generic_config)
+    def test_explicit_generic(self, mock_hass, generic_config):
+        adapter = create_charge_adapter(mock_hass, generic_config)
         assert isinstance(adapter, GenericChargeAdapter)
 
-    def test_auto_detect_huawei(self, hass):
-        hass.config.components = {"huawei_solar", "homeassistant"}
+    def test_auto_detect_huawei(self, mock_hass):
+        mock_hass.config.components = {"huawei_solar", "homeassistant"}
         config = {"battery_charge_platform": "auto", "inverter_device_id": "abc"}
-        adapter = create_charge_adapter(hass, config)
+        adapter = create_charge_adapter(mock_hass, config)
         assert isinstance(adapter, HuaweiChargeAdapter)
 
-    def test_auto_detect_goodwe(self, hass):
-        hass.config.components = {"goodwe", "homeassistant"}
+    def test_auto_detect_goodwe(self, mock_hass):
+        mock_hass.config.components = {"goodwe", "homeassistant"}
         config = {"battery_charge_platform": "auto"}
-        adapter = create_charge_adapter(hass, config)
+        adapter = create_charge_adapter(mock_hass, config)
         assert isinstance(adapter, GoodWeChargeAdapter)
 
-    def test_auto_detect_fallback_generic(self, hass):
-        hass.config.components = {"homeassistant"}
+    def test_auto_detect_fallback_generic(self, mock_hass):
+        mock_hass.config.components = {"homeassistant"}
         config = {"battery_charge_platform": "auto"}
-        adapter = create_charge_adapter(hass, config)
+        adapter = create_charge_adapter(mock_hass, config)
         assert isinstance(adapter, GenericChargeAdapter)
 
 
@@ -171,23 +171,23 @@ class TestHuaweiAdapter:
     """Test HuaweiChargeAdapter."""
 
     @pytest.mark.asyncio
-    async def test_start_forced_charge_success(self, hass, huawei_config):
-        adapter = HuaweiChargeAdapter(hass, huawei_config)
+    async def test_start_forced_charge_success(self, mock_hass, huawei_config):
+        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
         cmd = ChargeCommand(target_soc=80.0, max_power_w=3000, duration_minutes=240)
 
         status = await adapter.start_forced_charge(cmd)
 
         assert status.status == ChargeCommandStatus.CHARGING
         assert adapter.is_active
-        hass.services.async_call.assert_called_once_with(
+        mock_hass.services.async_call.assert_called_once_with(
             "huawei_solar",
             "forcible_charge_soc",
             {"device_id": "abc123", "target_soc": 80, "power": 3000, "duration": 240},
         )
 
     @pytest.mark.asyncio
-    async def test_start_forced_charge_no_device_id(self, hass):
-        adapter = HuaweiChargeAdapter(hass, {"battery_charge_platform": "huawei"})
+    async def test_start_forced_charge_no_device_id(self, mock_hass):
+        adapter = HuaweiChargeAdapter(mock_hass, {"battery_charge_platform": "huawei"})
         cmd = ChargeCommand(target_soc=80.0, max_power_w=3000)
 
         status = await adapter.start_forced_charge(cmd)
@@ -196,9 +196,9 @@ class TestHuaweiAdapter:
         assert "No inverter_device_id" in status.message
 
     @pytest.mark.asyncio
-    async def test_start_forced_charge_service_error(self, hass, huawei_config):
-        hass.services.async_call = AsyncMock(side_effect=Exception("Service unavailable"))
-        adapter = HuaweiChargeAdapter(hass, huawei_config)
+    async def test_start_forced_charge_service_error(self, mock_hass, huawei_config):
+        mock_hass.services.async_call = AsyncMock(side_effect=Exception("Service unavailable"))
+        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
         cmd = ChargeCommand(target_soc=80.0, max_power_w=3000)
 
         status = await adapter.start_forced_charge(cmd)
@@ -207,27 +207,27 @@ class TestHuaweiAdapter:
         assert not adapter.is_active
 
     @pytest.mark.asyncio
-    async def test_stop_forced_charge(self, hass, huawei_config):
-        adapter = HuaweiChargeAdapter(hass, huawei_config)
+    async def test_stop_forced_charge(self, mock_hass, huawei_config):
+        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
         adapter._active = True
 
         status = await adapter.stop_forced_charge()
 
         assert status.status == ChargeCommandStatus.IDLE
         assert not adapter.is_active
-        hass.services.async_call.assert_called_once_with(
+        mock_hass.services.async_call.assert_called_once_with(
             "huawei_solar",
             "stop_forcible_charge",
             {"device_id": "abc123"},
         )
 
     @pytest.mark.asyncio
-    async def test_get_status_target_reached(self, hass, huawei_config):
+    async def test_get_status_target_reached(self, mock_hass, huawei_config):
         soc_state = MagicMock()
         soc_state.state = "85"
-        hass.states.get = MagicMock(return_value=soc_state)
+        mock_hass.states.get = MagicMock(return_value=soc_state)
 
-        adapter = HuaweiChargeAdapter(hass, huawei_config)
+        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
         adapter._active = True
         adapter._target_soc = 80.0
 
@@ -237,12 +237,12 @@ class TestHuaweiAdapter:
         assert status.current_soc == 85.0
 
     @pytest.mark.asyncio
-    async def test_get_status_still_charging(self, hass, huawei_config):
+    async def test_get_status_still_charging(self, mock_hass, huawei_config):
         soc_state = MagicMock()
         soc_state.state = "60"
-        hass.states.get = MagicMock(return_value=soc_state)
+        mock_hass.states.get = MagicMock(return_value=soc_state)
 
-        adapter = HuaweiChargeAdapter(hass, huawei_config)
+        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
         adapter._active = True
         adapter._target_soc = 80.0
 
@@ -251,8 +251,8 @@ class TestHuaweiAdapter:
         assert status.status == ChargeCommandStatus.CHARGING
         assert status.current_soc == 60.0
 
-    def test_should_stop(self, hass, huawei_config):
-        adapter = HuaweiChargeAdapter(hass, huawei_config)
+    def test_should_stop(self, mock_hass, huawei_config):
+        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
         adapter._active = True
         adapter._target_soc = 80.0
 
@@ -260,8 +260,8 @@ class TestHuaweiAdapter:
         assert adapter.should_stop(80.0)
         assert adapter.should_stop(85.0)
 
-    def test_should_stop_inactive(self, hass, huawei_config):
-        adapter = HuaweiChargeAdapter(hass, huawei_config)
+    def test_should_stop_inactive(self, mock_hass, huawei_config):
+        adapter = HuaweiChargeAdapter(mock_hass, huawei_config)
         assert not adapter.should_stop(100.0)
 
 
@@ -273,33 +273,33 @@ class TestGoodWeAdapter:
     """Test GoodWeChargeAdapter."""
 
     @pytest.mark.asyncio
-    async def test_start_forced_charge(self, hass, goodwe_config):
-        adapter = GoodWeChargeAdapter(hass, goodwe_config)
+    async def test_start_forced_charge(self, mock_hass, goodwe_config):
+        adapter = GoodWeChargeAdapter(mock_hass, goodwe_config)
         cmd = ChargeCommand(target_soc=75.0, max_power_w=4000)
 
         status = await adapter.start_forced_charge(cmd)
 
         assert status.status == ChargeCommandStatus.CHARGING
         assert adapter.is_active
-        assert hass.services.async_call.call_count == 2  # SOC target + work mode
+        assert mock_hass.services.async_call.call_count == 2  # SOC target + work mode
 
     @pytest.mark.asyncio
-    async def test_stop_restores_normal_mode(self, hass, goodwe_config):
-        adapter = GoodWeChargeAdapter(hass, goodwe_config)
+    async def test_stop_restores_normal_mode(self, mock_hass, goodwe_config):
+        adapter = GoodWeChargeAdapter(mock_hass, goodwe_config)
         adapter._active = True
 
         status = await adapter.stop_forced_charge()
 
         assert status.status == ChargeCommandStatus.IDLE
-        hass.services.async_call.assert_called_with(
+        mock_hass.services.async_call.assert_called_with(
             "select",
             "select_option",
             {"entity_id": "select.goodwe_work_mode", "option": "General"},
         )
 
     @pytest.mark.asyncio
-    async def test_start_no_work_mode_entity(self, hass):
-        adapter = GoodWeChargeAdapter(hass, {"battery_charge_platform": "goodwe"})
+    async def test_start_no_work_mode_entity(self, mock_hass):
+        adapter = GoodWeChargeAdapter(mock_hass, {"battery_charge_platform": "goodwe"})
         cmd = ChargeCommand(target_soc=80.0, max_power_w=3000)
 
         status = await adapter.start_forced_charge(cmd)
@@ -315,8 +315,8 @@ class TestGenericAdapter:
     """Test GenericChargeAdapter."""
 
     @pytest.mark.asyncio
-    async def test_start_forced_charge(self, hass, generic_config):
-        adapter = GenericChargeAdapter(hass, generic_config)
+    async def test_start_forced_charge(self, mock_hass, generic_config):
+        adapter = GenericChargeAdapter(mock_hass, generic_config)
         cmd = ChargeCommand(target_soc=90.0, max_power_w=2500)
 
         status = await adapter.start_forced_charge(cmd)
@@ -325,8 +325,8 @@ class TestGenericAdapter:
         assert adapter.is_active
 
     @pytest.mark.asyncio
-    async def test_start_no_switch_configured(self, hass):
-        adapter = GenericChargeAdapter(hass, {})
+    async def test_start_no_switch_configured(self, mock_hass):
+        adapter = GenericChargeAdapter(mock_hass, {})
         cmd = ChargeCommand(target_soc=90.0, max_power_w=2500)
 
         status = await adapter.start_forced_charge(cmd)
@@ -334,14 +334,14 @@ class TestGenericAdapter:
         assert status.status == ChargeCommandStatus.UNSUPPORTED
 
     @pytest.mark.asyncio
-    async def test_stop_disables_switch(self, hass, generic_config):
-        adapter = GenericChargeAdapter(hass, generic_config)
+    async def test_stop_disables_switch(self, mock_hass, generic_config):
+        adapter = GenericChargeAdapter(mock_hass, generic_config)
         adapter._active = True
 
         status = await adapter.stop_forced_charge()
 
         assert status.status == ChargeCommandStatus.IDLE
-        hass.services.async_call.assert_called_with(
+        mock_hass.services.async_call.assert_called_with(
             "switch",
             "turn_off",
             {"entity_id": "switch.force_charge"},
@@ -355,15 +355,15 @@ class TestGenericAdapter:
 class TestSchedulerEvaluation:
     """Test BatteryChargeScheduler.evaluate() decision logic."""
 
-    def _make_scheduler(self, hass, scheduler_config, adapter=None):
+    def _make_scheduler(self, mock_hass, scheduler_config, adapter=None):
         if adapter is None:
             adapter = MagicMock(spec=BatteryChargeAdapter)
             adapter.is_active = False
-        return BatteryChargeScheduler(hass, adapter, scheduler_config)
+        return BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
-    def test_no_deficit_solar_covers_consumption(self, hass, scheduler_config):
+    def test_no_deficit_solar_covers_consumption(self, mock_hass, scheduler_config):
         """Solar forecast exceeds consumption — no charge needed."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=50.0,
@@ -377,9 +377,9 @@ class TestSchedulerEvaluation:
         assert decision.state == SchedulerState.NOT_NEEDED
         assert "Solar forecast covers" in decision.reason
 
-    def test_deficit_below_threshold(self, hass, scheduler_config):
+    def test_deficit_below_threshold(self, mock_hass, scheduler_config):
         """Small deficit below min_deficit_kwh — not worth charging."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         # With pessimism_weight=0.3:
         # optimistic = 15 * 1.0 * 0.8 = 12.0, pessimistic = 6.0
@@ -397,9 +397,9 @@ class TestSchedulerEvaluation:
         assert decision.state == SchedulerState.NOT_NEEDED
         assert "below threshold" in decision.reason
 
-    def test_not_profitable(self, hass, scheduler_config):
+    def test_not_profitable(self, mock_hass, scheduler_config):
         """NT effective cost >= HT rate — charging wastes money."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -413,9 +413,9 @@ class TestSchedulerEvaluation:
         assert decision.state == SchedulerState.NOT_PROFITABLE
         assert "Not profitable" in decision.reason
 
-    def test_already_at_target(self, hass, scheduler_config):
+    def test_already_at_target(self, mock_hass, scheduler_config):
         """SOC already at calculated target — no charge needed."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         # Small deficit = small SOC increase needed
         # deficit = 15 - (5 * 0.8) = 11 kWh
@@ -433,9 +433,9 @@ class TestSchedulerEvaluation:
         assert decision.state == SchedulerState.NOT_NEEDED
         assert "Already at target" in decision.reason
 
-    def test_scheduled_with_static_tariff(self, hass, scheduler_config):
+    def test_scheduled_with_static_tariff(self, mock_hass, scheduler_config):
         """Profitable deficit with no dynamic tariff — schedule charge."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         # With pessimism_weight=0.3:
         # optimistic = 5 * 1.0 * 0.8 = 4.0, pessimistic = 4.0 * 0.5 = 2.0
@@ -458,9 +458,9 @@ class TestSchedulerEvaluation:
         assert decision.hours_needed >= 1
         assert decision.charge_windows == []  # No dynamic tariff
 
-    def test_scheduled_with_dynamic_tariff(self, hass, scheduler_config, mock_tariff_provider):
+    def test_scheduled_with_dynamic_tariff(self, mock_hass, scheduler_config, mock_tariff_provider):
         """Profitable deficit with dynamic tariff — picks cheapest hours."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=50.0,
@@ -476,9 +476,9 @@ class TestSchedulerEvaluation:
         assert len(decision.charge_windows) > 0
         mock_tariff_provider.find_cheapest_hours.assert_called_once()
 
-    def test_forecast_correction_reduces_deficit(self, hass, scheduler_config):
+    def test_forecast_correction_reduces_deficit(self, mock_hass, scheduler_config):
         """Correction factor < 1 reduces effective forecast (increases deficit)."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         # With pessimism_weight=0.3, correction=0.7:
         # optimistic = 15 * 0.7 * 0.8 = 8.4, pessimistic = 8.4 * 0.5 = 4.2
@@ -496,9 +496,9 @@ class TestSchedulerEvaluation:
         assert decision.state == SchedulerState.SCHEDULED
         assert decision.deficit_kwh == pytest.approx(4.86)
 
-    def test_high_correction_eliminates_deficit(self, hass, scheduler_config):
+    def test_high_correction_eliminates_deficit(self, mock_hass, scheduler_config):
         """Good correction factor can eliminate deficit entirely."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         # Raw 15, correction 1.2, confidence 0.8 → effective 14.4
         # deficit = 12 - 14.4 = -2.4 → no charge
@@ -513,10 +513,10 @@ class TestSchedulerEvaluation:
 
         assert decision.state == SchedulerState.NOT_NEEDED
 
-    def test_target_soc_capped(self, hass, scheduler_config):
+    def test_target_soc_capped(self, mock_hass, scheduler_config):
         """Target SOC never exceeds max_target_soc."""
         scheduler_config.max_target_soc = 90.0
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=20.0,
@@ -529,10 +529,10 @@ class TestSchedulerEvaluation:
 
         assert decision.target_soc == 90.0  # Capped
 
-    def test_hours_needed_calculation(self, hass, scheduler_config):
+    def test_hours_needed_calculation(self, mock_hass, scheduler_config):
         """Hours needed = charge_kwh / charge_power_kw, rounded up."""
         scheduler_config.battery_max_charge_power_w = 2500  # 2.5 kW
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         # deficit = 10 - (2*0.8) = 8.4 kWh
         # target_soc = 40 + (8.4/9.5)*100 = 40 + 88.4 = 95 (capped)
@@ -557,7 +557,7 @@ class TestSchedulerEvaluation:
 class TestSchedulerUpdate:
     """Test BatteryChargeScheduler.update() execution logic."""
 
-    def _make_scheduler(self, hass, scheduler_config, adapter=None):
+    def _make_scheduler(self, mock_hass, scheduler_config, adapter=None):
         if adapter is None:
             adapter = AsyncMock(spec=BatteryChargeAdapter)
             adapter.is_active = False
@@ -567,22 +567,22 @@ class TestSchedulerUpdate:
             adapter.stop_forced_charge = AsyncMock(
                 return_value=ChargeStatus(status=ChargeCommandStatus.IDLE)
             )
-        return BatteryChargeScheduler(hass, adapter, scheduler_config)
+        return BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
     @pytest.mark.asyncio
-    async def test_idle_returns_idle(self, hass, scheduler_config):
-        scheduler = self._make_scheduler(hass, scheduler_config)
+    async def test_idle_returns_idle(self, mock_hass, scheduler_config):
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
         state = await scheduler.update(current_soc=50.0)
         assert state == SchedulerState.IDLE
 
     @pytest.mark.asyncio
-    async def test_target_reached_stops_charge(self, hass, scheduler_config):
+    async def test_target_reached_stops_charge(self, mock_hass, scheduler_config):
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = True
         adapter.stop_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.IDLE)
         )
-        scheduler = self._make_scheduler(hass, scheduler_config, adapter)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config, adapter)
 
         # Simulate a scheduled decision
         scheduler._decision = SchedulerDecision(
@@ -598,13 +598,13 @@ class TestSchedulerUpdate:
         adapter.stop_forced_charge.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_starts_charge_in_window(self, hass, scheduler_config):
+    async def test_starts_charge_in_window(self, mock_hass, scheduler_config):
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
         adapter.start_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
         )
-        scheduler = self._make_scheduler(hass, scheduler_config, adapter)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config, adapter)
 
         # Schedule with no specific windows (= always in window)
         scheduler._decision = SchedulerDecision(
@@ -620,10 +620,10 @@ class TestSchedulerUpdate:
         adapter.start_forced_charge.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_waits_outside_window(self, hass, scheduler_config):
+    async def test_waits_outside_window(self, mock_hass, scheduler_config):
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
-        scheduler = self._make_scheduler(hass, scheduler_config, adapter)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config, adapter)
 
         # Schedule with specific window far in the future
         future = dt_util.now() + timedelta(hours=5)
@@ -640,14 +640,14 @@ class TestSchedulerUpdate:
         adapter.start_forced_charge.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_peak_limit_reduces_power(self, hass, scheduler_config):
+    async def test_peak_limit_reduces_power(self, mock_hass, scheduler_config):
         scheduler_config.peak_limit_w = 9000.0
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
         adapter.start_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
         )
-        scheduler = self._make_scheduler(hass, scheduler_config, adapter)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config, adapter)
 
         scheduler._decision = SchedulerDecision(
             state=SchedulerState.SCHEDULED,
@@ -664,11 +664,11 @@ class TestSchedulerUpdate:
         assert cmd.max_power_w == 2800.0  # peak_limit - ev - safety
 
     @pytest.mark.asyncio
-    async def test_peak_limit_blocks_charge(self, hass, scheduler_config):
+    async def test_peak_limit_blocks_charge(self, mock_hass, scheduler_config):
         scheduler_config.peak_limit_w = 7000.0
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
-        scheduler = self._make_scheduler(hass, scheduler_config, adapter)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config, adapter)
 
         scheduler._decision = SchedulerDecision(
             state=SchedulerState.SCHEDULED,
@@ -684,7 +684,7 @@ class TestSchedulerUpdate:
         adapter.start_forced_charge.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_failed_start_sets_failed_state(self, hass, scheduler_config):
+    async def test_failed_start_sets_failed_state(self, mock_hass, scheduler_config):
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
         adapter.start_forced_charge = AsyncMock(
@@ -692,7 +692,7 @@ class TestSchedulerUpdate:
                 status=ChargeCommandStatus.FAILED, message="Inverter offline"
             )
         )
-        scheduler = self._make_scheduler(hass, scheduler_config, adapter)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config, adapter)
 
         scheduler._decision = SchedulerDecision(
             state=SchedulerState.SCHEDULED,
@@ -706,13 +706,13 @@ class TestSchedulerUpdate:
         assert state == SchedulerState.FAILED
 
     @pytest.mark.asyncio
-    async def test_stops_charge_outside_window(self, hass, scheduler_config):
+    async def test_stops_charge_outside_window(self, mock_hass, scheduler_config):
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = True  # Currently charging
         adapter.stop_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.IDLE)
         )
-        scheduler = self._make_scheduler(hass, scheduler_config, adapter)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config, adapter)
 
         # Window already passed
         past = dt_util.now() - timedelta(hours=2)
@@ -736,25 +736,25 @@ class TestSchedulerUpdate:
 class TestSchedulerTrigger:
     """Test should_trigger_evaluation timing logic."""
 
-    def test_triggers_at_correct_time(self, hass, scheduler_config):
+    def test_triggers_at_correct_time(self, mock_hass, scheduler_config):
         scheduler_config.trigger_hour = 21
         scheduler_config.trigger_minute = 0
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is True
 
-    def test_does_not_trigger_wrong_time(self, hass, scheduler_config):
+    def test_does_not_trigger_wrong_time(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         wrong_time = dt_util.now().replace(hour=15, minute=30, second=0)
         assert scheduler.should_trigger_evaluation(wrong_time) is False
 
-    def test_triggers_only_once_per_day(self, hass, scheduler_config):
+    def test_triggers_only_once_per_day(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is True
@@ -772,10 +772,10 @@ class TestSchedulerTrigger:
 class TestSchedulerReset:
     """Test scheduler reset behavior."""
 
-    def test_reset_clears_state(self, hass, scheduler_config):
+    def test_reset_clears_state(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         scheduler._decision = SchedulerDecision(
             state=SchedulerState.CHARGING, target_soc=80.0
@@ -836,7 +836,7 @@ class TestSchedulerIntegration:
     """End-to-end scenarios combining evaluation + update cycles."""
 
     @pytest.mark.asyncio
-    async def test_full_cycle_static_tariff(self, hass, scheduler_config):
+    async def test_full_cycle_static_tariff(self, mock_hass, scheduler_config):
         """Full cycle: evaluate → schedule → charge → target reached."""
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
@@ -846,7 +846,7 @@ class TestSchedulerIntegration:
         adapter.stop_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.IDLE)
         )
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         # 1. Evaluate at 21:00
         decision = scheduler.evaluate(
@@ -874,14 +874,14 @@ class TestSchedulerIntegration:
         adapter.stop_forced_charge.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_full_cycle_dynamic_tariff(self, hass, scheduler_config, mock_tariff_provider):
+    async def test_full_cycle_dynamic_tariff(self, mock_hass, scheduler_config, mock_tariff_provider):
         """Full cycle with dynamic tariff — waits for cheap window."""
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
         adapter.start_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
         )
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         # Evaluate with dynamic tariff
         decision = scheduler.evaluate(
@@ -902,7 +902,7 @@ class TestSchedulerIntegration:
         assert state in (SchedulerState.WAITING_FOR_SLOT, SchedulerState.CHARGING)
 
     @pytest.mark.asyncio
-    async def test_cloudy_day_scenario(self, hass, scheduler_config):
+    async def test_cloudy_day_scenario(self, mock_hass, scheduler_config):
         """Cloudy forecast + low correction = aggressive charging."""
         scheduler_config.battery_max_charge_power_w = 3000
         adapter = AsyncMock(spec=BatteryChargeAdapter)
@@ -910,7 +910,7 @@ class TestSchedulerIntegration:
         adapter.start_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
         )
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         # Low forecast, poor correction factor (overcast history)
         decision = scheduler.evaluate(
@@ -928,10 +928,10 @@ class TestSchedulerIntegration:
         assert decision.hours_needed >= 2
 
     @pytest.mark.asyncio
-    async def test_sunny_day_no_charge(self, hass, scheduler_config):
+    async def test_sunny_day_no_charge(self, mock_hass, scheduler_config):
         """Sunny forecast with good correction — no charge needed."""
         scheduler = BatteryChargeScheduler(
-            hass, MagicMock(spec=BatteryChargeAdapter), scheduler_config
+            mock_hass, MagicMock(spec=BatteryChargeAdapter), scheduler_config
         )
 
         decision = scheduler.evaluate(
@@ -1064,17 +1064,17 @@ class TestNightChargeSchedule:
 class TestSchedulePlanning:
     """Test _plan_night_schedule power allocation logic."""
 
-    def _make_scheduler(self, hass, scheduler_config, adapter=None):
+    def _make_scheduler(self, mock_hass, scheduler_config, adapter=None):
         if adapter is None:
             adapter = MagicMock(spec=BatteryChargeAdapter)
             adapter.is_active = False
-        return BatteryChargeScheduler(hass, adapter, scheduler_config)
+        return BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
-    def test_no_peak_limit_both_at_max(self, hass, scheduler_config):
+    def test_no_peak_limit_both_at_max(self, mock_hass, scheduler_config):
         """No peak limit — battery and EV charge simultaneously at full power."""
         scheduler_config.peak_limit_w = 0  # No limit
         scheduler_config.battery_max_charge_power_w = 5000
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1095,12 +1095,12 @@ class TestSchedulePlanning:
         assert first_slot.battery_power_w > 0
         assert first_slot.ev_power_w > 0
 
-    def test_peak_limit_ev_priority(self, hass, scheduler_config):
+    def test_peak_limit_ev_priority(self, mock_hass, scheduler_config):
         """With peak limit and EV priority — EV gets power first, battery gets remainder."""
         scheduler_config.peak_limit_w = 9000
         scheduler_config.battery_max_charge_power_w = 5000
         scheduler_config.ev_priority = True
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1119,12 +1119,12 @@ class TestSchedulePlanning:
         # Battery gets remainder: 9000 - 7000 = 2000W
         assert first_slot.battery_power_w == 2000
 
-    def test_peak_limit_proportional_split(self, hass, scheduler_config):
+    def test_peak_limit_proportional_split(self, mock_hass, scheduler_config):
         """With peak limit and proportional mode — power split by demand ratio."""
         scheduler_config.peak_limit_w = 8000
         scheduler_config.battery_max_charge_power_w = 5000
         scheduler_config.ev_priority = False  # Proportional
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1144,9 +1144,9 @@ class TestSchedulePlanning:
         assert first_slot.battery_power_w > 0
         assert first_slot.ev_power_w > 0
 
-    def test_battery_only_no_ev(self, hass, scheduler_config):
+    def test_battery_only_no_ev(self, mock_hass, scheduler_config):
         """No EV needed — all slots are battery-only."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1164,9 +1164,9 @@ class TestSchedulePlanning:
             assert slot.battery_power_w > 0
         assert decision.schedule.total_ev_kwh == 0
 
-    def test_schedule_with_dynamic_tariff_prices(self, hass, scheduler_config, mock_tariff_provider):
+    def test_schedule_with_dynamic_tariff_prices(self, mock_hass, scheduler_config, mock_tariff_provider):
         """Schedule slots inherit prices from tariff provider."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=50.0,
@@ -1184,10 +1184,10 @@ class TestSchedulePlanning:
         for slot in decision.schedule.slots:
             assert slot.price >= 0
 
-    def test_schedule_stops_when_energy_met(self, hass, scheduler_config):
+    def test_schedule_stops_when_energy_met(self, mock_hass, scheduler_config):
         """Schedule doesn't create more slots than needed."""
         scheduler_config.battery_max_charge_power_w = 5000
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         # Only need 3 kWh of battery charge at 5kW = ~0.6 hours
         # Should only create 1 slot even though 8 are available
@@ -1207,9 +1207,9 @@ class TestSchedulePlanning:
             actual_needed = (decision.target_soc - 65.0) / 100 * 9.5
             assert total_planned <= actual_needed + 5.1  # 1 slot = max 5kWh
 
-    def test_schedule_as_dict_for_sensor(self, hass, scheduler_config):
+    def test_schedule_as_dict_for_sensor(self, mock_hass, scheduler_config):
         """Schedule serializes to dict suitable for HA sensor attributes."""
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1230,11 +1230,11 @@ class TestSchedulePlanning:
         assert "estimated_cost" in d
         assert "peak_limit_w" in d
 
-    def test_ev_finishes_before_battery(self, hass, scheduler_config):
+    def test_ev_finishes_before_battery(self, mock_hass, scheduler_config):
         """EV needs less energy — later slots are battery-only."""
         scheduler_config.peak_limit_w = 0
         scheduler_config.battery_max_charge_power_w = 3000
-        scheduler = self._make_scheduler(hass, scheduler_config)
+        scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=20.0,
@@ -1269,7 +1269,7 @@ class TestActiveSlotTracking:
     """Test _get_active_slot and schedule-aware update cycle."""
 
     @pytest.mark.asyncio
-    async def test_uses_schedule_power_level(self, hass, scheduler_config):
+    async def test_uses_schedule_power_level(self, mock_hass, scheduler_config):
         """Update uses planned power from schedule, not just max."""
         scheduler_config.peak_limit_w = 9000
         adapter = AsyncMock(spec=BatteryChargeAdapter)
@@ -1277,7 +1277,7 @@ class TestActiveSlotTracking:
         adapter.start_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
         )
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         now = dt_util.now()
         # Create a decision with a schedule that has specific power levels
@@ -1309,13 +1309,13 @@ class TestActiveSlotTracking:
         assert cmd.max_power_w == 2500
 
     @pytest.mark.asyncio
-    async def test_adjusts_power_when_ev_differs_from_plan(self, hass, scheduler_config):
+    async def test_adjusts_power_when_ev_differs_from_plan(self, mock_hass, scheduler_config):
         """When actual EV power differs from planned, recalculate dynamically."""
         scheduler_config.peak_limit_w = 9000
         scheduler_config.battery_max_charge_power_w = 5000
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = True  # Already charging
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         now = dt_util.now()
         scheduler._decision = SchedulerDecision(
@@ -1345,11 +1345,11 @@ class TestActiveSlotTracking:
         assert cmd.max_power_w == 4800
 
     @pytest.mark.asyncio
-    async def test_ev_only_slot_skips_battery(self, hass, scheduler_config):
+    async def test_ev_only_slot_skips_battery(self, mock_hass, scheduler_config):
         """Slot with 0 battery power = waiting, not charging."""
         adapter = AsyncMock(spec=BatteryChargeAdapter)
         adapter.is_active = False
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         now = dt_util.now()
         scheduler._decision = SchedulerDecision(
@@ -1382,10 +1382,10 @@ class TestActiveSlotTracking:
 class TestFeatureToggle:
     """Test enabled/disabled behavior."""
 
-    def test_disabled_evaluate_returns_idle(self, hass, scheduler_config):
+    def test_disabled_evaluate_returns_idle(self, mock_hass, scheduler_config):
         scheduler_config.enabled = False
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1398,21 +1398,21 @@ class TestFeatureToggle:
         assert decision.state == SchedulerState.IDLE
         assert "disabled" in decision.reason
 
-    def test_disabled_trigger_returns_false(self, hass, scheduler_config):
+    def test_disabled_trigger_returns_false(self, mock_hass, scheduler_config):
         scheduler_config.enabled = False
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         trigger_time = dt_util.now().replace(hour=21, minute=0, second=0)
         assert scheduler.should_trigger_evaluation(trigger_time) is False
 
-    def test_enabled_property(self, hass, scheduler_config):
+    def test_enabled_property(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
         assert scheduler.enabled is True
 
         scheduler_config.enabled = False
-        scheduler2 = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler2 = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
         assert scheduler2.enabled is False
 
 
@@ -1423,11 +1423,11 @@ class TestFeatureToggle:
 class TestCycleCost:
     """Test degradation-aware break-even check."""
 
-    def test_cycle_cost_blocks_unprofitable_charge(self, hass, scheduler_config):
+    def test_cycle_cost_blocks_unprofitable_charge(self, mock_hass, scheduler_config):
         """High cycle cost makes arbitrage unprofitable."""
         scheduler_config.battery_cycle_cost = 0.10
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1440,11 +1440,11 @@ class TestCycleCost:
         assert decision.state == SchedulerState.NOT_PROFITABLE
         assert "degradation" in decision.reason
 
-    def test_low_cycle_cost_allows_charge(self, hass, scheduler_config):
+    def test_low_cycle_cost_allows_charge(self, mock_hass, scheduler_config):
         """Low cycle cost still allows profitable charging."""
         scheduler_config.battery_cycle_cost = 0.02
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1456,11 +1456,11 @@ class TestCycleCost:
 
         assert decision.state == SchedulerState.SCHEDULED
 
-    def test_zero_cycle_cost_same_as_before(self, hass, scheduler_config):
+    def test_zero_cycle_cost_same_as_before(self, mock_hass, scheduler_config):
         """Zero cycle cost = no degradation check (backward compat)."""
         scheduler_config.battery_cycle_cost = 0.0
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1480,10 +1480,10 @@ class TestCycleCost:
 class TestNegativeTariff:
     """Test force-charge during negative prices."""
 
-    def test_negative_price_forces_full_charge(self, hass, scheduler_config):
+    def test_negative_price_forces_full_charge(self, mock_hass, scheduler_config):
         """Negative price -> charge to max SOC regardless of forecast."""
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=50.0,
@@ -1498,10 +1498,10 @@ class TestNegativeTariff:
         assert decision.target_soc == 95.0
         assert "Negative price" in decision.reason
 
-    def test_negative_price_respects_already_full(self, hass, scheduler_config):
+    def test_negative_price_respects_already_full(self, mock_hass, scheduler_config):
         """Already at max SOC -> no charge even with negative price."""
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=96.0,
@@ -1514,11 +1514,11 @@ class TestNegativeTariff:
 
         assert decision.state in (SchedulerState.NOT_NEEDED, SchedulerState.IDLE)
 
-    def test_negative_price_feature_disabled(self, hass, scheduler_config):
+    def test_negative_price_feature_disabled(self, mock_hass, scheduler_config):
         """Feature disabled -> no force charge on negative price."""
         scheduler_config.force_charge_on_negative_price = False
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=50.0,
@@ -1539,10 +1539,10 @@ class TestNegativeTariff:
 class TestForecastFallback:
     """Test 3-tier forecast fallback strategy."""
 
-    def test_no_forecast_charges_conservatively(self, hass, scheduler_config):
+    def test_no_forecast_charges_conservatively(self, mock_hass, scheduler_config):
         """No forecast -> deficit = full consumption."""
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision = scheduler.evaluate(
             current_soc=30.0,
@@ -1556,10 +1556,10 @@ class TestForecastFallback:
         assert decision.state == SchedulerState.SCHEDULED
         assert decision.deficit_kwh == pytest.approx(12.0)
 
-    def test_stale_forecast_increases_pessimism(self, hass, scheduler_config):
+    def test_stale_forecast_increases_pessimism(self, mock_hass, scheduler_config):
         """Stale forecast (>6h) uses doubled pessimism weight."""
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision_fresh = scheduler.evaluate(
             current_soc=30.0,
@@ -1585,11 +1585,11 @@ class TestForecastFallback:
 
         assert decision_stale.deficit_kwh > decision_fresh.deficit_kwh
 
-    def test_fresh_forecast_applies_pessimism_blend(self, hass, scheduler_config):
+    def test_fresh_forecast_applies_pessimism_blend(self, mock_hass, scheduler_config):
         """More pessimism -> higher deficit."""
         scheduler_config.pessimism_weight = 0.0
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision_optimistic = scheduler.evaluate(
             current_soc=30.0,
@@ -1601,7 +1601,7 @@ class TestForecastFallback:
 
         scheduler.reset()
         scheduler_config.pessimism_weight = 0.5
-        scheduler2 = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler2 = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         decision_pessimistic = scheduler2.evaluate(
             current_soc=30.0,
@@ -1621,9 +1621,9 @@ class TestForecastFallback:
 class TestReplanTriggers:
     """Test should_replan() conditions."""
 
-    def test_soc_deviation_triggers_replan(self, hass, scheduler_config):
+    def test_soc_deviation_triggers_replan(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         scheduler.evaluate(
             current_soc=40.0,
@@ -1636,9 +1636,9 @@ class TestReplanTriggers:
         assert scheduler.should_replan(current_soc=43.0, ev_connected=False) is False
         assert scheduler.should_replan(current_soc=50.0, ev_connected=False) is True
 
-    def test_ev_connect_triggers_replan(self, hass, scheduler_config):
+    def test_ev_connect_triggers_replan(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         scheduler.evaluate(
             current_soc=40.0,
@@ -1651,15 +1651,15 @@ class TestReplanTriggers:
         assert scheduler.should_replan(current_soc=40.0, ev_connected=False) is False
         assert scheduler.should_replan(current_soc=40.0, ev_connected=True) is True
 
-    def test_no_replan_when_idle(self, hass, scheduler_config):
+    def test_no_replan_when_idle(self, mock_hass, scheduler_config):
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
         assert scheduler.should_replan(current_soc=50.0, ev_connected=True) is False
 
-    def test_ev_replan_disabled(self, hass, scheduler_config):
+    def test_ev_replan_disabled(self, mock_hass, scheduler_config):
         scheduler_config.replan_on_ev_change = False
         adapter = MagicMock(spec=BatteryChargeAdapter)
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         scheduler.evaluate(
             current_soc=40.0,
@@ -1681,7 +1681,7 @@ class TestGridImportLimit:
     """Test max_grid_import_w constraint."""
 
     @pytest.mark.asyncio
-    async def test_grid_import_limit_caps_battery_power(self, hass, scheduler_config):
+    async def test_grid_import_limit_caps_battery_power(self, mock_hass, scheduler_config):
         """Grid import limit reduces available battery charge power."""
         scheduler_config.max_grid_import_w = 6000
         scheduler_config.peak_limit_w = 0
@@ -1690,7 +1690,7 @@ class TestGridImportLimit:
         adapter.start_forced_charge = AsyncMock(
             return_value=ChargeStatus(status=ChargeCommandStatus.CHARGING)
         )
-        scheduler = BatteryChargeScheduler(hass, adapter, scheduler_config)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, scheduler_config)
 
         now = dt_util.now()
         scheduler._decision = SchedulerDecision(

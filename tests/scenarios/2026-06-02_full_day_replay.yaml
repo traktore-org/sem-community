@@ -1,0 +1,138 @@
+name: "2026-06-02 full-day replay — 24h walking through zones + day/night"
+
+coverage:
+  - mode: min_plus_solar
+    regime: zone4_day_assist_drain
+    issue: "long-duration"
+
+description: |
+  24-hour synthetic replay walking through:
+
+    * Night top-up (00:00 - 05:00) — MIN_PV at min current
+    * Pre-dawn idle (05:00 - 06:00) — daily target met, EV idle
+    * Sunrise / day mode flip (06:00 - 07:00)
+    * Morning solar ramp + battery_assist (07:00 - 11:00)
+    * Midday Zone 4 surplus (11:00 - 15:00)
+    * Afternoon ramp-down (15:00 - 17:00)
+    * Evening solar tail + Zone 3 (17:00 - 19:00)
+    * Sunset + day→night flip (19:00 - 20:00)
+    * Night idle (20:00 - 24:00, no top-up scheduled)
+
+  Walks the SOC zones via battery_soc + flips is_night at the
+  expected clock-times. Long-running scenarios catch class issues
+  no 4-cycle steady-state ever could: e.g. a cycle counter
+  overflow, a daily integrator that drifts, a state machine
+  blip on a specific zone transition.
+
+  Cycle interval = 600s (10 min) so 24h = 144 cycles, kept small
+  enough to run in CI in well under a second.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  is_night: true
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 7.0
+
+cycle_seconds: 600   # 10-minute cycles → 144 cycles per 24h
+
+timeline:
+  # ── 00:00 — start of day. Night charging at min.
+  - t: 0
+    solar_power: 0
+    grid_power: -4500
+    battery_power: 0
+    battery_soc: 45
+    ev_power: 4140
+    ev_connected: true
+    is_night: true
+
+  # ── 03:00 — night charge winding down
+  - t: 10800
+    battery_soc: 48
+
+  # ── 05:00 — daily target nearly met
+  - t: 18000
+    ev_power: 0
+    battery_soc: 50
+
+  # ── 06:30 — sunrise, day mode flips
+  - t: 23400
+    solar_power: 300
+    is_night: false
+
+  # ── 09:00 — solar ramping
+  - t: 32400
+    solar_power: 3500
+    grid_power: 1500
+    battery_power: 2000  # +ve = charging
+    battery_soc: 55
+
+  # ── 11:00 — full surplus, Zone 4 territory
+  - t: 39600
+    solar_power: 9000
+    grid_power: 4000
+    battery_power: 3000
+    battery_soc: 80
+
+  # ── 13:00 — battery full, big export
+  - t: 46800
+    solar_power: 10000
+    grid_power: 9000
+    battery_power: 0   # battery refused — auto_start full
+    battery_soc: 92
+
+  # ── 15:00 — afternoon ramp down
+  - t: 54000
+    solar_power: 6500
+    grid_power: 5000
+    battery_soc: 92
+
+  # ── 17:00 — evening sun, Zone 3
+  - t: 61200
+    solar_power: 3000
+    grid_power: 1500
+    battery_power: -500
+    battery_soc: 87
+
+  # ── 18:30 — sunset close
+  - t: 66600
+    solar_power: 800
+    grid_power: -200
+    battery_power: -2000
+    battery_soc: 82
+
+  # ── 19:30 — night mode kicks in
+  - t: 70200
+    solar_power: 100
+    is_night: true
+
+  # ── 22:00 — full night
+  - t: 79200
+    solar_power: 0
+    battery_power: -1000
+    battery_soc: 75
+    ev_power: 0   # not yet on night plan (charged earlier)
+
+  # ── 23:30 — end of replay
+  - t: 84600
+    battery_soc: 72
+
+expect:
+  # Across 144 cycles, multiple regimes must be visible. The min_pv
+  # regime kicks in during the night top-up (cycles 0-30 area), the
+  # battery_assist regime during midday Zone 4, etc. We assert ONE
+  # specific regime fires — full strategy-trace assertions belong
+  # in narrower scenarios.
+  strategy_substring: "min_pv"

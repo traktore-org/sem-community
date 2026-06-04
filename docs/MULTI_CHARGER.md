@@ -6,6 +6,63 @@ multi-charger code paths. For end-user setup with multiple chargers, see
 
 ---
 
+## v1.7.0: The bug class is structurally retired
+
+The per-device-primary architecture rebuild (PR #358 + #360 + #361 + #362)
+**eliminates the bug class this document describes** by construction.
+What used to be a discipline ("don't read `power.ev_power` inside the
+per-charger loop") is now a structural property of the data model.
+
+The new pipeline:
+
+```
+PowerReadings.ev_power_per_charger: Dict[str, ChargerPower]   ← PRIMARY
+PowerReadings.ev_power: FleetEvPower                          ← cached sum
+
+for each charger in coord._per_charger:
+    view = build_charger_view(charger, power_readings, ...)
+    decision = decide(view)                                   ← pure
+    await actuate(decision, adapter, view.power)              ← brand-aware
+```
+
+Key invariants now enforced by the type system:
+
+- **`decide(view)` is pure** — no `self`, no HA calls, no shared state.
+  Same `ChargerView` always produces the same `ChargerDecision`.
+- **`ChargerView.power` is a single charger's slice**, not the fleet
+  sum. There is no way for `decide` to accidentally read fleet state.
+- **One `ChargerDecision` per charger per cycle.** The strategy/state-
+  machine disagreement class (#346) cannot exist — there is no second
+  decision authority.
+- **Brand quirks live in `ChargerAdapter` subclasses.** KEBA's 6 A
+  minimum, `set_current(0)` rejection, and self-resume detection (the
+  #315/#346/#353 cluster) are encapsulated in `KebaAdapter`; the
+  actuator says `adapter.command_idle()` without knowing why KEBA
+  needs `keba.disable` instead of `set_current(0)`.
+- **Per-charger flow attribution uses priority allocation, not
+  fraction-of-fleet.** A `solar_only` charger in a two-charger fleet
+  no longer gets falsely attributed grid imports that the
+  `min_plus_solar` sibling actually consumed.
+
+The verification floor is the **simulation-driven test suite**:
+
+- `tests/test_step8_invariants.py` — 233 architectural invariants
+  parametrised across the full operating envelope.
+- `tests/test_surplus_charging_scenarios.py` — 93 behavioural
+  scenarios walking every (mode × battery zone × time × solar)
+  combination through `decide → actuate → adapter`.
+
+Any future change that violates an invariant fails CI before reaching
+HA-TEST. The "deploy and watch logs" cycle that pre-v1.7.0 was the
+only way to catch these bugs is no longer the safety net — the
+invariant suite is.
+
+The rest of this document describes the **historical bug class** and
+the v1.6.x band-aids that preceded the rebuild. Kept for context and
+as a reference for anyone hunting similar shapes in unrelated code.
+
+---
+
 ## The bug class we keep finding
 
 Between v1.6.0 and v1.6.6 SEM shipped four hotfixes for variants of the

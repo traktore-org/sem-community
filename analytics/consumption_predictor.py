@@ -115,6 +115,16 @@ class ConsumptionPredictor:
         self._last_ev_observation_day: Optional[int] = None
         self._training_status = "cold_start"
 
+        # #425 — telemetry surface mirroring #359/#416/#420/#421
+        # classifier_path / dampening_path patterns. Each prediction
+        # call sets the corresponding ``*_path`` string so callers can
+        # tell why a prediction was empty or fell back to defaults.
+        self._last_consumption_prediction_path: str = "uninitialized"
+        self._last_solar_prediction_path: str = "uninitialized"
+        self._last_surplus_window_path: str = "uninitialized"
+        self._last_ev_prediction_path: str = "uninitialized"
+        self._last_observation_path: str = "uninitialized"
+
     @property
     def training_status(self) -> str:
         """Current training status: cold_start, learning, trained."""
@@ -134,6 +144,10 @@ class ConsumptionPredictor:
 
         Call this once per hour (or on each coordinator cycle — it deduplicates
         by hour so only the last value per hour is used).
+
+        Records the observation path on
+        ``self._last_observation_path`` (#425):
+        ``deduplicated`` / ``recorded``.
         """
         hour = dt.hour
         dow = dt.weekday()  # 0=Mon, 6=Sun
@@ -141,11 +155,13 @@ class ConsumptionPredictor:
         # Deduplicate: only update once per hour
         hour_key = dow * 100 + hour
         if hour_key == self._last_observation_hour:
+            self._last_observation_path = "deduplicated"
             return
         self._last_observation_hour = hour_key
 
         self._consumption_profile.update(dow, hour, consumption_w)
         self._solar_profile.update(dow, hour, solar_w)
+        self._last_observation_path = "recorded"
 
         # Update training status
         days = self._consumption_profile.unique_days()
@@ -161,15 +177,31 @@ class ConsumptionPredictor:
 
         Returns list of 24 hourly values starting from from_dt.
         Returns empty list if not enough training data.
+
+        Records the prediction path on
+        ``self._last_consumption_prediction_path`` (#425):
+        ``cold_start_empty`` / ``trained_full`` / ``trained_with_fallback``.
         """
         if self._training_status == "cold_start":
+            self._last_consumption_prediction_path = "cold_start_empty"
             return []
 
         predictions = []
+        fallback_count = 0
         for i in range(24):
             dt = from_dt + timedelta(hours=i)
             value = self._consumption_profile.predict(dt.weekday(), dt.hour)
-            predictions.append(value if value is not None else 0.0)
+            if value is None:
+                fallback_count += 1
+                predictions.append(0.0)
+            else:
+                predictions.append(value)
+        if fallback_count == 0:
+            self._last_consumption_prediction_path = "trained_full"
+        elif fallback_count < 24:
+            self._last_consumption_prediction_path = f"trained_with_fallback:{fallback_count}"
+        else:
+            self._last_consumption_prediction_path = "trained_all_fallback"
         return predictions
 
     def predict_solar_24h(self, from_dt: datetime) -> List[float]:
@@ -177,15 +209,30 @@ class ConsumptionPredictor:
 
         Returns list of 24 hourly values starting from from_dt.
         Returns empty list if not enough training data.
+
+        Records the prediction path on
+        ``self._last_solar_prediction_path`` (#425).
         """
         if self._training_status == "cold_start":
+            self._last_solar_prediction_path = "cold_start_empty"
             return []
 
         predictions = []
+        fallback_count = 0
         for i in range(24):
             dt = from_dt + timedelta(hours=i)
             value = self._solar_profile.predict(dt.weekday(), dt.hour)
-            predictions.append(value if value is not None else 0.0)
+            if value is None:
+                fallback_count += 1
+                predictions.append(0.0)
+            else:
+                predictions.append(value)
+        if fallback_count == 0:
+            self._last_solar_prediction_path = "trained_full"
+        elif fallback_count < 24:
+            self._last_solar_prediction_path = f"trained_with_fallback:{fallback_count}"
+        else:
+            self._last_solar_prediction_path = "trained_all_fallback"
         return predictions
 
     def predict_consumption_today_kwh(self, from_dt: datetime) -> float:
@@ -201,15 +248,20 @@ class ConsumptionPredictor:
         """Predict the best surplus window based on learned patterns.
 
         Returns time window string like "10:00-14:00" or "" if unknown.
+
+        Records the path on ``self._last_surplus_window_path`` (#425):
+        ``no_data`` / ``no_surplus`` / ``found_window``.
         """
         solar = self.predict_solar_24h(from_dt)
         consumption = self.predict_consumption_24h(from_dt)
         if not solar or not consumption:
+            self._last_surplus_window_path = "no_data"
             return ""
 
         # Find the window with highest surplus (solar - consumption)
         surplus = [s - c for s, c in zip(solar, consumption)]
         if max(surplus) <= 0:
+            self._last_surplus_window_path = "no_surplus"
             return ""
 
         # Find contiguous window of positive surplus
@@ -239,8 +291,10 @@ class ConsumptionPredictor:
         if best_start >= 0:
             start_h = (from_dt.hour + best_start) % 24
             end_h = (from_dt.hour + best_end) % 24
+            self._last_surplus_window_path = "found_window"
             return f"{start_h:02d}:00-{end_h:02d}:00"
 
+        self._last_surplus_window_path = "no_contiguous_window"
         return ""
 
     def observe_ev(self, dt: datetime, daily_ev_kwh: float) -> None:
@@ -272,11 +326,43 @@ class ConsumptionPredictor:
 
         Uses the learned weekday profile. Returns 0.0 if no data
         for tomorrow's day-of-week.
+
+        Records the prediction path on
+        ``self._last_ev_prediction_path`` (#425):
+        ``weekday_match`` / ``hour_fallback`` / ``no_data``.
         """
         tomorrow = from_dt + timedelta(days=1)
         dow = tomorrow.weekday()
         value = self._ev_profile.predict(dow, 12)
-        return round(value, 1) if value is not None else 0.0
+        if value is None:
+            self._last_ev_prediction_path = "no_data"
+            return 0.0
+        # HourlyProfile.predict returns the dow-exact bin if present,
+        # else a hour-only average. Detect which path fired by
+        # re-checking the exact bin.
+        if (dow, 12) in self._ev_profile._bins:
+            self._last_ev_prediction_path = "weekday_match"
+        else:
+            self._last_ev_prediction_path = "hour_fallback"
+        return round(value, 1)
+
+    def get_diagnostics(self) -> Dict[str, Any]:
+        """Return the audit telemetry surface (#425).
+
+        Used by the coordinator to expose the ``*_path`` strings on the
+        existing consumption-prediction sensors. Mirrors the
+        ``get_data`` pattern in ``forecast_tracker.py`` from #416.
+        """
+        return {
+            "consumption_prediction_path": self._last_consumption_prediction_path,
+            "solar_prediction_path": self._last_solar_prediction_path,
+            "surplus_window_path": self._last_surplus_window_path,
+            "ev_prediction_path": self._last_ev_prediction_path,
+            "observation_path": self._last_observation_path,
+            "training_status": self._training_status,
+            "consumption_samples": self._consumption_profile.total_samples(),
+            "consumption_unique_days": self._consumption_profile.unique_days(),
+        }
 
     def get_state(self) -> Dict[str, Any]:
         """Export state for persistence."""

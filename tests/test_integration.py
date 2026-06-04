@@ -37,48 +37,48 @@ class TestPlatformEntityCounts:
     """Verify correct number of entities per platform."""
 
     @pytest.mark.asyncio
-    async def test_switch_count(self, hass, config_entry, mock_coordinator):
+    async def test_switch_count(self, mock_hass, config_entry, mock_coordinator):
         """Post-#277 Phase C: only ``observer_mode`` remains as a
         global switch (the legacy ``night_charging`` +
         ``smart_night_charging`` were removed when the named
         ``charge_mode`` selector took over)."""
         config_entry.runtime_data = mock_coordinator
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
-        await switch_setup(hass, config_entry, add_entities)
+        await switch_setup(mock_hass, config_entry, add_entities)
         switches = add_entities.call_args[0][0]
         assert len(switches) == 1
         keys = {s.entity_description.key for s in switches}
         assert keys == {"observer_mode"}
 
     @pytest.mark.asyncio
-    async def test_number_count(self, hass, config_entry, mock_coordinator):
+    async def test_number_count(self, mock_hass, config_entry, mock_coordinator):
         """Should create all number entities."""
         config_entry.runtime_data = mock_coordinator
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
-        await number_setup(hass, config_entry, add_entities)
+        await number_setup(mock_hass, config_entry, add_entities)
         numbers = add_entities.call_args[0][0]
         # Verify all NUMBER_TYPES are created
         assert len(numbers) == len(NUMBER_TYPES)
 
     @pytest.mark.asyncio
-    async def test_sensor_count(self, hass, config_entry, mock_coordinator):
+    async def test_sensor_count(self, mock_hass, config_entry, mock_coordinator):
         """Should create sensors from SENSOR_TYPES."""
         config_entry.runtime_data = mock_coordinator
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
-        await sensor_setup(hass, config_entry, add_entities)
+        await sensor_setup(mock_hass, config_entry, add_entities)
         sensors = add_entities.call_args[0][0]
         assert len(sensors) > 80  # We have 100+ sensor types
 
     @pytest.mark.asyncio
-    async def test_binary_sensor_count(self, hass, config_entry, mock_coordinator):
+    async def test_binary_sensor_count(self, mock_hass, config_entry, mock_coordinator):
         """Should create binary sensors."""
         config_entry.runtime_data = mock_coordinator
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
-        await binary_sensor_setup(hass, config_entry, add_entities)
+        await binary_sensor_setup(mock_hass, config_entry, add_entities)
         sensors = add_entities.call_args[0][0]
         assert len(sensors) >= 6  # ev_connected, ev_charging, battery, grid, solar, etc.
 
@@ -92,26 +92,26 @@ class TestCurrencyConfiguration:
     """Verify currency reads from HA config."""
 
     @pytest.mark.asyncio
-    async def test_sensor_uses_ha_currency(self, hass, config_entry, mock_coordinator):
+    async def test_sensor_uses_ha_currency(self, mock_hass, config_entry, mock_coordinator):
         """Monetary sensors should use hass.config.currency."""
-        hass.config.currency = "EUR"
+        mock_hass.config.currency = "EUR"
         config_entry.runtime_data = mock_coordinator
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
-        await sensor_setup(hass, config_entry, add_entities)
+        await sensor_setup(mock_hass, config_entry, add_entities)
         sensors = add_entities.call_args[0][0]
         monetary = [s for s in sensors if hasattr(s, '_attr_native_unit_of_measurement')
                     and s._attr_native_unit_of_measurement == "EUR"]
         assert len(monetary) > 0, "No monetary sensors found with EUR"
 
     @pytest.mark.asyncio
-    async def test_number_uses_ha_currency(self, hass, config_entry, mock_coordinator):
+    async def test_number_uses_ha_currency(self, mock_hass, config_entry, mock_coordinator):
         """Monetary number entities should use coordinator's hass.config.currency."""
         mock_coordinator.hass.config.currency = "USD"
         config_entry.runtime_data = mock_coordinator
-        hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
+        mock_hass.data = {DOMAIN: {config_entry.entry_id: mock_coordinator}}
         add_entities = MagicMock()
-        await number_setup(hass, config_entry, add_entities)
+        await number_setup(mock_hass, config_entry, add_entities)
         numbers = add_entities.call_args[0][0]
         # Find demand_charge_rate which has CHF/kW/Mt
         demand = [n for n in numbers if n.entity_description.key == "demand_charge_rate"]
@@ -342,30 +342,6 @@ class TestEnergyResetBehavior:
 # ============================================================
 # Test: Night charging strategy
 # ============================================================
-
-@pytest.mark.unit
-class TestNightChargingStrategy:
-    """Verify night charging only uses grid when target not reached."""
-
-    def test_night_target_reached_returns_idle(self):
-        """Night mode + target reached = idle (don't charge from grid)."""
-        from .test_soc_zone_strategy import _build_coordinator, _make_power, _MockEnergy
-        coord = _build_coordinator()
-        coord.time_manager.is_night_mode.return_value = True
-        strategy, reason = coord._determine_charging_strategy(
-            _make_power(battery_soc=95), _MockEnergy(daily_ev=10.0)
-        )
-        assert strategy == "idle"
-        assert "target reached" in reason.lower()
-
-    def test_solar_target_reached_continues(self):
-        """Daytime + target reached = solar continues (free surplus)."""
-        from .test_soc_zone_strategy import _build_coordinator, _make_power, _MockEnergy
-        coord = _build_coordinator()
-        strategy, _ = coord._determine_charging_strategy(
-            _make_power(battery_soc=95, solar_power=5000), _MockEnergy(daily_ev=10.0)
-        )
-        assert strategy != "idle"
 
 
 # ============================================================

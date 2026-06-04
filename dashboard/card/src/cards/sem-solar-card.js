@@ -10,7 +10,10 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { semTheme, semFormatPower, semCardSurfaceCSS, SEM_COLORS, semDefineCard } from '../base/sem-shared.js';
+import {
+    semTheme, semFormatPower, semCardSurfaceCSS, SEM_COLORS, semDefineCard,
+    semDiscoverPVStrings, semPVStringsCSS,
+} from '../base/sem-shared.js';
 
 const DEFAULT_PREFIX = 'sensor.sem_';
 
@@ -37,6 +40,15 @@ const ENTITY_SUFFIXES = [
     'pv_performance_vs_forecast',
     'pv_estimated_annual_degradation',
     'pv_degradation_trend',
+    // v1.7.0 / #312: per-PV-string sensors. Watch all 4 slots —
+    // when fewer exist the lookup is a no-op + harmless. Watching
+    // them here makes the card re-render on every per-string sample
+    // change, keeping the chip strip + "Per string today" section
+    // in sync with sibling cards rendering the same sensors.
+    'pv_string_pv1_power', 'pv_string_pv1_daily_energy',
+    'pv_string_pv2_power', 'pv_string_pv2_daily_energy',
+    'pv_string_pv3_power', 'pv_string_pv3_daily_energy',
+    'pv_string_pv4_power', 'pv_string_pv4_daily_energy',
 ];
 
 function buildEntityIds(prefix) {
@@ -151,6 +163,11 @@ class SEMSolarCard extends SEMLitBase {
         const vsFCText  = vsFC !== 0 ? this._fmt(vsFC, 0) + '%' : '—';
         const vsFCColor = vsFC >= 0 ? '#8DC892' : '#f06292';
 
+        // v1.7.1 / #312: per-PV-string chip strip. Auto-shown when ≥ 2
+        // strings are present (v1.7.0 discovery surface); empty array
+        // otherwise so the row collapses to ``nothing``.
+        const pvStrings = semDiscoverPVStrings(this._hass, this._prefix);
+
         return html`
             <style>
                 :host { display: block; }
@@ -240,6 +257,22 @@ class SEMSolarCard extends SEMLitBase {
                 }
                 @media (max-width: 400px) { .two-col { grid-template-columns: 1fr; } }
 
+                /* Mobile polish (added during the same fix as the
+                   render-bug repair): the existing 400px breakpoints
+                   only handle the very narrowest phones. The card is
+                   noticeably cramped on a typical 375–480px viewport
+                   without these — the 2-col flows grid produces two
+                   ~155px columns of dense kWh data. */
+                @media (max-width: 480px) {
+                    .hero { flex-direction: column; gap: 12px; align-items: stretch; }
+                    .solar-ring { width: 90px; height: 90px; margin: 0 auto; }
+                    .flows-grid { grid-template-columns: 1fr; gap: 6px; }
+                    .section { padding: 8px 10px; margin-top: 10px; }
+                    .metric-row { padding: 1px 0; }
+                    .chip { padding: 5px 6px; }
+                    .chip-value { font-size: 12px; }
+                }
+
                 /* ── Metric rows ── */
                 .metric-row {
                     display: flex; justify-content: space-between; align-items: baseline;
@@ -271,6 +304,8 @@ class SEMSolarCard extends SEMLitBase {
                     font-size: 13px; font-weight: 600; color: #ff9800;
                     font-variant-numeric: tabular-nums;
                 }
+                /* v1.7.1 / #312: per-PV-string chip strip styles */
+                ${semPVStringsCSS}
             </style>
 
             <!-- SVG glow filters -->
@@ -291,6 +326,21 @@ class SEMSolarCard extends SEMLitBase {
 
             <ha-card>
                 <div class="wrap">
+
+                    <!-- v1.7.1 / #312: per-PV-string chip strip (auto-shown ≥ 2 strings) -->
+                    ${pvStrings.length >= 2 ? html`
+                        <div class="pv-strings-row">
+                            ${pvStrings.map(s => html`
+                                <div class="pv-chip"
+                                     title="${s.entityId}"
+                                     data-entity="${s.entityId}"
+                                     @click=${() => this._fireMoreInfo?.(s.entityId)}>
+                                    <span class="pv-chip-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                    <span class="pv-chip-value">${(Math.abs(s.watts)/1000).toFixed(2)} kW</span>
+                                </div>
+                            `)}
+                        </div>
+                    ` : nothing}
 
                     <!-- Hero -->
                     <div class="hero">
@@ -364,6 +414,40 @@ class SEMSolarCard extends SEMLitBase {
                             </div>
                         </div>
                     </div>
+
+                    <!-- v1.7.0 / #312: per-PV-string detail. Reuses
+                         the "flow row" style for visual consistency
+                         with the Today's Flows section above. Auto-
+                         shown when 2+ strings are present; collapses
+                         to nothing on single-string installs.
+                         (Do NOT quote "nothing" with backticks here;
+                         this HTML comment lives inside an html
+                         tagged template literal, and a stray
+                         backtick terminates that template at parse
+                         time — see the 0x0 render bug we fixed.) -->
+                    ${pvStrings.length >= 2 ? html`
+                        <div class="section">
+                            <div class="section-title">${this._t('pv_strings_today') || "Per string today"}</div>
+                            <div class="flows-grid">
+                                ${pvStrings.map(s => html`
+                                    <div class="flow-row"
+                                         style="cursor:pointer"
+                                         @click=${() => this._fireMoreInfo?.(s.entityId)}>
+                                        <div class="flow-dot" style="background:#ff9800"></div>
+                                        <span class="flow-label">PV${s.slot.replace(/^pv/,'')}</span>
+                                        <div class="flow-vals">
+                                            <div class="flow-power">${semFormatPower(s.watts)}</div>
+                                            <div class="flow-energy">${
+                                                s.energyKwh != null
+                                                    ? this._fmt(s.energyKwh, 2) + ' kWh'
+                                                    : '—'
+                                            }</div>
+                                        </div>
+                                    </div>
+                                `)}
+                            </div>
+                        </div>
+                    ` : nothing}
 
                     <!-- Forecast + Performance (side by side) -->
                     <div class="section two-col">

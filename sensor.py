@@ -1612,6 +1612,22 @@ async def async_setup_entry(
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
+            # #383: real per-charger vehicle SOC. Populated from the
+            # charger's ``vehicle_soc_entity`` config; ``None`` /
+            # unavailable when not configured. Multi-charger cards
+            # used to mirror each other's SOC because the global
+            # ``sem_vehicle_soc`` got context-swap clobbered across
+            # the per-charger update loop; this sensor exposes the
+            # correct per-charger value so the card stops needing
+            # the global fallback.
+            SensorEntityDescription(
+                key=f"charger_{cid}_vehicle_soc",
+                name=f"{cname} Vehicle SOC",
+                device_class=SensorDeviceClass.BATTERY,
+                state_class=SensorStateClass.MEASUREMENT,
+                native_unit_of_measurement=PERCENTAGE,
+                suggested_display_precision=0,
+            ),
             SensorEntityDescription(
                 key=f"charger_{cid}_nights_until_charge",
                 name=f"{cname} Nights Until Charge",
@@ -1701,11 +1717,116 @@ async def async_setup_entry(
         _LOGGER.info("Created %d per-charger sensors for %d charger(s)",
                       len(per_charger_descriptions), len(ev_chargers))
 
+    # v1.7.0 / #312: per-PV-string sensor surface. Auto-discovered at
+    # config-flow time (``hardware_detection.discover_pv_strings_from_registry``)
+    # and stashed on the coordinator's sensor reader via
+    # ``set_pv_strings``. Gated on ≥ 2 strings to keep single-string
+    # installs identical to today (no entity-registry clutter).
+    #
+    # Defensive getattr on the coordinator's reader handle — keeps test
+    # mocks (``MagicMock``-only coordinators in ``test_integration.py``)
+    # working when the reader isn't wired through.
+    per_string_descriptions = []
+    _sr = getattr(coordinator, "_sensor_reader", None)
+    pv_strings = getattr(_sr, "_pv_strings", {}) if _sr is not None else {}
+    pv_strings = pv_strings or {}
+    if len(pv_strings) >= 2:
+        for slot in sorted(pv_strings.keys()):
+            # ``slot`` is the normalised label ``pv1`` / ``pv2`` / ...
+            n = slot.replace("pv", "")
+            per_string_descriptions.extend([
+                SensorEntityDescription(
+                    key=f"pv_string_{slot}_power",
+                    name=f"PV String {n} Power",
+                    device_class=SensorDeviceClass.POWER,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=UnitOfPower.WATT,
+                    suggested_display_precision=0,
+                ),
+                SensorEntityDescription(
+                    key=f"pv_string_{slot}_daily_energy",
+                    name=f"PV String {n} Daily Energy",
+                    device_class=SensorDeviceClass.ENERGY,
+                    state_class=SensorStateClass.TOTAL,
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    suggested_display_precision=2,
+                ),
+            ])
+        for desc in per_string_descriptions:
+            sensors.append(SEMSolarSensor(coordinator, desc, entry.entry_id))
+        _LOGGER.info(
+            "Created %d per-PV-string sensors for %d string(s) (#312)",
+            len(per_string_descriptions), len(pv_strings),
+        )
+
+    # Phase A of per-battery card mirror — auto-discover the multi-
+    # battery surface from the coordinator's sensor reader (single-
+    # battery installs leave ``battery_power_list`` at length 1 and
+    # produce zero per-battery sensors, preserving today's fleet-
+    # sensor behaviour). Same gating + getattr pattern as per-PV-
+    # string surface above.
+    per_battery_descriptions = []
+    _ed = getattr(_sr, "_energy_dashboard_config", None) if _sr is not None else None
+    batt_list = list(getattr(_ed, "battery_power_list", []) or []) if _ed is not None else []
+    if len(batt_list) > 1:
+        for idx, batt_source_entity in enumerate(batt_list):
+            bid = f"b{idx + 1}"
+            # Friendly name: the source entity stripped of common
+            # ``sensor.`` / power-suffix noise so the device page
+            # reads "Battery b1 — battery_1_lade_entladeleistung"
+            # rather than a wall of slugs. Card overrides this via
+            # ``friendly_name`` anyway.
+            source_label = batt_source_entity.replace("sensor.", "").rstrip("_")
+            per_battery_descriptions.extend([
+                SensorEntityDescription(
+                    key=f"battery_{bid}_power",
+                    name=f"Battery {bid} Power",
+                    device_class=SensorDeviceClass.POWER,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=UnitOfPower.WATT,
+                    suggested_display_precision=0,
+                ),
+                SensorEntityDescription(
+                    key=f"battery_{bid}_soc",
+                    name=f"Battery {bid} SOC",
+                    device_class=SensorDeviceClass.BATTERY,
+                    state_class=SensorStateClass.MEASUREMENT,
+                    native_unit_of_measurement=PERCENTAGE,
+                    suggested_display_precision=0,
+                ),
+                SensorEntityDescription(
+                    key=f"battery_{bid}_status",
+                    name=f"Battery {bid} Status",
+                    # No device_class — values are localised strings
+                    # ("charging" / "discharging" / "idle"); same shape
+                    # as the existing fleet ``battery_status``.
+                ),
+                SensorEntityDescription(
+                    key=f"battery_{bid}_capacity_kwh",
+                    name=f"Battery {bid} Capacity",
+                    device_class=SensorDeviceClass.ENERGY_STORAGE,
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    suggested_display_precision=1,
+                ),
+            ])
+        for desc in per_battery_descriptions:
+            sensors.append(SEMSolarSensor(coordinator, desc, entry.entry_id))
+        _LOGGER.info(
+            "Created %d per-battery sensors for %d batter%s (Phase A)",
+            len(per_battery_descriptions), len(batt_list),
+            "y" if len(batt_list) == 1 else "ies",
+        )
+
     _LOGGER.info("Adding %d sensors to Home Assistant", len(sensors))
     async_add_entities(sensors)
 
     # Fix entity_ids from pre-translation installs and clean up stale entities
-    all_descriptions = list(SENSOR_TYPES) + per_charger_descriptions
+    all_descriptions = (
+        list(SENSOR_TYPES)
+        + per_charger_descriptions
+        + per_string_descriptions
+        + per_battery_descriptions
+    )
     _fix_entity_ids(hass, entry, all_descriptions, "sensor")
     _cleanup_stale_entities(hass, entry, all_descriptions, "sensor")
 
@@ -2037,6 +2158,17 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
 
         # Add specific attributes based on sensor type
         if self.entity_description.key == "charging_state":
+            # #351 M4 — per-charger effective state map. Makes the
+            # disagreement visible: fleet ``charging_state`` may be
+            # NIGHT_CHARGING_ACTIVE even when a specific charger's
+            # ``charge_mode`` is solar_only (effective state SOLAR_IDLE).
+            # Built from the ``charger_<id>_charging_state`` result keys
+            # that the coordinator's per-charger loop emits.
+            _per_charger_states = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_charging_state"):
+                    cid = k[len("charger_"):-len("_charging_state")]
+                    _per_charger_states[cid] = v
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -2046,6 +2178,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "solar_sufficient": self.coordinator.data.get("solar_sufficient"),
                 "charging_strategy": self.coordinator.data.get("charging_strategy"),
                 "strategy_reason": self.coordinator.data.get("charging_strategy_reason"),
+                "per_charger_states": _per_charger_states,
                 # EV charge-target deadline (#246) + tariff-optimized status (#247)
                 "ev_target_time": self.coordinator.data.get("ev_target_time"),
                 "ev_tariff_optimized": self.coordinator.data.get("ev_tariff_optimized"),
@@ -2089,6 +2222,44 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "next_cheap_end": d.get("tariff_next_cheap_end"),
                 "upcoming": d.get("tariff_upcoming"),
                 "schedule_today": d.get("tariff_schedule_today"),
+            })
+        elif self.entity_description.key == "tariff_price_level":
+            # #359: surface WHICH classifier path produced the current level.
+            # Lets users in cold-start / unit-mismatch / derivative-entity
+            # setups self-diagnose why they're stuck on ``normal`` without
+            # having to ask a maintainer for a debug log.
+            d = self.coordinator.data
+            attrs.update({
+                "classifier_path": d.get("tariff_classifier_path"),
+                "provider": d.get("tariff_provider"),
+                "is_dynamic": d.get("tariff_is_dynamic"),
+                "current_import_rate": d.get("tariff_current_import_rate"),
+            })
+        elif self.entity_description.key == "forecast_dampening_factor":
+            # #416: mirror the #359 ``classifier_path`` pattern — expose
+            # WHICH branch of the dampening calculation produced the
+            # current value so installs hitting an unexpected ceiling /
+            # floor can self-diagnose without a maintainer reading the
+            # debug log. PROD telemetry on 2026-06-04 showed 35% of
+            # ``correction_factor`` records pinned at the post-shrinkage
+            # ceiling without any visible signal — this attribute is the
+            # signal.
+            d = self.coordinator.data
+            attrs.update({
+                "dampening_path": d.get("forecast_dampening_path"),
+                "confidence": d.get("forecast_dampening_confidence"),
+                "live_ratio": d.get("forecast_dampening_live_ratio"),
+                "normalized_ratio": d.get("forecast_dampening_normalized_ratio"),
+                "pre_clamp": d.get("forecast_dampening_pre_clamp"),
+                "correction_factor_historical": d.get("forecast_correction_factor"),
+            })
+        elif self.entity_description.key == "forecast_correction_factor":
+            d = self.coordinator.data
+            attrs.update({
+                "correction_path": d.get("forecast_correction_path"),
+                "bucket_size": d.get("forecast_correction_bucket_size"),
+                "weather_category": d.get("forecast_weather_category"),
+                "history_days": d.get("forecast_history_days"),
             })
         elif self.entity_description.key == "load_management_status":
             # Add device list details for dashboard table

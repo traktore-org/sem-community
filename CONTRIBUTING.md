@@ -80,17 +80,18 @@ rsync -av --delete --exclude='__pycache__' --exclude='.git' \
   ./ your-ha:/config/custom_components/solar_energy_management/
 ```
 
-## The three-layer test pyramid
+## The four-layer test pyramid
 
-SEM tests live at three layers, each catching a different bug class. Use the one that matches what you're verifying:
+SEM tests live at four layers, each catching a different bug class. Use the one that matches what you're verifying. See [ADR 0007](docs/adr/0007-real-hass-test-framework.md) for the choice rule and rationale.
 
 | Layer | Where | Catches | Cost |
 |---|---|---|---|
-| **Unit tests** | `tests/test_*.py` | Pure logic / arithmetic bugs | Fast (seconds) |
+| **Unit tests** | `tests/test_*.py` (mock `hass`) | Pure logic / arithmetic bugs | Fast (seconds) |
 | **Scenario harness** | `tests/scenarios/*.yaml` + `tests/scenario_harness.py` | Decision-vs-enforcement drift, replay of real traces through the coordinator pipeline | Medium (sub-second per scenario) |
+| **Real-hass tests** | `tests/test_setup_entry_*.py`, `tests/test_unload_reload_cycle.py`, … (`hass` fixture from `pytest-homeassistant-custom-component`) | HA lifecycle — setup, unload, reload, `hass.data` slot lifecycle, frontend resource registration races | Medium (ms-to-seconds per test) |
 | **Live tests** | `tests/live/*.sh` | Time-boundary effects, entity reactivity, persistence across HA restart, real coordinator update path | Slow (minutes per test) |
 
-Each is necessary; none is sufficient. The Phase B EV-budget unification (#282) bug was invisible to unit tests because it required different code paths reading different formulas — only a scenario replay or live observation could surface the disagreement.
+Each is necessary; none is sufficient. The Phase B EV-budget unification (#282) bug was invisible to unit tests because it required different code paths reading different formulas — only a scenario replay or live observation could surface the disagreement. The real-hass layer was added in v1.7.0-beta.10 after entry-setup/unload bugs slipped past every mock-hass test in the suite.
 
 ### Live tests (`tests/live/`)
 
@@ -110,11 +111,24 @@ YAML-driven replays of timeline-of-readings. Reach for these when:
 
 A scenario YAML has a `config:` block (which becomes `coordinator.config`), an `ev_chargers:` block (use 2+ entries to exercise multi-charger distribution), a `timeline:` of sensor rows (sticky semantics — values carry forward unless overridden), and an `expect:` block with assertions. See `tests/scenarios/2026-05-28_surplus_leak.yaml` for a worked example.
 
+### Real-hass tests (`tests/test_setup_entry_*.py`, `tests/test_unload_reload_cycle.py`, …)
+
+In-process `HomeAssistant` instance via the `hass` fixture from `pytest-homeassistant-custom-component`. Reach for these when:
+- You're testing entry setup / unload / reload behaviour, `hass.data` slot lifecycle, or frontend resource registration
+- A mock-hass unit test would pass but the real HA call path is what you actually care about
+- You want CI coverage of an HA-lifecycle bug class without a deploy cycle
+
+Real-hass tests run against a real (but in-process) HA instance, so they're fast enough for CI on every PR. See ADR 0007 for the layer-choice rule.
+
 ## Branch Strategy
 
 - `main` — stable releases only
 - `develop` — integration branch, CI must pass
 - `feature/*` — work in progress, PR to develop when ready
+
+## Architecture Decision Records
+
+When a decision is worth keeping (new device class, invariant change, refactor that reshapes a subsystem), add a one-pager to [`docs/adr/`](docs/adr/README.md) using the Nygard format. Bugfixes and routine feature work do NOT need an ADR.
 
 ## Questions?
 

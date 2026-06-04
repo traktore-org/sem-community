@@ -1,0 +1,72 @@
+name: "2026-06-02 battery_assist below floor SOC — assist must NOT engage"
+
+coverage:
+  - mode: min_plus_solar
+    regime: zone3_low_soc_no_assist
+    issue: "#351 edge-case backfill"
+
+description: |
+  Edge case for the budget-unification / Phase C work
+  (``2026-05-29_budget_unify_battery_assist.yaml`` covers the
+  HAPPY path at SOC=92). This file covers the SOC-protection
+  branch:
+
+    * battery_assist_floor_soc = 60
+    * battery_soc = 45 (well BELOW the floor)
+    * Zone is normally "battery assist" territory by SOC banding
+      logic, BUT the floor must override → no assist drain.
+
+  Why this matters: the floor-SOC protection is the only thing
+  preventing solar_plus_cheap and min_plus_solar from draining the
+  household battery to zero during cold winter days. If the floor
+  check ever regresses (e.g. a refactor moves it after the
+  decision), users will see their battery dropped to 0% over the
+  EV charge — a destructive regression visible to the user only
+  via the morning SOC reading.
+
+  Contract pinned: with SOC below floor, the strategy must NOT
+  resolve to battery_assist. solar_only (no battery contribution)
+  is the expected fallback.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60       # protection floor
+  battery_assist_max_power: 4500
+  ev_charging_mode: "min_plus_solar"
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Modest solar + EV connected + battery WELL below floor.
+# Battery is reading discharge power (legitimate house demand
+# eating into SOC) — but assist must not pile on top.
+timeline:
+  - t: 0
+    solar_power: 2200
+    grid_power: 0
+    battery_power: -800          # already discharging to home
+    battery_soc: 45              # ← BELOW the 60 floor
+    ev_power: 0
+    ev_connected: true
+
+  - t: 30
+  - t: 60
+  - t: 90
+
+expect:
+  # The protection must hold: no battery_assist regime engages.
+  # Acceptable strategies: solar_only (typical fallback), idle,
+  # self_consumption — anything BUT a substring containing
+  # "battery_assist".
+  strategy_not_substring: "battery_assist"

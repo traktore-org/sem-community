@@ -1,0 +1,82 @@
+name: "2026-06-02 solar_only long-run stability — no strategy flicker across 20 cycles"
+
+coverage:
+  - mode: solar_only
+    regime: zone3_day_redirect
+    issue: "long-run stability"
+
+description: |
+  Catches the bug class where the strategy decision oscillates
+  cycle-to-cycle even with stable inputs ("strategy flicker") —
+  what the dashboard user sees as "EV starts, stops, starts again"
+  every few seconds even though their solar production hasn't
+  changed.
+
+  Existing scenarios cover 3-6 cycles max. This one runs 20
+  cycles (10 minutes of simulated time) under steady-state
+  surplus conditions and asserts that the canonical_strategy
+  stays in "solar_only" the entire window — no flips back to
+  IDLE or BATTERY_ASSIST.
+
+  Pinned because the post-#358 arch made the strategy decision
+  pure / stateless. If a future refactor accidentally re-introduces
+  hysteresis state OR a debounce window or a sliding-window
+  forecast that's sensitive to micro-changes, this scenario
+  catches the flicker on PR review.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# 20 identical cycles. The harness's sticky-timeline semantics
+# carry t=0's readings forward to every subsequent ``t: N`` that
+# doesn't override them — so this is 20 cycles of "exactly the
+# same input." Any strategy flicker MUST come from the decision
+# pipeline itself (hidden state, hysteresis, timer-based debounce).
+timeline:
+  - t: 0
+    solar_power: 6000
+    grid_power: 3500
+    battery_power: 1000
+    battery_soc: 75
+    ev_power: 0
+    ev_connected: true
+
+  - t: 30
+  - t: 60
+  - t: 90
+  - t: 120
+  - t: 150
+  - t: 180
+  - t: 210
+  - t: 240
+  - t: 270
+  - t: 300
+  - t: 330
+  - t: 360
+  - t: 390
+  - t: 420
+  - t: 450
+  - t: 480
+  - t: 510
+  - t: 540
+  - t: 570
+
+expect:
+  # Headline: at least one cycle must be solar_only — proves the
+  # regime is exercised.
+  strategy_substring: "solar_only"

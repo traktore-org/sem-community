@@ -230,7 +230,7 @@ NUMBER_TYPES = [
         key="cheap_price_threshold",
         native_unit_of_measurement="CHF/kWh",
         native_min_value=0.0,
-        native_max_value=1.0,
+        native_max_value=5.0,
         native_step=0.01,
         mode=NumberMode.BOX,
     ),
@@ -238,7 +238,7 @@ NUMBER_TYPES = [
         key="expensive_price_threshold",
         native_unit_of_measurement="CHF/kWh",
         native_min_value=0.0,
-        native_max_value=1.0,
+        native_max_value=5.0,
         native_step=0.01,
         mode=NumberMode.BOX,
     ),
@@ -345,7 +345,12 @@ async def async_setup_entry(
                     key=f"charger_{cid}_daily_ev_target",
                     name=f"{cname} Night Target",
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-                    native_min_value=0, native_max_value=100, native_step=0.5,
+                    # #355: max raised 100 → 200 so the slider has drag room
+                    # when the user (or default) has Solar Max sitting at the
+                    # rail. Pre-fix a range slider with Min + Max both at 100
+                    # had zero space between the handles and could not be
+                    # dragged. Covers any practical EV battery size.
+                    native_min_value=0, native_max_value=200, native_step=0.5,
                     mode=NumberMode.SLIDER,
                 ), "daily_ev_target", full_config.get("daily_ev_target", 10)),
                 (NumberEntityDescription(
@@ -376,7 +381,10 @@ async def async_setup_entry(
                     key=f"charger_{cid}_daily_ev_target_max",
                     name=f"{cname} Solar Max",
                     native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-                    native_min_value=0, native_max_value=100, native_step=0.5,
+                    # #355: max raised 100 → 200 — same reason as the Min slider
+                    # above. With both defaulting to 100 (full charge intent),
+                    # the range slider had zero drag room.
+                    native_min_value=0, native_max_value=200, native_step=0.5,
                     mode=NumberMode.SLIDER,
                     icon="mdi:solar-power-variant",
                 ), "daily_ev_target_max",

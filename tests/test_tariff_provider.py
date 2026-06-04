@@ -126,38 +126,38 @@ class TestStaticTariffProvider:
 
 class TestDynamicTariffProvider:
 
-    def test_read_current_price(self, hass):
-        hass.states.get = MagicMock(return_value=_make_price_state(0.22))
-        provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+    def test_read_current_price(self, mock_hass):
+        mock_hass.states.get = MagicMock(return_value=_make_price_state(0.22))
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
         assert provider.get_current_import_rate() == 0.22
 
-    def test_read_current_price_fallback_no_entity(self, hass):
-        hass.states.get = MagicMock(return_value=None)
-        hass.states.async_all = MagicMock(return_value=[])
-        provider = DynamicTariffProvider(hass)
+    def test_read_current_price_fallback_no_entity(self, mock_hass):
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(return_value=[])
+        provider = DynamicTariffProvider(mock_hass)
         assert provider.get_current_import_rate() == 0.30
 
-    def test_read_current_price_fallback_unavailable(self, hass):
+    def test_read_current_price_fallback_unavailable(self, mock_hass):
         state = MagicMock()
         state.state = "unavailable"
-        hass.states.get = MagicMock(return_value=state)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+        mock_hass.states.get = MagicMock(return_value=state)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
         assert provider.get_current_import_rate() == 0.30
 
-    def test_detect_provider_tibber(self, hass):
+    def test_detect_provider_tibber(self, mock_hass):
         tibber_state = MagicMock()
         tibber_state.entity_id = "sensor.electricity_price_home"
         tibber_state.attributes = {"integration": "tibber"}
 
-        hass.states.get = MagicMock(return_value=None)
-        hass.states.async_all = MagicMock(return_value=[tibber_state])
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(return_value=[tibber_state])
 
-        provider = DynamicTariffProvider(hass)
+        provider = DynamicTariffProvider(mock_hass)
         result = provider.detect_provider()
         assert result == "tibber"
         assert provider._price_entity == "sensor.electricity_price_home"
 
-    def test_detect_provider_nordpool(self, hass):
+    def test_detect_provider_nordpool(self, mock_hass):
         nordpool_state = MagicMock()
         nordpool_state.entity_id = "sensor.nordpool_kwh_ch_eur_3_10_025"
         nordpool_state.attributes = {"integration": "nordpool"}
@@ -167,74 +167,80 @@ class TestDynamicTariffProvider:
         non_tibber.entity_id = "sensor.something_else"
         non_tibber.attributes = {}
 
-        hass.states.get = MagicMock(return_value=None)
-        hass.states.async_all = MagicMock(side_effect=lambda domain: {
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(side_effect=lambda domain: {
             "sensor": [non_tibber, nordpool_state],
         }.get(domain, []))
 
-        provider = DynamicTariffProvider(hass)
+        provider = DynamicTariffProvider(mock_hass)
         result = provider.detect_provider()
         assert result == "nordpool"
 
-    def test_classify_price_negative(self, hass):
-        provider = DynamicTariffProvider(hass)
+    def test_classify_price_negative(self, mock_hass):
+        provider = DynamicTariffProvider(mock_hass)
         assert provider._classify_price(-0.05) == PriceLevel.NEGATIVE
 
-    def test_classify_price_very_cheap(self, hass):
-        provider = DynamicTariffProvider(hass)
+    def test_classify_price_very_cheap(self, mock_hass):
+        """#359 follow-up: these tests were exercising the static-cutoff
+        buckets but constructing a percentile-default provider, so they
+        only passed because of the silent CHF fallback that we just
+        removed. Pass ``classification_mode='static'`` to make the
+        original intent explicit — testing the fixed-cutoff bucketing.
+        """
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # cheap_threshold default = 0.15, very_cheap < 0.075
         assert provider._classify_price(0.05) == PriceLevel.VERY_CHEAP
 
-    def test_classify_price_cheap(self, hass):
-        provider = DynamicTariffProvider(hass)
+    def test_classify_price_cheap(self, mock_hass):
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # 0.075 <= price < 0.15
         assert provider._classify_price(0.10) == PriceLevel.CHEAP
 
-    def test_classify_price_normal(self, hass):
-        provider = DynamicTariffProvider(hass)
+    def test_classify_price_normal(self, mock_hass):
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # 0.15 <= price <= 0.35
         assert provider._classify_price(0.25) == PriceLevel.NORMAL
 
-    def test_classify_price_expensive(self, hass):
-        provider = DynamicTariffProvider(hass)
+    def test_classify_price_expensive(self, mock_hass):
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # > 0.35 and <= 0.525
         assert provider._classify_price(0.40) == PriceLevel.EXPENSIVE
 
-    def test_classify_price_very_expensive(self, hass):
-        provider = DynamicTariffProvider(hass)
+    def test_classify_price_very_expensive(self, mock_hass):
+        provider = DynamicTariffProvider(mock_hass, classification_mode="static")
         # > 0.525 (1.5 * 0.35)
         assert provider._classify_price(0.60) == PriceLevel.VERY_EXPENSIVE
 
-    def test_find_cheapest_hours(self, hass):
+    def test_find_cheapest_hours(self, mock_hass):
         now = datetime(2026, 3, 19, 12, 0, 0)
         prices_today = [
             {"start": (now + timedelta(hours=i)).isoformat(), "total": 0.10 + i * 0.05}
             for i in range(1, 7)
         ]
         state = _make_price_state(0.20, attributes={"prices_today": prices_today})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
             cheapest = provider.find_cheapest_hours(2, within_hours=6)
 
         assert len(cheapest) == 2
         # Should be sorted by time, but the two cheapest are hours 1 and 2
         assert cheapest[0].price <= cheapest[1].price or cheapest[0].timestamp < cheapest[1].timestamp
 
-    def test_tariff_data_with_prices(self, hass):
+    def test_tariff_data_with_prices(self, mock_hass):
         now = datetime(2026, 3, 19, 12, 0, 0)
         prices = [
             {"start": now.replace(hour=h).isoformat(), "total": 0.10 + h * 0.01}
             for h in range(24)
         ]
         state = _make_price_state(0.22, attributes={"prices_today": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
             data = provider.get_tariff_data()
 
         assert data.is_dynamic is True
@@ -244,8 +250,8 @@ class TestDynamicTariffProvider:
         assert data.today_avg_price is not None
         assert data.today_min_price <= data.today_avg_price <= data.today_max_price
 
-    def test_export_rate(self, hass):
-        provider = DynamicTariffProvider(hass, export_rate=0.09)
+    def test_export_rate(self, mock_hass):
+        provider = DynamicTariffProvider(mock_hass, export_rate=0.09)
         assert provider.get_current_export_rate() == 0.09
 
 
@@ -297,23 +303,23 @@ class TestAmberElectricProvider:
 
     # ── Auto-detection ──
 
-    def test_detect_amber_by_entity_name(self, hass):
+    def test_detect_amber_by_entity_name(self, mock_hass):
         """Amber detected from sensor name pattern."""
         amber = MagicMock()
         amber.entity_id = "sensor.amber_my_home_general_price"
         amber.attributes = {}
         amber.state = "0.28"
 
-        hass.states.get = MagicMock(return_value=None)
-        hass.states.async_all = MagicMock(return_value=[amber])
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(return_value=[amber])
 
-        provider = DynamicTariffProvider(hass)
+        provider = DynamicTariffProvider(mock_hass)
         result = provider.detect_provider()
         assert result == "amber"
         assert provider._price_entity == "sensor.amber_my_home_general_price"
         assert provider._provider_name == "amber"
 
-    def test_detect_amber_finds_forecast_entity(self, hass):
+    def test_detect_amber_finds_forecast_entity(self, mock_hass):
         """Detection also discovers the forecast entity."""
         amber_price = MagicMock()
         amber_price.entity_id = "sensor.amber_my_home_general_price"
@@ -334,25 +340,25 @@ class TestAmberElectricProvider:
                 return feedin_state
             return None
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        hass.states.async_all = MagicMock(return_value=[amber_price])
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        mock_hass.states.async_all = MagicMock(return_value=[amber_price])
 
-        provider = DynamicTariffProvider(hass)
+        provider = DynamicTariffProvider(mock_hass)
         provider.detect_provider()
         assert provider._forecast_entity == "sensor.amber_my_home_general_forecast"
         assert provider._feedin_entity == "sensor.amber_my_home_feed_in_price"
 
-    def test_detect_amber_no_forecast_entity(self, hass):
+    def test_detect_amber_no_forecast_entity(self, mock_hass):
         """Works without forecast entity (fallback to current price only)."""
         amber_price = MagicMock()
         amber_price.entity_id = "sensor.amber_general_price"
         amber_price.attributes = {}
         amber_price.state = "0.28"
 
-        hass.states.get = MagicMock(return_value=None)
-        hass.states.async_all = MagicMock(return_value=[amber_price])
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(return_value=[amber_price])
 
-        provider = DynamicTariffProvider(hass)
+        provider = DynamicTariffProvider(mock_hass)
         provider.detect_provider()
         assert provider._provider_name == "amber"
         assert provider._forecast_entity is None
@@ -360,15 +366,15 @@ class TestAmberElectricProvider:
 
     # ── Current price reading ──
 
-    def test_amber_current_price(self, hass):
+    def test_amber_current_price(self, mock_hass):
         """Read current price from Amber price sensor."""
-        hass.states.get = MagicMock(return_value=self._amber_price_state(0.32))
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        mock_hass.states.get = MagicMock(return_value=self._amber_price_state(0.32))
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         assert provider.get_current_import_rate() == 0.32
 
     # ── Dynamic export rate from feed-in sensor ──
 
-    def test_dynamic_export_rate_from_feedin(self, hass):
+    def test_dynamic_export_rate_from_feedin(self, mock_hass):
         """Export rate read from feed-in entity (abs of negative value)."""
         def mock_get(entity_id):
             if entity_id == "sensor.amber_general_price":
@@ -377,30 +383,30 @@ class TestAmberElectricProvider:
                 return self._amber_feedin_state(-0.08)
             return None
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         provider._feedin_entity = "sensor.amber_feed_in_price"
         assert provider.get_current_export_rate() == pytest.approx(0.08)
 
-    def test_dynamic_export_rate_positive_feedin(self, hass):
+    def test_dynamic_export_rate_positive_feedin(self, mock_hass):
         """Feed-in price that's already positive."""
         def mock_get(entity_id):
             if "feed_in" in entity_id:
                 return _make_price_state(0.06)
             return self._amber_price_state(0.28)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         provider._feedin_entity = "sensor.amber_feed_in_price"
         assert provider.get_current_export_rate() == pytest.approx(0.06)
 
-    def test_export_rate_fallback_no_feedin_entity(self, hass):
+    def test_export_rate_fallback_no_feedin_entity(self, mock_hass):
         """Falls back to static export_rate when no feed-in entity."""
-        hass.states.get = MagicMock(return_value=self._amber_price_state(0.28))
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price", export_rate=0.075)
+        mock_hass.states.get = MagicMock(return_value=self._amber_price_state(0.28))
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price", export_rate=0.075)
         assert provider.get_current_export_rate() == 0.075
 
-    def test_export_rate_fallback_feedin_unavailable(self, hass):
+    def test_export_rate_fallback_feedin_unavailable(self, mock_hass):
         """Falls back when feed-in entity is unavailable."""
         def mock_get(entity_id):
             if "feed_in" in entity_id:
@@ -409,14 +415,14 @@ class TestAmberElectricProvider:
                 return state
             return self._amber_price_state(0.28)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price", export_rate=0.075)
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price", export_rate=0.075)
         provider._feedin_entity = "sensor.amber_feed_in_price"
         assert provider.get_current_export_rate() == 0.075
 
     # ── Forecast price parsing ──
 
-    def test_read_amber_forecasts_from_forecast_entity(self, hass):
+    def test_read_amber_forecasts_from_forecast_entity(self, mock_hass):
         """Parse forecasts from dedicated forecast sensor."""
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecast_state, raw_forecasts = self._amber_forecast_state(now, count=12)
@@ -426,8 +432,8 @@ class TestAmberElectricProvider:
                 return forecast_state
             return self._amber_price_state(0.28)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         provider._forecast_entity = "sensor.amber_general_forecast"
         prices = provider._read_prices_list()
 
@@ -438,7 +444,7 @@ class TestAmberElectricProvider:
         for i in range(1, len(prices)):
             assert prices[i].timestamp >= prices[i - 1].timestamp
 
-    def test_read_amber_forecasts_from_price_entity_attrs(self, hass):
+    def test_read_amber_forecasts_from_price_entity_attrs(self, mock_hass):
         """Parse forecasts from price entity attributes (if provider puts them there)."""
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
@@ -446,16 +452,16 @@ class TestAmberElectricProvider:
             for i in range(6)
         ]
         state = _make_price_state(0.20, attributes={"forecasts": forecasts})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         prices = provider._read_prices_list()
 
         assert len(prices) == 6
         assert prices[0].price == 0.20
         assert prices[5].price == pytest.approx(0.35)
 
-    def test_amber_30min_intervals_get_price_at(self, hass):
+    def test_amber_30min_intervals_get_price_at(self, mock_hass):
         """get_price_at works with 30-minute intervals."""
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
@@ -463,11 +469,11 @@ class TestAmberElectricProvider:
             for i in range(6)
         ]
         state = _make_price_state(0.20, attributes={"forecasts": forecasts})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
 
             # At 14:00 exactly → first interval (0.20)
             assert provider.get_price_at(now) == pytest.approx(0.20)
@@ -480,7 +486,7 @@ class TestAmberElectricProvider:
             # At 15:00 → third interval (0.30)
             assert provider.get_price_at(now + timedelta(minutes=60)) == pytest.approx(0.30)
 
-    def test_amber_hourly_intervals_still_work(self, hass):
+    def test_amber_hourly_intervals_still_work(self, mock_hass):
         """get_price_at still works with hourly intervals (Tibber/Nordpool)."""
         now = datetime(2026, 5, 3, 14, 0, 0)
         prices = [
@@ -488,16 +494,16 @@ class TestAmberElectricProvider:
             for i in range(4)
         ]
         state = _make_price_state(0.10, attributes={"prices_today": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.tibber_price")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.tibber_price")
             assert provider.get_price_at(now) == pytest.approx(0.10)
             assert provider.get_price_at(now + timedelta(minutes=30)) == pytest.approx(0.10)
             assert provider.get_price_at(now + timedelta(hours=1)) == pytest.approx(0.15)
 
-    def test_amber_forecast_negative_prices(self, hass):
+    def test_amber_forecast_negative_prices(self, mock_hass):
         """Handle negative prices (renewable oversupply)."""
         now = datetime(2026, 5, 3, 12, 0, 0)
         forecasts = [
@@ -505,26 +511,37 @@ class TestAmberElectricProvider:
             for i in range(6)
         ]
         state = _make_price_state(-0.05, attributes={"forecasts": forecasts})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         prices = provider._read_prices_list()
 
         assert len(prices) == 6
         assert prices[0].price == -0.05
         assert prices[0].level == PriceLevel.NEGATIVE
 
-    def test_amber_forecast_spike_detection(self, hass):
-        """Classify spike prices as very_expensive."""
+    def test_amber_forecast_spike_detection(self, mock_hass):
+        """Classify spike prices as very_expensive.
+
+        #359 follow-up: tests the static-cutoff branch explicitly (the
+        2-point forecast is too small for percentile mode, so under the
+        post-fix default the spike would be classified as NORMAL too).
+        Static mode is the correct shape for testing the literal 'a
+        price > 0.525 is very_expensive' assertion.
+        """
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
             {"start_time": now.isoformat(), "per_kwh": 0.25},
             {"start_time": (now + timedelta(minutes=30)).isoformat(), "per_kwh": 2.50},  # Spike!
         ]
         state = _make_price_state(0.25, attributes={"forecasts": forecasts})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        provider = DynamicTariffProvider(
+            mock_hass,
+            price_entity="sensor.amber_general_price",
+            classification_mode="static",
+        )
         prices = provider._read_prices_list()
 
         assert prices[0].level == PriceLevel.NORMAL
@@ -532,7 +549,7 @@ class TestAmberElectricProvider:
 
     # ── E2E: full tariff data pipeline ──
 
-    def test_amber_full_tariff_data(self, hass):
+    def test_amber_full_tariff_data(self, mock_hass):
         """End-to-end: detection → price → forecasts → tariff data."""
         now = datetime(2026, 5, 3, 14, 0, 0)
 
@@ -554,13 +571,13 @@ class TestAmberElectricProvider:
                 return self._amber_price_state(0.28)
             return None
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        hass.states.async_all = MagicMock(return_value=[amber_price])
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        mock_hass.states.async_all = MagicMock(return_value=[amber_price])
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
 
-            provider = DynamicTariffProvider(hass, currency="AUD")
+            provider = DynamicTariffProvider(mock_hass, currency="AUD")
             result = provider.detect_provider()
             assert result == "amber"
 
@@ -581,7 +598,7 @@ class TestAmberElectricProvider:
             assert d["tariff_current_import_rate"] == 0.28
             assert d["tariff_current_export_rate"] == pytest.approx(0.06)
 
-    def test_amber_find_cheapest_hours(self, hass):
+    def test_amber_find_cheapest_hours(self, mock_hass):
         """find_cheapest_hours works with 30-minute Amber intervals."""
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
@@ -589,11 +606,11 @@ class TestAmberElectricProvider:
             for i, price in enumerate([0.30, 0.05, 0.25, 0.02, 0.40, 0.08])
         ]
         state = _make_price_state(0.30, attributes={"forecasts": forecasts})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
             cheapest = provider.find_cheapest_hours(2, within_hours=6)
 
         assert len(cheapest) == 2
@@ -603,14 +620,14 @@ class TestAmberElectricProvider:
 
     # ── Edge cases ──
 
-    def test_empty_forecasts_array(self, hass):
+    def test_empty_forecasts_array(self, mock_hass):
         """Empty forecasts array doesn't crash."""
         state = _make_price_state(0.28, attributes={"forecasts": []})
-        hass.states.get = MagicMock(return_value=state)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        mock_hass.states.get = MagicMock(return_value=state)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         assert provider._read_prices_list() == []
 
-    def test_malformed_forecast_items_skipped(self, hass):
+    def test_malformed_forecast_items_skipped(self, mock_hass):
         """Malformed items in forecasts array are skipped gracefully."""
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
@@ -622,13 +639,13 @@ class TestAmberElectricProvider:
             {"start_time": (now + timedelta(minutes=30)).isoformat(), "per_kwh": 0.28},  # Good
         ]
         state = _make_price_state(0.25, attributes={"forecasts": forecasts})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
-        provider = DynamicTariffProvider(hass, price_entity="sensor.amber_general_price")
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         prices = provider._read_prices_list()
         assert len(prices) == 2  # Only the two valid entries
 
-    def test_forecasts_not_used_when_tibber_prices_exist(self, hass):
+    def test_forecasts_not_used_when_tibber_prices_exist(self, mock_hass):
         """If Tibber prices_today exists, forecasts attribute is ignored."""
         now = datetime(2026, 5, 3, 14, 0, 0)
         tibber_prices = [
@@ -644,15 +661,15 @@ class TestAmberElectricProvider:
             "prices_today": tibber_prices,
             "forecasts": amber_forecasts,
         })
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
-        provider = DynamicTariffProvider(hass, price_entity="sensor.tibber_price")
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.tibber_price")
         prices = provider._read_prices_list()
         # Should use Tibber prices (0.10, 0.12, 0.14), NOT Amber (0.50, 0.60, 0.70)
         assert len(prices) == 3
         assert prices[0].price == pytest.approx(0.10)
 
-    def test_generic_forecast_attribute_with_price_key(self, hass):
+    def test_generic_forecast_attribute_with_price_key(self, mock_hass):
         """Generic provider using 'price' instead of 'per_kwh'."""
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
@@ -660,9 +677,9 @@ class TestAmberElectricProvider:
             {"start": (now + timedelta(hours=1)).isoformat(), "price": 0.18},
         ]
         state = _make_price_state(0.22, attributes={"forecasts": forecasts})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
-        provider = DynamicTariffProvider(hass, price_entity="sensor.some_provider")
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.some_provider")
         prices = provider._read_prices_list()
         assert len(prices) == 2
         assert prices[0].price == 0.22
@@ -692,22 +709,22 @@ class TestOctopusEnergyProvider:
             })
         return rates
 
-    def test_detect_octopus_by_entity_name(self, hass):
+    def test_detect_octopus_by_entity_name(self, mock_hass):
         octopus = MagicMock()
         octopus.entity_id = "sensor.octopus_energy_electricity_abc123_12345_current_rate"
         octopus.attributes = {}
         octopus.state = "0.25"
 
-        hass.states.get = MagicMock(return_value=None)
-        hass.states.async_all = MagicMock(return_value=[octopus])
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(return_value=[octopus])
 
-        provider = DynamicTariffProvider(hass)
+        provider = DynamicTariffProvider(mock_hass)
         result = provider.detect_provider()
         assert result == "octopus"
         assert provider._price_entity == octopus.entity_id
         assert provider._provider_name == "octopus"
 
-    def test_detect_octopus_discovers_event_entity(self, hass):
+    def test_detect_octopus_discovers_event_entity(self, mock_hass):
         octopus = MagicMock()
         octopus.entity_id = "sensor.octopus_energy_electricity_abc_123_current_rate"
         octopus.attributes = {}
@@ -722,14 +739,14 @@ class TestOctopusEnergyProvider:
                 return event_state
             return None
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        hass.states.async_all = MagicMock(return_value=[octopus])
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        mock_hass.states.async_all = MagicMock(return_value=[octopus])
 
-        provider = DynamicTariffProvider(hass)
+        provider = DynamicTariffProvider(mock_hass)
         provider.detect_provider()
         assert provider._forecast_entity == "event.octopus_energy_electricity_abc_123_current_day_rates"
 
-    def test_detect_octopus_discovers_export_entity(self, hass):
+    def test_detect_octopus_discovers_export_entity(self, mock_hass):
         octopus = MagicMock()
         octopus.entity_id = "sensor.octopus_energy_electricity_abc_123_current_rate"
         octopus.attributes = {}
@@ -743,14 +760,14 @@ class TestOctopusEnergyProvider:
                 return export_state
             return None
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        hass.states.async_all = MagicMock(return_value=[octopus])
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        mock_hass.states.async_all = MagicMock(return_value=[octopus])
 
-        provider = DynamicTariffProvider(hass)
+        provider = DynamicTariffProvider(mock_hass)
         provider.detect_provider()
         assert provider._feedin_entity == "sensor.octopus_energy_electricity_abc_123_export_current_rate"
 
-    def test_read_octopus_rates_from_event_entity(self, hass):
+    def test_read_octopus_rates_from_event_entity(self, mock_hass):
         now = datetime(2026, 5, 3, 0, 0, 0)
         rates = self._octopus_rates(now, count=48, base_price=0.20)
 
@@ -763,42 +780,42 @@ class TestOctopusEnergyProvider:
                 return event_state
             return _make_price_state(0.20)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.octopus_current_rate")
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.octopus_current_rate")
         provider._forecast_entity = "event.octopus_current_day_rates"
         prices = provider._read_prices_list()
 
         assert len(prices) == 48
         assert prices[0].price == rates[0]["value_inc_vat"]
 
-    def test_octopus_30min_get_price_at(self, hass):
+    def test_octopus_30min_get_price_at(self, mock_hass):
         now = datetime(2026, 5, 3, 14, 0, 0)
         rates = [
             {"start": (now + timedelta(minutes=30 * i)).isoformat(), "value_inc_vat": 0.20 + i * 0.05}
             for i in range(4)
         ]
         state = _make_price_state(0.20, attributes={"rates": rates})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.octopus")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.octopus")
             assert provider.get_price_at(now) == pytest.approx(0.20)
             assert provider.get_price_at(now + timedelta(minutes=15)) == pytest.approx(0.20)
             assert provider.get_price_at(now + timedelta(minutes=30)) == pytest.approx(0.25)
 
-    def test_octopus_dynamic_export_rate(self, hass):
+    def test_octopus_dynamic_export_rate(self, mock_hass):
         def mock_get(entity_id):
             if "export" in entity_id:
                 return _make_price_state(0.04)
             return _make_price_state(0.25)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.octopus_rate")
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.octopus_rate")
         provider._feedin_entity = "sensor.octopus_export_rate"
         assert provider.get_current_export_rate() == pytest.approx(0.04)
 
-    def test_octopus_full_tariff_data(self, hass):
+    def test_octopus_full_tariff_data(self, mock_hass):
         now = datetime(2026, 5, 3, 14, 0, 0)
         rates = self._octopus_rates(now, count=24, base_price=0.22)
 
@@ -823,12 +840,12 @@ class TestOctopusEnergyProvider:
                 return _make_price_state(0.25)
             return None
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        hass.states.async_all = MagicMock(return_value=[octopus])
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        mock_hass.states.async_all = MagicMock(return_value=[octopus])
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, currency="GBP")
+            provider = DynamicTariffProvider(mock_hass, currency="GBP")
             provider.detect_provider()
 
             data = provider.get_tariff_data()
@@ -839,7 +856,7 @@ class TestOctopusEnergyProvider:
             assert data.currency == "GBP"
             assert len(data.upcoming_prices) > 0
 
-    def test_octopus_empty_rates(self, hass):
+    def test_octopus_empty_rates(self, mock_hass):
         event_state = MagicMock()
         event_state.state = "2026-05-03"
         event_state.attributes = {"rates": []}
@@ -849,12 +866,12 @@ class TestOctopusEnergyProvider:
                 return event_state
             return _make_price_state(0.25)
 
-        hass.states.get = MagicMock(side_effect=mock_get)
-        provider = DynamicTariffProvider(hass, price_entity="sensor.octopus")
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.octopus")
         provider._forecast_entity = "event.octopus_rates"
         assert provider._read_prices_list() == []
 
-    def test_octopus_malformed_rates_skipped(self, hass):
+    def test_octopus_malformed_rates_skipped(self, mock_hass):
         now = datetime(2026, 5, 3, 14, 0, 0)
         rates = [
             {"start": now.isoformat(), "value_inc_vat": 0.25},
@@ -865,9 +882,9 @@ class TestOctopusEnergyProvider:
             {"start": (now + timedelta(hours=1)).isoformat(), "value_inc_vat": 0.28},
         ]
         state = _make_price_state(0.25, attributes={"rates": rates})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
-        provider = DynamicTariffProvider(hass, price_entity="sensor.octopus")
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.octopus")
         prices = provider._read_prices_list()
         assert len(prices) == 2
 
@@ -879,7 +896,7 @@ class TestOctopusEnergyProvider:
 class TestDynamicTariffSchedule:
     """Tests for get_schedule_for_day() on DynamicTariffProvider."""
 
-    def test_schedule_from_hourly_prices(self, hass):
+    def test_schedule_from_hourly_prices(self, mock_hass):
         """Generate schedule from Tibber-style hourly prices."""
         now = datetime(2026, 5, 3, 0, 0, 0)
         prices = []
@@ -889,11 +906,11 @@ class TestDynamicTariffSchedule:
             prices.append({"start": now.replace(hour=h).isoformat(), "total": price})
 
         state = _make_price_state(0.08, attributes={"prices_today": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
             schedule = provider.get_schedule_for_day(now)
 
         # Block shape was extended in #282 with `level` + `avg_price` — assert
@@ -904,7 +921,7 @@ class TestDynamicTariffSchedule:
         assert _legacy(schedule[1]) == {"start": "06:00", "end": "20:00", "tariff": "HT"}
         assert _legacy(schedule[2]) == {"start": "20:00", "end": "24:00", "tariff": "NT"}
 
-    def test_schedule_from_30min_prices(self, hass):
+    def test_schedule_from_30min_prices(self, mock_hass):
         """Generate schedule from Amber/Octopus 30-min intervals."""
         now = datetime(2026, 5, 3, 12, 0, 0)
         forecasts = []
@@ -915,11 +932,11 @@ class TestDynamicTariffSchedule:
             forecasts.append({"start_time": start.isoformat(), "per_kwh": price})
 
         state = _make_price_state(0.05, attributes={"forecasts": forecasts})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.amber")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber")
             schedule = provider.get_schedule_for_day(now)
 
         assert len(schedule) == 2
@@ -930,7 +947,7 @@ class TestDynamicTariffSchedule:
         assert schedule[1]["start"] == "14:00"
         assert schedule[1]["end"] == "24:00"
 
-    def test_schedule_negative_prices(self, hass):
+    def test_schedule_negative_prices(self, mock_hass):
         """Negative prices map to NT (cheap)."""
         now = datetime(2026, 5, 3, 12, 0, 0)
         prices = [
@@ -938,29 +955,40 @@ class TestDynamicTariffSchedule:
             {"start": (now + timedelta(hours=1)).isoformat(), "total": 0.30},
         ]
         state = _make_price_state(-0.05, attributes={"prices_today": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
             schedule = provider.get_schedule_for_day(now)
 
         assert schedule[0]["tariff"] == "NT"  # Negative = cheap
         assert schedule[1]["tariff"] == "HT"
 
-    def test_schedule_all_cheap(self, hass):
-        """All prices cheap → single NT block."""
+    def test_schedule_all_cheap(self, mock_hass):
+        """All prices cheap → single NT block.
+
+        #359 follow-up: flat days (24 × €0.05) trip the degenerate-
+        distribution guard, so percentile mode returns NORMAL = HT
+        for every hour. Use static mode here — the test's semantics
+        are about schedule generation from a flat-cheap day, which is
+        exactly what static cutoffs were designed to encode.
+        """
         now = datetime(2026, 5, 3, 0, 0, 0)
         prices = [
             {"start": now.replace(hour=h).isoformat(), "total": 0.05}
             for h in range(24)
         ]
         state = _make_price_state(0.05, attributes={"prices_today": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(
+                mock_hass,
+                price_entity="sensor.price",
+                classification_mode="static",
+            )
             schedule = provider.get_schedule_for_day(now)
 
         assert len(schedule) == 1
@@ -969,19 +997,25 @@ class TestDynamicTariffSchedule:
         assert schedule[0]["end"] == "24:00"
         assert schedule[0]["tariff"] == "NT"
 
-    def test_schedule_empty_no_prices(self, hass):
+    def test_schedule_empty_no_prices(self, mock_hass):
         """No prices for target day → empty schedule (card uses fallback)."""
-        hass.states.get = MagicMock(return_value=_make_price_state(0.25))
+        mock_hass.states.get = MagicMock(return_value=_make_price_state(0.25))
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = datetime(2026, 5, 3, 12, 0, 0)
-            provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.price")
             schedule = provider.get_schedule_for_day()
 
         assert schedule == []
 
-    def test_schedule_with_spikes(self, hass):
-        """Spike prices map to HT."""
+    def test_schedule_with_spikes(self, mock_hass):
+        """Spike prices map to HT.
+
+        #359 follow-up: 3 prices is below the 4-point percentile
+        minimum, so percentile mode returns NORMAL for every hour and
+        the spike doesn't get singled out. Use static mode — the test
+        is about absolute-magnitude spike detection.
+        """
         now = datetime(2026, 5, 3, 14, 0, 0)
         prices = [
             {"start": now.isoformat(), "total": 0.10},           # Cheap
@@ -989,11 +1023,15 @@ class TestDynamicTariffSchedule:
             {"start": (now + timedelta(hours=2)).isoformat(), "total": 0.10},  # Cheap
         ]
         state = _make_price_state(0.10, attributes={"prices_today": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.price")
+            provider = DynamicTariffProvider(
+                mock_hass,
+                price_entity="sensor.price",
+                classification_mode="static",
+            )
             schedule = provider.get_schedule_for_day(now)
 
         assert len(schedule) == 3
@@ -1001,7 +1039,7 @@ class TestDynamicTariffSchedule:
         assert schedule[1]["tariff"] == "HT"  # Spike
         assert schedule[2]["tariff"] == "NT"
 
-    def test_schedule_alternating_prices(self, hass):
+    def test_schedule_alternating_prices(self, mock_hass):
         """Rapidly alternating prices create many blocks."""
         now = datetime(2026, 5, 3, 10, 0, 0)
         prices = [
@@ -1010,11 +1048,11 @@ class TestDynamicTariffSchedule:
             for i in range(6)
         ]
         state = _make_price_state(0.05, attributes={"forecasts": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = DynamicTariffProvider(hass, price_entity="sensor.amber")
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber")
             schedule = provider.get_schedule_for_day(now)
 
         assert len(schedule) == 6  # NT-HT-NT-HT-NT-HT
@@ -1026,10 +1064,10 @@ class TestDynamicTariffSchedule:
 
 class TestSpotMarketProvider:
 
-    def test_total_rate_includes_fees_and_taxes(self, hass):
-        hass.states.get = MagicMock(return_value=_make_price_state(0.08))
+    def test_total_rate_includes_fees_and_taxes(self, mock_hass):
+        mock_hass.states.get = MagicMock(return_value=_make_price_state(0.08))
         provider = SpotMarketProvider(
-            hass,
+            mock_hass,
             price_entity="sensor.spot",
             grid_fees=0.10,
             taxes=0.05,
@@ -1037,10 +1075,10 @@ class TestSpotMarketProvider:
         # 0.08 + 0.10 + 0.05 = 0.23
         assert provider.get_current_import_rate() == pytest.approx(0.23)
 
-    def test_total_rate_floors_at_zero(self, hass):
-        hass.states.get = MagicMock(return_value=_make_price_state(-0.50))
+    def test_total_rate_floors_at_zero(self, mock_hass):
+        mock_hass.states.get = MagicMock(return_value=_make_price_state(-0.50))
         provider = SpotMarketProvider(
-            hass,
+            mock_hass,
             price_entity="sensor.spot",
             grid_fees=0.10,
             taxes=0.05,
@@ -1048,36 +1086,36 @@ class TestSpotMarketProvider:
         # -0.50 + 0.10 + 0.05 = -0.35 -> max(0, -0.35) = 0
         assert provider.get_current_import_rate() == 0.0
 
-    def test_has_negative_prices_true(self, hass):
+    def test_has_negative_prices_true(self, mock_hass):
         now = datetime(2026, 3, 19, 12, 0, 0)
         prices = [
             {"start": (now + timedelta(hours=1)).isoformat(), "total": -0.02},
             {"start": (now + timedelta(hours=2)).isoformat(), "total": 0.10},
         ]
         state = _make_price_state(0.05, attributes={"prices_today": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = SpotMarketProvider(hass, price_entity="sensor.spot")
+            provider = SpotMarketProvider(mock_hass, price_entity="sensor.spot")
             assert provider.has_negative_prices(hours=24) is True
 
-    def test_has_negative_prices_false(self, hass):
+    def test_has_negative_prices_false(self, mock_hass):
         now = datetime(2026, 3, 19, 12, 0, 0)
         prices = [
             {"start": (now + timedelta(hours=1)).isoformat(), "total": 0.05},
             {"start": (now + timedelta(hours=2)).isoformat(), "total": 0.10},
         ]
         state = _make_price_state(0.05, attributes={"prices_today": prices})
-        hass.states.get = MagicMock(return_value=state)
+        mock_hass.states.get = MagicMock(return_value=state)
 
         with patch(DT_UTIL_PATH) as mock_dt:
             mock_dt.now.return_value = now
-            provider = SpotMarketProvider(hass, price_entity="sensor.spot")
+            provider = SpotMarketProvider(mock_hass, price_entity="sensor.spot")
             assert provider.has_negative_prices(hours=24) is False
 
-    def test_currency_default_eur(self, hass):
-        provider = SpotMarketProvider(hass)
+    def test_currency_default_eur(self, mock_hass):
+        provider = SpotMarketProvider(mock_hass)
         assert provider.currency == "EUR"
 
 

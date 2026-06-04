@@ -546,6 +546,33 @@ class EVControlMixin:
                     if ev._current_setpoint > 0:
                         await ev._set_current(0)
                     self._ev_charge_started_at = None
+                    # #353: KEBA P30 firmware rejects ``set_current``
+                    # values below its 6 A IEC 61851 minimum and silently
+                    # retains the last valid setpoint. Commanding 0 A
+                    # here does NOT actually stop the car — it keeps
+                    # drawing from whatever supply is available (grid +
+                    # battery) while SEM thinks the charger is idle.
+                    # Same root cause as #315/#346: KEBA owns its
+                    # contactor and ignores requests it doesn't like.
+                    #
+                    # When ``this_power_w > 500`` we're past the
+                    # handshake idle band (KEBA at ~110 W) and into real
+                    # charging, so call stop_session() to invoke the
+                    # brand-specific disable (``keba.disable``) that
+                    # actually opens the contactor. Idempotent — safe to
+                    # call every cycle until power drops.
+                    if this_power_w > 500:
+                        await ev.stop_session()
+                        if getattr(self, "_off_mode_stop_logged_for", None) != ev.device_id:
+                            _LOGGER.warning(
+                                "Charger %s self-charging in solar mode "
+                                "(drawing %.0fW, surplus=%.0fW < min). "
+                                "Commanded 0 A but firmware retained last "
+                                "setpoint — calling stop_session() to "
+                                "force-disable. (#353)",
+                                ev.name, this_power_w, budget_w,
+                            )
+                            self._off_mode_stop_logged_for = ev.device_id
 
             _LOGGER.debug(
                 "Solar EV: budget=%.0fW (%s), current=%.0fA, ev_power=%.0fW, session=%s",
@@ -558,6 +585,14 @@ class EVControlMixin:
         if state in self.SOLAR_PAUSE_STATES:
             if ev._current_setpoint > 0:
                 await ev._set_current(0)
+            # #351 M10 — clear the charge-started timestamp so the
+            # disable-delay counter doesn't consume its 300 s budget
+            # during a battery-priority pause. Without this, a 5-minute
+            # pause exhausts the timer and the very next cycle's
+            # terminal-branch fires stop_session even though we just
+            # resumed. Cleared here, re-armed on the next entry to
+            # an active charge state (lines 509 / 518).
+            self._ev_charge_started_at = None
             return
 
         # === TERMINAL STATES: full stop (EV disconnected, target reached, etc.) ===

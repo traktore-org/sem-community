@@ -89,6 +89,17 @@ class LoadManagementCoordinator:
         # Observer mode: skip all hardware control
         self._observer_mode = config_entry.options.get("observer_mode", False)
 
+        # #433 — telemetry surface mirroring classifier_path /
+        # dampening_path / legionella_path. Focus on the high-leverage
+        # decision points: state transitions, action dispatch, and the
+        # try/except catch that masks all errors. Not every if/elif
+        # — the module has 118 branches and exhaustive attribution
+        # would dwarf the actual logic.
+        self._last_state_decision_path: str = "uninitialized"
+        self._last_process_path: str = "uninitialized"
+        self._last_action_path: str = "uninitialized"
+        self._last_error_message: Optional[str] = None
+
     async def async_initialize(self):
         """Initialize the load management system."""
         try:
@@ -447,6 +458,7 @@ class LoadManagementCoordinator:
             ev_power_w: Current EV charging power in Watts
         """
         if not self._enabled:
+            self._last_process_path = "disabled_skip"
             return
 
         # Update rolling peak tracking from actual grid import
@@ -459,12 +471,16 @@ class LoadManagementCoordinator:
             self._cleanup_shed_list()
 
             # Determine current state based on peak levels
+            old_state = self._state
             new_state = self._determine_load_management_state(current_peak, consecutive_peak)
 
             # Handle state changes
             if new_state != self._state:
                 await self._handle_state_change(self._state, new_state, current_peak)
                 self._state = new_state
+                self._last_process_path = f"state_changed:{old_state}_to_{new_state}"
+            else:
+                self._last_process_path = f"state_stable:{new_state}"
 
             # Execute load management based on current state
             await self._execute_load_management(current_peak, consecutive_peak)
@@ -477,6 +493,12 @@ class LoadManagementCoordinator:
         except Exception as e:
             _LOGGER.error("Error in load management processing: %s", e)
             self._state = LoadManagementState.ERROR
+            # Pre-#433 this catch-all set state=ERROR with no surface
+            # signal beyond a log line. The path + last_error_message
+            # now make WHICH error masked the load-shedding action
+            # visible on the sensor.
+            self._last_process_path = "error_caught"
+            self._last_error_message = str(e)[:200]  # truncate runaway tracebacks
 
     # NOTE: update_ev_charging_current() has been removed.
     # EV charging current is now managed by the coordinator's _execute_ev_control()
@@ -541,10 +563,12 @@ class LoadManagementCoordinator:
 
         # Emergency state - immediate action required
         if peak_to_check >= self._emergency_level:
+            self._last_state_decision_path = "emergency"
             return LoadManagementState.EMERGENCY
 
         # At or above target - must shed loads
         elif peak_to_check >= self._target_peak_limit:
+            self._last_state_decision_path = "above_target_shedding"
             return LoadManagementState.SHEDDING
 
         # In warning zone (between warning and target)
@@ -552,7 +576,9 @@ class LoadManagementCoordinator:
             # If we have devices shed and peak is still in warning zone,
             # stay in SHEDDING to allow controlled restoration
             if self._devices_shed:
+                self._last_state_decision_path = "warning_zone_keep_shedding"
                 return LoadManagementState.SHEDDING
+            self._last_state_decision_path = "warning_zone_clean"
             return LoadManagementState.WARNING
 
         # Below warning level
@@ -562,12 +588,27 @@ class LoadManagementCoordinator:
             # This prevents the deadlock where devices stay shed indefinitely
             if peak_to_check <= restore_threshold:
                 # Well below threshold - definitely NORMAL
+                self._last_state_decision_path = "below_restore_threshold_normal"
                 return LoadManagementState.NORMAL
             elif self._devices_shed:
                 # Between restore_threshold and warning_level with devices shed
                 # Allow restoration to proceed (return NORMAL to enable restore logic)
+                #
+                # NOTE (#433 audit, reviewer-flagged): with default
+                # config (target=5.0, hysteresis=0.3, warning=4.5),
+                # restore_threshold = 4.7 > warning_level = 4.5, so
+                # this branch is **unreachable** — peaks satisfying
+                # ``peak < warning_level`` (< 4.5) cannot
+                # simultaneously satisfy ``peak > restore_threshold``
+                # (> 4.7). It only fires when the user has configured
+                # ``hysteresis > target - warning`` (an unusual but
+                # valid setup). Telemetry exposes this so a future
+                # audit can either fix the inverted-band config or
+                # remove the branch.
+                self._last_state_decision_path = "in_hysteresis_band_with_shed_devices_restore"
                 return LoadManagementState.NORMAL
             else:
+                self._last_state_decision_path = "in_hysteresis_band_clean_normal"
                 return LoadManagementState.NORMAL
 
     async def _handle_state_change(self, old_state: str, new_state: str, current_peak: float):
@@ -584,13 +625,24 @@ class LoadManagementCoordinator:
             )
 
     async def _execute_load_management(self, current_peak: float, consecutive_peak: float):
-        """Execute load management actions based on current state."""
+        """Execute load management actions based on current state.
+
+        Sets ``self._last_action_path`` (#433) to one of:
+        ``emergency_shedding`` / ``progressive_shedding`` /
+        ``restore`` / ``no_action:<state>`` (WARNING / ERROR).
+        """
         if self._state == LoadManagementState.EMERGENCY:
+            self._last_action_path = "emergency_shedding"
             await self._emergency_load_shedding()
         elif self._state == LoadManagementState.SHEDDING:
+            self._last_action_path = "progressive_shedding"
             await self._progressive_load_shedding(current_peak, consecutive_peak)
         elif self._state == LoadManagementState.NORMAL:
+            self._last_action_path = "restore"
             await self._restore_loads()
+        else:
+            # WARNING / ERROR states intentionally take no action
+            self._last_action_path = f"no_action:{self._state}"
 
     async def _emergency_load_shedding(self):
         """Emergency load shedding - turn off all non-critical loads immediately."""
@@ -1049,6 +1101,13 @@ class LoadManagementCoordinator:
             },
             "consecutive_peak_15min": self._consecutive_peak_15min,
             "monthly_consecutive_peak": self._monthly_consecutive_peak,
+            # #433 — telemetry surface (mirrors classifier_path /
+            # dampening_path pattern). Last-call decision paths so
+            # users hitting an unexpected state can self-diagnose.
+            "state_decision_path": self._last_state_decision_path,
+            "process_path": self._last_process_path,
+            "action_path": self._last_action_path,
+            "last_error": self._last_error_message,
         }
 
     def get_peak_margin(self, current_peak: float) -> float:

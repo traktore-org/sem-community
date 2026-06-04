@@ -166,7 +166,6 @@ PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
     Platform.SELECT,
     Platform.TIME,
-    Platform.BUTTON,
 ]
 
 
@@ -499,6 +498,49 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 8:
+        try:
+            # v7 → v8 (#359): flip stored ``tariff_classification_mode``
+            # from "static" to "percentile" when ``tariff_mode == "dynamic"``.
+            # Background: percentile became the install default in beta.12
+            # (#373) because the static 0.15/0.35 CHF cutoffs misclassify
+            # dynamic-tariff prices across every non-Swiss market. Entries
+            # created before that still carry "static" in storage even after
+            # the install default changed, and the static branch in
+            # ``tariff_provider._classify_price`` keeps firing — visible
+            # symptom (#359): RienduPre's ``classifier_path`` attribute
+            # reading ``static_fixed_cutoffs`` while the live price is well
+            # outside any reasonable static band. Idempotent: a user who
+            # explicitly wants static classification on a calendar/static
+            # tariff is untouched (gated on dynamic mode).
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            full = {**new_data, **new_options}
+            if full.get("tariff_mode") == "dynamic":
+                flipped = False
+                if new_options.get("tariff_classification_mode") == "static":
+                    new_options["tariff_classification_mode"] = "percentile"
+                    flipped = True
+                if new_data.get("tariff_classification_mode") == "static":
+                    new_data["tariff_classification_mode"] = "percentile"
+                    flipped = True
+                if flipped:
+                    _LOGGER.info(
+                        "Migrated tariff_classification_mode static→percentile "
+                        "for dynamic tariff (#359)"
+                    )
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=8, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v8 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -647,6 +689,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
     # Idempotent; only acts while the legacy key is present.
     _migrate_limit_surplus_to_max(hass, entry)
+
+    # Remove orphaned per-charger set-default button entities — the
+    # button itself was retired in v1.7.0-beta.11 (#355 follow-up).
+    # Idempotent; only fires on installs that still have the registry
+    # entry from a previous version.
+    try:
+        from homeassistant.helpers import entity_registry as er
+        registry = er.async_get(hass)
+        for ent in list(er.async_entries_for_config_entry(registry, entry.entry_id)):
+            if ent.domain == "button" and (ent.unique_id or "").endswith(
+                "_set_default_target",
+            ):
+                _LOGGER.info(
+                    "Removing retired set-default button %s", ent.entity_id,
+                )
+                registry.async_remove(ent.entity_id)
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.debug("Set-default button cleanup skipped: %s", exc)
 
     # Merge entry.data and entry.options for complete configuration
     full_config = {**entry.data, **entry.options}
@@ -910,11 +970,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         else:
             _LOGGER.debug("Heat pump not configured (no relay entities)")
 
-    except Exception as err:
-        _LOGGER.warning(
-            "Load management initialization failed (non-critical): %s. "
-            "Load management features will be unavailable.",
-            err
+    except Exception:
+        # Optional feature — keep setup alive so SEM still loads with
+        # solar / EV / battery control. Use ``exception`` so the full
+        # stack trace is captured in the log; the previous ``warning``
+        # printed only the str() of the error, which made
+        # post-incident debugging hard. Downstream code guards every
+        # ``coordinator._load_manager`` access with an ``if`` check —
+        # leaving it None is a supported state.
+        _LOGGER.exception(
+            "Load management initialization failed (non-critical). "
+            "Load management features will be unavailable."
         )
 
     # Setup platforms (critical - must succeed)
@@ -960,6 +1026,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
 
     # Register options update listener
     entry.async_on_unload(entry.add_update_listener(async_update_options))
+
+    # #397 first-run welcome: fire a one-shot persistent notification with a
+    # link to the dashboard so the user has a starting point instead of
+    # bouncing on the 263-entity registry. Gated by the same options-flag
+    # pattern the install-dashboard one-shot uses just below — survives HA
+    # restarts and never re-fires after the user dismisses it. Skipped on
+    # observer mode (test installs don't want notification spam).
+    _welcome_fired = entry.options.get("_welcome_notification_fired", False)
+    if not _welcome_fired and not entry.data.get("observer_mode"):
+        try:
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "notification_id": "sem_first_install_welcome",
+                    "title": "Solar Energy Management installed",
+                    "message": (
+                        "👋 Welcome! Your SEM dashboard is ready at "
+                        "[Open the SEM Dashboard](/sem-dashboard/home).\n\n"
+                        "**First-day checklist:**\n"
+                        "1. Confirm solar is reporting on the Energy tab\n"
+                        "2. Pick an EV charge mode on the EV tab\n"
+                        "3. Set your battery reserve on the Battery tab\n\n"
+                        "Everything else has sensible defaults — tune later "
+                        "via Settings → Devices & Services → SEM → Configure."
+                    ),
+                },
+                blocking=False,
+            )
+            hass.config_entries.async_update_entry(
+                entry,
+                options={**entry.options, "_welcome_notification_fired": True},
+            )
+            _LOGGER.info("SEM first-run welcome notification fired")
+        except Exception as err:
+            # Non-critical — never fail the setup over a notification.
+            _LOGGER.debug("Welcome notification skipped: %s", err)
 
     # Schedule post-startup tasks (non-blocking)
     _schedule_post_startup_tasks(hass, entry, full_config, coordinator)
@@ -1106,7 +1209,18 @@ async def async_remove_config_entry_device(
 
 async def async_unload_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Unload a config entry."""
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        # Clear the SurplusController's registered device list so a
+        # subsequent setup doesn't see the prior cycle's EV / heat-pump
+        # / switch devices still in the dispatch table. Each reload
+        # would otherwise grow the list. Guarded — coordinator may be
+        # missing if setup never completed.
+        if coordinator is not None:
+            sc = getattr(coordinator, "_surplus_controller", None)
+            if sc is not None and hasattr(sc, "clear_devices"):
+                sc.clear_devices()
+
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
         # Remove all registered services (quality scale: config-entry-unloading)

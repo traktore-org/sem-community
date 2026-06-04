@@ -13,8 +13,8 @@ from custom_components.solar_energy_management.analytics.pv_performance import (
 class TestPVPerformanceInit:
     """Test PVPerformanceAnalyzer initialization."""
 
-    def test_init_defaults(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass)
+    def test_init_defaults(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass)
         assert analyzer.system_size_kwp == 10.0
         assert analyzer.inverter_max_power_w == 10000.0
         assert analyzer.system_install_date is None
@@ -25,9 +25,9 @@ class TestPVPerformanceInit:
         assert data.estimated_annual_degradation == 0.0
         assert data.degradation_trend == "unknown"
 
-    def test_init_custom_values(self, hass):
+    def test_init_custom_values(self, mock_hass):
         analyzer = PVPerformanceAnalyzer(
-            hass,
+            mock_hass,
             system_size_kwp=15.0,
             inverter_max_power_w=12000.0,
             system_install_date="2020-06-15",
@@ -40,18 +40,18 @@ class TestPVPerformanceInit:
 class TestPVPerformanceUpdate:
     """Test PVPerformanceAnalyzer.update() method."""
 
-    def test_update_specific_yield(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+    def test_update_specific_yield(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         data = analyzer.update(daily_solar_kwh=50.0, monthly_solar_kwh=0.0, current_solar_power_w=0.0)
         assert data.daily_specific_yield == pytest.approx(5.0)  # 50 / 10
 
-    def test_update_monthly_specific_yield(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+    def test_update_monthly_specific_yield(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         data = analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=300.0, current_solar_power_w=0.0)
         assert data.monthly_specific_yield == pytest.approx(30.0)  # 300 / 10
 
-    def test_update_performance_vs_forecast(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+    def test_update_performance_vs_forecast(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         data = analyzer.update(
             daily_solar_kwh=40.0,
             monthly_solar_kwh=0.0,
@@ -60,8 +60,8 @@ class TestPVPerformanceUpdate:
         )
         assert data.performance_vs_forecast == pytest.approx(80.0)  # (40/50)*100
 
-    def test_update_no_forecast(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+    def test_update_no_forecast(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         data = analyzer.update(
             daily_solar_kwh=40.0,
             monthly_solar_kwh=0.0,
@@ -70,8 +70,8 @@ class TestPVPerformanceUpdate:
         )
         assert data.performance_vs_forecast == 0.0
 
-    def test_update_clipping_detection(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0, inverter_max_power_w=10000.0)
+    def test_update_clipping_detection(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0, inverter_max_power_w=10000.0)
         # Power at 96% of inverter max triggers clipping (>= 95%)
         data = analyzer.update(
             daily_solar_kwh=0.0,
@@ -81,8 +81,8 @@ class TestPVPerformanceUpdate:
         assert analyzer._clipping_minutes == 1
         assert data.clipping_losses_kwh > 0.0
 
-    def test_update_no_clipping_below_threshold(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0, inverter_max_power_w=10000.0)
+    def test_update_no_clipping_below_threshold(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0, inverter_max_power_w=10000.0)
         # Power at 90% of inverter max -- below 95% threshold
         data = analyzer.update(
             daily_solar_kwh=0.0,
@@ -92,23 +92,23 @@ class TestPVPerformanceUpdate:
         assert analyzer._clipping_minutes == 0
         assert data.clipping_losses_kwh == 0.0
 
-    def test_update_system_age(self, hass):
+    def test_update_system_age(self, mock_hass):
         analyzer = PVPerformanceAnalyzer(
-            hass, system_install_date="2020-01-01"
+            mock_hass, system_install_date="2020-01-01"
         )
         data = analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=0.0, current_solar_power_w=0.0)
         # System should be several years old
         assert data.system_age_years > 5.0
 
-    def test_update_system_age_invalid_date(self, hass):
+    def test_update_system_age_invalid_date(self, mock_hass):
         analyzer = PVPerformanceAnalyzer(
-            hass, system_install_date="not-a-date"
+            mock_hass, system_install_date="not-a-date"
         )
         data = analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=0.0, current_solar_power_w=0.0)
         assert data.system_age_years == 0.0
 
-    def test_update_peak_power_tracking(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass)
+    def test_update_peak_power_tracking(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass)
         analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=0.0, current_solar_power_w=5000.0)
         assert analyzer._daily_peak_power == 5000.0
         analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=0.0, current_solar_power_w=3000.0)
@@ -125,9 +125,9 @@ class TestPVDegradation:
         for year, month, kwh in months_data:
             analyzer.record_monthly(year, month, kwh, forecast_kwh=kwh)
 
-    def test_update_degradation_normal(self, hass):
+    def test_update_degradation_normal(self, mock_hass):
         """< 1% degradation = normal."""
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         # Create 14 months with very small degradation (~0.5%)
         months = []
         for m in range(1, 13):
@@ -139,9 +139,9 @@ class TestPVDegradation:
         data = analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=0.0, current_solar_power_w=0.0)
         assert data.degradation_trend == "normal"
 
-    def test_update_degradation_warning(self, hass):
+    def test_update_degradation_warning(self, mock_hass):
         """1-2% degradation = warning."""
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         months = []
         for m in range(1, 13):
             months.append((2024, m, 100.0))
@@ -152,9 +152,9 @@ class TestPVDegradation:
         data = analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=0.0, current_solar_power_w=0.0)
         assert data.degradation_trend == "warning"
 
-    def test_update_degradation_critical(self, hass):
+    def test_update_degradation_critical(self, mock_hass):
         """> 2% degradation = critical."""
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         months = []
         for m in range(1, 13):
             months.append((2024, m, 100.0))
@@ -165,15 +165,15 @@ class TestPVDegradation:
         data = analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=0.0, current_solar_power_w=0.0)
         assert data.degradation_trend == "critical"
 
-    def test_estimate_degradation_insufficient_data(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass)
+    def test_estimate_degradation_insufficient_data(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass)
         # Only 5 months of data
         for m in range(1, 6):
             analyzer.record_monthly(2024, m, 100.0)
         assert analyzer._estimate_degradation() == 0.0
 
-    def test_estimate_degradation_year_over_year(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+    def test_estimate_degradation_year_over_year(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         # 13 months with known degradation
         for m in range(1, 13):
             analyzer.record_monthly(2024, m, 100.0)
@@ -186,8 +186,8 @@ class TestPVDegradation:
 class TestPVRecordMonthly:
     """Test monthly recording and history."""
 
-    def test_record_monthly(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+    def test_record_monthly(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         analyzer.record_monthly(2024, 6, 300.0, forecast_kwh=320.0)
         assert len(analyzer._monthly_history) == 1
         record = analyzer._monthly_history[0]
@@ -197,14 +197,14 @@ class TestPVRecordMonthly:
         assert record.specific_yield == pytest.approx(30.0)
         assert record.performance_ratio == pytest.approx((300.0 / 320.0) * 100)
 
-    def test_record_monthly_max_36(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass)
+    def test_record_monthly_max_36(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass)
         for i in range(40):
             analyzer.record_monthly(2020 + i // 12, (i % 12) + 1, 100.0)
         assert len(analyzer._monthly_history) == 36
 
-    def test_get_monthly_history(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, system_size_kwp=10.0)
+    def test_get_monthly_history(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, system_size_kwp=10.0)
         analyzer.record_monthly(2024, 3, 250.0, forecast_kwh=260.0)
         history = analyzer.get_monthly_history()
         assert len(history) == 1
@@ -222,8 +222,8 @@ class TestPVRecordMonthly:
 class TestPVResetDaily:
     """Test daily reset."""
 
-    def test_reset_daily(self, hass):
-        analyzer = PVPerformanceAnalyzer(hass, inverter_max_power_w=10000.0)
+    def test_reset_daily(self, mock_hass):
+        analyzer = PVPerformanceAnalyzer(mock_hass, inverter_max_power_w=10000.0)
         # Trigger clipping and peak tracking
         analyzer.update(daily_solar_kwh=0.0, monthly_solar_kwh=0.0, current_solar_power_w=9600.0)
         assert analyzer._daily_peak_power > 0

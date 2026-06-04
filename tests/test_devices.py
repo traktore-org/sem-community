@@ -30,7 +30,7 @@ from custom_components.solar_energy_management.devices.appliance_scheduler impor
 # ──────────────────────────────────────────────
 
 @pytest.fixture
-def hass():
+def mock_hass():
     """Return a mocked Home Assistant instance."""
     h = MagicMock()
     h.config = MagicMock()
@@ -44,9 +44,9 @@ def hass():
 
 
 @pytest.fixture
-def switch_device(hass):
+def switch_device(mock_hass):
     return SwitchDevice(
-        hass=hass,
+        hass=mock_hass,
         device_id="hot_water",
         name="Hot Water",
         rated_power=2000.0,
@@ -59,9 +59,9 @@ def switch_device(hass):
 
 
 @pytest.fixture
-def current_device(hass):
+def current_device(mock_hass):
     return CurrentControlDevice(
-        hass=hass,
+        hass=mock_hass,
         device_id="ev_charger",
         name="EV Charger",
         priority=5,
@@ -76,9 +76,9 @@ def current_device(hass):
 
 
 @pytest.fixture
-def setpoint_device(hass):
+def setpoint_device(mock_hass):
     return SetpointDevice(
-        hass=hass,
+        hass=mock_hass,
         device_id="heat_pump",
         name="Heat Pump",
         rated_power=2000.0,
@@ -91,9 +91,9 @@ def setpoint_device(hass):
 
 
 @pytest.fixture
-def schedule_device(hass):
+def schedule_device(mock_hass):
     return ScheduleDevice(
-        hass=hass,
+        hass=mock_hass,
         device_id="dishwasher",
         name="Dishwasher",
         rated_power=1500.0,
@@ -103,9 +103,9 @@ def schedule_device(hass):
 
 
 @pytest.fixture
-def heat_pump(hass):
+def heat_pump(mock_hass):
     return HeatPumpController(
-        hass=hass,
+        hass=mock_hass,
         device_id="heat_pump",
         name="Heat Pump",
         rated_power=2000.0,
@@ -123,9 +123,9 @@ def heat_pump(hass):
 
 
 @pytest.fixture
-def hot_water(hass):
+def hot_water(mock_hass):
     return HotWaterController(
-        hass=hass,
+        hass=mock_hass,
         device_id="hot_water",
         name="Hot Water",
         rated_power=2000.0,
@@ -138,8 +138,8 @@ def hot_water(hass):
 
 
 @pytest.fixture
-def scheduler(hass):
-    return ApplianceScheduler(hass)
+def scheduler(mock_hass):
+    return ApplianceScheduler(mock_hass)
 
 
 # ──────────────────────────────────────────────
@@ -161,12 +161,12 @@ async def test_switch_device_activate(switch_device):
 
 
 @pytest.mark.asyncio
-async def test_switch_device_activate_no_entity(hass):
+async def test_switch_device_activate_no_entity(mock_hass):
     """Test switch with no entity_id returns 0."""
-    dev = SwitchDevice(hass=hass, device_id="test", name="Test", rated_power=1000.0, entity_id=None)
+    dev = SwitchDevice(hass=mock_hass, device_id="test", name="Test", rated_power=1000.0, entity_id=None)
     result = await dev.activate(2000.0)
     assert result == 0.0
-    hass.services.async_call.assert_not_called()
+    mock_hass.services.async_call.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -272,7 +272,13 @@ async def test_current_control_start_stop_session(current_device):
     """Test KEBA session management."""
     await current_device.start_session(energy_target_kwh=10.0)
     assert current_device._session_active is True
-    # Should have called set_failsafe, set_energy, and enable (no disable — needs_pilot_cycle=False)
+    # Should have called set_failsafe, set_energy, and enable (no disable
+    # — needs_pilot_cycle=False). This is the historically-working
+    # sequence shipped since v1.5.0. ``keba.authorize`` was tried briefly
+    # on 2026-06-02 as a speculative fix for an auth-rejected cascade —
+    # reverted same day after confirming git history shows authorize was
+    # never in the sequence; the real fix is the IDLE debounce in
+    # ``actuate.py`` / ``ChargerAdapter.attempt_idle``.
     assert current_device.hass.services.async_call.call_count == 3
 
     current_device.hass.services.async_call.reset_mock()
@@ -331,10 +337,10 @@ async def test_setpoint_device_deactivate(setpoint_device):
 
 
 @pytest.mark.asyncio
-async def test_setpoint_device_no_climate(hass):
+async def test_setpoint_device_no_climate(mock_hass):
     """Test returns 0 without climate entity."""
     dev = SetpointDevice(
-        hass=hass, device_id="test", name="Test",
+        hass=mock_hass, device_id="test", name="Test",
         rated_power=2000.0, climate_entity_id=None,
     )
     result = await dev.activate(3000.0)
@@ -561,9 +567,9 @@ def test_hot_water_does_not_need_heating(hot_water):
     assert hot_water.needs_heating() is False
 
 
-def test_hot_water_no_temp_sensor(hass):
+def test_hot_water_no_temp_sensor(mock_hass):
     """Test is_temperature_safe returns True when no sensor configured."""
-    hw = HotWaterController(hass=hass, device_id="hw", name="HW", rated_power=2000.0)
+    hw = HotWaterController(hass=mock_hass, device_id="hw", name="HW", rated_power=2000.0)
     assert hw.is_temperature_safe() is True
     assert hw.needs_heating() is True  # No sensor -> assume needs heating
 
@@ -576,9 +582,9 @@ def test_hot_water_get_current_temperature(hot_water):
     assert hot_water.get_current_temperature() == 52.3
 
 
-def test_hot_water_get_current_temperature_no_sensor(hass):
+def test_hot_water_get_current_temperature_no_sensor(mock_hass):
     """Test returns None when no temperature sensor."""
-    hw = HotWaterController(hass=hass, device_id="hw", name="HW", rated_power=2000.0)
+    hw = HotWaterController(hass=mock_hass, device_id="hw", name="HW", rated_power=2000.0)
     assert hw.get_current_temperature() is None
 
 
@@ -801,9 +807,9 @@ def test_get_current_consumption_unavailable(switch_device):
     assert switch_device.get_current_consumption() == switch_device._status.current_consumption_w
 
 
-def test_get_current_consumption_no_entity(hass):
+def test_get_current_consumption_no_entity(mock_hass):
     """Test fallback when no power entity configured."""
-    dev = SwitchDevice(hass=hass, device_id="test", name="Test", rated_power=1000.0)
+    dev = SwitchDevice(hass=mock_hass, device_id="test", name="Test", rated_power=1000.0)
     dev._status.current_consumption_w = 750.0
     assert dev.get_current_consumption() == 750.0
 

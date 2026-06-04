@@ -22,8 +22,13 @@ def _make_coordinator():
             "update_interval": 10,
             "electricity_import_rate": 0.30,
         }
+        # Post-#351 L1, energy accumulators integrate against the
+        # actual update interval (DataUpdateCoordinator.update_interval)
+        # not the requested one in config. Mirror config here.
+        coord.update_interval = timedelta(seconds=10)
         coord._battery_session = BatterySessionData()
         coord._battery_session_idle_count = 0
+        coord._battery_session_opposite_count = 0
         # Mock energy calculator with live import rate (used since #223 fix)
         coord._energy_calculator = type('MockCalc', (), {'_import_rate': 0.30})()
         return coord
@@ -70,75 +75,157 @@ class TestBatterySessionStart:
 class TestBatterySessionEnd:
     """Test session end via hysteresis."""
 
-    def test_session_ends_after_3_idle_cycles(self):
-        """Session ends after 3 consecutive idle cycles."""
+    def test_session_ends_after_idle_window(self):
+        """Session ends after 18 consecutive idle cycles (~3 min)."""
         coord = _make_coordinator()
-        # Start a charge session
         power_active = PowerReadings(battery_charge_power=500, battery_discharge_power=0)
         flows = PowerFlows(solar_to_battery=500)
         coord._update_battery_session_tracking(power_active, flows)
         assert coord._battery_session.active is True
 
-        # 3 idle cycles
+        # 18 idle cycles → ends
         power_idle = PowerReadings(battery_charge_power=0, battery_discharge_power=0)
-        for i in range(3):
+        for _ in range(18):
             coord._update_battery_session_tracking(power_idle, PowerFlows())
 
         assert coord._battery_session.active is False
 
-    def test_session_survives_1_idle_cycle(self):
-        """Session survives 1 idle cycle (hysteresis)."""
+    def test_session_survives_short_idle_gap(self):
+        """A brief gap (well under the idle window) keeps the session
+        alive — the sunset/cloud-transit case that produced the
+        original "1 hour discharge → 2 min session" bug."""
         coord = _make_coordinator()
         power_active = PowerReadings(battery_charge_power=500, battery_discharge_power=0)
         flows = PowerFlows(solar_to_battery=500)
         coord._update_battery_session_tracking(power_active, flows)
 
-        # 1 idle cycle
+        # 5 idle cycles (~50 s) — well below the 18-cycle threshold
         power_idle = PowerReadings(battery_charge_power=0, battery_discharge_power=0)
-        coord._update_battery_session_tracking(power_idle, PowerFlows())
+        for _ in range(5):
+            coord._update_battery_session_tracking(power_idle, PowerFlows())
 
         assert coord._battery_session.active is True
-        assert coord._battery_session_idle_count == 1
+        assert coord._battery_session_idle_count == 5
 
     def test_idle_counter_resets_on_active(self):
-        """Idle counter resets when power returns."""
+        """Idle counter resets when power returns above the dead-band."""
         coord = _make_coordinator()
         power_active = PowerReadings(battery_charge_power=500, battery_discharge_power=0)
         flows = PowerFlows(solar_to_battery=500)
         coord._update_battery_session_tracking(power_active, flows)
 
-        # 2 idle cycles (not enough to end)
+        # 10 idle cycles (not enough to end — limit is 18)
         power_idle = PowerReadings(battery_charge_power=0, battery_discharge_power=0)
-        coord._update_battery_session_tracking(power_idle, PowerFlows())
-        coord._update_battery_session_tracking(power_idle, PowerFlows())
-        assert coord._battery_session_idle_count == 2
+        for _ in range(10):
+            coord._update_battery_session_tracking(power_idle, PowerFlows())
+        assert coord._battery_session_idle_count == 10
 
-        # Power returns — counter resets
+        # Power returns above the 200 W dead-band — counter resets
         coord._update_battery_session_tracking(power_active, flows)
         assert coord._battery_session_idle_count == 0
         assert coord._battery_session.active is True
 
+    def test_dead_band_idles_low_power(self):
+        """Power below the 200 W dead-band counts as idle even though
+        > 0, because that's the inverter's micro-rebalance regime."""
+        coord = _make_coordinator()
+        power_active = PowerReadings(battery_charge_power=500, battery_discharge_power=0)
+        coord._update_battery_session_tracking(power_active, PowerFlows(solar_to_battery=500))
+
+        # 150 W is below the new 200 W dead-band.
+        power_low = PowerReadings(battery_charge_power=150, battery_discharge_power=0)
+        coord._update_battery_session_tracking(power_low, PowerFlows())
+        # Session still active, idle counter ticks up.
+        assert coord._battery_session.active is True
+        assert coord._battery_session_idle_count == 1
+
 
 class TestBatterySessionDirectionChange:
-    """Test session handling on charge/discharge direction switch."""
+    """Direction-change hysteresis — single-cycle blips don't end the
+    session; sustained N-cycle reversal does (#405)."""
 
-    def test_direction_change_ends_session(self):
-        """Switching from charge to discharge ends current session and starts new."""
+    def test_single_cycle_blip_does_not_end_session(self):
+        """The user's screenshot scenario: a continuous discharge that
+        gets a single cycle of +500 W charge during a sunset transient.
+        Session must survive."""
         coord = _make_coordinator()
+        power_discharge = PowerReadings(battery_charge_power=0, battery_discharge_power=1100)
+        coord._update_battery_session_tracking(power_discharge, PowerFlows())
+        assert coord._battery_session.session_type == "discharge"
 
-        # Start charge session
+        # One cycle of charge (the transient).
+        power_blip = PowerReadings(battery_charge_power=500, battery_discharge_power=0)
+        coord._update_battery_session_tracking(power_blip, PowerFlows(solar_to_battery=500))
+        assert coord._battery_session.active is True
+        assert coord._battery_session.session_type == "discharge"
+        assert coord._battery_session_opposite_count == 1
+
+        # Back to discharge — opposite counter resets.
+        coord._update_battery_session_tracking(power_discharge, PowerFlows())
+        assert coord._battery_session.active is True
+        assert coord._battery_session.session_type == "discharge"
+        assert coord._battery_session_opposite_count == 0
+
+    def test_sustained_opposite_direction_ends_session(self):
+        """Three consecutive cycles of opposite direction = real flip.
+        Old session ends, new one starts on the next active cycle."""
+        coord = _make_coordinator()
+        power_discharge = PowerReadings(battery_charge_power=0, battery_discharge_power=1100)
+        coord._update_battery_session_tracking(power_discharge, PowerFlows())
+        assert coord._battery_session.session_type == "discharge"
+
+        # 3 charge cycles in a row → flip after the third.
         power_charge = PowerReadings(battery_charge_power=500, battery_discharge_power=0)
+        for _ in range(3):
+            coord._update_battery_session_tracking(power_charge, PowerFlows(solar_to_battery=500))
+
+        # After 3 opposite cycles the old session ends + a new one
+        # starts on the same cycle (next call), now as charge.
         coord._update_battery_session_tracking(power_charge, PowerFlows(solar_to_battery=500))
+        assert coord._battery_session.active is True
         assert coord._battery_session.session_type == "charge"
 
-        # Switch to discharge
-        power_discharge = PowerReadings(battery_charge_power=0, battery_discharge_power=800)
-        coord._update_battery_session_tracking(power_discharge, PowerFlows())
+
+class TestBatterySessionRealWorld:
+    """Real-world scenarios from the #405 investigation."""
+
+    def test_steady_one_hour_discharge_keeps_one_session(self):
+        """User's reported case: 1 hour of steady 1.1 kW discharge
+        with no fluctuations should produce one continuous session."""
+        coord = _make_coordinator()
+        power = PowerReadings(battery_charge_power=0, battery_discharge_power=1100)
+
+        # 1 hour at 10 s update interval = 360 cycles.
+        for _ in range(360):
+            coord._update_battery_session_tracking(power, PowerFlows())
 
         assert coord._battery_session.active is True
         assert coord._battery_session.session_type == "discharge"
-        # Energy should be from the new session (near zero), not carried over
-        assert coord._battery_session.energy_kwh < 0.01
+        # Energy: 1100 W × 3600 s / 3600 / 1000 = 1.1 kWh.
+        assert abs(coord._battery_session.energy_kwh - 1.1) < 0.05
+
+    def test_sunset_transient_keeps_session_alive(self):
+        """Sunset: solar tails off, battery starts discharging, has
+        occasional brief charge blips during inverter rebalance.
+        Session should remain a single continuous session."""
+        coord = _make_coordinator()
+        power_discharge = PowerReadings(battery_charge_power=0, battery_discharge_power=800)
+        power_blip_charge = PowerReadings(battery_charge_power=300, battery_discharge_power=0)
+
+        # 10 minutes of discharge
+        for _ in range(60):
+            coord._update_battery_session_tracking(power_discharge, PowerFlows())
+
+        # Single-cycle blip of charge (inverter rebalance)
+        coord._update_battery_session_tracking(power_blip_charge, PowerFlows(solar_to_battery=300))
+
+        # 10 more minutes of discharge
+        for _ in range(60):
+            coord._update_battery_session_tracking(power_discharge, PowerFlows())
+
+        # One continuous session, never flipped.
+        assert coord._battery_session.active is True
+        assert coord._battery_session.session_type == "discharge"
 
 
 class TestBatterySessionEnergyAccumulation:

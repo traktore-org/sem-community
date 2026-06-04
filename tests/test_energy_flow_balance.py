@@ -282,7 +282,14 @@ class TestNightScenarios:
         assert flows.battery_to_home > 0
 
     def test_night_ev_charging(self, flow_calculator):
-        """Test EV charging at night from grid and battery."""
+        """Test EV charging at night from grid and battery (#349).
+
+        ``calculate_derived`` computes home as the slack: with
+        solar=0, grid_import=5000, battery_discharge=1000, ev=3000, it
+        derives home = 6000 - 3000 = 3000 W. Priority drains
+        battery (1000) → home, then grid covers remaining home (2000)
+        and ev (3000). Battery is exhausted before EV is reached.
+        """
         readings = PowerReadings()
         readings.solar_power = 0
         readings.grid_power = -5000  # Import
@@ -292,9 +299,11 @@ class TestNightScenarios:
 
         flows = flow_calculator.calculate_power_flows(readings)
 
-        # EV should receive from grid and battery
-        assert flows.grid_to_ev > 0
-        assert flows.battery_to_ev > 0
+        # EV is fully grid-served (battery went to home first).
+        assert flows.grid_to_ev == pytest.approx(3000, abs=1)
+        assert flows.battery_to_home == pytest.approx(1000, abs=1)
+        assert flows.grid_to_home == pytest.approx(2000, abs=1)
+        assert flows.battery_to_ev == 0
 
 
 class TestExportScenarios:

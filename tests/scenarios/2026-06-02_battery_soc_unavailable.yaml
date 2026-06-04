@@ -1,0 +1,72 @@
+name: "2026-06-02 battery_soc goes unavailable mid-timeline — graceful fallback"
+
+coverage:
+  - mode: solar_only
+    regime: zone3_day_redirect
+    issue: "#378-class — sensor unavailable handling"
+
+description: |
+  @RienduPre's #378 root cause was a battery sensor going
+  ``unavailable`` from HA's perspective. SEM silently treated it
+  as 0 in the sum, and the energy balance attributed the missing
+  flow to home_consumption_power. The scenario harness can replay
+  the same shape via the existing ``battery_soc_unavailable``
+  flag on PowerReadings.
+
+  What this pins:
+
+    * Cycles 0-2: battery_soc reads normally (75%). solar_only
+      surplus + redirect works.
+    * Cycles 3-5: battery_soc_unavailable=true. SEM must NOT
+      crash; the strategy decision must remain stable (we don't
+      want to flip mode just because the SOC sensor blinked).
+
+  Production handling of ``battery_soc_unavailable``: SEM should
+  fall back to the last-known SOC or treat it as the "battery
+  out of the picture" case, but MUST NOT decide to charge from
+  grid when it can't see the battery SOC.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_only"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  # ── Cycles 0-2: normal regime, SOC=75 visible
+  - t: 0
+    solar_power: 6000
+    grid_power: 3500
+    battery_power: 1000
+    battery_soc: 75
+    battery_soc_unavailable: false
+    ev_power: 0
+    ev_connected: true
+
+  - t: 30
+  - t: 60
+
+  # ── Cycle 3+: SOC sensor goes unavailable. Other readings stay.
+  - t: 90
+    battery_soc_unavailable: true
+
+  - t: 120
+  - t: 150
+
+expect:
+  # The headline assertion: the run completes (no exception),
+  # AND we don't see the strategy collapse into a never-charge
+  # state across all cycles.
+  strategy_substring: "solar_only"

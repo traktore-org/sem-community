@@ -183,6 +183,7 @@ class CalendarTariffProvider(TariffProvider):
             currency=self.currency,
             provider="calendar",
             is_dynamic=False,
+            classifier_path="calendar_schedule",
             today_min_price=self.off_peak_rate,
             today_max_price=self.peak_rate,
             today_avg_price=(self.peak_rate + self.off_peak_rate) / 2,

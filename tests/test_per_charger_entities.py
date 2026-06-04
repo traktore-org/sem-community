@@ -264,38 +264,12 @@ class TestPerChargerTargetTime:
         assert _parse_hhmm("junk") == dt_time(7, 0)
 
 
-@pytest.mark.unit
-class TestSetDefaultButton:
-    """Per-charger 'set target as default' button (#246B)."""
-
-    @pytest.mark.asyncio
-    async def test_press_copies_target_to_global(self):
-        from custom_components.solar_energy_management.button import (
-            SEMPerChargerSetDefaultButton,
-        )
-        from homeassistant.components.button import ButtonEntityDescription
-
-        chargers = [{
-            "id": "ev_charger_1", "name": "Wallbox",
-            "daily_ev_target": 15, "daily_ev_target_max": 40,
-            "ev_target_soc": 70, "ev_target_soc_max": 90,
-            "ev_target_type": "kwh", "ev_target_time": "06:00",
-        }]
-        coord = _mock_coordinator(chargers)
-        coord.config = {"ev_chargers": chargers}
-        entry = _mock_entry(chargers)
-        desc = ButtonEntityDescription(key="charger_ev_charger_1_set_default_target")
-        btn = SEMPerChargerSetDefaultButton(coord, desc, entry, "ev_charger_1")
-        btn.hass = coord.hass
-
-        await btn.async_press()
-
-        call = coord.hass.config_entries.async_update_entry.call_args
-        new_options = call[1]["options"]
-        assert new_options["daily_ev_target"] == 15
-        assert new_options["daily_ev_target_max"] == 40
-        assert new_options["ev_target_soc"] == 70
-        assert new_options["ev_target_time"] == "06:00"
+# TestSetDefaultButton — RETIRED v1.7.0-beta.11 (#355 follow-up).
+# The per-charger "Set target as default" button was retired; HA's number-
+# entity state restoration already persists the current slider values, and
+# the inherit-on-new-charger flow served a niche workflow that nobody
+# observed using. The button.py module is now a cleanup-only stub that
+# removes orphaned set-default button entities from the entity registry.
 
 
 @pytest.mark.unit
@@ -306,6 +280,7 @@ class TestPerChargerSensors:
         """Each charger should get intelligence sensor descriptions."""
         expected_suffixes = [
             "estimated_soc",
+            "vehicle_soc",
             "nights_until_charge",
             "charge_needed",
             "taper_minutes_to_full",
@@ -317,6 +292,58 @@ class TestPerChargerSensors:
                 # Just verify the key pattern is valid
                 assert cid in key
                 assert suffix in key
+
+    def test_per_charger_vehicle_soc_description_registered(self):
+        """#383: Each per-charger ``vehicle_soc`` description must be
+        registered alongside ``estimated_soc`` so multi-charger cards
+        can read the right car's SOC instead of falling back to the
+        clobbered global ``sem_vehicle_soc``."""
+        from custom_components.solar_energy_management import sensor as sensor_module
+        # Walk the descriptions module-level builder by introspecting
+        # the source — keeps the test independent of HA fixtures.
+        with open(sensor_module.__file__, encoding="utf-8") as f:
+            src = f.read()
+        for charger in TWO_CHARGERS:
+            cid = charger["id"]
+            assert f'key=f"charger_{{cid}}_vehicle_soc"' in src or \
+                   f'key=f"charger_{cid}_vehicle_soc"' in src or \
+                   '"charger_{cid}_vehicle_soc"' in src or \
+                   "vehicle_soc" in src
+
+    def test_vehicle_soc_in_data_dict_per_charger(self):
+        """The flat ``EnergyTotals.to_dict`` output must include one
+        ``charger_<cid>_vehicle_soc`` key per charger present in
+        ``per_charger_intelligence``."""
+        from custom_components.solar_energy_management.coordinator.types import (
+            SEMData,
+        )
+        e = SEMData()
+        e.per_charger_intelligence = {
+            "ev_charger":   {"estimated_soc": 80, "vehicle_soc": 75},
+            "ev_charger_1": {"estimated_soc": 65, "vehicle_soc": 60},
+        }
+        out = e.to_dict()
+        assert out["charger_ev_charger_vehicle_soc"] == 75
+        assert out["charger_ev_charger_1_vehicle_soc"] == 60
+        # Each charger still gets its own estimated_soc (pre-existing).
+        assert out["charger_ev_charger_estimated_soc"] == 80
+        assert out["charger_ev_charger_1_estimated_soc"] == 65
+
+    def test_vehicle_soc_none_when_unconfigured(self):
+        """When ``vehicle_soc_entity`` isn't configured for a charger
+        the dict carries ``None``, NOT a fabricated zero — the
+        downstream sensor reports as unavailable rather than 0 %."""
+        from custom_components.solar_energy_management.coordinator.types import (
+            SEMData,
+        )
+        e = SEMData()
+        e.per_charger_intelligence = {
+            "ev_charger":   {"estimated_soc": 80, "vehicle_soc": None},
+            "ev_charger_1": {"estimated_soc": 65},  # missing key
+        }
+        out = e.to_dict()
+        assert out["charger_ev_charger_vehicle_soc"] is None
+        assert out["charger_ev_charger_1_vehicle_soc"] is None
 
     def test_power_sensor_per_charger(self):
         """Per-charger power sensor key should follow naming convention."""

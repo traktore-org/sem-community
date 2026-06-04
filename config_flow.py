@@ -144,7 +144,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     Phase A's derivation silently dropped.
     # v7 (#277 Phase C): drop the dead ev_charging_mode key (charge_mode is
     #     authoritative now; the legacy select + 3 legacy switches are gone).
-    VERSION = 7
+    VERSION = 8
 
     @staticmethod
     @callback
@@ -386,7 +386,15 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 ),
 
-                # EV Charger Control (Optional - for chargers without number entity)
+                # EV Charger Control — pick ONE of the two paths below:
+                #   • Number entity (Wallbox, go-eCharger, Heidelberg, OpenWB, Ohme, V2C, …)
+                #   • Service call    (KEBA, Easee, Zaptec, OCPP, …)
+                vol.Optional(
+                    "ev_current_control_entity",
+                    description={"suggested_value": _opt_entity_default("ev_current_control_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="number")
+                ),
                 vol.Optional(
                     "ev_charger_service",
                     default=suggestions.get("ev_charger_service", ""),
@@ -402,7 +410,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
 
-                # Optional EV sensors
+                # Optional readback sensors
                 vol.Optional(
                     "ev_current_sensor",
                     description={"suggested_value": _opt_entity_default("ev_current_sensor")},
@@ -421,9 +429,17 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         device_class="energy"
                     )
                 ),
-                # Vehicle SOC fields moved to OptionsFlow — they only matter
-                # when the user has a real vehicle SOC sensor, which most
-                # cars don't expose. Asking on install creates dead inputs.
+                # #397: per-charger tunables — `ev_surplus_priority`,
+                # `daily_ev_target` + `_max`, `ev_night_initial_current`,
+                # `ev_min_current`, `ev_target_soc` + `_max`,
+                # `ev_battery_capacity_kwh`, `vehicle_soc_entity` — all live
+                # in OptionsFlow only. PR #390 surfaced them at install time
+                # and the resulting 16-field step became the biggest install
+                # drop-off; the original slim-3-step design at line ~440 is
+                # the right shape per the SaaS-onboarding research. The
+                # Wallbox install-time blocker (`ev_current_control_entity`)
+                # is the only #390 field that stays — it's not a tunable, it's
+                # a control-path requirement no default can substitute for.
             }),
             errors=errors
         )
@@ -530,6 +546,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "ev_start_service", "ev_start_service_data",
                         "ev_stop_service", "ev_stop_service_data",
                         "ev_charger_needs_cycle", "ev_surplus_priority",
+                        # Wallbox-style control path (#384 Part 2 kept). The
+                        # other 8 per-charger fields from #390 reverted to
+                        # OptionsFlow-only in #397 — they were tunables with
+                        # sensible defaults, not install-time blockers.
+                        "ev_current_control_entity",
                     ]
                     charger_0 = {"id": "ev_charger", "name": "EV Charger"}
                     for k in _EV_KEYS:
@@ -1047,6 +1068,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                # Optional real range sensor; else range is derived from
+                # SOC × capacity ÷ consumption (kWh/100km) (#245, #384).
+                vol.Optional(
+                    "vehicle_range_entity",
+                    description={"suggested_value": suggestions.get("vehicle_range_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="distance")
+                ),
+                vol.Optional(
+                    "ev_kwh_per_100km",
+                    default=self._data.get("ev_kwh_per_100km", 18),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=8, max=50, step=0.5,
+                        unit_of_measurement="kWh/100km", mode="box",
+                    )
+                ),
                 # Per-charger SOC target (#215): Min floor + Max solar ceiling (#245)
                 vol.Optional(
                     "ev_target_soc",
@@ -1193,6 +1231,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
                 ),
+                # Optional real range sensor; else range is derived from
+                # SOC × capacity ÷ consumption (kWh/100km) (#245, #384).
+                vol.Optional(
+                    "vehicle_range_entity",
+                    description={"suggested_value": charger.get("vehicle_range_entity")},
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="distance")
+                ),
+                vol.Optional(
+                    "ev_kwh_per_100km",
+                    default=charger.get("ev_kwh_per_100km", self._data.get("ev_kwh_per_100km", 18)),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=8, max=50, step=0.5,
+                        unit_of_measurement="kWh/100km", mode="box",
+                    )
+                ),
                 # Per-charger SOC target (#215)
                 vol.Optional(
                     "ev_target_soc",
@@ -1334,6 +1389,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                # #352 — Enphase + a handful of other installs report
+                # grid power with +import / -export polarity (opposite
+                # of SEM's convention). The Energy-Dashboard-counter
+                # auto-detect can't always stabilise on these (counters
+                # tick at coarse intervals). This toggle is the manual
+                # escape hatch: when ON, the raw read is negated and
+                # auto-detect is bypassed.
+                vol.Optional(
+                    "grid_sign_invert",
+                    default=_c("grid_sign_invert", False),
+                ): selector.BooleanSelector(),
             }),
             errors=errors,
         )
@@ -1438,6 +1504,23 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     description={"suggested_value": current_config.get("dynamic_feedin_entity")},
                 ): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor")
+                ),
+                # #359 — dynamic-tariff price classification mode. The
+                # legacy fixed thresholds (0.15 / 0.35 CHF) mis-bucketed
+                # everything as "normal" on UK/AU/NL providers whose
+                # daily range is 0.05–0.80 €/kWh. Percentile (default)
+                # bucket relative to today's 24-hour price distribution.
+                vol.Optional(
+                    "tariff_classification_mode",
+                    default=_c("tariff_classification_mode", "percentile"),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            {"value": "percentile", "label": "Percentile (relative to today's prices)"},
+                            {"value": "static", "label": "Static (fixed cheap/expensive thresholds)"},
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
                 ),
                 vol.Optional(
                     "electricity_import_rate",

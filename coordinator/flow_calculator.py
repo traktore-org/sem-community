@@ -24,6 +24,7 @@ from .types import (
     EnergyTotals,
     PowerFlows,
     PowerReadings,
+    StringEnergy,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -143,6 +144,57 @@ class EVBudget:
             self.current_a = 0
 
 
+def battery_redirect_w(
+    battery_charge_w: float,
+    battery_soc: float,
+    battery_capacity_kwh: float,
+    forecast_remaining_kwh: float,
+) -> float:
+    """How much battery charge power can be redirected to EV.
+
+    Forecast-aware: if the remaining solar today can still refill the
+    battery, divert some of the current battery_charge_w to the EV
+    instead — proportional to how much "extra" forecast exists beyond
+    the battery's need. Without a forecast, fall back to the 80% SOC
+    threshold (battery full enough that redirect is safe).
+
+    Module-level (not a method on FlowCalculator) so the strategy
+    decision path in ``decide.py`` can compute the same redirect for
+    the intent decision WITHOUT instantiating a FlowCalculator —
+    avoiding the regression where ``SolarOnlyMode.decide()`` checked
+    bare surplus against the charger min, returned IDLE, and so
+    ``calculate_canonical_ev_budget(SOLAR_ONLY)``'s redirect branch
+    was never reached even though it had a viable budget. See the
+    triage in ``tests/test_scenarios.py::_XFAIL_DRIFT`` for the
+    scenario this restores.
+    """
+    if battery_charge_w <= 0:
+        return 0
+
+    battery_need_kwh = max(0, (100 - battery_soc) / 100 * battery_capacity_kwh)
+
+    if forecast_remaining_kwh > 0:
+        # Forecast available: redirect proportional to excess forecast
+        if forecast_remaining_kwh >= battery_need_kwh and battery_need_kwh > 0:
+            # Forecast covers battery — redirect proportionally.
+            # Use max(0.05, ratio) so we always redirect at least 5%
+            # at the exact boundary (forecast == battery_need gives
+            # ratio=0 without this).
+            ratio = min(1.0, 1.0 - battery_need_kwh / forecast_remaining_kwh)
+            return battery_charge_w * max(0.05, ratio)
+        elif battery_need_kwh <= 0.5:
+            # Battery nearly full — redirect all
+            return battery_charge_w
+        else:
+            # Forecast can't cover battery need — keep charging
+            return 0
+    else:
+        # No forecast — SOC threshold fallback
+        if battery_soc >= 80:
+            return battery_charge_w  # Battery full enough, redirect all
+        return 0
+
+
 class FlowCalculator:
     """Calculates power and energy flows using proportional allocation."""
 
@@ -156,101 +208,207 @@ class FlowCalculator:
         # in single-charger setups (no per-charger PowerFlows entries
         # arrive at ``integrate_energy_flows``).
         self._per_charger_accumulators: Dict[str, Dict[str, float]] = {}
+        # v1.7.0 / #312: per-PV-string daily kWh accumulators, reset
+        # daily alongside the fleet + per-charger ones. Outer key is
+        # the string slot label (``"pv1"``, ``"pv2"``, …), inner key
+        # is ``"energy_kwh"`` (kept as a dict for symmetry with the
+        # per-charger schema). Empty in single-string setups.
+        self._per_string_accumulators: Dict[str, Dict[str, float]] = {}
         self._current_date: date = dt_util.now().date()
 
     def calculate_power_flows(self, power: PowerReadings) -> PowerFlows:
-        """Calculate instantaneous power flows using proportional allocation.
+        """Calculate instantaneous power flows using priority-based allocation (#349).
 
-        Each source flows to ALL destinations based on demand percentages.
-        This matches how electricity physically distributes in a system.
+        Sources drain in priority order — ``solar → battery_discharge →
+        grid_import`` (best-for-user first). Destinations are served in
+        priority order — ``home → ev → battery_charge → grid_export``.
 
-        v1.6.9: when ``power.ev_power_per_charger`` is populated
-        (multi-charger setups, ``len(ev_chargers) > 1`` in
-        ``sensor_reader``), the EV-side flow attribution is also split
-        per charger and stored on ``flows.per_charger``. The fleet-level
-        ``flows.solar_to_ev`` (etc.) remains the sum across all chargers
-        — invariant pinned in the scenario tests. Single-charger setups
-        leave ``per_charger`` empty, preserving identical behaviour for
-        every downstream reader.
+        Pre-#349 SEM used proportional allocation: every source split
+        across every destination by demand percentage. That model
+        broke user intent whenever multiple consumers ran in parallel
+        — on HA-PROD 2026-06-01 the dashboard showed 6.6 kWh of
+        grid_to_ev on a day the EV was actually 91 % solar (the home
+        battery was charging from grid; proportional allocation
+        attributed a slice of that grid pull to the EV). It also broke
+        algebraic conservation in supply ≠ demand cycles (scenario:
+        solar=5000 W, home=500 W, grid_export=0 mis-specified →
+        solar_to_home overshoots home demand).
+
+        Priority allocation matches user intent AND conserves on
+        both sides for every cycle:
+
+            sum(flows_to_dest) = dest_demand   for every destination
+            sum(flows_from_src) = src_supply   for every source
+
+        when the input ``power`` is balanced (supply == demand). When
+        the input is unbalanced (sensor lag, transient mismatch), the
+        algorithm degrades gracefully — destinations are served up to
+        their demand from the available supplies in priority order;
+        leftover supply lands in ``solar_to_grid`` (acting as the
+        slack variable) and leftover demand reads zero on the missing
+        rows. Pinned in ``tests/test_349_flow_priority_attribution.py``.
+
+        v1.6.9 multi-charger split + v1.7.0 per-string passthrough
+        (see below the allocator) are unchanged.
         """
         flows = PowerFlows()
 
-        # Get source powers
+        # Get source powers (priority order: solar > battery > grid)
         solar = power.solar_power
-        grid_import = power.grid_import_power
         battery_discharge = power.battery_discharge_power
+        grid_import = power.grid_import_power
 
-        # Get destination powers
+        # Get destination powers (priority order: home > ev > battery_charge > grid_export)
         home = power.home_consumption_power
-        # FLEET-READ: fleet EV demand is the input to proportional
-        # attribution; per-charger split happens below via
-        # ``power.ev_power_per_charger``.
+        # FLEET-READ: fleet EV demand drives the destination allocation;
+        # per-charger split happens below via ``power.ev_power_per_charger``.
         ev = power.ev_power
         battery_charge = power.battery_charge_power
         grid_export = power.grid_export_power
 
-        # Calculate total supply and demand
-        total_supply = solar + grid_import + battery_discharge
-        total_demand = home + ev + battery_charge + grid_export
-
-        # Skip if no activity (prevents division by zero)
-        if total_supply < 1 or total_demand < 1:
+        # Skip if everything's idle (avoids spurious zero-flow rows).
+        if (solar + battery_discharge + grid_import < 1
+                and home + ev + battery_charge + grid_export < 1):
             return flows
 
-        # Calculate demand percentages
-        home_pct = home / total_demand
-        ev_pct = ev / total_demand
-        battery_charge_pct = battery_charge / total_demand
-        grid_export_pct = grid_export / total_demand
+        # Greedy priority allocator. Each (source, destination) pair
+        # consumes ``min(source_left, dest_left)``; the chosen field on
+        # ``flows`` is set; both counters tick down. ``solar_to_battery``
+        # / ``solar_to_grid`` / etc. roll up the leftovers naturally.
+        sources_left = {
+            "solar": solar,
+            "battery": battery_discharge,
+            "grid": grid_import,
+        }
+        destinations_left = {
+            "home": home,
+            "ev": ev,
+            "battery_charge": battery_charge,
+            "grid_export": grid_export,
+        }
 
-        # Distribute solar proportionally to all destinations
-        flows.solar_to_home = round(solar * home_pct, 1)
-        flows.solar_to_ev = round(solar * ev_pct, 1)
-        flows.solar_to_battery = round(solar * battery_charge_pct, 1)
-        flows.solar_to_grid = round(solar * grid_export_pct, 1)
-
-        # Grid import only flows to home, EV, battery (not back to grid)
-        demand_without_export = home + ev + battery_charge
-        if demand_without_export > 0:
-            home_pct_no_export = home / demand_without_export
-            ev_pct_no_export = ev / demand_without_export
-            battery_pct_no_export = battery_charge / demand_without_export
-
-            flows.grid_to_home = round(grid_import * home_pct_no_export, 1)
-            flows.grid_to_ev = round(grid_import * ev_pct_no_export, 1)
-            flows.grid_to_battery = round(grid_import * battery_pct_no_export, 1)
-
-        # Battery discharge flows to home and EV (not to grid or battery charge)
-        demand_for_battery = home + ev
-        if demand_for_battery > 0:
-            home_pct_battery = home / demand_for_battery
-            ev_pct_battery = ev / demand_for_battery
-
-            flows.battery_to_home = round(battery_discharge * home_pct_battery, 1)
-            flows.battery_to_ev = round(battery_discharge * ev_pct_battery, 1)
+        # Allowed (source, destination) pairs. The omissions are
+        # deliberate:
+        # - ``grid → grid_export``: a flow-meter sign artefact, not real.
+        # - ``battery_discharge → battery_charge``: a battery can't
+        #   simultaneously discharge and charge itself.
+        # - ``battery_discharge → grid_export``: SEM doesn't support
+        #   battery-to-grid arbitrage (the few installs that do would
+        #   need a ``battery_to_grid`` flow field — out of scope here).
+        #   In a normal install solar/battery sign-conflicts caused by
+        #   sensor lag are rare; if they happen the leftover battery
+        #   discharge stays unattributed for that cycle, which is a
+        #   small honest under-count rather than a wrong attribution.
+        pairs = [
+            ("solar", "home"),
+            ("solar", "ev"),
+            ("solar", "battery_charge"),
+            ("solar", "grid_export"),
+            ("battery", "home"),
+            ("battery", "ev"),
+            ("grid", "home"),
+            ("grid", "ev"),
+            ("grid", "battery_charge"),
+        ]
+        flow_field = {
+            ("solar", "home"): "solar_to_home",
+            ("solar", "ev"): "solar_to_ev",
+            ("solar", "battery_charge"): "solar_to_battery",
+            ("solar", "grid_export"): "solar_to_grid",
+            ("battery", "home"): "battery_to_home",
+            ("battery", "ev"): "battery_to_ev",
+            ("grid", "home"): "grid_to_home",
+            ("grid", "ev"): "grid_to_ev",
+            ("grid", "battery_charge"): "grid_to_battery",
+        }
+        for src, dst in pairs:
+            avail = sources_left[src]
+            need = destinations_left[dst]
+            if avail <= 0 or need <= 0:
+                continue
+            delivered = min(avail, need)
+            field = flow_field[(src, dst)]
+            setattr(flows, field, round(delivered, 1))
+            sources_left[src] = avail - delivered
+            destinations_left[dst] = need - delivered
 
         # v1.6.9 per-charger attribution. When per-charger draws are
         # available, split the fleet-level EV flows by each charger's
         # share of the total EV draw. Math: ``charger_share = c_draw /
         # ev_total`` × fleet ``flows.*_to_ev``. Sum invariant holds by
-        # construction (sum of shares == 1.0 modulo float rounding;
-        # final ``round(..., 1)`` may leak ≤ 0.1 W which is well below
-        # any user-visible threshold).
+        # v1.7.0 / #312: carry per-string raw power onto the flows
+        # object so ``integrate_energy_flows`` can accumulate kWh per
+        # string without an API change. Strings are SOURCES so there's
+        # no destination attribution to compute — just pass-through.
+        if power.solar_power_per_string:
+            flows.solar_per_string = dict(power.solar_power_per_string)
+
+        # Per-charger native attribution (Step 5 of arch/
+        # multi-charger-primary, addresses #351 finding M3).
+        #
+        # Pre-Step-5 SEM did proportional fraction-of-fleet:
+        # ``flows.per_charger[cid].solar_to_ev = flows.solar_to_ev *
+        # (charger_ev_w / fleet_ev_w)``. If charger A was on solar
+        # and charger B was on grid (different priorities or just
+        # different surplus availability), both got the SAME
+        # proportional mix — losing the priority signal that the
+        # main allocator above just computed.
+        #
+        # Step 5 attribution: priority-allocate each charger's
+        # draw against the residual supply, in charger priority
+        # order. Higher-priority chargers get first claim on
+        # solar; lower-priority ones fall back to battery / grid.
+        # The sum invariant
+        # ``sum(per_charger.solar_to_ev) == fleet.solar_to_ev``
+        # is preserved by construction (we just split the same
+        # totals across chargers in priority order instead of by
+        # equal fraction).
         if power.ev_power_per_charger:
-            for cid, charger_ev_w in power.ev_power_per_charger.items():
-                if charger_ev_w <= 0 or ev <= 0:
-                    # An idle charger (or the whole fleet idle) gets a
-                    # zero-filled ChargerFlows so the per-charger
-                    # sensors stay AVAILABLE at 0 W instead of going
-                    # ``unavailable`` whenever no charger is drawing
-                    # (HA-TEST 2026-05-31 noise after first deploy).
+            # Sort chargers by priority (lower = higher priority).
+            # Falls back to dict-insertion order if priority dict
+            # not provided — preserves v1.6.9 behaviour on single-
+            # charger setups.
+            priorities = getattr(power, "ev_priority_per_charger", None) or {}
+            sorted_cids = sorted(
+                power.ev_power_per_charger.keys(),
+                key=lambda c: (priorities.get(c, 999), c),
+            )
+
+            # Per-source pool of fleet-attributed EV flow that's
+            # still up for grabs by per-charger consumers.
+            ev_pool = {
+                "solar": flows.solar_to_ev,
+                "grid": flows.grid_to_ev,
+                "battery": flows.battery_to_ev,
+            }
+
+            for cid in sorted_cids:
+                charger_ev_w = power.ev_power_per_charger.get(cid, 0.0)
+                if charger_ev_w <= 0:
+                    # Idle charger: zero-filled ChargerFlows (the
+                    # v1.6.9 behaviour preserved).
                     flows.per_charger[cid] = ChargerFlows()
                     continue
-                share = charger_ev_w / ev
+
+                # Allocate from each source in priority order
+                # (solar first, then battery, then grid).
+                need = charger_ev_w
+                solar_share = min(ev_pool["solar"], need)
+                ev_pool["solar"] -= solar_share
+                need -= solar_share
+
+                battery_share = min(ev_pool["battery"], need)
+                ev_pool["battery"] -= battery_share
+                need -= battery_share
+
+                grid_share = min(ev_pool["grid"], need)
+                ev_pool["grid"] -= grid_share
+                need -= grid_share
+
                 flows.per_charger[cid] = ChargerFlows(
-                    solar_to_ev=round(flows.solar_to_ev * share, 1),
-                    grid_to_ev=round(flows.grid_to_ev * share, 1),
-                    battery_to_ev=round(flows.battery_to_ev * share, 1),
+                    solar_to_ev=round(solar_share, 1),
+                    grid_to_ev=round(grid_share, 1),
+                    battery_to_ev=round(battery_share, 1),
                 )
 
         return flows
@@ -267,6 +425,14 @@ class FlowCalculator:
     # have a per-charger attribution surface — the rest stay fleet-level.
     _PER_CHARGER_ACCUMULATED_ATTRS = (
         "solar_to_ev", "grid_to_ev", "battery_to_ev",
+    )
+
+    # v1.7.0 / #312: per-string slot label form. Just one quantity
+    # per string (kWh contribution this day). Kept as a tuple-of-one
+    # for symmetry with the per-charger pattern and to make a future
+    # second per-string scalar (e.g. peak watts) a one-line add.
+    _PER_STRING_ACCUMULATED_ATTRS = (
+        "energy_kwh",
     )
 
     def integrate_energy_flows(
@@ -309,6 +475,7 @@ class FlowCalculator:
         if today != self._current_date:
             self._flow_accumulators.clear()
             self._per_charger_accumulators.clear()
+            self._per_string_accumulators.clear()
             self._current_date = today
 
         hours = max(0.0, interval_seconds) / 3600.0
@@ -345,6 +512,28 @@ class FlowCalculator:
                 battery_to_ev=round(acc.get("battery_to_ev", 0.0), 3),
             )
 
+        # v1.7.0 / #312: per-PV-string slice. Integrate the raw
+        # per-string power carried on ``power_flows.solar_per_string``
+        # into a parallel dict-of-dicts so each string has its own
+        # kWh counter. Sum invariant pinned in tests:
+        # ``sum(per_string.energy_kwh) ≈ fleet solar integration``
+        # within rounding.
+        if power_flows.solar_per_string:
+            for sid, watts in power_flows.solar_per_string.items():
+                acc = self._per_string_accumulators.setdefault(sid, {})
+                w = watts or 0.0
+                acc["energy_kwh"] = (
+                    acc.get("energy_kwh", 0.0) + w * hours / 1000.0
+                )
+
+        # Emit every string ever seen — clouds shading one panel
+        # array mid-day shouldn't regress the user-visible counter to 0
+        # (same semantic as the per-charger emit above).
+        for sid, acc in self._per_string_accumulators.items():
+            flows.per_string[sid] = StringEnergy(
+                energy_kwh=round(acc.get("energy_kwh", 0.0), 3),
+            )
+
         return flows
 
     def get_flow_accumulator_state(self) -> dict:
@@ -363,6 +552,11 @@ class FlowCalculator:
             snap["per_charger"] = {
                 cid: dict(acc)
                 for cid, acc in self._per_charger_accumulators.items()
+            }
+        if self._per_string_accumulators:
+            snap["per_string"] = {
+                sid: dict(acc)
+                for sid, acc in self._per_string_accumulators.items()
             }
         return snap
 
@@ -399,6 +593,19 @@ class FlowCalculator:
                     if isinstance(v, (int, float)):
                         target[k] = float(v)
 
+        # v1.7.0: restore per-string slice if present. Missing key is
+        # the expected case for pre-v1.7.0 snapshots — silently skip.
+        ps = state.get("per_string")
+        if isinstance(ps, dict):
+            for sid, acc in ps.items():
+                if not isinstance(acc, dict):
+                    continue
+                target = self._per_string_accumulators.setdefault(str(sid), {})
+                for k in self._PER_STRING_ACCUMULATED_ATTRS:
+                    v = acc.get(k)
+                    if isinstance(v, (int, float)):
+                        target[k] = float(v)
+
     def calculate_energy_flows(self, energy: EnergyTotals) -> EnergyFlows:
         """Legacy proportional-allocation energy flows (kept for tests).
 
@@ -412,6 +619,15 @@ class FlowCalculator:
         timing doesn't matter (full-day overviews). Not wired into the
         coordinator update cycle anymore (#282).
         """
+        import warnings
+        warnings.warn(
+            "FlowCalculator.calculate_energy_flows is deprecated — "
+            "proportional allocation produces misleading attribution. "
+            "Use integrate_energy_flows() for the canonical, "
+            "timing-aware energy flows. #351 L2.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         flows = EnergyFlows()
 
         # Get source energies
@@ -490,35 +706,16 @@ class FlowCalculator:
                                      battery_soc: float,
                                      battery_capacity_kwh: float,
                                      forecast_remaining_kwh: float) -> float:
-        """How much battery charge power can be redirected to EV.
+        """Thin wrapper kept for method-call call sites.
 
-        Uses forecast when available: if remaining solar can still fill battery,
-        redirect proportionally. Falls back to SOC threshold without forecast.
+        Delegates to the module-level free function so the strategy
+        decision path (``decide.py``) can compute the same value
+        without instantiating a ``FlowCalculator``.
         """
-        if battery_charge_w <= 0:
-            return 0
-
-        battery_need_kwh = max(0, (100 - battery_soc) / 100 * battery_capacity_kwh)
-
-        if forecast_remaining_kwh > 0:
-            # Forecast available: redirect proportional to excess forecast
-            if forecast_remaining_kwh >= battery_need_kwh and battery_need_kwh > 0:
-                # Forecast covers battery — redirect proportionally.
-                # Use max(0.05, ratio) to always redirect at least 5% at the
-                # exact boundary (forecast == battery_need gives ratio=0 without this).
-                ratio = min(1.0, 1.0 - battery_need_kwh / forecast_remaining_kwh)
-                return battery_charge_w * max(0.05, ratio)
-            elif battery_need_kwh <= 0.5:
-                # Battery nearly full — redirect all
-                return battery_charge_w
-            else:
-                # Forecast can't cover battery need — keep charging
-                return 0
-        else:
-            # No forecast — SOC threshold fallback
-            if battery_soc >= 80:
-                return battery_charge_w  # Battery full enough, redirect all
-            return 0
+        return battery_redirect_w(
+            battery_charge_w, battery_soc,
+            battery_capacity_kwh, forecast_remaining_kwh,
+        )
 
     # ``calculate_available_power`` removed in Phase D.2 (#282). Zero
     # production callers as of v1.6.0 — the canonical EVBudget supersedes

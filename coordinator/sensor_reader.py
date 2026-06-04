@@ -62,16 +62,38 @@ class SensorReader:
         self.config = self._parse_config(config)
         self._raw_config = config
         self._energy_dashboard_config = None
+        # v1.7.0 / #312: per-PV-string sensors discovered at config-
+        # flow time. Empty dict in single-string setups (no discovery
+        # hit), populated by ``set_pv_strings`` from
+        # ``hardware_detection.discover_pv_strings_from_registry``.
+        self._pv_strings: Dict[str, str] = {}
         self._grid_sign_inverted = False
         self._grid_sign_detected = False  # True once sign is reliably determined
         self._grid_sign_votes: int = 0  # Consecutive same-sign detections needed
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
-        self._battery_sign_inverted = False
-        self._battery_sign_detected = False
-        self._battery_sign_votes: int = 0  # Consecutive same-sign detections needed
-        self._battery_charge_baseline: Optional[float] = None
-        self._battery_discharge_baseline: Optional[float] = None
+        # Battery sign autodetect — #404: per-battery state.
+        # Multi-battery installs (≥ 2 ``battery_power_list`` entries) run
+        # the detection independently per battery using each one's own
+        # ``battery_charge_energy_list[i]`` / ``discharge_energy_list[i]``
+        # counters, so a dual-brand fleet (e.g., Sessy + Huawei) with
+        # opposite sign conventions ends up canonical for both. Each
+        # dict is keyed by the stable per-battery slug (``b1``, ``b2`` …)
+        # assigned in the read-power loop below.
+        #
+        # Single-battery / combined-sensor installs fall back to the
+        # legacy fleet-level detection using the ``ed.battery_*_energy``
+        # (singular) counters. Both code paths share the same voting +
+        # threshold heuristic — only the input scope differs.
+        self._battery_sign_inverted: Dict[str, bool] = {}
+        self._battery_sign_detected: Dict[str, bool] = {}
+        self._battery_sign_votes: Dict[str, int] = {}
+        self._battery_charge_baseline: Dict[str, Optional[float]] = {}
+        self._battery_discharge_baseline: Dict[str, Optional[float]] = {}
+        # Sentinel key for the legacy single-battery / fleet-sensor path.
+        # Keeps the per-battery and fleet paths in one data model
+        # without spreading two parallel sets of state across the class.
+        self._FLEET_BID = "__fleet__"
         # Track sensor availability transitions (#5: robustness)
         self._sensor_unavailable: set[str] = set()
         # Cache last valid SOC to avoid 0% during sensor gaps
@@ -110,6 +132,88 @@ class SensorReader:
             ev_charging_sensor=config.get("ev_charging_sensor", ""),
         )
 
+    def _read_pv_string_source(self, slot: str, source) -> float:
+        """Read one per-PV-string source (v1.7.0 / #312).
+
+        Handles both registered source shapes:
+
+        - ``str`` → direct power entity. Read the value, return W.
+        - ``tuple(V_entity, I_entity)`` → V+I synthesis. Read both,
+          return ``V × I`` (W). Used for inverter integrations that
+          publish voltage + current per string but no power sensor
+          (Huawei Solar Modbus is the motivating case — confirmed
+          on HA-PROD 2026-06-01: ``inverter_pv_1_spannung`` and
+          ``..._strom`` exist but no ``..._power``).
+
+        Returns 0.0 on any read failure (unavailable sensor, non-
+        numeric state, etc.) — same fail-soft contract as
+        ``_read_sensor``. The synthesised power is then surfaced
+        through the same ``solar_power_per_string`` dict as a
+        directly-read value; downstream consumers don't need to
+        know the source shape.
+        """
+        if isinstance(source, tuple):
+            v_entity, i_entity = source
+            v = self._read_sensor(v_entity, f"pv_{slot}_voltage")
+            i = self._read_sensor(i_entity, f"pv_{slot}_current")
+            return float(v) * float(i)
+        # Direct power entity — keep the legacy fast path.
+        return self._read_sensor(source, f"pv_{slot}")
+
+    def set_pv_strings(
+        self,
+        pv_strings_map: Dict[str, str],
+        pv_vi_pairs_map: Optional[Dict[str, "Tuple[str, str]"]] = None,
+    ) -> None:
+        """Register the discovered per-PV-string sources (v1.7.0 / #312).
+
+        Two sources supported, both feed the same ``_pv_strings`` dict:
+
+        - ``pv_strings_map``: result of
+          ``hardware_detection.discover_pv_strings_from_registry`` —
+          direct power sensors (``{"pv1_power": "sensor.inverter_pv1_power"}``).
+        - ``pv_vi_pairs_map`` (v1.7.0): result of
+          ``hardware_detection.discover_pv_string_vi_pairs`` —
+          V+I sibling pairs for inverters that publish only voltage
+          and current per string (Huawei Solar Modbus, generic
+          Modbus drivers). At read time SEM multiplies V × I to
+          synthesise the per-string watts. Keys are stripped slot
+          labels ``"pv1"`` / ``"pv2"`` / …; values are tuples
+          ``(voltage_entity, current_entity)``.
+
+        When the same slot appears in BOTH maps, the direct power
+        sensor wins — it's a real measurement rather than a
+        computed product, slightly more accurate (the inverter's
+        own internal computation accounts for MPPT efficiency etc.).
+
+        Single-string installs pass empty dicts; sensor reads stay
+        identical to today.
+
+        Called once from ``SEMCoordinator.async_initialize_energy_dashboard``
+        after Energy Dashboard config is read — discovery is a config-
+        flow operation, not something to repeat every cycle.
+        """
+        # Internal shape: ``{slot: str | (V_entity, I_entity)}``. Stored
+        # as ``Any`` because the union type is awkward to express in
+        # a single dataclass field; the per-cycle read loop tags by
+        # ``isinstance(value, tuple)``.
+        self._pv_strings: Dict[str, "Any"] = {}
+
+        for slot_key, entity_id in (pv_strings_map or {}).items():
+            # Slot keys arrive as ``pv1_power``, ``mppt1_power`` etc.
+            # Normalise to ``pv1`` for stable downstream labelling.
+            label = slot_key.replace("_power", "").replace("mppt", "pv")
+            if entity_id:
+                self._pv_strings[label] = entity_id
+
+        for slot_label, vi_pair in (pv_vi_pairs_map or {}).items():
+            # Don't override a direct power entry from a parallel
+            # V+I match — see contract above.
+            if slot_label in self._pv_strings:
+                continue
+            if vi_pair and len(vi_pair) == 2 and all(vi_pair):
+                self._pv_strings[slot_label] = tuple(vi_pair)
+
     def set_energy_dashboard_config(self, ed_config) -> None:
         """Set energy dashboard configuration for alternative sensor reading."""
         self._energy_dashboard_config = ed_config
@@ -127,23 +231,76 @@ class SensorReader:
         # Calculate derived values
         readings.calculate_derived()
 
-        # Auto-detect grid sign convention using Energy Dashboard counters.
-        # SEM convention: negative = import, positive = export.
-        # Compares power sensor sign against import/export energy counter
-        # changes to determine if negation is needed.
-        needs_negate = self._detect_grid_sign(readings)
-
-        if needs_negate:
+        # Manual grid-sign override (#352): when the user sets
+        # ``grid_sign_invert: True`` the auto-detect path is bypassed
+        # entirely and the raw read is negated. Required for Enphase /
+        # other installs where the energy-counter heuristic can't
+        # stabilise.
+        manual_grid_invert = bool(self._raw_config.get("grid_sign_invert", False))
+        if manual_grid_invert:
             readings.grid_power = -readings.grid_power
             readings.calculate_derived()
+        else:
+            # Auto-detect grid sign convention using Energy Dashboard counters.
+            # SEM convention: negative = import, positive = export.
+            # Compares power sensor sign against import/export energy counter
+            # changes to determine if negation is needed.
+            needs_negate = self._detect_grid_sign(readings)
+
+            if needs_negate:
+                readings.grid_power = -readings.grid_power
+                readings.calculate_derived()
 
         # Auto-detect battery sign convention using Energy Dashboard counters.
         # SEM convention: positive = charge, negative = discharge.
-        battery_needs_negate = self._detect_battery_sign(readings)
+        #
+        # #404: when the install has ≥ 2 per-battery power sensors AND
+        # the matching per-battery energy counters, run the detection
+        # independently per battery and rebuild the fleet sum from the
+        # corrected per-battery values — this guarantees fleet ↔ per-
+        # battery consistency by construction AND handles dual-brand
+        # fleets (e.g., Sessy + Huawei) that need different per-battery
+        # flip decisions.
+        #
+        # Single-battery / combined-sensor installs fall back to the
+        # legacy fleet-level path.
+        ed = self._energy_dashboard_config
+        per_battery_mode = (
+            ed is not None
+            and len(ed.battery_power_list) >= 2
+            and len(readings.batteries) == len(ed.battery_power_list)
+        )
 
-        if battery_needs_negate:
-            readings.battery_power = -readings.battery_power
+        if per_battery_mode:
+            from dataclasses import replace
+            corrected_total = 0.0
+            for idx, entity in enumerate(ed.battery_power_list):
+                bid = f"b{idx + 1}"
+                bp = readings.batteries.get(bid)
+                if bp is None:
+                    continue
+                charge_entity = (
+                    ed.battery_charge_energy_list[idx]
+                    if idx < len(ed.battery_charge_energy_list) else None
+                )
+                discharge_entity = (
+                    ed.battery_discharge_energy_list[idx]
+                    if idx < len(ed.battery_discharge_energy_list) else None
+                )
+                needs_negate = self._detect_battery_sign_for(
+                    bid, bp.power_w, charge_entity, discharge_entity,
+                )
+                if needs_negate:
+                    bp = replace(bp, power_w=-bp.power_w)
+                    readings.batteries[bid] = bp
+                corrected_total += bp.power_w
+            readings.battery_power = corrected_total
             readings.calculate_derived()
+        else:
+            battery_needs_negate = self._detect_battery_sign(readings)
+            if battery_needs_negate:
+                readings.battery_power = -readings.battery_power
+                readings.calculate_derived()
 
         return readings
 
@@ -254,42 +411,73 @@ class SensorReader:
 
         charge_entity = ed.battery_charge_energy
         discharge_entity = ed.battery_discharge_energy
+        return self._detect_battery_sign_for(
+            self._FLEET_BID,
+            readings.battery_power,
+            charge_entity,
+            discharge_entity,
+        )
+
+    def _detect_battery_sign_for(
+        self,
+        bid: str,
+        power: float,
+        charge_entity: Optional[str],
+        discharge_entity: Optional[str],
+    ) -> bool:
+        """Run the sign-autodetect correlation against one (battery_id,
+        power, charge_counter, discharge_counter) tuple.
+
+        Used both by the legacy fleet path (``bid = _FLEET_BID``) and by
+        the per-battery loop introduced in #404. Each ``bid`` gets its
+        own voting deque + baselines, so dual-brand multi-battery installs
+        end up with each battery independently corrected.
+
+        Returns True if ``power`` should be negated for this ``bid``.
+        """
+        # ``setdefault`` keeps the existing per-bid state stable across
+        # cycles while letting new bids appear lazily (e.g., a second
+        # battery added mid-session).
+        self._battery_sign_inverted.setdefault(bid, False)
+        self._battery_sign_detected.setdefault(bid, False)
+        self._battery_sign_votes.setdefault(bid, 0)
+        self._battery_charge_baseline.setdefault(bid, None)
+        self._battery_discharge_baseline.setdefault(bid, None)
 
         if not charge_entity or not discharge_entity:
-            return False
+            return self._battery_sign_inverted[bid]
 
         # Need meaningful power to detect (ignore noise)
-        power = readings.battery_power
         if abs(power) < 100:
-            return self._battery_sign_inverted  # Keep last known state
+            return self._battery_sign_inverted[bid]  # Keep last known state
 
         # Read energy counter values
         charge_state = self.hass.states.get(charge_entity)
         discharge_state = self.hass.states.get(discharge_entity)
 
         if not charge_state or charge_state.state in ("unknown", "unavailable"):
-            return self._battery_sign_inverted
+            return self._battery_sign_inverted[bid]
         if not discharge_state or discharge_state.state in ("unknown", "unavailable"):
-            return self._battery_sign_inverted
+            return self._battery_sign_inverted[bid]
 
         try:
             charge_val = float(charge_state.state)
             discharge_val = float(discharge_state.state)
         except (ValueError, TypeError):
-            return self._battery_sign_inverted
+            return self._battery_sign_inverted[bid]
 
         # First call: store baselines, don't correct yet
-        if self._battery_charge_baseline is None:
-            self._battery_charge_baseline = charge_val
-            self._battery_discharge_baseline = discharge_val
+        if self._battery_charge_baseline[bid] is None:
+            self._battery_charge_baseline[bid] = charge_val
+            self._battery_discharge_baseline[bid] = discharge_val
             return False
 
-        charge_delta = charge_val - self._battery_charge_baseline
-        discharge_delta = discharge_val - self._battery_discharge_baseline
+        charge_delta = charge_val - self._battery_charge_baseline[bid]
+        discharge_delta = discharge_val - self._battery_discharge_baseline[bid]
 
         # Update baselines for next cycle
-        self._battery_charge_baseline = charge_val
-        self._battery_discharge_baseline = discharge_val
+        self._battery_charge_baseline[bid] = charge_val
+        self._battery_discharge_baseline[bid] = discharge_val
 
         # Determine convention from correlation:
         # power > 0 + charge growing → SEM convention (+ = charge) → no negate
@@ -305,31 +493,32 @@ class SensorReader:
             detected = power > 0  # If power positive during discharge → negate
 
         if detected is None:
-            return self._battery_sign_inverted
+            return self._battery_sign_inverted[bid]
 
         # Require 3 consecutive consistent detections before locking in.
         # This prevents false sign flips from transient energy counter
         # jitter after reboots (e.g. both counters ticking simultaneously
         # during HA recorder settling).
-        if not self._battery_sign_detected:
-            if detected == (self._battery_sign_votes > 0):
+        if not self._battery_sign_detected[bid]:
+            if detected == (self._battery_sign_votes[bid] > 0):
                 # Same direction as previous votes (True=negate votes positive)
-                self._battery_sign_votes += 1 if detected else -1
+                self._battery_sign_votes[bid] += 1 if detected else -1
             else:
                 # Direction changed — reset
-                self._battery_sign_votes = 1 if detected else -1
+                self._battery_sign_votes[bid] = 1 if detected else -1
 
-            if abs(self._battery_sign_votes) >= 3:
-                self._battery_sign_inverted = detected
-                self._battery_sign_detected = True
+            if abs(self._battery_sign_votes[bid]) >= 3:
+                self._battery_sign_inverted[bid] = detected
+                self._battery_sign_detected[bid] = True
                 _LOGGER.info(
-                    "Battery sign detected from Energy Dashboard counters: %s "
+                    "Battery sign detected for %s from Energy Dashboard counters: %s "
                     "(power=%.0fW, charge_delta=%.3f, discharge_delta=%.3f)",
+                    bid,
                     "negating (opposite convention)" if detected else "no correction (SEM convention)",
                     power, charge_delta, discharge_delta,
                 )
 
-        return self._battery_sign_inverted
+        return self._battery_sign_inverted[bid]
 
     def _read_sensors_sum(self, entity_ids: list, name: str) -> float:
         """Sum values from multiple sensors of the same type."""
@@ -340,11 +529,35 @@ class SensorReader:
         ed = self._energy_dashboard_config
         readings = PowerReadings()
 
-        # Solar power — sum all inverters if multiple configured
+        # Solar power — sum all inverters if multiple configured.
+        # v1.7.0 arch/multi-inverter-battery-primary: also populate
+        # the per-inverter dict so downstream consumers can attribute
+        # by inverter (multi-inverter installs only — single-inverter
+        # leaves the dict empty and falls back to readings.solar_power).
+        from .charger_types import InverterPower
         if len(ed.solar_power_list) > 1:
-            readings.solar_power = self._read_sensors_sum(ed.solar_power_list, "solar")
+            total = 0.0
+            for entity in ed.solar_power_list:
+                w = self._read_sensor(entity, "solar")
+                total += w
+                readings.inverters[entity] = InverterPower(
+                    inverter_id=entity, power_w=w, name=entity,
+                )
+            readings.solar_power = total
         elif ed.solar_power:
             readings.solar_power = self._read_sensor(ed.solar_power, "solar")
+
+        # v1.7.0 / #312: per-PV-string power. Gated on len ≥ 2 — single-
+        # string setups get nothing here and downstream readers fall
+        # back to ``readings.solar_power``. The discovery already
+        # capped the slot count at 4, so the loop is O(≤4). Sources
+        # may be either a direct power entity (str) or a V+I sibling
+        # pair (tuple) — the per-cycle helper handles both.
+        if len(self._pv_strings) >= 2:
+            for slot, source in self._pv_strings.items():
+                readings.solar_power_per_string[slot] = self._read_pv_string_source(
+                    slot, source,
+                )
 
         # Grid power from Energy Dashboard.
         # Three modes:
@@ -394,10 +607,43 @@ class SensorReader:
                 )
 
         # Battery power — sum all battery units if multiple configured.
-        # Sign auto-detection (in read_power → _detect_battery_sign) uses the
-        # primary sensor and assumes all units share the same sign convention.
+        # v1.7.0 arch: also populate the per-battery dict so multi-
+        # battery installs can be attributed per-unit. Single-battery
+        # leaves the dict empty and downstream consumers fall back to
+        # readings.battery_power.
+        # Sign auto-detection (in read_power → _detect_battery_sign)
+        # uses the primary sensor and assumes all units share the same
+        # sign convention.
+        from .charger_types import BatteryPower
         if len(ed.battery_power_list) > 1:
-            readings.battery_power = self._read_sensors_sum(ed.battery_power_list, "battery")
+            total = 0.0
+            # Phase A of per-battery card mirror: assign short stable
+            # slugs (``b1``, ``b2`` …) keyed by the Energy Dashboard
+            # battery_power_list order so the SEM-side sensor IDs are
+            # predictable at setup time (``sensor.sem_battery_b1_power``
+            # rather than echoing the source entity). The full source
+            # entity stays in ``name`` for display + as the friendly
+            # name override the card uses.
+            for idx, entity in enumerate(ed.battery_power_list):
+                bid = f"b{idx + 1}"
+                w = self._read_sensor(entity, "battery")
+                total += w
+                # Per-battery SOC via the same auto-detect heuristic
+                # the fleet average uses. Falls through to 0.0 when no
+                # matching SOC sensor is discoverable — card displays
+                # ``—`` in that case rather than fabricating a value.
+                soc_entity = self._auto_detect_battery_soc(entity)
+                soc_val = 0.0
+                if soc_entity:
+                    s = self._read_sensor(
+                        soc_entity, "battery_soc", allow_none=True,
+                    )
+                    if s is not None and s >= 0:
+                        soc_val = s
+                readings.batteries[bid] = BatteryPower(
+                    battery_id=bid, power_w=w, soc_pct=soc_val, name=entity,
+                )
+            readings.battery_power = total
         elif ed.battery_power:
             readings.battery_power = self._read_sensor(ed.battery_power, "battery")
 
@@ -656,6 +902,14 @@ class SensorReader:
             readings.solar_power = self._read_sensor(
                 self.config.solar_power_sensor, "solar"
             )
+
+        # v1.7.0 / #312: per-PV-string power on the legacy path too.
+        # Same len ≥ 2 gate as the Energy Dashboard path.
+        if len(self._pv_strings) >= 2:
+            for slot, entity_id in self._pv_strings.items():
+                readings.solar_power_per_string[slot] = self._read_sensor(
+                    entity_id, f"pv_{slot}",
+                )
 
         # Grid power (hardware convention: negative=import, positive=export)
         if self.config.grid_power_sensor:

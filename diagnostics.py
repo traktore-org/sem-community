@@ -131,6 +131,37 @@ async def async_get_config_entry_diagnostics(
                 return "derived"
             return "stat_rate" if entity_id else None
 
+        # Per-source sensor lists (#378 diagnostic gap). The cached single
+        # ``solar_power`` / ``battery_power`` / ``grid_import_power`` field
+        # is the PRIMARY entity SEM reads, but for multi-inverter /
+        # multi-battery / multi-grid setups the ACTUAL aggregated value
+        # comes from the ``*_list`` fields — each entity in the list is
+        # read and summed. If a user reports "fleet sensor underreports",
+        # the gap is almost always either:
+        #   (a) the list is missing an entity (autodiscovery missed it,
+        #       or HA Energy Dashboard config doesn't include it), or
+        #   (b) one of the entities is unavailable / returns non-numeric.
+        # Capturing the lists + each entity's current state makes the
+        # triage one-shot from the diagnostics dump alone.
+        def _read_state(eid):
+            if not eid:
+                return None
+            s = hass.states.get(eid)
+            if s is None:
+                return {"state": "missing"}
+            return {"state": s.state, "unit": s.attributes.get("unit_of_measurement")}
+
+        per_source_lists = {
+            "solar_power_list": list(getattr(ed_config, "solar_power_list", []) or []),
+            "battery_power_list": list(getattr(ed_config, "battery_power_list", []) or []),
+            "grid_power_list": list(getattr(ed_config, "grid_power_list", []) or []),
+        }
+        per_source_readings = {
+            "solar": {eid: _read_state(eid) for eid in per_source_lists["solar_power_list"]},
+            "battery": {eid: _read_state(eid) for eid in per_source_lists["battery_power_list"]},
+            "grid": {eid: _read_state(eid) for eid in per_source_lists["grid_power_list"]},
+        }
+
         ed_info = {
             "has_solar": ed_config.has_solar,
             "has_grid": ed_config.has_grid,
@@ -147,6 +178,8 @@ async def async_get_config_entry_diagnostics(
                 "grid": _power_source("grid", ed_config.grid_import_power),
                 "battery": _power_source("battery", ed_config.battery_power),
             },
+            "per_source_lists": per_source_lists,
+            "per_source_readings": per_source_readings,
             "energy_sensors": {
                 "solar": ed_config.solar_energy,
                 "grid_import": ed_config.grid_import_energy,
@@ -177,6 +210,60 @@ async def async_get_config_entry_diagnostics(
             "confidence": disc.get("confidence"),
             "grid_energy_device_resolved": grid_device_resolved,
         }
+
+    # PV string discovery result (#379 triage support).
+    # The discover_pv_strings_from_registry result lives on
+    # ``coordinator._sensor_reader._pv_strings`` (direct-power form)
+    # AND ``coordinator._sensor_reader._pv_vi_pairs`` (V+I synthesis
+    # form). When a user reports "PV2 is empty in the dashboard", the
+    # gap is almost always either:
+    #   * Discovery returned empty → ``_pv_strings = {}``
+    #   * Discovery returned 1 entry → fallback to multi-inverter
+    #     didn't fire (would have produced N entries)
+    #   * Both populated correctly → bug is in the dashboard card
+    #     rendering (not in this layer)
+    pv_strings_info = {}
+    if reader:
+        pv_strings_info = {
+            "discovered_direct": dict(getattr(reader, "_pv_strings", {}) or {}),
+            "discovered_vi_pairs": {
+                k: list(v) for k, v in
+                (getattr(reader, "_pv_vi_pairs", None) or {}).items()
+            },
+        }
+
+    # Per-charger adapter state (#357 triage support).
+    # Surface the brand the adapter resolved to + the brand-specific
+    # discovery state. For Wallbox: the ``pause_resume`` switch entity
+    # the adapter found (or didn't). When @RienduPre's "charge_mode=off
+    # but charger keeps charging" report drops in, this tells us at a
+    # glance whether the adapter failed to discover the pause switch
+    # (then ``command_disable`` silently no-ops on the pause action,
+    # leaving the contactor closed).
+    charger_adapter_info = {}
+    ev_devices = getattr(coordinator, "_ev_devices", None) or {}
+    if ev_devices:
+        from .coordinator.ev_control import EVControlMixin  # noqa: F401
+        adapters = getattr(coordinator, "_ev_adapters", {}) or {}
+        for cid, dev in ev_devices.items():
+            ad = adapters.get(cid)
+            entry_info = {
+                "device_name": getattr(dev, "name", None),
+                "device_max_current": getattr(dev, "max_current", None),
+                "device_min_current": getattr(dev, "min_current", None),
+                "charger_service": getattr(dev, "charger_service", None),
+                "adapter_class": type(ad).__name__ if ad else None,
+            }
+            # Brand-specific state — currently Wallbox is the only
+            # one with non-trivial discovery state. KEBA / generic
+            # don't have discovery, so this block stays small.
+            if ad is not None and type(ad).__name__ == "WallboxAdapter":
+                entry_info["wallbox"] = {
+                    "pause_switch_searched": getattr(ad, "_pause_switch_searched", False),
+                    "pause_switch_entity": getattr(ad, "_pause_switch_entity", None),
+                    "pause_switch_discovered": getattr(ad, "_pause_switch_entity", None) is not None,
+                }
+            charger_adapter_info[cid] = entry_info
 
     # v1.6.11: bundle the last ~80 SEM-related log lines into the
     # diagnostics dump so bug reports come pre-loaded with the
@@ -252,6 +339,8 @@ async def async_get_config_entry_diagnostics(
         "load_management": load_info,
         "energy_dashboard": ed_info,
         "split_grid_discovery": split_grid_info,
+        "pv_strings_discovery": pv_strings_info,
+        "charger_adapters": charger_adapter_info,
         "forecast": {
             "today_kwh": data.get("forecast_today_kwh"),
             "tomorrow_kwh": data.get("forecast_tomorrow_kwh"),

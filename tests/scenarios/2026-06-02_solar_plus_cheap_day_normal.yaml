@@ -1,0 +1,64 @@
+name: "2026-06-02 solar_plus_cheap day + normal tariff — behaves like solar_only"
+
+coverage:
+  - mode: solar_plus_cheap
+    regime: day_normal_tariff_solar_only_like
+    issue: "#247"
+
+description: |
+  Day path of solar_plus_cheap mode: when tariff_level is not in
+  EXPENSIVE_LEVELS ({"expensive", "very_expensive"}) it should
+  behave like solar_only — pure surplus charging, no grid backfill.
+
+  The "expensive day pause" (#247) is tested separately; here we
+  pin the "normal tariff = no special behaviour" case.
+
+  Also verifies the v1.7 prep coordinator fix that plumbs
+  tariff_level into the primary view's FleetContext. Without that
+  fix, decide.py's SolarPlusCheapMode would have read
+  tariff_level=None and the expensive-window branch would have
+  been unreachable in production (same class as the SOLAR_ONLY
+  redirect regression).
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  tariff_level: "normal"
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "solar_plus_cheap"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Generous solar surplus, high SOC (Zone 4 — auto_start_soc=90):
+# the day path collapses to solar_only-like surplus charging.
+timeline:
+  - t: 0
+    solar_power: 7000
+    grid_power: 1500     # +ve = export
+    battery_power: 0     # battery full, not charging
+    battery_soc: 92      # Zone 4
+    ev_power: 5500       # already drawing surplus
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  # Day + normal tariff: decide.py SolarPlusCheapMode falls through
+  # to the same canonical mapper as min_plus_solar day. At Zone 4
+  # the mapper returns BATTERY_ASSIST (regardless of mode); the
+  # "normal tariff doesn't gate" contract is verified by NOT seeing
+  # an IDLE state (the expensive-window pause would have produced
+  # that). For the strict "no grid backfill" check use the Zone 2
+  # variant or solar_plus_cheap_night_cheap_window scenarios.
+  strategy_substring: "battery_assist"

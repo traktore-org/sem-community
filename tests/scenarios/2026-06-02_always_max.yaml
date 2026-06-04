@@ -1,0 +1,58 @@
+name: "2026-06-02 always_max ignores zone, night, and tariff"
+
+coverage:
+  - mode: always_max
+    regime: ignores_zone_and_tariff
+    issue: "always_max contract"
+
+description: |
+  The ``always_max`` mode is the user's "I want to charge as fast
+  as possible, period" intent. It must ignore SOC zone, time of
+  day, and tariff level — three regimes that gate other modes.
+
+  Contract:
+    - intent = CHARGE_MAX
+    - canonical_strategy = NOW
+    - amps = ev_max_current (16 here)
+    - budget_w = max_current * phases * voltage = 11040 W
+
+  Tested at low SOC (Zone 1, would normally block) + at night +
+  during an expensive tariff window. None of those should
+  intervene.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  # Hostile regime: night + expensive tariff + low SOC. Every
+  # other mode would idle here. always_max must charge.
+  is_night: true
+  tariff_level: "very_expensive"
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "always_max"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+timeline:
+  - t: 0
+    solar_power: 0
+    grid_power: -10000      # -ve = importing (always_max accepts grid)
+    battery_power: 0
+    battery_soc: 25         # Zone 1 (below priority_soc=30)
+    ev_power: 10000         # already drawing max
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  strategy_substring: "now"

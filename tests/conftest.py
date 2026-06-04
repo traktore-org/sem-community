@@ -87,7 +87,7 @@ TEST_HARDWARE_VALUES = {
 
 
 @pytest.fixture
-def hass():
+def mock_hass():
     """Return a mocked Home Assistant instance."""
     hass_mock = MagicMock(spec=HomeAssistant)
     hass_mock.config = MagicMock()
@@ -538,3 +538,94 @@ def charging_state_scenarios():
         "battery_low": 25,  # SOC below minimum
         "battery_resume": 55,  # SOC above resume threshold
     }
+
+
+# ============================================================================
+# pytest-homeassistant-custom-component framework fixtures
+# ============================================================================
+# Legacy MagicMock-based fixture has been renamed ``mock_hass``. New tests
+# (config flow, services, scenarios) request ``hass`` — pytest-HA's plugin
+# fixture, which yields a real HomeAssistant instance with full state
+# machine, registries, and service dispatch.
+# ============================================================================
+
+
+@pytest.fixture
+def expected_lingering_timers() -> bool:
+    """Override pytest-HA's ``verify_cleanup`` strict timer check.
+
+    Core HA schedules background timers (e.g. ``_async_setup_cleanup`` at
+    a 24h interval) the moment the ``hass`` fixture starts. Those timers
+    are not bugs in SEM — they're core's own bookkeeping — but the
+    auto-applied ``verify_cleanup`` would fail tests that observe them.
+    Returning True downgrades the failure to a warning. Lingering-task
+    detection (the real signal for SEM leaks) stays strict via the
+    default ``expected_lingering_tasks=False``.
+    """
+    return True
+
+
+@pytest.fixture
+def sem_config_entry():
+    """A ``MockConfigEntry`` at SEM's current schema version (v7).
+
+    Pre-seeded with a multi-charger-ready config (``ev_chargers`` list,
+    not legacy flat keys). Test-specific tweaks can mutate ``.data`` /
+    ``.options`` before calling ``entry.add_to_hass(hass)``.
+
+    Use with the real ``hass`` fixture::
+
+        async def test_setup(hass, sem_config_entry):
+            sem_config_entry.add_to_hass(hass)
+            assert await hass.config_entries.async_setup(
+                sem_config_entry.entry_id
+            )
+    """
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.solar_energy_management.const import DOMAIN
+
+    return MockConfigEntry(
+        domain=DOMAIN,
+        version=7,
+        data={
+            "grid_power_sensor": "sensor.test_grid_power",
+            "battery_power_sensor": "sensor.test_battery_power",
+            "battery_soc_sensor": "sensor.test_battery_soc",
+            "solar_power_sensor": "sensor.test_solar_power",
+            "ev_total_energy_sensor": "sensor.test_ev_total_energy",
+            "battery_priority_soc": 90,
+            "battery_minimum_soc": 30,
+            "battery_resume_soc": 50,
+            "min_solar_power": 1000,
+            "max_grid_import": 100,
+            "battery_assist_max_power": 4500,
+            "daily_ev_target": 31,
+            "battery_capacity_kwh": 10.0,
+            "peak_load": 6000,
+            "update_interval": 30,
+            "electricity_import_rate": 0.30,
+            "electricity_export_rate": 0.08,
+            "ev_chargers": [{
+                # Need at least one EV charger so per-charger SELECT
+                # (charge_mode, target_type) and TIME (target_time)
+                # entities get instantiated — without one the
+                # ``test_setup_entry_forwards_all_platforms`` smoke
+                # test fails on those two platforms.
+                "id": "ev_charger",
+                "name": "Test Wallbox",
+                "ev_connected_sensor": "binary_sensor.test_ev_connected",
+                "ev_charging_sensor": "binary_sensor.test_ev_charging",
+                "ev_charging_power_sensor": "sensor.test_ev_charging_power",
+                "ev_charger_service": "number.set_value",
+                "ev_charger_service_entity_id": "number.test_charger_current",
+                "daily_ev_target": 10,
+                "daily_ev_target_max": 50,
+                "ev_target_soc": 80,
+                "ev_target_soc_max": 100,
+                "ev_target_type": "kwh",
+                "ev_target_time": "07:00",
+            }],
+        },
+        options={},
+        title="SEM Test (real_hass)",
+    )

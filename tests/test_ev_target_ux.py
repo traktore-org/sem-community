@@ -44,10 +44,10 @@ def _make_hass():
     return hass
 
 
-def _make_switch(hass, device_id="dev1", control_mode=DeviceControlMode.SURPLUS):
+def _make_switch(mock_hass, device_id="dev1", control_mode=DeviceControlMode.SURPLUS):
     """Create a SwitchDevice with the given control mode."""
     dev = SwitchDevice(
-        hass=hass,
+        hass=mock_hass,
         device_id=device_id,
         name=device_id,
         rated_power=2000,
@@ -58,10 +58,10 @@ def _make_switch(hass, device_id="dev1", control_mode=DeviceControlMode.SURPLUS)
     return dev
 
 
-def _make_charger(hass, device_id="ev1", control_mode=DeviceControlMode.SURPLUS, priority=5):
+def _make_charger(mock_hass, device_id="ev1", control_mode=DeviceControlMode.SURPLUS, priority=5):
     """Create a CurrentControlDevice (EV charger) with the given control mode."""
     dev = CurrentControlDevice(
-        hass=hass,
+        hass=mock_hass,
         device_id=device_id,
         name=device_id,
         priority=priority,
