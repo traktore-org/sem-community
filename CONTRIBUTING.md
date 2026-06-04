@@ -116,6 +116,31 @@ A scenario YAML has a `config:` block (which becomes `coordinator.config`), an `
 - `develop` — integration branch, CI must pass
 - `feature/*` — work in progress, PR to develop when ready
 
+## Review Flow
+
+Lightweight by design — single maintainer, fast beta cadence.
+
+| Trigger | What runs | Cost |
+|---|---|---|
+| Every commit | Pre-commit hooks (Ruff format + lint, YAML/JSON/TOML check, `hassfest-lite`) | seconds, local |
+| Every PR | CI gates (Hassfest, HACS validation, pytest 3.12/3.13, card-test) + CodeRabbit AI review per [`.coderabbit.yaml`](.coderabbit.yaml) | ~15 min, no human time |
+| Optional second opinion on non-trivial PRs | `/codex review` for an independent AI take — useful when author = reviewer | ~2 min |
+| Crossing a complexity threshold (new device class, sign-convention change, new fitness function) | Write a 1-page [ADR](docs/adr/README.md) | 15–30 min, one-time |
+| Before each release | Soak on HA-TEST + `~/bin/validate-sem.sh` | already in the deploy script |
+
+### Setup pre-commit (one-time)
+
+```bash
+pip install pre-commit
+pre-commit install --hook-type pre-commit --hook-type pre-push
+```
+
+Now every `git commit` runs Ruff + sanity checks locally before CI burns 15 min. Skip with `--no-verify` only if you really mean it.
+
+### Architecture Decision Records
+
+When a decision is worth keeping (new device class, invariant change, refactor that reshapes a subsystem), add a one-pager to [`docs/adr/`](docs/adr/README.md) using the Nygard format. Bugfixes and routine feature work do NOT need an ADR.
+
 ## Questions?
 
 Open a [discussion](https://github.com/traktore-org/sem-community/discussions) or ask in the [HA Community thread](https://community.home-assistant.io/t/solar-energy-management-sem-smart-solar-ev-battery-orchestration/1003701).

@@ -1,0 +1,46 @@
+# Pre-commit hooks for SEM.
+#
+# Install once:
+#     pip install pre-commit
+#     pre-commit install --hook-type pre-commit --hook-type pre-push
+#
+# Run all hooks against the whole tree:
+#     pre-commit run --all-files
+#
+# These hooks catch ~80% of what CI catches, in <5 s, before the 15-min
+# CI cycle starts. See CONTRIBUTING.md.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: '\.(svg|md)$'
+      - id: end-of-file-fixer
+        exclude: '\.(svg|json)$'
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+        # The bundled card output is one giant line — don't reformat it.
+        exclude: '^dashboard/card/dist/'
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=512']
+        exclude: '^dashboard/card/dist/'
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Local hooks — repo-specific gates.
+  - repo: local
+    hooks:
+      - id: hassfest-lite
+        name: hassfest manifest sanity (lite)
+        entry: python3 scripts/hassfest_lite.py
+        language: system
+        files: ^manifest\.json$
+        pass_filenames: false
