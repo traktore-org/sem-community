@@ -47,6 +47,6 @@ value at DEBUG when it goes negative, and the sign-convention
 boundary (ADR 0003) keeps the class small enough that audits catch
 real bugs upstream.
 
-Code path: `coordinator/sensor_reader.py:_compute_home_consumption`.
+Code path: `coordinator/types.py:PowerReadings.calculate_derived` (line 206).
 Do **not** add a `if balance < 0: return None` branch — that
 explicitly inverts this decision.
