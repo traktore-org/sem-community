@@ -2223,6 +2223,18 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "upcoming": d.get("tariff_upcoming"),
                 "schedule_today": d.get("tariff_schedule_today"),
             })
+        elif self.entity_description.key == "tariff_price_level":
+            # #359: surface WHICH classifier path produced the current level.
+            # Lets users in cold-start / unit-mismatch / derivative-entity
+            # setups self-diagnose why they're stuck on ``normal`` without
+            # having to ask a maintainer for a debug log.
+            d = self.coordinator.data
+            attrs.update({
+                "classifier_path": d.get("tariff_classifier_path"),
+                "provider": d.get("tariff_provider"),
+                "is_dynamic": d.get("tariff_is_dynamic"),
+                "current_import_rate": d.get("tariff_current_import_rate"),
+            })
         elif self.entity_description.key == "load_management_status":
             # Add device list details for dashboard table
             devices = self.coordinator.data.get("load_management_devices", {})

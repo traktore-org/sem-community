@@ -584,6 +584,11 @@ class TariffSensorData:
     tariff_today_max_price: Optional[float] = None
     tariff_today_avg_price: Optional[float] = None
     tariff_next_cheap_start: Optional[str] = None
+    # #359: diagnostic — which classifier branch produced ``tariff_price_level``.
+    # Exposed as an attribute on ``sensor.sem_tariff_price_level`` so users in
+    # cold-start / unit-mismatch / derivative-entity setups can self-diagnose
+    # why they don't see ``cheap``/``expensive`` even with a dynamic tariff.
+    tariff_classifier_path: str = "unknown"
 
 
 @dataclass
@@ -995,6 +1000,7 @@ class SEMData:
             "tariff_today_max_price": self.tariff.tariff_today_max_price,
             "tariff_today_avg_price": self.tariff.tariff_today_avg_price,
             "tariff_next_cheap_start": self.tariff.tariff_next_cheap_start,
+            "tariff_classifier_path": self.tariff.tariff_classifier_path,
 
             # Heat pump (Phase 2)
             "heat_pump_mode": self.heat_pump.heat_pump_mode,

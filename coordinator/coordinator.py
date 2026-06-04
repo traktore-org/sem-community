@@ -2354,6 +2354,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             tariff_data.tariff_today_min_price = tariff.today_min_price
             tariff_data.tariff_today_max_price = tariff.today_max_price
             tariff_data.tariff_today_avg_price = tariff.today_avg_price
+            tariff_data.tariff_classifier_path = tariff.classifier_path
             if tariff.next_cheap_window_start:
                 tariff_data.tariff_next_cheap_start = tariff.next_cheap_window_start.isoformat()
         except (ValueError, TypeError, AttributeError) as e:
