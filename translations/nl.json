@@ -22,7 +22,7 @@
           "ev_charger_service_entity_id": "EV Lader Service Entiteit (optioneel)",
           "ev_current_sensor": "⚡ EV Laadstroom — amperage (A)",
           "ev_total_energy_sensor": "🔋 EV Totale Energie — geleverde energie (kWh)",
-          "ev_current_control_entity": "Number Entity for Current Control (Wallbox-style chargers)"
+          "ev_current_control_entity": "Number-entiteit voor laadstroom-besturing (Wallbox-achtige laders)"
         },
         "data_description": {
           "ev_connected_sensor": "Binaire sensor die aangeeft we je electrische auto is aangesloten op de lader. Automatische detectie voor de volgende merken: KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
@@ -32,7 +32,7 @@
           "ev_charger_service_entity_id": "Entiteits ID die gebruikt wordt in de service call.",
           "ev_current_sensor": "Optioneell. Numerieke sensor (A) die het werkelijke stroomverbruik rapporteert. Wordt gebruikt voor diagnostiek.",
           "ev_total_energy_sensor": "Optioneel. Cumulatieve kWh sensor voor de totale energie die je electrische auto heeft ontvangen.",
-          "ev_current_control_entity": "Number entity SEM writes to so it can change the charging current (e.g. number.wallbox_charging_current). Use this for chargers that expose a number entity instead of a service call. Leave blank if you fill in the Service path below."
+          "ev_current_control_entity": "Number-entiteit waarnaar SEM schrijft om de laadstroom aan te passen (bv. number.wallbox_charging_current). Gebruik dit voor laders die een Number-entiteit aanbieden in plaats van een service-aanroep. Leeg laten als je hieronder het Service-pad invult."
         }
       },
       "hardware": {
