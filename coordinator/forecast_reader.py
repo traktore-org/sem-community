@@ -88,6 +88,15 @@ class ForecastReader:
         self._entities: Dict[str, str] = {}
         self._last_data = ForecastData()
 
+        # #434 — telemetry surface mirroring classifier_path /
+        # dampening_path. Each public method sets the corresponding
+        # ``*_path`` string so users can see which branch produced
+        # the current forecast / recommendation.
+        self._last_source_detection_path: str = "uninitialized"
+        self._last_read_path: str = "uninitialized"
+        self._last_recommendation_path: str = "uninitialized"
+        self._last_unit_conversion_count: int = 0  # Solcast kW→W bumps
+
     @property
     def forecast_data(self) -> ForecastData:
         return self._last_data
@@ -97,11 +106,17 @@ class ForecastReader:
         return self._source
 
     def detect_source(self) -> Optional[str]:
-        """Auto-detect available forecast integration."""
+        """Auto-detect available forecast integration.
+
+        Records the branch on
+        ``self._last_source_detection_path`` (#434):
+        ``custom`` / ``solcast`` / ``forecast_solar`` / ``none_available``.
+        """
         # Check custom entities first
         if self._custom_entities:
             self._entities = self._custom_entities
             self._source = "custom"
+            self._last_source_detection_path = "custom"
             _LOGGER.info("Using custom forecast entities")
             return self._source
 
@@ -111,6 +126,7 @@ class ForecastReader:
         if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
             self._entities = SOLCAST_ENTITIES
             self._source = "solcast"
+            self._last_source_detection_path = "solcast"
             _LOGGER.info("Detected Solcast PV Solar integration")
             return self._source
 
@@ -120,9 +136,11 @@ class ForecastReader:
         if state and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE, None):
             self._entities = FORECAST_SOLAR_ENTITIES
             self._source = "forecast_solar"
+            self._last_source_detection_path = "forecast_solar"
             _LOGGER.info("Detected Forecast.Solar integration")
             return self._source
 
+        self._last_source_detection_path = "none_available"
         _LOGGER.info("No solar forecast integration detected")
         return None
 
@@ -131,9 +149,19 @@ class ForecastReader:
 
         Caches the detected source — only re-detects if source becomes
         unavailable (#26).
+
+        Records the read path on ``self._last_read_path`` (#434):
+        ``cold_detect`` (first call) / ``cached_source_valid`` /
+        ``cached_source_lost_redetected`` / ``no_source_after_detect``
+        / ``read_complete``.
         """
+        # Reset unit-conversion counter per read so we can see how
+        # many magic-number kW→W bumps fired this cycle.
+        self._last_unit_conversion_count = 0
+
         if not self._source:
             self.detect_source()
+            self._last_read_path = "cold_detect"
         elif self._source != "custom":
             # Verify cached source is still valid (entity may have disappeared)
             test_entity = self._entities.get("forecast_today")
@@ -142,8 +170,16 @@ class ForecastReader:
                 if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
                     self._source = None
                     self.detect_source()
+                    self._last_read_path = "cached_source_lost_redetected"
+                else:
+                    self._last_read_path = "cached_source_valid"
+            else:
+                self._last_read_path = "cached_source_valid"
+        else:
+            self._last_read_path = "cached_source_valid"
 
         if not self._source:
+            self._last_read_path = "no_source_after_detect"
             return ForecastData()
 
         data = ForecastData(
@@ -180,6 +216,7 @@ class ForecastReader:
         # Solcast reports in kW, convert if needed
         if self._source == "solcast" and data.power_now_w < 100:
             data.power_now_w *= 1000
+            self._last_unit_conversion_count += 1
 
         # Read power next hour
         data.power_next_hour_w = self._read_float(
@@ -187,6 +224,7 @@ class ForecastReader:
         )
         if self._source == "solcast" and data.power_next_hour_w < 100:
             data.power_next_hour_w *= 1000
+            self._last_unit_conversion_count += 1
 
         # Peak power
         data.peak_power_today_w = self._read_float(
@@ -194,6 +232,7 @@ class ForecastReader:
         )
         if self._source == "solcast" and data.peak_power_today_w < 100:
             data.peak_power_today_w *= 1000
+            self._last_unit_conversion_count += 1
 
         # Peak time — Solcast exposes a full ISO datetime; coordinator
         # and dashboard consumers expect "HH:MM" local time.
@@ -212,6 +251,7 @@ class ForecastReader:
                     data.peak_time_today = raw
 
         self._last_data = data
+        self._last_read_path = "read_complete"
         return data
 
     def _read_float(self, entity_id: Optional[str], default: float) -> float:
@@ -254,13 +294,20 @@ class ForecastReader:
             "solar_only" — enough solar expected
             "solar_plus_cheap" — partial solar, fill gap with cheap grid
             "immediate" — insufficient solar, charge now
+
+        The return string is the same as
+        ``self._last_recommendation_path`` (#434) — keep both for
+        backward compat (callers expect the return string) and so the
+        path can also be read off the audit telemetry surface.
         """
         remaining_need = daily_ev_target_kwh - current_ev_energy_kwh
         if remaining_need <= 0:
+            self._last_recommendation_path = "target_reached"
             return "target_reached"
 
         forecast = self._last_data
         if not forecast.available:
+            self._last_recommendation_path = "no_forecast"
             return "no_forecast"
 
         # Rough estimate: available surplus = remaining forecast * self-consumption factor
@@ -268,8 +315,26 @@ class ForecastReader:
         estimated_surplus_kwh = forecast.forecast_remaining_today_kwh * 0.5
 
         if estimated_surplus_kwh >= remaining_need:
+            self._last_recommendation_path = "solar_only"
             return "solar_only"
         elif estimated_surplus_kwh >= remaining_need * 0.5:
+            self._last_recommendation_path = "solar_plus_cheap"
             return "solar_plus_cheap"
         else:
+            self._last_recommendation_path = "immediate"
             return "immediate"
+
+    def get_diagnostics(self) -> Dict[str, Any]:
+        """Return the audit telemetry surface (#434).
+
+        Used by the coordinator to expose ``*_path`` strings on the
+        existing forecast sensors. Mirrors the ``get_data`` pattern
+        in ``forecast_tracker.py`` from #416.
+        """
+        return {
+            "source_detection_path": self._last_source_detection_path,
+            "read_path": self._last_read_path,
+            "recommendation_path": self._last_recommendation_path,
+            "unit_conversion_count": self._last_unit_conversion_count,
+            "source": self._source,
+        }

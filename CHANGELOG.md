@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0-beta.26] - 04.06.2026
+
+## 🧪 Beta Release — v1.7.1 audit batch 4
+
+_Changes since [1.7.0-beta.25](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0-beta.25)_
+
+Two more modules audited beyond the original Top-12, picked up by widening the staleness cutoff from 30 days to 2 weeks. Big-module focus on highest-leverage decisions, medium-module full coverage.
+
+### 🔍 Diagnostics
+
+- **#433 `LoadManagementCoordinator`** (1056 LOC, 118 branches — biggest module on the backlog) — **focused** telemetry on the highest-leverage decision points rather than exhaustive attribution. Four new keys on `sensor.sem_load_management_status`: `state_decision_path` (`emergency` / `above_target_shedding` / `warning_zone_keep_shedding` / `warning_zone_clean` / `below_restore_threshold_normal` / `in_hysteresis_band_with_shed_devices_restore` / `in_hysteresis_band_clean_normal`), `process_path` (`disabled_skip` / `state_changed:<old>_to_<new>` / `state_stable:<state>` / `error_caught`), `action_path` (`emergency_shedding` / `progressive_shedding` / `restore` / `no_action:<state>`), plus `last_error` (truncated catch-all exception message — previously this was log-only with no sensor surface) (by @traktore-org, refs #433)
+- **#434 `ForecastReader`** — new `get_diagnostics()` method exposing: `source_detection_path` (`custom` / `solcast` / `forecast_solar` / **`none_available`** silent-failure surface — no forecast integration detected), `read_path` (`cold_detect` / `cached_source_valid` / `cached_source_lost_redetected` / `no_source_after_detect` / `read_complete`), `recommendation_path` (`target_reached` / `no_forecast` / `solar_only` / `solar_plus_cheap` / `immediate`), plus `unit_conversion_count` — counts how many of the 3 Solcast kW→W magic-number conversions fired this cycle (by @traktore-org, refs #434)
+
+### 📁 Audit findings
+
+- **Dead-code branch surfaced**: the `in_hysteresis_band_with_shed_devices_restore` path in `_determine_load_management_state` is **unreachable with default config** (target=5.0, hysteresis=0.3, warning=4.5 → restore_threshold=4.7 > warning_level=4.5). Inline comment documents this; future audit can fix the inverted-band config or remove the branch (reviewer-flagged on #433)
+
 # [1.7.0-beta.25] - 04.06.2026
 
 ## 🧪 Beta Release — v1.7.1 audit batch 3
