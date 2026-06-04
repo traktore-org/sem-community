@@ -410,7 +410,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.EntitySelectorConfig(domain=["binary_sensor", "sensor", "switch"])
                 ),
 
-                # Optional EV sensors
+                # Optional readback sensors
                 vol.Optional(
                     "ev_current_sensor",
                     description={"suggested_value": _opt_entity_default("ev_current_sensor")},
@@ -429,81 +429,17 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         device_class="energy"
                     )
                 ),
-
-                # Per-charger tunables — parity with the Add/Edit flow (#384).
-                # All have sensible defaults so the user can ignore them.
-                vol.Optional(
-                    "ev_surplus_priority",
-                    default=5,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=10, step=1, mode="slider")
-                ),
-                vol.Optional(
-                    "daily_ev_target",
-                    default=DEFAULT_DAILY_EV_TARGET,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=100, step=0.5,
-                        unit_of_measurement="kWh", mode="slider",
-                    )
-                ),
-                vol.Optional(
-                    "daily_ev_target_max",
-                    default=100,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=100, step=0.5,
-                        unit_of_measurement="kWh", mode="slider",
-                    )
-                ),
-                vol.Optional(
-                    "ev_night_initial_current",
-                    default=10,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=6, max=32, step=1,
-                        unit_of_measurement="A", mode="slider",
-                    )
-                ),
-                vol.Optional(
-                    "ev_min_current",
-                    default=6,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=6, max=16, step=1,
-                        unit_of_measurement="A", mode="slider",
-                    )
-                ),
-                vol.Optional(
-                    "ev_target_soc",
-                    default=80,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
-                        unit_of_measurement="%", mode="slider",
-                    )
-                ),
-                vol.Optional(
-                    "ev_target_soc_max",
-                    default=100,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=50, max=100, step=5,
-                        unit_of_measurement="%", mode="slider",
-                    )
-                ),
-                vol.Optional(
-                    "ev_battery_capacity_kwh",
-                    default=40,
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=10, max=120, step=5,
-                        unit_of_measurement="kWh", mode="box",
-                    )
-                ),
-                # `vehicle_soc_entity` stays in OptionsFlow only — it requires a
-                # real vehicle SOC sensor, which most cars don't expose. Asking
-                # at install creates a dead input for the common case.
+                # #397: per-charger tunables — `ev_surplus_priority`,
+                # `daily_ev_target` + `_max`, `ev_night_initial_current`,
+                # `ev_min_current`, `ev_target_soc` + `_max`,
+                # `ev_battery_capacity_kwh`, `vehicle_soc_entity` — all live
+                # in OptionsFlow only. PR #390 surfaced them at install time
+                # and the resulting 16-field step became the biggest install
+                # drop-off; the original slim-3-step design at line ~440 is
+                # the right shape per the SaaS-onboarding research. The
+                # Wallbox install-time blocker (`ev_current_control_entity`)
+                # is the only #390 field that stays — it's not a tunable, it's
+                # a control-path requirement no default can substitute for.
             }),
             errors=errors
         )
@@ -610,12 +546,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "ev_start_service", "ev_start_service_data",
                         "ev_stop_service", "ev_stop_service_data",
                         "ev_charger_needs_cycle", "ev_surplus_priority",
-                        # Per-charger overrides surfaced in the initial flow (#384)
+                        # Wallbox-style control path (#384 Part 2 kept). The
+                        # other 8 per-charger fields from #390 reverted to
+                        # OptionsFlow-only in #397 — they were tunables with
+                        # sensible defaults, not install-time blockers.
                         "ev_current_control_entity",
-                        "daily_ev_target", "daily_ev_target_max",
-                        "ev_night_initial_current", "ev_min_current",
-                        "ev_target_soc", "ev_target_soc_max",
-                        "ev_battery_capacity_kwh",
                     ]
                     charger_0 = {"id": "ev_charger", "name": "EV Charger"}
                     for k in _EV_KEYS:
