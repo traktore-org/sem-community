@@ -32,3 +32,4 @@ _changes_.
 | [0006](0006-fleet-cycle-state.md) | FleetCycleState as single source of truth for fleet-level coordinator inputs | Accepted |
 | [0007](0007-real-hass-test-framework.md) | Real-hass test framework adoption and test-layer choice rule | Accepted |
 | [0008](0008-fleet-ev-power-newtype.md) | FleetEvPower newtype as type-system enforcement of fleet-vs-per-charger reads | Accepted |
+| [0009](0009-ev-budget-multi-charger-distribution.md) | Multi-charger EV power distribution is a priority cascade with 60 s hysteresis | Accepted |
