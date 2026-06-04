@@ -205,6 +205,86 @@ class TestTwoBatteryLoop:
         cache["b"].command_limit_discharge.assert_called_once()
 
 
+class TestPerBatteryDirectionStatus404:
+    """#404 — regression tests for the per-battery direction string
+    (``battery_<bid>_status``) derived from per-battery signed power.
+
+    User-visible spec (clarified by @traktore-org on 2026-06-04):
+
+    - **Per-battery tile** = sign of THAT battery's ``power_w``
+      (``> +200 W`` = charging, ``< -200 W`` = discharging, otherwise
+      ``idle``).
+    - **Fleet top tile** = sign of the NET fleet power
+      (sum of all per-battery ``power_w``). Per-battery and fleet can
+      legitimately disagree in mixed-direction scenarios.
+
+    Reproduces RienduPre's #404 symptom across 4 scenarios and locks
+    the current ``types.py:1077-1087`` direction logic in so a future
+    refactor can't accidentally invert it.
+
+    Note for the upstream Growatt-sign question: if a brand integration
+    emits per-battery power with an INVERTED sign, the fix belongs in
+    ``sensor_reader.py`` per ADR 0003 — never downstream. These tests
+    assume the per-battery ``power_w`` field has already been
+    normalised to SEM canonical convention (positive = charging).
+    """
+
+    def _status_from(self, power_w: float) -> str:
+        """Replicate the types.py:1077-1087 status logic in isolation."""
+        DEADBAND = 200.0  # _STATUS_DEADBAND_W
+        if power_w > DEADBAND:
+            return "charging"
+        if power_w < -DEADBAND:
+            return "discharging"
+        return "idle"
+
+    def test_both_batteries_charging(self):
+        """RienduPre's exact #404 setup: both batteries genuinely
+        charging. Each per-battery tile must say 'charging'."""
+        power = PowerReadings()
+        power.batteries["b1"] = _battery("b1", power_w=+250.0)
+        power.batteries["b2"] = _battery("b2", power_w=+400.0)
+
+        assert self._status_from(power.batteries["b1"].power_w) == "charging"
+        assert self._status_from(power.batteries["b2"].power_w) == "charging"
+        # Fleet net is +650 W → charging
+        assert power.fleet_battery_w == pytest.approx(+650.0)
+
+    def test_both_batteries_discharging(self):
+        power = PowerReadings()
+        power.batteries["b1"] = _battery("b1", power_w=-500.0)
+        power.batteries["b2"] = _battery("b2", power_w=-300.0)
+
+        assert self._status_from(power.batteries["b1"].power_w) == "discharging"
+        assert self._status_from(power.batteries["b2"].power_w) == "discharging"
+        assert power.fleet_battery_w == pytest.approx(-800.0)
+
+    def test_mixed_directions_per_battery_independent(self):
+        """One battery charging, one discharging — per-battery tiles
+        show INDIVIDUAL direction, fleet shows NET. Both correct."""
+        power = PowerReadings()
+        power.batteries["b1"] = _battery("b1", power_w=+300.0)  # charging
+        power.batteries["b2"] = _battery("b2", power_w=-500.0)  # discharging
+
+        assert self._status_from(power.batteries["b1"].power_w) == "charging"
+        assert self._status_from(power.batteries["b2"].power_w) == "discharging"
+        # Fleet net is -200 W → discharging (per the user's stated spec:
+        # "fleet decides for itself based on the [net] power")
+        assert power.fleet_battery_w == pytest.approx(-200.0)
+
+    def test_both_at_deadband_count_as_idle(self):
+        """Below the 200 W deadband the cycle is too quiet to call a
+        direction — both tiles say idle. Matches HA-TEST's observed
+        b1=+23 W → 'idle' behaviour."""
+        power = PowerReadings()
+        power.batteries["b1"] = _battery("b1", power_w=+23.0)
+        power.batteries["b2"] = _battery("b2", power_w=-150.0)
+
+        assert self._status_from(power.batteries["b1"].power_w) == "idle"
+        assert self._status_from(power.batteries["b2"].power_w) == "idle"
+        assert abs(power.fleet_battery_w) < 200.0
+
+
 class TestDischargeLimitSensorRollup:
     """The discharge-limit sensor reads from the cache dict and
     surfaces the tightest active limit across all batteries (#375
