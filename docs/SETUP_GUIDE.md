@@ -146,6 +146,7 @@ The config flow has three steps. You can change any setting later via the
 
 ### Step 1: Energy Dashboard Detection
 
+![Step 1 — Energy Dashboard detection](screenshots/setup-flow/01-step1-energy-dashboard.png)
 
 SEM scans your Energy Dashboard and auto-detects all configured sensors:
 solar production, grid import/export, battery charge/discharge, and EV charger.
@@ -160,10 +161,18 @@ solar production, grid import/export, battery charge/discharge, and EV charger.
 
 ### Step 2: EV Charger (optional)
 
+![Step 2 — EV Charger (slim 5-field form)](screenshots/setup-flow/02-step2-ev-charger-slim.png)
 
 If you have an EV charger, this step configures how SEM controls it. SEM
 auto-detects your charger from the HA entity registry — review the pre-filled
 values and correct anything that looks wrong.
+
+Step 2 is intentionally minimal — only the 3 required sensors plus the one
+control-path field your charger needs (number entity OR service call). All
+per-charger tunables (daily target kWh, target SOC, surplus priority,
+night-charging current, battery capacity) live in **Configure** after install,
+with sensible defaults until you change them. See
+[Per-charger tunables](#per-charger-tunables) below.
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -188,6 +197,7 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
 ### Step 3: Hardware and Dashboard Settings
 
+![Step 3 — Hardware and dashboard](screenshots/setup-flow/03-step3-hardware.png)
 
 | Field | Default | Description |
 |-------|---------|-------------|
@@ -201,6 +211,21 @@ chargers, see [MULTI_DEVICE_GUIDE.md](MULTI_DEVICE_GUIDE.md).
 
 Click **Submit**. SEM starts running immediately. The SEM dashboard appears
 in your sidebar within a few seconds if dashboard generation is enabled.
+
+### First-run welcome notification
+
+From v1.7.0-beta.15 onward, the very first install fires a one-shot
+**persistent notification** with a deep link to the SEM dashboard and a
+three-item starter checklist:
+
+1. Confirm solar is reporting on the Energy tab
+2. Pick an EV charge mode on the EV tab
+3. Set your battery reserve on the Battery tab
+
+The notification only fires once per install (gated by
+`_welcome_notification_fired` in the entry options), survives HA restarts, and
+is skipped on `observer_mode` test installs. Dismiss it from the notifications
+panel any time.
 
 ---
 
