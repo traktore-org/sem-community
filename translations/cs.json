@@ -22,7 +22,7 @@
           "ev_charger_service_entity_id": "Cílová entita služby nabíječky (volitelné)",
           "ev_current_sensor": "⚡ EV Charging Current — charging amperage (A)",
           "ev_total_energy_sensor": "🔋 EV Total Energy — cumulative energy delivered (kWh)",
-          "ev_current_control_entity": "Number Entity for Current Control (Wallbox-style chargers)"
+          "ev_current_control_entity": "Entita Number pro řízení proudu (nabíječky typu Wallbox)"
         },
         "data_description": {
           "ev_connected_sensor": "Binary sensor that reports whether the vehicle plug is currently connected. Auto-detected from KEBA / Easee / Wallbox / go-eCharger / Zaptec / ChargePoint / Heidelberg.",
@@ -32,7 +32,7 @@
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Auto-filled when needed; leave blank if the service is global.",
           "ev_current_sensor": "Optional. Numeric sensor (A) reporting the actual charging current. Used for diagnostics.",
           "ev_total_energy_sensor": "Optional. Cumulative kWh counter for energy delivered to the vehicle. Used for accurate session tracking.",
-          "ev_current_control_entity": "Number entity SEM writes to so it can change the charging current (e.g. number.wallbox_charging_current). Use this for chargers that expose a number entity instead of a service call. Leave blank if you fill in the Service path below."
+          "ev_current_control_entity": "Entita Number, do které SEM zapisuje, aby měnil nabíjecí proud (např. number.wallbox_charging_current). Použijte pro nabíječky, které vystavují entitu Number místo volání služby. Ponechte prázdné, pokud níže vyplníte cestu Služba."
         }
       },
       "hardware": {
@@ -355,7 +355,7 @@
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
           "ev_surplus_priority": "Priorita přebytku (1=nejvyšší)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_current_control_entity": "Entita řízení proudu (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
           "ev_target_soc_max": "Limit solárního nabíjení (SOC %)"
         },
@@ -367,7 +367,7 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "ev_current_control_entity": "Entita Number použitá pro nastavení nabíjecího proudu (A). Pro Wallbox, go-eCharger a podobné nabíječky.",
           "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
           "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce."
         }
@@ -383,7 +383,7 @@
           "ev_charger_service": "Charger Set-Current Service (optional)",
           "ev_charger_service_entity_id": "Charger Service Target Entity (optional)",
           "ev_surplus_priority": "Priorita přebytku (1=nejvyšší)",
-          "ev_current_control_entity": "Current Control Entity (number — Wallbox, go-eCharger)",
+          "ev_current_control_entity": "Entita řízení proudu (number — Wallbox, go-eCharger)",
           "daily_ev_target_max": "Limit solárního nabíjení (kWh)",
           "ev_target_soc_max": "Limit solárního nabíjení (SOC %)"
         },
@@ -395,7 +395,7 @@
           "ev_charger_service": "HA service used to set the charging current. Use for KEBA or Easee.",
           "ev_charger_service_entity_id": "Entity ID passed as the target of the service call. Leave blank if not needed.",
           "ev_surplus_priority": "Surplus allocation order across multiple chargers. Lower number = higher priority.",
-          "ev_current_control_entity": "Number entity used to set the charging current (A). Use for Wallbox, go-eCharger, and similar chargers.",
+          "ev_current_control_entity": "Entita Number použitá pro nastavení nabíjecího proudu (A). Pro Wallbox, go-eCharger a podobné nabíječky.",
           "daily_ev_target_max": "Solární přebytek nabíjí až do této hodnoty a poté se zastaví. Ponechte na maximu pro volné nabíjení ze slunce.",
           "ev_target_soc_max": "Solární přebytek nabíjí až do tohoto SOC a poté se zastaví. Ponechte na 100 % pro volné nabíjení ze slunce."
         }
