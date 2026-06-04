@@ -307,14 +307,12 @@ class TestSolarEnergyManagementConfigFlow:
         assert data["observer_mode"] is False
 
     @pytest.mark.asyncio
-    async def test_ev_charger_step_schema_exposes_per_charger_fields(self, mock_hass):
-        """#384 Part 2: the initial flow exposes the per-charger override fields.
-
-        Without `ev_current_control_entity`, Wallbox-style chargers (number
-        entity, no service call) couldn't be configured at install — the user
-        had to finish setup then edit. The full per-charger override set is
-        also exposed so the install doesn't lag behind the Add/Edit flow.
-        """
+    async def test_ev_charger_step_schema_keeps_wallbox_control_field(self, mock_hass):
+        """#397 onboarding slim-down: only `ev_current_control_entity` survives
+        from the PR #390 expansion. It's the genuine Wallbox install-time
+        blocker — no default can substitute for picking the right number
+        entity. The other 8 fields from #390 (tunables with sensible
+        defaults) reverted to OptionsFlow."""
         energy_config = _make_energy_dashboard_config()
         flow = _create_flow(mock_hass)
         flow._energy_dashboard_config = energy_config
@@ -334,8 +332,16 @@ class TestSolarEnergyManagementConfigFlow:
         assert result["type"] == FlowResultType.FORM
         assert result["step_id"] == "ev_charger"
         schema_keys = {str(k) for k in result["data_schema"].schema.keys()}
-        for key in (
-            "ev_current_control_entity",
+
+        # Wallbox install-time blocker — STAYS.
+        assert "ev_current_control_entity" in schema_keys, (
+            "#384 Part 2: the one #390 field that must remain at install — "
+            "Wallbox-style chargers cannot be configured without it"
+        )
+
+        # The 8 per-charger tunables reverted to OptionsFlow per #397 to
+        # bring the install step back to the slim-3-step shape.
+        for reverted in (
             "ev_surplus_priority",
             "daily_ev_target",
             "daily_ev_target_max",
@@ -345,11 +351,16 @@ class TestSolarEnergyManagementConfigFlow:
             "ev_target_soc_max",
             "ev_battery_capacity_kwh",
         ):
-            assert key in schema_keys, f"#384: {key} missing from initial ev_charger schema"
+            assert reverted not in schema_keys, (
+                f"#397: {reverted} must NOT appear at install — it lives in "
+                "OptionsFlow with a sensible default. Surfacing it again "
+                "would reopen the 16-field abandon-zone install step."
+            )
 
     @pytest.mark.asyncio
-    async def test_hardware_step_migrates_per_charger_fields(self, mock_hass):
-        """#384 Part 2: per-charger overrides set at install land in ev_chargers[0]."""
+    async def test_hardware_step_migrates_current_control_entity(self, mock_hass):
+        """The one #390 field we kept (`ev_current_control_entity`) must still
+        land in `ev_chargers[0]` via the _EV_KEYS bridge."""
         energy_config = _make_energy_dashboard_config()
         flow = _create_flow(mock_hass)
         flow._energy_dashboard_config = energy_config
@@ -357,16 +368,7 @@ class TestSolarEnergyManagementConfigFlow:
             **energy_config.to_dict(),
             **VALID_EV_INPUT,
             "observer_mode": False,
-            # New per-charger overrides set in the initial flow
             "ev_current_control_entity": "number.wallbox_max_charging_current",
-            "ev_surplus_priority": 7,
-            "daily_ev_target": 12.5,
-            "daily_ev_target_max": 30.0,
-            "ev_night_initial_current": 16,
-            "ev_min_current": 8,
-            "ev_target_soc": 85,
-            "ev_target_soc_max": 95,
-            "ev_battery_capacity_kwh": 60,
         }
 
         flow.async_set_unique_id = AsyncMock()
@@ -381,14 +383,6 @@ class TestSolarEnergyManagementConfigFlow:
         assert result["type"] == FlowResultType.CREATE_ENTRY
         charger_0 = result["data"]["ev_chargers"][0]
         assert charger_0["ev_current_control_entity"] == "number.wallbox_max_charging_current"
-        assert charger_0["ev_surplus_priority"] == 7
-        assert charger_0["daily_ev_target"] == 12.5
-        assert charger_0["daily_ev_target_max"] == 30.0
-        assert charger_0["ev_night_initial_current"] == 16
-        assert charger_0["ev_min_current"] == 8
-        assert charger_0["ev_target_soc"] == 85
-        assert charger_0["ev_target_soc_max"] == 95
-        assert charger_0["ev_battery_capacity_kwh"] == 60
 
     @pytest.mark.asyncio
     async def test_hardware_step_no_inverter_detected_uses_empty(self, mock_hass):

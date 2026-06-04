@@ -984,6 +984,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Register options update listener
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 
+    # #397 first-run welcome: fire a one-shot persistent notification with a
+    # link to the dashboard so the user has a starting point instead of
+    # bouncing on the 263-entity registry. Gated by the same options-flag
+    # pattern the install-dashboard one-shot uses just below — survives HA
+    # restarts and never re-fires after the user dismisses it. Skipped on
+    # observer mode (test installs don't want notification spam).
+    _welcome_fired = entry.options.get("_welcome_notification_fired", False)
+    if not _welcome_fired and not entry.data.get("observer_mode"):
+        try:
+            await hass.services.async_call(
+                "persistent_notification",
+                "create",
+                {
+                    "notification_id": "sem_first_install_welcome",
+                    "title": "Solar Energy Management installed",
+                    "message": (
+                        "👋 Welcome! Your SEM dashboard is ready at "
+                        "[Open the SEM Dashboard](/sem-dashboard/home).\n\n"
+                        "**First-day checklist:**\n"
+                        "1. Confirm solar is reporting on the Energy tab\n"
+                        "2. Pick an EV charge mode on the EV tab\n"
+                        "3. Set your battery reserve on the Battery tab\n\n"
+                        "Everything else has sensible defaults — tune later "
+                        "via Settings → Devices & Services → SEM → Configure."
+                    ),
+                },
+                blocking=False,
+            )
+            hass.config_entries.async_update_entry(
+                entry,
+                options={**entry.options, "_welcome_notification_fired": True},
+            )
+            _LOGGER.info("SEM first-run welcome notification fired")
+        except Exception as err:
+            # Non-critical — never fail the setup over a notification.
+            _LOGGER.debug("Welcome notification skipped: %s", err)
+
     # Schedule post-startup tasks (non-blocking)
     _schedule_post_startup_tasks(hass, entry, full_config, coordinator)
 
