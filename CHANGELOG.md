@@ -11,6 +11,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.0] - 04.06.2026
+
+## 🚀 Stable Release
+
+First stable cut of the 1.7 line. Consolidates the work from 26 beta
+releases since [v1.6.17](https://github.com/traktore-org/sem-community/releases/tag/v1.6.17).
+Each beta's release notes remain below for the per-fix detail; this
+block summarises the themes.
+
+### 🏗️ Architecture
+
+- **FleetCycleState refactor** (beta.7) — single source of truth for fleet-level coordinator inputs; eliminates an entire class of fleet-vs-per-charger read bugs that produced four hotfixes between v1.6.0 and v1.6.6
+- **9 Architecture Decision Records** committed under `docs/adr/` (PerChargerContext, EVBudget, sign-convention boundary, home_consumption clamp, per-brand pipeline test, FleetCycleState, real-hass test framework, FleetEvPower newtype, multi-charger priority cascade)
+- **`v7 → v8` config schema migration** (#359) — auto-flips stored `tariff_classification_mode` from legacy `static` to `percentile` for dynamic-tariff users on first restart after upgrade
+
+### 🔍 Audit telemetry surfaces — 10 modules instrumented
+
+Following the `classifier_path` pattern introduced in #359, **10 stale modules** now publish decision-path enums as sensor attributes so users can self-diagnose without us reading a debug log. Modules covered: `forecast_tracker` (#416), `hot_water_controller` (#420), `heat_pump_controller` (#421), `pv_performance` (#422), `time_manager` (#424), `consumption_predictor` (#425), `appliance_scheduler` (#426), `utility_signals` (#427), `load_management` (#433), `forecast_reader` (#434). Plus 4 modules audited and closed as no-change (pure data registries + stateless helpers: #423 #428 #429 #430 #431). Pure additive observability — zero behavior change in any of the published numeric outputs. Full framework lives in `docs/AUDIT_PLAYBOOK.md` and `tools/audit_candidates.py`. v1.7.1 then opens for the algorithmic improvements step once 2–4 weeks of real-world PROD telemetry accumulates.
+
+### 🐛 User-reported fixes
+
+- **#359** `tariff_classification_mode` stuck on `static` for dynamic-tariff users → v7→v8 schema migration (beta.21)
+- **#384** missing `vehicle_range_entity` + `ev_kwh_per_100km` fields in the Add/Edit Charger flow (beta.21)
+- **#404** per-battery power sign + SOC ring readability (beta.18-20)
+- **#417** `cheap_price_threshold` / `expensive_price_threshold` max bumped 1.0 → 5.0 to cover high-priced markets (beta.21)
+- **#356** ghost charger discovery (per-charger `_flow_` sensors matched as chargers) (beta.10)
+- **#378** PV strings i18n fix (beta.8)
+- **#383** per-charger `vehicle_soc` sensor (beta.19)
+- **#392** KEBA failsafe watchdog heartbeat (beta.14)
+- **#400** native `ev_current_control_entity` translations for 12 languages (beta.16, beta.20)
+- **#405** battery session hysteresis (1-hour discharge → 2-min bug) (beta.16)
+
+### 🎨 UX
+
+- **Slim config flow** (#397) — 5 essential fields at install; advanced options moved to OptionsFlow. ~30 second setup
+- **First-run welcome notification** (beta.15)
+- **Per-battery sensors + fleet/per-battery card** (#404)
+- **KEBA flicker debounce** (beta.8) — eliminates the on/off oscillation on edge-of-surplus
+- **Multi-charger SOC clobber fix** (#383) — per-charger SOC sensor surfaces independent values
+
+### 🙇 Thanks to our contributors
+
+- @RienduPre for the precise `classifier_path` diagnosis on #359, the Add/Edit charger flow gap on #384, the multi-battery sign issue on #404, and weeks of high-signal beta reports
+- @zlakes01 for the high-tariff-market signal on #417 and the multi-Easee dashboard report on #415 (under continued investigation)
+- Everyone else who filed an issue this cycle — the user reports are what made the audit telemetry necessary AND useful
+
+---
+
+> **Per-beta detail follows. The notes for each `1.7.0-beta.N` below remain unchanged and may be consulted for the granular per-fix changes that rolled up into this stable.**
+
 # [1.7.0-beta.26] - 04.06.2026
 
 ## 🧪 Beta Release — v1.7.1 audit batch 4
