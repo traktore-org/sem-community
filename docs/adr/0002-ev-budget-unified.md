@@ -23,7 +23,7 @@ multi-charger installs got unpredictable splits.
 **Canonical `EVBudget` dataclass is the single source of truth across
 all four paths.**
 
-Defined in `coordinator/ev_budget.py`. Computed once per coordinator
+Defined in `coordinator/flow_calculator.py` (line 95). Computed once per coordinator
 cycle, consumed by:
 
 - the publish path (sensor reports exactly what's in the dataclass)
@@ -45,5 +45,10 @@ removal, demotion-guard removal) deferred to v1.7.0 after sustained
 soak — completed in v1.6.2 (PR #282). The unification phases
 A + B + B.5 + C + D.1 shipped in v1.6.0.
 
-See `coordinator/ev_budget.py` for the dataclass shape and helper
+See `coordinator/flow_calculator.py` for the dataclass shape and helper
 predicates.
+
+**Open (TODO):** Consider splitting this ADR into (a) a unification ADR
+covering the single-source-of-truth decision and (b) a per-charger-
+distribution ADR covering the multi-charger split shape — under
+consideration, not yet authorised.

@@ -22,8 +22,13 @@ _changes_.
 
 ## Index
 
-- [0001 — PerChargerContext per-charger swap surface](0001-per-charger-context.md)
-- [0002 — EVBudget unified across publish path, state machine, actuator](0002-ev-budget-unified.md)
-- [0003 — Sign convention boundary at sensor_reader](0003-sign-convention-boundary.md)
-- [0004 — home_consumption_power is clamped to zero](0004-home-consumption-clamp.md)
-- [0005 — Pipeline test per supported brand is mandatory](0005-pipeline-test-per-brand.md)
+| # | Title | Status |
+|---|---|---|
+| [0001](0001-per-charger-context.md) | PerChargerContext per-charger swap surface | Accepted |
+| [0002](0002-ev-budget-unified.md) | EVBudget unified across publish path, state machine, actuator | Accepted |
+| [0003](0003-sign-convention-boundary.md) | Sign convention boundary at sensor_reader | Accepted |
+| [0004](0004-home-consumption-clamp.md) | home_consumption_power is clamped to zero | Accepted |
+| [0005](0005-pipeline-test-per-brand.md) | Pipeline test per supported brand is mandatory | Accepted |
+| [0006](0006-fleet-cycle-state.md) | FleetCycleState as single source of truth for fleet-level coordinator inputs | Accepted |
+| [0007](0007-real-hass-test-framework.md) | Real-hass test framework adoption and test-layer choice rule | Accepted |
+| [0008](0008-fleet-ev-power-newtype.md) | FleetEvPower newtype as type-system enforcement of fleet-vs-per-charger reads | Accepted |
