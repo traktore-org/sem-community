@@ -37,11 +37,21 @@ SETTLING_CYCLES = 3        # Ignore 3 cycles (30s) after SEM setpoint change
 TAPER_SLOPE_THRESHOLD = -5.0   # W/min — steeper than this = declining
 FULL_POWER_THRESHOLD = 50      # W — below this after declining = car full
 SESSION_PEAK_MIN = 500         # W — minimum peak to consider a real session
-FULL_SESSION_ENERGY_MIN_KWH = 1.0  # #438 — session must have delivered at
-                                    # least this much energy before
-                                    # taper-to-full can fire. A 0.2 kWh
-                                    # session physically cannot have
-                                    # filled a 40+ kWh battery.
+FULL_SESSION_ENERGY_MIN_KWH = 1.0  # #438 — upper bound of the session-energy
+                                    # floor below which taper-to-full cannot
+                                    # fire. We chose 1.0 over the 2.0 suggested
+                                    # in the original test prose: 2.0 blocks
+                                    # legitimate full-anchors on small-battery
+                                    # cars (24 kWh LEAF arriving at 95 % only
+                                    # needs ~1.2 kWh to top up). The PROD bug
+                                    # was 0.19 kWh — well under 1.0 — so the
+                                    # safety margin is comfortable. Used as a
+                                    # CAP; the per-vehicle effective floor is
+                                    # ``min(constant, capacity_kwh * 0.025)``
+                                    # — see ``_session_energy_floor_kwh``.
+FULL_SESSION_ENERGY_FRAC_OF_CAPACITY = 0.025  # 2.5 % of pack capacity. Below
+                                              # this any "taper to zero" is
+                                              # noise, not a completed charge.
 TAPER_RATIO_NEARLY_FULL = 50   # % — below this = nearly full
 TAPER_RATIO_DETECTED = 70     # % — below this + declining = taper confirmed
 MAX_ETA_MINUTES = 60           # Cap completion estimate
@@ -103,13 +113,31 @@ class EVTaperDetector:
 
         # SOC calibration: track real SOC for syncing virtual SOC
         self._last_real_soc: Optional[float] = None
-        # Consecutive night charge skip counter (safety net)
-        self._consecutive_skips: int = 0
         # Session SOC tracking for partial-charge health estimates
         self._session_start_soc: Optional[float] = None
         # Hardware counter tracking for drift-free energy accounting
         self._hw_total_at_full: Optional[float] = None  # Charger total kWh when SOC was 100%
         self._hw_total_last: Optional[float] = None  # Last known charger total kWh
+
+    def _session_energy_floor_kwh(self) -> float:
+        """Per-vehicle effective floor for the taper-to-full gate (#438).
+
+        Returns ``min(FULL_SESSION_ENERGY_MIN_KWH, capacity * 0.025)``.
+        The 1.0 kWh cap protects against handshake-floor oscillations
+        (the PROD bug was 0.19 kWh). The 2.5 %-of-capacity scaling
+        prevents false-negatives on small-battery cars: a 24 kWh LEAF
+        arriving at 99 % only needs ~0.24 kWh to complete and would
+        otherwise be locked out of the full-anchor by a fixed 1.0 kWh
+        floor. For 40 kWh+ packs the cap binds; for smaller packs
+        the proportional term binds.
+
+        Returns:
+            Minimum session-delivered energy (kWh) required before
+            ``_full_detected`` can be anchored from a taper pattern.
+        """
+        capacity = float(self._config.get("ev_battery_capacity_kwh", 40))
+        proportional = capacity * FULL_SESSION_ENERGY_FRAC_OF_CAPACITY
+        return min(FULL_SESSION_ENERGY_MIN_KWH, proportional)
 
     # ------------------------------------------------------------------
     # Public API — called each coordinator cycle
@@ -185,9 +213,12 @@ class EVTaperDetector:
         # (e.g. ~0.2 kWh of oscillation at a sub-handshake offer)
         # satisfies the "peak > 3 kW + 3 low samples" pattern but
         # cannot physically have filled the battery. Gate the full
-        # anchor on a sane minimum session energy delivered.
+        # anchor on a sane minimum session energy delivered — scaled
+        # per-vehicle so small-battery cars at very high SOC don't
+        # get false-negatives.
         if self._full_confirm_count >= 3 and not self._full_detected:
-            if self._current_session_energy_kwh >= FULL_SESSION_ENERGY_MIN_KWH:
+            floor_kwh = self._session_energy_floor_kwh()
+            if self._current_session_energy_kwh >= floor_kwh:
                 self._full_detected = True
                 self._last_full_timestamp = timestamp.isoformat()
                 self._energy_since_full = 0.0
@@ -197,16 +228,18 @@ class EVTaperDetector:
                 if self._hw_total_last is not None:
                     self._hw_total_at_full = self._hw_total_last
                 _LOGGER.info(
-                    "EV full charge detected at %s (peak=%.0fW, session=%.2fkWh, hw_total=%.1f) — SOC anchored at 100%%",
+                    "EV full charge detected at %s (peak=%.0fW, session=%.2fkWh ≥ floor=%.2fkWh, hw_total=%.1f) — SOC anchored at 100%%",
                     self._last_full_timestamp, self._session_peak_w,
-                    self._current_session_energy_kwh,
+                    self._current_session_energy_kwh, floor_kwh,
                     self._hw_total_at_full if self._hw_total_at_full is not None else 0,
                 )
             else:
                 _LOGGER.debug(
-                    "EV taper-to-full pattern met but session=%.2fkWh < %.1fkWh floor — "
-                    "not anchoring full (likely a handshake-floor oscillation, not a real end-of-charge)",
-                    self._current_session_energy_kwh, FULL_SESSION_ENERGY_MIN_KWH,
+                    "EV taper-to-full pattern met but session=%.2fkWh < %.2fkWh floor "
+                    "(capacity=%.0fkWh) — not anchoring full (likely a "
+                    "handshake-floor oscillation, not a real end-of-charge)",
+                    self._current_session_energy_kwh, floor_kwh,
+                    self._config.get("ev_battery_capacity_kwh", 40),
                 )
 
         return self._analyze(ev_power)
@@ -465,75 +498,14 @@ class EVTaperDetector:
         self._last_energy_power_w = 0.0
 
     # ------------------------------------------------------------------
-    # Night charge skip helpers
-    # ------------------------------------------------------------------
-
-    def calculate_nights_until_charge(
-        self,
-        predicted_daily_kwh: float,
-        vehicle_soc: Optional[float] = None,
-    ) -> Tuple[int, bool, str]:
-        """Calculate nights until charge is needed.
-
-        Returns:
-            (nights_remaining, charge_needed, skip_reason)
-        """
-        capacity = self._config.get("ev_battery_capacity_kwh", 40)
-        target_soc = self._config.get("ev_target_soc", 80)
-        min_soc = self._config.get("ev_min_soc_threshold", 20)
-
-        # No anchor yet (no taper, no car API, no session) → safe default
-        if not self._soc_anchored and vehicle_soc is None:
-            return (0, True, "No charge history yet")
-
-        # Safety net: max 3 consecutive skips, then force charge
-        max_skips = self._config.get("ev_max_consecutive_skips", 3)
-        if self._consecutive_skips >= max_skips:
-            return (0, True, f"Safety: {self._consecutive_skips} consecutive skips reached")
-
-        soc = self.get_virtual_soc(vehicle_soc)
-
-        if capacity <= 0:
-            return (99, False, "Insufficient data")
-
-        # Use fallback if predictor has no data for this weekday yet
-        if predicted_daily_kwh <= 0:
-            fallback_kwh = self._config.get("daily_ev_target", 10)
-            if fallback_kwh > 0:
-                predicted_daily_kwh = fallback_kwh
-            else:
-                return (99, False, "Insufficient data")
-
-        predicted_soc_drop = predicted_daily_kwh / capacity * 100.0
-        safety = 1.3  # 30% safety margin
-
-        # Already above target
-        if soc > target_soc:
-            nights = max(0, int((soc - min_soc) / predicted_soc_drop)) if predicted_soc_drop > 0 else 99
-            return (nights, False, f"SOC {soc:.0f}%, {nights} nights range")
-
-        # Enough range with safety margin
-        if soc - predicted_soc_drop * safety > min_soc:
-            nights = max(0, int((soc - min_soc) / predicted_soc_drop)) if predicted_soc_drop > 0 else 0
-            return (nights, False, f"SOC {soc:.0f}%, {nights} nights range")
-
-        # Charge needed
-        return (0, True, f"SOC {soc:.0f}% — charge recommended")
-
-    def record_skip(self) -> None:
-        """Record that tonight's night charge was skipped."""
-        self._consecutive_skips += 1
-        _LOGGER.debug("Consecutive night charge skips: %d", self._consecutive_skips)
-
-    def reset_skips(self) -> None:
-        """Reset skip counter (called when charging happens)."""
-        if self._consecutive_skips > 0:
-            _LOGGER.debug("Consecutive skip counter reset (was %d)", self._consecutive_skips)
-        self._consecutive_skips = 0
-
-    # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
+    #
+    # (#440) ``calculate_nights_until_charge`` / ``record_skip`` /
+    # ``reset_skips`` and the ``_consecutive_skips`` field were removed.
+    # The charge mode is the sole authority on whether to charge — the
+    # taper detector is display-only now (taper trend, estimated SOC,
+    # battery health).
 
     def get_state(self) -> Dict[str, Any]:
         """Export persistent state for storage."""
@@ -543,19 +515,19 @@ class EVTaperDetector:
             "estimated_soc": round(self._estimated_soc, 1),
             "battery_health_samples": self._battery_health_samples,
             "battery_health_pct": round(self._battery_health_pct, 1),
-            "consecutive_skips": self._consecutive_skips,
             "soc_anchored": self._soc_anchored,
             "hw_total_at_full": self._hw_total_at_full,
         }
 
     def restore_state(self, state: Dict[str, Any]) -> None:
-        """Restore persistent state from storage."""
+        """Restore persistent state from storage. (#440) ``consecutive_skips``
+        is silently ignored on restore — older payloads remain compatible
+        but the field is no longer tracked."""
         self._last_full_timestamp = state.get("last_full_charge")
         self._energy_since_full = state.get("energy_since_full", 0.0)
         self._estimated_soc = state.get("estimated_soc", 0.0)
         self._battery_health_samples = state.get("battery_health_samples", [])
         self._battery_health_pct = state.get("battery_health_pct", 0.0)
-        self._consecutive_skips = state.get("consecutive_skips", 0)
         self._soc_anchored = state.get("soc_anchored", False)
         self._hw_total_at_full = state.get("hw_total_at_full")
 

@@ -339,23 +339,8 @@ class TestSessionAnchor:
         det.on_session_end(9.5)
         assert det._estimated_soc == pytest.approx(61.8, abs=2.0)
 
-    def test_soc_anchored_enables_skip_logic(self):
-        """After session anchor, charge skip should work."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        assert det._soc_anchored is False
+    # (test_soc_anchored_enables_skip_logic) removed in #440 — skip-decision wiring is gone.
 
-        # No anchor → always charge
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is True
-        assert "No charge history" in reason
-
-        # First session → bootstrap
-        _feed_constant(det, 7000, 16, 10)
-        det.on_session_end(9.5)
-
-        # Now skip logic should work
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert "No charge history" not in reason
 
     def test_taper_anchor_overrides_session(self):
         """Taper detection (gold anchor) should override session estimate."""
@@ -422,42 +407,7 @@ class TestSessionAnchor:
         assert det2._soc_anchored is True
 
 
-class TestNightsUntilCharge:
-    def test_skip_when_soc_above_target(self):
-        """Should skip charge when SOC > target."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-        # SOC = 100%, target = 80%
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is False
-        assert nights > 0
-        assert "nights range" in reason
-
-    def test_charge_needed_when_low(self):
-        """Should recommend charge when SOC is low."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-        det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(35.0)  # SOC ~12.5%
-        det.get_virtual_soc()
-
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is True
-        assert "recommended" in reason
-
-    def test_multiple_nights_range(self):
-        """With high SOC and moderate daily use, should have multi-night range."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-        det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(8.0)  # SOC ~80%
-        det.get_virtual_soc()
-
-        # Daily consumption = 8 kWh = 20% of 40 kWh
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is False
-        assert nights >= 2
-
+# (TestNightsUntilCharge) removed in #440 — skip-decision wiring is gone.
 
 # ════════════════════════════════════════════
 # Persistence
@@ -706,237 +656,19 @@ class TestSOCDecay:
 # Consecutive skip safety net
 # ════════════════════════════════════════════
 
-class TestConsecutiveSkips:
-    def test_skip_limit_forces_charge(self):
-        """After 3 consecutive skips, should force charge."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)  # SOC=100%
-
-        det.record_skip()
-        det.record_skip()
-        det.record_skip()
-
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is True
-        assert "consecutive skips" in reason
-
-    def test_skip_counter_resets_on_charge(self):
-        """Counter should reset when charging happens."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-
-        det.record_skip()
-        det.record_skip()
-        assert det._consecutive_skips == 2
-
-        det.reset_skips()
-        assert det._consecutive_skips == 0
-
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is False
-
-    def test_skip_counter_persists(self):
-        """Consecutive skips should survive restart."""
-        det1 = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det1)
-        det1.record_skip()
-        det1.record_skip()
-
-        state = det1.get_state()
-        det2 = EVTaperDetector(DEFAULT_CONFIG)
-        det2.restore_state(state)
-        assert det2._consecutive_skips == 2
-
+# (TestConsecutiveSkips) removed in #440 — skip-decision wiring is gone.
 
 # ════════════════════════════════════════════
 # 10-day integration scenarios
 # ════════════════════════════════════════════
 
-class TestMultiDayScenarios:
-    def test_10_day_spring_scenario(self):
-        """Spring: 15°C, 8 kWh/day, solar available.
-
-        Expected: skip 2-3 nights, then charge, repeat.
-        """
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)  # Day 1: full charge → SOC=100%
-
-        temp_factor = EVTaperDetector.temperature_correction_factor(15)
-        assert temp_factor == 1.0  # 15°C is in optimal range
-
-        skip_days = 0
-        for day in range(10):
-            # Each morning: car unplugged, decay by daily use
-            det.apply_daily_decay(8.0, 10.0, temp_factor)
-
-            # Each evening: check if charge needed
-            nights, needed, reason = det.calculate_nights_until_charge(8.0)
-
-            if not needed:
-                det.record_skip()
-                skip_days += 1
-            else:
-                det.reset_skips()
-                # Simulate night charge: add 9.5 kWh back
-                det._energy_since_full = max(0, det._energy_since_full - 9.5)
-                det._estimated_soc = min(100, 100 - det._energy_since_full / 40 * 100)
-
-        # Should have skipped some but not all nights
-        assert 2 <= skip_days <= 7
-
-    def test_10_day_winter_scenario(self):
-        """Winter: -5°C, consumption +72%, charges more often.
-
-        8 kWh × 1.72 = 13.76 kWh/day effective consumption.
-        40 kWh battery → needs charge every 2-3 days.
-        """
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-
-        temp_factor = EVTaperDetector.temperature_correction_factor(-5)
-        assert temp_factor == pytest.approx(1.72, abs=0.01)
-
-        charge_count = 0
-        for day in range(10):
-            det.apply_daily_decay(8.0, 10.0, temp_factor)
-            nights, needed, reason = det.calculate_nights_until_charge(8.0)
-
-            if not needed:
-                det.record_skip()
-            else:
-                det.reset_skips()
-                det._energy_since_full = max(0, det._energy_since_full - 9.5)
-                det._estimated_soc = min(100, 100 - det._energy_since_full / 40 * 100)
-                charge_count += 1
-
-        # Winter: should charge more often than spring
-        assert charge_count >= 4  # At least every 2-3 days
-
+# (TestMultiDayScenarios) removed in #440 — skip-decision wiring is gone.
 
 # ════════════════════════════════════════════
 # Night charge skip scenarios
 # ════════════════════════════════════════════
 
-class TestNightChargeSkip:
-    """Test the calculate_nights_until_charge() logic that determines
-    whether SEM should skip tonight's night charge.
-
-    Real-world scenarios based on PROD data:
-    - 40 kWh battery, target SOC 80%, min threshold 20%
-    - Daily commute ~8 kWh (20% of capacity)
-    """
-
-    def test_skip_soc_above_target(self):
-        """SOC 98% > target 80% → skip, multi-night range."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)  # full detected → SOC 100%
-        det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(0.8)  # small drain → SOC ~98%
-        det.get_virtual_soc()
-
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is False
-        assert nights >= 3
-        assert "nights range" in reason
-
-    def test_skip_enough_range_with_margin(self):
-        """SOC 70%, daily 8 kWh (20%), plenty of range → skip."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-        det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(12.0)  # 100% - 12/40*100 = 70%
-        det.get_virtual_soc()
-
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is False
-        assert nights >= 2
-        assert "nights range" in reason
-
-    def test_charge_needed_soc_low(self):
-        """SOC 25%, daily 8 kWh → only 1 day range → charge needed."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-        det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(30.0)  # 100% - 30/40*100 = 25%
-        det.get_virtual_soc()
-
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is True
-        assert "recommended" in reason
-
-    def test_charge_needed_no_history(self):
-        """No full charge ever detected → charge needed (safe default)."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        # Never fed a taper profile → no full charge detected
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is True
-        assert "No charge history" in reason
-
-    def test_skip_with_zero_daily_consumption(self):
-        """WFH day, 0 kWh predicted → falls back to daily_ev_target (10 kWh).
-        SOC 100%, target 80%, min 20%, daily 10 kWh → 3 nights range."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-
-        nights, needed, reason = det.calculate_nights_until_charge(0.0)
-        assert needed is False
-        assert nights == 3  # Fallback to daily_ev_target=10
-
-    def test_skip_weekend_high_consumption(self):
-        """SOC 60%, weekend trip 15 kWh (37.5%) → charge needed."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-        det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(16.0)  # 100% - 16/40*100 = 60%
-        det.get_virtual_soc()
-
-        nights, needed, reason = det.calculate_nights_until_charge(15.0)
-        assert needed is True
-
-    def test_skip_just_above_threshold(self):
-        """SOC 45%, daily 8 kWh (20%), margin 1.3×20=26% → 45-26=19% < 20% min → charge."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        _feed_taper_profile(det)
-        det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(22.0)  # 100% - 22/40*100 = 45%
-        det.get_virtual_soc()
-
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is True
-
-    def test_skip_with_real_vehicle_soc(self):
-        """Real vehicle SOC 85% overrides virtual → skip."""
-        det = EVTaperDetector(DEFAULT_CONFIG)
-        # No taper history — but real SOC is provided
-        det._last_full_timestamp = "2026-04-25T12:00:00"  # Fake history
-
-        nights, needed, reason = det.calculate_nights_until_charge(
-            8.0, vehicle_soc=85.0
-        )
-        assert needed is False
-        assert "nights range" in reason
-
-    def test_real_prod_scenario_apr25(self):
-        """Reproduce actual PROD scenario: SOC 98.3%, target 80%, daily 8 kWh.
-
-        Expected: skip night charge, 3+ nights range.
-        """
-        config = {
-            "ev_battery_capacity_kwh": 40,
-            "ev_target_soc": 80,
-            "ev_min_soc_threshold": 20,
-        }
-        det = EVTaperDetector(config)
-        _feed_taper_profile(det)
-        det.reset_session()  # Clear full_detected for energy tracking
-        det.update_energy(0.68)  # SOC ~98.3%
-        det.get_virtual_soc()
-
-        nights, needed, reason = det.calculate_nights_until_charge(8.0)
-        assert needed is False
-        assert nights >= 3
-        assert "nights range" in reason
-
+# (TestNightChargeSkip) removed in #440 — skip-decision wiring is gone.
 
 # ════════════════════════════════════════════
 # History seeding tests
@@ -1260,4 +992,97 @@ class TestFalseFullOnMinCurrentOscillation:
             "last_full_charge anchored from a tiny oscillation — "
             "this pins skip_logic to 'SOC 100 %' until next "
             "disconnect (issue #438)."
+        )
+
+
+# ════════════════════════════════════════════
+# Per-vehicle session-energy floor (#438 Phase A — small-battery cars)
+# ════════════════════════════════════════════
+#
+# The 1.0 kWh constant is a CAP; the effective per-vehicle floor is
+# ``min(constant, capacity * 0.025)``. This protects against the
+# reviewer-flagged false-negative on small-battery cars arriving at
+# very high SOC (e.g. a 24 kWh LEAF needing only ~0.6 kWh to top up).
+# ════════════════════════════════════════════
+
+class TestPerVehicleEnergyFloor:
+    """Pin the per-vehicle scaling of the taper-to-full energy floor.
+
+    A 24 kWh LEAF at 99 % only needs ~0.24 kWh to finish; a flat 1.0
+    kWh floor would lock the full-anchor out for these cars. The
+    proportional rule ``min(constant, capacity * 0.025)`` solves both
+    ends: handshake oscillations still blocked (0.2 kWh below any
+    floor), small-battery taper-to-full still anchorable.
+    """
+
+    def test_floor_small_battery_scales_down(self):
+        """24 kWh LEAF: floor = 0.6 kWh (proportional binds)."""
+        det = EVTaperDetector({"ev_battery_capacity_kwh": 24})
+        assert det._session_energy_floor_kwh() == pytest.approx(0.6)
+
+    def test_floor_medium_battery_at_cap(self):
+        """40 kWh: floor = 1.0 kWh (cap binds at constant)."""
+        det = EVTaperDetector({"ev_battery_capacity_kwh": 40})
+        assert det._session_energy_floor_kwh() == pytest.approx(1.0)
+
+    def test_floor_large_battery_at_cap(self):
+        """80 kWh Tesla: floor = 1.0 kWh (cap binds)."""
+        det = EVTaperDetector({"ev_battery_capacity_kwh": 80})
+        assert det._session_energy_floor_kwh() == pytest.approx(1.0)
+
+    def test_floor_default_capacity(self):
+        """Config missing ``ev_battery_capacity_kwh`` → fallback 40."""
+        det = EVTaperDetector({})
+        assert det._session_energy_floor_kwh() == pytest.approx(1.0)
+
+    def test_small_battery_legitimate_full_anchors_at_proportional_floor(self):
+        """24 kWh LEAF: a legitimate ~0.7 kWh taper-to-full session
+        must anchor full (above the 0.6 kWh proportional floor but
+        below the old 1.0 kWh flat floor).
+
+        Pre-Phase-A (flat 1.0 kWh floor): blocked → false-negative.
+        Post-Phase-A (0.6 kWh floor for 24 kWh): anchors. ✓"""
+        det = EVTaperDetector({"ev_battery_capacity_kwh": 24})
+        # 12-minute taper from 7 kW peak linearly to 0:
+        #   avg ≈ 3.5 kW × 720 s = 0.70 kWh delivered.
+        # 9 samples/step × 8 steps × 10 s = 720 s.
+        steps = [7000, 6000, 5000, 4000, 3000, 2000, 1000, 0]
+        samples_per_step = 9
+        sample_idx = 0
+        for power in steps:
+            for _ in range(samples_per_step):
+                det.update(power, 16.0, True, _make_dt(sample_idx * 10 / 60))
+                sample_idx += 1
+        # Trailing zeros to trigger _full_confirm_count >= 3
+        for _ in range(3):
+            det.update(0.0, 16.0, True, _make_dt(sample_idx * 10 / 60))
+            sample_idx += 1
+        assert det._current_session_energy_kwh > 0.6, (
+            f"test profile only integrated to {det._current_session_energy_kwh:.2f} kWh — "
+            "needs > 0.6 to validate the per-vehicle floor allows it."
+        )
+        assert det._full_detected is True, (
+            f"legitimate 24 kWh taper-to-full ({det._current_session_energy_kwh:.2f} kWh) "
+            f"must anchor full ≥ floor ({det._session_energy_floor_kwh():.2f} kWh). "
+            "If this fails, the small-battery false-negative regression is back."
+        )
+
+    def test_handshake_oscillation_still_blocked_on_small_battery(self):
+        """The PROD bug (0.19 kWh oscillation) must STILL be blocked
+        even on a small-battery vehicle where the floor scales down.
+        24 kWh × 0.025 = 0.6 kWh — well above the 0.19 kWh bug."""
+        det = EVTaperDetector({"ev_battery_capacity_kwh": 24})
+        # Reuse the oscillation pattern from TestFalseFullOnMinCurrentOscillation
+        oscillation = [4240.0, 4240.0, 1570.0, 1570.0, 0.0, 1570.0]
+        sample_idx = 0
+        for i in range(42):
+            power_w = oscillation[i % len(oscillation)]
+            det.update(power_w, 6.0, True, _make_dt(sample_idx * 10 / 60))
+            sample_idx += 1
+        for _ in range(3):
+            det.update(0.0, 6.0, True, _make_dt(sample_idx * 10 / 60))
+            sample_idx += 1
+        assert det._full_detected is False, (
+            "small-battery floor (0.6 kWh) must still block the "
+            "0.19 kWh handshake-oscillation bug."
         )

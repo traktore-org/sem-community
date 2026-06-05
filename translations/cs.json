@@ -908,20 +908,11 @@
       "ev_energy_since_full": {
         "name": "Energie od plného nabití"
       },
-      "ev_nights_until_charge": {
-        "name": "Nocí do nabíjení"
-      },
       "ev_predicted_daily_consumption": {
         "name": "Předpovězená denní spotřeba EV"
       },
       "ev_battery_health": {
         "name": "Zdraví baterie EV"
-      },
-      "ev_charge_needed": {
-        "name": "Nabíjení potřeba"
-      },
-      "ev_charge_skip_reason": {
-        "name": "Důvod vynechání nabíjení"
       },
       "ev_charger_count": {
         "name": "Počet nabíječek"

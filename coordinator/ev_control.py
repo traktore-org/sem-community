@@ -112,7 +112,15 @@ class EVControlMixin:
             v = cfg.get(key)
             return v if v is not None else self.config.get(key, default)
 
-        min_amps = int(_pc("ev_min_current", 6))
+        # (#440 ADR 0010 #3) effective min = max(loadpoint_min, vehicle_min).
+        # Fall through to the global ``ev_min_current`` when neither
+        # per-charger value is set.
+        from .decide import effective_min_amps
+        _effective_cfg = {
+            "ev_min_current": _pc("ev_min_current", 6),
+            "vehicle_min_current": cfg.get("vehicle_min_current"),
+        }
+        min_amps = effective_min_amps(_effective_cfg, 6)
         max_amps = int(self.config.get("ev_max_current", 32))
         ev = getattr(self, "_ev_device", None)
         if ev is not None:
@@ -360,10 +368,13 @@ class EVControlMixin:
                 "ev_night_initial_current",
                 self.config.get("ev_night_initial_current", 10),
             ))
-            min_amps = int(charger_cfg.get(
-                "ev_min_current",
-                self.config.get("ev_min_current", 6),
-            ))
+            # (#440 ADR 0010 #3) effective min = max(loadpoint_min, vehicle_min)
+            from .decide import effective_min_amps
+            min_amps = effective_min_amps({
+                "ev_min_current": charger_cfg.get(
+                    "ev_min_current", self.config.get("ev_min_current", 6)),
+                "vehicle_min_current": charger_cfg.get("vehicle_min_current"),
+            }, 6)
             stall_cooldown = int(self.config.get("ev_stall_cooldown", 120))
 
             # Deadline floor (#246): the planner's required current to reach Min
@@ -826,107 +837,30 @@ class EVControlMixin:
     def _calculate_forecast_night_target(
         self, remaining_kwh: float, energy: Any, charger_cfg: dict | None = None,
     ) -> float:
-        """Reduce night charging target based on tomorrow's solar forecast.
+        """Night-charge target = the user's Min slider minus what's already
+        been delivered today. No EV-intelligence override, no solar-forecast
+        reduction (#440).
 
-        Uses history-based daily averages for home consumption and battery charge,
-        and adjusts for weekday vs weekend (car availability differs).
+        Per the v1.7.1-beta.4 truth model, only the user's sliders (Min/Max),
+        the charge mode, and — for ``%`` target type — the real vehicle SOC
+        determine charging. Estimated SOC, predicted daily consumption,
+        consecutive-skip counters and tomorrow's forecast are diagnostic
+        signals only; they do not override the user's stated mode.
 
-        Weekdays: car arrives ~17:00, only ~20% of surplus reachable
-        Weekends: car connected all day, ~70% of surplus reachable
+        The function is kept as a thin method for call-site stability — the
+        previous body shipped two override paths (SOC-based skip at lines
+        847-885 of the pre-#440 file, solar-forecast-based reduction at
+        lines 887-929) that violated the principle. Both are gone.
 
         Args:
-            remaining_kwh: Raw remaining EV energy need (daily_target - daily_ev).
-            energy: EnergyData with monthly_home, monthly_battery_charge.
+            remaining_kwh: User's Min target minus today's delivered kWh.
+            energy: unused — kept for call-site signature stability.
+            charger_cfg: unused — kept for call-site signature stability.
 
         Returns:
-            Adjusted remaining kWh for night charging.
+            ``max(0, remaining_kwh)``.
         """
-        if remaining_kwh <= 0:
-            return 0
-
-        # EV Intelligence SOC-based skip runs FIRST — independent of forecast (#106)
-        # This must be before the forecast check, because forecast may be unavailable
-        ev_taper = getattr(self, "_ev_taper_detector", None)
-        if ev_taper and (ev_taper.last_full_timestamp or ev_taper._soc_anchored):
-            now = dt_util.now()
-            estimated_soc = ev_taper.get_virtual_soc(
-                getattr(self, "_cycle_vehicle_soc", None)
-            )
-            # Per-car target/capacity (one car per charger); fall back to global.
-            _cfg = charger_cfg or {}
-            def _pc(key, default):
-                v = _cfg.get(key)
-                return v if v is not None else self.config.get(key, default)
-            target_soc = _pc("ev_target_soc", 80)
-            min_soc = _pc("ev_min_soc_threshold", 20)
-            capacity = _pc("ev_battery_capacity_kwh", 40)
-
-            predicted_daily = 0.0
-            predictor = getattr(self, "_predictor", None)
-            if predictor:
-                predicted_daily = predictor.predict_ev_consumption_tomorrow(now)
-
-            predicted_soc_drop = (predicted_daily / capacity * 100) if capacity > 0 else 0
-
-            if estimated_soc > target_soc:
-                _LOGGER.info(
-                    "EV charge skip: SOC %.0f%% > target %d%%, skipping night charge",
-                    estimated_soc, target_soc,
-                )
-                return 0.0
-
-            safety = 1.3
-            if predicted_soc_drop > 0 and (estimated_soc - predicted_soc_drop * safety) > min_soc:
-                nights = int((estimated_soc - min_soc) / predicted_soc_drop)
-                _LOGGER.info(
-                    "EV charge skip: SOC %.0f%%, predicted daily %.0f%%, %d nights range",
-                    estimated_soc, predicted_soc_drop, nights,
-                )
-                return 0.0
-
-        try:
-            forecast = self._forecast_reader.read_forecast()
-            if not forecast.available or forecast.forecast_tomorrow_kwh <= 0:
-                return remaining_kwh
-        except Exception:
-            return remaining_kwh
-
-        now = dt_util.now()
-        tomorrow = now + timedelta(days=1)
-        is_weekend = tomorrow.weekday() >= 5
-
-        # Use real monthly averages if enough data (7+ days), else config defaults
-        day_of_month = now.day
-        if day_of_month >= 7 and energy.monthly_home > 0:
-            avg_daily_home = energy.monthly_home / day_of_month
-            avg_daily_battery = energy.monthly_battery_charge / day_of_month
-        else:
-            avg_daily_home = self.config.get("daily_home_consumption_estimate", 18.0)
-            avg_daily_battery = self.config.get("daily_battery_consumption_estimate", 10.0)
-
-        # Surplus available for EV tomorrow
-        available_for_ev = max(0, forecast.forecast_tomorrow_kwh - avg_daily_home - avg_daily_battery)
-
-        if is_weekend:
-            ev_expected = available_for_ev * 0.7
-        else:
-            ev_expected = available_for_ev * 0.2
-
-        reduction = min(remaining_kwh, ev_expected)
-        day_type = "weekend" if is_weekend else "weekday"
-
-        if reduction > 0.5:
-            _LOGGER.info(
-                "Night forecast adjustment (%s): -%.1fkWh "
-                "(tomorrow=%.1fkWh, avg_home=%.1fkWh, avg_battery=%.1fkWh, "
-                "available=%.1fkWh, ev_expected=%.1fkWh)",
-                day_type, reduction, forecast.forecast_tomorrow_kwh,
-                avg_daily_home, avg_daily_battery, available_for_ev, ev_expected,
-            )
-
-        adjusted = max(0, remaining_kwh - reduction)
-
-        return adjusted
+        return max(0.0, float(remaining_kwh))
 
     def _this_charger_power(self, ev, power) -> float:
         """Return the per-charger power reading in watts (#315 multi-charger fix).

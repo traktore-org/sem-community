@@ -129,6 +129,49 @@ def amps_from_watts(watts: float, phases: int, voltage: int) -> int:
     return int(watts // denom)
 
 
+def effective_min_amps(cfg: dict, fallback: int = 6) -> int:
+    """Effective per-charger minimum current.
+
+    Combines two SEM-side floors via three-way max (ADR 0010 pattern 3,
+    #440):
+      * ``ev_min_current`` — the user's chosen SEM-side floor (the
+        "loadpoint min" in evcc terminology).
+      * ``vehicle_min_current`` — per-vehicle handshake floor (e.g. a
+        Renault Zoe needs ~9 A; if the user records that here, SEM
+        won't offer 6 A and watch the contactor sit unused).
+    The third leg of the max — the EVSE hardware minimum — is enforced
+    in the adapter, not at the decide layer, so it doesn't appear here.
+
+    Safety: the returned floor is also clamped to ``ev_max_current`` to
+    prevent a misconfigured ``vehicle_min_current`` (e.g. 20 A on a 16 A
+    circuit because the slider's max wasn't lowered) from pinning the
+    commanded current above the circuit breaker via the downstream
+    ``max(min, min(max, surplus))`` clamp. Reviewer-flagged 2026-06-06.
+
+    Returns:
+        ``min(ev_max_current, max(loadpoint_min, vehicle_min or 0))`` as int.
+    """
+    loadpoint_min = int(cfg.get("ev_min_current", fallback)) if isinstance(cfg, dict) else fallback
+    effective = loadpoint_min
+    if isinstance(cfg, dict):
+        v = cfg.get("vehicle_min_current")
+        if v is not None and v != "":
+            try:
+                effective = max(loadpoint_min, int(v))
+            except (TypeError, ValueError):
+                pass
+        # Defensive clamp: never let the floor exceed the user-set
+        # circuit max. If misconfigured the surplus_amps clamp would
+        # otherwise pin commanded current at max.
+        max_amps_raw = cfg.get("ev_max_current")
+        if max_amps_raw is not None:
+            try:
+                effective = min(effective, int(max_amps_raw))
+            except (TypeError, ValueError):
+                pass
+    return effective
+
+
 # ─────────────────────────────────────────────────────────────────
 # Mode strategy protocol
 # ─────────────────────────────────────────────────────────────────
@@ -259,8 +302,7 @@ class SolarOnlyMode(ModeStrategy):
         # the decision is correct even without the adapter wired in.
         # Step 4 will route min through the adapter.
         cfg = view.config
-        min_amps = int(cfg.get("ev_min_current", self.MIN_AMPS_FALLBACK)) \
-            if isinstance(cfg, dict) else self.MIN_AMPS_FALLBACK
+        min_amps = effective_min_amps(cfg, self.MIN_AMPS_FALLBACK)
         phases = int(cfg.get("ev_phases", self.PHASES_FALLBACK)) \
             if isinstance(cfg, dict) else self.PHASES_FALLBACK
         voltage = int(cfg.get("ev_voltage", self.VOLTAGE_FALLBACK)) \
@@ -335,7 +377,7 @@ class MinPlusSolarMode(ModeStrategy):
             )
 
         cfg = view.config if isinstance(view.config, dict) else {}
-        min_amps = int(cfg.get("ev_min_current", 6))
+        min_amps = effective_min_amps(cfg, 6)
         max_amps = int(cfg.get("ev_max_current", 32))
 
         # Deadline override (#246) — the planner pre-computed the
@@ -406,7 +448,7 @@ class MinPlusSolarMode(ModeStrategy):
         # because the EV hadn't been told to start drawing yet.
         budget_w = battery_assist_budget_w(view)
         cfg = view.config if isinstance(view.config, dict) else {}
-        min_amps = int(cfg.get("ev_min_current", 6))
+        min_amps = effective_min_amps(cfg, 6)
         max_amps = int(cfg.get("ev_max_current", 32))
         phases = int(cfg.get("ev_phases", 3))
         voltage = int(cfg.get("ev_voltage", 230))

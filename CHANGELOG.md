@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.4] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.3](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.3)_
+
+### 🚀 Architectural — charge mode is the sole authority on charging (BREAKING)
+
+- **EV intelligence no longer overrides charge mode.** Pre-#440, `coordinator/ev_control.py:_calculate_forecast_night_target` had two override paths that could zero the user's Min target: a SOC-based skip (`estimated_soc > target_soc → return 0`) and a solar-forecast-based reduction. The mode + Min slider therefore did NOT decide whether to charge — EV intelligence did. Post-#440 the function is a thin pass-through (`max(0, daily_target - daily_delivered)`); the user's mode + sliders are the sole authority. The `%` (SOC) target type is already structurally gated on a real `vehicle_soc_entity` in `select.py:63-65`, so estimated SOC never enters the decision. **Behaviour change**: users in `min_plus_solar` with a sunny forecast tomorrow will now charge the full Min target tonight, where pre-#440 SEM would have skipped some/all of it. (by @traktore-org, fixes #440)
+- **Skip-decision wiring deleted.** `calculate_nights_until_charge`, `record_skip`, `reset_skips`, `_consecutive_skips`, the `_skip_recorded_tonight_per_charger` latch, the `notify_ev_charge_skip` / `notify_ev_charge_recommended` notification methods, the `nights_until_charge` / `charge_needed` / `charge_skip_reason` sensor entities (both global and per-charger), and the corresponding "Charge Tonight" / "Nights Until Charge" rows on the EV card are all gone. Existing user automations referencing these entities will break — `binary_sensor.sem_charger_<id>_charge_tonight` and `sensor.sem_charger_<id>_nights_until_charge` become unavailable. The features were never reliable in the absence of a real vehicle SOC; removing is honest. The `EVTaperDetector` now serves display only: `estimated_soc`, `last_full_timestamp`, `energy_since_full`, taper trend, `battery_health_pct`. (by @traktore-org, refs #440)
+- **Per-vehicle minimum current** (ADR 0010 pattern 3). New optional per-charger `vehicle_min_current` field captures the car's handshake-floor minimum (e.g. Renault Zoe ~9 A). Effective floor at the decision layer is `max(ev_min_current, vehicle_min_current or 0)` via the new `decide.effective_min_amps()` helper, applied to all `MinPlusSolarMode` / `SolarOnlyMode` branches plus `ev_control._night_initial_amps`. Config-flow charger-edit step gains a slider; the EV card gains a "Vehicle Min Amps" tile in the bottom settings row. Schema migration v8→v9 seeds the field to `None` (= "use the loadpoint `ev_min_current`") for existing entries. (by @traktore-org, refs ADR 0010 #3)
+
+### 🐛 Bugfixes (already on this branch from earlier work)
+
+- **#438 false-full taper anchor.** Pre-fix, an 11-minute handshake-floor oscillation totalling 0.19 kWh satisfied `peak > 3 kW + 3 low samples → _full_detected=True`, anchoring SOC=100 % until physical unplug. Fix: trapezoidal energy integration in `EVTaperDetector.update()` plus a per-vehicle session-energy floor `min(1.0 kWh, capacity × 0.025)` — a 24 kWh LEAF arriving at 99 % SOC can still anchor full (~0.6 kWh threshold); a 0.19 kWh oscillation never can. 6 new regression tests in `TestPerVehicleEnergyFloor` (by @traktore-org, fixes #438)
+- **#439 daytime `min_plus_solar` idled instead of supplementing.** Pre-fix, `MinPlusSolarMode._decide_day` gated Zone 3/4 charging on `budget_w < min_w → IDLE`. The budget read `battery_assist_budget_w() = surplus + battery_discharge_w`, but `battery_discharge_w` is the inverter's *currently-flowing* discharge — zero when no EV demand has been commanded yet. Chicken-and-egg deadlock. Fix: commit-then-measure pattern from evcc — drop the gate, offer `min_amps` unconditionally, let the next cycle's sensor readings reflect the actual battery/grid split. `coordinator/decide.py` Zone 3/4 branch now matches the `min_plus_solar` UI promise verbatim. (by @traktore-org, fixes #439)
+
+### 🌍 i18n — structured 3-line mode hints
+
+- **`charge_mode_hint_*` rewritten to 3 structured rows per mode.** The old single-line `charge_mode_hint_solar_only` / `min_plus_solar` / etc. shipped one short clause each — users couldn't tell what a mode actually did for solar, the house battery, and overnight charging. Replaced with `charge_mode_hint_<mode>_surplus` / `_overnight` / `_battery` (15 new keys per language × 15 languages = 225 strings) plus 3 row labels (`hint_label_surplus` / `_overnight` / `_battery`). The battery row substitutes `{buffer}` and `{priority}` placeholders with the user's actual SOC zone values (read from `number.sem_battery_buffer_soc` / `number.sem_battery_priority_soc`) so the hint reads "Drains for EV when home battery SOC ≥ 70 % (buffer). Below 70 % … Below 30 % (priority floor) …" — concrete, not abstract. EN + DE polished manually; other 13 languages follow the same template structure with native-speaker review welcome. Card rendering moves to `.ct-hint-row` flex layout in `sem-ev-status-card.js`. (by @traktore-org)
+
+### 📝 Documentation
+
+- **ADR 0010 — evcc pattern adoption.** Records the architectural choice informing #438, #439, and the per-vehicle min-current pattern. Three patterns adopted in order: commit-then-measure for `min_plus_solar` budget (the #439 fix), pilot-state-gated session lifecycle with a session-energy floor for taper-to-full (the #438 fix), per-vehicle minimum current with three-way max (the new feature this beta). Cites the exact evcc source locations for each. (by @traktore-org)
+
 # [1.7.1-beta.3] - 05.06.2026
 
 ## 🧪 Beta Release

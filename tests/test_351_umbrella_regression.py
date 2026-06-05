@@ -102,8 +102,7 @@ class TestM6_NearlyFullGatesOnPerChargerDraw:
         coord = MagicMock()
         coord._notification_manager = MagicMock()
         coord._notification_manager.notify_ev_nearly_full = AsyncMock()
-        coord._notification_manager.notify_ev_charge_skip = AsyncMock()
-        coord._notification_manager.notify_ev_charge_recommended = AsyncMock()
+        # (#440) notify_ev_charge_skip / notify_ev_charge_recommended removed
         coord._last_ev_connected_per_charger = {"a": True, "b": True}
         coord._ev_devices = {
             "a": MagicMock(name="Wallbox A", id="a"),
@@ -113,11 +112,10 @@ class TestM6_NearlyFullGatesOnPerChargerDraw:
         coord._ev_devices["b"].name = "Wallbox B"
 
         # Per-charger intelligence: B near full, A still ramping.
+        # (#440) charge_needed / nights_until_charge fields removed.
         coord._build_per_charger_intelligence = MagicMock(return_value={
-            "a": {"minutes_to_full": 60, "estimated_soc": 40,
-                  "charge_needed": True, "nights_until_charge": 0},
-            "b": {"minutes_to_full": 3, "estimated_soc": 95,
-                  "charge_needed": False, "nights_until_charge": 0},
+            "a": {"minutes_to_full": 60, "estimated_soc": 40},
+            "b": {"minutes_to_full": 3, "estimated_soc": 95},
         })
 
         # Per-charger power: B drawing 0 W, A drawing 7000 W.
@@ -164,100 +162,7 @@ class TestM6_NearlyFullGatesOnPerChargerDraw:
 # ---------------------------------------------------------------------------
 
 
-class TestM11_NightSkipRespectsChargeMode:
-    """The night-skip notification must skip chargers whose mode
-    disallows night charging (``off``, ``solar_only``).
-
-    Current code in ``_send_notifications``:
-
-        if (is_night and charger_connected
-                and not charge_needed and est_soc > 0):
-            await self._notification_manager.notify_ev_charge_skip(...)
-
-    fires regardless of ``charge_mode``. Correct: skip when mode ∉
-    ``MODE_NIGHT_ALLOWED`` (``auto``, ``min_plus_solar``,
-    ``solar_plus_cheap``, ``always_max``).
-    """
-
-    @pytest.mark.asyncio
-    async def test_skip_not_sent_for_solar_only_mode(self) -> None:
-        from custom_components.solar_energy_management.consts.ev_charge_modes import (
-            MODE_NIGHT_ALLOWED,
-        )
-
-        coord = MagicMock()
-        coord._notification_manager = MagicMock()
-        coord._notification_manager.notify_ev_nearly_full = AsyncMock()
-        coord._notification_manager.notify_ev_charge_skip = AsyncMock()
-        coord._notification_manager.notify_ev_charge_recommended = AsyncMock()
-        coord._notification_manager.notify_battery_full = AsyncMock()
-        coord._notification_manager.notify_high_grid_import = AsyncMock()
-        coord._notification_manager.notify_daily_summary = AsyncMock()
-        coord._notification_manager.notify_forecast_alert = AsyncMock()
-        coord._notification_manager.notify_state_change = AsyncMock()
-        coord._last_ev_connected_per_charger = {"x": True}
-        coord._ev_devices = {"x": MagicMock(id="x")}
-        coord._ev_devices["x"].name = "SolarOnly Charger"
-
-        # X is in solar_only mode — should never get night skip.
-        # Use the canonical ``charge_mode`` key (post-#277 Phase B); the
-        # production gate reads it via ``effective_charge_mode_for``.
-        coord.config = {
-            "ev_chargers": [
-                {"id": "x", "charge_mode": "solar_only"},
-            ],
-        }
-        coord._effective_states_per_charger = {}
-
-        # Bind the per-mode predicate so the production call resolves
-        # against a real mode lookup instead of a MagicMock auto-truthy
-        # return.
-        coord._mode_allows_night_charging = MagicMock(
-            side_effect=lambda cfg: (
-                isinstance(cfg, dict)
-                and cfg.get("charge_mode") in MODE_NIGHT_ALLOWED
-            )
-        )
-
-        coord._build_per_charger_intelligence = MagicMock(return_value={
-            "x": {"minutes_to_full": 0, "estimated_soc": 45,
-                  "charge_needed": False, "nights_until_charge": 0},
-        })
-
-        power = _power(ev_charging=False, ev_power=0, battery_soc=70)
-        power.ev_power_per_charger = {"x": 0.0}
-
-        coord.time_manager = MagicMock()
-        coord.time_manager.is_night_mode = MagicMock(return_value=True)
-
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            SEMCoordinator,
-        )
-        await SEMCoordinator._send_notifications(
-            coord,
-            charging_state="night_idle",
-            power=power,
-            energy=_energy(),
-            costs=MagicMock(daily_savings=0, daily_net_cost=0),
-            performance=MagicMock(current_vs_peak_percentage=0, autarky_rate=0),
-            charging_context=MagicMock(),
-            forecast_data=MagicMock(forecast_tomorrow_kwh=20),
-            discharge_limit=0,
-            calculated_current=0,
-            available_power=0,
-        )
-
-        skip_calls = coord._notification_manager.notify_ev_charge_skip.call_args_list
-        assert skip_calls == [], (
-            f"M11 regression — skip notification fired for solar_only mode: "
-            f"{skip_calls}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# L1 — battery session uses self.update_interval not config
-# ---------------------------------------------------------------------------
-
+# (TestM11_NightSkipRespectsChargeMode) removed in #440 — skip-decision wiring is gone.
 
 class TestL1_BatterySessionUsesWallClockInterval:
     """The battery-session energy integration must use the actual update
@@ -468,104 +373,7 @@ class TestM5_DistributeRespectsOffMode:
 # ---------------------------------------------------------------------------
 
 
-class TestM8_SkipRecordedTonightPerCharger:
-    """The night-skip latch is per-charger. Charger A's skip-recorded
-    state does not mask charger B's independent record_skip call —
-    each charger maintains its own counter against its own taper
-    detector.
-
-    Pre-fix: a single ``self._skip_recorded_tonight = True`` flag was
-    set the first time ANY charger recorded a skip; any subsequent
-    charger's record_skip path saw the flag and silently no-op'd, so
-    consecutive-skip counters only ever advanced on the first charger
-    each night.
-    """
-
-    def test_per_charger_dict_separate_keys(self) -> None:
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            SEMCoordinator,
-        )
-        coord = SEMCoordinator.__new__(SEMCoordinator)
-        coord._skip_recorded_tonight_per_charger = {}
-
-        # Charger A skips first → its key gets set, B's stays untouched.
-        coord._skip_recorded_tonight_per_charger["a"] = True
-        assert coord._skip_recorded_tonight_per_charger.get("a") is True
-        assert coord._skip_recorded_tonight_per_charger.get("b") is None, (
-            "M8 regression — A's skip flag is bleeding into B's key. "
-            "Should be a dict keyed by charger_id, not a fleet bool."
-        )
-
-    def test_per_charger_record_skip_in_intel_builder(self) -> None:
-        """The per-charger intel builder ALSO records skips per-charger.
-        Two chargers, both connected at night, both charge_needed=False
-        → both should have record_skip called on their respective
-        detectors exactly once per cycle."""
-        from custom_components.solar_energy_management.coordinator.coordinator import (
-            SEMCoordinator,
-        )
-
-        coord = SEMCoordinator.__new__(SEMCoordinator)
-        coord.config = {
-            "ev_chargers": [
-                {"id": "a"},
-                {"id": "b"},
-            ],
-        }
-
-        # Fake per-charger taper detectors with record_skip / reset_skips
-        # tracked as MagicMock calls.
-        det_a = MagicMock()
-        det_a._soc_anchored = False
-        det_a._energy_since_full = 0.0
-        det_a.battery_health_pct = 100
-        det_a.calculate_nights_until_charge = MagicMock(
-            return_value=(2, False, "skip_low_consumption")
-        )
-        det_a.get_taper_data = MagicMock(return_value=None)
-        det_a.get_virtual_soc = MagicMock(return_value=80.0)
-        det_a.record_skip = MagicMock()
-        det_a.reset_skips = MagicMock()
-
-        det_b = MagicMock()
-        det_b._soc_anchored = False
-        det_b._energy_since_full = 0.0
-        det_b.battery_health_pct = 100
-        det_b.calculate_nights_until_charge = MagicMock(
-            return_value=(2, False, "skip_low_consumption")
-        )
-        det_b.get_taper_data = MagicMock(return_value=None)
-        det_b.get_virtual_soc = MagicMock(return_value=80.0)
-        det_b.record_skip = MagicMock()
-        det_b.reset_skips = MagicMock()
-
-        coord._ev_taper_detectors = {"a": det_a, "b": det_b}
-        coord._last_ev_connected_per_charger = {"a": True, "b": True}
-        coord._skip_recorded_tonight_per_charger = {}
-        coord.time_manager = MagicMock()
-        coord.time_manager.is_night_mode = MagicMock(return_value=True)
-        coord.hass = MagicMock()
-        coord.hass.states = MagicMock()
-        coord.hass.states.get = MagicMock(return_value=None)
-        coord._predictor = MagicMock()
-        coord._predictor.predict_ev_consumption_tomorrow = MagicMock(return_value=15.0)
-
-        result = SEMCoordinator._build_per_charger_intelligence(coord)
-
-        assert "a" in result and "b" in result
-        det_a.record_skip.assert_called_once()
-        det_b.record_skip.assert_called_once()
-        # Second invocation in the same night must NOT re-record (the
-        # per-charger latch is set).
-        SEMCoordinator._build_per_charger_intelligence(coord)
-        det_a.record_skip.assert_called_once()  # still once
-        det_b.record_skip.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# M3 — per-charger session uses priority-correct flows
-# ---------------------------------------------------------------------------
-
+# (TestM8_SkipRecordedTonightPerCharger) removed in #440 — skip-decision wiring is gone.
 
 class TestM3_PerChargerFlowsPriorityCorrect:
     """The flow_calculator already populates
@@ -968,10 +776,9 @@ class TestUmbrellaStructure:
             "not found in coordinator.py — re-anchor the regression "
             "tests."
         )
-        assert "notify_ev_charge_skip" in body, (
-            "Umbrella M11 anchor `notify_ev_charge_skip` missing — "
-            "either fixed or moved."
-        )
+        # (#440) Umbrella M11 anchor `notify_ev_charge_skip` was removed
+        # alongside the skip-decision wiring — charge mode is now the
+        # sole authority on whether to charge.
 
     def test_l1_anchor_present_in_coordinator(self) -> None:
         from pathlib import Path

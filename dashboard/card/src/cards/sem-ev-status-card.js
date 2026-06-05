@@ -79,7 +79,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 `charger_${id}_power`, `charger_${id}_session_energy`,
                 `charger_${id}_daily_energy`, `charger_${id}_session_solar_share`,
                 `charger_${id}_estimated_soc`, `charger_${id}_vehicle_soc`,
-                `charger_${id}_nights_until_charge`, `charger_${id}_charge_needed`,
+                // (#440) charger_*_nights_until_charge / _charge_needed removed
             ].map(s => hass.states[`${prefix}${s}`]?.state || '').join(':')).join('|');
 
             key += '|' + this._chargers.map(id =>
@@ -447,8 +447,8 @@ class SEMEVStatusCard extends SEMLitBase {
             ?? this._val('vehicle_soc', null);
         const estimatedSoc = this._val(`charger_${id}_estimated_soc`, null);
         const soc = vehicleSoc != null ? vehicleSoc : estimatedSoc;
-        const nights = this._entityVal(`number.sem_charger_${id}_nights_until_charge`, null);
-        const chargeNeeded = this._valStr(`charger_${id}_charge_needed`);
+        // (#440) nights / chargeNeeded / needsCharge / chargeIcon / chargeColor /
+        // chargeText removed — the underlying skip decision is gone.
         const name = this._chargerName(id);
 
         // Per-charger connected status (#193)
@@ -459,13 +459,9 @@ class SEMEVStatusCard extends SEMLitBase {
 
         const startAmps = this._entityVal(`number.sem_charger_${id}_night_initial_current`, 10);
         const minAmps = this._entityVal(`number.sem_charger_${id}_minimum_current`, 6);
+        const vehicleMinAmps = this._entityVal(`number.sem_charger_${id}_vehicle_min_current`, minAmps);
         const capacityKwh = this._entityVal(`number.sem_charger_${id}_ev_battery_capacity_kwh`, 40);
         const consumption = this._entityVal(`number.sem_charger_${id}_ev_kwh_per_100km`, 18);
-
-        const needsCharge = chargeNeeded === 'True' || chargeNeeded === 'true';
-        const chargeIcon = needsCharge ? 'mdi:battery-alert' : 'mdi:battery-check';
-        const chargeColor = needsCharge ? '#f06292' : '#8DC892';
-        const chargeText = needsCharge ? this._t('yes') : this._t('no');
 
         // Charge mode selector (#277 Phase B.2). Replaces the legacy
         // four-toggle stack (ev_charging_mode select + night_charging +
@@ -487,13 +483,22 @@ class SEMEVStatusCard extends SEMLitBase {
             always_max:       this._t('charge_mode_always_max'),
             off:              this._t('charge_mode_off'),
         };
-        const chargeModeHints = {
-            solar_only:       this._t('charge_mode_hint_solar_only'),
-            solar_plus_cheap: this._t('charge_mode_hint_solar_plus_cheap'),
-            min_plus_solar:   this._t('charge_mode_hint_min_plus_solar'),
-            always_max:       this._t('charge_mode_hint_always_max'),
-            off:              this._t('charge_mode_hint_off'),
-        };
+        // Mode hints (#charge-mode-detail) — three structured rows
+        // (Surplus / Overnight / House battery) per mode. The battery
+        // row substitutes {buffer} and {priority} with the user's
+        // actual SOC zone values, read from the global battery
+        // settings entities. Buffer/priority default fallback matches
+        // the config defaults (70 / 30) when entities are missing.
+        const bufferSoc = Math.round(
+            this._entityVal('number.sem_battery_buffer_soc', 70));
+        const prioritySoc = Math.round(
+            this._entityVal('number.sem_battery_priority_soc', 30));
+        const _hint = (key) => (this._t(key) || '')
+            .replace(/\{buffer\}/g, bufferSoc)
+            .replace(/\{priority\}/g, prioritySoc);
+        const hintSurplus = _hint(`charge_mode_hint_${chargeMode}_surplus`);
+        const hintOvernight = _hint(`charge_mode_hint_${chargeMode}_overnight`);
+        const hintBattery = _hint(`charge_mode_hint_${chargeMode}_battery`);
 
         // Charge Target range (#245): Min (floor/night) + Max (solar ceiling) handles
         const targetTypeId = `select.sem_charger_${id}_ev_target_type`;
@@ -578,19 +583,10 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span class="cm-label">${this._t('solar_share')}</span>
                             <span class="cm-value" style="color:#ff9800">${this._fmt(solar, 0)}%</span>
                         </div>
-                        <div class="cm-row">
-                            <span class="cm-label">${this._t('charge_tonight')}</span>
-                            <span class="cm-value" style="color:${chargeColor}">
-                                <ha-icon icon="${chargeIcon}" style="--mdc-icon-size:14px;vertical-align:middle;color:${chargeColor}"></ha-icon>
-                                ${chargeText}
-                            </span>
-                        </div>
-                        ${nights != null ? html`
-                            <div class="cm-row">
-                                <span class="cm-label">${this._t('nights_until_charge')}</span>
-                                <span class="cm-value">${Math.round(nights)}</span>
-                            </div>
-                        ` : nothing}
+                        <!-- (#440) "Charge Tonight" and "Nights Until Charge"
+                             rows removed. The underlying skip-decision wiring
+                             was removed alongside; charge mode is the sole
+                             authority on whether to charge at night. -->
                     </div>
                 </div>
 
@@ -626,9 +622,23 @@ class SEMEVStatusCard extends SEMLitBase {
                         </span>
                     </div>
                     <div class="ct-subhint">
-                        ${chargeModeHints[chargeMode] || ''}
+                        <div class="ct-hint-row">
+                            <span class="ct-hint-label">${this._t('hint_label_surplus')}:</span>
+                            <span class="ct-hint-text">${hintSurplus}</span>
+                        </div>
+                        <div class="ct-hint-row">
+                            <span class="ct-hint-label">${this._t('hint_label_overnight')}:</span>
+                            <span class="ct-hint-text">${hintOvernight}</span>
+                        </div>
+                        <div class="ct-hint-row">
+                            <span class="ct-hint-label">${this._t('hint_label_battery')}:</span>
+                            <span class="ct-hint-text">${hintBattery}</span>
+                        </div>
                         ${showCheapHint ? html`
-                            · ${this._t('ev_next_cheap')} <b style="color:#8DC892">${nextCheapLabel}</b>
+                            <div class="ct-hint-row ct-hint-extra">
+                                <span class="ct-hint-label">${this._t('ev_next_cheap')}:</span>
+                                <span class="ct-hint-text"><b style="color:#8DC892">${nextCheapLabel}</b></span>
+                            </div>
                         ` : nothing}
                     </div>
                     <div class="ct-row clickable"
@@ -669,6 +679,17 @@ class SEMEVStatusCard extends SEMLitBase {
                     >
                         <ha-icon icon="mdi:speedometer-slow" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
                         <span class="setting-value">${this._fmt(minAmps, 0)}A</span>
+                    </div>
+                    <div
+                        class="setting-item clickable"
+                        title="Vehicle handshake-floor minimum (ADR 0010)"
+                        @click=${() => {
+                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_vehicle_min_current` } });
+                            this.dispatchEvent(event);
+                        }}
+                    >
+                        <ha-icon icon="mdi:car-electric" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
+                        <span class="setting-value">${this._fmt(vehicleMinAmps, 0)}A</span>
                     </div>
                     <div
                         class="setting-item clickable"
@@ -1142,10 +1163,19 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-subrow { padding-left: 14px; border-left: 2px solid rgba(141,200,146,0.35); margin-left: 2px; }
             .ct-subrow .ct-label { color: var(--secondary-text-color, #b5b5b5); }
             .ct-subhint {
-                padding: 2px 0 4px 16px; margin-left: 2px;
+                padding: 4px 0 4px 16px; margin-left: 2px;
                 border-left: 2px solid rgba(141,200,146,0.18);
-                font-size: 10.5px; line-height: 1.3; color: var(--secondary-text-color, #999);
+                font-size: 10.5px; line-height: 1.35; color: var(--secondary-text-color, #999);
+                display: flex; flex-direction: column; gap: 2px;
             }
+            .ct-hint-row { display: flex; gap: 6px; align-items: baseline; }
+            .ct-hint-label {
+                color: var(--secondary-text-color, #b5b5b5);
+                font-weight: 600; flex-shrink: 0;
+                min-width: 64px; text-align: right;
+            }
+            .ct-hint-text { color: var(--secondary-text-color, #999); }
+            .ct-hint-extra { padding-top: 2px; border-top: 1px dashed rgba(255,255,255,0.05); }
             .ct-label { font-size: 12px; color: var(--primary-text-color, #e0e0e0); }
             .ct-ctl { margin-left: auto; display: flex; align-items: center; gap: 7px; }
             .ct-time {

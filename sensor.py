@@ -1339,22 +1339,15 @@ SENSOR_TYPES = [
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=1,
     ),
-    SensorEntityDescription(
-        key="ev_nights_until_charge",
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="ev_charge_needed",
-    ),
+    # (#440) ev_nights_until_charge / ev_charge_needed / ev_charge_skip_reason
+    # were removed — the skip-decision wiring is gone, charge mode is the
+    # sole authority on whether to charge at night. ev_battery_health
+    # stays (display-only, no decision impact).
     SensorEntityDescription(
         key="ev_battery_health",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="ev_charge_skip_reason",
     ),
     # Multi-charger (#112)
     SensorEntityDescription(
@@ -1628,16 +1621,9 @@ async def async_setup_entry(
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
-            SensorEntityDescription(
-                key=f"charger_{cid}_nights_until_charge",
-                name=f"{cname} Nights Until Charge",
-                state_class=SensorStateClass.MEASUREMENT,
-                suggested_display_precision=0,
-            ),
-            SensorEntityDescription(
-                key=f"charger_{cid}_charge_needed",
-                name=f"{cname} Charge Needed",
-            ),
+            # (#440) per-charger _nights_until_charge and _charge_needed
+            # were removed alongside the global versions — see comment
+            # in the main SENSOR_TYPES block.
             SensorEntityDescription(
                 key=f"charger_{cid}_taper_minutes_to_full",
                 name=f"{cname} Minutes to Full",
@@ -1855,7 +1841,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "heat_pump_mode", "heat_pump_sg_ready_state",
         "pv_degradation_trend", "energy_tip", "energy_tip_category",
         "utility_signal_source",
-        "ev_taper_trend", "ev_charge_needed", "ev_charge_skip_reason",
+        "ev_taper_trend",
     }
 
     def __init__(

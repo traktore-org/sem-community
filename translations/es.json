@@ -908,20 +908,11 @@
       "ev_energy_since_full": {
         "name": "Energía desde carga completa"
       },
-      "ev_nights_until_charge": {
-        "name": "Noches hasta cargar"
-      },
       "ev_predicted_daily_consumption": {
         "name": "Consumo diario previsto"
       },
       "ev_battery_health": {
         "name": "Salud batería VE"
-      },
-      "ev_charge_needed": {
-        "name": "Carga necesaria"
-      },
-      "ev_charge_skip_reason": {
-        "name": "Razón de omisión de carga"
       },
       "ev_charger_count": {
         "name": "EV Charger Count"

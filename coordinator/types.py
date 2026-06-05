@@ -651,20 +651,21 @@ class EVTaperData:
 
 @dataclass
 class EVIntelligenceData:
-    """Complete EV intelligence sensor data.
+    """EV intelligence sensor data — display-only after #440.
 
-    Combines taper detection, virtual SOC estimation, consumption
-    prediction, and charge skip logic into a single output structure.
+    Combines taper detection, virtual SOC estimation, and consumption
+    prediction. The skip-decision fields (``nights_until_charge``,
+    ``charge_needed``, ``charge_skip_reason``) were removed in #440
+    because charge mode is the sole authority on whether to charge —
+    estimated SOC and predicted consumption are diagnostic signals
+    only, they do not override the user's stated mode.
     """
     taper: EVTaperData = field(default_factory=EVTaperData)
     estimated_soc_pct: Optional[float] = 0.0  # Virtual SOC (0-100); None = unknown (no anchor yet)
     last_full_charge: Optional[str] = None   # ISO timestamp of last detected full
     energy_since_full_kwh: float = 0.0       # Energy consumed since last full
-    predicted_daily_ev_kwh: float = 0.0      # Tomorrow's predicted EV consumption
-    nights_until_charge: int = 0             # Estimated nights before charge needed
-    charge_needed: bool = True               # Whether charging is recommended tonight
-    ev_battery_health_pct: float = 0.0       # EV battery health estimate
-    charge_skip_reason: str = ""             # Human-readable skip explanation
+    predicted_daily_ev_kwh: float = 0.0      # Tomorrow's predicted EV consumption (display)
+    ev_battery_health_pct: float = 0.0       # EV battery health estimate (display)
 
 
 @dataclass
@@ -1117,8 +1118,6 @@ class SEMData:
                     # global ``sensor.sem_vehicle_soc`` which gets
                     # clobbered across the per-charger update loop.
                     f"charger_{cid}_vehicle_soc": intel.get("vehicle_soc"),
-                    f"charger_{cid}_nights_until_charge": intel.get("nights_until_charge", 0),
-                    f"charger_{cid}_charge_needed": intel.get("charge_needed", False),
                     f"charger_{cid}_taper_minutes_to_full": intel.get("minutes_to_full"),
                 })
         except Exception as e:
@@ -1135,10 +1134,7 @@ class SEMData:
                 "ev_last_full_charge": _ei.last_full_charge,
                 "ev_energy_since_full": _ei.energy_since_full_kwh,
                 "ev_predicted_daily_consumption": _ei.predicted_daily_ev_kwh,
-                "ev_nights_until_charge": _ei.nights_until_charge,
-                "ev_charge_needed": _ei.charge_needed,
                 "ev_battery_health": _ei.ev_battery_health_pct,
-                "ev_charge_skip_reason": _ei.charge_skip_reason,
             })
         except Exception as e:
             _LOGGER.warning("EV intelligence to_dict failed: %s", e)

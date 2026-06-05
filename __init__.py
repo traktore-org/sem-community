@@ -541,6 +541,35 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 9:
+        try:
+            # v8 → v9 (#440 ADR 0010 #3): every ``ev_chargers`` entry
+            # gets a ``vehicle_min_current`` field defaulting to ``None``
+            # (= "use the loadpoint ``ev_min_current``"). Optional per-car
+            # override letting users record handshake-floor minimums
+            # (e.g. Renault Zoe ~9 A) without raising the SEM-side floor
+            # other chargers in the fleet may want at 6 A. Forward-compat:
+            # existing entries that already have the key are left alone.
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            for bag in (new_data, new_options):
+                chargers = bag.get("ev_chargers")
+                if isinstance(chargers, list):
+                    for c in chargers:
+                        if isinstance(c, dict) and "vehicle_min_current" not in c:
+                            c["vehicle_min_current"] = None
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=9, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v9 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 

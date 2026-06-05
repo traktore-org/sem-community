@@ -102,10 +102,10 @@ SEM_SENSORS: Final = {
     "ev_last_full_charge": "sensor.sem_ev_last_full_charge",
     "ev_energy_since_full": "sensor.sem_ev_energy_since_full",
     "ev_predicted_daily_consumption": "sensor.sem_ev_predicted_daily_consumption",
-    "ev_nights_until_charge": "sensor.sem_ev_nights_until_charge",
-    "ev_charge_needed": "sensor.sem_ev_charge_needed",
+    # (#440) ev_nights_until_charge / ev_charge_needed / ev_charge_skip_reason
+    # removed — skip-decision wiring is gone, charge mode is the sole
+    # authority on whether to charge at night.
     "ev_battery_health": "sensor.sem_ev_battery_health",
-    "ev_charge_skip_reason": "sensor.sem_ev_charge_skip_reason",
 
     # Multi-charger Sensors (#112)
     "ev_charger_count": "sensor.sem_ev_charger_count",

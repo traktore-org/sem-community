@@ -583,57 +583,11 @@ class NotificationManager:
             group="sem_charging",
         )
 
-    async def notify_ev_charge_skip(
-        self, estimated_soc: float, nights: int,
-        *, charger_name: str | None = None,
-    ) -> None:
-        """Notify user that night charge was skipped (#106, #193)."""
-        flag = f"ev_charge_skip_{charger_name}" if charger_name else "ev_charge_skip"
-        if flag in self._notified_flags:
-            return
-        self._notified_flags.add(flag)
-
-        label = charger_name or "EV"
-        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
-            "category": "charging",
-            "event": "ev_charge_skip",
-            "charger_name": label,
-            "estimated_soc": round(estimated_soc, 0),
-            "nights_remaining": nights,
-        })
-        from ..utils.translate import get_text
-        await self._send_mobile_notification(
-            get_text(self.hass, "notif_ev_charge_skip",
-                "Night charge skipped for {name} — SOC {soc:.0f}%, {nights} night(s) range remaining",
-                name=label, soc=estimated_soc, nights=nights),
-            channel=_CHANNEL_CHARGING,
-            group="sem_charging",
-        )
-
-    async def notify_ev_charge_recommended(
-        self, estimated_soc: float, *, charger_name: str | None = None,
-    ) -> None:
-        """Notify user that EV charging is recommended (#106, #193)."""
-        flag = f"ev_charge_recommended_{charger_name}" if charger_name else "ev_charge_recommended"
-        if flag in self._notified_flags:
-            return
-        self._notified_flags.add(flag)
-
-        label = charger_name or "EV"
-        self.hass.bus.async_fire(f"{DOMAIN}_notification", {
-            "category": "charging",
-            "event": "ev_charge_recommended",
-            "charger_name": label,
-            "estimated_soc": round(estimated_soc, 0),
-        })
-        from ..utils.translate import get_text
-        await self._send_mobile_notification(
-            get_text(self.hass, "notif_ev_charge_recommended",
-                "{name} charge recommended tonight — estimated SOC {soc:.0f}%",
-                name=label, soc=estimated_soc),
-            channel=_CHANNEL_CHARGING,
-            group="sem_charging",
-        )
+    # (#440) ``notify_ev_charge_skip`` / ``notify_ev_charge_recommended``
+    # were removed alongside the skip-decision wiring. Both fired based
+    # on the estimated_soc-driven ``charge_needed`` flag, which is no
+    # longer load-bearing in any decision path. Tests of the old
+    # behaviour are updated to assert the methods are absent.
 
     async def notify_ev_deadline_unreachable(
         self, remaining_kwh: float, hours_left: float, deadline: str,

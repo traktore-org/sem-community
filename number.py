@@ -367,6 +367,21 @@ async def async_setup_entry(
                     native_min_value=6, native_max_value=16, native_step=1,
                     mode=NumberMode.SLIDER,
                 ), "ev_min_current", full_config.get("ev_min_current", 6)),
+                # (#440 ADR 0010 #3) per-vehicle handshake-floor minimum.
+                # Effective floor = max(ev_min_current, vehicle_min_current).
+                # Default seeds to the charger's ev_min_current so the
+                # entity is never empty in the UI; users with cars that
+                # need > 6 A (e.g. Renault Zoe handshake) bump this.
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_vehicle_min_current",
+                    name=f"{cname} Vehicle Min Amps",
+                    native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+                    native_min_value=6, native_max_value=32, native_step=1,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:car-electric",
+                ), "vehicle_min_current",
+                    charger_cfg.get("vehicle_min_current") or
+                    full_config.get("ev_min_current", 6)),
                 (NumberEntityDescription(
                     key=f"charger_{cid}_target_soc",
                     name=f"{cname} Target SOC",

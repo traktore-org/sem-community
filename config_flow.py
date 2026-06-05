@@ -144,7 +144,12 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     Phase A's derivation silently dropped.
     # v7 (#277 Phase C): drop the dead ev_charging_mode key (charge_mode is
     #     authoritative now; the legacy select + 3 legacy switches are gone).
-    VERSION = 8
+    # v8 (#359): flip tariff_classification_mode static→percentile when
+    #     tariff_mode == "dynamic".
+    # v9 (#440 ADR 0010 #3): add ``vehicle_min_current`` to each
+    #     ``ev_chargers`` entry (default None = use the loadpoint
+    #     ``ev_min_current``). Optional per-car handshake-floor override.
+    VERSION = 9
 
     @staticmethod
     @callback
@@ -1221,6 +1226,22 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=6, max=16, step=1,
+                        unit_of_measurement="A", mode="slider",
+                    )
+                ),
+                # Per-vehicle handshake-floor minimum (ADR 0010 #3, #440).
+                # Optional; defaults to whatever ``ev_min_current`` is set to.
+                # Lets users record per-car constraints (e.g. Renault Zoe ~9 A
+                # handshake floor) without raising the SEM-side floor that
+                # other chargers in a multi-charger fleet might want at 6 A.
+                # Effective floor at the decision layer is
+                # ``max(ev_min_current, vehicle_min_current or 0)``.
+                vol.Optional(
+                    "vehicle_min_current",
+                    description={"suggested_value": charger.get("vehicle_min_current")},
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=6, max=32, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),

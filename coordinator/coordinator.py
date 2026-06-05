@@ -327,11 +327,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # session only ends when this reaches OPPOSITE_CYCLES_TO_FLIP.
         self._battery_session_opposite_count = 0
 
-        # Per-charger night-skip safety counter latch (#351 M8). Maps
-        # charger_id → bool; the legacy single-charger path uses the
-        # ``"_fleet"`` sentinel key. Prevents charger A's skip-recorded
-        # flag from masking charger B's independent skip count.
-        self._skip_recorded_tonight_per_charger: Dict[str, bool] = {}
+        # (#440) the per-charger night-skip safety counter latch was
+        # removed alongside the skip-decision wiring — charge mode is
+        # the sole authority on whether to charge at night now.
 
         # Zone-transition debounce: holds the last stable SOC zone and the
         # candidate zone being observed. A new zone is only applied after it
@@ -2767,9 +2765,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # ``TypeError`` every cycle (DEBUG log spam observed on
                 # HA-TEST 2026-05-31 after the v1.6.14 deploy).
                 mins_to_full = intel.get("minutes_to_full") or 0
+                # est_soc kept for the "nearly full" notification gate
+                # logic that survived #440 (informational only — does not
+                # gate the charge command).
                 est_soc = intel.get("estimated_soc") or 0
-                charge_needed = intel.get("charge_needed") or False
-                nights = intel.get("nights_until_charge") or 0
 
                 # Per-charger draw — gate nearly-full on THIS charger's
                 # power, not the fleet flag. In a multi-charger fleet,
@@ -2800,26 +2799,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     else True
                 )
 
-                # 1. Nearly full: taper detector shows < 5 minutes remaining
+                # Nearly full: taper detector shows < 5 minutes remaining.
+                # Pure informational — does NOT gate the charge command.
+                # (#440: skip + recommended notifications removed — they
+                # were gated on estimated_soc, which is no longer load-
+                # bearing in any decision path.)
                 if mins_to_full > 0 and mins_to_full < 5 and this_charger_drawing:
                     await self._notification_manager.notify_ev_nearly_full(
                         mins_to_full, charger_name=charger_name
-                    )
-
-                # 2. Night charge skipped: night mode, EV connected, skip decided,
-                #    AND this charger's mode allows night charging at all.
-                if (is_night and charger_connected
-                        and not charge_needed and est_soc > 0
-                        and mode_allows_night):
-                    await self._notification_manager.notify_ev_charge_skip(
-                        est_soc, nights, charger_name=charger_name
-                    )
-
-                # 3. Charge recommended: night mode, SOC low, charge needed
-                if (is_night and charger_connected
-                        and charge_needed and 0 < est_soc < 30):
-                    await self._notification_manager.notify_ev_charge_recommended(
-                        est_soc, charger_name=charger_name
                     )
 
         except (ValueError, TypeError) as e:
@@ -3834,29 +3821,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._session_data.energy_kwh, session_soc,
             )
 
-        # EV consumption prediction
+        # EV consumption prediction (display-only — feeds the
+        # ``predicted_daily_ev_kwh`` diagnostic sensor; no longer
+        # drives skip decisions per #440).
         predicted_daily = self._predictor.predict_ev_consumption_tomorrow(now)
-
-        # Night charge skip calculation
-        nights, charge_needed, skip_reason = self._ev_taper_detector.calculate_nights_until_charge(
-            predicted_daily, self._cycle_vehicle_soc,
-        )
-
-        # Track consecutive skips for safety net (once per night, not every cycle).
-        # #351 M8 — keyed per-charger; this legacy single-charger path uses
-        # the ``"_fleet"`` sentinel. The per-charger intel builder uses
-        # per-charger keys so charger A's skip doesn't mask charger B's.
-        skip_flags = self._skip_recorded_tonight_per_charger
-        if self.time_manager.is_night_mode() and power.ev_connected:
-            if not charge_needed:
-                if not skip_flags.get("_fleet", False):
-                    self._ev_taper_detector.record_skip()
-                    skip_flags["_fleet"] = True
-            else:
-                self._ev_taper_detector.reset_skips()
-                skip_flags["_fleet"] = False
-        elif not self.time_manager.is_night_mode():
-            skip_flags["_fleet"] = False
 
         # No real SOC and no calibration yet → the virtual 100% default is
         # misleading. Report None so the sensor shows "unknown" until a real
@@ -3874,10 +3842,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             last_full_charge=self._ev_taper_detector.last_full_timestamp,
             energy_since_full_kwh=round(self._ev_taper_detector.energy_since_full, 2),
             predicted_daily_ev_kwh=predicted_daily,
-            nights_until_charge=nights,
-            charge_needed=charge_needed,
             ev_battery_health_pct=self._ev_taper_detector.battery_health_pct,
-            charge_skip_reason=skip_reason,
         )
 
     def _build_per_charger_intelligence(self) -> dict:
@@ -3910,33 +3875,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             else:
                 soc = detector.get_virtual_soc(per_charger_vehicle_soc)
 
-            predicted = getattr(self, '_predictor', None)
-            predicted_daily = predicted.predict_ev_consumption_tomorrow(dt_util.now()) if predicted else 0
-            nights, charge_needed, skip_reason = detector.calculate_nights_until_charge(
-                predicted_daily, per_charger_vehicle_soc,
-            )
             taper_data = detector.get_taper_data() if hasattr(detector, 'get_taper_data') else None
 
-            # Per-charger night-skip latch (#351 M8). Each charger maintains
-            # its own skip counter against its own taper detector. The
-            # per-charger flag in ``_skip_recorded_tonight_per_charger``
-            # prevents this cycle from recording skip again on the same
-            # detector, BUT a skip on charger A no longer blocks charger
-            # B's legitimate independent record (the legacy fleet flag
-            # did).
-            charger_connected = self._last_ev_connected_per_charger.get(cid, False)
-            skip_flags = self._skip_recorded_tonight_per_charger
-            if self.time_manager.is_night_mode() and charger_connected:
-                if not charge_needed:
-                    if not skip_flags.get(cid, False):
-                        detector.record_skip()
-                        skip_flags[cid] = True
-                else:
-                    detector.reset_skips()
-                    skip_flags[cid] = False
-            elif not self.time_manager.is_night_mode():
-                skip_flags[cid] = False
-
+            # (#440) Per-charger skip-decision latch removed alongside the
+            # skip-decision wiring — charge mode is the sole authority
+            # on whether to charge at night now.
             result[cid] = {
                 "estimated_soc": round(soc, 1) if soc is not None else None,
                 # #383: surface the real per-charger vehicle SOC reading
@@ -3949,9 +3892,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     round(per_charger_vehicle_soc, 1)
                     if per_charger_vehicle_soc is not None else None
                 ),
-                "nights_until_charge": nights,
-                "charge_needed": charge_needed,
-                "charge_skip_reason": skip_reason,
                 "minutes_to_full": taper_data.minutes_to_full if taper_data else None,
                 "battery_health": detector.battery_health_pct,
             }

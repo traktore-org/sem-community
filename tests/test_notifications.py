@@ -379,44 +379,31 @@ async def test_ev_nearly_full_resets_when_above_threshold(notifier, mock_hass):
     assert mock_hass.bus.async_fire.call_count == 1
 
 
-@pytest.mark.asyncio
-async def test_ev_charge_skip_sends_once(notifier, mock_hass):
-    """notify_ev_charge_skip fires once per night."""
-    await notifier.notify_ev_charge_skip(85.0, 3)
-    assert mock_hass.bus.async_fire.call_count == 1
-    event_data = mock_hass.bus.async_fire.call_args[0][1]
-    assert event_data["event"] == "ev_charge_skip"
-    assert event_data["estimated_soc"] == 85
-    assert event_data["nights_remaining"] == 3
-
-    # Deduplicated
-    mock_hass.bus.async_fire.reset_mock()
-    await notifier.notify_ev_charge_skip(85.0, 3)
-    assert mock_hass.bus.async_fire.call_count == 0
+# (#440) test_ev_charge_skip_sends_once / test_ev_charge_recommended_sends_once
+# removed — the underlying notification methods are gone. The skip-decision
+# wiring was removed because estimated_soc is no longer load-bearing in any
+# decision path.
 
 
 @pytest.mark.asyncio
-async def test_ev_charge_recommended_sends_once(notifier, mock_hass):
-    """notify_ev_charge_recommended fires once per night."""
-    await notifier.notify_ev_charge_recommended(25.0)
-    assert mock_hass.bus.async_fire.call_count == 1
-    event_data = mock_hass.bus.async_fire.call_args[0][1]
-    assert event_data["event"] == "ev_charge_recommended"
-    assert event_data["estimated_soc"] == 25
-
-    # Deduplicated
-    mock_hass.bus.async_fire.reset_mock()
-    await notifier.notify_ev_charge_recommended(25.0)
-    assert mock_hass.bus.async_fire.call_count == 0
+async def test_ev_notifications_methods_removed(notifier):
+    """(#440 regression) The two skip-related notification methods must
+    not be re-added without re-evaluating the architectural choice that
+    charge mode is the sole authority on whether to charge."""
+    assert not hasattr(notifier, "notify_ev_charge_skip"), (
+        "notify_ev_charge_skip resurrected — see #440 ADR for the "
+        "rationale on why this is a decision-loop violation."
+    )
+    assert not hasattr(notifier, "notify_ev_charge_recommended"), (
+        "notify_ev_charge_recommended resurrected — see #440."
+    )
 
 
 @pytest.mark.asyncio
 async def test_ev_notifications_reset_on_notifier_reset(notifier, mock_hass):
     """All EV flags should clear on notifier.reset()."""
     await notifier.notify_ev_nearly_full(3.0)
-    await notifier.notify_ev_charge_skip(85.0, 3)
-    await notifier.notify_ev_charge_recommended(25.0)
-    assert len(notifier._notified_flags) >= 3
+    assert len(notifier._notified_flags) >= 1
 
     notifier.reset()
     assert len(notifier._notified_flags) == 0
