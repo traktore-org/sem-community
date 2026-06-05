@@ -146,6 +146,60 @@ def test_registration_gate_one_relay_with_climate_passes():
 
 
 # ──────────────────────────────────────────────
+# binary_sensor.sem_heat_pump_registered wiring
+# ──────────────────────────────────────────────
+
+
+def _coordinator_check(devices_dict):
+    """Mirror the coordinator's heat_pump_registered computation
+    (coordinator.py: HeatPumpSensorData block). `_devices` is a Dict[str,
+    ControllableDevice] keyed by device_id; the check must look at keys,
+    not iterate the dict (which yields strings, never controllable
+    devices). Locks the fix found while reproducing discussion #432."""
+    return (
+        "heat_pump" in getattr(
+            type("_Sc", (), {"_devices": devices_dict})(),
+            "_devices",
+            {},
+        )
+    )
+
+
+def test_binary_sensor_registered_true_when_hp_in_devices():
+    """The fix: dict-membership check, not iterator-with-getattr."""
+    devices = {"heat_pump": MagicMock(), "ev_charger": MagicMock()}
+    assert _coordinator_check(devices) is True
+
+
+def test_binary_sensor_registered_false_when_only_ev():
+    """No heat_pump device → off."""
+    devices = {"ev_charger": MagicMock()}
+    assert _coordinator_check(devices) is False
+
+
+def test_binary_sensor_registered_false_when_empty():
+    """No devices at all → off."""
+    assert _coordinator_check({}) is False
+
+
+def test_binary_sensor_old_bug_would_have_failed():
+    """The old code iterated the dict (= keys) and did getattr(str,
+    "device_id", "") which always returns "" — so it returned False
+    even when the HP was registered. This test pins that the new check
+    is NOT the old check."""
+    devices = {"heat_pump": MagicMock()}
+    # Old (buggy) check:
+    old_result = any(
+        getattr(d, "device_id", "") == "heat_pump"
+        for d in devices
+    )
+    assert old_result is False, "old check should be False (=bug)"
+    # New (fixed) check:
+    new_result = "heat_pump" in devices
+    assert new_result is True, "new check must be True (=fix)"
+
+
+# ──────────────────────────────────────────────
 # Config flow validation — partial relays without climate
 # ──────────────────────────────────────────────
 

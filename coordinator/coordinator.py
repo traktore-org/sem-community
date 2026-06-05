@@ -2445,12 +2445,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # state". When a HeatPumpController IS registered, its current
         # sg_ready_state / mode / boost flags will override below.
         heat_pump_data = HeatPumpSensorData(
-            heat_pump_registered=any(
-                getattr(d, "device_id", "") == "heat_pump"
-                for d in getattr(
+            heat_pump_registered=(
+                "heat_pump" in getattr(
                     getattr(self, "_surplus_controller", None),
                     "_devices",
-                    [],
+                    {},
                 )
             ),
         )

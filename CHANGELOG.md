@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.3] - 05.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.2](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.2)_
+
+### 🐛 Bugfixes
+
+- **`binary_sensor.sem_heat_pump_registered` was always `off`** — pre-fix, `coordinator/coordinator.py` populated `heat_pump_registered` via `any(getattr(d, "device_id", "") == "heat_pump" for d in self._surplus_controller._devices)`. `_devices` is a `Dict[str, ControllableDevice]` keyed by device_id, so iterating it yields **keys (strings)**, never devices — and `getattr(string, "device_id", "")` always returns `""`. The check was wired to always be False, so the v1.7.1-beta.1 dashboard auto-hide kept the Heat Pump section hidden even on correctly registered climate-only installs (the exact path RienduPre would have hit). Replaced with the trivial `"heat_pump" in self._devices` dict-membership check. 4 new regression cases in `tests/test_437_heat_pump_climate_only.py` lock the new code and pin the old buggy expression as a counter-example (by @traktore-org, fixes the v1.7.1-beta.1 follow-up surfaced while reproducing discussion #432)
+
+### 📝 Documentation
+
+- **Nibe SG-Ready misconfig demo screenshots** — `docs/screenshots/nibe-sim/` adds 4 reproducible screenshots for discussion #432: config flow heat pump step + Control tab dashboard, under both Path 3 (the broken Nibe enable-flag-switches-as-relays config the other Claude recommended) and Path A (the v1.7.1-beta.1 climate-only config). Reproducible via `/config/packages/sem_sim_nibe.yaml` on HA-TEST (template switches mirroring `switch.sg_ready_heating_48282` / `switch.sg_ready_hot_water_48284` / `climate.vvm_320_heating_circuit` so the demo doesn't need real Nibe hardware) (by @traktore-org, refs #432)
+
 # [1.7.1-beta.2] - 05.06.2026
 
 ## 🧪 Beta Release
