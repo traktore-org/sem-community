@@ -262,7 +262,9 @@ class LoadManagementCoordinator:
         power_entity: str = None,
         priority: int = 3,
         is_critical: bool = False,
-        charger_service: str = None
+        charger_service: str = None,
+        charger_id: str = "ev_charger",
+        charger_name: str = "EV Charger",
     ):
         """Register EV charger as a load management device.
 
@@ -276,9 +278,22 @@ class LoadManagementCoordinator:
             priority: Priority level (1-10, higher = shed first). Default 3 = low priority
             is_critical: If True, never shed this device
             charger_service: Service for current control (e.g., "keba.set_current") - alternative to number entity
+            charger_id: Per-charger id from ``ev_chargers[i].id`` (#436).
+                Defaults to ``"ev_charger"`` for backward compatibility with
+                pre-#436 single-charger installs (their storage key was
+                ``load_device_ev_charger``; preserved here so saved
+                priority / critical / controllable flags carry across).
+            charger_name: Per-charger friendly name from
+                ``ev_chargers[i].name`` (#436). Falls back to the
+                control entity's friendly_name if unset.
         """
         try:
-            device_id = "load_device_ev_charger"
+            # #436: key on per-charger id. Pre-fix used a hardcoded
+            # ``"load_device_ev_charger"`` so a multi-charger loop
+            # caller overwrote the same entry N times — only the last
+            # charger survived in the Load Priority card and peak
+            # shedding throttled the wrong charger.
+            device_id = f"load_device_{charger_id}"
 
             # Need at least one control method
             if not current_control_entity and not charger_service:
@@ -294,12 +309,17 @@ class LoadManagementCoordinator:
             if power_entity and not self.hass.states.get(power_entity):
                 _LOGGER.warning("EV charger power entity not found: %s", power_entity)
 
-            # Get friendly name
-            friendly_name = "EV Charger"
-            if current_control_entity:
+            # Get friendly name. Caller-supplied ``charger_name`` wins
+            # (it's the user-chosen label from ``ev_chargers[i].name``);
+            # fall back to the control entity's friendly_name if the
+            # caller passed the default ``"EV Charger"`` placeholder.
+            friendly_name = charger_name
+            if friendly_name in (None, "EV Charger") and current_control_entity:
                 current_state = self.hass.states.get(current_control_entity)
                 if current_state:
-                    friendly_name = current_state.attributes.get("friendly_name", "EV Charger")
+                    friendly_name = current_state.attributes.get(
+                        "friendly_name", charger_name or "EV Charger",
+                    )
 
             # EV charger can draw up to 22kW (32A × 3 phases × 230V)
             max_power = 22.0  # kW
@@ -310,7 +330,7 @@ class LoadManagementCoordinator:
                 "charger_service": charger_service,  # Service-based control (e.g., "keba.set_current")
                 "power_entity": power_entity,
                 "device_type": "ev_charger",
-                "description": "EV Charger (Current Control)",
+                "description": f"EV Charger (Current Control) — {charger_id}",
                 "friendly_name": friendly_name,
                 "power_rating": max_power,
                 "is_available": True,
@@ -318,6 +338,7 @@ class LoadManagementCoordinator:
                 "is_critical": is_critical,
                 "is_controllable": True,
                 "control_type": "current",  # Special flag: use current control instead of switch
+                "charger_id": charger_id,  # #436: lets callers / card map back to ev_chargers[i].id
             }
 
             # Save configuration

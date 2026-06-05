@@ -1015,6 +1015,9 @@
       "heat_pump_solar_boost": {
         "name": "Boost Solare Pompa di Calore"
       },
+      "heat_pump_registered": {
+        "name": "Pompa di calore registrata"
+      },
       "utility_signal_active": {
         "name": "Segnale Rete Attivo"
       }

@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.2] - 05.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.1)_
+
+### 🐛 Bugfixes
+
+- **Multi-charger Load Priority collision** — pre-fix, `LoadManagementCoordinator.register_ev_charger()` hardcoded `device_id = "load_device_ev_charger"`. The per-charger loop in `__init__.py` called it N times for N chargers — each call overwrote the previous entry in `self._devices`, so the Control tab's Load Priority card showed only ONE EV row even with multiple chargers configured, and peak-shedding only acted on the LAST registered charger. `register_ev_charger()` now accepts `charger_id` + `charger_name` kwargs (defaults preserve single-charger backward compat: `load_device_ev_charger` key unchanged for `ev_chargers[0].id == "ev_charger"`); device dict gains a `charger_id` field for downstream mapping. Reviewer-caught: `features/device_registry.py:_populate_load_manager()` had a hardcoded `!= "load_device_ev_charger"` exclusion that would have silently pruned the new `load_device_ev_charger_1` entries on every registry sync — widened to `startswith("load_device_")`. 7 new tests in `tests/test_436_multi_charger_load_priority.py` covering single-charger legacy key preservation, multi-charger distinct entries, friendly-name fallback chain, idempotent re-registration, and the device_registry prune-survival regression (by @traktore-org, fixes #436)
+
 # [1.7.1-beta.1] - 05.06.2026
 
 ## 🧪 Beta Release — first v1.7.1 beta

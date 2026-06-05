@@ -920,7 +920,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ev_charger_service or ev_current_entity,
             )
 
-            # Also register in load management for peak shedding
+            # Also register in load management for peak shedding (#436:
+            # pass per-charger id + name so each ev_chargers[i] gets its
+            # own ``load_device_<id>`` entry in self._devices instead of
+            # all chargers colliding on a hardcoded ``ev_charger`` key).
             if coordinator._load_manager:
                 await coordinator._load_manager.register_ev_charger(
                     current_control_entity=ev_current_entity,
@@ -928,6 +931,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     priority=ev_priority,
                     is_critical=False,
                     charger_service=ev_charger_service,
+                    charger_id=charger_id,
+                    charger_name=charger_name,
                 )
 
         # Backward compat: _ev_device points to primary (first) charger

@@ -1015,6 +1015,9 @@
       "heat_pump_solar_boost": {
         "name": "Heat Pump Solar Boost"
       },
+      "heat_pump_registered": {
+        "name": "Hőszivattyú regisztrálva"
+      },
       "utility_signal_active": {
         "name": "Utility Signal Active"
       }

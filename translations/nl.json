@@ -1015,6 +1015,9 @@
       "heat_pump_solar_boost": {
         "name": "Warmtepomp Zonne-boost"
       },
+      "heat_pump_registered": {
+        "name": "Warmtepomp geregistreerd"
+      },
       "utility_signal_active": {
         "name": "Netbeheerder Signaal Actief"
       }
