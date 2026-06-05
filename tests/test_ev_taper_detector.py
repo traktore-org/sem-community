@@ -1157,3 +1157,110 @@ async def test_history_seed_kw_values():
     assert result["session_count"] == 1
     total = list(result["weekday_totals"].values())[0]
     assert 2.0 < total < 5.0  # 10kW × 20min ≈ 3.3 kWh
+
+
+# ════════════════════════════════════════════
+# #438: false-full on min-current oscillation
+# Reproduces the HA-PROD 2026-06-05 incident where a car/charger
+# combo whose handshake floor is 9 A oscillated at a 6 A offer
+# (cycling 4.24 / 1.57 / 0 kW), the detector saw 3 consecutive
+# low-power samples after a >3 kW peak, and anchored full=true
+# after only ~0.19 kWh of session energy. This pinned SOC=100 %
+# and skipped subsequent charging.
+#
+# These tests pin the DESIRED post-fix behaviour:
+#   (a) sessions with total energy below a sane minimum (~2 kWh)
+#       must not anchor full
+#   (b) the confirm window must be longer than 30 s to survive a
+#       transient car-side phase renegotiation
+# Both are expected to FAIL on develop until #438 lands.
+# ════════════════════════════════════════════
+
+@pytest.mark.xfail(
+    reason=(
+        "#438 — taper detector marks full from oscillation pattern "
+        "with tiny total session energy. Turns green when the "
+        "session-energy floor (or longer confirm window) lands."
+    ),
+    strict=False,
+)
+class TestFalseFullOnMinCurrentOscillation:
+    """Regression fixtures for the #438 stuck-state class."""
+
+    def _feed_oscillation(self, detector, setpoint_a=6.0):
+        """Replay an extended PROD-style oscillation at 6 A offer.
+
+        The 2026-06-05 PROD session integrated to ~0.19 kWh of
+        ``session_energy`` before triggering false-full. Reconstruct
+        a representative ~11-minute window with the same per-sample
+        power pattern (4240 / 1570 / 0 W as the car renegotiated
+        between 3-phase, 1-phase, and contactor-open at the 6 A
+        offer that sits below its 9 A handshake floor):
+
+            ~7 min of oscillation between 4240 and 1570 W (declining
+                avg, satisfies MIN_SAMPLES=12 and produces a
+                negative regression slope < -5 W/min)
+            3 zero samples at the tail (triggers the
+                ``_full_confirm_count >= 3`` branch)
+
+        Total integrated energy ≈ 0.3 kWh — under any sensible
+        session-energy floor for taper-to-full.
+        """
+        # 7 minutes of oscillation at 10 s sample interval = 42 samples.
+        # Cycle: 4240 → 4240 → 1570 → 1570 → 0 (one minute period),
+        # producing a declining average and a clear regression slope.
+        oscillation = [4240.0, 4240.0, 1570.0, 1570.0, 0.0, 1570.0]
+        t_offset_min = 0.0
+        sample_period_min = 10.0 / 60.0  # 10 s between samples
+
+        for i in range(42):
+            power_w = oscillation[i % len(oscillation)]
+            detector.update(power_w, setpoint_a, True, _make_dt(t_offset_min))
+            t_offset_min += sample_period_min
+
+        # Trailing 3 zero samples — the trigger pattern for
+        # ``_full_confirm_count >= 3``. Separated so the test
+        # intent is obvious: these zeros are what the bug
+        # mistakes for end-of-charge.
+        for _ in range(3):
+            detector.update(0.0, setpoint_a, True, _make_dt(t_offset_min))
+            t_offset_min += sample_period_min
+
+    def test_short_oscillation_must_not_anchor_full(self):
+        """A ~38-second oscillation totalling well under 1 kWh must
+        not be interpreted as a completed charge.
+
+        Pre-fix: detector sees peak=4250 W (> SESSION_PEAK_MIN),
+        declining phase, 3 consecutive samples < FULL_POWER_THRESHOLD
+        → ``_full_detected = True``. This is the bug.
+
+        Post-fix: a session-energy floor (~2 kWh suggested) must
+        gate taper-to-full so a tiny session cannot anchor SOC=100.
+        """
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        self._feed_oscillation(det)
+        assert det._full_detected is False, (
+            "False-full anchor: a ~0.2 kWh oscillation session must "
+            "not mark the car as fully charged. See issue #438."
+        )
+
+    def test_short_oscillation_must_not_anchor_soc_100(self):
+        """Companion check: if full anchored is False, SOC should
+        not be pinned at 100 % either."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        self._feed_oscillation(det)
+        assert det._estimated_soc < 100.0, (
+            "SOC anchored at 100 % after a tiny oscillation session "
+            "— sympom of the false-full anchor (issue #438)."
+        )
+
+    def test_short_oscillation_no_last_full_timestamp(self):
+        """Companion check: no ``last_full_timestamp`` should be
+        recorded for a session that never genuinely completed."""
+        det = EVTaperDetector(DEFAULT_CONFIG)
+        self._feed_oscillation(det)
+        assert det._last_full_timestamp is None, (
+            "last_full_charge anchored from a tiny oscillation — "
+            "this pins skip_logic to 'SOC 100 %' until next "
+            "disconnect (issue #438)."
+        )
