@@ -42,6 +42,20 @@ const SECTIONS = [
         subtitleFn: () => '',
     },
     {
+        // #437 — heat pump section, surfaces SG-Ready state, boost
+        // offset stepper, and the active mode (SG-Ready vs Climate-only).
+        // Auto-hidden when no heat pump is registered (sg_ready_state
+        // entity is missing). Visible when the user configured a heat
+        // pump in either mode.
+        id: 'heatpump', icon: 'mdi:heat-pump', color: '#4db6ac', titleKey: 'heat_pump_title',
+        subtitleFn: (c) => {
+            const state = c._val('heat_pump_sg_ready_state');
+            const mode = c._val('heat_pump_mode');
+            if (!state) return '';
+            return `${mode || '—'} · ${state}`;
+        },
+    },
+    {
         id: 'solar', icon: 'mdi:solar-panel-large', color: '#ff9800', titleKey: 'solar_power_section',
         subtitleFn: () => '',
     },
@@ -82,6 +96,10 @@ const WATCHED = [
     'number.sem_battery_priority_soc', 'number.sem_battery_minimum_soc',
     'number.sem_battery_resume_soc', 'sensor.sem_diag_battery_capacity',
     'number.sem_hot_water_solar_target', 'number.sem_legionella_target_temp',
+    // #437 — heat pump section: registered? mode, sg_ready_state, boost offset
+    'binary_sensor.sem_heat_pump_registered',
+    'sensor.sem_heat_pump_sg_ready_state', 'sensor.sem_heat_pump_mode',
+    'binary_sensor.sem_heat_pump_solar_boost', 'number.sem_heat_pump_boost_offset',
     'number.sem_minimum_solar_power', 'number.sem_maximum_grid_import',
     'sensor.sem_tariff_provider', 'sensor.sem_tariff_price_level',
     'sensor.sem_tariff_current_import_rate',
@@ -102,7 +120,7 @@ class SEMControlCard extends SEMLitBase {
         // ev + battery + tariff expanded by default; surplus, hotwater, solar, peak, system collapsed
         this._collapsed = {
             ev: false, surplus: true, battery: false,
-            hotwater: true, solar: true, tariff: false,
+            hotwater: true, heatpump: true, solar: true, tariff: false,
             peak: true, system: true,
         };
     }
@@ -271,6 +289,40 @@ class SEMControlCard extends SEMLitBase {
         `;
     }
 
+    _renderHeatPumpSection(T) {
+        // Auto-hide body when no HeatPumpController is registered.
+        // sg_ready_state defaults to 2 / "normal" via the dataclass
+        // even when no controller exists, so we can't gate on it
+        // (reviewer-flagged). Use the explicit ``heat_pump_registered``
+        // presence flag (coordinator/types.py:597 + populated in
+        // coordinator.py:_run_phase_pipeline from the surplus
+        // controller's device list).
+        const registered = this._val('heat_pump_registered');
+        const isRegistered = (registered === true || registered === 'True' || registered === 'on');
+        if (!isRegistered) {
+            return html`<div class="info-box-text" style="opacity:0.6">
+                ${this._t('heat_pump_not_configured')}
+            </div>`;
+        }
+        const sgStateRaw = this._val('heat_pump_sg_ready_state');
+        const mode = this._val('heat_pump_mode') || '—';
+        const boosted = this._switchOn('heat_pump_solar_boost');
+        const accent = boosted ? '#ff9800' : '#4db6ac';
+        return html`
+            <div class="readonly-row">
+                <ha-icon icon="mdi:heat-pump-outline" style="--mdc-icon-size:18px;color:${accent}"></ha-icon>
+                <span class="ctrl-label" style="flex:1">${this._t('heat_pump_mode')}</span>
+                <span class="readonly-value">${this._t(mode.toLowerCase()) || mode}</span>
+            </div>
+            <div class="readonly-row">
+                <ha-icon icon="mdi:transmission-tower" style="--mdc-icon-size:18px;color:${accent}"></ha-icon>
+                <span class="ctrl-label" style="flex:1">${this._t('heat_pump_sg_ready_state')}</span>
+                <span class="readonly-value">${sgStateRaw}</span>
+            </div>
+            ${this._renderStepper('number.sem_heat_pump_boost_offset', 'heat_pump_boost_offset', T)}
+        `;
+    }
+
     _renderHotWaterSection(T) {
         return html`
             <div class="stepper-pair">
@@ -413,6 +465,7 @@ class SEMControlCard extends SEMLitBase {
             surplus:  (T) => this._renderSurplusSection(T),
             battery:  (T) => this._renderBatterySection(T),
             hotwater: (T) => this._renderHotWaterSection(T),
+            heatpump: (T) => this._renderHeatPumpSection(T),
             solar:    (T) => this._renderSolarSection(T),
             tariff:   (T) => this._renderTariffSection(T),
             peak:     (T) => this._renderPeakSection(T),

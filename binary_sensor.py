@@ -63,6 +63,14 @@ BINARY_SENSOR_TYPES = [
     BinarySensorEntityDescription(
         key="heat_pump_solar_boost",
     ),
+    # #437: heat pump registered with the surplus controller (presence
+    # flag for the dashboard auto-hide — sg_ready_state defaults to 2
+    # even when no controller exists, so the dashboard needs an
+    # explicit signal to distinguish "unconfigured" from "in normal").
+    BinarySensorEntityDescription(
+        key="heat_pump_registered",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+    ),
     # Phase 7: Utility signal active
     BinarySensorEntityDescription(
         key="utility_signal_active",

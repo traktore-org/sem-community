@@ -944,7 +944,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         # Register heat pump SG-Ready controller if configured
         hp_relay1 = full_config.get("heat_pump_relay1_entity")
         hp_relay2 = full_config.get("heat_pump_relay2_entity")
-        if hp_relay1 and hp_relay2:
+        hp_climate = full_config.get("heat_pump_climate_entity")
+        has_sg_ready = bool(hp_relay1 and hp_relay2)
+        has_climate = bool(hp_climate)
+        # #437: registration was gated on (relay1 AND relay2) — too
+        # strict for non-SG-Ready heat pumps (Nibe, Mitsubishi, Daikin
+        # etc.) that only expose a ``climate`` entity. The controller
+        # itself already handles climate-only mode internally (the
+        # ``_set_sg_ready_state`` ``no_relays_configured`` branch is
+        # exercised by the #421 audit telemetry tests). Widen the gate
+        # to (relays) OR (climate) so climate-only installs get
+        # automatic setpoint boost on surplus.
+        if has_sg_ready or has_climate:
             from .devices.heat_pump_controller import HeatPumpController
             hp_device = HeatPumpController(
                 hass=hass,
@@ -954,7 +965,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 priority=int(full_config.get("heat_pump_priority", 4)),
                 relay1_entity_id=hp_relay1,
                 relay2_entity_id=hp_relay2,
-                climate_entity_id=full_config.get("heat_pump_climate_entity"),
+                climate_entity_id=hp_climate,
                 power_entity_id=full_config.get("heat_pump_power_sensor"),
                 temperature_entity_id=full_config.get("heat_pump_temperature_sensor"),
                 boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
@@ -962,13 +973,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 force_on_threshold=float(full_config.get("heat_pump_force_on_threshold", 5000)),
             )
             coordinator._surplus_controller.register_device(hp_device)
+            mode_label = (
+                "SG-Ready+climate" if has_sg_ready and has_climate
+                else "SG-Ready only" if has_sg_ready
+                else "climate-only setpoint boost"
+            )
             _LOGGER.info(
-                "Heat pump registered as SG-Ready device "
-                "(priority %d, relay1=%s, relay2=%s)",
-                hp_device.priority, hp_relay1, hp_relay2,
+                "Heat pump registered (mode=%s, priority=%d, "
+                "relay1=%s, relay2=%s, climate=%s)",
+                mode_label, hp_device.priority,
+                hp_relay1 or "—", hp_relay2 or "—", hp_climate or "—",
             )
         else:
-            _LOGGER.debug("Heat pump not configured (no relay entities)")
+            _LOGGER.debug(
+                "Heat pump not configured (no relay entities AND "
+                "no climate entity)"
+            )
 
     except Exception:
         # Optional feature — keep setup alive so SEM still loads with

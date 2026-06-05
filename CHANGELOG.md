@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.1] - 05.06.2026
+
+## 🧪 Beta Release — first v1.7.1 beta
+
+_Changes since [1.7.0](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0)_
+
+First feature release on top of v1.7.0 stable. Closes the heat pump integration gap surfaced by discussion #432.
+
+### 🚀 Features and enhancements
+
+- **Heat pump climate-only registration** — `__init__.py` registration gate widened from `(relay1 AND relay2)` to `(relay1 AND relay2) OR climate_entity`. Nibe, Mitsubishi, Daikin, and any HA-controlled heat pump that exposes a `climate.*` entity but no SG-Ready relays can now configure SEM's heat pump boost automation. The `HeatPumpController` itself already supported the climate-only path internally (the #421 audit telemetry's `relay_path = no_relays_configured` branch was the proof). Config flow gains explicit two-path description (SG-Ready relays vs climate-only setpoint boost) plus form validation that rejects half-configured SG-Ready (one relay without the other AND no climate fallback). New `error.heat_pump_partial_relays` translation key. Reported by @RienduPre in discussion #432 (by @traktore-org, fixes #437)
+- **Heat pump dashboard section** — `sem-control-card` gets a new "Heat Pump" section with mode (SG-Ready+climate / SG-Ready only / climate-only), current SG-Ready state, and the boost offset stepper. Auto-hides when no heat pump is registered using a new `binary_sensor.sem_heat_pump_registered` presence flag (needed because `heat_pump_sg_ready_state` defaults to `2 (NORMAL)` even when no controller exists). New translation keys: `heat_pump_title`, `heat_pump_mode`, `heat_pump_sg_ready_state`, `heat_pump_boost_offset`, `heat_pump_not_configured` (by @traktore-org, refs #437)
+
 # [1.7.0] - 04.06.2026
 
 ## 🚀 Stable Release

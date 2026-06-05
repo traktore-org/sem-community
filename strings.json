@@ -94,6 +94,7 @@
       "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
       "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
       "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
+      "heat_pump_partial_relays": "SG-Ready needs BOTH relay entities. Set both relays — or leave both empty and configure only the climate entity for climate-only setpoint boost.",
       "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
       "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
     },
@@ -138,21 +139,21 @@
         }
       },
       "heat_pump": {
-        "title": "Heat Pump (SG-Ready)",
-        "description": "Configure your SG-Ready heat pump for solar surplus control. Both relay entities are required for SG-Ready operation. Leave empty to skip.",
+        "title": "Heat Pump",
+        "description": "Configure your heat pump for solar surplus boost. Two control paths are supported:\n• **SG-Ready** — set both relay entities (Viessmann, Stiebel Eltron, Vaillant).\n• **Climate-only** — set just the climate entity (Nibe, Mitsubishi, Daikin and any HA-controlled heat pump without SG-Ready relays).\nBoth paths can also be combined. Leave all empty to skip.",
         "data": {
-          "heat_pump_relay1_entity": "SG-Ready Relay 1 (switch entity)",
-          "heat_pump_relay2_entity": "SG-Ready Relay 2 (switch entity)",
-          "heat_pump_climate_entity": "Climate entity for temperature boost (optional)",
+          "heat_pump_relay1_entity": "SG-Ready Relay 1 (optional switch entity)",
+          "heat_pump_relay2_entity": "SG-Ready Relay 2 (optional switch entity)",
+          "heat_pump_climate_entity": "Climate entity for setpoint boost (optional)",
           "heat_pump_power_sensor": "Power sensor (optional)",
           "heat_pump_boost_offset": "Temperature boost offset (°C)",
           "heat_pump_max_setpoint": "Maximum temperature setpoint (°C)",
           "heat_pump_priority": "Surplus priority (1=highest)"
         },
         "data_description": {
-          "heat_pump_relay1_entity": "Switch entity for SG-Ready relay 1 (normal operation signal).",
-          "heat_pump_relay2_entity": "Switch entity for SG-Ready relay 2 (surplus boost signal).",
-          "heat_pump_climate_entity": "Optional climate entity used to raise the setpoint during solar surplus.",
+          "heat_pump_relay1_entity": "Switch entity for SG-Ready relay 1 (normal operation signal). Set together with relay 2 for SG-Ready protocol.",
+          "heat_pump_relay2_entity": "Switch entity for SG-Ready relay 2 (surplus boost signal). Set together with relay 1 for SG-Ready protocol.",
+          "heat_pump_climate_entity": "Climate entity used to raise the setpoint during solar surplus. Sufficient on its own for climate-only mode (no relays needed).",
           "heat_pump_power_sensor": "Optional sensor (W) reporting the heat pump's current power consumption.",
           "heat_pump_boost_offset": "Degrees Celsius added to the normal setpoint during a solar surplus boost.",
           "heat_pump_max_setpoint": "Upper temperature limit (°C) SEM will set during a boost cycle.",

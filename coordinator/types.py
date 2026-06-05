@@ -593,7 +593,15 @@ class TariffSensorData:
 
 @dataclass
 class HeatPumpSensorData:
-    """Heat pump data for coordinator sensors."""
+    """Heat pump data for coordinator sensors.
+
+    The ``heat_pump_registered`` flag distinguishes "no controller
+    registered" from "controller registered, currently in NORMAL
+    state" — both produce ``heat_pump_sg_ready_state == 2`` so the
+    presence flag is needed for the dashboard auto-hide logic on
+    the heat pump section (#437).
+    """
+    heat_pump_registered: bool = False
     heat_pump_mode: str = "normal"
     heat_pump_sg_ready_state: int = 2
     heat_pump_solar_boost: bool = False
@@ -1003,6 +1011,7 @@ class SEMData:
             "tariff_classifier_path": self.tariff.tariff_classifier_path,
 
             # Heat pump (Phase 2)
+            "heat_pump_registered": self.heat_pump.heat_pump_registered,
             "heat_pump_mode": self.heat_pump.heat_pump_mode,
             "heat_pump_sg_ready_state": self.heat_pump.heat_pump_sg_ready_state,
             "heat_pump_solar_boost": self.heat_pump.heat_pump_solar_boost,

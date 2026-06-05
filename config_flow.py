@@ -1648,12 +1648,45 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_heat_pump(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle heat pump SG-Ready configuration."""
+        """Handle heat pump SG-Ready configuration.
+
+        Two control paths are supported (#437):
+
+        - **SG-Ready** — configure both relay entities. Drives the heat
+          pump via the standard SG-Ready 4-state protocol (BLOCKED /
+          NORMAL / BOOST / FORCE_ON). For Viessmann / Stiebel Eltron /
+          Vaillant and similar hardware-relay setups.
+        - **Climate-only** — configure only ``heat_pump_climate_entity``.
+          Drives ``climate.set_temperature`` with ``boost_offset``
+          increments when surplus is available. For Nibe, Mitsubishi,
+          Daikin and any integration that exposes a climate entity but
+          no SG-Ready binary inputs.
+
+        Both paths can also coexist (SG-Ready relays + climate boost
+        for additional thermal storage).
+
+        Configuring no relays AND no climate entity = the heat pump
+        step is intentionally skipped (existing behaviour, leaves the
+        controller unregistered).
+        """
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_battery_scheduler()
+            # #437: validate the two-path rule — if the user fills ONE
+            # of the relay entities but not BOTH, AND has no climate
+            # entity, the controller can't be driven. Reject so the
+            # user doesn't ship a half-configured heat pump that
+            # silently does nothing.
+            relay1 = user_input.get("heat_pump_relay1_entity")
+            relay2 = user_input.get("heat_pump_relay2_entity")
+            climate = user_input.get("heat_pump_climate_entity")
+            has_one_relay = bool(relay1) ^ bool(relay2)
+            has_climate = bool(climate)
+            if has_one_relay and not has_climate:
+                errors["base"] = "heat_pump_partial_relays"
+            else:
+                self._data.update(user_input)
+                return await self.async_step_battery_scheduler()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)

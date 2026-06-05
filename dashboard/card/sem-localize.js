@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-02T20:30:05.396405+00:00
+// Generated: 2026-06-05T11:13:41.613832+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -252,6 +252,11 @@ const _semTranslations = {
     "legionella_last_cycle": "Last disinfection cycle",
     "legionella_overdue_warning": "Legionella prevention overdue!",
     "hot_water_title": "Hot Water",
+    "heat_pump_title": "Heat Pump",
+    "heat_pump_mode": "Mode",
+    "heat_pump_sg_ready_state": "SG-Ready State",
+    "heat_pump_boost_offset": "Boost Offset",
+    "heat_pump_not_configured": "No heat pump configured — set relays (SG-Ready) or a climate entity (climate-only) in Settings → SEM → Heat Pump.",
     "max_temperature": "Max Temperature",
     "solar_heating_target": "Solar Heating Target",
     "legionella_disinfection_target": "Legionella Disinfection Target",
