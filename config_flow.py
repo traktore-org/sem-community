@@ -149,7 +149,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # v9 (#440 ADR 0010 #3): add ``vehicle_min_current`` to each
     #     ``ev_chargers`` entry (default None = use the loadpoint
     #     ``ev_min_current``). Optional per-car handshake-floor override.
-    VERSION = 9
+    # v10 (#441): rename per-charger ``ev_night_initial_current`` to
+    #     ``initial_current`` (decouples from the misleading "night"
+    #     prefix — the value is the session-start ramp current, applied
+    #     whenever a session begins). Display: "Vehicle Start Amps".
+    VERSION = 10
 
     @staticmethod
     @callback
@@ -435,7 +439,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 ),
                 # #397: per-charger tunables — `ev_surplus_priority`,
-                # `daily_ev_target` + `_max`, `ev_night_initial_current`,
+                # `daily_ev_target` + `_max`, `initial_current`,
                 # `ev_min_current`, `ev_target_soc` + `_max`,
                 # `ev_battery_capacity_kwh`, `vehicle_soc_entity` — all live
                 # in OptionsFlow only. PR #390 surfaced them at install time
@@ -1049,8 +1053,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     )
                 ),
                 vol.Optional(
-                    "ev_night_initial_current",
-                    default=self._data.get("ev_night_initial_current", 10),
+                    "initial_current",
+                    default=self._data.get("initial_current", 10),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=6, max=32, step=1,
@@ -1212,8 +1216,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     )
                 ),
                 vol.Optional(
-                    "ev_night_initial_current",
-                    default=charger.get("ev_night_initial_current", self._data.get("ev_night_initial_current", 10)),
+                    "initial_current",
+                    default=charger.get("initial_current", self._data.get("initial_current", 10)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=6, max=32, step=1,

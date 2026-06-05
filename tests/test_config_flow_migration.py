@@ -8,7 +8,7 @@ mock just recorded the call. Here the entry registry is real, so a
 broken migration step that forgets to bump ``entry.version`` or that
 drops a field on the storage round-trip fails loudly.
 
-Coverage map (the 8 hops, plus failure + multi-hop fall-through):
+Coverage map (the 9 hops, plus failure + multi-hop fall-through):
 
   * v1 → v2 (#98): legacy ``battery_priority_soc`` semantics remap
     + 4-zone defaults seeding
@@ -21,7 +21,9 @@ Coverage map (the 8 hops, plus failure + multi-hop fall-through):
   * v7 → v8 (#359): tariff_classification_mode static→percentile for
     dynamic-tariff entries
   * v8 → v9 (#440): seed ``vehicle_min_current`` per charger
-  * v1 → v9 multi-hop: every step composes cleanly
+  * v9 → v10 (#441): rename ``ev_night_initial_current`` →
+    ``initial_current`` at both top-level and per-charger
+  * v1 → v10 multi-hop: every step composes cleanly
   * migration step raises: returns False, entry unchanged
 
 What the dict-mocked tests CAN'T see and these tests DO:
@@ -69,7 +71,7 @@ async def test_v1_to_v2_remaps_legacy_battery_priority_soc(hass) -> None:
     # Re-read from the registry, not the local var — the entry registry
     # owns the post-migration truth.
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 9  # all hops compose
+    assert updated.version == 10  # all hops compose
     assert updated.data["battery_priority_soc"] == 30
 
 
@@ -259,7 +261,7 @@ async def test_full_chain_v1_to_v7(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 9
+    assert updated.version == 10
     # v1→v2 effect
     assert updated.data["battery_priority_soc"] == 30
     # v2→v3 effect — flat → list
@@ -305,7 +307,7 @@ async def test_v7_to_v8_flips_static_to_percentile_for_dynamic_tariff(hass) -> N
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 9
+    assert updated.version == 10
     assert updated.options["tariff_classification_mode"] == "percentile"
 
 
@@ -327,7 +329,7 @@ async def test_v7_to_v8_keeps_static_when_tariff_mode_is_not_dynamic(hass) -> No
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 9
+    assert updated.version == 10
     assert updated.options["tariff_classification_mode"] == "static"
 
 
@@ -360,20 +362,31 @@ async def test_v8_to_v9_seeds_vehicle_min_current(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 9
+    assert updated.version == 10
     chargers = updated.options["ev_chargers"]
     assert chargers[0]["vehicle_min_current"] is None
     assert chargers[1]["vehicle_min_current"] == 9
 
 
 @pytest.mark.asyncio
-async def test_v9_already_current_is_noop(hass) -> None:
-    """An entry already at v9 sails through every ``if version < N`` gate."""
-    payload_data = {"battery_priority_soc": 30}
-    payload_options = {"ev_chargers": [
-        {"id": "ev_charger", "charge_mode": "solar_only",
-         "vehicle_min_current": None}
-    ]}
+async def test_v9_to_v10_renames_night_initial_current(hass) -> None:
+    """v9 → v10 (#441) — rename ``ev_night_initial_current`` to
+    ``initial_current`` on every ``ev_chargers`` entry AND at the
+    top level. The "night" prefix was misleading — the value is the
+    session-start ramp current, applied whenever a session begins."""
+    payload_data = {
+        "battery_priority_soc": 30,
+        "ev_night_initial_current": 12,  # legacy global key — must rename
+    }
+    payload_options = {
+        "ev_chargers": [
+            {"id": "ev_charger", "charge_mode": "solar_only",
+             "vehicle_min_current": None,
+             "ev_night_initial_current": 10},  # per-charger — must rename
+            {"id": "ev_charger_1", "charge_mode": "min_plus_solar",
+             "initial_current": 14},  # already migrated — must survive
+        ]
+    }
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=9,
@@ -385,6 +398,36 @@ async def test_v9_already_current_is_noop(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 9
+    assert updated.version == 10
+    # Top-level legacy global key renamed
+    assert "ev_night_initial_current" not in updated.data
+    assert updated.data["initial_current"] == 12
+    # Per-charger keys renamed; pre-renamed entries untouched
+    chargers = updated.options["ev_chargers"]
+    assert "ev_night_initial_current" not in chargers[0]
+    assert chargers[0]["initial_current"] == 10
+    assert chargers[1]["initial_current"] == 14
+
+
+@pytest.mark.asyncio
+async def test_v10_already_current_is_noop(hass) -> None:
+    """An entry already at v10 sails through every ``if version < N`` gate."""
+    payload_data = {"battery_priority_soc": 30}
+    payload_options = {"ev_chargers": [
+        {"id": "ev_charger", "charge_mode": "solar_only",
+         "vehicle_min_current": None, "initial_current": 10}
+    ]}
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=10,
+        data=payload_data,
+        options=payload_options,
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.version == 10
     assert updated.data == payload_data
     assert updated.options == payload_options

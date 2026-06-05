@@ -457,7 +457,7 @@ class SEMEVStatusCard extends SEMLitBase {
         const isCharging = power > 50;
         const statusText = isCharging ? this._t('charging') : isConnected ? this._t('connected') : this._t('idle');
 
-        const startAmps = this._entityVal(`number.sem_charger_${id}_night_initial_current`, 10);
+        const startAmps = this._entityVal(`number.sem_charger_${id}_initial_current`, 10);
         const minAmps = this._entityVal(`number.sem_charger_${id}_minimum_current`, 6);
         const vehicleMinAmps = this._entityVal(`number.sem_charger_${id}_vehicle_min_current`, minAmps);
         const capacityKwh = this._entityVal(`number.sem_charger_${id}_ev_battery_capacity_kwh`, 40);
@@ -663,7 +663,7 @@ class SEMEVStatusCard extends SEMLitBase {
                     <div
                         class="setting-item clickable"
                         @click=${() => {
-                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_night_initial_current` } });
+                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_initial_current` } });
                             this.dispatchEvent(event);
                         }}
                     >

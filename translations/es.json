@@ -1076,9 +1076,6 @@
       "system_size_kwp": {
         "name": "Tamaño Instalación PV"
       },
-      "ev_night_initial_current": {
-        "name": "Corriente Inicial Noche VE"
-      },
       "ev_min_current": {
         "name": "Corriente Mínima VE"
       },
@@ -1144,6 +1141,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Consumo del vehículo (kWh/100km)"
+      },
+      "initial_current": {
+        "name": "Corriente de arranque VE"
       }
     },
     "select": {

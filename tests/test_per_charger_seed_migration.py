@@ -38,13 +38,14 @@ async def test_seeds_all_eight_from_global():
     )
     assert await async_migrate_entry(hass, entry) is True
     c, kwargs = _seeded_charger(hass)
-    assert kwargs["version"] == 9  # bumped in v8→v9 (#440)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
+    assert kwargs["version"] == 10  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
     assert c["daily_ev_target"] == 8
     assert c["daily_ev_target_max"] == 50
     assert c["ev_target_soc"] == 70
     assert c["ev_target_soc_max"] == 90
     assert c["ev_min_current"] == 6
-    assert c["ev_night_initial_current"] == 10
+    # (#441) v9→v10 renamed ev_night_initial_current → initial_current
+    assert c["initial_current"] == 10
     assert c["ev_kwh_per_100km"] == 18
     assert c["ev_target_type"] == "soc"
 
@@ -90,7 +91,7 @@ async def test_no_chargers_is_safe_and_bumps_version():
     hass = MagicMock()
     entry = _entry(options={}, data={"daily_ev_target": 8})
     assert await async_migrate_entry(hass, entry) is True
-    assert hass.config_entries.async_update_entry.call_args.kwargs["version"] == 9  # bumped in v8→v9 (#440)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
+    assert hass.config_entries.async_update_entry.call_args.kwargs["version"] == 10  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
 
 
 @pytest.mark.asyncio

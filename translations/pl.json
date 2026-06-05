@@ -1076,9 +1076,6 @@
       "system_size_kwp": {
         "name": "PV System Size"
       },
-      "ev_night_initial_current": {
-        "name": "EV Night Initial Current"
-      },
       "ev_min_current": {
         "name": "EV Minimum Current"
       },
@@ -1144,6 +1141,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Zużycie pojazdu (kWh/100km)"
+      },
+      "initial_current": {
+        "name": "Prąd startowy pojazdu"
       }
     },
     "select": {

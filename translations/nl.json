@@ -1076,9 +1076,6 @@
       "system_size_kwp": {
         "name": "PV-systeemgrootte"
       },
-      "ev_night_initial_current": {
-        "name": "EV Nacht Beginstroom"
-      },
       "ev_min_current": {
         "name": "EV Minimale Stroom"
       },
@@ -1144,6 +1141,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Voertuigverbruik (kWh/100km)"
+      },
+      "initial_current": {
+        "name": "Voertuig Startstroom"
       }
     },
     "select": {

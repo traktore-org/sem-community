@@ -301,6 +301,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             _SEED_KEYS = (
                 "daily_ev_target", "daily_ev_target_max",
                 "ev_target_soc", "ev_target_soc_max",
+                # ``ev_night_initial_current`` is the LEGACY key name at
+                # v3 time — v9→v10 (#441) renames it to ``initial_current``
+                # later in the chain. Keep the legacy spelling here so a
+                # v3 entry's global value is actually picked up.
                 "ev_min_current", "ev_night_initial_current",
                 "ev_kwh_per_100km", "ev_target_type",
                 # #255 Phase 4 — also converted to per-charger
@@ -566,6 +570,47 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
         except Exception as e:
             _LOGGER.error(
                 "Migration from v%s to v9 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
+    if entry.version < 10:
+        try:
+            # v9 → v10 (#441): rename ``ev_night_initial_current`` to
+            # ``initial_current`` at both the top level (legacy global
+            # key) and on each ``ev_chargers`` entry. The "night" prefix
+            # was misleading — the value is the session-start ramp
+            # current, applied whenever a session begins, not strictly
+            # at nighttime. Display label moves from "Start Amps" to
+            # "Vehicle Start Amps" to group with the new per-vehicle
+            # Min Amps. The old ``number.sem_charger_<id>_night_initial_current``
+            # entity is auto-removed by ``number.py:_cleanup_stale_entities``
+            # on next setup (the description key is renamed so the old
+            # key is no longer in the valid_keys set).
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            for bag in (new_data, new_options):
+                if "ev_night_initial_current" in bag and "initial_current" not in bag:
+                    bag["initial_current"] = bag.pop("ev_night_initial_current")
+                elif "ev_night_initial_current" in bag:
+                    bag.pop("ev_night_initial_current")  # both present — drop stale
+                chargers = bag.get("ev_chargers")
+                if isinstance(chargers, list):
+                    for c in chargers:
+                        if not isinstance(c, dict):
+                            continue
+                        if "ev_night_initial_current" in c and "initial_current" not in c:
+                            c["initial_current"] = c.pop("ev_night_initial_current")
+                        elif "ev_night_initial_current" in c:
+                            c.pop("ev_night_initial_current")
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=10, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v10 failed — keeping original config: %s",
                 entry.version, e,
             )
             return False

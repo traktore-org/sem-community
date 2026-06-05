@@ -1076,9 +1076,6 @@
       "system_size_kwp": {
         "name": "PV-Anlagengröße"
       },
-      "ev_night_initial_current": {
-        "name": "EV Nacht-Startstrom"
-      },
       "ev_min_current": {
         "name": "EV Minimalstrom"
       },
@@ -1144,6 +1141,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Fahrzeugverbrauch (kWh/100km)"
+      },
+      "initial_current": {
+        "name": "Fahrzeug Startstrom"
       }
     },
     "select": {

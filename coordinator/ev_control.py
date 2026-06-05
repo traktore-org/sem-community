@@ -365,8 +365,8 @@ class EVControlMixin:
             # Read configurable EV parameters — per-charger overrides (#193)
             charger_cfg = self._get_active_charger_config()
             initial_amps = int(charger_cfg.get(
-                "ev_night_initial_current",
-                self.config.get("ev_night_initial_current", 10),
+                "initial_current",
+                self.config.get("initial_current", 10),
             ))
             # (#440 ADR 0010 #3) effective min = max(loadpoint_min, vehicle_min)
             from .decide import effective_min_amps

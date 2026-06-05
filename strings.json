@@ -1112,8 +1112,8 @@
       "night_latest_end": {
         "name": "Night Latest End"
       },
-      "ev_night_initial_current": {
-        "name": "EV Night Initial Current"
+      "initial_current": {
+        "name": "Vehicle Start Amps"
       },
       "ev_minimum_current": {
         "name": "EV Minimum Current"

@@ -225,7 +225,7 @@ class SEMSolarCard extends SEMLitBase {
                     border-radius: 10px;
                 }
                 .section-title {
-                    font-size: 10px; font-weight: 600; text-transform: uppercase;
+                    font-size: 12px; font-weight: 600; text-transform: uppercase;
                     letter-spacing: 0.6px; color: #ff9800; margin-bottom: 8px;
                 }
 
@@ -237,15 +237,15 @@ class SEMSolarCard extends SEMLitBase {
                 }
                 .flow-row { display: flex; align-items: center; gap: 6px; }
                 .flow-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-                .flow-label { font-size: 11px; color: var(--secondary-text-color,${T.textSec}); flex: 1; }
+                .flow-label { font-size: 12px; color: var(--secondary-text-color,${T.textSec}); flex: 1; }
                 .flow-vals { text-align: right; }
                 .flow-power {
-                    font-size: 11px; font-weight: 600;
+                    font-size: 13px; font-weight: 600;
                     font-variant-numeric: tabular-nums;
                     color: var(--primary-text-color,${T.text});
                 }
                 .flow-energy {
-                    font-size: 9px; color: var(--secondary-text-color,${T.textSec});
+                    font-size: 10px; color: var(--secondary-text-color,${T.textSec});
                     font-variant-numeric: tabular-nums;
                 }
 
@@ -279,11 +279,11 @@ class SEMSolarCard extends SEMLitBase {
                     padding: 2px 0;
                 }
                 .metric-label {
-                    font-size: 11px; color: var(--secondary-text-color,${T.textSec});
+                    font-size: 12px; color: var(--secondary-text-color,${T.textSec});
                     font-weight: 500;
                 }
                 .metric-val {
-                    font-size: 12px; font-weight: 600;
+                    font-size: 13px; font-weight: 600;
                     font-variant-numeric: tabular-nums;
                     color: var(--primary-text-color,${T.text});
                 }
@@ -297,11 +297,11 @@ class SEMSolarCard extends SEMLitBase {
                     border-radius: 10px;
                 }
                 .chip-label {
-                    font-size: 10px; color: var(--secondary-text-color,${T.textTertiary});
+                    font-size: 12px; color: var(--secondary-text-color,${T.textTertiary});
                     font-weight: 500; margin-bottom: 2px;
                 }
                 .chip-value {
-                    font-size: 13px; font-weight: 600; color: #ff9800;
+                    font-size: 14px; font-weight: 600; color: #ff9800;
                     font-variant-numeric: tabular-nums;
                 }
                 /* v1.7.1 / #312: per-PV-string chip strip styles */

@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.5] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.4](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.4)_
+
+### 🚀 Renames + polish
+
+- **`night_initial_current` renamed to `initial_current` ("Vehicle Start Amps")** (#441). The "night" prefix on the per-charger session-start ramp current was misleading — the value is applied whenever a charging session begins, not strictly at nighttime. Renamed config key `ev_night_initial_current` → `initial_current` (top-level + per-charger), entity key `number.sem_charger_<id>_night_initial_current` → `number.sem_charger_<id>_initial_current`, display name "Start Amps" → "Vehicle Start Amps" (groups with the new "Vehicle Min Amps" tile from beta.4). Schema migration v9 → v10 renames the field on existing entries; the old number entity is auto-removed by `number.py:_cleanup_stale_entities` on next setup. New `number.py` icon `mdi:car-clock`. Translation strings updated across 15 languages. (by @traktore-org)
+- **Solar card font sizes bumped to match other cards** — the PV1/PV2 / Solar Flows Today / Per String / Forecast & Performance card was rendering at 10-11px labels and 11-12px values vs the battery card's 12-13px. Section titles, flow labels, flow values, metric labels/values, and chip labels/values all bumped one tier up for readability. (by @traktore-org)
+
 # [1.7.1-beta.4] - 06.06.2026
 
 ## 🧪 Beta Release
