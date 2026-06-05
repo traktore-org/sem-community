@@ -549,9 +549,7 @@ class SEMBatteryCard extends SEMLitBase {
                                 style="--mdc-icon-size:14px;color:${sessionActive ? sessColor : T.textSec}">
                             </ha-icon>
                             <span class="sess-title" style="color:${sessionActive ? sessColor : T.textSec}">
-                                ${sessionActive
-                                    ? (isChargeSess ? this._t('charging') : this._t('discharging'))
-                                    : this._t('idle')}
+                                ${this._t('current_session')}
                             </span>
                         </div>
                         ${sessionActive ? html`

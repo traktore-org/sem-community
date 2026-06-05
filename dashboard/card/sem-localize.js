@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-05T19:27:44.533177+00:00
+// Generated: 2026-06-05T21:48:04.221326+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -843,7 +843,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Drains whenever total home demand exceeds solar, down to {buffer}% (buffer SOC). Protected below buffer.",
     "charge_mode_hint_off_surplus": "No charge. Contactor open.",
     "charge_mode_hint_off_overnight": "No charge.",
-    "charge_mode_hint_off_battery": "Untouched."
+    "charge_mode_hint_off_battery": "Untouched.",
+    "current_session": "Current Session"
   },
   "de": {
     "charging": "Laden",
@@ -1682,7 +1683,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Entlädt wenn Hausbedarf den Solar-Ertrag übersteigt, bis runter auf {buffer}% (Puffer-SoC). Darunter geschützt.",
     "charge_mode_hint_off_surplus": "Kein Laden. Schütz offen.",
     "charge_mode_hint_off_overnight": "Kein Laden.",
-    "charge_mode_hint_off_battery": "Unangetastet."
+    "charge_mode_hint_off_battery": "Unangetastet.",
+    "current_session": "Aktuelle Sitzung"
   },
   "fr": {
     "charging": "En charge",
@@ -2521,7 +2523,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Se décharge dès que la demande maison dépasse le solaire, jusqu'à {buffer}% (SoC tampon). Protégée en dessous.",
     "charge_mode_hint_off_surplus": "Pas de charge. Contacteur ouvert.",
     "charge_mode_hint_off_overnight": "Pas de charge.",
-    "charge_mode_hint_off_battery": "Intacte."
+    "charge_mode_hint_off_battery": "Intacte.",
+    "current_session": "Session en cours"
   },
   "es": {
     "charging": "Cargando",
@@ -3360,7 +3363,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Se descarga cuando la demanda doméstica supera al solar, hasta {buffer}% (SoC búfer). Protegida por debajo.",
     "charge_mode_hint_off_surplus": "Sin carga. Contactor abierto.",
     "charge_mode_hint_off_overnight": "Sin carga.",
-    "charge_mode_hint_off_battery": "Intacta."
+    "charge_mode_hint_off_battery": "Intacta.",
+    "current_session": "Sesión actual"
   },
   "it": {
     "charging": "In carica",
@@ -4199,7 +4203,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Si scarica quando la domanda di casa supera il solare, fino a {buffer}% (SoC buffer). Protetta sotto il buffer.",
     "charge_mode_hint_off_surplus": "Nessuna carica. Contattore aperto.",
     "charge_mode_hint_off_overnight": "Nessuna carica.",
-    "charge_mode_hint_off_battery": "Intatta."
+    "charge_mode_hint_off_battery": "Intatta.",
+    "current_session": "Sessione corrente"
   },
   "nl": {
     "charging": "Laden",
@@ -5038,7 +5043,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Ontlaadt zodra het huisverbruik het zonopwekken overstijgt, tot {buffer}% (buffer-SoC). Daaronder beschermd.",
     "charge_mode_hint_off_surplus": "Geen lading. Schakelaar open.",
     "charge_mode_hint_off_overnight": "Geen lading.",
-    "charge_mode_hint_off_battery": "Ongebruikt."
+    "charge_mode_hint_off_battery": "Ongebruikt.",
+    "current_session": "Huidige Sessie"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5877,7 +5883,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Vybíjí se, když spotřeba domu překračuje PV, až na {buffer}% (rezervní SoC). Pod rezervou chráněna.",
     "charge_mode_hint_off_surplus": "Bez nabíjení. Stykač otevřen.",
     "charge_mode_hint_off_overnight": "Bez nabíjení.",
-    "charge_mode_hint_off_battery": "Nedotčená."
+    "charge_mode_hint_off_battery": "Nedotčená.",
+    "current_session": "Aktuální relace"
   },
   "da": {
     "charging": "Oplader",
@@ -6716,7 +6723,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Aflades når husets forbrug overstiger sol, ned til {buffer}% (buffer-SoC). Beskyttet under buffer.",
     "charge_mode_hint_off_surplus": "Ingen opladning. Kontaktor åben.",
     "charge_mode_hint_off_overnight": "Ingen opladning.",
-    "charge_mode_hint_off_battery": "Urørt."
+    "charge_mode_hint_off_battery": "Urørt.",
+    "current_session": "Nuværende session"
   },
   "fi": {
     "charging": "Lataus",
@@ -7555,7 +7563,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Purkautuu, kun talon kulutus ylittää auringon, aina {buffer}% (puskuri-SoC) saakka. Suojattu puskurin alapuolella.",
     "charge_mode_hint_off_surplus": "Ei latausta. Kontaktori auki.",
     "charge_mode_hint_off_overnight": "Ei latausta.",
-    "charge_mode_hint_off_battery": "Koskematon."
+    "charge_mode_hint_off_battery": "Koskematon.",
+    "current_session": "Nykyinen istunto"
   },
   "hu": {
     "charging": "Töltés",
@@ -8394,7 +8403,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Akkor ürül, amikor a házi igény meghaladja a napot, egészen {buffer}% (puffer SoC)-ig. Puffer alatt védett.",
     "charge_mode_hint_off_surplus": "Nincs töltés. Kontaktor nyitva.",
     "charge_mode_hint_off_overnight": "Nincs töltés.",
-    "charge_mode_hint_off_battery": "Érintetlen."
+    "charge_mode_hint_off_battery": "Érintetlen.",
+    "current_session": "Aktuális munkamenet"
   },
   "no": {
     "charging": "Lader",
@@ -9233,7 +9243,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Utlades når husets forbruk overstiger solen, ned til {buffer}% (buffer-SoC). Beskyttet under buffer.",
     "charge_mode_hint_off_surplus": "Ingen lading. Kontaktor åpen.",
     "charge_mode_hint_off_overnight": "Ingen lading.",
-    "charge_mode_hint_off_battery": "Urørt."
+    "charge_mode_hint_off_battery": "Urørt.",
+    "current_session": "Gjeldende økt"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -10072,7 +10083,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Rozładowuje się, gdy zapotrzebowanie domu przekracza PV, aż do {buffer}% (SoC bufora). Poniżej chroniona.",
     "charge_mode_hint_off_surplus": "Brak ładowania. Stycznik otwarty.",
     "charge_mode_hint_off_overnight": "Brak ładowania.",
-    "charge_mode_hint_off_battery": "Nietknięta."
+    "charge_mode_hint_off_battery": "Nietknięta.",
+    "current_session": "Bieżąca sesja"
   },
   "pt": {
     "charging": "A carregar",
@@ -10911,7 +10923,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Descarrega quando a procura da casa excede o solar, até {buffer}% (SoC buffer). Protegida abaixo do buffer.",
     "charge_mode_hint_off_surplus": "Sem carga. Contactor aberto.",
     "charge_mode_hint_off_overnight": "Sem carga.",
-    "charge_mode_hint_off_battery": "Intacta."
+    "charge_mode_hint_off_battery": "Intacta.",
+    "current_session": "Sessão atual"
   },
   "ro": {
     "charging": "Încărcare",
@@ -11750,7 +11763,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Se descarcă când consumul casei depășește solarul, până la {buffer}% (SoC buffer). Protejată sub buffer.",
     "charge_mode_hint_off_surplus": "Fără încărcare. Contactor deschis.",
     "charge_mode_hint_off_overnight": "Fără încărcare.",
-    "charge_mode_hint_off_battery": "Neatinsă."
+    "charge_mode_hint_off_battery": "Neatinsă.",
+    "current_session": "Sesiune curentă"
   },
   "sv": {
     "charging": "Laddar",
@@ -12589,7 +12603,8 @@ const _semTranslations = {
     "charge_mode_hint_always_max_battery": "Laddas ur när husets förbrukning överstiger solen, ner till {buffer}% (buffert-SoC). Skyddat under buffert.",
     "charge_mode_hint_off_surplus": "Ingen laddning. Kontaktor öppen.",
     "charge_mode_hint_off_overnight": "Ingen laddning.",
-    "charge_mode_hint_off_battery": "Orörd."
+    "charge_mode_hint_off_battery": "Orörd.",
+    "current_session": "Aktuell session"
   }
 };
 

@@ -1629,7 +1629,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                                 style="--mdc-icon-size:14px;color:${z?L:t.textSec}">
                             </ha-icon>
                             <span class="sess-title" style="color:${z?L:t.textSec}">
-                                ${z?D?this._t("charging"):this._t("discharging"):this._t("idle")}
+                                ${this._t("current_session")}
                             </span>
                         </div>
                         ${z?H`
