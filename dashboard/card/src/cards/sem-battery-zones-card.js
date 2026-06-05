@@ -109,7 +109,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
                 .subtitle {
                     flex: 1;
                     text-align: right;
-                    font-size: 11px;
+                    font-size: 12px;
                     color: var(--secondary-text-color, ${T.textSec});
                     overflow: hidden;
                     text-overflow: ellipsis;

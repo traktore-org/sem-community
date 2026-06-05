@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-05T21:48:04.221326+00:00
+// Generated: 2026-06-05T22:35:04.265605+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -1684,7 +1684,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Kein Laden. Schütz offen.",
     "charge_mode_hint_off_overnight": "Kein Laden.",
     "charge_mode_hint_off_battery": "Unangetastet.",
-    "current_session": "Aktuelle Sitzung"
+    "current_session": "Aktuelle Sitzung",
+    "heat_pump_title": "Wärmepumpe",
+    "heat_pump_mode": "Modus",
+    "heat_pump_sg_ready_state": "SG-Ready Status",
+    "heat_pump_boost_offset": "Boost-Offset",
+    "heat_pump_not_configured": "Keine Wärmepumpe konfiguriert — Relais (SG-Ready) oder Climate-Entity (Climate-only) unter Einstellungen → SEM → Wärmepumpe setzen."
   },
   "fr": {
     "charging": "En charge",
@@ -2524,7 +2529,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Pas de charge. Contacteur ouvert.",
     "charge_mode_hint_off_overnight": "Pas de charge.",
     "charge_mode_hint_off_battery": "Intacte.",
-    "current_session": "Session en cours"
+    "current_session": "Session en cours",
+    "heat_pump_title": "Pompe à chaleur",
+    "heat_pump_mode": "Mode",
+    "heat_pump_sg_ready_state": "État SG-Ready",
+    "heat_pump_boost_offset": "Offset Boost",
+    "heat_pump_not_configured": "Aucune pompe à chaleur configurée — définissez les relais (SG-Ready) ou une entité climate (climate-only) dans Paramètres → SEM → Pompe à chaleur."
   },
   "es": {
     "charging": "Cargando",
@@ -3364,7 +3374,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Sin carga. Contactor abierto.",
     "charge_mode_hint_off_overnight": "Sin carga.",
     "charge_mode_hint_off_battery": "Intacta.",
-    "current_session": "Sesión actual"
+    "current_session": "Sesión actual",
+    "heat_pump_title": "Bomba de calor",
+    "heat_pump_mode": "Modo",
+    "heat_pump_sg_ready_state": "Estado SG-Ready",
+    "heat_pump_boost_offset": "Desplazamiento Boost",
+    "heat_pump_not_configured": "Sin bomba de calor configurada — defina los relés (SG-Ready) o una entidad climate (climate-only) en Configuración → SEM → Bomba de calor."
   },
   "it": {
     "charging": "In carica",
@@ -4204,7 +4219,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Nessuna carica. Contattore aperto.",
     "charge_mode_hint_off_overnight": "Nessuna carica.",
     "charge_mode_hint_off_battery": "Intatta.",
-    "current_session": "Sessione corrente"
+    "current_session": "Sessione corrente",
+    "heat_pump_title": "Pompa di calore",
+    "heat_pump_mode": "Modalità",
+    "heat_pump_sg_ready_state": "Stato SG-Ready",
+    "heat_pump_boost_offset": "Offset Boost",
+    "heat_pump_not_configured": "Nessuna pompa di calore configurata — imposta i relè (SG-Ready) o un'entità climate (climate-only) in Impostazioni → SEM → Pompa di calore."
   },
   "nl": {
     "charging": "Laden",
@@ -5044,7 +5064,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Geen lading. Schakelaar open.",
     "charge_mode_hint_off_overnight": "Geen lading.",
     "charge_mode_hint_off_battery": "Ongebruikt.",
-    "current_session": "Huidige Sessie"
+    "current_session": "Huidige Sessie",
+    "heat_pump_title": "Warmtepomp",
+    "heat_pump_mode": "Modus",
+    "heat_pump_sg_ready_state": "SG-Ready Status",
+    "heat_pump_boost_offset": "Boost Offset",
+    "heat_pump_not_configured": "Geen warmtepomp geconfigureerd — stel relais (SG-Ready) of een climate-entiteit (climate-only) in onder Instellingen → SEM → Warmtepomp."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -5884,7 +5909,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Bez nabíjení. Stykač otevřen.",
     "charge_mode_hint_off_overnight": "Bez nabíjení.",
     "charge_mode_hint_off_battery": "Nedotčená.",
-    "current_session": "Aktuální relace"
+    "current_session": "Aktuální relace",
+    "heat_pump_title": "Tepelné čerpadlo",
+    "heat_pump_mode": "Režim",
+    "heat_pump_sg_ready_state": "Stav SG-Ready",
+    "heat_pump_boost_offset": "Posun Boost",
+    "heat_pump_not_configured": "Tepelné čerpadlo není nakonfigurováno — nastavte relé (SG-Ready) nebo climate entitu (climate-only) v Nastavení → SEM → Tepelné čerpadlo."
   },
   "da": {
     "charging": "Oplader",
@@ -6724,7 +6754,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Ingen opladning. Kontaktor åben.",
     "charge_mode_hint_off_overnight": "Ingen opladning.",
     "charge_mode_hint_off_battery": "Urørt.",
-    "current_session": "Nuværende session"
+    "current_session": "Nuværende session",
+    "heat_pump_title": "Varmepumpe",
+    "heat_pump_mode": "Tilstand",
+    "heat_pump_sg_ready_state": "SG-Ready Status",
+    "heat_pump_boost_offset": "Boost Offset",
+    "heat_pump_not_configured": "Ingen varmepumpe konfigureret — sæt relæer (SG-Ready) eller en climate-entitet (climate-only) under Indstillinger → SEM → Varmepumpe."
   },
   "fi": {
     "charging": "Lataus",
@@ -7564,7 +7599,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Ei latausta. Kontaktori auki.",
     "charge_mode_hint_off_overnight": "Ei latausta.",
     "charge_mode_hint_off_battery": "Koskematon.",
-    "current_session": "Nykyinen istunto"
+    "current_session": "Nykyinen istunto",
+    "heat_pump_title": "Lämpöpumppu",
+    "heat_pump_mode": "Tila",
+    "heat_pump_sg_ready_state": "SG-Ready-tila",
+    "heat_pump_boost_offset": "Boost-poikkeama",
+    "heat_pump_not_configured": "Lämpöpumppua ei ole määritetty — aseta releet (SG-Ready) tai climate-entiteetti (climate-only) kohdassa Asetukset → SEM → Lämpöpumppu."
   },
   "hu": {
     "charging": "Töltés",
@@ -8404,7 +8444,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Nincs töltés. Kontaktor nyitva.",
     "charge_mode_hint_off_overnight": "Nincs töltés.",
     "charge_mode_hint_off_battery": "Érintetlen.",
-    "current_session": "Aktuális munkamenet"
+    "current_session": "Aktuális munkamenet",
+    "heat_pump_title": "Hőszivattyú",
+    "heat_pump_mode": "Mód",
+    "heat_pump_sg_ready_state": "SG-Ready állapot",
+    "heat_pump_boost_offset": "Boost eltolás",
+    "heat_pump_not_configured": "Nincs hőszivattyú beállítva — adja meg a reléket (SG-Ready) vagy egy climate entitást (climate-only) a Beállítások → SEM → Hőszivattyú menüben."
   },
   "no": {
     "charging": "Lader",
@@ -9244,7 +9289,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Ingen lading. Kontaktor åpen.",
     "charge_mode_hint_off_overnight": "Ingen lading.",
     "charge_mode_hint_off_battery": "Urørt.",
-    "current_session": "Gjeldende økt"
+    "current_session": "Gjeldende økt",
+    "heat_pump_title": "Varmepumpe",
+    "heat_pump_mode": "Modus",
+    "heat_pump_sg_ready_state": "SG-Ready-status",
+    "heat_pump_boost_offset": "Boost-offset",
+    "heat_pump_not_configured": "Ingen varmepumpe konfigurert — sett releer (SG-Ready) eller en climate-entitet (climate-only) under Innstillinger → SEM → Varmepumpe."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -10084,7 +10134,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Brak ładowania. Stycznik otwarty.",
     "charge_mode_hint_off_overnight": "Brak ładowania.",
     "charge_mode_hint_off_battery": "Nietknięta.",
-    "current_session": "Bieżąca sesja"
+    "current_session": "Bieżąca sesja",
+    "heat_pump_title": "Pompa ciepła",
+    "heat_pump_mode": "Tryb",
+    "heat_pump_sg_ready_state": "Status SG-Ready",
+    "heat_pump_boost_offset": "Przesunięcie Boost",
+    "heat_pump_not_configured": "Pompa ciepła nieskonfigurowana — ustaw przekaźniki (SG-Ready) lub encję climate (climate-only) w Ustawienia → SEM → Pompa ciepła."
   },
   "pt": {
     "charging": "A carregar",
@@ -10924,7 +10979,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Sem carga. Contactor aberto.",
     "charge_mode_hint_off_overnight": "Sem carga.",
     "charge_mode_hint_off_battery": "Intacta.",
-    "current_session": "Sessão atual"
+    "current_session": "Sessão atual",
+    "heat_pump_title": "Bomba de calor",
+    "heat_pump_mode": "Modo",
+    "heat_pump_sg_ready_state": "Estado SG-Ready",
+    "heat_pump_boost_offset": "Offset Boost",
+    "heat_pump_not_configured": "Nenhuma bomba de calor configurada — defina os relés (SG-Ready) ou uma entidade climate (climate-only) em Definições → SEM → Bomba de calor."
   },
   "ro": {
     "charging": "Încărcare",
@@ -11764,7 +11824,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Fără încărcare. Contactor deschis.",
     "charge_mode_hint_off_overnight": "Fără încărcare.",
     "charge_mode_hint_off_battery": "Neatinsă.",
-    "current_session": "Sesiune curentă"
+    "current_session": "Sesiune curentă",
+    "heat_pump_title": "Pompă de căldură",
+    "heat_pump_mode": "Mod",
+    "heat_pump_sg_ready_state": "Stare SG-Ready",
+    "heat_pump_boost_offset": "Decalaj Boost",
+    "heat_pump_not_configured": "Nicio pompă de căldură configurată — setați relee (SG-Ready) sau o entitate climate (climate-only) în Setări → SEM → Pompă de căldură."
   },
   "sv": {
     "charging": "Laddar",
@@ -12604,7 +12669,12 @@ const _semTranslations = {
     "charge_mode_hint_off_surplus": "Ingen laddning. Kontaktor öppen.",
     "charge_mode_hint_off_overnight": "Ingen laddning.",
     "charge_mode_hint_off_battery": "Orörd.",
-    "current_session": "Aktuell session"
+    "current_session": "Aktuell session",
+    "heat_pump_title": "Värmepump",
+    "heat_pump_mode": "Läge",
+    "heat_pump_sg_ready_state": "SG-Ready-status",
+    "heat_pump_boost_offset": "Boost-offset",
+    "heat_pump_not_configured": "Ingen värmepump konfigurerad — ange reläer (SG-Ready) eller en climate-entitet (climate-only) under Inställningar → SEM → Värmepump."
   }
 };
 

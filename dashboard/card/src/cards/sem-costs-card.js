@@ -199,7 +199,7 @@ class SEMCostsCard extends SEMLitBase {
                 line-height: 1.1;
             }
             .hero-label {
-                font-size: 11px; font-weight: 500; text-transform: uppercase;
+                font-size: 12px; font-weight: 500; text-transform: uppercase;
                 letter-spacing: 0.6px; margin-top: 2px;
                 color: var(--secondary-text-color, #999);
             }
@@ -212,7 +212,7 @@ class SEMCostsCard extends SEMLitBase {
                 border-radius: 10px;
             }
             .section-title {
-                font-size: 10px; font-weight: 600; text-transform: uppercase;
+                font-size: 12px; font-weight: 600; text-transform: uppercase;
                 letter-spacing: 0.6px; color: #8DC892; margin-bottom: 6px;
             }
 
@@ -242,7 +242,7 @@ class SEMCostsCard extends SEMLitBase {
                 border-top: 1px solid var(--divider-color, rgba(255,255,255,0.12));
             }
             .metric-label {
-                font-size: 11px; color: var(--secondary-text-color, #999);
+                font-size: 12px; color: var(--secondary-text-color, #999);
                 font-weight: 500;
             }
             .metric-val {

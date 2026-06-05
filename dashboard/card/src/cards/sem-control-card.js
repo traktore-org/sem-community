@@ -440,7 +440,8 @@ class SEMControlCard extends SEMLitBase {
     _renderSection(section, contentFn, T) {
         const collapsed = this._collapsed[section.id];
         return html`
-            <div class="section">
+            <div class="section ${collapsed ? '' : 'expanded'}"
+                 style="--section-accent: ${section.color}">
                 ${this._renderSectionHeader(section, T)}
                 <div class="section-content ${collapsed ? '' : 'expanded'}">
                     <div class="section-body">
@@ -502,30 +503,45 @@ class SEMControlCard extends SEMLitBase {
                     padding: ${obsOn ? '12px 16px' : '0 16px'};
                 }
 
-                /* ── Sections ── */
+                /* ── Sections (polish: color accent + EV-card-matching typography) ── */
                 .section {
-                    margin-bottom: 8px;
+                    margin-bottom: 10px;
                     border-radius: 14px;
                     background: ${T.surface};
                     border: 1px solid ${T.surfaceBorder};
                     overflow: hidden;
-                    transition: border-color 0.2s;
+                    transition: border-color 0.2s, box-shadow 0.2s;
+                    position: relative;
+                }
+                /* When expanded: subtle color-coded accent stripe matching the
+                   section icon's color, plus a soft glow that ties the card
+                   together with the EV card's hint-row aesthetic. */
+                .section.expanded {
+                    border-color: color-mix(in srgb, var(--section-accent) 40%, ${T.surfaceBorder});
+                    box-shadow: inset 3px 0 0 0 var(--section-accent);
                 }
                 .section:hover { border-color: ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)'}; }
 
                 .section-header {
-                    display: flex; align-items: center; gap: 8px;
-                    padding: 12px 14px;
+                    display: flex; align-items: center; gap: 10px;
+                    padding: 13px 14px;
                     cursor: pointer;
                     user-select: none;
                     -webkit-user-select: none;
                     transition: background 0.15s;
                 }
                 .section-header:hover { background: ${T.surfaceHover}; }
-                .section-title-text { font-size: 14px; font-weight: 600; white-space: nowrap; }
+                .section.expanded .section-header {
+                    background: color-mix(in srgb, var(--section-accent) 6%, transparent);
+                }
+                .section-title-text {
+                    font-size: 15px; font-weight: 600;
+                    white-space: nowrap;
+                    letter-spacing: 0.1px;
+                }
                 .section-subtitle {
                     flex: 1;
-                    font-size: 12px;
+                    font-size: 13px;
                     color: var(--secondary-text-color, ${T.textSec});
                     text-align: right;
                     white-space: nowrap;
@@ -562,7 +578,7 @@ class SEMControlCard extends SEMLitBase {
                     display: flex; align-items: center; justify-content: space-between;
                     padding: 8px 0;
                 }
-                .toggle-label { font-size: 13px; font-weight: 500; }
+                .toggle-label { font-size: 14px; font-weight: 500; }
                 .toggle-track {
                     position: relative;
                     width: 42px; height: 24px;
@@ -591,14 +607,14 @@ class SEMControlCard extends SEMLitBase {
                     border-bottom: 1px solid ${T.surfaceBorder};
                     margin-bottom: 4px;
                 }
-                .ctrl-label { font-size: 13px; font-weight: 500; }
+                .ctrl-label { font-size: 14px; font-weight: 500; }
                 .sem-select {
                     background: ${T.surface};
                     border: 1px solid ${T.surfaceBorder};
                     border-radius: 8px;
                     color: var(--primary-text-color, ${T.text});
                     padding: 6px 10px;
-                    font-size: 13px;
+                    font-size: 14px;
                     font-family: inherit;
                     cursor: pointer;
                     min-width: 120px;
@@ -616,7 +632,7 @@ class SEMControlCard extends SEMLitBase {
                     padding: 7px 0;
                 }
                 .stepper-label {
-                    font-size: 13px; font-weight: 500;
+                    font-size: 14px; font-weight: 500;
                     flex: 1; min-width: 0;
                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                 }
@@ -643,7 +659,7 @@ class SEMControlCard extends SEMLitBase {
                     background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'};
                 }
                 .stepper-value {
-                    font-size: 13px; font-weight: 600;
+                    font-size: 14px; font-weight: 600;
                     min-width: 60px; text-align: center;
                     font-variant-numeric: tabular-nums;
                 }
@@ -660,7 +676,7 @@ class SEMControlCard extends SEMLitBase {
                     padding: 7px 0;
                 }
                 .readonly-value {
-                    font-size: 13px; font-weight: 600;
+                    font-size: 14px; font-weight: 600;
                     font-variant-numeric: tabular-nums;
                     color: var(--secondary-text-color, ${T.textSec});
                 }

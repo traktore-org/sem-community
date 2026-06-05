@@ -113,22 +113,22 @@ class SEMLoadPriorityCard extends SEMLitBase {
                 box-shadow: var(--ha-card-box-shadow, 0 4px 24px rgba(0,0,0,0.35));
             }
             .card-content { padding: 14px 16px; font-family: 'Segoe UI','Roboto',sans-serif; color: var(--primary-text-color); }
-            .status-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--divider-color, rgba(128,128,128,0.12)); font-size:0.85em; }
+            .status-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--divider-color, rgba(128,128,128,0.12)); font-size:0.95em; }
             .status-text { text-transform:uppercase; letter-spacing:0.5px; font-weight:600; opacity:0.85; }
             .peak-dot { width:9px; height:9px; border-radius:50%; }
             .peak-box { background:var(--secondary-background-color, rgba(255,255,255,0.04)); border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:12px; padding:12px; margin-bottom:10px; backdrop-filter: blur(8px); }
-            .peak-row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.9em; }
+            .peak-row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:1em; }
             .peak-row:last-of-type { margin-bottom:0; }
-            .dim { opacity:0.55; font-size:0.9em; }
+            .dim { opacity:0.55; font-size:1em; }
             .mono { font-variant-numeric:tabular-nums; font-weight:500; }
             .bar { width:100%; height:5px; background:var(--divider-color, rgba(128,128,128,0.12)); border-radius:3px; overflow:hidden; margin-top:8px; }
             .bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease, background 0.4s ease; }
             .target-row { display:flex; align-items:center; gap:8px; margin-top:6px; }
-            .target-row input { width:70px; padding:5px 8px; border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:8px; background:var(--card-background-color, rgba(0,0,0,0.2)); color:var(--primary-text-color); text-align:center; font-size:0.9em; }
+            .target-row input { width:70px; padding:5px 8px; border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:8px; background:var(--card-background-color, rgba(0,0,0,0.2)); color:var(--primary-text-color); text-align:center; font-size:1em; }
             .target-row input:focus { outline:none; border-color:#ff9800; }
-            .target-row button { padding:5px 14px; border:none; border-radius:8px; background:#ff9800; color:#fff; cursor:pointer; font-size:0.85em; }
+            .target-row button { padding:5px 14px; border:none; border-radius:8px; background:#ff9800; color:#fff; cursor:pointer; font-size:0.95em; }
             .target-row button:hover { background:#e68900; }
-            .section-label { font-size:0.85em; opacity:0.55; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+            .section-label { font-size:0.95em; opacity:0.55; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
             .device-list { min-height:40px; }
             .device { display:flex; align-items:stretch; background:var(--secondary-background-color, rgba(255,255,255,0.04)); border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:12px; margin-bottom:6px; transition:transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; overflow:hidden; backdrop-filter:blur(8px); }
             .device.ghost { opacity:0.3; }
@@ -142,24 +142,24 @@ class SEMLoadPriorityCard extends SEMLitBase {
             .device-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
             .device-name { display:flex; align-items:center; gap:6px; font-weight:500; font-size:0.95em; min-width:0; overflow:hidden; }
             .device-name span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-            .device-power { font-size:0.9em; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; opacity:0.7; }
-            .device-bottom { display:flex; align-items:center; gap:8px; font-size:0.8em; flex-wrap:wrap; }
+            .device-power { font-size:1em; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; opacity:0.7; }
+            .device-bottom { display:flex; align-items:center; gap:8px; font-size:0.95em; flex-wrap:wrap; }
             .status-dot { width:7px; height:7px; border-radius:50%; background:var(--divider-color, rgba(128,128,128,0.12)); flex-shrink:0; }
             .status-dot.on { background:#4caf50; box-shadow:0 0 6px #4caf50; }
             .status-dot.shed { background:#f44336; box-shadow:0 0 6px #f44336; }
             .spacer { flex:1; }
-            .badge { padding:2px 7px; border-radius:8px; font-size:0.8em; font-weight:600; }
+            .badge { padding:2px 7px; border-radius:8px; font-size:0.95em; font-weight:600; }
             .badge.priority { background:#ff9800; color:#fff; min-width:14px; text-align:center; }
             .toggle-label { display:flex; align-items:center; gap:4px; }
             .arrows { display:flex; flex-direction:column; gap:1px; }
             .arrow-btn { border:none; background:none; cursor:pointer; font-size:10px; padding:0 4px; opacity:0.35; line-height:1; color:var(--primary-text-color,inherit); }
             .arrow-btn:hover { opacity:0.8; }
-            .mode-select { background:var(--card-background-color,rgba(40,40,55,0.7)); color:var(--primary-text-color); border:1px solid var(--divider-color,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px; font-size:11px; font-family:'Segoe UI','Roboto',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none; }
+            .mode-select { background:var(--card-background-color,rgba(40,40,55,0.7)); color:var(--primary-text-color); border:1px solid var(--divider-color,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px; font-size:13px; font-family:'Segoe UI','Roboto',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none; }
             .mode-select:focus { outline:none; border-color:rgba(255,152,0,0.5); }
-            .configure-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.25); border-radius:5px; color:#ffc107; cursor:pointer; font-size:0.75em; }
+            .configure-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.25); border-radius:5px; color:#ffc107; cursor:pointer; font-size:0.9em; }
             .configure-btn:hover { background:rgba(255,193,7,0.22); }
-            .hint { text-align:center; font-size:0.8em; opacity:0.4; margin-top:10px; }
-            .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:0.9em; }
+            .hint { text-align:center; font-size:0.95em; opacity:0.4; margin-top:10px; }
+            .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
         `;
     }
 
@@ -301,9 +301,9 @@ class SEMLoadPriorityCard extends SEMLitBase {
                         ${onOff ? semFormatPower(device.power * 1000) : (device.isShed ? this._t('shed_label') : this._t('off'))}
                     </div>
                 </div>
-                ${device.blockedBy ? html`<div style="font-size:11px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${device.blockedBy}</div>` : nothing}
-                ${device.dependsOn.length ? html`<div style="font-size:11px;opacity:0.55;padding:0 0 0 28px">&#8618; ${this._t('requires')}: ${device.dependsOn.join(', ')}</div>` : nothing}
-                ${device.isShed && device.shedReason ? html`<div style="font-size:11px;color:#f44336;padding:2px 0 0 28px">${device.shedReason === 'emergency' ? this._t('shed_emergency') : this._t('shed_peak')}</div>` : nothing}
+                ${device.blockedBy ? html`<div style="font-size:13px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${device.blockedBy}</div>` : nothing}
+                ${device.dependsOn.length ? html`<div style="font-size:13px;opacity:0.55;padding:0 0 0 28px">&#8618; ${this._t('requires')}: ${device.dependsOn.join(', ')}</div>` : nothing}
+                ${device.isShed && device.shedReason ? html`<div style="font-size:13px;color:#f44336;padding:2px 0 0 28px">${device.shedReason === 'emergency' ? this._t('shed_emergency') : this._t('shed_peak')}</div>` : nothing}
                 <div class="device-bottom">
                     <div class="status-dot ${onOff ? 'on' : (device.isShed ? 'shed' : '')}" data-field="status-${device.id}"></div>
                     <span class="dim" data-field="onoff-${device.id}">${onOff ? this._t('on') : (device.isShed ? this._t('shed_label') : this._t('off'))}</span>

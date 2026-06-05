@@ -187,11 +187,11 @@ class SEMPriceCard extends SEMLitBase {
             .wrap.empty { color: var(--secondary-text-color,#999); }
             .head { display: flex; align-items: baseline; gap: 8px; }
             .title { font-size: 13px; font-weight: 600; color: var(--primary-text-color,#e0e0e0); }
-            .prov { margin-left: auto; font-size: 10px; color: var(--secondary-text-color,#999); text-transform: capitalize; }
+            .prov { margin-left: auto; font-size: 12px; color: var(--secondary-text-color,#999); text-transform: capitalize; }
             .now { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 6px; }
             .price { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
             .unit { font-size: 12px; color: var(--secondary-text-color,#999); }
-            .badge { margin-left: auto; font-size: 11px; font-weight: 600; padding: 2px 9px;
+            .badge { margin-left: auto; font-size: 12px; font-weight: 600; padding: 2px 9px;
                      border-radius: 10px; border: 1px solid; text-transform: capitalize; }
             .summary { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px;
                        color: var(--secondary-text-color,#aaa); margin-bottom: 8px; }
@@ -206,10 +206,10 @@ class SEMPriceCard extends SEMLitBase {
             }
             .chip-title { font-size: 12px; font-weight: 600; color: var(--primary-text-color,#e0e0e0); }
             .chip-price { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
-            .chip-unit { font-size: 11px; color: var(--secondary-text-color,#999); }
+            .chip-unit { font-size: 12px; color: var(--secondary-text-color,#999); }
             .chip-badge { font-size: 10.5px; font-weight: 600; padding: 1px 8px;
                           border-radius: 9px; border: 1px solid; text-transform: capitalize; }
-            .chip-next { margin-left: auto; font-size: 11px; color: var(--secondary-text-color,#aaa); }
+            .chip-next { margin-left: auto; font-size: 12px; color: var(--secondary-text-color,#aaa); }
             .chip-next b { font-variant-numeric: tabular-nums; }
         `;
     }

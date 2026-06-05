@@ -394,7 +394,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
 
                 .tile-label {
-                    font-size: 11px;
+                    font-size: 12px;
                     font-weight: 500;
                     text-transform: uppercase;
                     letter-spacing: 0.3px;
@@ -409,7 +409,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
 
                 .tile-detail {
-                    font-size: 11px;
+                    font-size: 12px;
                     color: var(--secondary-text-color, ${t.textSec});
                 }
 
@@ -433,7 +433,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
 
                 .stat-lbl {
-                    font-size: 10px;
+                    font-size: 12px;
                     text-transform: uppercase;
                     letter-spacing: 0.3px;
                     color: var(--secondary-text-color, ${t.textSec});
@@ -1730,14 +1730,14 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 .hero-power-row { display: flex; gap: 14px; margin-bottom: 4px; flex-wrap: wrap; }
                 .hero-pw { display: flex; flex-direction: column; }
                 .hero-pw-label {
-                    font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
+                    font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px;
                     color: var(--secondary-text-color, ${B}); margin-bottom: 1px;
                 }
                 .hero-pw-val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
                 .hero-pw-val.import { color: #488fc2; }
                 .hero-pw-val.export { color: #8353d1; }
                 .hero-status {
-                    font-size: 11px; font-weight: 500;
+                    font-size: 12px; font-weight: 500;
                     text-transform: uppercase; letter-spacing: 0.5px;
                 }
                 .section {
@@ -1747,14 +1747,14 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     border-radius: 10px;
                 }
                 .section-title {
-                    font-size: 10px; font-weight: 600; text-transform: uppercase;
+                    font-size: 12px; font-weight: 600; text-transform: uppercase;
                     letter-spacing: 0.6px; margin-bottom: 6px;
                 }
                 .metric-row {
                     display: flex; justify-content: space-between; align-items: baseline; padding: 2px 0;
                 }
                 .metric-label {
-                    font-size: 11px; color: var(--secondary-text-color, ${B}); font-weight: 500;
+                    font-size: 12px; color: var(--secondary-text-color, ${B}); font-weight: 500;
                 }
                 .metric-val {
                     font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
@@ -1772,7 +1772,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
                 .peak-bar-svg { width: 100%; height: 8px; display: block; }
                 .peak-pct-label {
-                    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+                    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
                     margin-top: 2px; text-align: right;
                 }
                 .c-import { color: #488fc2; }
@@ -2101,7 +2101,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 .subtitle {
                     flex: 1;
                     text-align: right;
-                    font-size: 11px;
+                    font-size: 12px;
                     color: var(--secondary-text-color, ${t.textSec});
                     overflow: hidden;
                     text-overflow: ellipsis;
@@ -2329,7 +2329,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 line-height: 1.1;
             }
             .hero-label {
-                font-size: 11px; font-weight: 500; text-transform: uppercase;
+                font-size: 12px; font-weight: 500; text-transform: uppercase;
                 letter-spacing: 0.6px; margin-top: 2px;
                 color: var(--secondary-text-color, #999);
             }
@@ -2342,7 +2342,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 border-radius: 10px;
             }
             .section-title {
-                font-size: 10px; font-weight: 600; text-transform: uppercase;
+                font-size: 12px; font-weight: 600; text-transform: uppercase;
                 letter-spacing: 0.6px; color: #8DC892; margin-bottom: 6px;
             }
 
@@ -2372,7 +2372,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 border-top: 1px solid var(--divider-color, rgba(255,255,255,0.12));
             }
             .metric-label {
-                font-size: 11px; color: var(--secondary-text-color, #999);
+                font-size: 12px; color: var(--secondary-text-color, #999);
                 font-weight: 500;
             }
             .metric-val {
@@ -3802,11 +3802,11 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             .wrap.empty { color: var(--secondary-text-color,#999); }
             .head { display: flex; align-items: baseline; gap: 8px; }
             .title { font-size: 13px; font-weight: 600; color: var(--primary-text-color,#e0e0e0); }
-            .prov { margin-left: auto; font-size: 10px; color: var(--secondary-text-color,#999); text-transform: capitalize; }
+            .prov { margin-left: auto; font-size: 12px; color: var(--secondary-text-color,#999); text-transform: capitalize; }
             .now { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 6px; }
             .price { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
             .unit { font-size: 12px; color: var(--secondary-text-color,#999); }
-            .badge { margin-left: auto; font-size: 11px; font-weight: 600; padding: 2px 9px;
+            .badge { margin-left: auto; font-size: 12px; font-weight: 600; padding: 2px 9px;
                      border-radius: 10px; border: 1px solid; text-transform: capitalize; }
             .summary { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11.5px;
                        color: var(--secondary-text-color,#aaa); margin-bottom: 8px; }
@@ -3821,10 +3821,10 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             }
             .chip-title { font-size: 12px; font-weight: 600; color: var(--primary-text-color,#e0e0e0); }
             .chip-price { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
-            .chip-unit { font-size: 11px; color: var(--secondary-text-color,#999); }
+            .chip-unit { font-size: 12px; color: var(--secondary-text-color,#999); }
             .chip-badge { font-size: 10.5px; font-weight: 600; padding: 1px 8px;
                           border-radius: 9px; border: 1px solid; text-transform: capitalize; }
-            .chip-next { margin-left: auto; font-size: 11px; color: var(--secondary-text-color,#aaa); }
+            .chip-next { margin-left: auto; font-size: 12px; color: var(--secondary-text-color,#aaa); }
             .chip-next b { font-variant-numeric: tabular-nums; }
         `}},{type:"custom:sem-price-card",name:"SEM Price Card",description:"Dynamic electricity price: current price, level, today range, next cheap window, and an hourly price strip (#257)",preview:!1});const ne=[{id:"info",icon:"mdi:information-outline",color:"#96CAEE",titleKey:"system_info",subtitleFn:t=>{const e=t._val("diag_version")||"—",i=t._val("diag_grid_mode")||"—";return`v${e} · ${"combined"===i?t._t("grid_combined"):"split"===i?t._t("grid_split"):i}`}},{id:"health",icon:"mdi:heart-pulse",color:"#8DC892",titleKey:"health_overview",subtitleFn:t=>`${t._valNum("solar_power").toFixed(0)}W solar · SOC ${t._valNum("battery_soc").toFixed(0)}%`},{id:"diag",icon:"mdi:bug-outline",color:"#ff9800",titleKey:"diagnostics",subtitleFn:()=>""}],le=[{key:"solar_power",icon:"mdi:solar-power",color:"#ff9800",suffix:"W"},{key:"grid_power",icon:"mdi:transmission-tower",color:"#488fc2",suffix:"W"},{key:"battery_soc",icon:"mdi:battery",color:"#4db6ac",suffix:"%"},{key:"forecast_today_kwh",icon:"mdi:weather-sunny",color:"#ff9800",suffix:"kWh"},{key:"tariff_current_import_rate",icon:"mdi:tag",color:"#96CAEE",suffix:""}],ce=["sensor.sem_diag_version","sensor.sem_diag_grid_mode","sensor.sem_diag_battery_capacity","sensor.sem_diag_update_interval","sensor.sem_diag_charger_count","sensor.sem_diag_charger_control","sensor.sem_diag_sensors_unavailable","sensor.sem_diag_ed_config","sensor.sem_solar_power","sensor.sem_grid_power","sensor.sem_battery_soc","sensor.sem_ev_power","sensor.sem_forecast_today_kwh","sensor.sem_tariff_current_import_rate","switch.sem_observer_mode","sensor.sem_home_consumption_power","sensor.sem_grid_import_power","sensor.sem_grid_export_power","sensor.sem_autarky_rate","sensor.sem_self_consumption_rate","sensor.sem_battery_power","sensor.sem_night_charging_status","sensor.sem_battery_status","sensor.sem_grid_status","sensor.sem_charging_state"];yt("sem-system-card",class extends xt{static get watchedEntities(){return ce}constructor(){super(),this._collapsed={info:!1,health:!1,diag:!0},this._copyFeedback=""}setConfig(t){super.setConfig(t),this._prefix=t.entity_prefix||"sensor.sem_"}_val(t){const e=this._hass?.states[`${this._prefix}${t}`];return e&&"unavailable"!==e.state&&"unknown"!==e.state?e.state:""}_valNum(t,e=0){const i=this._hass?.states[`${this._prefix}${t}`];return i&&"unavailable"!==i.state&&"unknown"!==i.state?parseFloat(i.state)??e:e}_switchOn(t){return"on"===this._hass?.states[`switch.sem_${t}`]?.state}_available(t){const e=this._hass?.states[t];return!(!e||"unavailable"===e.state||"unknown"===e.state)}_toggleSection(t){this._collapsed={...this._collapsed,[t]:!this._collapsed[t]},this.requestUpdate()}_copyDiagnostics(){const t=this._val("diag_version")||"—",e=this._val("diag_grid_mode")||"—",i=this._val("diag_charger_count")||"—",s=this._val("diag_charger_control")||"—",r=this._valNum("diag_battery_capacity"),a=`SEM ${t} | Grid: ${e} | Chargers: ${i} (${s}) | Battery: ${r>0?r.toFixed(1):"—"}kWh | Unavailable: ${this._val("diag_sensors_unavailable")||"0"}`,o=this._hass?.states?.["sensor.sem_diag_ed_config"]?.attributes?.energy_dashboard;let n;if(o){const t=t=>t||"—";n=`Solar:   pwr=${t(o.solar?.power)} [${t(o.solar?.power_source)}]  energy=${t(o.solar?.energy)}\nGrid:    pwr=${t(o.grid?.power)} [${t(o.grid?.power_source)}]  imp=${t(o.grid?.import_energy)}  exp=${t(o.grid?.export_energy)}\nBattery: pwr=${t(o.battery?.power)} [${t(o.battery?.power_source)}]  chg=${t(o.battery?.charge_energy)}  dis=${t(o.battery?.discharge_energy)}`}else n=`Config: ${this._val("diag_ed_config")||"—"}`;const l=`${a}\n${n}`;this._writeClipboard(l)}async _writeClipboard(t){const e=t=>{this._copyFeedback=this._t(t),this.requestUpdate(),setTimeout(()=>{this._copyFeedback="",this.requestUpdate()},2e3)};if(navigator?.clipboard?.writeText&&!1!==window.isSecureContext)try{return await navigator.clipboard.writeText(t),void e("copied")}catch(t){console.warn("[SEM System] modern clipboard API failed, falling back to execCommand",t)}try{const i=document.createElement("textarea");i.value=t,i.setAttribute("readonly",""),i.style.position="fixed",i.style.top="0",i.style.left="0",i.style.width="1px",i.style.height="1px",i.style.opacity="0",document.body.appendChild(i),i.focus(),i.select();const s=document.execCommand("copy");document.body.removeChild(i),s?e("copied"):(e("copy_failed"),console.error('[SEM System] execCommand("copy") returned false'))}catch(t){e("copy_failed"),console.error("[SEM System] legacy clipboard fallback threw",t)}}_renderSectionHeader(t,e){const i=this._collapsed[t.id],s=i?"rotate(-90deg)":"rotate(0deg)";return H`
             <div
@@ -5036,22 +5036,22 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 box-shadow: var(--ha-card-box-shadow, 0 4px 24px rgba(0,0,0,0.35));
             }
             .card-content { padding: 14px 16px; font-family: 'Segoe UI','Roboto',sans-serif; color: var(--primary-text-color); }
-            .status-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--divider-color, rgba(128,128,128,0.12)); font-size:0.85em; }
+            .status-bar { display:flex; align-items:center; gap:8px; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid var(--divider-color, rgba(128,128,128,0.12)); font-size:0.95em; }
             .status-text { text-transform:uppercase; letter-spacing:0.5px; font-weight:600; opacity:0.85; }
             .peak-dot { width:9px; height:9px; border-radius:50%; }
             .peak-box { background:var(--secondary-background-color, rgba(255,255,255,0.04)); border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:12px; padding:12px; margin-bottom:10px; backdrop-filter: blur(8px); }
-            .peak-row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:0.9em; }
+            .peak-row { display:flex; justify-content:space-between; margin-bottom:4px; font-size:1em; }
             .peak-row:last-of-type { margin-bottom:0; }
-            .dim { opacity:0.55; font-size:0.9em; }
+            .dim { opacity:0.55; font-size:1em; }
             .mono { font-variant-numeric:tabular-nums; font-weight:500; }
             .bar { width:100%; height:5px; background:var(--divider-color, rgba(128,128,128,0.12)); border-radius:3px; overflow:hidden; margin-top:8px; }
             .bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease, background 0.4s ease; }
             .target-row { display:flex; align-items:center; gap:8px; margin-top:6px; }
-            .target-row input { width:70px; padding:5px 8px; border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:8px; background:var(--card-background-color, rgba(0,0,0,0.2)); color:var(--primary-text-color); text-align:center; font-size:0.9em; }
+            .target-row input { width:70px; padding:5px 8px; border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:8px; background:var(--card-background-color, rgba(0,0,0,0.2)); color:var(--primary-text-color); text-align:center; font-size:1em; }
             .target-row input:focus { outline:none; border-color:#ff9800; }
-            .target-row button { padding:5px 14px; border:none; border-radius:8px; background:#ff9800; color:#fff; cursor:pointer; font-size:0.85em; }
+            .target-row button { padding:5px 14px; border:none; border-radius:8px; background:#ff9800; color:#fff; cursor:pointer; font-size:0.95em; }
             .target-row button:hover { background:#e68900; }
-            .section-label { font-size:0.85em; opacity:0.55; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+            .section-label { font-size:0.95em; opacity:0.55; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
             .device-list { min-height:40px; }
             .device { display:flex; align-items:stretch; background:var(--secondary-background-color, rgba(255,255,255,0.04)); border:1px solid var(--divider-color, rgba(255,255,255,0.08)); border-radius:12px; margin-bottom:6px; transition:transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; overflow:hidden; backdrop-filter:blur(8px); }
             .device.ghost { opacity:0.3; }
@@ -5065,24 +5065,24 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             .device-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
             .device-name { display:flex; align-items:center; gap:6px; font-weight:500; font-size:0.95em; min-width:0; overflow:hidden; }
             .device-name span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-            .device-power { font-size:0.9em; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; opacity:0.7; }
-            .device-bottom { display:flex; align-items:center; gap:8px; font-size:0.8em; flex-wrap:wrap; }
+            .device-power { font-size:1em; font-weight:500; font-variant-numeric:tabular-nums; white-space:nowrap; opacity:0.7; }
+            .device-bottom { display:flex; align-items:center; gap:8px; font-size:0.95em; flex-wrap:wrap; }
             .status-dot { width:7px; height:7px; border-radius:50%; background:var(--divider-color, rgba(128,128,128,0.12)); flex-shrink:0; }
             .status-dot.on { background:#4caf50; box-shadow:0 0 6px #4caf50; }
             .status-dot.shed { background:#f44336; box-shadow:0 0 6px #f44336; }
             .spacer { flex:1; }
-            .badge { padding:2px 7px; border-radius:8px; font-size:0.8em; font-weight:600; }
+            .badge { padding:2px 7px; border-radius:8px; font-size:0.95em; font-weight:600; }
             .badge.priority { background:#ff9800; color:#fff; min-width:14px; text-align:center; }
             .toggle-label { display:flex; align-items:center; gap:4px; }
             .arrows { display:flex; flex-direction:column; gap:1px; }
             .arrow-btn { border:none; background:none; cursor:pointer; font-size:10px; padding:0 4px; opacity:0.35; line-height:1; color:var(--primary-text-color,inherit); }
             .arrow-btn:hover { opacity:0.8; }
-            .mode-select { background:var(--card-background-color,rgba(40,40,55,0.7)); color:var(--primary-text-color); border:1px solid var(--divider-color,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px; font-size:11px; font-family:'Segoe UI','Roboto',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none; }
+            .mode-select { background:var(--card-background-color,rgba(40,40,55,0.7)); color:var(--primary-text-color); border:1px solid var(--divider-color,rgba(255,255,255,0.08)); border-radius:6px; padding:2px 6px; font-size:13px; font-family:'Segoe UI','Roboto',sans-serif; cursor:pointer; -webkit-appearance:none; appearance:none; }
             .mode-select:focus { outline:none; border-color:rgba(255,152,0,0.5); }
-            .configure-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.25); border-radius:5px; color:#ffc107; cursor:pointer; font-size:0.75em; }
+            .configure-btn { display:inline-flex; align-items:center; gap:3px; padding:2px 6px; background:rgba(255,193,7,0.12); border:1px solid rgba(255,193,7,0.25); border-radius:5px; color:#ffc107; cursor:pointer; font-size:0.9em; }
             .configure-btn:hover { background:rgba(255,193,7,0.22); }
-            .hint { text-align:center; font-size:0.8em; opacity:0.4; margin-top:10px; }
-            .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:0.9em; }
+            .hint { text-align:center; font-size:0.95em; opacity:0.4; margin-top:10px; }
+            .empty { text-align:center; padding:20px 0; opacity:0.4; font-size:1em; }
         `}_updateDeviceData(){if(!this._hass)return;const t=this._hass.states[`${this.entityPrefix}target_peak_limit`],e=this._hass.states[`${this.entityPrefix}consecutive_peak_15min`],i=this._hass.states[`${this.entityPrefix}load_management_status`],s=this._hass.states[`${this.entityPrefix}controllable_devices_count`];t&&(this.targetPeakLimit=parseFloat(t.state)||5),e&&(this.currentPeak=parseFloat(e.state)||0),i&&(this.loadManagementStatus=i.state||"normal"),s?.attributes?.devices&&(this.devices=Object.entries(s.attributes.devices).map(([t,e])=>({id:t,name:e.name||t.replace(/^(load_device_|energy_dashboard_)/,"").replace(/_/g," "),power:(e.current_power||0)/1e3,priority:e.priority||5,isOn:e.is_on||!1,isShed:e.is_shed||!1,shedReason:e.shed_reason||null,isControllable:!1!==e.is_controllable,isCritical:e.is_critical||!1,deviceType:e.device_type||"unknown",isAvailable:e.is_available||!1,hasManualMapping:e.has_manual_mapping||!1,energySensor:e.energy_sensor||"",control:e.control||null,controlEntity:e.control?.entity||e.switch_entity||"",controlType:e.control?.type||"switch",controlMode:e.control_mode||"peak_only",dependsOn:e.depends_on||[],blockedBy:e.blocked_by||null,icon:this._resolveDeviceIcon(e)})).sort((t,e)=>t.priority-e.priority))}render(){if(!this._config)return K;const t=this._getPeakColor(),e=this.targetPeakLimit-this.currentPeak,i=this.targetPeakLimit>0?Math.min(this.currentPeak/this.targetPeakLimit*100,100):0;return H`
             <ha-card>
                 <div class="card-content">
@@ -5157,9 +5157,9 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         ${i?ht(1e3*t.power):t.isShed?this._t("shed_label"):this._t("off")}
                     </div>
                 </div>
-                ${t.blockedBy?H`<div style="font-size:11px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${t.blockedBy}</div>`:K}
-                ${t.dependsOn.length?H`<div style="font-size:11px;opacity:0.55;padding:0 0 0 28px">&#8618; ${this._t("requires")}: ${t.dependsOn.join(", ")}</div>`:K}
-                ${t.isShed&&t.shedReason?H`<div style="font-size:11px;color:#f44336;padding:2px 0 0 28px">${"emergency"===t.shedReason?this._t("shed_emergency"):this._t("shed_peak")}</div>`:K}
+                ${t.blockedBy?H`<div style="font-size:13px;color:#ff9800;padding:2px 0 0 28px">&#9203; Waiting for: ${t.blockedBy}</div>`:K}
+                ${t.dependsOn.length?H`<div style="font-size:13px;opacity:0.55;padding:0 0 0 28px">&#8618; ${this._t("requires")}: ${t.dependsOn.join(", ")}</div>`:K}
+                ${t.isShed&&t.shedReason?H`<div style="font-size:13px;color:#f44336;padding:2px 0 0 28px">${"emergency"===t.shedReason?this._t("shed_emergency"):this._t("shed_peak")}</div>`:K}
                 <div class="device-bottom">
                     <div class="status-dot ${i?"on":t.isShed?"shed":""}" data-field="status-${t.id}"></div>
                     <span class="dim" data-field="onoff-${t.id}">${i?this._t("on"):t.isShed?this._t("shed_label"):this._t("off")}</span>
@@ -5356,7 +5356,8 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ></ha-icon>
             </div>
         `}_renderSection(t,e,i){const s=this._collapsed[t.id];return H`
-            <div class="section">
+            <div class="section ${s?"":"expanded"}"
+                 style="--section-accent: ${t.color}">
                 ${this._renderSectionHeader(t,i)}
                 <div class="section-content ${s?"":"expanded"}">
                     <div class="section-body">
@@ -5394,30 +5395,45 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     padding: ${s?"12px 16px":"0 16px"};
                 }
 
-                /* ── Sections ── */
+                /* ── Sections (polish: color accent + EV-card-matching typography) ── */
                 .section {
-                    margin-bottom: 8px;
+                    margin-bottom: 10px;
                     border-radius: 14px;
                     background: ${t.surface};
                     border: 1px solid ${t.surfaceBorder};
                     overflow: hidden;
-                    transition: border-color 0.2s;
+                    transition: border-color 0.2s, box-shadow 0.2s;
+                    position: relative;
+                }
+                /* When expanded: subtle color-coded accent stripe matching the
+                   section icon's color, plus a soft glow that ties the card
+                   together with the EV card's hint-row aesthetic. */
+                .section.expanded {
+                    border-color: color-mix(in srgb, var(--section-accent) 40%, ${t.surfaceBorder});
+                    box-shadow: inset 3px 0 0 0 var(--section-accent);
                 }
                 .section:hover { border-color: ${e?"rgba(255,255,255,0.18)":"rgba(0,0,0,0.12)"}; }
 
                 .section-header {
-                    display: flex; align-items: center; gap: 8px;
-                    padding: 12px 14px;
+                    display: flex; align-items: center; gap: 10px;
+                    padding: 13px 14px;
                     cursor: pointer;
                     user-select: none;
                     -webkit-user-select: none;
                     transition: background 0.15s;
                 }
                 .section-header:hover { background: ${t.surfaceHover}; }
-                .section-title-text { font-size: 14px; font-weight: 600; white-space: nowrap; }
+                .section.expanded .section-header {
+                    background: color-mix(in srgb, var(--section-accent) 6%, transparent);
+                }
+                .section-title-text {
+                    font-size: 15px; font-weight: 600;
+                    white-space: nowrap;
+                    letter-spacing: 0.1px;
+                }
                 .section-subtitle {
                     flex: 1;
-                    font-size: 12px;
+                    font-size: 13px;
                     color: var(--secondary-text-color, ${t.textSec});
                     text-align: right;
                     white-space: nowrap;
@@ -5454,7 +5470,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     display: flex; align-items: center; justify-content: space-between;
                     padding: 8px 0;
                 }
-                .toggle-label { font-size: 13px; font-weight: 500; }
+                .toggle-label { font-size: 14px; font-weight: 500; }
                 .toggle-track {
                     position: relative;
                     width: 42px; height: 24px;
@@ -5483,14 +5499,14 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     border-bottom: 1px solid ${t.surfaceBorder};
                     margin-bottom: 4px;
                 }
-                .ctrl-label { font-size: 13px; font-weight: 500; }
+                .ctrl-label { font-size: 14px; font-weight: 500; }
                 .sem-select {
                     background: ${t.surface};
                     border: 1px solid ${t.surfaceBorder};
                     border-radius: 8px;
                     color: var(--primary-text-color, ${t.text});
                     padding: 6px 10px;
-                    font-size: 13px;
+                    font-size: 14px;
                     font-family: inherit;
                     cursor: pointer;
                     min-width: 120px;
@@ -5508,7 +5524,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     padding: 7px 0;
                 }
                 .stepper-label {
-                    font-size: 13px; font-weight: 500;
+                    font-size: 14px; font-weight: 500;
                     flex: 1; min-width: 0;
                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                 }
@@ -5535,7 +5551,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     background: ${e?"rgba(255,255,255,0.15)":"rgba(0,0,0,0.08)"};
                 }
                 .stepper-value {
-                    font-size: 13px; font-weight: 600;
+                    font-size: 14px; font-weight: 600;
                     min-width: 60px; text-align: center;
                     font-variant-numeric: tabular-nums;
                 }
@@ -5552,7 +5568,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     padding: 7px 0;
                 }
                 .readonly-value {
-                    font-size: 13px; font-weight: 600;
+                    font-size: 14px; font-weight: 600;
                     font-variant-numeric: tabular-nums;
                     color: var(--secondary-text-color, ${t.textSec});
                 }

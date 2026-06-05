@@ -166,7 +166,7 @@ class SEMEnergyImpactCard extends SEMLitBase {
                 }
 
                 .tile-label {
-                    font-size: 11px;
+                    font-size: 12px;
                     font-weight: 500;
                     text-transform: uppercase;
                     letter-spacing: 0.3px;
@@ -181,7 +181,7 @@ class SEMEnergyImpactCard extends SEMLitBase {
                 }
 
                 .tile-detail {
-                    font-size: 11px;
+                    font-size: 12px;
                     color: var(--secondary-text-color, ${T.textSec});
                 }
 
@@ -205,7 +205,7 @@ class SEMEnergyImpactCard extends SEMLitBase {
                 }
 
                 .stat-lbl {
-                    font-size: 10px;
+                    font-size: 12px;
                     text-transform: uppercase;
                     letter-spacing: 0.3px;
                     color: var(--secondary-text-color, ${T.textSec});

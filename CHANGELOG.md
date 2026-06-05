@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.6] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.5](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.5)_
+
+### 🌍 Translations
+
+- **Heat pump dashboard keys filled in for 14 languages**. `heat_pump_title`, `heat_pump_mode`, `heat_pump_sg_ready_state`, `heat_pump_boost_offset`, and `heat_pump_not_configured` were authored in English in beta.1 but never propagated to the other languages. Users on de/nl/fr/es/it/pt/pl/sv/cs/da/fi/hu/ro/no saw raw translation keys ("heat_pump_title", "heat_pump_not_configured") in the Control tab's Heat Pump section. 70 entries added (5 keys × 14 languages). Native-speaker review welcome. (by @traktore-org)
+
+### 🎨 Polish — Control tab consistency with the EV card
+
+- **Color-accent stripe on expanded sections.** Each Control-card section now shows an inset color-coded left stripe when expanded, matching the section icon (orange = surplus/solar/peak, teal = battery/heat_pump, pink = hot_water, blue = tariff/system). Ties the multi-section settings hub to the EV card's hint-row aesthetic. (by @traktore-org)
+- **Typography bumped to match the EV / Battery card tier.** Section titles 14→15px with 0.1px letter-spacing; subtitles 12→13px; body labels (steppers, toggles, select rows) 13→14px; stepper/readonly values 13→14px. Tighter visual rhythm; readable at arm's length on phones. (by @traktore-org)
+- **Surrounding cards bumped to the same tier** so the Control tab feels coherent: `sem-load-priority-card.js` (em-based sizes scaled from 0.75-0.9em up to 0.9-1em), `sem-grid-card.js`, `sem-price-card.js`, `sem-costs-card.js`, `sem-energy-impact-card.js`, `sem-battery-zones-card.js` (10→11px and 11→12px label sizes). Same pattern as the solar-card font-polish in beta.5. (by @traktore-org)
+
 # [1.7.1-beta.5] - 06.06.2026
 
 ## 🧪 Beta Release
