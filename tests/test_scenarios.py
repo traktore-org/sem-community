@@ -63,13 +63,7 @@ _YAML_PATHS = sorted(SCENARIOS_DIR.glob("*.yaml"))
 # Empty for now — but keep the structure so future drift can be
 # tracked cleanly. ``strict=False`` so a future YAML/prod fix that
 # makes any new xfail entry pass turns it green silently.
-_XFAIL_DRIFT: dict[str, str] = {
-    "2026-06-05_min_plus_solar_zone4_battery_chicken_egg":
-        "#439 — daytime min_plus_solar idles when battery is "
-        "available but not actively discharging "
-        "(battery_assist_budget_w uses current discharge instead "
-        "of potential discharge). Turns green when #439 lands.",
-}
+_XFAIL_DRIFT: dict[str, str] = {}
 
 
 def _id_with_xfail(p: Path) -> str:

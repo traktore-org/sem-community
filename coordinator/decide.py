@@ -396,33 +396,30 @@ class MinPlusSolarMode(ModeStrategy):
         # Zone 2: pure solar (same as solar_only).
         if zone == 2:
             return _SOLAR_ONLY.decide(view)
-        # Zone 3 / 4: battery-assist budget includes battery_discharge.
+        # Zone 3 / 4: commit-then-measure (#439, ADR 0010). The mode
+        # name promises "guarantee min from grid + solar up to max",
+        # and in Zone 3/4 the home battery is available to supplement.
+        # Offer ``min_amps`` unconditionally — the inverter / grid will
+        # fill the gap next cycle. Do NOT gate on "is the battery
+        # currently discharging?" — that's the chicken-and-egg bug
+        # that idled this mode when battery sat at 0 W discharge
+        # because the EV hadn't been told to start drawing yet.
         budget_w = battery_assist_budget_w(view)
         cfg = view.config if isinstance(view.config, dict) else {}
         min_amps = int(cfg.get("ev_min_current", 6))
+        max_amps = int(cfg.get("ev_max_current", 32))
         phases = int(cfg.get("ev_phases", 3))
         voltage = int(cfg.get("ev_voltage", 230))
-        min_w = min_amps * phases * voltage
-        if budget_w < min_w:
-            return ChargerDecision(
-                charger_id=cid, mode="min_plus_solar",
-                intent=ChargerIntent.IDLE,
-                budget_w=budget_w,
-                reason=(
-                    f"min_plus_solar day Zone {zone}: budget="
-                    f"{budget_w:.0f}W < min={min_w}W — idle"
-                ),
-            )
-        max_amps = int(cfg.get("ev_max_current", 32))
-        amps = max(min_amps, min(max_amps, amps_from_watts(budget_w, phases, voltage)))
+        surplus_amps = amps_from_watts(budget_w, phases, voltage)
+        amps = max(min_amps, min(max_amps, surplus_amps))
         return ChargerDecision(
             charger_id=cid, mode="min_plus_solar",
             intent=ChargerIntent.CHARGE_AT_AMPS,
             commanded_amps=amps, budget_w=budget_w,
             reason=(
                 f"min_plus_solar day Zone {zone}: budget={budget_w:.0f}W "
-                f"→ {amps}A (solar={f.solar_w:.0f}W + battery_dis="
-                f"{f.battery_discharge_w:.0f}W)"
+                f"→ {amps}A floor={min_amps}A (solar={f.solar_w:.0f}W "
+                f"+ battery_dis={f.battery_discharge_w:.0f}W)"
             ),
         )
 

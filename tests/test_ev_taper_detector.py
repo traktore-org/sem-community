@@ -1176,16 +1176,13 @@ async def test_history_seed_kw_values():
 # Both are expected to FAIL on develop until #438 lands.
 # ════════════════════════════════════════════
 
-@pytest.mark.xfail(
-    reason=(
-        "#438 — taper detector marks full from oscillation pattern "
-        "with tiny total session energy. Turns green when the "
-        "session-energy floor (or longer confirm window) lands."
-    ),
-    strict=False,
-)
 class TestFalseFullOnMinCurrentOscillation:
-    """Regression fixtures for the #438 stuck-state class."""
+    """Regression fixtures for the #438 stuck-state class.
+
+    The session-energy floor (`FULL_SESSION_ENERGY_MIN_KWH`) is the
+    structural guard — a tiny oscillation session cannot anchor full
+    even if it satisfies the peak / declining / 3-low-samples pattern.
+    """
 
     def _feed_oscillation(self, detector, setpoint_a=6.0):
         """Replay an extended PROD-style oscillation at 6 A offer.

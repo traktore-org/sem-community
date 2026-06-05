@@ -37,6 +37,11 @@ SETTLING_CYCLES = 3        # Ignore 3 cycles (30s) after SEM setpoint change
 TAPER_SLOPE_THRESHOLD = -5.0   # W/min — steeper than this = declining
 FULL_POWER_THRESHOLD = 50      # W — below this after declining = car full
 SESSION_PEAK_MIN = 500         # W — minimum peak to consider a real session
+FULL_SESSION_ENERGY_MIN_KWH = 1.0  # #438 — session must have delivered at
+                                    # least this much energy before
+                                    # taper-to-full can fire. A 0.2 kWh
+                                    # session physically cannot have
+                                    # filled a 40+ kWh battery.
 TAPER_RATIO_NEARLY_FULL = 50   # % — below this = nearly full
 TAPER_RATIO_DETECTED = 70     # % — below this + declining = taper confirmed
 MAX_ETA_MINUTES = 60           # Cap completion estimate
@@ -76,6 +81,15 @@ class EVTaperDetector:
         self._full_detected: bool = False
         self._last_setpoint: float = 0.0
         self._settling_counter: int = 0
+        # #438 — current-session energy accumulator, integrated from
+        # the per-call (power, timestamp) tuples. The taper-to-full
+        # gate requires this to exceed FULL_SESSION_ENERGY_MIN_KWH
+        # before anchoring full — a tiny oscillation session can
+        # satisfy the power-pattern check but cannot physically have
+        # filled the battery. Reset by ``reset_session()`` on disconnect.
+        self._current_session_energy_kwh: float = 0.0
+        self._last_energy_timestamp: Optional[datetime] = None
+        self._last_energy_power_w: float = 0.0
 
         # Persistent state (restored from storage)
         self._last_full_timestamp: Optional[str] = None
@@ -122,6 +136,17 @@ class EVTaperDetector:
         if not ev_connected:
             return EVTaperData()
 
+        # #438 — integrate current-session energy from per-call dt
+        # using the wall-clock timestamp the caller provides.
+        # Trapezoidal: (prev_power + curr_power) / 2 × dt_hours.
+        if self._last_energy_timestamp is not None:
+            dt_s = (timestamp - self._last_energy_timestamp).total_seconds()
+            if 0 < dt_s < 600:  # ignore stale gaps / restart jumps > 10 min
+                avg_w = (self._last_energy_power_w + ev_power) / 2.0
+                self._current_session_energy_kwh += avg_w * dt_s / 3_600_000.0
+        self._last_energy_timestamp = timestamp
+        self._last_energy_power_w = ev_power
+
         mono = time.monotonic()
 
         # Detect SEM setpoint changes
@@ -156,7 +181,13 @@ class EVTaperDetector:
         else:
             self._full_confirm_count = 0
 
+        # #438 / ADR 0010 — session-energy floor. A tiny session
+        # (e.g. ~0.2 kWh of oscillation at a sub-handshake offer)
+        # satisfies the "peak > 3 kW + 3 low samples" pattern but
+        # cannot physically have filled the battery. Gate the full
+        # anchor on a sane minimum session energy delivered.
         if self._full_confirm_count >= 3 and not self._full_detected:
+            if self._current_session_energy_kwh >= FULL_SESSION_ENERGY_MIN_KWH:
                 self._full_detected = True
                 self._last_full_timestamp = timestamp.isoformat()
                 self._energy_since_full = 0.0
@@ -166,9 +197,16 @@ class EVTaperDetector:
                 if self._hw_total_last is not None:
                     self._hw_total_at_full = self._hw_total_last
                 _LOGGER.info(
-                    "EV full charge detected at %s (peak was %.0fW, hw_total=%.1f) — SOC anchored at 100%%",
+                    "EV full charge detected at %s (peak=%.0fW, session=%.2fkWh, hw_total=%.1f) — SOC anchored at 100%%",
                     self._last_full_timestamp, self._session_peak_w,
+                    self._current_session_energy_kwh,
                     self._hw_total_at_full if self._hw_total_at_full is not None else 0,
+                )
+            else:
+                _LOGGER.debug(
+                    "EV taper-to-full pattern met but session=%.2fkWh < %.1fkWh floor — "
+                    "not anchoring full (likely a handshake-floor oscillation, not a real end-of-charge)",
+                    self._current_session_energy_kwh, FULL_SESSION_ENERGY_MIN_KWH,
                 )
 
         return self._analyze(ev_power)
@@ -421,6 +459,10 @@ class EVTaperDetector:
         self._settling_counter = 0
         self._last_setpoint = 0.0
         self._session_start_soc = None
+        # #438 — reset session-energy accumulator + integration state
+        self._current_session_energy_kwh = 0.0
+        self._last_energy_timestamp = None
+        self._last_energy_power_w = 0.0
 
     # ------------------------------------------------------------------
     # Night charge skip helpers
