@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.13] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.12](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.12)_
+
+### 🐛 Configuration tab save pipeline — actually works now (#442)
+
+Beta.12 wired up inline editors for every OptionsFlow field, but the underlying `config_entries/update` WebSocket call **silently rejected every option write**: HA reserves the `options` field on that endpoint exclusively for OptionsFlow walks. The UI flashed "✓ Saved" because the client believed the write succeeded; in reality `voluptuous` rejected the payload server-side with `extra keys not allowed @ data['options']` and the value never landed in `entry.options`. None of the inline editors in beta.12 actually persisted anything.
+
+Two new services close the loop:
+
+- **`solar_energy_management.set_option`** (`__init__.py`) — accepts an `options` dict, merges it into the SEM ConfigEntry's `entry.options`, and lets HA's `update_listener` decide whether to reload (the same path the OptionsFlow takes). The Configuration tab now calls this service instead of `config_entries/update`. (by @traktore-org in #442)
+- **`solar_energy_management.get_config`** (`supports_response=ONLY`) — returns the merged `data + options` dict the OptionsFlow uses internally. HA's public `config_entries/get` strips `data` and `options` for security, leaving the dashboard with no way to display current values for option-only fields. The card now reads via this service and displays the actual saved values, not just defaults. (by @traktore-org in #442)
+
+### 🧪 Save round-trip harness — 8/8 green
+
+New Playwright harness writes a value to one field per section, asserts:
+- save status flashes from "saving" → "✓ Saved" within 400 ms
+- new value is readable via `get_config` within 1 s
+- revert restores the original value cleanly
+
+Sections covered: tariff (export rate + mode select), heat pump (priority slider), battery scheduler (capacity number + force-charge toggle), load management (warning peak slider + critical-protection toggle), notifications (charger toggle). **8/8 GREEN, zero console errors.**
+
+### 🧪 Unit tests
+
+3186 pass, 9 skipped, 0 fail (unchanged from beta.12).
+
 # [1.7.1-beta.12] - 06.06.2026
 
 ## 🧪 Beta Release

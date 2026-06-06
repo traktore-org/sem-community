@@ -25,7 +25,7 @@ from typing import Any, Dict
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, SupportsResponse, callback
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
@@ -2439,3 +2439,96 @@ async def _async_register_phase_services(
     )
 
     _LOGGER.debug("Phase services registered: register_surplus_device, schedule_appliance")
+
+    # #442: in-dashboard option writes. The Configuration tab card
+    # writes one key at a time via this service rather than walking the
+    # OptionsFlow programmatically — the OptionsFlow has 7 steps and
+    # would require the card to know which step owns each key, which is
+    # the very coupling the dashboard tab is meant to avoid. The HA
+    # public ``config_entries/update`` WebSocket call rejects the
+    # ``options`` field (it's reserved for the OptionsFlow round-trip),
+    # so this service is the supported escape hatch.
+    async def async_set_option(call) -> None:
+        """Write one or more keys into the SEM ConfigEntry options.
+
+        Equivalent to walking the OptionsFlow but without forcing the
+        caller to know which step owns each key. Triggers the standard
+        ``async_update_options`` listener which decides whether a reload
+        is needed (see ``async_update_options`` comment for the skip
+        rules — runtime number/switch tweaks don't reload, structural
+        keys like entity pickers do).
+        """
+        options = call.data.get("options")
+        if not isinstance(options, dict):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="set_option_invalid_payload",
+            )
+        # Identify the SEM entry (single-instance integration).
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="set_option_no_entry",
+            )
+        target_entry = sem_entries[0]
+        if len(sem_entries) > 1:
+            for e in sem_entries:
+                if e.entry_id == call.data.get("entry_id"):
+                    target_entry = e
+                    break
+        # Merge with existing options to preserve unrelated keys, then
+        # update. HA fires the update_listener automatically.
+        merged = {**(target_entry.options or {}), **options}
+        hass.config_entries.async_update_entry(target_entry, options=merged)
+        _LOGGER.debug(
+            "set_option wrote %d key(s) to entry %s: %s",
+            len(options), target_entry.entry_id, list(options.keys()),
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        "set_option",
+        async_set_option,
+        schema=vol.Schema({
+            vol.Required("options"): dict,
+            vol.Optional("entry_id"): cv.string,
+        }),
+    )
+
+    # #442: Configuration-tab read-back service. HA's public
+    # ``config_entries/get`` WS call strips ``data`` and ``options``
+    # for security, so the dashboard has no way to display current
+    # values for option-only fields (entity pickers, slot toggles,
+    # etc.). This service returns the merged config dict the
+    # OptionsFlow uses internally.
+    async def async_get_config(call):
+        """Return the merged ``data + options`` for the SEM entry.
+
+        Uses ``supports_response=ONLY`` so the frontend can call this
+        via ``hass.callService('solar_energy_management', 'get_config',
+        {}, undefined, undefined, true)`` and receive the dict in the
+        response.
+        """
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return {"config": {}}
+        target = sem_entries[0]
+        requested = call.data.get("entry_id") if call.data else None
+        if requested and len(sem_entries) > 1:
+            for e in sem_entries:
+                if e.entry_id == requested:
+                    target = e
+                    break
+        merged = {**(target.data or {}), **(target.options or {})}
+        return {"config": merged, "entry_id": target.entry_id}
+
+    hass.services.async_register(
+        DOMAIN,
+        "get_config",
+        async_get_config,
+        schema=vol.Schema({
+            vol.Optional("entry_id"): cv.string,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )

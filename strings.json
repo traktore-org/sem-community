@@ -1195,6 +1195,12 @@
     },
     "mapping_service_required": {
       "message": "A service (e.g. keba.set_current) is required for the service control type."
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option requires an 'options' dict mapping config keys to new values."
+    },
+    "set_option_no_entry": {
+      "message": "No SEM ConfigEntry found — install SEM via Settings → Devices & Services first."
     }
   },
   "issues": {

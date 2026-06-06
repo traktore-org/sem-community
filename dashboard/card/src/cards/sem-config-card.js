@@ -171,29 +171,30 @@ class SEMConfigCard extends SEMLitBase {
         return this._entryId;
     }
 
-    // Write one or more option keys to entry.options via the public
-    // ``config_entries/update`` WebSocket call. Triggers SEM's
-    // update_listener → coordinator reload. Use for fields that have
-    // no runtime entity (option-only fields like heat_pump_relay1_entity,
-    // tariff_entity, etc.).
+    // Write one option key (or several) to ``entry.options`` via the
+    // SEM-side ``solar_energy_management.set_option`` service. We can't
+    // use HA's public ``config_entries/update`` WS call here — it
+    // explicitly rejects the ``options`` field (reserved for the
+    // OptionsFlow round-trip). The service is SEM's supported escape
+    // hatch and fires the same ``update_listener`` the OptionsFlow
+    // does, so the coordinator reloads on structural changes.
     async _saveOption(key, value, fieldKey) {
         const entryId = await this._ensureEntryId();
-        if (!entryId) return;
         this._saveStatus = { ...this._saveStatus, [fieldKey || key]: 'saving' };
         try {
-            const entries = await this._hass.callWS({
-                type: 'config_entries/get',
-                domain: 'solar_energy_management',
-            });
-            const entry = entries.find(e => e.entry_id === entryId);
-            const merged = { ...(entry?.options || {}), [key]: value };
-            await this._hass.callWS({
-                type: 'config_entries/update',
-                entry_id: entryId,
-                options: merged,
-            });
+            await this._hass.callService(
+                'solar_energy_management',
+                'set_option',
+                {
+                    options: { [key]: value },
+                    ...(entryId ? { entry_id: entryId } : {}),
+                },
+            );
             this._saveStatus = { ...this._saveStatus, [fieldKey || key]: 'ok' };
-            // Clear status after a short flash
+            // Refresh local cache so the displayed value updates
+            // immediately — without waiting for the next render cycle.
+            this._options = { ...this._options, [key]: value };
+            this.requestUpdate();
             setTimeout(() => {
                 this._saveStatus = { ...this._saveStatus };
                 delete this._saveStatus[fieldKey || key];
@@ -202,6 +203,7 @@ class SEMConfigCard extends SEMLitBase {
         } catch (err) {
             console.error('[sem-config-card] save failed', key, err);
             this._saveStatus = { ...this._saveStatus, [fieldKey || key]: err?.message || 'save failed' };
+            this.requestUpdate();
         }
     }
 
@@ -212,20 +214,28 @@ class SEMConfigCard extends SEMLitBase {
     async _refreshOptions() {
         if (!this._hass) return;
         try {
-            const entries = await this._hass.callWS({
-                type: 'config_entries/get',
-                domain: 'solar_energy_management',
-            });
-            const entry = entries?.[0];
-            // SEM merges ``data`` + ``options`` everywhere (see
-            // OptionsFlowHandler `current_config = {**data, **options}`),
-            // so the card shows the same merged view. Writes still go
-            // to ``options`` via ``config_entries/update`` — HA copies
-            // them up to ``options`` on save, where the update_listener
-            // picks them up.
-            this._options = { ...(entry?.data || {}), ...(entry?.options || {}) };
+            // HA's public ``config_entries/get`` strips data/options for
+            // security. SEM's ``get_config`` service is the supported
+            // way to read the merged config dict the OptionsFlow uses.
+            const resp = await this._hass.callService(
+                'solar_energy_management',
+                'get_config',
+                {},
+                undefined,
+                undefined,  // notifyOnError
+                true,       // returnResponse
+            );
+            const cfg = resp?.response?.config || {};
+            this._options = cfg;
+            if (resp?.response?.entry_id && !this._entryId) {
+                this._entryId = resp.response.entry_id;
+            }
             this.requestUpdate();
-        } catch (err) { /* tolerate */ }
+        } catch (err) {
+            // Tolerate — older SEM installs without the service still
+            // render with empty options (defaults shown).
+            console.warn('[sem-config-card] get_config failed', err);
+        }
     }
 
     connectedCallback() {
