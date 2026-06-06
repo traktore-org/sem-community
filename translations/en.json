@@ -1196,6 +1196,18 @@
     "ev_charger_not_configured": {
       "title": "EV charger not configured",
       "description": "No EV charger sensors are configured, so EV charging features are unavailable. Add an EV “connected” sensor or a charging-power sensor in the integration options to enable EV charging."
+    },
+    "sensor_unavailable": {
+      "title": "Sensor unavailable",
+      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+    },
+    "no_forecast_integration": {
+      "title": "No solar forecast integration detected",
+      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+    },
+    "no_recorder": {
+      "title": "Recorder integration unavailable",
+      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
     }
   }
 }

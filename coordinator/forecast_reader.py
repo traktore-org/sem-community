@@ -88,6 +88,19 @@ class ForecastReader:
         self._entities: Dict[str, str] = {}
         self._last_data = ForecastData()
 
+        # (HA Repairs, 2026-06-06) Log-once + Repair gating. Pre-fix
+        # ``_detect_source`` logged INFO every cycle (~10 s) when no
+        # integration was found — spam. Now: log INFO once on the
+        # first detection failure, file a Repair issue after the
+        # threshold so the user has something actionable in
+        # Settings → System → Repairs, and clear both on detection
+        # success.
+        import time as _time
+        self._no_forecast_logged: bool = False
+        self._no_forecast_since_mono: Optional[float] = None
+        self._no_forecast_repair_raised: bool = False
+        self._mono_time = _time.monotonic
+
         # #434 — telemetry surface mirroring classifier_path /
         # dampening_path. Each public method sets the corresponding
         # ``*_path`` string so users can see which branch produced
@@ -105,6 +118,19 @@ class ForecastReader:
     def source(self) -> Optional[str]:
         return self._source
 
+    def _clear_no_forecast_repair(self) -> None:
+        """Reset detection-failure state + drop the Repair issue when
+        a forecast integration appears after a previous absence."""
+        self._no_forecast_logged = False
+        self._no_forecast_since_mono = None
+        if self._no_forecast_repair_raised:
+            try:
+                from . import repair_issues as _ri
+                _ri.clear_no_forecast_integration(self.hass)
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("Could not clear no_forecast Repair: %s", e)
+            self._no_forecast_repair_raised = False
+
     def detect_source(self) -> Optional[str]:
         """Auto-detect available forecast integration.
 
@@ -118,6 +144,7 @@ class ForecastReader:
             self._source = "custom"
             self._last_source_detection_path = "custom"
             _LOGGER.info("Using custom forecast entities")
+            self._clear_no_forecast_repair()
             return self._source
 
         # Check Solcast
@@ -128,6 +155,7 @@ class ForecastReader:
             self._source = "solcast"
             self._last_source_detection_path = "solcast"
             _LOGGER.info("Detected Solcast PV Solar integration")
+            self._clear_no_forecast_repair()
             return self._source
 
         # Check Forecast.Solar
@@ -138,10 +166,30 @@ class ForecastReader:
             self._source = "forecast_solar"
             self._last_source_detection_path = "forecast_solar"
             _LOGGER.info("Detected Forecast.Solar integration")
+            self._clear_no_forecast_repair()
             return self._source
 
         self._last_source_detection_path = "none_available"
-        _LOGGER.info("No solar forecast integration detected")
+        # Log once per outage; subsequent cycles stay silent.
+        if not self._no_forecast_logged:
+            _LOGGER.info("No solar forecast integration detected")
+            self._no_forecast_logged = True
+        # Track the first detection-failure timestamp; escalate to a
+        # Repair issue if still missing after 1 hour (gives a
+        # legitimate first-boot install window before complaining).
+        now_mono = self._mono_time()
+        if self._no_forecast_since_mono is None:
+            self._no_forecast_since_mono = now_mono
+        elif (
+            not self._no_forecast_repair_raised
+            and (now_mono - self._no_forecast_since_mono) >= 3600
+        ):
+            try:
+                from . import repair_issues as _ri
+                _ri.raise_no_forecast_integration(self.hass)
+                self._no_forecast_repair_raised = True
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug("Could not raise no_forecast Repair: %s", e)
         return None
 
     def read_forecast(self) -> ForecastData:

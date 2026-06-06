@@ -579,6 +579,14 @@ class EVTaperDetector:
 
         except Exception as e:
             _LOGGER.debug("Could not read EV history from recorder: %s", e)
+            # (HA Repairs, 2026-06-06) Surface a one-time Repair so the
+            # user knows EV / forecast bootstrap won't work until the
+            # recorder integration is healthy. Idempotent.
+            try:
+                from . import repair_issues as _ri
+                _ri.raise_no_recorder(hass)
+            except Exception:  # noqa: BLE001
+                pass
             return None
 
         # Detect sensor unit to apply correct scale factor.
@@ -719,6 +727,12 @@ class EVTaperDetector:
             len(sessions), len(full_sessions), len(weekday_energy),
         )
 
+        # (HA Repairs) Recorder is clearly healthy — clear any prior issue.
+        try:
+            from . import repair_issues as _ri
+            _ri.clear_no_recorder(hass)
+        except Exception:  # noqa: BLE001
+            pass
         return {
             "improved": improved,
             "weekday_totals": weekday_averages,

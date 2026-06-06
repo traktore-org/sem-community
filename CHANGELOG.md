@@ -11,6 +11,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.10] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.9](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.9)_
+
+### 🚀 HA Repairs — graceful unavailability channel
+
+Honors the HA quality-check feedback "should handle unavailability gracefully instead of spamming". Persistent problems now surface in **Settings → System → Repairs** instead of growing the log.
+
+- **Persistent sensor unavailable** (`coordinator/sensor_reader.py`). New `_sensor_unavailable_since: dict[str, float]` tracks per-entity outage start in monotonic time. After `UNAVAILABLE_REPAIR_THRESHOLD_S = 300` seconds (5 min) the outage stops being "transient flap" territory and a Repair issue files — one entry per sensor in Settings → System → Repairs, severity WARNING, auto-cleared on first successful read. Transient sub-5 min flaps (Huawei modbus over WiFi commonly bouncing every 10-30 s) stay completely silent. (by @traktore-org)
+- **No forecast integration** (`coordinator/forecast_reader.py`). Pre-fix, `detect_source()` logged INFO every cycle (~10 s) when no Forecast.Solar / Solcast / custom forecast was detected — log spam. Now: INFO logs once per outage, plus a Repair issue files after **1 hour** of continuous detection failure (gives a legitimate first-boot config window). Both clear automatically when SEM detects a forecast integration. (by @traktore-org)
+- **Recorder integration unavailable** (`coordinator/ev_taper_detector.py:async_seed_from_history`). When the HA recorder isn't available, EV intelligence can't warm-start from history. Files a one-time Repair so the user has something actionable in the UI; auto-clears on next successful recorder read. (by @traktore-org)
+
+### 🌍 Translations
+
+- 3 new `issues.*` blocks (sensor_unavailable / no_forecast_integration / no_recorder) added to `strings.json` + 15 language translation files. EN + DE polished; other 13 use EN as placeholder until native-speaker review. (by @traktore-org)
+
+### 🧪 Tests
+
+- New `tests/test_repair_issues.py` (8 tests): threshold gate, recovery clears Repair, idempotent helper exceptions, forecast log-once-per-outage, forecast Repair-after-1h-threshold latching. (by @traktore-org)
+
 # [1.7.1-beta.9] - 06.06.2026
 
 ## 🧪 Beta Release

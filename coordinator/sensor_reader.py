@@ -96,6 +96,15 @@ class SensorReader:
         self._FLEET_BID = "__fleet__"
         # Track sensor availability transitions (#5: robustness)
         self._sensor_unavailable: set[str] = set()
+        # (HA Repairs, 2026-06-06) per-entity timestamp when sensor
+        # first went unavailable in the current outage. Used to delay
+        # the Repair issue past a transient flap window
+        # (``repair_issues.UNAVAILABLE_REPAIR_THRESHOLD_S``). Cleared
+        # on recovery.
+        self._sensor_unavailable_since: dict[str, float] = {}
+        # Per-entity flag — was the Repair already raised this outage?
+        # Avoids re-raising every cycle past the threshold.
+        self._sensor_repair_raised: set[str] = set()
         # Cache last valid SOC to avoid 0% during sensor gaps
         self._last_valid_soc: float = 0.0
         # Split grid power sensors (Growatt, DSMR, etc.) — discovered on first read.
@@ -1012,6 +1021,26 @@ class SensorReader:
             _LOGGER.debug(f"Sensor {entity_id} ({name}) unavailable")
             # Track unavailability for transition detection
             self._sensor_unavailable.add(entity_id)
+            # (HA Repairs) Stamp the outage start AND escalate to a
+            # Repair issue once we cross the threshold. Quiet for
+            # transient flaps; user-visible for real outages.
+            import time as _time
+            now_mono = _time.monotonic()
+            if entity_id not in self._sensor_unavailable_since:
+                self._sensor_unavailable_since[entity_id] = now_mono
+            elif entity_id not in self._sensor_repair_raised:
+                from . import repair_issues as _ri
+                outage_s = now_mono - self._sensor_unavailable_since[entity_id]
+                if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
+                    friendly = None
+                    if state is not None:
+                        friendly = state.attributes.get("friendly_name")
+                    _ri.raise_sensor_unavailable(
+                        self.hass, entity_id,
+                        friendly_name=friendly,
+                        minutes_unavailable=int(outage_s // 60),
+                    )
+                    self._sensor_repair_raised.add(entity_id)
             return None if allow_none else 0.0
 
         try:
@@ -1036,6 +1065,13 @@ class SensorReader:
                     "Sensor %s (%s) recovered — now reading %.1f",
                     entity_id, name, value,
                 )
+                # (HA Repairs) Reset the outage clock and clear any
+                # Repair issue we may have filed for this sensor.
+                self._sensor_unavailable_since.pop(entity_id, None)
+                if entity_id in self._sensor_repair_raised:
+                    self._sensor_repair_raised.discard(entity_id)
+                    from . import repair_issues as _ri
+                    _ri.clear_sensor_unavailable(self.hass, entity_id)
 
             return value
         except (ValueError, TypeError) as e:

@@ -1196,6 +1196,18 @@
     "ev_charger_not_configured": {
       "title": "EV-Ladegerät nicht konfiguriert",
       "description": "Es sind keine Sensoren für das EV-Ladegerät konfiguriert, daher sind die EV-Ladefunktionen nicht verfügbar. Fügen Sie in den Integrationsoptionen einen „Verbunden“-Sensor oder einen Ladeleistungssensor hinzu, um das EV-Laden zu aktivieren."
+    },
+    "sensor_unavailable": {
+      "title": "Sensor nicht verfügbar",
+      "description": "Der Sensor `{entity_id}` ({friendly_name}) ist seit {minutes}+ Minuten nicht verfügbar. SEM kann ihn nicht in Berechnungen einbeziehen, bis er wieder verfügbar ist. Prüfen Sie die zugrundeliegende Integration (Huawei modbus / Solcast / Forecast.Solar / Ihr Wechselrichter-Netzwerk). Wird automatisch gelöscht, sobald der Sensor wieder einen gültigen Wert meldet."
+    },
+    "no_forecast_integration": {
+      "title": "Keine Solar-Prognose-Integration erkannt",
+      "description": "SEM hat eine Stunde nach Start nach einer Solar-Prognose-Integration (Forecast.Solar, Solcast PV Solar oder ein benutzerdefinierter Sensor) gesucht, aber keine gefunden. Prognose-Funktionen (beste Überschussfenster, smarte Nachtladung, Prognose-Dämpfung) sind inaktiv, bis Sie eine installieren. Wird automatisch gelöscht, sobald SEM eine Prognose-Integration erkennt."
+    },
+    "no_recorder": {
+      "title": "Recorder-Integration nicht verfügbar",
+      "description": "SEM wollte EV-/Lade-Verlauf aus dem HA-Recorder bootstrappen, aber der Lesevorgang ist fehlgeschlagen. EV-Intelligenz (SoC-Schätzung, tägliche Decay) kann ohne ihn nicht kalt starten — Werte füllen sich langsam aus Live-Zyklen. Meist transient — wird beim nächsten erfolgreichen Lesevorgang automatisch gelöscht."
     }
   }
 }
