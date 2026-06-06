@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.12] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.11](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.11)_
+
+### ✨ Every OptionsFlow step now inline in the Configuration tab (#442)
+
+Beta.11 shipped the Configuration tab framework; beta.12 finishes the migration. **Every field from every OptionsFlow step is now editable directly in the dashboard** — entity pickers, sliders, toggles, selects, text/number inputs. No more page-by-page wizard for any setup task.
+
+- **Heat pump inline setup.** 4 `<ha-entity-picker>` widgets (SG-Ready relays, climate entity, power sensor) + 3 sliders (boost offset, max setpoint, priority). Auto-saves on each change via `config_entries/update` → SEM's `update_listener` reloads the coordinator → `binary_sensor.sem_heat_pump_registered` flips on within ~1s once relays (or just climate) are set. Live status block (mode + SG-ready state) appears above the form once registered. (by @traktore-org in #442)
+- **Tariff & pricing inline setup.** Tariff mode select (static/dynamic/calendar) + classification mode select (percentile/static) + 3 dynamic-provider pickers (price/forecast/feedin entity, conditionally rendered only when mode=dynamic) + 4 currency-aware number inputs (import/off-peak/export/demand-charge) + 2 grid-sensor pickers (override the Energy-Dashboard auto-pick) + 2 threshold steppers backed by runtime entities. Single source of truth: `entry.options`. (by @traktore-org in #442)
+- **Battery scheduler inline setup.** All 10 fields: enable toggle, capacity number input, max charge power number input, roundtrip efficiency slider, cycle cost number input, pre-charge trigger hour slider, max target SOC slider, min deficit number input, pessimism weight slider, force-charge-on-negative-price toggle. (by @traktore-org in #442)
+- **Load management inline setup.** Enable toggle + 3 peak-level sliders (target/warning/emergency) + critical-device-protection toggle + max grid import stepper. (by @traktore-org in #442)
+- **Notifications inline setup.** 2 toggles (per-charger + mobile push) + notification-service dropdown built from `hass.services.notify` / `hass.services.rest_command`. (by @traktore-org in #442)
+- **Per-charger inline setup.** Each existing EV charger now exposes 4 inline entity pickers (connected sensor, charging power sensor, current control entity, vehicle SOC sensor) plus the existing min/start/capacity steppers. Writes use the nested-list path `ev_chargers[index][key]` via `config_entries/update`. Add/remove a charger still deep-links to HA settings — schema migration on first-charger setup is too nuanced for inline-add in v1. (by @traktore-org in #442)
+- **Auto-fetched ConfigEntry id.** Card runs one `config_entries/get` WebSocket call on connect to find the SEM entry; no need to pass `entry_id` via the dashboard YAML config. Caches `entry.data + entry.options` (the same merge the OptionsFlow uses) and re-renders on every save. (by @traktore-org in #442)
+- **Save status flash.** Every editable field shows a "Saving…" → "✓ Saved" flash on write, or an error string if `config_entries/update` rejects. Errors stick until cleared. (by @traktore-org in #442)
+- **New primitives.** `_renderPicker`, `_renderPickerNested`, `_renderOptionToggle`, `_renderOptionSelect`, `_renderOptionNumberInput`, `_renderOptionSlider` — six small render helpers that any future card can reuse for option-only fields. (by @traktore-org in #442)
+
+### 🌍 Translations
+
+- **73 new dashboard translation keys** for the inline form labels + help text (config_tariff_*, config_bs_*, config_lm_*, config_notif_*, config_ev_*, config_hp_*, config_help_*). EN + DE polished, other 13 languages on EN fallback. `sem-localize.js` regenerated: **998 keys × 15 languages**. (by @traktore-org in #442)
+
+### 🧪 Tests
+
+- Per-section verification harness (Playwright) walks the dashboard, expands every section, counts pickers/sliders/toggles/selects/number-inputs per section, asserts zero JS errors during traversal. Result: 10/10 sections render clean. (by @traktore-org in #442)
+- Unit suite: **3186 pass, 9 skipped, 0 fail** (no change from beta.11). (by @traktore-org in #442)
+
 # [1.7.1-beta.11] - 06.06.2026
 
 ## 🧪 Beta Release

@@ -126,6 +126,8 @@ class SEMConfigCard extends SEMLitBase {
         return {
             ...super.properties,
             _showHelp: { state: true },
+            _entryId: { state: true },
+            _saveStatus: { state: true },
         };
     }
 
@@ -140,17 +142,120 @@ class SEMConfigCard extends SEMLitBase {
             forecast: true, notifications: true, advanced: true,
         };
         this._showHelp = false;
+        this._entryId = '';
+        this._saveStatus = {};  // { fieldKey: 'saving' | 'ok' | error-msg }
     }
 
     setConfig(config) {
         super.setConfig(config);
         this._prefix = config.entity_prefix || 'sensor.sem_';
-        this._entryId = config.entry_id || '';  // for HA settings deep-link
+        if (config.entry_id) this._entryId = config.entry_id;
     }
+
+    // Look up the SEM ConfigEntry id once we have hass — needed to write
+    // option changes back via the public ``config_entries/update`` WS API.
+    async _ensureEntryId() {
+        if (this._entryId || !this._hass) return this._entryId;
+        try {
+            const entries = await this._hass.callWS({
+                type: 'config_entries/get',
+                domain: 'solar_energy_management',
+            });
+            if (Array.isArray(entries) && entries.length > 0) {
+                this._entryId = entries[0].entry_id;
+                this.requestUpdate();
+            }
+        } catch (err) {
+            console.warn('[sem-config-card] entry lookup failed', err);
+        }
+        return this._entryId;
+    }
+
+    // Write one or more option keys to entry.options via the public
+    // ``config_entries/update`` WebSocket call. Triggers SEM's
+    // update_listener → coordinator reload. Use for fields that have
+    // no runtime entity (option-only fields like heat_pump_relay1_entity,
+    // tariff_entity, etc.).
+    async _saveOption(key, value, fieldKey) {
+        const entryId = await this._ensureEntryId();
+        if (!entryId) return;
+        this._saveStatus = { ...this._saveStatus, [fieldKey || key]: 'saving' };
+        try {
+            const entries = await this._hass.callWS({
+                type: 'config_entries/get',
+                domain: 'solar_energy_management',
+            });
+            const entry = entries.find(e => e.entry_id === entryId);
+            const merged = { ...(entry?.options || {}), [key]: value };
+            await this._hass.callWS({
+                type: 'config_entries/update',
+                entry_id: entryId,
+                options: merged,
+            });
+            this._saveStatus = { ...this._saveStatus, [fieldKey || key]: 'ok' };
+            // Clear status after a short flash
+            setTimeout(() => {
+                this._saveStatus = { ...this._saveStatus };
+                delete this._saveStatus[fieldKey || key];
+                this.requestUpdate();
+            }, 1200);
+        } catch (err) {
+            console.error('[sem-config-card] save failed', key, err);
+            this._saveStatus = { ...this._saveStatus, [fieldKey || key]: err?.message || 'save failed' };
+        }
+    }
+
+    // Cached options dict from the SEM entry — refreshed on entryId
+    // lookup and after any save. Reads are synchronous in render().
+    _options = {};
+
+    async _refreshOptions() {
+        if (!this._hass) return;
+        try {
+            const entries = await this._hass.callWS({
+                type: 'config_entries/get',
+                domain: 'solar_energy_management',
+            });
+            const entry = entries?.[0];
+            // SEM merges ``data`` + ``options`` everywhere (see
+            // OptionsFlowHandler `current_config = {**data, **options}`),
+            // so the card shows the same merged view. Writes still go
+            // to ``options`` via ``config_entries/update`` — HA copies
+            // them up to ``options`` on save, where the update_listener
+            // picks them up.
+            this._options = { ...(entry?.data || {}), ...(entry?.options || {}) };
+            this.requestUpdate();
+        } catch (err) { /* tolerate */ }
+    }
+
+    connectedCallback() {
+        super.connectedCallback();
+        // Defer until hass arrives. If hass is already set, fire now.
+        if (this._hass) {
+            this._ensureEntryId().then(() => this._refreshOptions());
+        } else {
+            // hass setter triggers this once via _afterFirstHass below.
+            this._needsEntryLookup = true;
+        }
+    }
+
+    // Override hass setter so we can fire the entry lookup on first hass.
+    set hass(hass) {
+        super.hass = hass;
+        if (this._needsEntryLookup && hass) {
+            this._needsEntryLookup = false;
+            this._ensureEntryId().then(() => this._refreshOptions());
+        }
+    }
+    get hass() { return super.hass; }
 
     _toggleHelp() { this._showHelp = !this._showHelp; }
     _toggleSection(id) {
+        // `_collapsed` is a plain instance property (not a Lit reactive
+        // state) — mutating it does NOT schedule a re-render on its own.
+        // Mirror the Control card pattern: explicit ``requestUpdate()``.
         this._collapsed = { ...this._collapsed, [id]: !this._collapsed[id] };
+        this.requestUpdate();
     }
 
     // ── Entity helpers ──
@@ -352,8 +457,14 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderEvChargers(T) {
-        const chargers = this._chargersList();
-        if (chargers.length === 0) {
+        const opts = this._options || {};
+        // Iterate over opts.ev_chargers (canonical source) so idx is
+        // aligned with the nested-write path. Fall back to runtime
+        // discovery for the per-charger ``number.sem_charger_<id>_*``
+        // entity steppers (cid is the SEM-assigned id, not the index).
+        const optsChargers = opts.ev_chargers || [];
+        const runtimeIds = this._chargersList();
+        if (optsChargers.length === 0 && runtimeIds.length === 0) {
             return html`
                 <div class="empty-state">
                     <ha-icon icon="mdi:ev-station-outline" style="--mdc-icon-size:32px;color:#5BC8D8;opacity:0.7"></ha-icon>
@@ -363,13 +474,26 @@ class SEMConfigCard extends SEMLitBase {
                 </div>
             `;
         }
+        // Prefer iterating options-shape; align each opts entry with
+        // the runtime id of the same position when present.
+        const rows = optsChargers.length ? optsChargers : runtimeIds.map(_ => ({}));
         return html`
-            ${chargers.map(cid => html`
+            ${rows.map((charger, idx) => {
+                const cid = charger.id || runtimeIds[idx];
+                return html`
                 <div class="charger-block">
                     <div class="charger-block-title">
                         <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:18px;color:#5BC8D8"></ha-icon>
                         ${this._chargerFriendlyName(cid)}
                     </div>
+                    ${this._renderPickerNested(idx, 'ev_connected_sensor', 'config_ev_connected_sensor',
+                        'binary_sensor', null, opts, 'config_help_ev_connected_sensor')}
+                    ${this._renderPickerNested(idx, 'ev_charging_power_sensor', 'config_ev_charging_power',
+                        'sensor', 'power', opts, 'config_help_ev_charging_power')}
+                    ${this._renderPickerNested(idx, 'ev_current_control_entity', 'config_ev_current_control',
+                        'number', null, opts, 'config_help_ev_current_control')}
+                    ${this._renderPickerNested(idx, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
+                        'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'minimum_soc', T, 'tile_help_min_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_vehicle_min_current`, 'vehicle_min_current', T, 'tile_help_vehicle_min_amps')}
@@ -379,9 +503,9 @@ class SEMConfigCard extends SEMLitBase {
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
                     </div>
                 </div>
-            `)}
+            `;})}
             <div class="section-footer">
-                ${this._renderHaSettingsButton('config_ev_manage')}
+                ${this._renderHaSettingsButton('config_ev_add_remove')}
             </div>
         `;
     }
@@ -409,72 +533,313 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderTariff(T) {
+        const opts = this._options || {};
         const rateEntity = this._hass?.states['sensor.sem_tariff_current_import_rate'];
         const rate = rateEntity ? rateEntity.state : '—';
         const unit = rateEntity?.attributes?.unit_of_measurement || '';
+        const currency = this._hass?.config?.currency || 'EUR';
+        const tariffModeOptions = [
+            { value: 'static', label: this._t('config_tariff_mode_static') },
+            { value: 'dynamic', label: this._t('config_tariff_mode_dynamic') },
+            { value: 'calendar', label: this._t('config_tariff_mode_calendar') },
+        ];
+        const classModeOptions = [
+            { value: 'percentile', label: this._t('config_tariff_class_percentile') },
+            { value: 'static', label: this._t('config_tariff_class_static') },
+        ];
+        const mode = opts.tariff_mode || 'static';
         return html`
             <div class="readonly-row tariff-rate-row">
                 <ha-icon icon="mdi:flash" style="--mdc-icon-size:18px;color:#ff9800"></ha-icon>
                 <span class="ctrl-label" style="flex:1">${this._t('current_electricity_price')}</span>
                 <span class="readonly-value tariff-rate-value">${rate} ${unit}</span>
             </div>
+            ${this._renderOptionSelect('tariff_mode', 'config_tariff_mode',
+                tariffModeOptions, opts, 'config_help_tariff_mode', 'static')}
+            ${mode === 'dynamic' ? html`
+                ${this._renderPicker('dynamic_tariff_entity', 'config_dynamic_tariff_entity',
+                    'sensor', null, opts, 'config_help_dynamic_tariff_entity')}
+                ${this._renderPicker('dynamic_forecast_entity', 'config_dynamic_forecast_entity',
+                    'sensor', null, opts, 'config_help_dynamic_forecast_entity')}
+                ${this._renderPicker('dynamic_feedin_entity', 'config_dynamic_feedin_entity',
+                    'sensor', null, opts, 'config_help_dynamic_feedin_entity')}
+                ${this._renderOptionSelect('tariff_classification_mode', 'config_tariff_class_mode',
+                    classModeOptions, opts, 'config_help_tariff_class_mode', 'percentile')}
+            ` : nothing}
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_cheap_price_threshold', 'cheap_threshold', T, 'setting_help_cheap_threshold')}
                 ${this._renderStepper('number.sem_expensive_price_threshold', 'expensive_threshold', T, 'setting_help_expensive_threshold')}
             </div>
-            <div class="section-footer">
-                ${this._renderHaSettingsButton('config_tariff_manage')}
-            </div>
+            ${this._renderOptionNumberInput('electricity_import_rate', 'config_import_rate',
+                { min: 0, max: 1, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_import_rate')}
+            ${this._renderOptionNumberInput('electricity_off_peak_rate', 'config_off_peak_rate',
+                { min: 0, max: 1, step: 0.001, unit: `${currency}/kWh`, default: 0.3387 }, opts, 'config_help_off_peak_rate')}
+            ${this._renderOptionNumberInput('electricity_export_rate', 'config_export_rate',
+                { min: 0, max: 0.5, step: 0.001, unit: `${currency}/kWh`, default: 0.075 }, opts, 'config_help_export_rate')}
+            ${this._renderOptionNumberInput('demand_charge_rate', 'config_demand_charge_rate',
+                { min: 0, max: 20, step: 0.01, unit: `${currency}/kW/Mt`, default: 4.32 }, opts, 'config_help_demand_charge_rate')}
+            ${this._renderPicker('grid_import_power_entity', 'config_grid_import_entity',
+                'sensor', 'power', opts, 'config_help_grid_import_entity')}
+            ${this._renderPicker('grid_export_power_entity', 'config_grid_export_entity',
+                'sensor', 'power', opts, 'config_help_grid_export_entity')}
         `;
     }
 
     _renderHeatPump(T) {
         const registered = this._val('heat_pump_registered') === 'on';
-        if (!registered) {
-            return html`
-                <div class="empty-state">
-                    <ha-icon icon="mdi:heat-pump-outline" style="--mdc-icon-size:32px;color:#4db6ac;opacity:0.7"></ha-icon>
-                    <div class="empty-title">${this._t('not_configured')}</div>
-                    <div class="empty-help">${this._t('heat_pump_not_configured')}</div>
-                    ${this._renderHaSettingsButton('config_heat_pump_setup')}
+        const opts = this._options || {};
+        // Live-status block — only when SEM has the heat pump registered
+        const statusBlock = registered ? html`
+            <div class="hp-status">
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('heat_pump_mode')}</span>
+                    <span class="readonly-value">${this._val('heat_pump_mode') || '—'}</span>
                 </div>
-            `;
-        }
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('heat_pump_sg_ready_state')}</span>
+                    <span class="readonly-value">${this._val('heat_pump_sg_ready_state') || '—'}</span>
+                </div>
+            </div>
+        ` : html`
+            <div class="setup-intro">
+                ${this._t('config_heat_pump_intro')}
+            </div>
+        `;
         return html`
-            <div class="readonly-row">
-                <span class="ctrl-label">${this._t('heat_pump_mode')}</span>
-                <span class="readonly-value">${this._val('heat_pump_mode') || '—'}</span>
+            ${statusBlock}
+            <div class="hp-form">
+                ${this._renderPicker('heat_pump_relay1_entity', 'config_hp_relay1', 'switch',
+                    null, opts, 'config_help_hp_relay')}
+                ${this._renderPicker('heat_pump_relay2_entity', 'config_hp_relay2', 'switch',
+                    null, opts, 'config_help_hp_relay')}
+                ${this._renderPicker('heat_pump_climate_entity', 'config_hp_climate', 'climate',
+                    null, opts, 'config_help_hp_climate')}
+                ${this._renderPicker('heat_pump_power_sensor', 'config_hp_power_sensor', 'sensor',
+                    'power', opts, 'config_help_hp_power_sensor')}
+                ${registered
+                    ? this._renderStepper('number.sem_heat_pump_boost_offset', 'heat_pump_boost_offset', T, 'config_help_hp_boost_offset')
+                    : this._renderOptionSlider('heat_pump_boost_offset', 'heat_pump_boost_offset',
+                        { min: 0, max: 10, step: 0.5, unit: '°C', default: 2.0 }, opts, 'config_help_hp_boost_offset')}
+                ${this._renderOptionSlider('heat_pump_max_setpoint', 'config_hp_max_setpoint',
+                    { min: 30, max: 80, step: 1, unit: '°C', default: 55 }, opts, 'config_help_hp_max_setpoint')}
+                ${this._renderOptionSlider('heat_pump_priority', 'config_hp_priority',
+                    { min: 1, max: 10, step: 1, unit: '', default: 4 }, opts, 'config_help_hp_priority')}
             </div>
-            <div class="readonly-row">
-                <span class="ctrl-label">${this._t('heat_pump_sg_ready_state')}</span>
-                <span class="readonly-value">${this._val('heat_pump_sg_ready_state') || '—'}</span>
+        `;
+    }
+
+    // Entity picker bound to ev_chargers[index][key] — writes the nested
+    // list shape back via config_entries/update.
+    _renderPickerNested(chargerIndex, chargerKey, labelKey, domain, deviceClass, opts, helpKey) {
+        const chargers = opts.ev_chargers || [];
+        const cur = chargers[chargerIndex]?.[chargerKey] || '';
+        const statusKey = `ev_chargers.${chargerIndex}.${chargerKey}`;
+        const status = this._saveStatus[statusKey];
+        const onChange = async (val) => {
+            const newChargers = (opts.ev_chargers || []).map(c => ({ ...c }));
+            if (!newChargers[chargerIndex]) newChargers[chargerIndex] = {};
+            newChargers[chargerIndex][chargerKey] = val;
+            await this._saveOption('ev_chargers', newChargers, statusKey);
+        };
+        return html`
+            <div class="picker-cell">
+                <div class="picker-row">
+                    <span class="picker-label">${this._t(labelKey)}</span>
+                    <ha-entity-picker
+                        .hass=${this._hass}
+                        .value=${cur}
+                        .includeDomains=${[domain]}
+                        .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
+                        .allowCustomEntity=${false}
+                        @value-changed=${(e) => onChange(e.detail?.value || '')}>
+                    </ha-entity-picker>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
-            ${this._renderStepper('number.sem_heat_pump_boost_offset', 'heat_pump_boost_offset', T)}
-            <div class="section-footer">
-                ${this._renderHaSettingsButton('config_heat_pump_manage')}
+        `;
+    }
+
+    // Entity picker bound to an entry.options key. Auto-saves via WebSocket
+    // on change → SEM update_listener reloads → registered=on within ~1s.
+    _renderPicker(optionKey, labelKey, domain, deviceClass, opts, helpKey) {
+        const cur = opts[optionKey] || '';
+        const status = this._saveStatus[optionKey];
+        return html`
+            <div class="picker-cell">
+                <div class="picker-row">
+                    <span class="picker-label">${this._t(labelKey)}</span>
+                    <ha-entity-picker
+                        .hass=${this._hass}
+                        .value=${cur}
+                        .includeDomains=${[domain]}
+                        .includeDeviceClasses=${deviceClass ? [deviceClass] : undefined}
+                        .allowCustomEntity=${false}
+                        @value-changed=${(e) => this._saveOption(optionKey, e.detail?.value || '', optionKey)}>
+                    </ha-entity-picker>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
+                ${status && status !== 'saving' && status !== 'ok' ? html`<div class="save-status err">⚠ ${status}</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // Toggle bound to an entry.options key. Use when no runtime
+    // ``switch.sem_*`` entity exists for the option.
+    _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal = false) {
+        const cur = opts[optionKey] != null ? !!opts[optionKey] : defaultVal;
+        const status = this._saveStatus[optionKey];
+        return html`
+            <div class="stepper-cell">
+                <div class="toggle-row">
+                    <span class="toggle-label">${this._t(labelKey)}</span>
+                    <div class="toggle-track ${cur ? 'on' : ''}"
+                         @click=${() => this._saveOption(optionKey, !cur, optionKey)}>
+                        <div class="toggle-thumb"></div>
+                    </div>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // Native <select> bound to an entry.options key.
+    _renderOptionSelect(optionKey, labelKey, options, opts, helpKey, defaultVal) {
+        const cur = opts[optionKey] != null ? opts[optionKey] : defaultVal;
+        const status = this._saveStatus[optionKey];
+        return html`
+            <div class="stepper-cell">
+                <div class="ctrl-row">
+                    <span class="ctrl-label">${this._t(labelKey)}</span>
+                    <select class="sem-select"
+                            .value=${cur}
+                            @change=${(e) => this._saveOption(optionKey, e.target.value, optionKey)}>
+                        ${options.map(o => html`
+                            <option value="${o.value}" ?selected=${o.value === cur}>${o.label}</option>
+                        `)}
+                    </select>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // Native <input type="number"> for BOX-mode fields with large ranges
+    // (e.g. battery_max_charge_power_w spans 500–25000 W). Steppers would
+    // need hundreds of clicks; typing the number is faster. Commits on
+    // blur and Enter to avoid one save per keystroke.
+    _renderOptionNumberInput(optionKey, labelKey, cfg, opts, helpKey) {
+        const cur = opts[optionKey] != null ? opts[optionKey] : cfg.default;
+        const status = this._saveStatus[optionKey];
+        const commit = (val) => {
+            const n = parseFloat(val);
+            if (Number.isNaN(n)) return;
+            const clamped = Math.max(cfg.min, Math.min(cfg.max, n));
+            this._saveOption(optionKey, clamped, optionKey);
+        };
+        return html`
+            <div class="stepper-cell">
+                <div class="ctrl-row">
+                    <span class="ctrl-label">${this._t(labelKey)}</span>
+                    <div class="num-input-wrap">
+                        <input class="sem-num-input" type="number"
+                               .value=${String(cur)}
+                               min=${cfg.min} max=${cfg.max} step=${cfg.step}
+                               @change=${(e) => commit(e.target.value)}
+                               @blur=${(e) => commit(e.target.value)}
+                               @keydown=${(e) => { if (e.key === 'Enter') e.target.blur(); }}>
+                        ${cfg.unit ? html`<span class="num-unit">${cfg.unit}</span>` : nothing}
+                    </div>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // Slider that writes to entry.options on change. Use for option-only
+    // numeric fields that don't have a runtime ``number.sem_*`` entity.
+    _renderOptionSlider(optionKey, labelKey, cfg, opts, helpKey) {
+        const cur = opts[optionKey] != null ? opts[optionKey] : cfg.default;
+        const status = this._saveStatus[optionKey];
+        const decimals = cfg.step < 1 ? 1 : 0;
+        const displayVal = parseFloat(cur).toFixed(decimals) + (cfg.unit ? ' ' + cfg.unit : '');
+        return html`
+            <div class="stepper-cell">
+                <div class="stepper-row">
+                    <span class="stepper-label">${this._t(labelKey)}</span>
+                    <div class="stepper-controls">
+                        <button class="stepper-minus" @click=${() => {
+                            const next = Math.max(cfg.min, parseFloat(cur) - cfg.step);
+                            this._saveOption(optionKey, next, optionKey);
+                        }}>−</button>
+                        <span class="stepper-value">${displayVal}</span>
+                        <button class="stepper-plus" @click=${() => {
+                            const next = Math.min(cfg.max, parseFloat(cur) + cfg.step);
+                            this._saveOption(optionKey, next, optionKey);
+                        }}>+</button>
+                    </div>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
         `;
     }
 
     _renderBatteryScheduler(T) {
+        const opts = this._options || {};
         return html`
-            <div class="info-box-text">${this._t('config_battery_scheduler_intro')}</div>
-            <div class="section-footer">
-                ${this._renderHaSettingsButton('config_battery_scheduler_manage')}
-            </div>
+            <div class="setup-intro">${this._t('config_battery_scheduler_intro')}</div>
+            ${this._renderOptionToggle('battery_charge_scheduler_enabled', 'config_bs_enabled',
+                opts, 'config_help_bs_enabled', false)}
+            ${this._renderOptionNumberInput('battery_capacity_kwh', 'config_bs_capacity',
+                { min: 1, max: 100, step: 0.5, unit: 'kWh', default: 10.0 }, opts, 'config_help_bs_capacity')}
+            ${this._renderOptionNumberInput('battery_max_charge_power_w', 'config_bs_max_charge',
+                { min: 500, max: 25000, step: 100, unit: 'W', default: 5000 }, opts, 'config_help_bs_max_charge')}
+            ${this._renderOptionSlider('battery_roundtrip_efficiency', 'config_bs_efficiency',
+                { min: 0.70, max: 0.99, step: 0.01, unit: '', default: 0.92 }, opts, 'config_help_bs_efficiency')}
+            ${this._renderOptionNumberInput('battery_cycle_cost', 'config_bs_cycle_cost',
+                { min: 0, max: 0.5, step: 0.001, unit: 'EUR/kWh', default: 0.0 }, opts, 'config_help_bs_cycle_cost')}
+            ${this._renderOptionSlider('battery_precharge_trigger_hour', 'config_bs_trigger_hour',
+                { min: 18, max: 23, step: 1, unit: 'h', default: 21 }, opts, 'config_help_bs_trigger_hour')}
+            ${this._renderOptionSlider('battery_max_target_soc', 'config_bs_max_target_soc',
+                { min: 50, max: 100, step: 5, unit: '%', default: 95.0 }, opts, 'config_help_bs_max_target_soc')}
+            ${this._renderOptionNumberInput('battery_min_deficit_kwh', 'config_bs_min_deficit',
+                { min: 0.5, max: 10, step: 0.5, unit: 'kWh', default: 2.0 }, opts, 'config_help_bs_min_deficit')}
+            ${this._renderOptionSlider('battery_pessimism_weight', 'config_bs_pessimism',
+                { min: 0, max: 1, step: 0.1, unit: '', default: 0.3 }, opts, 'config_help_bs_pessimism')}
+            ${this._renderOptionToggle('battery_force_charge_negative_price', 'config_bs_force_neg',
+                opts, 'config_help_bs_force_neg', true)}
         `;
     }
 
     _renderLoadManagement(T) {
+        const opts = this._options || {};
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('load_management_status')}</span>
                 <span class="readonly-value">${this._val('load_management_status') || '—'}</span>
             </div>
+            ${this._renderOptionToggle('load_management_enabled', 'config_lm_enabled',
+                opts, 'config_help_lm_enabled', true)}
+            ${this._renderOptionSlider('target_peak_limit', 'config_lm_target_peak',
+                { min: 1.0, max: 15.0, step: 0.5, unit: 'kW', default: 5.0 }, opts, 'config_help_lm_target_peak')}
+            ${this._renderOptionSlider('warning_peak_level', 'config_lm_warning_peak',
+                { min: 1.0, max: 15.0, step: 0.5, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
+            ${this._renderOptionSlider('emergency_peak_level', 'config_lm_emergency_peak',
+                { min: 1.0, max: 20.0, step: 0.5, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
+            ${this._renderOptionToggle('critical_device_protection', 'config_lm_critical_protection',
+                opts, 'config_help_lm_critical_protection', true)}
             ${this._renderStepper('number.sem_maximum_grid_import', 'max_grid_import', T, 'tile_help_max_grid_import')}
-            <div class="section-footer">
-                ${this._renderHaSettingsButton('config_load_management_manage')}
-            </div>
         `;
     }
 
@@ -490,11 +855,24 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderNotifications(T) {
+        const opts = this._options || {};
+        // Build the notify-service dropdown from hass.services.
+        const notifyServices = [{ value: '', label: this._t('config_notif_none') }];
+        const services = this._hass?.services || {};
+        for (const svcName of Object.keys(services.notify || {})) {
+            notifyServices.push({ value: svcName, label: `notify.${svcName}` });
+        }
+        for (const svcName of Object.keys(services.rest_command || {})) {
+            notifyServices.push({ value: svcName, label: `rest_command.${svcName}` });
+        }
         return html`
-            <div class="info-box-text">${this._t('config_notifications_intro')}</div>
-            <div class="section-footer">
-                ${this._renderHaSettingsButton('config_notifications_manage')}
-            </div>
+            <div class="setup-intro">${this._t('config_notifications_intro')}</div>
+            ${this._renderOptionToggle('enable_charger_notifications', 'config_notif_charger',
+                opts, 'config_help_notif_charger', true)}
+            ${this._renderOptionToggle('enable_mobile_notifications', 'config_notif_mobile',
+                opts, 'config_help_notif_mobile', false)}
+            ${this._renderOptionSelect('mobile_notification_service', 'config_notif_service',
+                notifyServices, opts, 'config_help_notif_service', '')}
         `;
     }
 
@@ -718,6 +1096,54 @@ class SEMConfigCard extends SEMLitBase {
                     color: var(--secondary-text-color, ${T.textSec});
                     opacity: 0.75; padding: 2px 4px 6px 0; margin-top: -4px;
                     font-style: italic;
+                }
+
+                /* Entity picker + slider cells for option-only fields */
+                .picker-cell { display: flex; flex-direction: column; padding: 6px 0; }
+                .picker-row { display: flex; align-items: center; gap: 10px; }
+                .picker-label {
+                    font-size: 14px; font-weight: 500;
+                    min-width: 150px; flex-shrink: 0;
+                }
+                .picker-row ha-entity-picker { flex: 1; min-width: 0; }
+                .save-status {
+                    font-size: 11px; padding: 2px 0 0 154px;
+                    color: var(--secondary-text-color, ${T.textSec});
+                }
+                .save-status.ok { color: #8DC892; }
+                .save-status.err { color: var(--error-color, #d33); }
+
+                .setup-intro {
+                    font-size: 12px; line-height: 1.45;
+                    color: var(--secondary-text-color, ${T.textSec});
+                    padding: 6px 0 12px; border-bottom: 1px solid ${T.surfaceBorder};
+                    margin-bottom: 8px;
+                }
+                .hp-status, .hp-form { display: flex; flex-direction: column; }
+                .hp-status { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid ${T.surfaceBorder}; }
+
+                /* number input for box-mode large-range fields */
+                .num-input-wrap { display: flex; align-items: center; gap: 6px; }
+                .sem-num-input {
+                    background: ${T.surface};
+                    border: 1px solid ${T.surfaceBorder};
+                    border-radius: 8px;
+                    color: var(--primary-text-color, ${T.text});
+                    padding: 5px 8px; font-size: 14px; font-family: inherit;
+                    width: 90px; text-align: right;
+                    font-variant-numeric: tabular-nums;
+                    outline: none;
+                }
+                .sem-num-input:focus { border-color: ${accent}; }
+                .num-unit {
+                    font-size: 12px; color: var(--secondary-text-color, ${T.textSec});
+                }
+
+                @media (max-width: 500px) {
+                    .picker-row { flex-wrap: wrap; }
+                    .picker-label { flex: 1 1 100%; min-width: 0; }
+                    .picker-row ha-entity-picker { flex: 1 1 100%; }
+                    .save-status { padding-left: 0; }
                 }
 
                 .charger-block {
