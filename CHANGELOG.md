@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.15] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.14](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.14)_
+
+### 🐛 Reliable home consumption — two-tier hold against sensor-staleness skew (#444)
+
+**PROD report:** the system-diagram + energy panels occasionally show `Home = 0 W` for a single-cycle blip during active EV charging, then snap back to a real value. Recorded the behavior live on PROD on 2026-06-06: **16 % of cycles** clamped home consumption to 0 during a 10-min `min_plus_solar` charging window at ~4.25 kW with variable solar (clouds).
+
+Root cause confirmed from the recording: the Huawei modbus inverter + grid meter update every ~13 s (p95 30 s), but the LUNA2000 battery sensor and the KEBA P30 EV sensor both have p95 staleness over **60 s** (max 82 s and 86 s respectively). When solar drops while grid hasn't yet caught up, the raw energy balance briefly goes physically negative (e.g. solar 4 348 W − stale grid_export 4 901 W − stale EV 120 W = **−700 W**). The existing 2-cycle hold (`HOME_HOLD_MAX_CYCLES = 2`) covered ~20 s of these gaps; the slower KEBA + LUNA2000 push gaps blew right past it.
+
+**Fix.** Two-tier hold in `_smooth_home_consumption` (`coordinator/coordinator.py`):
+
+  * **Inconsistency hold (~5 min):** when the raw balance is strongly negative (below the new `SENSOR_INCONSISTENCY_THRESHOLD_W = −100 W` gate), the inputs are guaranteed inconsistent — energy can't actually flow out faster than in. Hold the last positive value for up to `HOME_HOLD_INCONSISTENT_MAX = 30` cycles (~5 min @ 10 s coordinator cycle) while the slow sensor catches up.
+  * **Transient hold (~100 s):** when the raw balance is at or near zero (sensor noise around a real low load), keep a shorter hold via the existing `HOME_HOLD_MAX_CYCLES` knob, now bumped from `2` to `10`. A genuinely sustained zero past that window is still reported as real.
+
+Simulated against the 2026-06-06 PROD recording (200 samples × 3 s = 600 s wall, with all four raw upstream sensors + their `last_changed` timestamps captured): drops the zero-clamp rate from **37 %** (single-tier 2-cycle baseline replay) → **3 %** with the two-tier defaults. By @traktore-org in #444
+
+### 🧪 Tests
+
+- `tests/test_home_consumption_smoothing.py` extended to 9 tests (was 5). New coverage: strongly-negative raw balance triggers the inconsistency tier (`test_strongly_negative_raw_balance_uses_inconsistent_hold`), inconsistency tier eventually releases at the cap (`test_inconsistent_hold_eventually_releases`), mild negative raw balance stays on the transient tier (`test_mild_negative_raw_balance_uses_transient_hold`), and recovery resets the counter when sensors agree again (`test_inconsistency_tier_recovers_when_balance_returns_to_zero`). All 5 pre-existing tests still pass with no behavior change for raw-balance ≈ 0 cases. (by @traktore-org in #444)
+- Full unit suite: **3214 pass, 9 skipped, 0 fail** (was 3186 — net +28 tests across the recent beta cluster).
+
+### 📐 Why this is safe
+
+The inconsistency tier only fires when the raw balance is strongly negative — a physically impossible state that can only come from sensor disagreement. It does NOT mask real sustained-zero states (no one home, all loads off): those keep `raw_balance` ≈ 0 W, which falls under the transient tier, which still releases the zero after 10 cycles. Equally important, **`HOME_HOLD_INCONSISTENT_MAX` is finite** — even an integration-level outage that holds the raw balance pathologically negative is accepted as real after 5 minutes, so the energy total doesn't get permanently inflated.
+
 # [1.7.1-beta.14] - 06.06.2026
 
 ## 🧪 Beta Release
