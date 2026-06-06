@@ -11,6 +11,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.14] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.13](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.13)_
+
+### 🐛 Stop KEBA solar-path current oscillation that aborts EV sessions
+
+**PROD report (HA-PROD, Huawei SUN2000 + KEBA P30):** EV charging current "goes up and down" so often the car closes the session and stops charging. Worked fine "a few changes ago, like last week". Traced to commit `c30a140` (the #438 commit-then-measure fix): the `min_plus_solar` Zone 3/4 day path was tightened to unconditionally command `max(min_amps, surplus_amps)` every cycle. Correct intent (the EV must draw min to bootstrap battery-assist), but the solar-path `_set_current` call at `coordinator/ev_control.py:519` had no delta or time guard (unlike the night-path call at `:440`). Huawei modbus jitter on PROD (`8 kW → 0 W → 8 kW` across cycles) propagated straight into a new `set_current` value every 10 s — KEBA P30 couldn't handshake fast enough and the car aborted.
+
+This release adds an evcc-style stability layer around the solar-path `_set_current` call. (by @traktore-org in #443)
+
+- **Layer 1 — rolling-median smoothing on `budget_w`.** Window 3 cycles (~30 s), tunable via `ev_surplus_smooth_window`. Drops single-cycle inverter flickers before they reach the amps calculation. Median (not mean) so the outlier is dropped, not averaged in.
+- **Layer 2 — delta guard.** Skip `_set_current` when `|target - last_setpoint| < ev_min_change_amps` (default 1 A). The missing parity with the night-path guard at `ev_control.py:440`.
+- **Layer 3 — time debounce.** Skip when less than `ev_min_change_interval_sec` (default 30 s) has elapsed since the last issued call. evcc's `guardduration` discipline, applied per-loadpoint.
+- **Layer 5 — heartbeat.** After `ev_state_refresh_sec` (default 300 s) of no commands, force a re-send even if Layers 2 / 3 would suppress. Defends against lost commands on transient network blips and stale per-charger state across restarts.
+- **Bypass.** `cold_start`, `mode_switch`, `stop`, `stall_recovery`, `deadline` always go through regardless of guards. Safety-critical transitions are never debounced.
+- **Audit trail.** Every suppressed call logs a structured `solar set_current suppressed layer=... charger=... target=... last=... dt_since_last_set=... reason=...` line at INFO, so PROD soak can verify the guards are firing with sensible counts.
+- **Multi-charger safe.** State lives on `PerChargerContext` (`last_set_amps_ts` + `budget_history` swap surface) so a fleet of N chargers keeps independent guards per loadpoint — `docs/MULTI_CHARGER.md` invariants preserved.
+
+Layer 4 (threshold-time-windows on enable/disable transitions) is the pre-existing `ev_enable_delay_seconds` (60 s) and `ev_disable_delay_seconds` (300 s) at `ev_control.py:495-496` — kept as-is.
+
+### 🧪 Tests
+
+- **`tests/test_ev_solar_stability.py` — 23 new tests** covering: Huawei flicker smoothed (5), delta guard suppress/pass-through (3), debounce window suppress/pass-through (3), heartbeat re-send + reset (2), every bypass reason (4), multi-charger swap correctness (1), audit logging (3), regression guards for #438 + the PROD pattern (2). (by @traktore-org in #443)
+- Existing EV-control tests untouched and green: `test_ev_control_fleet_reads`, `test_canonical_ev_budget`, `test_ev_stall_gate_commanded_amps`, `test_multi_charger_canonical_budget` (35/35). The FLEET-READ AST lint still passes.
+
+### 📊 Tunables (config defaults; can be overridden via `ConfigEntry.options` in current beta — a Configuration-tab UI is planned for a follow-up beta)
+
+| Key | Default | Why |
+|---|---|---|
+| `ev_min_change_amps` | `1` | Matches the night-path floor at `ev_control.py:440`. |
+| `ev_min_change_interval_sec` | `30` | evcc-equivalent of guardduration, scaled to per-cycle adjusts. |
+| `ev_surplus_smooth_window` | `3` | ~30 s rolling median; drops single-cycle modbus flickers. |
+| `ev_state_refresh_sec` | `300` | Heartbeat floor; never let a charger sit without a fresh command for longer. |
+
+### ✅ HA-PROD verification — Configuration tab save pipeline (beta.13 fix)
+
+8/8 fields persisted on PROD via SSH-tunneled service calls (`solar_energy_management.set_option` writes, `solar_energy_management.get_config` reads back). Confirms beta.13's fix for the silent-reject bug in beta.12 holds on real hardware:
+
+| Section | Field | Type | Before | After | Result |
+|---|---|---|---|---|---|
+| tariff | electricity_export_rate | number | 0.075 | 0.087 | ✓ |
+| tariff | tariff_mode | select | static | static | ✓ |
+| heat_pump | heat_pump_priority | slider | 4.0 | 5 | ✓ |
+| battery_scheduler | battery_capacity_kwh | number | 15.0 | 12.5 | ✓ |
+| battery_scheduler | battery_force_charge_negative_price | toggle | True | False | ✓ |
+| load_management | warning_peak_level | slider | 4.5 | 4.0 | ✓ |
+| load_management | critical_device_protection | toggle | True | False | ✓ |
+| notifications | enable_charger_notifications | toggle | (default) | False | ✓ |
+
+All values reverted to their original state after the test. PROD is clean.
+
+### ✅ HA-PROD verification — EV charge-mode walk
+
+Walked every available charge mode on PROD (target raised from 2 kWh → 10 kWh because the daily counter was already at 1.93 kWh, leaving SEM with no headroom; with 10 kWh target the modes had room to actually pull current):
+
+| Mode | Commanded | EV power | State | Verdict |
+|---|---:|---:|---|---|
+| off | 0 A | 0 W | Solar mode – Charging allowed | ✓ |
+| solar_only | 0 A | 0 W | Solar mode – Charging allowed | ⚠ |
+| min_plus_solar | 9 A | 3 330 W | Solar mode – Charging active | ✓ |
+| always_max | 32 A | 10 480 W | Solar mode – Charging active | ✓ |
+
+3/4 green on real PROD hardware (Huawei SUN2000 + LUNA2000 + KEBA P30). The `solar_only` row is the open question: SEM showed `Charging allowed` but commanded 0 A even with ~6.5 kW solar and battery at 100 %. Most likely the rapid `off → solar_only` transition hit a stall-cooldown window before SEM had a clean surplus reading — `min_plus_solar` (forced 6 A floor) immediately afterward pulled 3.3 kW and `always_max` pulled the full 10.5 kW (32 A × 3 phase). Worth digging into in a follow-up but not a blocker for either the save-pipeline fix or the #443 KEBA stability work.
+
+`solar_plus_cheap` is correctly hidden on PROD because no dynamic tariff is configured.
+
 # [1.7.1-beta.13] - 06.06.2026
 
 ## 🧪 Beta Release
