@@ -1022,10 +1022,17 @@ class SensorReader:
             if unit.lower() == "kw":
                 value *= 1000
 
-            # Detect transition from unavailable → available
+            # Detect transition from unavailable → available. Demoted
+            # to DEBUG so a flapping upstream sensor (e.g. Huawei
+            # modbus over WiFi, common to bounce every 10-30 s) does
+            # not spam INFO for every sensor on every recovery cycle.
+            # Symmetric with the DEBUG unavailability log a few lines
+            # above — recovery isn't user-actionable. Quality-scale
+            # feedback 2026-06-06: "should handle unavailability
+            # gracefully instead of spamming".
             if entity_id in self._sensor_unavailable:
                 self._sensor_unavailable.discard(entity_id)
-                _LOGGER.info(
+                _LOGGER.debug(
                     "Sensor %s (%s) recovered — now reading %.1f",
                     entity_id, name, value,
                 )

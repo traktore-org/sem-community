@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.9] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.8](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.8)_
+
+### 🐛 Bugfix — quiet sensor-recovery log spam (HA quality-check feedback)
+
+- **`Sensor X recovered — now reading Y` demoted from INFO to DEBUG** in `coordinator/sensor_reader.py:1028`. When the upstream hardware flaps (Huawei modbus over WiFi commonly bounces every 10-30 s), the per-sensor recovery line previously fired at INFO for each of the 6+ tracked sensors on every cycle that recovered, spamming the HA log. Now symmetric with the existing DEBUG-level "Sensor X unavailable" log a few lines above — recovery is not user-actionable. Honors community feedback "should handle the unavailability gracefully instead of spamming". No behaviour change: the `_sensor_unavailable` transition tracking still fires, only the log channel changed. (by @traktore-org)
+
 # [1.7.1-beta.8] - 06.06.2026
 
 ## 🧪 Beta Release
