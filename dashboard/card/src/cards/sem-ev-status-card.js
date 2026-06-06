@@ -17,10 +17,22 @@ const DEFAULT_PREFIX = 'sensor.sem_';
 const CHARGER_COLORS = ['#8DC892', '#64B5F6'];
 
 class SEMEVStatusCard extends SEMLitBase {
+    static get properties() {
+        return {
+            ...super.properties,
+            _showHelp: { state: true },
+        };
+    }
+
     constructor() {
         super();
         this._chargers = [];
         this._lastStateCount = 0;
+        this._showHelp = false;
+    }
+
+    _toggleHelp() {
+        this._showHelp = !this._showHelp;
     }
 
     /**
@@ -621,6 +633,7 @@ class SEMEVStatusCard extends SEMLitBase {
                             </select>
                         </span>
                     </div>
+                    ${this._showHelp ? html`
                     <div class="ct-subhint">
                         <div class="ct-hint-row">
                             <span class="ct-hint-label">${this._t('hint_label_surplus')}:</span>
@@ -641,6 +654,12 @@ class SEMEVStatusCard extends SEMLitBase {
                             </div>
                         ` : nothing}
                     </div>
+                    ` : (showCheapHint ? html`
+                        <div class="ct-cheap-hint">
+                            <span class="ct-hint-label">${this._t('ev_next_cheap')}:</span>
+                            <b style="color:#8DC892">${nextCheapLabel}</b>
+                        </div>
+                    ` : nothing)}
                     <div class="ct-row clickable"
                         @click=${() => this.dispatchEvent(new CustomEvent('hass-more-info',
                             { bubbles: true, composed: true, detail: { entityId: targetTimeId } }))}>
@@ -659,58 +678,79 @@ class SEMEVStatusCard extends SEMLitBase {
                     ${this._renderPlanStrip()}
                 </div>
 
-                <div class="charger-settings">
-                    <div
-                        class="setting-item clickable"
-                        @click=${() => {
-                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_initial_current` } });
-                            this.dispatchEvent(event);
-                        }}
-                    >
-                        <ha-icon icon="mdi:current-ac" style="--mdc-icon-size:16px;color:#64B5F6"></ha-icon>
-                        <span class="setting-value">${this._fmt(startAmps, 0)}A</span>
+                <div class="charger-settings ${this._showHelp ? 'help-mode' : ''}">
+                    <div class="setting-cell">
+                        <div
+                            class="setting-item clickable"
+                            @click=${() => {
+                                const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_initial_current` } });
+                                this.dispatchEvent(event);
+                            }}
+                        >
+                            <ha-icon icon="mdi:current-ac" style="--mdc-icon-size:16px;color:#64B5F6"></ha-icon>
+                            <span class="setting-value">${this._fmt(startAmps, 0)}A</span>
+                        </div>
+                        ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_start_amps')}</div>` : nothing}
                     </div>
-                    <div
-                        class="setting-item clickable"
-                        @click=${() => {
-                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_minimum_current` } });
-                            this.dispatchEvent(event);
-                        }}
-                    >
-                        <ha-icon icon="mdi:speedometer-slow" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
-                        <span class="setting-value">${this._fmt(minAmps, 0)}A</span>
+                    <div class="setting-cell">
+                        <div
+                            class="setting-item clickable"
+                            @click=${() => {
+                                const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_minimum_current` } });
+                                this.dispatchEvent(event);
+                            }}
+                        >
+                            <ha-icon icon="mdi:speedometer-slow" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
+                            <span class="setting-value">${this._fmt(minAmps, 0)}A</span>
+                        </div>
+                        ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_min_amps')}</div>` : nothing}
                     </div>
-                    <div
-                        class="setting-item clickable"
-                        title="Vehicle handshake-floor minimum (ADR 0010)"
-                        @click=${() => {
-                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_vehicle_min_current` } });
-                            this.dispatchEvent(event);
-                        }}
-                    >
-                        <ha-icon icon="mdi:car-electric" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
-                        <span class="setting-value">${this._fmt(vehicleMinAmps, 0)}A</span>
+                    <div class="setting-cell">
+                        <div
+                            class="setting-item clickable"
+                            @click=${() => {
+                                const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_vehicle_min_current` } });
+                                this.dispatchEvent(event);
+                            }}
+                        >
+                            <ha-icon icon="mdi:car-electric" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
+                            <span class="setting-value">${this._fmt(vehicleMinAmps, 0)}A</span>
+                        </div>
+                        ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_vehicle_min_amps')}</div>` : nothing}
                     </div>
-                    <div
-                        class="setting-item clickable"
-                        @click=${() => {
-                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_battery_capacity_kwh` } });
-                            this.dispatchEvent(event);
-                        }}
-                    >
-                        <ha-icon icon="mdi:car-battery" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
-                        <span class="setting-value">${this._fmt(capacityKwh, 0)} kWh</span>
+                    <div class="setting-cell">
+                        <div
+                            class="setting-item clickable"
+                            @click=${() => {
+                                const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_battery_capacity_kwh` } });
+                                this.dispatchEvent(event);
+                            }}
+                        >
+                            <ha-icon icon="mdi:car-battery" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
+                            <span class="setting-value">${this._fmt(capacityKwh, 0)} kWh</span>
+                        </div>
+                        ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_capacity')}</div>` : nothing}
                     </div>
-                    <div
-                        class="setting-item clickable"
-                        @click=${() => {
-                            const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_kwh_per_100km` } });
-                            this.dispatchEvent(event);
-                        }}
-                    >
-                        <ha-icon icon="mdi:map-marker-distance" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
-                        <span class="setting-value">${this._fmt(consumption, 0)} kWh/100km</span>
+                    <div class="setting-cell">
+                        <div
+                            class="setting-item clickable"
+                            @click=${() => {
+                                const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_ev_kwh_per_100km` } });
+                                this.dispatchEvent(event);
+                            }}
+                        >
+                            <ha-icon icon="mdi:map-marker-distance" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
+                            <span class="setting-value">${this._fmt(consumption, 0)} kWh/100km</span>
+                        </div>
+                        ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_consumption')}</div>` : nothing}
                     </div>
+                    <ha-icon
+                        class="ev-help-toggle ${this._showHelp ? 'on' : ''}"
+                        icon="${this._showHelp ? 'mdi:help-circle' : 'mdi:help-circle-outline'}"
+                        title="${this._t('zone_help_toggle')}"
+                        @click=${() => this._toggleHelp()}
+                        style="--mdc-icon-size:16px"
+                    ></ha-icon>
                 </div>
             </div>
         `;
@@ -1092,6 +1132,34 @@ class SEMEVStatusCard extends SEMLitBase {
                 border-top: 1px solid var(--divider-color, rgba(255,255,255,0.12));
                 flex-wrap: wrap;
             }
+            /* Help mode: switch to a vertical list so each tile gets a
+               one-line description below it. Compact when off. */
+            .charger-settings.help-mode {
+                flex-direction: column; align-items: stretch; gap: 4px;
+            }
+            .setting-cell { display: flex; align-items: center; gap: 6px; }
+            .charger-settings.help-mode .setting-cell {
+                flex-direction: column; align-items: flex-start; gap: 2px;
+            }
+            .setting-help {
+                font-size: 11px;
+                line-height: 1.3;
+                color: var(--secondary-text-color, #888);
+                opacity: 0.85;
+                font-style: italic;
+                padding-left: 22px;
+            }
+            .ev-help-toggle {
+                cursor: pointer;
+                color: var(--secondary-text-color, #999);
+                opacity: 0.6;
+                margin-left: auto;
+                flex-shrink: 0;
+                transition: opacity 0.15s, color 0.15s;
+            }
+            .ev-help-toggle:hover { opacity: 1; }
+            .ev-help-toggle.on { color: #8DC892; opacity: 1; }
+            .charger-settings.help-mode .ev-help-toggle { align-self: flex-end; }
             .setting-item {
                 display: flex; align-items: center; gap: 3px;
                 font-size: 10px; color: var(--secondary-text-color, #999);
@@ -1176,6 +1244,17 @@ class SEMEVStatusCard extends SEMLitBase {
             }
             .ct-hint-text { color: var(--secondary-text-color, #999); }
             .ct-hint-extra { padding-top: 2px; border-top: 1px dashed rgba(255,255,255,0.05); }
+            /* Cheap-window timing kept visible when help is off — too
+               useful to hide behind the (?). One small line. */
+            .ct-cheap-hint {
+                padding: 3px 0 0 16px; margin-left: 2px;
+                border-left: 2px solid rgba(141,200,146,0.18);
+                font-size: 11px; color: var(--secondary-text-color, #999);
+                display: flex; gap: 6px; align-items: baseline;
+            }
+            .ct-cheap-hint .ct-hint-label {
+                min-width: auto; text-align: left;
+            }
             .ct-label { font-size: 12px; color: var(--primary-text-color, #e0e0e0); }
             .ct-ctl { margin-left: auto; display: flex; align-items: center; gap: 7px; }
             .ct-time {

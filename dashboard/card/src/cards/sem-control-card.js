@@ -115,6 +115,13 @@ const WATCHED = [
 class SEMControlCard extends SEMLitBase {
     static get watchedEntities() { return WATCHED; }
 
+    static get properties() {
+        return {
+            ...super.properties,
+            _showHelp: { state: true },
+        };
+    }
+
     constructor() {
         super();
         // ev + battery + tariff expanded by default; surplus, hotwater, solar, peak, system collapsed
@@ -123,6 +130,11 @@ class SEMControlCard extends SEMLitBase {
             hotwater: true, heatpump: true, solar: true, tariff: false,
             peak: true, system: true,
         };
+        this._showHelp = false;
+    }
+
+    _toggleHelp() {
+        this._showHelp = !this._showHelp;
     }
 
     setConfig(config) {
@@ -178,7 +190,7 @@ class SEMControlCard extends SEMLitBase {
         `;
     }
 
-    _renderStepper(entityId, labelKey, T) {
+    _renderStepper(entityId, labelKey, T, helpKey) {
         const entity = this._hass?.states[entityId];
         if (!entity) return nothing;
         const frozen = this._frozenEntities[entityId];
@@ -189,25 +201,28 @@ class SEMControlCard extends SEMLitBase {
         const displayVal = val.toFixed(decimals) + (unit ? ' ' + unit : '');
 
         return html`
-            <div class="stepper-row">
-                <span class="stepper-label">${this._t(labelKey)}</span>
-                <div class="stepper-controls">
-                    <button
-                        class="stepper-minus" aria-label="Decrease"
-                        @click=${() => this._stepNumber(entityId, -1)}
-                        @pointerdown=${() => this._startHold(entityId, -1)}
-                        @pointerup=${() => this._stopHold(entityId)}
-                        @pointerleave=${() => this._stopHold(entityId)}
-                    >−</button>
-                    <span class="stepper-value">${displayVal}</span>
-                    <button
-                        class="stepper-plus" aria-label="Increase"
-                        @click=${() => this._stepNumber(entityId, 1)}
-                        @pointerdown=${() => this._startHold(entityId, 1)}
-                        @pointerup=${() => this._stopHold(entityId)}
-                        @pointerleave=${() => this._stopHold(entityId)}
-                    >+</button>
+            <div class="stepper-cell">
+                <div class="stepper-row">
+                    <span class="stepper-label">${this._t(labelKey)}</span>
+                    <div class="stepper-controls">
+                        <button
+                            class="stepper-minus" aria-label="Decrease"
+                            @click=${() => this._stepNumber(entityId, -1)}
+                            @pointerdown=${() => this._startHold(entityId, -1)}
+                            @pointerup=${() => this._stopHold(entityId)}
+                            @pointerleave=${() => this._stopHold(entityId)}
+                        >−</button>
+                        <span class="stepper-value">${displayVal}</span>
+                        <button
+                            class="stepper-plus" aria-label="Increase"
+                            @click=${() => this._stepNumber(entityId, 1)}
+                            @pointerdown=${() => this._startHold(entityId, 1)}
+                            @pointerup=${() => this._stopHold(entityId)}
+                            @pointerleave=${() => this._stopHold(entityId)}
+                        >+</button>
+                    </div>
                 </div>
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
         `;
     }
@@ -276,11 +291,11 @@ class SEMControlCard extends SEMLitBase {
 
         return html`
             <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T)}
-                ${this._renderStepper('number.sem_battery_minimum_soc', 'minimum_soc', T)}
+                ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T, 'setting_help_priority_soc')}
+                ${this._renderStepper('number.sem_battery_minimum_soc', 'minimum_soc', T, 'setting_help_minimum_soc')}
             </div>
             <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_resume_soc', 'resume_soc', T)}
+                ${this._renderStepper('number.sem_battery_resume_soc', 'resume_soc', T, 'setting_help_resume_soc')}
                 <div class="readonly-row">
                     <span class="ctrl-label">${this._t('capacity_kwh')}</span>
                     <span class="readonly-value">${capStr}</span>
@@ -362,8 +377,8 @@ class SEMControlCard extends SEMLitBase {
                 <span class="readonly-value tariff-rate-value">${rate} ${rateUnit}</span>
             </div>
             <div class="stepper-pair">
-                ${this._renderStepper('number.sem_cheap_price_threshold', 'cheap_threshold', T)}
-                ${this._renderStepper('number.sem_expensive_price_threshold', 'expensive_threshold', T)}
+                ${this._renderStepper('number.sem_cheap_price_threshold', 'cheap_threshold', T, 'setting_help_cheap_threshold')}
+                ${this._renderStepper('number.sem_expensive_price_threshold', 'expensive_threshold', T, 'setting_help_expensive_threshold')}
             </div>
         `;
     }
@@ -568,6 +583,37 @@ class SEMControlCard extends SEMLitBase {
                 }
                 .section-body { padding: 0 14px 14px; }
 
+                /* ── Card-level help toggle (2026-06-06). Tap (?) to reveal
+                   inline one-line setting explanations across all sections
+                   that opt in (Battery, Tariff). ── */
+                .card-help-bar {
+                    display: flex; justify-content: flex-end;
+                    margin: -4px 0 6px;
+                }
+                .help-toggle {
+                    cursor: pointer;
+                    color: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.6;
+                    flex-shrink: 0;
+                    transition: opacity 0.15s, color 0.15s;
+                    user-select: none;
+                    -webkit-user-select: none;
+                    padding: 4px;
+                    border-radius: 50%;
+                }
+                .help-toggle:hover { opacity: 1; }
+                .help-toggle.on { color: ${accent}; opacity: 1; }
+                .stepper-cell { display: flex; flex-direction: column; }
+                .setting-help-text {
+                    font-size: 11px;
+                    line-height: 1.35;
+                    color: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.75;
+                    padding: 2px 4px 6px 0;
+                    margin-top: -4px;
+                    font-style: italic;
+                }
+
                 /* ── Toggle ── */
                 .toggle-group {
                     border-bottom: 1px solid ${T.surfaceBorder};
@@ -747,6 +793,15 @@ class SEMControlCard extends SEMLitBase {
                 <div class="observer-warning">
                     <ha-icon icon="mdi:eye-outline" style="--mdc-icon-size:20px;color:#f44336"></ha-icon>
                     <span>${this._t('observer_mode_active')} — ${this._t('observer_mode_readonly')}</span>
+                </div>
+                <div class="card-help-bar">
+                    <ha-icon
+                        class="help-toggle ${this._showHelp ? 'on' : ''}"
+                        icon="${this._showHelp ? 'mdi:help-circle' : 'mdi:help-circle-outline'}"
+                        title="${this._t('zone_help_toggle')}"
+                        @click=${() => this._toggleHelp()}
+                        style="--mdc-icon-size:18px"
+                    ></ha-icon>
                 </div>
                 ${SECTIONS.map(s => this._renderSection(s, sectionRenderers[s.id], T))}
             </div>

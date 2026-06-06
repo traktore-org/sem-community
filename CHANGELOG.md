@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.7] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.6](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.6)_
+
+### 🎨 Inline help toggles — one mechanism across three cards
+
+Discoverable `?` icon on cards where settings benefit from a one-line explanation. Off by default keeps the surface clean; tap to reveal italic descriptions next to each setting.
+
+- **SOC Zones card** (`sem-battery-zones-card.js`) — (?) in the section header. Reveals one-line descriptions for Auto-start / Buffer / Assist Floor / Priority SOC, each with a color-coded left stripe matching its zone marker dot. (by @traktore-org)
+- **EV charger card** (`sem-ev-status-card.js`) — (?) in the bottom settings row. Toggles two things together: (1) the 3-line Surplus/Overnight/House-battery mode hint that previously was always visible, (2) per-tile descriptions for Vehicle Start Amps / Min Amps / Vehicle Min Amps / Capacity / kWh-per-100km. Off = compact (selector + deadline + plan strip only). The "Next cheap window" timing line stays visible regardless when in `solar_plus_cheap` (operational info). (by @traktore-org)
+- **Control card** (`sem-control-card.js`) — (?) at the top right. Globally toggles inline help for the two eligible sections: Battery Management (Priority / Min / Resume SOC) and Tariff & Pricing (Cheap / Expensive threshold). Other sections unchanged for now. (by @traktore-org)
+
+### 🌍 Translations
+
+- 15 new help strings × 15 languages = **225 entries**. EN + DE polished, other 13 follow the same template (native-speaker review welcome).
+
 # [1.7.1-beta.6] - 06.06.2026
 
 ## 🧪 Beta Release
