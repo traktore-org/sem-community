@@ -1198,16 +1198,17 @@
       "description": "Er zijn geen sensoren voor de EV-lader geconfigureerd, dus EV-laadfuncties zijn niet beschikbaar. Voeg in de integratieopties een “verbonden”-sensor of een laadvermogenssensor toe om EV-laden in te schakelen."
     },
     "sensor_unavailable": {
-      "title": "Sensor unavailable",
-      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
-    },
-    "no_forecast_integration": {
-      "title": "No solar forecast integration detected",
-      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
-    },
-    "no_recorder": {
-      "title": "Recorder integration unavailable",
-      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
-    }
+    "title": "Sensor niet beschikbaar",
+    "description": "De sensor `{entity_id}` ({friendly_name}) is al {minutes}+ minuten niet beschikbaar. SEM kan deze niet meenemen in berekeningen totdat de sensor weer actief is. Controleer de bovenliggende integratie (Huawei modbus / Solcast / Forecast.Solar / uw omvormernetwerk). Deze melding verdwijnt automatisch zodra de sensor weer een geldige waarde rapporteert."
+  },
+  "no_forecast_integration": {
+    "title": "Geen zonneprognose-integratie gevonden",
+    "description": "SEM heeft na het opstarten een uur lang gezocht naar een zonneprognose-integratie (Forecast.Solar, Solcast PV Solar of een aangepaste prognose-sensor), maar niets gevonden. Prognose-afhankelijke functies (tips voor het beste overschotvenster, slim nachtladen, prognose-demping) zijn inactief totdat u er een installeert. De melding verdwijnt automatisch zodra SEM een prognose-integratie detecteert."
+  },
+  "no_recorder": {
+    "title": "Recorder-integratie niet beschikbaar",
+    "description": "SEM heeft geprobeerd de EV- en laadgeschiedenis te laden vanuit de HA-recorder, maar het uitlezen is mislukt. EV-intelligentie (geschatte laadtoestand, dagelijks verval) kan niet warm opstarten zonder deze gegevens; waarden worden langzaam opgebouwd vanuit live laadcycli. Meestal een eenmalige storing — de melding verdwijnt automatisch bij de volgende geslaagde recorder-uitlezing."
+  }
+   
   }
 }
