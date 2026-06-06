@@ -75,6 +75,9 @@ def _build_coordinator(charge_mode="solar_only"):
     coord._ev_charge_started_at = None
     coord._ev_last_change_time = None
     coord._current_charger_budget = None
+    # v1.7.1-beta.14 stability layer state — the real __init__ creates these.
+    coord._ev_last_set_amps_ts = None
+    coord._ev_budget_history = []
     coord._cycle_ev_budget = MagicMock(net_w=2000.0)  # below 4140 W threshold
     coord._this_charger_power = MagicMock()
     coord._this_charger_drawing_power = MagicMock()

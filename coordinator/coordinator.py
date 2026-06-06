@@ -122,6 +122,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_last_change_time = None  # Reactive control timing
         self._ev_charge_started_at = None  # Disable delay: min hold timer to prevent cycling
         self._ev_enable_surplus_since = None  # Enable delay: surplus must persist before starting
+        # Solar stability primary view (swapped per-charger by PerChargerContext).
+        self._ev_last_set_amps_ts: Optional[float] = None
+        self._ev_budget_history: list = []
         # Per-charger state dicts for multi-charger (#112)
         self._ev_stalled_since_per_charger: Dict[str, Optional[float]] = {}
         self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
@@ -130,6 +133,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # False-stall guard per charger (#243)
         self._ev_reenable_attempts_per_charger: Dict[str, int] = {}
         self._ev_charge_refused_per_charger: Dict[str, bool] = {}
+        # Solar stability layer (v1.7.1-beta.14): per-charger guard state.
+        # last_set_amps_ts is the wall-clock of the most recent ``_set_current``
+        # call so the time-debounce in ``ev_control.py`` knows when it's been
+        # long enough to issue another one. budget_history is the rolling-median
+        # window over recent budget_w samples so a single-cycle Huawei modbus
+        # flicker (e.g. 8000 / 0 / 8000 W) does not propagate into a current
+        # change. Mutated in place inside the per-charger loop.
+        self._ev_last_set_amps_ts_per_charger: Dict[str, Optional[float]] = {}
+        self._ev_budget_history_per_charger: Dict[str, list] = {}
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
         # Per-charger "EV day" boundary, keyed by charger id. Each charger's day
         # ends at its own ``Charge by`` deadline (#246) — NOT at sunrise — so the

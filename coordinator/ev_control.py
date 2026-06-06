@@ -507,22 +507,36 @@ class EVControlMixin:
                 budget_w = max(ev.min_power_threshold, budget_w)
                 enable_delay = 0  # No enable delay — guaranteed charge
 
+            # Layer 1 — smooth the per-cycle budget so a single-cycle inverter
+            # modbus flicker (PROD: Huawei SUN2000 8 kW → 0 W → 8 kW across
+            # consecutive cycles) doesn't propagate into a current change.
+            # Rolling median (window default 3) drops the outlier sample.
+            budget_w = self._smooth_solar_budget(budget_w)
+
             if budget_w >= ev.min_power_threshold:
                 # Surplus is sufficient — track how long it's been sufficient
                 self._ev_enable_surplus_since = self._ev_enable_surplus_since or now_ts
 
                 if ev._session_active and this_power_w > 100:
-                    # Already charging — update current immediately, reset disable timer
+                    # Already charging — adjust current via Layers 2/3/5
+                    # (delta + debounce + heartbeat). This was the primary
+                    # oscillation path: pre-fix it issued ``set_current``
+                    # every 10 s cycle with no guard.
                     target_current = min(ev.max_current,
                                          max(ev.min_current, ev.watts_to_current(budget_w)))
                     target_current = self._apply_ramp_limit(target_current)
-                    await ev._set_current(target_current)
+                    await self._solar_set_current(
+                        ev, target_current, reason="adjust", now_ts=now_ts,
+                    )
                     self._ev_charge_started_at = self._ev_charge_started_at or now_ts
                 elif (now_ts - self._ev_enable_surplus_since) >= enable_delay:
-                    # Surplus persisted long enough — start charging
+                    # Surplus persisted long enough — start charging.
+                    # First command of a session always bypasses the guards.
                     target_current = min(ev.max_current,
                                          max(ev.min_current, ev.watts_to_current(budget_w)))
-                    await ev._set_current(target_current)
+                    await self._solar_set_current(
+                        ev, target_current, reason="cold_start", now_ts=now_ts,
+                    )
 
                     if not ev._session_active or self._should_reenable_charger(power):
                         await ev.start_session(energy_target_kwh=0)
@@ -544,18 +558,27 @@ class EVControlMixin:
                 if (self._ev_charge_started_at
                         and (now_ts - self._ev_charge_started_at) < disable_delay
                         and this_power_w > 100):
-                    # Within disable delay and actually charging — hold at minimum current
+                    # Within disable delay and actually charging — hold at minimum current.
+                    # The outer ``!= min_current`` guard ensures we only fire when
+                    # we're actually stepping down; the stability layer audits and
+                    # debounces the actual transition.
                     if ev._current_setpoint != ev.min_current:
-                        await ev._set_current(ev.min_current)
+                        await self._solar_set_current(
+                            ev, ev.min_current, reason="adjust", now_ts=now_ts,
+                        )
                     _LOGGER.debug(
                         "Solar EV: budget=%.0fW < threshold, disable delay active "
                         "(%.0fs of %ds) — holding min current",
                         budget_w, now_ts - self._ev_charge_started_at, disable_delay,
                     )
                 else:
-                    # Disable delay expired or not charging — zero current
+                    # Disable delay expired or not charging — zero current.
+                    # ``stop`` reason bypasses the stability guards: stopping
+                    # is a safety transition and must not be debounced.
                     if ev._current_setpoint > 0:
-                        await ev._set_current(0)
+                        await self._solar_set_current(
+                            ev, 0, reason="stop", now_ts=now_ts,
+                        )
                     self._ev_charge_started_at = None
                     # #353: KEBA P30 firmware rejects ``set_current``
                     # values below its 6 A IEC 61851 minimum and silently
@@ -595,7 +618,16 @@ class EVControlMixin:
         # === PAUSE STATES: zero current, keep session ===
         if state in self.SOLAR_PAUSE_STATES:
             if ev._current_setpoint > 0:
-                await ev._set_current(0)
+                # Route through the stability wrapper so the heartbeat /
+                # debounce clocks stay honest across a battery-priority
+                # pause. ``battery_pause`` bypasses delta + debounce (we
+                # MUST drop to 0 immediately) but still updates
+                # ``_ev_last_set_amps_ts`` so the next charge-state
+                # re-entry doesn't see a stale clock.
+                now_ts = dt_util.now().timestamp()
+                await self._solar_set_current(
+                    ev, 0, reason="battery_pause", now_ts=now_ts,
+                )
             # #351 M10 — clear the charge-started timestamp so the
             # disable-delay counter doesn't consume its 300 s budget
             # during a battery-priority pause. Without this, a 5-minute
@@ -928,6 +960,157 @@ class EVControlMixin:
         current" from "plugged in, not charging".
         """
         return self._this_charger_power(ev, power) > 500
+
+    # ─── Solar stability layer (v1.7.1-beta.14) ─────────────────
+    # Layered guards around ``ev._set_current`` in the solar path. The night
+    # path at L440 already has a delta guard; mirroring + extending it here
+    # closes the oscillation class where Huawei modbus jitter (8 kW → 0 W →
+    # 8 kW across cycles) drove KEBA into a current loop the car aborted.
+    #
+    # Layer 1: ``_smooth_solar_budget`` — rolling median over recent budget_w.
+    # Layers 2+3+5: ``_solar_set_current`` — delta, debounce, heartbeat.
+    #
+    # All per-charger state lives on ``PerChargerContext`` (swapped via
+    # ``_ev_last_set_amps_ts`` / ``_ev_budget_history``), so a multi-charger
+    # fleet keeps independent guards per loadpoint.
+
+    _SOLAR_GUARD_BYPASS_REASONS = frozenset({
+        "cold_start", "mode_switch", "stop", "stall_recovery", "deadline",
+        "battery_pause",
+    })
+
+    def _smooth_solar_budget(self, raw_budget_w: float) -> float:
+        """Layer 1: rolling-median smoothing of the per-cycle EV budget.
+
+        Why median, not mean: a single-cycle inverter modbus flicker
+        (Huawei observed 8 kW → 0 W → 8 kW across consecutive cycles)
+        gets dropped by the median but only halved by the mean. The
+        flicker is the dominant root cause of the cycle-by-cycle
+        ``set_current`` re-issues that abort EV sessions.
+
+        Window size from ``ev_surplus_smooth_window`` (default 3
+        cycles ≈ 30 s). One-sample window degenerates to identity.
+        Stored on the per-charger context's ``_ev_budget_history``
+        list (swapped by ``PerChargerContext``) so multi-charger
+        fleets keep independent windows per loadpoint.
+        """
+        from ..consts.core import DEFAULT_EV_SURPLUS_SMOOTH_WINDOW
+        window = max(1, int(self.config.get(
+            "ev_surplus_smooth_window", DEFAULT_EV_SURPLUS_SMOOTH_WINDOW,
+        )))
+        # Lazy-init so tests that build the coordinator via ``__new__`` (and
+        # therefore skip ``__init__``) don't AttributeError. Production always
+        # has this initialised by ``coordinator.py:__init__``.
+        hist = getattr(self, "_ev_budget_history", None)
+        if hist is None:
+            hist = []
+            self._ev_budget_history = hist
+        hist.append(float(raw_budget_w))
+        while len(hist) > window:
+            hist.pop(0)
+        ordered = sorted(hist)
+        # For even-length windows we deliberately pick the UPPER of the two
+        # centre values (``len // 2`` rather than ``(len - 1) // 2``). With
+        # the default window=3 this never matters; with a user-configured
+        # window=2 it biases toward the recent / higher sample, which is
+        # the safe direction for a charge controller (under-deliver vs
+        # over-deliver under uncertainty).
+        return ordered[len(ordered) // 2]
+
+    async def _solar_set_current(
+        self, ev, target_amps: int, *, reason: str, now_ts: float,
+    ) -> bool:
+        """Layered ``ev._set_current`` wrapper for the solar control path.
+
+        Returns ``True`` iff the underlying call was issued (so callers can
+        update their own state mirrors when appropriate). Always-bypass
+        reasons go through unconditionally — see
+        ``_SOLAR_GUARD_BYPASS_REASONS``.
+
+        Guards (each can suppress, in order):
+
+        * Layer 2 — delta: skip when ``|target - current_setpoint| <
+          ev_min_change_amps`` (default 1 A). This is the missing parity
+          with the night-path guard at ev_control.py:440.
+        * Layer 3 — debounce: skip when less than
+          ``ev_min_change_interval_sec`` (default 30 s) has elapsed since
+          the previous issued call.
+        * Layer 5 — heartbeat: when more than
+          ``ev_state_refresh_sec`` (default 300 s) has elapsed, force a
+          re-send even if Layers 2/3 would skip. Protects against lost
+          commands on a transient network blip and against stale
+          per-charger state across a restart.
+
+        Every suppress emits a structured INFO log so the PROD soak can
+        verify the guards are firing with sensible counts.
+        """
+        from ..consts.core import (
+            DEFAULT_EV_MIN_CHANGE_AMPS,
+            DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC,
+            DEFAULT_EV_STATE_REFRESH_SEC,
+        )
+        min_change_amps = int(self.config.get(
+            "ev_min_change_amps", DEFAULT_EV_MIN_CHANGE_AMPS,
+        ))
+        min_change_interval = int(self.config.get(
+            "ev_min_change_interval_sec", DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC,
+        ))
+        heartbeat_sec = int(self.config.get(
+            "ev_state_refresh_sec", DEFAULT_EV_STATE_REFRESH_SEC,
+        ))
+
+        target_amps = int(target_amps)
+        current = int(getattr(ev, "_current_setpoint", 0) or 0)
+        # Lazy-init so tests that build the coordinator via ``__new__`` work.
+        # Production has this initialised by ``coordinator.py:__init__``.
+        last_ts = getattr(self, "_ev_last_set_amps_ts", None)
+        dt_since = (now_ts - last_ts) if last_ts is not None else None
+        cid = getattr(ev, "device_id", None) or "ev"
+
+        # Layer 5 — heartbeat upgrade. If it's been heartbeat_sec since the
+        # last issued call, we MUST send regardless of delta/debounce. Tag
+        # the reason so the post-call log is honest about why we sent.
+        heartbeat_due = (
+            dt_since is not None and dt_since >= heartbeat_sec
+        )
+        effective_reason = reason
+        if heartbeat_due and reason not in self._SOLAR_GUARD_BYPASS_REASONS:
+            effective_reason = "heartbeat"
+
+        bypass = (
+            effective_reason in self._SOLAR_GUARD_BYPASS_REASONS
+            or effective_reason == "heartbeat"
+        )
+
+        # Layer 2 — delta guard. The dominant oscillation kill on PROD.
+        if not bypass and abs(target_amps - current) < min_change_amps:
+            _LOGGER.info(
+                "solar set_current suppressed layer=delta charger=%s "
+                "target=%dA last=%dA dt_since_last_set=%s reason=%s",
+                cid, target_amps, current,
+                f"{dt_since:.0f}s" if dt_since is not None else "none",
+                reason,
+            )
+            return False
+
+        # Layer 3 — time debounce.
+        if not bypass and dt_since is not None and dt_since < min_change_interval:
+            _LOGGER.info(
+                "solar set_current suppressed layer=debounce charger=%s "
+                "target=%dA last=%dA dt_since_last_set=%.1fs min=%ds reason=%s",
+                cid, target_amps, current, dt_since, min_change_interval, reason,
+            )
+            return False
+
+        await ev._set_current(target_amps)
+        self._ev_last_set_amps_ts = now_ts
+        if effective_reason == "heartbeat":
+            _LOGGER.info(
+                "solar set_current heartbeat charger=%s target=%dA "
+                "dt_since_last_set=%.0fs (refresh_floor=%ds)",
+                cid, target_amps, dt_since or 0.0, heartbeat_sec,
+            )
+        return True
 
     def _apply_ramp_limit(self, target_current: float) -> float:
         """Limit current changes to ±ramp_rate per cycle during solar charging.
