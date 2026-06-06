@@ -618,16 +618,8 @@ class EVControlMixin:
         # === PAUSE STATES: zero current, keep session ===
         if state in self.SOLAR_PAUSE_STATES:
             if ev._current_setpoint > 0:
-                # Route through the stability wrapper so the heartbeat /
-                # debounce clocks stay honest across a battery-priority
-                # pause. ``battery_pause`` bypasses delta + debounce (we
-                # MUST drop to 0 immediately) but still updates
-                # ``_ev_last_set_amps_ts`` so the next charge-state
-                # re-entry doesn't see a stale clock.
-                now_ts = dt_util.now().timestamp()
-                await self._solar_set_current(
-                    ev, 0, reason="battery_pause", now_ts=now_ts,
-                )
+                # battery_pause bypasses guards but updates heartbeat clock.
+                await self._solar_set_current(ev, 0, reason="battery_pause", now_ts=dt_util.now().timestamp())
             # #351 M10 — clear the charge-started timestamp so the
             # disable-delay counter doesn't consume its 300 s budget
             # during a battery-priority pause. Without this, a 5-minute
