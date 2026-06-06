@@ -47,6 +47,38 @@ Layer 4 (threshold-time-windows on enable/disable transitions) is the pre-existi
 | `ev_surplus_smooth_window` | `3` | ~30 s rolling median; drops single-cycle modbus flickers. |
 | `ev_state_refresh_sec` | `300` | Heartbeat floor; never let a charger sit without a fresh command for longer. |
 
+### ✅ HA-PROD verification — Configuration tab save pipeline (beta.13 fix)
+
+8/8 fields persisted on PROD via SSH-tunneled service calls (`solar_energy_management.set_option` writes, `solar_energy_management.get_config` reads back). Confirms beta.13's fix for the silent-reject bug in beta.12 holds on real hardware:
+
+| Section | Field | Type | Before | After | Result |
+|---|---|---|---|---|---|
+| tariff | electricity_export_rate | number | 0.075 | 0.087 | ✓ |
+| tariff | tariff_mode | select | static | static | ✓ |
+| heat_pump | heat_pump_priority | slider | 4.0 | 5 | ✓ |
+| battery_scheduler | battery_capacity_kwh | number | 15.0 | 12.5 | ✓ |
+| battery_scheduler | battery_force_charge_negative_price | toggle | True | False | ✓ |
+| load_management | warning_peak_level | slider | 4.5 | 4.0 | ✓ |
+| load_management | critical_device_protection | toggle | True | False | ✓ |
+| notifications | enable_charger_notifications | toggle | (default) | False | ✓ |
+
+All values reverted to their original state after the test. PROD is clean.
+
+### ✅ HA-PROD verification — EV charge-mode walk
+
+Walked every available charge mode on PROD (target raised from 2 kWh → 10 kWh because the daily counter was already at 1.93 kWh, leaving SEM with no headroom; with 10 kWh target the modes had room to actually pull current):
+
+| Mode | Commanded | EV power | State | Verdict |
+|---|---:|---:|---|---|
+| off | 0 A | 0 W | Solar mode – Charging allowed | ✓ |
+| solar_only | 0 A | 0 W | Solar mode – Charging allowed | ⚠ |
+| min_plus_solar | 9 A | 3 330 W | Solar mode – Charging active | ✓ |
+| always_max | 32 A | 10 480 W | Solar mode – Charging active | ✓ |
+
+3/4 green on real PROD hardware (Huawei SUN2000 + LUNA2000 + KEBA P30). The `solar_only` row is the open question: SEM showed `Charging allowed` but commanded 0 A even with ~6.5 kW solar and battery at 100 %. Most likely the rapid `off → solar_only` transition hit a stall-cooldown window before SEM had a clean surplus reading — `min_plus_solar` (forced 6 A floor) immediately afterward pulled 3.3 kW and `always_max` pulled the full 10.5 kW (32 A × 3 phase). Worth digging into in a follow-up but not a blocker for either the save-pipeline fix or the #443 KEBA stability work.
+
+`solar_plus_cheap` is correctly hidden on PROD because no dynamic tariff is configured.
+
 # [1.7.1-beta.13] - 06.06.2026
 
 ## 🧪 Beta Release
