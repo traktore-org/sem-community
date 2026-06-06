@@ -504,6 +504,7 @@ class SEMConfigCard extends SEMLitBase {
                         'number', null, opts, 'config_help_ev_current_control')}
                     ${this._renderPickerNested(idx, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
+                    ${this._renderTargetTypeSelectNested(idx, charger, opts)}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'minimum_soc', T, 'tile_help_min_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_vehicle_min_current`, 'vehicle_min_current', T, 'tile_help_vehicle_min_amps')}
@@ -634,6 +635,44 @@ class SEMConfigCard extends SEMLitBase {
                     { min: 30, max: 80, step: 1, unit: '°C', default: 55 }, opts, 'config_help_hp_max_setpoint')}
                 ${this._renderOptionSlider('heat_pump_priority', 'config_hp_priority',
                     { min: 1, max: 10, step: 1, unit: '', default: 4 }, opts, 'config_help_hp_priority')}
+            </div>
+        `;
+    }
+
+    // EV target-type select bound to ev_chargers[index].ev_target_type.
+    // The SOC option is disabled (#446 GUI gate) when this charger has
+    // no ``vehicle_soc_entity`` configured — preventing the saved-bad-state
+    // class of bug that idled PROD 2026-06-06. The runtime trusts the
+    // saved config; the GUI is the only gatekeeper.
+    _renderTargetTypeSelectNested(chargerIndex, charger, opts) {
+        const cur = charger.ev_target_type || 'kwh';
+        const hasSensor = !!charger.vehicle_soc_entity;
+        const statusKey = `ev_chargers.${chargerIndex}.ev_target_type`;
+        const status = this._saveStatus[statusKey];
+        const onChange = async (e) => {
+            const val = e.target.value;
+            const newChargers = (opts.ev_chargers || []).map(c => ({ ...c }));
+            if (!newChargers[chargerIndex]) newChargers[chargerIndex] = {};
+            newChargers[chargerIndex].ev_target_type = val;
+            await this._saveOption('ev_chargers', newChargers, statusKey);
+        };
+        return html`
+            <div class="stepper-cell">
+                <div class="ctrl-row">
+                    <span class="ctrl-label">${this._t('config_ev_target_type')}</span>
+                    <select class="sem-select" .value=${cur} @change=${onChange}>
+                        <option value="kwh" ?selected=${cur !== 'soc'}>
+                            ${this._t('config_ev_target_type_kwh')}
+                        </option>
+                        <option value="soc" ?disabled=${!hasSensor}
+                                            ?selected=${cur === 'soc'}>
+                            ${this._t('config_ev_target_type_soc')}${hasSensor ? '' : ' — ' + this._t('config_ev_target_type_requires_sensor')}
+                        </option>
+                    </select>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
+                ${this._showHelp ? html`<div class="setting-help-text">${this._t('config_help_ev_target_type')}</div>` : nothing}
             </div>
         `;
     }

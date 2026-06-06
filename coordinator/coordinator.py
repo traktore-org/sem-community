@@ -3037,46 +3037,63 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self, energy, vehicle_soc: float | None = None, charger_cfg: dict | None = None,
         bound: str = "min",
     ) -> float:
-        """Calculate remaining EV charging need in kWh from the best available source.
+        """Calculate remaining EV charging need in kWh.
 
-        When ev_target_type is "soc" AND vehicle_soc is available: SOC-based.
-        When ev_target_type is "kwh" OR vehicle_soc is unavailable: kWh daily target.
-        Used by both _build_charging_context() and _determine_charging_strategy().
+        Clean ``if SOC else kWh`` branch — no fallback, no cross-mode
+        contamination (#446). The mode is the saved per-charger
+        ``ev_target_type`` (with legacy ``ev_target_mode`` for back-compat),
+        falling back to the integration-level default, then "kwh".
+
+        The Configuration tab GUI is the gatekeeper that ensures
+        ``ev_target_type="soc"`` is only ever saved when a real
+        ``vehicle_soc_entity`` is configured (#446 GUI gate), and the
+        v10 → v11 schema migration cleans up any pre-existing entries
+        that had the bad combination on disk (#446 migration). The
+        runtime trusts the saved config — no override, no rescue path.
+
+        Branches:
+          * **SOC branch:** compute ``(target_soc − vehicle_soc) × capacity``.
+            If the user's real SOC sensor is momentarily ``unavailable``,
+            return the full ``ev_capacity`` as the remaining need so SEM
+            keeps charging — taper detection (hardware-level) is the
+            real "full" stop. Never substitutes ``estimated_soc``.
+          * **kWh branch:** ``daily_target − delivered_today`` for this
+            specific charger (per #351 H1 per-charger accounting).
 
         ``bound`` selects which target to measure against (#245):
-          - "min" (default, floor = the existing single target): the guaranteed
-            amount; night/grid tops up to this. This is what callers usually mean
-            by "remaining to target".
-          - "max" (ceiling): surplus charges up to this, then stops. Defaults to
-            full (100% / 100 kWh ≈ unlimited) when no Max is set.
+          * ``"min"`` (default): the guaranteed-floor target. Night /
+            grid tops up to this.
+          * ``"max"`` (ceiling): surplus charges up to this then stops.
+            Defaults to "effectively unlimited" when no Max is set.
         """
         cfg = charger_cfg or {}
-        ev_capacity = cfg.get("ev_battery_capacity_kwh") if cfg.get("ev_battery_capacity_kwh") is not None else self.config.get("ev_battery_capacity_kwh", 40)
-        # ev_target_mode was renamed to ev_target_type (#235); read both for back-compat.
+        ev_capacity = (
+            cfg.get("ev_battery_capacity_kwh")
+            if cfg.get("ev_battery_capacity_kwh") is not None
+            else self.config.get("ev_battery_capacity_kwh", 40)
+        )
+        # ``ev_target_mode`` was renamed to ``ev_target_type`` (#235); read
+        # both for back-compat. Per-charger config wins over the
+        # integration-level default.
         ev_target_type = (
             cfg.get("ev_target_type") or cfg.get("ev_target_mode")
-            or self.config.get("ev_target_type") or self.config.get("ev_target_mode", "kwh")
+            or self.config.get("ev_target_type")
+            or self.config.get("ev_target_mode", "kwh")
         )
 
-        # De-trap %: if % is selected but there's no real SOC sensor, fall back to
-        # the EV-intelligence virtual SOC — but only when it has a confident anchor
-        # (a detected full charge / car-API calibration). The estimate is a *soft*
-        # ceiling: taper detection is still the hard "full" stop, and the Min floor
-        # still grid-tops-up, so an estimate error is bounded. With no real SOC and
-        # no anchored estimate, fall through to the kWh target (no silent no-op). (#245)
-        if ev_target_type == "soc" and vehicle_soc is None:
-            cid = cfg.get("id")
-            detectors = getattr(self, "_ev_taper_detectors", {}) or {}
-            detector = detectors.get(cid) if cid else getattr(self, "_ev_taper_detector", None)
-            if detector is not None and getattr(detector, "_soc_anchored", False):
-                vehicle_soc = detector.get_virtual_soc(None)
-
-        use_soc = ev_target_type == "soc" and vehicle_soc is not None
-        if use_soc:
-            # SOC ceiling defaults to 100% (car full); floor default 80%.
+        if ev_target_type == "soc":
+            # Pre-condition guaranteed by GUI gate + v10→v11 migration:
+            # a real ``vehicle_soc_entity`` is configured for this charger.
+            # If its current value is unavailable (network blip etc.),
+            # return the full capacity so SEM keeps charging — taper
+            # detection will eventually stop it on car-full. Never use
+            # estimated_soc.
+            if vehicle_soc is None:
+                return float(ev_capacity)
             soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
             return max(0, (soc_target - vehicle_soc) / 100 * ev_capacity)
-        # kWh ceiling defaults to 100 kWh/day (≈ unlimited); floor default 10.
+
+        # kWh branch — the default mode for installs without a SOC sensor.
         daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
         # #351 H1 — for a per-charger call (``charger_cfg`` provided),
         # subtract THIS charger's daily energy, not the fleet total.

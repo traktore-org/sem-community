@@ -227,16 +227,31 @@ class TestSocTargetType:
         energy = _make_energy()
         assert coord._calculate_remaining_need(energy, vehicle_soc=95.0) == 0.0
 
-    def test_soc_type_without_sensor_falls_back_to_kwh(self):
-        """Without vehicle_soc (None), SOC type falls back to kWh calculation."""
+    # Removed (#446): test_soc_type_without_sensor_falls_back_to_kwh.
+    # Pre-#446 SOC mode silently fell back to the kWh budget when the
+    # vehicle_soc reading was None. The bad combination
+    # (ev_target_type="soc" without a vehicle_soc_entity) is now
+    # structurally prevented by the GUI gate + the v10 → v11 migration.
+    # See test_minmax_targets.py::test_soc_mode_with_unavailable_real_sensor_returns_full_capacity
+    # for the replacement contract: with a real sensor configured but
+    # currently unavailable, SOC mode returns the full capacity so SEM
+    # keeps charging — taper detection is the hard "full" stop.
+
+    def test_soc_mode_with_real_sensor_temporarily_unavailable(self):
+        """#446: ``ev_target_type="soc"`` + real sensor configured + sensor's
+        current reading is None → SOC branch returns full capacity (keep
+        charging until taper detection trips). Does NOT silently use kWh."""
         coord = _make_coordinator({
             "ev_target_type": "soc",
             "ev_target_soc": 80,
             "ev_battery_capacity_kwh": 40,
             "daily_ev_target": 10,
+            "vehicle_soc_entity": "sensor.test_car_soc",
         })
         energy = _make_energy(daily_ev=4.0)
-        assert coord._calculate_remaining_need(energy, vehicle_soc=None) == pytest.approx(6.0)
+        # SOC branch with unavailable reading returns the configured
+        # capacity (40 kWh), NOT the kWh-derived 6.0.
+        assert coord._calculate_remaining_need(energy, vehicle_soc=None) == pytest.approx(40.0)
 
 
 # ──────────────────────────────────────────────

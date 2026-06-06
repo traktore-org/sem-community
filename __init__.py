@@ -615,6 +615,76 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 11:
+        # v10 → v11 (#446): pre-#446 the Configuration tab allowed users to
+        # save ``ev_target_type="soc"`` without configuring a
+        # ``vehicle_soc_entity``. The runtime then silently fell back to
+        # the taper detector's ``estimated_soc`` to compute the kWh
+        # budget — causing the PROD 2026-06-06 IDLE-stuck-at-120 W bug.
+        # Going forward the GUI prevents the bad combination; here we
+        # clean up the existing data so the runtime sees only valid
+        # ``(ev_target_type, vehicle_soc_entity)`` pairs.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            cleaned = 0
+
+            def _scrub(bag: dict) -> int:
+                """Clean up a data/options bag in place. Returns scrubs."""
+                scrubs = 0
+                # Per-charger entries
+                chargers = bag.get("ev_chargers")
+                if isinstance(chargers, list):
+                    for c in chargers:
+                        if not isinstance(c, dict):
+                            continue
+                        if c.get("ev_target_type") == "soc" and not c.get("vehicle_soc_entity"):
+                            c["ev_target_type"] = "kwh"
+                            scrubs += 1
+                # Integration-level legacy default (single-charger installs)
+                if (
+                    bag.get("ev_target_type") == "soc"
+                    and not any(
+                        c.get("vehicle_soc_entity")
+                        for c in (bag.get("ev_chargers") or [])
+                        if isinstance(c, dict)
+                    )
+                ):
+                    bag["ev_target_type"] = "kwh"
+                    scrubs += 1
+                # Legacy field name ``ev_target_mode`` — same treatment
+                if (
+                    bag.get("ev_target_mode") == "soc"
+                    and not any(
+                        c.get("vehicle_soc_entity")
+                        for c in (bag.get("ev_chargers") or [])
+                        if isinstance(c, dict)
+                    )
+                ):
+                    bag["ev_target_mode"] = "kwh"
+                    scrubs += 1
+                return scrubs
+
+            cleaned += _scrub(new_data)
+            cleaned += _scrub(new_options)
+
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=11, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if cleaned:
+                _LOGGER.info(
+                    "#446 cleanup: %d ev_target_type field(s) reset from 'soc' "
+                    "to 'kwh' (no vehicle_soc_entity configured)", cleaned,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v11 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 

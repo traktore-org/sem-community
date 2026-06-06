@@ -11,6 +11,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.16] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.15](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.15)_
+
+### 🐛 EV charging logic strictly honours `ev_target_type` per charger (#446)
+
+**PROD report 2026-06-06:** EV connected, SEM showing *"Charging active"* with `commanded_current = 9 A`, but real KEBA draw stalled at **120 W** with no progress against the day's kWh counter. The user (correctly) called this out as a charging-logic bug rather than a GUI / display problem.
+
+**Root cause traced to `coordinator/coordinator.py:_calculate_remaining_need` (the kWh budget feeding `decide.py:369`).** Pre-#446 logic:
+
+```python
+if ev_target_type == "soc" and vehicle_soc is None:          # ← rescue path
+    if detector and detector._soc_anchored:
+        vehicle_soc = detector.get_virtual_soc(None)         # ← leaks estimated_soc
+
+use_soc = ev_target_type == "soc" and vehicle_soc is not None
+if use_soc:
+    return max(0, (target_soc - vehicle_soc) / 100 * ev_capacity)   # → view.target_kwh
+```
+
+PROD had `ev_target_type="soc"` saved but no `vehicle_soc_entity` configured (a combination the Configuration tab let users save before this release). The rescue path silently substituted the taper detector's `estimated_soc = 89.6 %` into the kWh budget. With `target_soc = 80 %`, `(80 − 89.6) / 100 × 40 kWh` clamped to **0 kWh** → `decide.py:369` returned `IDLE` → KEBA got pilot-off → real draw collapsed to ~120 W. The user's daily kWh counter still had 3 kWh of headroom, but SEM didn't know it.
+
+**Three-part fix per the user's architectural rule "if SOC, then SOC; if kWh, then kWh — no mixing":**
+
+1. **Runtime trusts the saved config (no override).** `_calculate_remaining_need` is now a clean `if ev_target_type == "soc": … else: kwh …` branch. The rescue path is gone — `estimated_soc` never enters the budget. If a real `vehicle_soc` reading is momentarily `None` while in SOC mode, the SOC branch returns the full capacity so SEM keeps charging until taper detection trips (taper is the hard "full" stop). (by @traktore-org in #446)
+2. **v10 → v11 schema migration cleans existing bad state.** On the first restart after upgrade, any entry that has `ev_target_type="soc"` (or the legacy `ev_target_mode` field) on a charger without a `vehicle_soc_entity` gets reset to `"kwh"`. Logged via `_LOGGER.info` with a count of fields scrubbed. Bad combinations on disk become structurally impossible. (by @traktore-org in #446)
+3. **Configuration tab GUI gate prevents future bad state.** A new "Target type" select widget per charger. The "Vehicle SOC %" option is `disabled` when `vehicle_soc_entity` is empty; help text says *"requires SOC sensor"*. Users with a real sensor can pick either kWh or SOC; users without a sensor can only see kWh. (by @traktore-org in #446)
+
+### 🧪 Tests
+
+- **`tests/test_calculate_remaining_need_no_estimated_soc.py`** (new) — AST lint over `_calculate_remaining_need`. Banned names: `_estimated_soc`, `estimated_soc`, `get_virtual_soc`, `_ev_taper_detector`, `_ev_taper_detectors`. Any future refactor that reintroduces a SOC leak fails CI. (by @traktore-org in #446)
+- **`tests/test_decide_no_soc_reads.py`** (new) — AST lint over `coordinator/decide.py`. Banned attribute reads: `target_soc`, `estimated_soc`, `vehicle_soc`. The "decision logic is pure kWh" invariant has been true since #440 but was unpinned; now it's locked. (by @traktore-org in #446)
+- **`tests/test_config_flow_migration.py`** — added 3 v10 → v11 cases: per-charger bad-combo reset, legacy `ev_target_mode` cleanup, and the kWh-mode-preserved noop case. Updated 7 existing intermediate-hop assertions to expect version 11 (the new target). (by @traktore-org in #446)
+- **`tests/test_minmax_targets.py`** + **`tests/test_ev_target_ux.py`** — deleted 3 tests that pinned the removed rescue-path behaviour; added 2 replacement tests for the new "real sensor + unavailable reading = full capacity" SOC-branch contract. (by @traktore-org in #446)
+- **`tests/scenarios/2026-06-06_target_soc_no_sensor_must_use_kwh.yaml`** (new) — replays the PROD 2026-06-06 setup through the scenario harness. Asserts `canonical_strategy` is `battery_assist` (not `idle`) when `ev_target_type="soc"` + no SOC sensor + kWh headroom. (by @traktore-org in #446)
+- **Full unit suite: 3217 pass, 9 skipped, 0 fail** (was 3214 — net +5 after the test cleanup).
+
+### 📐 Why this is safe to deploy
+
+- The runtime change is a code-path simplification, not a behaviour change for any user with a sensible config. Installs in pure kWh mode (the default) are unaffected. Installs with a real SOC sensor + SOC mode are unaffected — the SOC math is unchanged.
+- The migration is idempotent. v11 entries are noops; v10 entries with kWh mode are noops; only the PROD-2026-06-06-class bad state gets cleaned.
+- The GUI gate is purely a UX guardrail. Saved values are still honoured by the runtime; the migration handles legacy data.
+
+### 🌍 Translations
+
+- 5 new dashboard keys for the Configuration tab Target-type select (`config_ev_target_type`, `config_ev_target_type_kwh`, `config_ev_target_type_soc`, `config_ev_target_type_requires_sensor`, `config_help_ev_target_type`). EN + DE polished; other 13 languages on EN fallback. `sem-localize.js` regenerated: 1003 keys × 15 languages.
+
 # [1.7.1-beta.15] - 06.06.2026
 
 ## 🧪 Beta Release

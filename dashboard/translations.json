@@ -997,7 +997,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "de": {
     "charging": "Laden",
@@ -1997,7 +2002,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Zieltyp",
+    "config_ev_target_type_kwh": "kWh pro Tag geliefert",
+    "config_ev_target_type_soc": "Fahrzeug-SOC %",
+    "config_ev_target_type_requires_sensor": "erfordert SOC-Sensor",
+    "config_help_ev_target_type": "kWh-Modus (Standard): SEM lädt bis das tägliche kWh-Ziel erreicht ist. SOC-Modus: SEM lädt bis die Fahrzeug-SOC das Ziel erreicht — nur verfügbar, wenn oben ein Fahrzeug-SOC-Sensor konfiguriert ist."
   },
   "fr": {
     "charging": "En charge",
@@ -2997,7 +3007,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "es": {
     "charging": "Cargando",
@@ -3997,7 +4012,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "it": {
     "charging": "In carica",
@@ -4997,7 +5017,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "nl": {
     "charging": "Laden",
@@ -5997,7 +6022,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -6997,7 +7027,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "da": {
     "charging": "Oplader",
@@ -7997,7 +8032,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "fi": {
     "charging": "Lataus",
@@ -8997,7 +9037,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "hu": {
     "charging": "Töltés",
@@ -9997,7 +10042,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "no": {
     "charging": "Lader",
@@ -10997,7 +11047,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -11997,7 +12052,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "pt": {
     "charging": "A carregar",
@@ -12997,7 +13057,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "ro": {
     "charging": "Încărcare",
@@ -13997,7 +14062,12 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   },
   "sv": {
     "charging": "Laddar",
@@ -14997,6 +15067,11 @@
     "config_help_ev_connected_sensor": "Sensor that goes on when an EV is physically plugged into this charger.",
     "config_help_ev_charging_power": "Live power draw of this charger. Used for surplus calculation + session tracking.",
     "config_help_ev_current_control": "The number entity SEM writes amperage to (or pair with a service in HA settings).",
-    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full."
+    "config_help_ev_vehicle_soc": "Optional vehicle SOC sensor (Tronity / Bouncie / brand integration). Lets SEM stop at full.",
+    "config_ev_target_type": "Target type",
+    "config_ev_target_type_kwh": "kWh delivered per day",
+    "config_ev_target_type_soc": "Vehicle SOC %",
+    "config_ev_target_type_requires_sensor": "requires SOC sensor",
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
   }
 }

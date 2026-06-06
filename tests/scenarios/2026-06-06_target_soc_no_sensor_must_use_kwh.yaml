@@ -1,0 +1,86 @@
+name: "2026-06-06 ev_target_type=soc without vehicle_soc_entity must use kWh budget (#446)"
+
+coverage:
+  - mode: min_plus_solar
+    regime: ev_target_type_soc_no_sensor
+    issue: "#446 — estimated_soc leaked into kWh budget"
+
+description: |
+  PROD 2026-06-06 reproducer. Pre-#446 the Configuration tab let users
+  save ``ev_target_type="soc"`` without configuring a
+  ``vehicle_soc_entity``. ``_calculate_remaining_need`` then rescued
+  ``vehicle_soc`` from the taper detector's ``estimated_soc``, computed
+  ``(target_soc - estimated_soc) * capacity / 100``, and that fictitious
+  kWh number flowed into ``view.target_kwh``. With
+  ``estimated_soc > target_soc`` the result clamped to 0 →
+  ``decide.py:369`` returned ``IDLE`` → KEBA pilot off → car idled at
+  ~120 W even though the day's kWh counter had headroom.
+
+  Two structural fixes make this scenario impossible going forward:
+
+    1. v10 → v11 migration: pre-existing entries with the bad
+       combination are reset to ``ev_target_type="kwh"`` at upgrade time.
+    2. Runtime: ``_calculate_remaining_need`` no longer consults the
+       taper detector at all. The SOC branch is only reached when a
+       real ``vehicle_soc_entity`` is configured, and even there a
+       missing reading falls through to "full capacity remaining"
+       (never to ``estimated_soc``).
+
+  This scenario locks the runtime invariant — with the offending
+  config shape AND a fictitious estimated_soc available on the
+  detector, the budget must still be kWh-derived.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  ev_battery_capacity_kwh: 40
+  # PROD 2026-06-06 state — saved at v10 with the bad combo. The
+  # v10→v11 migration will reset target_type to "kwh"; the runtime
+  # behaviour we assert here is the post-migration steady state.
+  daily_ev_target: 10
+  ev_target_soc: 80
+  # Daylight, solar surplus available, battery full.
+  is_night: false
+  tariff_level: "normal"
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      ev_target_type: "kwh"      # post-migration value
+      daily_ev_target: 10
+      # NOTE: vehicle_soc_entity intentionally absent — the user has no
+      # real SOC sensor, which is the whole point of #446.
+
+cycle_seconds: 30
+
+timeline:
+  - t: 0
+    solar_power: 6000           # plenty of surplus
+    grid_power: 5500            # +ve = exporting
+    battery_power: 0
+    battery_soc: 100            # Zone 4 — full commit
+    ev_power: 0                 # just plugged in
+    ev_connected: true
+    # Harness defaults ``daily_ev = 0`` per cycle (see scenario_harness.py:516)
+    # so view.target_kwh = daily_ev_target = 10 (full headroom).
+
+  - t: 60                       # past enable_delay
+  - t: 120
+
+expect:
+  # min_plus_solar in Zone 4 (battery full, solar surplus) resolves to
+  # the "battery_assist" canonical strategy — drain battery to EV.
+  # The bug we're locking: pre-#446 SEM would IDLE here because
+  # ``target_kwh`` came back 0 (computed from a fictitious estimated SOC).
+  # Post-#446 the budget is purely kWh-based → 10 kWh headroom → assist.
+  strategy_substring: "battery_assist"
+  # Belt-and-braces: under no circumstance may the strategy be "idle"
+  # for this configuration. Pins the regression boundary even if the
+  # exact canonical strategy name shifts in a future refactor.
+  strategy_not_substring: "idle"

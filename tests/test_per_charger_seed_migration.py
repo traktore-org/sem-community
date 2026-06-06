@@ -28,7 +28,11 @@ def _seeded_charger(mock_hass, idx=0):
 async def test_seeds_all_eight_from_global():
     hass = MagicMock()
     entry = _entry(
-        options={"ev_chargers": [{"id": "ev_charger", "name": "EV"}]},
+        # #446: pair ev_target_type="soc" with a real vehicle_soc_entity so
+        # the v10→v11 cleanup leaves it intact. This test exercises the
+        # v4→v5 seed contract, not the v10→v11 cleanup.
+        options={"ev_chargers": [{"id": "ev_charger", "name": "EV",
+                                  "vehicle_soc_entity": "sensor.car_soc"}]},
         data={
             "daily_ev_target": 8, "daily_ev_target_max": 50,
             "ev_target_soc": 70, "ev_target_soc_max": 90,
@@ -38,7 +42,7 @@ async def test_seeds_all_eight_from_global():
     )
     assert await async_migrate_entry(hass, entry) is True
     c, kwargs = _seeded_charger(hass)
-    assert kwargs["version"] == 10  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
+    assert kwargs["version"] == 11  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
     assert c["daily_ev_target"] == 8
     assert c["daily_ev_target_max"] == 50
     assert c["ev_target_soc"] == 70
@@ -66,7 +70,11 @@ async def test_does_not_overwrite_explicit_per_charger():
 async def test_target_type_legacy_alias_seeded():
     hass = MagicMock()
     entry = _entry(
-        options={"ev_chargers": [{"id": "c1"}]},
+        # #446: pair the legacy "soc" alias with a real vehicle_soc_entity
+        # so the v10→v11 cleanup leaves it intact (the seed is the
+        # contract being tested here, not the cleanup).
+        options={"ev_chargers": [{"id": "c1",
+                                  "vehicle_soc_entity": "sensor.car_soc"}]},
         data={"ev_target_mode": "soc"},  # legacy alias, no ev_target_type
     )
     await async_migrate_entry(hass, entry)
@@ -91,7 +99,7 @@ async def test_no_chargers_is_safe_and_bumps_version():
     hass = MagicMock()
     entry = _entry(options={}, data={"daily_ev_target": 8})
     assert await async_migrate_entry(hass, entry) is True
-    assert hass.config_entries.async_update_entry.call_args.kwargs["version"] == 10  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
+    assert hass.config_entries.async_update_entry.call_args.kwargs["version"] == 11  # bumped in v10→v11 (#446)  # bumped in v9→v10 (#441)  # bumped in v6→v7 (#277 Phase C)  # bumped in v5→v6 (#277 Phase B)  # bumped in v4→v5 (#277)
 
 
 @pytest.mark.asyncio
