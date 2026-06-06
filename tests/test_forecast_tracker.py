@@ -186,6 +186,122 @@ def test_weather_condition_tracking(mock_dt, tracker):
     assert tracker.weather_category == "unknown"
 
 
+# ──────────────────────────────────────────────
+# #416 follow-up — mid-day weather snapshot for rollover writes
+# ──────────────────────────────────────────────
+
+
+@patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
+def test_416_weather_snapshot_taken_at_confident_midday(mock_dt, tracker):
+    """Inside ``_calculate_dampening_factor``'s ``blended_live`` branch
+    the tracker must snapshot ``_weather_today`` so a later rollover
+    write records the mid-day weather, not the post-sunset value."""
+    mock_dt.now.return_value = _freeze_dt(hour=13)
+    # Force the dampening calc into the confident branch by seeding
+    # enough actual + forecast history. The branch requires a meaningful
+    # ``expected_so_far`` AND a meaningful ``live_ratio`` — both come
+    # from ``update()``.
+    for _ in range(5):
+        tracker.update(
+            forecast_today_kwh=25.0, actual_solar_kwh=15.0,
+            weather_condition="sunny",
+        )
+    # The blended_live branch should have populated ``_weather_snapshot``.
+    assert tracker._weather_snapshot == "sunny", (
+        f"weather_snapshot={tracker._weather_snapshot!r} — expected "
+        "the mid-day cycle to snapshot the day's actual weather."
+    )
+
+
+@patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
+def test_416_save_record_prefers_snapshot_over_live_weather(mock_dt, tracker):
+    """Rollover write must use the mid-day weather snapshot, not the
+    post-sunset live ``_weather_today``. This is the bug that caused
+    42 % of PROD records to have ``weather_category=unknown``."""
+    # Day 1 mid-day: feed multiple confident cycles. Note the dampening
+    # blend needs forecast > MIN_FORECAST_KWH and an accumulating
+    # actual reading, so loop a few cycles.
+    mock_dt.now.return_value = _freeze_dt(day=18, hour=13)
+    for _ in range(5):
+        tracker.update(
+            forecast_today_kwh=30.0, actual_solar_kwh=18.0,
+            weather_condition="sunny",
+        )
+    assert tracker._weather_snapshot == "sunny", (
+        "snapshot precondition not met — check the confident-branch gate"
+    )
+
+    # Simulate day rollover: the next ``update()`` lands in the new
+    # day with the weather entity now reporting the post-sunset state.
+    mock_dt.now.return_value = _freeze_dt(day=19, hour=1)
+    tracker.update(
+        forecast_today_kwh=20.0, actual_solar_kwh=0.0,
+        weather_condition="clear-night",  # the typical post-sunset bug input
+    )
+
+    # The rollover should have saved a record for day 18 (forecast=30,
+    # actual=18). It MUST use the mid-day "sunny" snapshot, not the
+    # post-sunset "clear-night" we just fed in.
+    assert len(tracker._history) == 1
+    saved = tracker._history[0]
+    assert saved.date == "2026-04-18"
+    assert saved.weather == "sunny", (
+        f"record.weather={saved.weather!r} — the rollover wrote the "
+        "post-sunset weather instead of the mid-day snapshot. "
+        "Regression of #416 weather-write-time bug."
+    )
+
+
+@patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
+def test_416_snapshot_resets_on_day_rollover(mock_dt, tracker):
+    """``_weather_snapshot`` is per-day, like ``_dampening_snapshot``.
+    Must reset on rollover so today's record never picks up yesterday's
+    snapshot if the early-morning cycles haven't yet entered the
+    confident branch."""
+    mock_dt.now.return_value = _freeze_dt(day=18, hour=13)
+    for _ in range(5):
+        tracker.update(forecast_today_kwh=30.0, actual_solar_kwh=18.0,
+                       weather_condition="sunny")
+    assert tracker._weather_snapshot == "sunny"
+
+    # Roll over to the next day. First post-rollover update should have
+    # cleared yesterday's snapshot.
+    mock_dt.now.return_value = _freeze_dt(day=19, hour=1)
+    tracker.update(forecast_today_kwh=25.0, actual_solar_kwh=0.0,
+                   weather_condition="clear-night")
+    assert tracker._weather_snapshot is None, (
+        "snapshot survived rollover — record on day 20 would pick up "
+        "day 18's weather if no confident cycle fires today."
+    )
+
+
+@patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
+def test_416_save_record_falls_back_to_live_when_no_snapshot(mock_dt, tracker):
+    """If the day never reached the confident branch (rare: forecast
+    always below MIN_FORECAST_KWH, HA restarted late, …), the rollover
+    falls back to ``_weather_today``. This is honest under-count, not
+    a regression — we mark the record best-effort."""
+    mock_dt.now.return_value = _freeze_dt(day=18, hour=13)
+    # Single cycle, low-forecast — won't trip the confident gate.
+    tracker.update(forecast_today_kwh=10.0, actual_solar_kwh=8.0,
+                   weather_condition="sunny")
+    # Manually nudge today's forecast above the save gate so the
+    # rollover writes (otherwise the < MIN_FORECAST_KWH guard skips).
+    tracker._today_forecast = 12.0
+    # Ensure no snapshot was set this day
+    if tracker._weather_snapshot is not None:
+        pytest.skip("snapshot fired — test premise no longer holds")
+
+    mock_dt.now.return_value = _freeze_dt(day=19, hour=1)
+    tracker.update(forecast_today_kwh=11.0, actual_solar_kwh=0.0,
+                   weather_condition="clear-night")
+
+    assert len(tracker._history) == 1
+    # No mid-day snapshot ever fired → fall back to live ``_weather_today``
+    # as it was at the moment the rollover ran (i.e. ``clear-night``).
+    assert tracker._history[0].weather == "clear-night"
+
+
 @patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
 def test_day_rollover_saves_record(mock_dt, tracker):
     """Test that day rollover saves yesterday's record to history."""

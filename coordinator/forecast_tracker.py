@@ -89,6 +89,16 @@ class ForecastTracker:
         self._dampening_snapshot: Optional[float] = None
         self._snapshot_confidence: Optional[float] = None
         self._snapshot_live_ratio: Optional[float] = None
+        # #416 follow-up (2026-06-06): snapshot of ``_weather_today``
+        # captured during the same confident mid-day cycle that updates
+        # ``_dampening_snapshot``. The day-rollover write needs to
+        # record the day's actual weather (sunny / partlycloudy / …),
+        # not the post-sunset weather entity state (``clear-night`` /
+        # ``unknown``) that ``_weather_today`` carries by the time
+        # ``_save_day_record()`` fires. Live PROD 2026-06-05: 42 % of
+        # stored records had ``weather_category=unknown`` because the
+        # rollover read the post-midnight value.
+        self._weather_snapshot: Optional[str] = None
 
     def set_hass(self, hass: Any) -> None:
         """Set Home Assistant instance for reading sun.sun entity."""
@@ -142,6 +152,7 @@ class ForecastTracker:
             self._dampening_snapshot = None
             self._snapshot_confidence = None
             self._snapshot_live_ratio = None
+            self._weather_snapshot = None
 
         # Update today's values
         self._today_date = today
@@ -176,11 +187,21 @@ class ForecastTracker:
         accuracy = (actual / self._today_forecast * 100) if self._today_forecast > 0 else 0
         ratio = actual / self._today_forecast if self._today_forecast > MIN_FORECAST_KWH else 1.0
 
+        # #416 follow-up (2026-06-06): prefer the mid-day weather
+        # snapshot over the live ``_weather_today`` if available. The
+        # snapshot is set inside the ``blended_live`` branch of
+        # ``_calculate_dampening_factor`` so it reflects the day's
+        # actual weather. Live ``_weather_today`` reads the weather
+        # entity's post-sunset state at rollover (clear-night /
+        # unknown) and was responsible for 42 % of PROD records
+        # landing in ``weather_category=unknown``.
+        weather_for_record = self._weather_snapshot or self._weather_today
+
         record = DailyForecastRecord(
             date=self._today_date,
             forecast_kwh=round(self._today_forecast, 2),
             actual_kwh=round(actual, 2),
-            weather=self._weather_today,
+            weather=weather_for_record,
             accuracy_pct=round(accuracy, 1),
             correction_factor=round(ratio, 3),
             # #416: dampening snapshot captured during the last
@@ -499,6 +520,13 @@ class ForecastTracker:
         self._dampening_snapshot = round(clamped, 3)
         self._snapshot_confidence = self._last_confidence
         self._snapshot_live_ratio = self._last_live_ratio
+        # #416 follow-up: also capture the weather state at this
+        # confident mid-day cycle. Rollover writes prefer this
+        # snapshot over the live ``_weather_today`` value so
+        # ``DailyForecastRecord.weather`` reflects the day's actual
+        # weather, not the post-sunset ``clear-night`` / ``unknown``
+        # the weather entity is returning by the rollover firing.
+        self._weather_snapshot = self._weather_today
         return clamped
 
     def apply_dampening(self, forecast_kwh: float) -> float:

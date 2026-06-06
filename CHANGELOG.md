@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.8] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.7](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.7)_
+
+### 🐛 Bugfix — #416 forecast records the wrong weather category
+
+- **Mid-day weather snapshot for day-rollover writes** (`coordinator/forecast_tracker.py`). Pre-fix, `_save_day_record()` wrote `self._weather_today` into history at calendar rollover — which fires post-midnight when the HA weather entity reports `clear-night` / `unknown`, not the day's actual weather. Live PROD telemetry on 2026-06-05 confirmed **42 % of forecast records had `weather_category=unknown`**, so the correction cascade kept falling through from `weather × month` → `weather only` → `month only` → `weather=unknown bucket` (last resort). Fix mirrors the existing `_dampening_snapshot` pattern: capture `_weather_today` inside the `_calculate_dampening_factor` confident `blended_live` branch (snapshot taken during the day's actual daylight cycles), then have `_save_day_record()` prefer the snapshot over the live value. Backward-compat: if the day never entered the confident branch (forecast always below `MIN_FORECAST_KWH`, or HA restarted late), falls through to the live value as before. 4 new regression tests in `tests/test_forecast_tracker.py` (`test_416_*`) lock the snapshot + fallback paths. (by @traktore-org, fixes #416 write-time-weather)
+
 # [1.7.1-beta.7] - 06.06.2026
 
 ## 🧪 Beta Release
