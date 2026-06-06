@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Oppsett av solenergistyring",
-        "description": "SEM har oppdaget følgende sensorer fra Home Assistant Energi-dashbordet:\n\n{summary}\n\nKlikk **Send** for å fortsette. De neste to trinnene oppdager automatisk elbilladeren og vekselretteren din.",
+        "description": "SEM har oppdaget følgende sensorer fra Home Assistant Energi-dashbordet:\n\n{summary}\n\nKlikk **Send** for å fortsette. Bare ett steg igjen. EV-ladere, varmepumpe, tariff og alle andre innstillinger konfigureres senere i den nye **Konfigurasjon**-fanen i SEM-dashbordet — du trenger ikke å håndtere dem nå.",
         "data": {
           "observer_mode": "Testmodus (skrivebeskyttet — styrer ikke maskinvare)"
         },

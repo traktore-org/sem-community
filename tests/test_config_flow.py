@@ -148,8 +148,10 @@ class TestSolarEnergyManagementConfigFlow:
         assert "Grid" in result["description_placeholders"]["missing"]
 
     @pytest.mark.asyncio
-    async def test_user_step_proceeds_to_ev_charger(self, mock_hass):
-        """Submitting the user step (with observer_mode) advances to ev_charger."""
+    async def test_user_step_proceeds_to_hardware(self, mock_hass):
+        """#442 slim install: user step now routes directly to hardware
+        (EV charger step is options-flow + dashboard Configuration tab
+        only)."""
         energy_config = _make_energy_dashboard_config()
         flow = _create_flow(mock_hass)
 
@@ -167,11 +169,14 @@ class TestSolarEnergyManagementConfigFlow:
         ), patch(
             "custom_components.solar_energy_management.config_flow.discover_ev_charger_from_registry",
             return_value={},
+        ), patch(
+            "custom_components.solar_energy_management.config_flow.discover_inverter_from_registry",
+            return_value=None,
         ):
             result = await flow.async_step_user(user_input={"observer_mode": False})
 
         assert result["type"] == FlowResultType.FORM
-        assert result["step_id"] == "ev_charger"
+        assert result["step_id"] == "hardware"
         # observer_mode value is persisted into self._data so the hardware step
         # can include it in the created entry
         assert flow._data.get("observer_mode") is False
@@ -196,6 +201,9 @@ class TestSolarEnergyManagementConfigFlow:
         ), patch(
             "custom_components.solar_energy_management.config_flow.discover_ev_charger_from_registry",
             return_value={},
+        ), patch(
+            "custom_components.solar_energy_management.config_flow.discover_inverter_from_registry",
+            return_value=None,
         ):
             await flow.async_step_user(user_input={"observer_mode": True})
 
@@ -410,7 +418,9 @@ class TestSolarEnergyManagementConfigFlow:
 
     @pytest.mark.asyncio
     async def test_full_flow_creates_entry(self, mock_hass):
-        """End-to-end walk through the slim 3-step install flow."""
+        """End-to-end walk through the slim 2-step install flow (#442).
+        The EV step was removed from the install path — chargers are
+        added later via OptionsFlow or the dashboard Configuration tab."""
         energy_config = _make_energy_dashboard_config()
         flow = _create_flow(mock_hass)
 
@@ -435,22 +445,21 @@ class TestSolarEnergyManagementConfigFlow:
             "custom_components.solar_energy_management.config_flow.discover_inverter_from_registry",
             return_value=None,
         ):
-            # Step 1: user
+            # Step 1: user → routes to hardware (slim install)
             result = await flow.async_step_user(user_input={"observer_mode": False})
-            assert result["step_id"] == "ev_charger"
-
-            # Step 2: ev_charger
-            result = await flow.async_step_ev_charger(user_input=VALID_EV_INPUT)
             assert result["step_id"] == "hardware"
 
-            # Step 3: hardware → creates entry
+            # Step 2: hardware → creates entry directly
             result = await flow.async_step_hardware(user_input=VALID_HARDWARE_INPUT)
 
         assert result["type"] == FlowResultType.CREATE_ENTRY
         data = result["data"]
         assert data["solar_power_sensor"] == "sensor.solar_power"
-        assert data["ev_connected_sensor"] == "binary_sensor.ev_connected"
-        assert data["battery_capacity_kwh"] == 12
+        # No EV charger configured at install — `ev_chargers` is the
+        # empty default from `_install_defaults()`. Users add chargers
+        # via OptionsFlow or the dashboard Configuration tab.
+        assert data.get("ev_chargers") == []
+        assert "ev_connected_sensor" not in data
         assert data["target_peak_limit"] == 5.0
         # Defaults silently filled in
         assert data["update_interval"] == 10

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Installation av solenergihantering",
-        "description": "SEM har upptäckt följande sensorer från din Home Assistant Energipanel:\n\n{summary}\n\nKlicka **Skicka** för att fortsätta. Nästa två steg upptäcker automatiskt din elbilsladdare och växelriktare.",
+        "description": "SEM har upptäckt följande sensorer från din Home Assistant Energi-instrumentpanel:\n\n{summary}\n\nKlicka **Skicka** för att fortsätta. Bara ett steg till. EV-laddare, värmepump, tariff och alla andra inställningar konfigureras senare på den nya **Konfiguration**-fliken i SEM-instrumentpanelen — du behöver inte hantera dem nu.",
         "data": {
           "observer_mode": "Testläge (skrivskyddat — styr inte hårdvara)"
         },

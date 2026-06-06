@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Nastavení správy solární energie",
-        "description": "SEM detekoval následující senzory z vašeho panelu Energy Dashboard v Home Assistant:\n\n{summary}\n\nKlikněte **Odeslat** pro pokračování. Další dva kroky automaticky detekují vaši EV nabíječku a střídač.",
+        "description": "SEM zjistil následující senzory z vašeho ovládacího panelu Energie v Home Assistant:\n\n{summary}\n\nKliknutím na **Odeslat** pokračujte. Už jen jeden krok. Nabíječky EV, tepelné čerpadlo, tarif a všechna ostatní nastavení se konfigurují později na nové kartě **Konfigurace** na panelu SEM — teď je nemusíte řešit.",
         "data": {
           "observer_mode": "Testovací režim (pouze čtení — bez ovládání hardware)"
         },

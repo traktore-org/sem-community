@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Configuração de Gestão de Energia Solar",
-        "description": "O SEM detetou os seguintes sensores do seu Painel de Energia do Home Assistant:\n\n{summary}\n\nClique **Submeter** para continuar. Os próximos dois passos detetam automaticamente o seu carregador EV e inversor.",
+        "description": "SEM detectou os seguintes sensores no seu Painel de Energia do Home Assistant:\n\n{summary}\n\nClique em **Enviar** para continuar. Falta apenas um passo. Carregadores VE, bomba de calor, tarifa e todas as outras definições são configurados depois no novo separador **Configuração** do painel SEM — não precisa de tratar disso agora.",
         "data": {
           "observer_mode": "Modo de teste (somente leitura — sem controlo de hardware)"
         },

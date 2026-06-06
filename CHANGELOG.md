@@ -11,6 +11,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.11] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.10](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.10)_
+
+### ✨ Slim install flow + new in-dashboard Configuration tab (#442)
+
+Fresh installs now take **2 forms instead of 3**, and every later tweak lives **inside the dashboard** — no more digging through Settings → Devices & Services → SEM → Configure.
+
+- **Install flow stripped to 2 steps.** `async_step_user` (welcome + observer toggle) → `async_step_hardware` (peak limit + diagram style + install dashboard). The EV-charger step is gone from the install path entirely — most users don't have an EV configured on day one and were forced to lie or quit. EV setup now happens **after** SEM is up and running, via the new Configuration tab or HA settings. `_install_defaults()` seeds an empty `ev_chargers: []` list so downstream code is identical. (by @traktore-org in #442)
+- **New "Configuration" tab** (`mdi:cog-outline`) sits between Control and Costs. Single `sem-config-card` with 10 accordion sections: Setup overview, EV chargers, Battery zones, Tariff & pricing, Heat pump, Battery scheduler, Load management, Forecast, Notifications, Advanced. Same look + (?) help-toggle pattern as the Control card from beta.7 — every setting carries a one-line explanation that toggles on with one click. (by @traktore-org in #442)
+- **Inline edits for everything backed by a runtime entity.** Battery-zone steppers, tariff thresholds, observer-mode toggle, per-charger min/start amps, heat pump boost offset — all live-write to `number.sem_*` / `switch.sem_*` / `select.sem_*` so the change is immediate, no entry reload required. Sections that need entity-pickers (vehicle SOC sensor, tariff entity, heat pump relays, etc.) carry a one-click deep-link to the legacy OptionsFlow as a v1 fallback while the new `<sem-entity-picker>` rolls in. (by @traktore-org in #442)
+- **`<sem-entity-picker>` Lit element** (`dashboard/card/src/elements/sem-entity-picker.js`). Thin wrapper around HA's stable `<ha-entity-picker>` that writes selections back via the public `config_entries/update` WebSocket command. Supports both flat options keys and nested `ev_chargers[index][key]` paths. Used by the Configuration tab; ready for power-user cards to compose against. (by @traktore-org in #442)
+- **One-time welcome banner** (`sem-onboarding-banner`) shows up on the Home tab for existing users on first dashboard open after the update. Dismissable, persisted via `localStorage` (`sem-config-tab-introduced-v1`), points one click at the new Configuration tab. New installs never see it. (by @traktore-org in #442)
+- **OptionsFlow stays intact for power users.** All 9 steps still register so the legacy "Settings → SEM → Configure" path keeps working for anyone who prefers it — and the Configuration tab's "Open in HA settings" buttons deep-link straight to it. (by @traktore-org in #442)
+
+### 🌍 Translations
+
+- **52 new dashboard translation keys** for the Configuration tab + onboarding banner (config_tab_title, config_section_*, config_help_*, onboarding_banner_*). EN + DE polished; other 13 languages use EN as placeholder pending native-speaker review (same convention as beta.6/7/10). `dashboard/translations.json` regenerated to `sem-localize.js`: **910 keys × 15 languages**. (by @traktore-org in #442)
+- Install-flow `strings.json` user-step description rewritten across all 15 languages to mention the new Configuration tab instead of "next two steps". (by @traktore-org in #442)
+
+### 🧪 Tests
+
+- New `tests/test_config_flow_slim_install.py` pins (a) the install flow is exactly 2 steps, (b) `_install_defaults()` seeds an empty ev_chargers list, (c) all 9 OptionsFlow power-user steps stay registered so Configuration-tab deep-links never 404. (by @traktore-org in #442)
+- `tests/test_dashboard_generator.py` updated for the new tab count (7 → 8) + Configuration path. Full suite: **3186 pass, 9 skipped, 0 fail** (was 3182). (by @traktore-org in #442)
+
 # [1.7.1-beta.10] - 06.06.2026
 
 ## 🧪 Beta Release

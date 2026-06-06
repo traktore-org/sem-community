@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Configurare gestionare energie solară",
-        "description": "SEM a detectat următorii senzori din panoul de energie Home Assistant:\n\n{summary}\n\nApăsați **Trimite** pentru a continua. Următorii doi pași detectează automat încărcătorul EV și invertorul.",
+        "description": "SEM a detectat următorii senzori din tabloul de bord Energie din Home Assistant:\n\n{summary}\n\nApăsați **Trimite** pentru a continua. Mai este un singur pas. Încărcătoarele VE, pompa de căldură, tariful și toate celelalte setări se configurează mai târziu în noua filă **Configurare** din tabloul SEM — nu trebuie să le tratați acum.",
         "data": {
           "observer_mode": "Mod test (doar citire — fără control hardware)"
         },

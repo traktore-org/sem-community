@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Konfiguracja zarządzania energią słoneczną",
-        "description": "SEM wykrył następujące czujniki z panelu energetycznego Home Assistant:\n\n{summary}\n\nKliknij **Prześlij** aby kontynuować. Następne dwa kroki automatycznie wykrywają ładowarkę EV i falownik.",
+        "description": "SEM wykrył następujące czujniki w pulpicie Energia Home Assistant:\n\n{summary}\n\nKliknij **Prześlij**, aby kontynuować. Jeszcze tylko jeden krok. Ładowarki EV, pompa ciepła, taryfa i wszystkie inne ustawienia są konfigurowane później w nowej zakładce **Konfiguracja** na pulpicie SEM — nie musisz ich teraz ustawiać.",
         "data": {
           "observer_mode": "Tryb testowy (tylko odczyt — bez sterowania sprzętem)"
         },

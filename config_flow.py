@@ -219,12 +219,18 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             )
 
-        # Energy Dashboard is configured - show summary and continue
+        # Energy Dashboard is configured - show summary and continue.
+        # Slim install (v1.7.1-beta.11+, #442): route directly to
+        # ``async_step_hardware`` and skip the EV charger step entirely.
+        # The EV step's fields stay available in the OptionsFlow for
+        # power users and via the new dashboard Configuration tab for
+        # everyone else — fresh installs no longer need to lie about
+        # their EV setup just to get past the install.
         if user_input is not None:
             # Store Energy Dashboard sensor config + the observer_mode toggle
             self._data.update(self._energy_dashboard_config.to_dict())
             self._data["observer_mode"] = user_input.get("observer_mode", False)
-            return await self.async_step_ev_charger()
+            return await self.async_step_hardware()
 
         # Show Energy Dashboard summary — list every sensor SEM picked up so the
         # user can verify the auto-detection at a glance.
@@ -504,6 +510,12 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "warning_peak_level": DEFAULT_WARNING_PEAK_LEVEL,
             "emergency_peak_level": DEFAULT_EMERGENCY_PEAK_LEVEL,
             "critical_device_protection": DEFAULT_CRITICAL_DEVICE_PROTECTION,
+            # #442 slim install: explicit empty EV chargers list so
+            # downstream code reading ``config["ev_chargers"]`` always
+            # finds a list (even though ``.get("ev_chargers") or []``
+            # would also work). Users add their first charger from the
+            # dashboard Configuration tab → OptionsFlow ``ev_charger_add``.
+            "ev_chargers": [],
         }
 
     async def async_step_hardware(
@@ -542,8 +554,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # if empty so config.get() returns "".
                     merged.setdefault("battery_discharge_control_entity", "")
 
-                # Wrap flat EV keys into ev_chargers list (#112 multi-charger)
-                if merged.get("ev_charging_power_sensor") and "ev_chargers" not in merged:
+                # Wrap flat EV keys into ev_chargers list (#112 multi-charger).
+                # #442: ``_install_defaults()`` now sets ``ev_chargers: []`` so
+                # downstream code always finds a list. Treat both "missing" and
+                # "empty list" as the wrap-eligible state.
+                if merged.get("ev_charging_power_sensor") and not merged.get("ev_chargers"):
                     _EV_KEYS = [
                         "ev_connected_sensor", "ev_charging_sensor",
                         "ev_charging_power_sensor", "ev_charger_service",

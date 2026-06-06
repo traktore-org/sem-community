@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Aurinkoenergian hallinnan asennus",
-        "description": "SEM on havainnut seuraavat anturit Home Assistantin Energia-kojelaudalta:\n\n{summary}\n\nNapsauta **Lähetä** jatkaaksesi. Seuraavat kaksi vaihetta tunnistavat automaattisesti sähköauton laturin ja invertterisi.",
+        "description": "SEM havaitsi seuraavat anturit Home Assistantin Energia-paneelista:\n\n{summary}\n\nNapsauta **Lähetä** jatkaaksesi. Vain yksi vaihe jäljellä. Sähköauton laturit, lämpöpumppu, tariffi ja kaikki muut asetukset määritetään myöhemmin SEM-paneelin uudessa **Asetukset**-välilehdessä — sinun ei tarvitse käsitellä niitä nyt.",
         "data": {
           "observer_mode": "Testitila (vain luku — ei ohjaa laitteistoa)"
         },

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Napenergia-kezelés beállítása",
-        "description": "A SEM a következő szenzorokat észlelte a Home Assistant Energia irányítópultjáról:\n\n{summary}\n\nKattintson a **Küldés** gombra a folytatáshoz. A következő két lépés automatikusan felismeri az EV töltőt és az invertert.",
+        "description": "SEM az alábbi szenzorokat észlelte a Home Assistant Energia irányítópultján:\n\n{summary}\n\nKattintson a **Küldés** gombra a folytatáshoz. Már csak egy lépés. Az EV-töltők, hőszivattyú, tarifa és minden más beállítás később az SEM irányítópult új **Konfiguráció** fülén állítható be — most nem kell ezekkel foglalkozni.",
         "data": {
           "observer_mode": "Teszt mód (csak olvasás — nem vezérli a hardvert)"
         },

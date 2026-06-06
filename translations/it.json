@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Solar Energy Management Setup",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "description": "SEM ha rilevato i seguenti sensori dal tuo Dashboard Energia di Home Assistant:\n\n{summary}\n\nClicca **Invia** per continuare. Solo un altro passo. Caricabatterie VE, pompa di calore, tariffa e tutte le altre impostazioni vengono configurate dopo nella nuova scheda **Configurazione** del dashboard SEM — non serve impostarle ora.",
         "data": {
           "observer_mode": "Test mode (read-only — do not control hardware)"
         },

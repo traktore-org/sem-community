@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Solar Energy Management Setup",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. Just one more step. EV chargers, heat pumps, tariff, and all other settings are set up later in the new **Configuration** tab on the SEM dashboard — no need to handle them now.",
         "data": {
           "observer_mode": "Test mode (read-only — do not control hardware)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches. You can change this any time later in the Configuration tab → Advanced."
         }
       },
       "ev_charger": {
@@ -35,7 +35,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Almost done! SEM auto-detected your battery capacity and inverter size from the hardware.\n\nSet your **Peak Power Limit** — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "Last step! Set your **Peak Power Limit** — the maximum kW your grid contract allows before SEM starts shedding load. SEM auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the **Configuration** tab on the SEM dashboard — including EV chargers, heat pump, tariff, and battery zones.",
         "data": {
           "target_peak_limit": "Peak Power Limit (kW)",
           "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",

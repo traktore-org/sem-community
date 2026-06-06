@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Solar Energy Management Einrichtung",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "description": "SEM hat die folgenden Sensoren aus Ihrem Home Assistant Energie-Dashboard erkannt:\n\n{summary}\n\nKlicken Sie auf **Übernehmen**, um fortzufahren. Nur noch ein Schritt. EV-Ladegeräte, Wärmepumpe, Tarif und alle anderen Einstellungen werden später im neuen **Konfiguration**-Tab des SEM-Dashboards eingerichtet — Sie müssen sie jetzt nicht angeben.",
         "data": {
           "observer_mode": "Testmodus (nur lesen — keine Hardwaresteuerung)"
         },
@@ -37,7 +37,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "Letzter Schritt! Stellen Sie Ihr **Netz-Spitzenwert-Limit** ein — die maximale kW, die Ihr Netzvertrag zulässt, bevor SEM mit dem Lastabwurf beginnt. SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere verwendet sichere Standardwerte, die Sie später im **Konfiguration**-Tab des SEM-Dashboards anpassen können — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
         "data": {
           "battery_capacity_kwh": "Home Battery Capacity (kWh)",
           "target_peak_limit": "Peak Power Limit (kW)",

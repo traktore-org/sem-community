@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Opsætning af solenergistyring",
-        "description": "SEM har fundet følgende sensorer fra dit Home Assistant Energi Dashboard:\n\n{summary}\n\nKlik **Send** for at fortsætte. De næste to trin finder automatisk din elbiloplader og inverter.",
+        "description": "SEM har registreret følgende sensorer fra dit Home Assistant Energi-dashboard:\n\n{summary}\n\nKlik på **Indsend** for at fortsætte. Kun et trin mere. EV-ladere, varmepumpe, takst og alle andre indstillinger konfigureres senere på den nye fane **Konfiguration** i SEM-dashboardet — du behøver ikke håndtere dem nu.",
         "data": {
           "observer_mode": "Testtilstand (skrivebeskyttet — styrer ikke hardware)"
         },

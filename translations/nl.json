@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Solar Energy Management Configuratie",
-        "description": "SEM heeft de volgende sensors gevonden in je Home Assistant Energie Dashboard:\n\n{summary}\n\nClick **Submit** om door te gaan. De volgende 2 stappen onderzoeken je EV lader(s) en zonnepaneel omvormer(s) — bijna alles wordt automatisch voor je ingevuld.",
+        "description": "SEM heeft de volgende sensoren in uw Home Assistant Energie-dashboard gevonden:\n\n{summary}\n\nKlik op **Versturen** om door te gaan. Nog één stap. EV-laders, warmtepompen, tarief en alle andere instellingen worden later geconfigureerd in het nieuwe **Configuratie**-tabblad van het SEM-dashboard — u hoeft ze nu niet in te vullen.",
         "data": {
           "observer_mode": "Test mode (read-only — geen hardware wijzigingen)"
         },
