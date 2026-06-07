@@ -200,16 +200,33 @@ class HotWaterController(SwitchDevice):
         During Legionella cycle: cutoff is legionella_target_temp.
 
         Records which branch fired on
-        ``self._last_temperature_safety_path`` (#420). The
-        ``no_sensor_assume_safe`` path is the silent-failure surface to
-        watch — when the configured temperature sensor breaks SEM keeps
-        activating the heater relying only on the device's internal
-        thermostat. Telemetry attribute makes this state visible.
+        ``self._last_temperature_safety_path`` (#420).
+
+        Sensor-unavailable distinction (v1.7.2, 2026-06-07):
+        * ``no_sensor_configured`` — user never configured a sensor.
+          Returns ``True`` so SEM can drive the device and rely on the
+          device's own internal thermostat (by design).
+        * ``configured_sensor_broken`` — user DID configure a sensor
+          but it is currently ``unavailable`` / ``unknown`` / invalid.
+          Returns ``False`` (fail-safe). Without this, a broken
+          temperature sensor would let SEM activate the heater
+          indefinitely, relying only on the device's thermostat —
+          fine when the device's thermostat is healthy, dangerous if
+          the sensor failure is correlated with broader hardware issues.
         """
         temp = self.get_current_temperature()
         if temp is None:
-            self._last_temperature_safety_path = "no_sensor_assume_safe"
-            return True  # No sensor — allow operation (rely on thermostat)
+            # ``get_current_temperature`` already recorded WHY the read
+            # returned None on ``_last_temperature_reading_path``. We
+            # use that to split the silent-failure case from the
+            # genuinely-unconfigured case.
+            reading_path = self._last_temperature_reading_path or "uninitialized"
+            if reading_path == "no_source_configured":
+                self._last_temperature_safety_path = "no_sensor_configured"
+                return True  # No sensor — allow operation (rely on thermostat)
+            # Sensor configured but broken — fail-safe.
+            self._last_temperature_safety_path = "configured_sensor_broken"
+            return False
         if self._legionella_cycle_active:
             if temp < self.legionella_target_temp:
                 self._last_temperature_safety_path = "in_legionella_cycle_below_target"

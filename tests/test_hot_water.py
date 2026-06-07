@@ -132,6 +132,61 @@ class TestTemperatureSafety:
         mock_hass.states.get = lambda eid: None
         ctrl = HotWaterController(mock_hass, entity_id="switch.boiler")
         assert ctrl.is_temperature_safe() is True  # Rely on thermostat
+        assert ctrl._last_temperature_safety_path == "no_sensor_configured"
+
+    def test_unsafe_when_configured_sensor_unavailable(self, mock_hass):
+        """#420 fix (v1.7.2): if user CONFIGURED a temperature sensor
+        but it currently reports ``unavailable`` / ``unknown``, fail
+        safe. The old behaviour returned ``True`` and let SEM activate
+        the heater indefinitely with no temperature feedback."""
+        def get_state(eid):
+            if eid == "sensor.water_temp":
+                return _make_state("unavailable")
+            return None
+        mock_hass.states.get = get_state
+        ctrl = HotWaterController(mock_hass, entity_id="switch.boiler",
+                                   temperature_entity_id="sensor.water_temp")
+        assert ctrl.is_temperature_safe() is False, (
+            "configured-but-broken sensor must fail safe (#420)"
+        )
+        assert ctrl._last_temperature_safety_path == "configured_sensor_broken"
+        assert ctrl._last_temperature_reading_path == "separate_sensor_unavailable"
+
+    def test_unsafe_when_configured_sensor_missing(self, mock_hass):
+        """#420 fix (v1.7.2): if the configured sensor entity does NOT
+        exist in HA at all (typo in entity_id, removed integration),
+        fail safe."""
+        mock_hass.states.get = lambda eid: None
+        ctrl = HotWaterController(mock_hass, entity_id="switch.boiler",
+                                   temperature_entity_id="sensor.does_not_exist")
+        assert ctrl.is_temperature_safe() is False
+        assert ctrl._last_temperature_safety_path == "configured_sensor_broken"
+        assert ctrl._last_temperature_reading_path == "separate_sensor_missing"
+
+    def test_unsafe_when_configured_sensor_returns_invalid_value(self, mock_hass):
+        """#420 fix (v1.7.2): configured sensor reports non-numeric
+        string (e.g. an enum sensor wired by accident). Fail safe."""
+        mock_hass.states.get = lambda eid: _make_state("garbage_value")
+        ctrl = HotWaterController(mock_hass, entity_id="switch.boiler",
+                                   temperature_entity_id="sensor.water_temp")
+        assert ctrl.is_temperature_safe() is False
+        assert ctrl._last_temperature_safety_path == "configured_sensor_broken"
+
+    def test_unsafe_when_water_heater_attribute_broken_and_no_fallback(self, mock_hass):
+        """#420 fix (v1.7.2): water_heater entity is configured (so
+        the attribute IS the configured sensor source) and its
+        ``current_temperature`` attribute is non-numeric, with no
+        separate fallback sensor. Fail safe — the user did configure
+        a temperature source, it's just broken right now."""
+        def get_state(eid):
+            if eid == "water_heater.dhw":
+                return _make_state("idle", {"current_temperature": "n/a"})
+            return None
+        mock_hass.states.get = get_state
+        ctrl = HotWaterController(mock_hass, entity_id="water_heater.dhw")
+        assert ctrl.is_temperature_safe() is False
+        assert ctrl._last_temperature_safety_path == "configured_sensor_broken"
+        assert ctrl._last_temperature_reading_path == "entity_attribute_invalid"
 
     def test_legionella_cycle_allows_higher_temp(self, mock_hass):
         """During Legionella cycle, cutoff is Legionella target, not solar target."""
