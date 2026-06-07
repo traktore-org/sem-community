@@ -11,6 +11,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1] - 07.06.2026
+
+## 🎉 Stable Release
+
+_Consolidates the 1.7.1-beta.1 through 1.7.1-beta.17 chain into a single stable cut. Soaked overnight on HA-PROD on real hardware (Huawei SUN2000 + LUNA2000 + KEBA P30); no regression vs 1.7.0._
+
+### 🚀 Headline features
+
+* **Slim install flow** (#442) — 3 steps → 2. EV charger is moved off the install path entirely; users without an EV configured can now finish setup without lying or quitting.
+* **In-dashboard Configuration tab** (#442) — every OptionsFlow setting is now editable inline. 10 accordion sections (Setup overview, EV chargers, Battery zones, Tariff, Heat pump, Battery scheduler, Load management, Forecast, Notifications, Advanced), `(?)` help-toggle pattern on every field, auto-save via `solar_energy_management.set_option` + read-back via `solar_energy_management.get_config`.
+* **Per-section Diagnose buttons** (#432) — every Configuration tab section gets a 🩺 button that opens a focused JSON modal with **Copy to clipboard**. The user pastes on the discussion → maintainer gets a signal-rich payload instead of the 5 MB full diagnostics dump.
+* **One-time onboarding banner** (`sem-onboarding-banner`) — points existing users at the new Configuration tab; localStorage-gated, never shown to new installs.
+
+### 🐛 Stable-quality bug fixes
+
+* **EV charging logic now strictly honours per-charger `ev_target_type`** (#446) — no silent fallback to `estimated_soc` when the SOC sensor isn't configured. v10 → v11 migration auto-resets bad-state entries on first restart; Configuration tab GUI gate prevents new ones. AST lint pins the invariant. Fixes the PROD 2026-06-06 IDLE-stuck-at-120W stall.
+* **Reliable home consumption — two-tier hold** (#444) — `_smooth_home_consumption` now uses a 10-cycle transient hold (was 2) plus a separate 30-cycle inconsistency hold triggered when the raw balance goes strongly negative (i.e. physically impossible → guaranteed sensor staleness). Measured on PROD: zero-clamp rate drops from 37 % → 3 % during active charging at variable solar.
+* **Bulletproof EV solar-path stability** (#443) — evcc-style stability layer around `_set_current` on the daytime `min_plus_solar` Zone 3/4 path: rolling-median smoothing on `budget_w`, delta guard, time debounce, heartbeat. Stops the KEBA-side current oscillation that aborted EV sessions for Huawei+KEBA users on cloudy days.
+* **HA Repairs — graceful unavailability** (#440 / beta.10) — persistent sensor / forecast / recorder problems now surface in Settings → System → Repairs instead of growing the log. Transient sub-5-minute flaps stay completely silent.
+
+### 🔍 Heat-pump observability (#432)
+
+Discussion #432 surfaced a class of bug we couldn't reproduce on our hardware: heat-pump-controller registration silently fails for users with non-standard SG-Ready wiring. **1.7.1 ships the observability tools so users can self-diagnose remotely:**
+
+* **`sensor.sem_heat_pump_registration_status`** — six-string diagnostic sensor + attributes exposing the resolved entity ids + their live HA state (including `entity_missing` when the entity id is set but doesn't exist).
+* **Two new Repair issues** — `heat_pump_relay_unavailable_<slot>_<entity_id>` (per-relay, 5 min threshold) + `heat_pump_partial_sg_ready` (singleton, half-config detection).
+* **`heat_pump` block in the diagnostics dump.**
+* **Failure-path log promoted DEBUG → INFO** at `__init__.py:1137` so users see it in standard HA logs without enabling SEM debug logging.
+
+### 📐 Architectural principle codified (`docs/ARCHITECTURE.md`)
+
+**SEM is not an integration. SEM is an energy-management layer that sits on top of HA integrations.** Kills the temptation to add brand-specific drivers inside SEM. For Nibe SG-Ready specifically, `docs/EV_CHARGING_LOGIC.md §12` now documents both valid wiring paths (physical relays vs HA Modbus template switches) — SEM treats both the same way.
+
+### 🧪 Tests
+
+* **3 239 pass, 9 skipped, 0 fail** (was 3 186 at 1.7.0 — net **+53 tests** across the 1.7.1 betas).
+* AST lints locking key invariants: `decide.py` never reads SOC fields (#446), `_calculate_remaining_need` never touches `estimated_soc` (#446), heat-pump failure log stays at INFO (#432).
+* New scenario YAML `2026-06-06_target_soc_no_sensor_must_use_kwh` replays the PROD 2026-06-06 setup through the scenario harness.
+
+### 🌍 Translations
+
+* `dashboard/translations.json`: **1 007 keys × 15 languages** (EN + DE polished, others EN fallback).
+* `strings.json` + 15 `translations/*.json`: every new OptionsFlow field, Repair issue, and entity name covered.
+
+### 📦 Schema migration
+
+* **v10 → v11** (#446) — entries with `ev_target_type="soc"` on a charger lacking `vehicle_soc_entity` are reset to `"kwh"`. No data loss; existing `target_soc` values sit idle in `entry.options` for users who later wire up a real SOC sensor.
+
+### 🙏 Thanks
+
+Massive thanks to @RienduPre for the persistent #432 reports — they directly drove the observability investment that lets us debug heat-pump issues remotely from now on.
+
 # [1.7.1-beta.17] - 07.06.2026
 
 ## 🧪 Beta Release
