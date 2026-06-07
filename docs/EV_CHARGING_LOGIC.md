@@ -265,10 +265,47 @@ Each charger has its own daily energy bucket (`daily_ev` for that charger). The 
 | Daytime Min+PV not pulling grid on cloudy day | Cheapest hours ON + price = EXPENSIVE | Either accept the pause or turn Cheapest hours OFF |
 | Daily target counter shows yesterday's number into the morning | Working as intended — bucket only resets at *Charge by* time | `sensor.sem_charger_*_daily_ev`. Pre-#280 reset at sunrise; now at deadline to prevent double-charge race |
 | EV plugged in, SEM says *"Charging active"*, but real draw is ~0 W with `commanded_current > 0` | **Fixed in #446 (v1.7.1-beta.16+).** Pre-#446 if you had `ev_target_type="soc"` saved without a vehicle SOC sensor, SEM substituted an estimated SOC into the kWh budget which could go to 0 and idle the charger. The v10 → v11 migration auto-resets these to `"kwh"` on first restart after upgrade. If you're seeing this on an OLDER version, manually set `ev_target_type` back to `"kwh"` in the Configuration tab, or upgrade. | Configuration tab → EV chargers → Target type (the SOC option is now disabled when no vehicle SOC sensor is configured) |
+| Heat pump section in dashboard says "No heat pump configured" even though `heat_pump_relay1_entity` / `heat_pump_relay2_entity` are filled | **v1.7.1-beta.17+ exposes the diagnostic surface.** Check `sensor.sem_heat_pump_registration_status` — its state + attributes tell you which of the six possible failure modes applies (`partial_sg_ready_only_relay1`, `entity_missing`, `unavailable`, etc.). When a configured relay entity stays `unavailable` for 5+ minutes a Repair issue files at **Settings → System → Repairs** naming the specific entity. For users wiring SG-Ready via Nibe Modbus rather than physical relays, see "Heat pump — two valid wiring paths" below. | Configuration tab → Heat pump section → status sensor; Settings → System → Repairs |
 
 ---
 
-## 12. Related docs
+## 12. Heat pump — two valid wiring paths for SG-Ready
+
+SEM doesn't bundle device drivers — it operates on HA entities that other integrations expose (see [ARCHITECTURE.md → "SEM is not an integration"](ARCHITECTURE.md#architectural-principle--sem-is-not-an-integration)). For heat pumps with SG-Ready inputs there are two equally valid wiring paths, and SEM treats both the same way: as two `switch` entities that flip between `on` and `off`.
+
+### Path A — Physical relays wired to AUX inputs
+
+For Nibe units without Modbus, or any heat pump whose only SG-Ready interface is a hardware-relay pair:
+
+1. Wire two physical relays (e.g. Shelly 1 Mini × 2, an ESP relay board, or any HA-supported `switch`) to the heat pump's AUX1 / AUX2 inputs.
+2. In HA: confirm both switches appear under Developer Tools → States and toggle correctly.
+3. In SEM: open Configuration tab → Heat pump section → set `heat_pump_relay1_entity` and `heat_pump_relay2_entity` to those two switches.
+
+SEM commands the SG-Ready four states (BLOCKED / NORMAL / BOOST / FORCE_ON) by toggling the two switches as a 2-bit binary code, exactly as a hardware utility-signal box would.
+
+### Path B — Software SG-Ready via Modbus / vendor integration
+
+For Nibe S-Series (firmware ≥ 4.7.5) and any heat pump that supports SG-Ready via a Modbus register or vendor cloud API, no hardware is required:
+
+1. Install the relevant HA integration — HA's `nibe` integration, the generic `modbus` integration with manual register mapping, or the vendor's official integration.
+2. Configure the integration to expose / write the SG-Ready register (e.g. Nibe holding register 3032 enables Modbus-driven SG-Ready; subsequent writes drive the state).
+3. Create two HA `template switch` entities. Each writes one bit of the SG-Ready state to the appropriate register when toggled, and reads back the current bit for its state.
+4. In SEM: same as Path A — point `heat_pump_relay1_entity` / `heat_pump_relay2_entity` at the template switches.
+
+SEM never knows or cares that it's Modbus underneath. It sees two switches and toggles them. The HA integration owns the protocol.
+
+### Why this design?
+
+evcc and similar tools bundle vendor-specific Modbus templates (e.g. evcc's `nibe-s-series` template writes directly to register 3032). SEM intentionally takes a different shape — it stays in HA's entity-and-services world so it doesn't have to ship a protocol library for every brand, doesn't have to track every firmware revision, and doesn't replace HA integrations the user already trusts. See [ARCHITECTURE.md](ARCHITECTURE.md#architectural-principle--sem-is-not-an-integration) for the full principle.
+
+### How to tell which path you're on
+
+* `sensor.sem_heat_pump_registration_status` shows the active mode: `registered_sg_ready` (relays only), `registered_climate_only` (no relays, climate-entity boost only), or `registered_sg_ready_and_climate` (both).
+* Click Settings → SEM → ⋮ → Download Diagnostics → the `heat_pump` block in the JSON shows the resolved entity ids + their live states.
+
+---
+
+## 13. Related docs
 
 - [README — Recent Improvements](../README.md#recent-improvements-v15x) — release notes for each version
 - [USER_GUIDE — Configuration Options](../USER_GUIDE.md#configuration-options) — full settings reference

@@ -152,3 +152,99 @@ def clear_no_recorder(hass: HomeAssistant) -> None:
         ir.async_delete_issue(hass, DOMAIN, "no_recorder")
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("issue_registry.delete no_recorder failed: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# Heat pump misconfiguration (#432)
+# ---------------------------------------------------------------------------
+
+
+def _heat_pump_relay_issue_id(slot: str, entity_id: str) -> str:
+    """Stable per-relay issue id. ``slot`` is ``"relay1"`` or ``"relay2"``."""
+    return f"heat_pump_{slot}_unavailable_{entity_id}"
+
+
+def raise_heat_pump_relay_unavailable(
+    hass: HomeAssistant,
+    slot: str,
+    entity_id: str,
+    *,
+    minutes_unavailable: int = 5,
+) -> None:
+    """File a repair when a configured SG-Ready relay entity
+    (``heat_pump_relay1_entity`` / ``heat_pump_relay2_entity``) has been
+    ``unavailable`` / ``unknown`` / missing past the threshold.
+
+    Surfaces the case where the user wired up ESP relays / Shelly
+    switches and SEM cannot actually toggle them — silent failure pre-
+    #432 (the heat pump controller registers happily, then no-ops on
+    every command). The user sees one entry per relay in
+    Settings → System → Repairs telling them which entity to fix.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_heat_pump_relay_issue_id(slot, entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="heat_pump_relay_unavailable",
+            translation_placeholders={
+                "slot": slot,
+                "entity_id": entity_id,
+                "minutes": str(minutes_unavailable),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug(
+            "issue_registry.create heat_pump_relay_unavailable failed for %s/%s: %s",
+            slot, entity_id, e,
+        )
+
+
+def clear_heat_pump_relay_unavailable(
+    hass: HomeAssistant, slot: str, entity_id: str,
+) -> None:
+    """Clear the relay repair when the entity reports a real state."""
+    try:
+        ir.async_delete_issue(
+            hass, DOMAIN, _heat_pump_relay_issue_id(slot, entity_id),
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug(
+            "issue_registry.delete heat_pump_relay_unavailable failed for %s/%s: %s",
+            slot, entity_id, e,
+        )
+
+
+def raise_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
+    """File a repair when exactly one of the two SG-Ready relays is
+    configured AND no climate fallback is set. The SG-Ready protocol
+    needs BOTH relays (it encodes the four states as a 2-bit binary).
+    A single relay is a config mistake the user almost certainly
+    didn't intend.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="heat_pump_partial_sg_ready",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="heat_pump_partial_sg_ready",
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug(
+            "issue_registry.create heat_pump_partial_sg_ready failed: %s", e,
+        )
+
+
+def clear_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
+    try:
+        ir.async_delete_issue(hass, DOMAIN, "heat_pump_partial_sg_ready")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug(
+            "issue_registry.delete heat_pump_partial_sg_ready failed: %s", e,
+        )

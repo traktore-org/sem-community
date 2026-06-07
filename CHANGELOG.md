@@ -11,6 +11,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1-beta.17] - 07.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.16](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.16)_
+
+### 🔍 Heat-pump observability — diagnose silent registration failures remotely (#432)
+
+Discussion #432 surfaced a class of bug we couldn't reproduce on our hardware: heat-pump-controller registration silently fails for users with non-standard SG-Ready wiring (ESP relay boards, Shellies, Modbus-bridged template switches for Nibe S-Series). Pre-#432 the user saw "No heat pump configured" on the dashboard with no clue why. The maintainer was guessing at fixes each round-trip. **Beta.17 ships observability tools so users can diagnose remotely — the maintainer reads one screenshot or one diagnostics dump and knows exactly which condition is failing.**
+
+#### What's new
+
+- **`sensor.sem_heat_pump_registration_status`** — diagnostic sensor publishing one of six strings (`registered_sg_ready`, `registered_climate_only`, `registered_sg_ready_and_climate`, `not_configured`, `partial_sg_ready_only_relay1`, `partial_sg_ready_only_relay2`). Attributes expose the resolved entity ids + their live HA state (including `entity_missing` when the entity id is set but doesn't exist in `hass.states`). One screenshot tells the maintainer if the gate logic is wrong OR the entity wiring is broken. (by @traktore-org in #432)
+- **Two new Repair issues** at Settings → System → Repairs:
+  - `heat_pump_relay_unavailable_<slot>_<entity_id>` — fires when a configured relay entity has been unavailable/unknown/missing for 5+ minutes, naming the specific relay (1 or 2) and entity id. Auto-clears on recovery. Mirrors the `sensor_unavailable` pattern from beta.10.
+  - `heat_pump_partial_sg_ready` — fires when exactly one of `(relay1, relay2)` is set without a climate fallback. The SG-Ready protocol encodes its four states as a 2-bit binary across BOTH relays; a single relay can't drive it. Singleton issue (one fix per misconfig), auto-clears when the config becomes valid. (by @traktore-org in #432)
+- **`heat_pump` block in the diagnostics dump.** Settings → SEM → ⋮ → Download Diagnostics now includes a `heat_pump` block with `registered`, `registration_status`, `mode`, `sg_ready_state`, `solar_boost`, plus nested `config` (entity ids) and `live` (their HA states). One-click payload for sharing on the discussion. (by @traktore-org in #432)
+- **Failure-path log promoted from DEBUG to INFO** at `__init__.py:1137`. Pre-#432 the "Heat pump not configured" line was DEBUG-only, so users never saw it in their normal HA log view. Now it's INFO and includes the actual `relay1` / `relay2` / `climate` config values, symmetric with the success-path INFO. If the user expects registration but sees `None` values, the problem is in the config-flow save; if they see real entity ids, the problem is the entities themselves. (by @traktore-org in #432)
+
+### 🩺 Per-section Diagnose buttons in the Configuration tab (#432)
+
+Built on top of the heat-pump observability above. Every section of the Configuration tab gets a **Diagnose** button next to the section title. Click it → a modal opens with a focused JSON payload (the section's config + live state + last ~20 SEM log lines matching the section's keywords) + a **Copy to clipboard** button. The user pastes the result on the discussion or issue tracker; the maintainer gets a signal-rich payload instead of having to ask for a full 5 MB diagnostics dump.
+
+- **`solar_energy_management.diagnose` service** (`__init__.py`, `supports_response=ONLY`). Takes an optional `section` parameter (defaults to `all`). Returns `{section, payload: {version, entry_id, entry_version, config, state, recent_logs}}`. Phase 1 has dedicated slicers for `all` (Overview) and `heat_pump`; the other 8 sections use a generic prefix-match slice (per-section slicers land in a follow-up beta — the button shell + modal + copy flow are wired everywhere so the user surface is consistent). (by @traktore-org in #432)
+- **`<sem-diagnose-button>` Lit element** (`dashboard/card/src/cards/sem-diagnose-button.js`). Self-contained: button + modal + clipboard-write + busy/error states. Pluggable via `section` + `label` props. The Configuration tab's `_renderSectionHeader` mounts one per section with `@click.stop` so opening the modal doesn't toggle the accordion. (by @traktore-org in #432)
+- **Architectural design note for follow-up betas:** generic prefix-match slicers stay; we'll add dedicated slicers for the high-value sections (EV chargers, tariff, battery zones) in 1.7.2-beta.1. Each new section just needs a one-liner key set added to `__init__.py`'s slicer map — no extra UI work.
+
+#### Architectural principle codified (`docs/ARCHITECTURE.md`)
+
+**SEM is not an integration. SEM is an energy-management layer that sits on top of HA integrations.** evcc and similar tools bundle brand-specific device drivers (e.g. evcc's `nibe-s-series` template speaks Modbus directly to register 3032). SEM intentionally takes a different shape: it stays in HA's entity-and-services world. The user runs HA's `nibe` / `modbus` / `keba` integration (which owns the protocol), then plugs the resulting entities into SEM via entity pickers.
+
+For Nibe SG-Ready specifically, `docs/EV_CHARGING_LOGIC.md` now documents both valid paths (Path A: physical relays wired to AUX inputs; Path B: HA `template switch` entities backed by Modbus registers via the user's `nibe`/`modbus` integration). SEM treats both the same way — as two `switch` entities — so no protocol code lands in SEM regardless of which the user picks. (by @traktore-org in #432)
+
+### 🧪 Tests
+
+- `tests/test_heat_pump_registration_status_sensor.py` (new, 8 tests) — pins the 6-string state machine plus attribute behaviour for entity-missing and unavailable cases.
+- `tests/test_heat_pump_repair_issues.py` (new, 7 tests) — verifies the two new repair types fire with the right issue ids + translation placeholders, are idempotent across relay slots, and swallow registry exceptions without crashing cycles.
+- `tests/test_diagnostics_dump_heat_pump.py` (new, 4 tests) — AST-walks `diagnostics.py` to lock the `heat_pump` block + nested `config` / `live` subblocks. Cross-checks `coordinator/types.py` emits the diagnostic fields the dump reads.
+- `tests/test_heat_pump_failure_log_is_info.py` (new, 1 test) — AST lint on `__init__.py` to assert the NOT-registered branch logs INFO, not DEBUG. Pins the regression boundary.
+
+Full suite: **3239 pass, 9 skipped, 0 fail** (was 3217 — net +22 after the heat-pump tests).
+
+### 🌍 Translations
+
+- 70 new entries (5 keys × 14 languages): the `heat_pump_registration_status` entity name + the two new Repair issue title/description pairs. EN + DE polished, other 13 languages on EN fallback per the existing convention.
+
 # [1.7.1-beta.16] - 06.06.2026
 
 ## 🧪 Beta Release

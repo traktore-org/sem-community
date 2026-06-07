@@ -976,6 +976,9 @@
       },
       "diag_ed_config": {
         "name": "Energie-Dashboard-Konfiguration"
+      },
+      "heat_pump_registration_status": {
+        "name": "Wärmepumpe Registrierungs-Status"
       }
     },
     "binary_sensor": {
@@ -1208,6 +1211,14 @@
     "no_recorder": {
       "title": "Recorder-Integration nicht verfügbar",
       "description": "SEM wollte EV-/Lade-Verlauf aus dem HA-Recorder bootstrappen, aber der Lesevorgang ist fehlgeschlagen. EV-Intelligenz (SoC-Schätzung, tägliche Decay) kann ohne ihn nicht kalt starten — Werte füllen sich langsam aus Live-Zyklen. Meist transient — wird beim nächsten erfolgreichen Lesevorgang automatisch gelöscht."
+    },
+    "heat_pump_relay_unavailable": {
+      "title": "Wärmepumpe SG-Ready {slot} nicht verfügbar",
+      "description": "Die konfigurierte SG-Ready-Relais-Entity `{entity_id}` ({slot}) ist seit {minutes}+ Minuten nicht verfügbar/unbekannt. SEM kann die Wärmepumpensteuerung zwar registrieren, aber jeder SG-Ready-Befehl läuft ins Leere, bis die Entity wieder einen gültigen Zustand meldet. Prüfe das vorgelagerte Gerät — ESP-Relais-Board, Shelly, Modbus-Template-Switch oder wer auch immer die Entity besitzt. Die Meldung verschwindet automatisch, sobald das Relais wieder on/off meldet."
+    },
+    "heat_pump_partial_sg_ready": {
+      "title": "Wärmepumpe SG-Ready unvollständig konfiguriert",
+      "description": "Genau eines der beiden SG-Ready-Relais (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) ist in SEM gesetzt, ohne climate-Fallback. Das SG-Ready-Protokoll kodiert die vier Zustände (BLOCKED / NORMAL / BOOST / FORCE_ON) als 2-Bit-Wert über BEIDE Relais. Ein einzelnes Relais kann das Protokoll nicht ansteuern. Entweder das zweite Relais auch konfigurieren oder eine `heat_pump_climate_entity` setzen, um den climate-only Setpoint-Boost-Pfad zu nutzen. Die Meldung verschwindet automatisch, sobald die Konfiguration gültig ist."
     }
   }
 }

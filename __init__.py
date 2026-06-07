@@ -1134,9 +1134,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 hp_relay1 or "—", hp_relay2 or "—", hp_climate or "—",
             )
         else:
-            _LOGGER.debug(
-                "Heat pump not configured (no relay entities AND "
-                "no climate entity)"
+            # #432: promote from DEBUG to INFO so users self-diagnosing
+            # heat-pump setup see this in the standard log view. Mirrors
+            # the success-path INFO above. The detailed config values are
+            # the load-bearing diagnostic — if the user expects the heat
+            # pump to register but sees this line with all None values,
+            # the problem is upstream (config-flow save / migration);
+            # if they see real entity ids, the problem is the entity not
+            # existing in HA.
+            _LOGGER.info(
+                "Heat pump NOT registered: relay1=%r relay2=%r climate=%r "
+                "(needs either BOTH relays OR a climate entity)",
+                hp_relay1, hp_relay2, hp_climate,
             )
 
     except Exception:
@@ -2599,6 +2608,148 @@ async def _async_register_phase_services(
         async_get_config,
         schema=vol.Schema({
             vol.Optional("entry_id"): cv.string,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    # #432: per-section Diagnose payload. The Configuration tab's
+    # ``<sem-diagnose-button>`` Lit element calls this service with a
+    # ``section`` name, gets back a focused JSON slice + recent log
+    # lines, then shows it in a modal with a "Copy to clipboard"
+    # button. The user pastes the result on the discussion → maintainer
+    # gets a signal-rich payload instead of the 5 MB diagnostics dump.
+    #
+    # Phase 1 (this beta): supports ``all`` + ``heat_pump`` cleanly.
+    # Other sections return a generic slice for now; their dedicated
+    # slicers land in a follow-up beta. The button shell + modal +
+    # copy flow are wired everywhere so the user surface is consistent.
+    _DIAGNOSE_HEAT_PUMP_KEYS = {
+        "heat_pump_registered", "heat_pump_registration_status",
+        "heat_pump_mode", "heat_pump_sg_ready_state", "heat_pump_solar_boost",
+        "heat_pump_relay1_entity", "heat_pump_relay2_entity",
+        "heat_pump_climate_entity",
+        "heat_pump_relay1_state", "heat_pump_relay2_state",
+        "heat_pump_climate_state",
+    }
+    _DIAGNOSE_HEAT_PUMP_OPTION_KEYS = {
+        "heat_pump_relay1_entity", "heat_pump_relay2_entity",
+        "heat_pump_climate_entity", "heat_pump_boost_offset",
+        "heat_pump_max_setpoint", "heat_pump_priority",
+    }
+    _DIAGNOSE_LOG_NEEDLES = {
+        "all": (),  # no filter — caller wants every recent SEM line
+        "heat_pump": ("heat_pump", "heatpump", "sg_ready", "HeatPumpController"),
+        "ev_chargers": ("ev_control", "ev_charger", "keba", "wallbox", "charger_"),
+        "battery_zones": ("battery_soc", "zone", "battery_priority"),
+        "tariff": ("tariff", "classifier", "percentile", "nordpool", "tibber"),
+        "battery_scheduler": ("battery_charge_scheduler", "precharge"),
+        "load_management": ("load_management", "peak_management"),
+        "forecast": ("forecast"),
+        "notifications": ("notification", "notify"),
+        "advanced": (),
+        "overview": (),
+    }
+
+    async def async_diagnose(call):
+        """Return a focused diagnose payload for a section.
+
+        Used by the Configuration tab Diagnose buttons. The output is a
+        dict ``{section, payload}`` where ``payload`` has three sub-blocks:
+
+          * ``config``  — the configured option keys for the section
+          * ``state``   — the live SEM-published state for the section
+          * ``recent_logs`` — last few SEM log lines matching the section
+
+        The frontend renders this as monospace JSON in a modal with a
+        Copy-to-clipboard button.
+        """
+        section = (call.data.get("section") if call.data else None) or "all"
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return {"section": section, "payload": {"error": "no_sem_entry"}}
+        target = sem_entries[0]
+        merged_cfg = {**(target.data or {}), **(target.options or {})}
+        coordinator = target.runtime_data
+        live = (coordinator.data or {}) if coordinator else {}
+
+        # Slice the config + state to the section's keys
+        if section == "heat_pump":
+            config = {k: merged_cfg.get(k) for k in _DIAGNOSE_HEAT_PUMP_OPTION_KEYS if k in merged_cfg}
+            state = {k: live.get(k) for k in _DIAGNOSE_HEAT_PUMP_KEYS if k in live}
+        elif section == "all" or section == "overview":
+            config = dict(merged_cfg)
+            state = dict(live)
+        else:
+            # Generic prefix-match slice for sections without a
+            # dedicated slicer yet. Better than nothing — RienduPre's
+            # diagnose-button doesn't 404, and the maintainer can
+            # eyeball the relevant fields.
+            prefix_map = {
+                "ev_chargers": ("ev_", "charger_", "daily_ev", "session_"),
+                "battery_zones": ("battery_",),
+                "tariff": ("tariff_", "electricity_"),
+                "battery_scheduler": ("battery_",),
+                "load_management": ("load_management", "peak_", "target_peak"),
+                "forecast": ("forecast_",),
+                "notifications": ("notification", "notify", "mobile_"),
+                "advanced": ("observer_mode", "update_interval", "power_delta",
+                             "current_delta", "soc_delta"),
+            }
+            prefixes = prefix_map.get(section, ())
+            config = {
+                k: v for k, v in merged_cfg.items()
+                if any(k.startswith(p) for p in prefixes)
+            }
+            state = {
+                k: v for k, v in live.items()
+                if any(k.startswith(p) for p in prefixes)
+            }
+
+        # Last ~20 SEM log lines (or filtered) — reuse the diagnostics
+        # log tail logic so behaviour stays consistent.
+        try:
+            from .diagnostics import _get_recent_sem_logs
+            all_logs = await _get_recent_sem_logs(hass)
+        except Exception:  # noqa: BLE001
+            all_logs = []
+        needles = _DIAGNOSE_LOG_NEEDLES.get(section, ())
+        if needles:
+            recent_logs = [
+                ln for ln in all_logs
+                if any(n.lower() in ln.lower() for n in needles)
+            ][-20:]
+        else:
+            recent_logs = list(all_logs)[-20:]
+
+        # Read SEM integration version (best effort)
+        sem_version = "unknown"
+        try:
+            import os as _os
+            import json as _json_v
+            manifest = _os.path.join(_os.path.dirname(__file__), "manifest.json")
+            with open(manifest) as _f:
+                sem_version = _json_v.load(_f).get("version", "unknown")
+        except Exception:  # noqa: BLE001
+            pass
+
+        return {
+            "section": section,
+            "payload": {
+                "version": sem_version,
+                "entry_id": target.entry_id,
+                "entry_version": f"{target.version}.{getattr(target, 'minor_version', 0)}",
+                "config": config,
+                "state": state,
+                "recent_logs": recent_logs,
+            },
+        }
+
+    hass.services.async_register(
+        DOMAIN,
+        "diagnose",
+        async_diagnose,
+        schema=vol.Schema({
+            vol.Optional("section", default="all"): cv.string,
         }),
         supports_response=SupportsResponse.ONLY,
     )

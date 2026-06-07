@@ -946,11 +946,22 @@ class SEMConfigCard extends SEMLitBase {
         const collapsed = this._collapsed[section.id];
         const chevronRotate = collapsed ? 'rotate(-90deg)' : 'rotate(0deg)';
         const subtitle = section.subtitleFn(this);
+        // Map section ids to the diagnose service ``section`` arg. The
+        // ``overview`` section dumps EVERYTHING (the maintainer's
+        // "general diagnose" payload); other sections get a focused
+        // slice. The mapping is 1:1 except overview→all.
+        const diagnoseSection = section.id === 'overview' ? 'all' : section.id;
         return html`
             <div class="section-header" @click=${() => this._toggleSection(section.id)}>
                 <ha-icon icon="${section.icon}" style="--mdc-icon-size:20px;color:${section.color}"></ha-icon>
                 <span class="section-title-text">${this._t(section.titleKey)}</span>
                 <span class="section-subtitle">${subtitle}</span>
+                <sem-diagnose-button
+                    .hass=${this._hass}
+                    section="${diagnoseSection}"
+                    label="${this._t('config_diagnose')}"
+                    @click=${(e) => e.stopPropagation()}>
+                </sem-diagnose-button>
                 <ha-icon class="chevron" icon="mdi:chevron-down"
                          style="--mdc-icon-size:18px;transform:${chevronRotate}"></ha-icon>
             </div>

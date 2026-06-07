@@ -605,6 +605,22 @@ class HeatPumpSensorData:
     heat_pump_mode: str = "normal"
     heat_pump_sg_ready_state: int = 2
     heat_pump_solar_boost: bool = False
+    # #432 / #446-followup: surface "why didn't the heat pump register?"
+    # so users with non-standard SG-Ready wiring (ESP relays, Shellies,
+    # Modbus-bridged template switches for Nibe S-Series) can debug
+    # without owning the hardware on our side. One of six string states:
+    #   registered_sg_ready, registered_climate_only,
+    #   registered_sg_ready_and_climate, not_configured,
+    #   partial_sg_ready_only_relay1, partial_sg_ready_only_relay2
+    # plus the resolved entity ids + their live states for the diagnostic
+    # attributes on ``sensor.sem_heat_pump_registration_status``.
+    heat_pump_registration_status: str = "not_configured"
+    heat_pump_relay1_entity: Optional[str] = None
+    heat_pump_relay2_entity: Optional[str] = None
+    heat_pump_climate_entity: Optional[str] = None
+    heat_pump_relay1_state: Optional[str] = None
+    heat_pump_relay2_state: Optional[str] = None
+    heat_pump_climate_state: Optional[str] = None
 
 
 @dataclass
@@ -1016,6 +1032,16 @@ class SEMData:
             "heat_pump_mode": self.heat_pump.heat_pump_mode,
             "heat_pump_sg_ready_state": self.heat_pump.heat_pump_sg_ready_state,
             "heat_pump_solar_boost": self.heat_pump.heat_pump_solar_boost,
+            # #432 diagnostic surface — exposed via
+            # ``sensor.sem_heat_pump_registration_status`` state +
+            # extra_state_attributes for self-diagnosis.
+            "heat_pump_registration_status": self.heat_pump.heat_pump_registration_status,
+            "heat_pump_relay1_entity": self.heat_pump.heat_pump_relay1_entity,
+            "heat_pump_relay2_entity": self.heat_pump.heat_pump_relay2_entity,
+            "heat_pump_climate_entity": self.heat_pump.heat_pump_climate_entity,
+            "heat_pump_relay1_state": self.heat_pump.heat_pump_relay1_state,
+            "heat_pump_relay2_state": self.heat_pump.heat_pump_relay2_state,
+            "heat_pump_climate_state": self.heat_pump.heat_pump_climate_state,
 
             # PV analytics (Phase 5)
             "pv_daily_specific_yield": self.pv_analytics.pv_daily_specific_yield,

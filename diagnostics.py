@@ -341,6 +341,28 @@ async def async_get_config_entry_diagnostics(
         "split_grid_discovery": split_grid_info,
         "pv_strings_discovery": pv_strings_info,
         "charger_adapters": charger_adapter_info,
+        # #432 — full heat-pump observability block. One-click dump for
+        # users with non-standard SG-Ready wiring (ESP relays, Shellies,
+        # Modbus-bridged template switches). Tells the maintainer in a
+        # single payload whether the gate logic is wrong, the entity
+        # wiring is broken, or the config is half-set.
+        "heat_pump": {
+            "registered": data.get("heat_pump_registered"),
+            "registration_status": data.get("heat_pump_registration_status"),
+            "mode": data.get("heat_pump_mode"),
+            "sg_ready_state": data.get("heat_pump_sg_ready_state"),
+            "solar_boost": data.get("heat_pump_solar_boost"),
+            "config": {
+                "relay1_entity": data.get("heat_pump_relay1_entity"),
+                "relay2_entity": data.get("heat_pump_relay2_entity"),
+                "climate_entity": data.get("heat_pump_climate_entity"),
+            },
+            "live": {
+                "relay1_state": data.get("heat_pump_relay1_state"),
+                "relay2_state": data.get("heat_pump_relay2_state"),
+                "climate_state": data.get("heat_pump_climate_state"),
+            },
+        },
         "forecast": {
             "today_kwh": data.get("forecast_today_kwh"),
             "tomorrow_kwh": data.get("forecast_tomorrow_kwh"),

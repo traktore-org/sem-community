@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-06T19:16:42.298146+00:00
+// Generated: 2026-06-07T06:46:42.336231+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -1004,7 +1004,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "de": {
     "charging": "Laden",
@@ -2009,7 +2013,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh pro Tag geliefert",
     "config_ev_target_type_soc": "Fahrzeug-SOC %",
     "config_ev_target_type_requires_sensor": "erfordert SOC-Sensor",
-    "config_help_ev_target_type": "kWh-Modus (Standard): SEM lädt bis das tägliche kWh-Ziel erreicht ist. SOC-Modus: SEM lädt bis die Fahrzeug-SOC das Ziel erreicht — nur verfügbar, wenn oben ein Fahrzeug-SOC-Sensor konfiguriert ist."
+    "config_help_ev_target_type": "kWh-Modus (Standard): SEM lädt bis das tägliche kWh-Ziel erreicht ist. SOC-Modus: SEM lädt bis die Fahrzeug-SOC das Ziel erreicht — nur verfügbar, wenn oben ein Fahrzeug-SOC-Sensor konfiguriert ist.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Sammle Diagnose…",
+    "config_diagnose_copy": "In Zwischenablage kopieren",
+    "config_diagnose_clipboard_failed": "Zwischenablage fehlgeschlagen — Text manuell markieren."
   },
   "fr": {
     "charging": "En charge",
@@ -3014,7 +3022,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "es": {
     "charging": "Cargando",
@@ -4019,7 +4031,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "it": {
     "charging": "In carica",
@@ -5024,7 +5040,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "nl": {
     "charging": "Laden",
@@ -6029,7 +6049,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "cs": {
     "charging": "Nabíjení",
@@ -7034,7 +7058,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "da": {
     "charging": "Oplader",
@@ -8039,7 +8067,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "fi": {
     "charging": "Lataus",
@@ -9044,7 +9076,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "hu": {
     "charging": "Töltés",
@@ -10049,7 +10085,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "no": {
     "charging": "Lader",
@@ -11054,7 +11094,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "pl": {
     "charging": "Ładowanie",
@@ -12059,7 +12103,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "pt": {
     "charging": "A carregar",
@@ -13064,7 +13112,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "ro": {
     "charging": "Încărcare",
@@ -14069,7 +14121,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   },
   "sv": {
     "charging": "Laddar",
@@ -15074,7 +15130,11 @@ const _semTranslations = {
     "config_ev_target_type_kwh": "kWh delivered per day",
     "config_ev_target_type_soc": "Vehicle SOC %",
     "config_ev_target_type_requires_sensor": "requires SOC sensor",
-    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above."
+    "config_help_ev_target_type": "kWh mode (default): SEM charges until your daily kWh target is reached. SOC mode: SEM charges until the vehicle SOC reaches your target — only available when a vehicle SOC sensor is configured above.",
+    "config_diagnose": "Diagnose",
+    "config_diagnose_busy": "Collecting diagnostics…",
+    "config_diagnose_copy": "Copy to clipboard",
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
   }
 };
 

@@ -2505,15 +2505,123 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # can distinguish "no controller registered" from "in NORMAL
         # state". When a HeatPumpController IS registered, its current
         # sg_ready_state / mode / boost flags will override below.
-        heat_pump_data = HeatPumpSensorData(
-            heat_pump_registered=(
-                "heat_pump" in getattr(
-                    getattr(self, "_surplus_controller", None),
-                    "_devices",
-                    {},
-                )
-            ),
+        registered_flag = (
+            "heat_pump" in getattr(
+                getattr(self, "_surplus_controller", None),
+                "_devices",
+                {},
+            )
         )
+        # #432: compute the registration status string + live entity
+        # state attributes so users with non-standard SG-Ready wiring
+        # (ESP relays, Shellies, Modbus-bridged template switches) can
+        # self-diagnose via ``sensor.sem_heat_pump_registration_status``.
+        # Reads the saved option values once per cycle + queries
+        # ``hass.states.get()`` for each configured entity.
+        hp_relay1 = self.config.get("heat_pump_relay1_entity") or None
+        hp_relay2 = self.config.get("heat_pump_relay2_entity") or None
+        hp_climate = self.config.get("heat_pump_climate_entity") or None
+
+        def _entity_state(eid: Optional[str]) -> Optional[str]:
+            """Return the live HA state of an entity, or "entity_missing"
+            if the entity id is set but does not exist in ``hass.states``."""
+            if not eid:
+                return None
+            st = self.hass.states.get(eid)
+            return st.state if st else "entity_missing"
+
+        if registered_flag:
+            if hp_relay1 and hp_relay2 and hp_climate:
+                _hp_status = "registered_sg_ready_and_climate"
+            elif hp_relay1 and hp_relay2:
+                _hp_status = "registered_sg_ready"
+            elif hp_climate:
+                _hp_status = "registered_climate_only"
+            else:
+                # Defensive — registration flag true but no config matches.
+                # Surfaces as a useful "investigate" signal.
+                _hp_status = "registered_unknown_mode"
+        else:
+            if hp_relay1 and not hp_relay2 and not hp_climate:
+                _hp_status = "partial_sg_ready_only_relay1"
+            elif hp_relay2 and not hp_relay1 and not hp_climate:
+                _hp_status = "partial_sg_ready_only_relay2"
+            else:
+                _hp_status = "not_configured"
+
+        relay1_state = _entity_state(hp_relay1)
+        relay2_state = _entity_state(hp_relay2)
+        climate_state = _entity_state(hp_climate)
+
+        heat_pump_data = HeatPumpSensorData(
+            heat_pump_registered=registered_flag,
+            heat_pump_registration_status=_hp_status,
+            heat_pump_relay1_entity=hp_relay1,
+            heat_pump_relay2_entity=hp_relay2,
+            heat_pump_climate_entity=hp_climate,
+            heat_pump_relay1_state=relay1_state,
+            heat_pump_relay2_state=relay2_state,
+            heat_pump_climate_state=climate_state,
+        )
+
+        # #432 — relay unavailability tracking + Repair issue. Mirrors the
+        # SensorReader pattern (``_sensor_unavailable_since``). Per-relay
+        # outage timer; if a configured relay stays unavailable past the
+        # 5-minute threshold, file a Repair so the user knows WHICH relay
+        # to investigate (ESP / Shelly / Modbus template switch). Cleared
+        # the moment the entity returns a real state.
+        try:
+            import time as _ri_time
+            from . import repair_issues as _ri
+            _now_mono = _ri_time.monotonic()
+            if not hasattr(self, "_heat_pump_relay_unavailable_since"):
+                self._heat_pump_relay_unavailable_since = {}
+                self._heat_pump_relay_repair_raised = set()
+            tracked = self._heat_pump_relay_unavailable_since
+            raised = self._heat_pump_relay_repair_raised
+            for slot, eid, state in (
+                ("relay1", hp_relay1, relay1_state),
+                ("relay2", hp_relay2, relay2_state),
+            ):
+                if not eid:
+                    continue
+                key = f"{slot}:{eid}"
+                is_bad = state in (None, "unavailable", "unknown", "entity_missing")
+                if is_bad:
+                    if key not in tracked:
+                        tracked[key] = _now_mono
+                    elif key not in raised:
+                        outage_s = _now_mono - tracked[key]
+                        if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
+                            _ri.raise_heat_pump_relay_unavailable(
+                                self.hass, slot, eid,
+                                minutes_unavailable=int(outage_s // 60),
+                            )
+                            raised.add(key)
+                else:
+                    if key in tracked:
+                        tracked.pop(key, None)
+                    if key in raised:
+                        raised.discard(key)
+                        _ri.clear_heat_pump_relay_unavailable(
+                            self.hass, slot, eid,
+                        )
+            # Partial SG-Ready repair — fires once when exactly one relay
+            # is set with no climate fallback. Auto-clears as soon as the
+            # config becomes valid (both relays set OR climate set OR
+            # both relays cleared).
+            partial = _hp_status in (
+                "partial_sg_ready_only_relay1",
+                "partial_sg_ready_only_relay2",
+            )
+            if partial and not getattr(self, "_heat_pump_partial_raised", False):
+                _ri.raise_heat_pump_partial_sg_ready(self.hass)
+                self._heat_pump_partial_raised = True
+            elif not partial and getattr(self, "_heat_pump_partial_raised", False):
+                _ri.clear_heat_pump_partial_sg_ready(self.hass)
+                self._heat_pump_partial_raised = False
+        except Exception as e:  # noqa: BLE001 — never fail a cycle over a repair
+            _LOGGER.debug("Heat-pump repair tracking failed: %s", e)
 
         # Phase 8: Consumption/solar predictor (#3)
         try:

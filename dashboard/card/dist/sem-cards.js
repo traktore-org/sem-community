@@ -6138,11 +6138,17 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${this._renderStepper("number.sem_soc_delta","soc_delta",t,"config_help_soc_delta")}
             </div>
             ${this._renderStepper("number.sem_minimum_solar_power","min_solar_power",t,"config_help_min_solar_power")}
-        `}_renderSectionHeader(t,e){const i=this._collapsed[t.id]?"rotate(-90deg)":"rotate(0deg)",s=t.subtitleFn(this);return W`
+        `}_renderSectionHeader(t,e){const i=this._collapsed[t.id]?"rotate(-90deg)":"rotate(0deg)",s=t.subtitleFn(this),r="overview"===t.id?"all":t.id;return W`
             <div class="section-header" @click=${()=>this._toggleSection(t.id)}>
                 <ha-icon icon="${t.icon}" style="--mdc-icon-size:20px;color:${t.color}"></ha-icon>
                 <span class="section-title-text">${this._t(t.titleKey)}</span>
                 <span class="section-subtitle">${s}</span>
+                <sem-diagnose-button
+                    .hass=${this._hass}
+                    section="${r}"
+                    label="${this._t("config_diagnose")}"
+                    @click=${t=>t.stopPropagation()}>
+                </sem-diagnose-button>
                 <ha-icon class="chevron" icon="mdi:chevron-down"
                          style="--mdc-icon-size:18px;transform:${i}"></ha-icon>
             </div>
@@ -6459,4 +6465,124 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     </button>
                 </div>
             </div>
-        `}getCardSize(){return 1}static getStubConfig(){return{}}},{type:"custom:sem-onboarding-banner",name:"SEM Onboarding Banner",description:"One-time welcome banner pointing existing users to the new Configuration tab",preview:!1}),console.info("%c SEM Cards %c Lit Bundle ","color: #4db6ac; font-weight: bold; background: #1e232d; padding: 2px 6px; border-radius: 4px 0 0 4px;","color: #ff9800; background: #1e232d; padding: 2px 6px; border-radius: 0 4px 4px 0;");
+        `}getCardSize(){return 1}static getStubConfig(){return{}}},{type:"custom:sem-onboarding-banner",name:"SEM Onboarding Banner",description:"One-time welcome banner pointing existing users to the new Configuration tab",preview:!1});class Fe extends xt{static get properties(){return{...super.properties,section:{type:String},label:{type:String},_open:{state:!0},_busy:{state:!0},_payload:{state:!0},_error:{state:!0},_copied:{state:!0}}}constructor(){super(),this.section="all",this.label="",this._open=!1,this._busy=!1,this._payload=null,this._error=null,this._copied=!1}static get watchedEntities(){return[]}async _click(){if(this._hass){this._open=!0,this._busy=!0,this._error=null,this._payload=null;try{const t=await this._hass.callService("solar_energy_management","diagnose",{section:this.section||"all"},void 0,void 0,!0);this._payload=t?.response||t}catch(t){this._error=t?.message||String(t),console.error("[sem-diagnose-button] failed",t)}finally{this._busy=!1}}}_close(){this._open=!1,this._copied=!1,this._payload=null,this._error=null}async _copy(){if(!this._payload)return;const t=JSON.stringify(this._payload,null,2);try{await navigator.clipboard.writeText(t),this._copied=!0,setTimeout(()=>{this._copied=!1},1500)}catch(t){console.error("[sem-diagnose-button] clipboard failed",t),this._error=this._t("config_diagnose_clipboard_failed")}}render(){const t=this._theme(),e=t.accent||"#5BC8D8",i=this.label||this._t("config_diagnose");return W`
+            <style>
+                :host { display: inline-flex; }
+                .btn {
+                    display: inline-flex; align-items: center; gap: 4px;
+                    padding: 5px 10px; border-radius: 8px; cursor: pointer;
+                    background: ${t.surface}; color: var(--primary-text-color, ${t.text});
+                    border: 1px solid ${t.surfaceBorder};
+                    font-size: 12px; font-family: inherit;
+                    transition: background 0.15s, border-color 0.15s;
+                }
+                .btn:hover { background: ${t.surfaceHover}; border-color: ${e}; }
+                .modal-backdrop {
+                    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+                    display: flex; align-items: center; justify-content: center;
+                    z-index: 9999; padding: 20px;
+                }
+                .modal {
+                    background: ${t.surface};
+                    border: 1px solid ${t.surfaceBorder};
+                    border-radius: 14px; padding: 18px;
+                    max-width: 800px; width: 100%;
+                    max-height: 80vh; overflow: hidden;
+                    display: flex; flex-direction: column;
+                    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+                    color: var(--primary-text-color, ${t.text});
+                    font-family: 'Segoe UI','Roboto',sans-serif;
+                }
+                .modal-header {
+                    display: flex; align-items: center; gap: 10px;
+                    padding-bottom: 12px;
+                    border-bottom: 1px solid ${t.surfaceBorder};
+                }
+                .modal-title { font-size: 16px; font-weight: 700; flex: 1; }
+                .icon-btn {
+                    background: transparent; border: none;
+                    color: var(--secondary-text-color, ${t.textSec});
+                    cursor: pointer; padding: 4px; border-radius: 50%;
+                    transition: background 0.15s;
+                }
+                .icon-btn:hover { background: ${t.surfaceHover}; }
+                .modal-body {
+                    flex: 1; overflow: auto; padding: 12px 0;
+                    font-family: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
+                    font-size: 11px; line-height: 1.5;
+                    white-space: pre-wrap; word-break: break-word;
+                    color: var(--primary-text-color, ${t.text});
+                }
+                .modal-footer {
+                    display: flex; gap: 8px; padding-top: 12px;
+                    border-top: 1px solid ${t.surfaceBorder};
+                    justify-content: flex-end;
+                }
+                .footer-btn {
+                    padding: 7px 14px; border-radius: 9px;
+                    font-size: 12px; font-weight: 600; font-family: inherit;
+                    cursor: pointer; border: 1px solid transparent;
+                }
+                .footer-btn.primary {
+                    background: ${e}; color: #1a1d24;
+                    border-color: ${e};
+                }
+                .footer-btn.primary:hover {
+                    background: color-mix(in srgb, ${e} 88%, white);
+                }
+                .footer-btn.secondary {
+                    background: transparent;
+                    color: var(--secondary-text-color, ${t.textSec});
+                    border-color: ${t.surfaceBorder};
+                }
+                .footer-btn.secondary:hover { background: ${t.surfaceHover}; }
+                .footer-btn.copied {
+                    background: #8DC892; color: #1a1d24;
+                    border-color: #8DC892;
+                }
+                .busy {
+                    text-align: center; padding: 30px;
+                    color: var(--secondary-text-color, ${t.textSec});
+                }
+                .error {
+                    color: var(--error-color, #d33);
+                    padding: 12px;
+                    background: rgba(220, 50, 50, 0.1);
+                    border-radius: 8px;
+                    font-family: ui-monospace, monospace;
+                    font-size: 11px;
+                }
+            </style>
+            <button class="btn" @click=${this._click}>
+                <ha-icon icon="mdi:stethoscope" style="--mdc-icon-size:14px"></ha-icon>
+                ${i}
+            </button>
+            ${this._open?W`
+                <div class="modal-backdrop" @click=${t=>t.target.classList.contains("modal-backdrop")&&this._close()}>
+                    <div class="modal">
+                        <div class="modal-header">
+                            <ha-icon icon="mdi:stethoscope" style="--mdc-icon-size:18px;color:${e}"></ha-icon>
+                            <span class="modal-title">${this._t("config_diagnose")} — ${this.section}</span>
+                            <button class="icon-btn" @click=${this._close} title="${this._t("cancel")||"Close"}">
+                                <ha-icon icon="mdi:close" style="--mdc-icon-size:18px"></ha-icon>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            ${this._busy?W`<div class="busy">${this._t("config_diagnose_busy")||"Collecting diagnostics…"}</div>`:K}
+                            ${this._error?W`<div class="error">${this._error}</div>`:K}
+                            ${this._busy||this._error||!this._payload?K:W`${JSON.stringify(this._payload,null,2)}`}
+                        </div>
+                        <div class="modal-footer">
+                            <button class="footer-btn secondary" @click=${this._close}>
+                                ${this._t("cancel")||"Close"}
+                            </button>
+                            ${this._payload?W`
+                                <button class="footer-btn ${this._copied?"copied":"primary"}" @click=${this._copy}>
+                                    ${this._copied?this._t("copied"):this._t("config_diagnose_copy")||"Copy to clipboard"}
+                                </button>
+                            `:K}
+                        </div>
+                    </div>
+                </div>
+            `:K}
+        `}}customElements.get("sem-diagnose-button")||customElements.define("sem-diagnose-button",Fe),console.info("%c SEM Cards %c Lit Bundle ","color: #4db6ac; font-weight: bold; background: #1e232d; padding: 2px 6px; border-radius: 4px 0 0 4px;","color: #ff9800; background: #1e232d; padding: 2px 6px; border-radius: 0 4px 4px 0;");
