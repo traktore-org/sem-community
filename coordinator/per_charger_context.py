@@ -246,6 +246,9 @@ class PerChargerContext:
             "reenable_attempts": coord._ev_reenable_attempts,
             "charge_refused": coord._ev_charge_refused,
             "current_charger_budget": coord._current_charger_budget,
+            # v1.7.1-beta.14 — solar stability layer per-charger state.
+            "last_set_amps_ts": coord._ev_last_set_amps_ts,
+            "budget_history": coord._ev_budget_history,
         }
         self._saved_vehicle_soc = coord._cycle_vehicle_soc
 
@@ -258,6 +261,14 @@ class PerChargerContext:
         coord._ev_reenable_attempts = coord._ev_reenable_attempts_per_charger.get(self.cid, 0)
         coord._ev_charge_refused = coord._ev_charge_refused_per_charger.get(self.cid, False)
         coord._current_charger_budget = self.budget_w
+        coord._ev_last_set_amps_ts = coord._ev_last_set_amps_ts_per_charger.get(self.cid)
+        # Budget history list is mutated in place by the actuator (appends
+        # the cycle's budget_w sample, pops the oldest). Setdefault keeps
+        # the same list reference across __enter__/__exit__ cycles so the
+        # rolling window survives.
+        coord._ev_budget_history = coord._ev_budget_history_per_charger.setdefault(
+            self.cid, [],
+        )
 
         # v1.6.14: precompute this charger's draw via the coordinator's
         # kW-aware helper. Reads ``self._ev_device`` indirectly via
@@ -305,6 +316,12 @@ class PerChargerContext:
             coord._ev_last_change_per_charger[self.cid] = coord._ev_last_change_time
             coord._ev_reenable_attempts_per_charger[self.cid] = coord._ev_reenable_attempts
             coord._ev_charge_refused_per_charger[self.cid] = coord._ev_charge_refused
+            # v1.7.1-beta.14 — solar stability layer per-charger state.
+            coord._ev_last_set_amps_ts_per_charger[self.cid] = coord._ev_last_set_amps_ts
+            # ``budget_history`` is the same list reference setdefault returned
+            # at __enter__; mutations done by the actuator persist naturally,
+            # so no explicit write-back is needed. The setdefault on the next
+            # __enter__ rebinds the primary view to the same list.
 
             # v1.6.14: persist effective state for the post-loop
             # notification dispatcher. The dict on the coordinator
@@ -329,6 +346,8 @@ class PerChargerContext:
             coord._ev_last_change_time = self._saved["change"]
             coord._ev_reenable_attempts = self._saved["reenable_attempts"]
             coord._ev_charge_refused = self._saved["charge_refused"]
+            coord._ev_last_set_amps_ts = self._saved["last_set_amps_ts"]
+            coord._ev_budget_history = self._saved["budget_history"]
             # ``_current_charger_budget`` is cleared to ``None`` in the
             # legacy code rather than restored to its pre-loop value —
             # preserve that semantic (the post-loop reader treats

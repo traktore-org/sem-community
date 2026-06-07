@@ -277,70 +277,7 @@ class TestSurplusDistributionIntegration:
 # 3. Night charge skip — PROD regression tests
 # ============================================================
 
-class TestNightChargeSkipProdRegression:
-    """Reproduce exact PROD bugs from 2026-04-28."""
-
-    def _make_detector(self, soc=57.6, anchored=True, last_full=None):
-        config = {"ev_battery_capacity_kwh": 40, "ev_target_soc": 80,
-                  "ev_min_soc_threshold": 20, "ev_max_consecutive_skips": 3}
-        d = EVTaperDetector(config)
-        d._estimated_soc = soc
-        d._soc_anchored = anchored
-        d._last_full_timestamp = last_full
-        d._energy_since_full = (100.0 - soc) / 100.0 * 40
-        return d
-
-    def _make_coord(self, detector, forecast_available=True):
-        config = {"ev_battery_capacity_kwh": 40, "ev_target_soc": 80,
-                  "ev_min_soc_threshold": 20}
-        coord = MockCoordinator(config, detector)
-        forecast = MagicMock()
-        forecast.available = forecast_available
-        forecast.forecast_tomorrow_kwh = 20.0 if forecast_available else 0
-        coord._forecast_reader.read_forecast.return_value = forecast
-        return coord
-
-    def test_prod_soc_58_forecast_unavailable_should_skip(self):
-        """PROD bug: SOC 58%, forecast down → skip must still work."""
-        detector = self._make_detector(soc=57.6, anchored=True)
-        coord = self._make_coord(detector, forecast_available=False)
-        energy = make_energy(daily_ev=8.38)
-
-        result = coord._calculate_forecast_night_target(1.1, energy)
-        assert result == 0.0, f"Should skip even without forecast, got {result}"
-
-    def test_prod_soc_58_forecast_available_should_skip(self):
-        """SOC 58% with forecast available → should also skip."""
-        detector = self._make_detector(soc=57.6, anchored=True)
-        coord = self._make_coord(detector, forecast_available=True)
-        energy = make_energy(daily_ev=8.38)
-
-        result = coord._calculate_forecast_night_target(1.1, energy)
-        assert result == 0.0
-
-    def test_soc_25_should_charge(self):
-        """SOC 25% → must charge (below safety margin)."""
-        detector = self._make_detector(soc=25.0, anchored=True)
-        coord = self._make_coord(detector)
-        energy = make_energy()
-
-        result = coord._calculate_forecast_night_target(10.0, energy)
-        # 25 - (4.4/40*100 * 1.3) = 25 - 14.3 = 10.7 < 20 → charge
-        assert result > 0
-
-    def test_not_anchored_charges(self):
-        """No SOC anchor → cannot skip, must charge."""
-        detector = self._make_detector(soc=70.0, anchored=False, last_full=None)
-        coord = self._make_coord(detector)
-        energy = make_energy()
-
-        result = coord._calculate_forecast_night_target(10.0, energy)
-        assert result > 0
-
-
-# ============================================================
-# 4. Taper detection — false positive regression
-# ============================================================
+# (TestNightChargeSkipProdRegression) removed in #440 — skip-decision wiring is gone.
 
 class TestTaperFalsePositiveRegression:
     """Prevent false full detection at low power."""
@@ -403,70 +340,7 @@ class TestTaperFalsePositiveRegression:
 # 5. Skip counter — once per night
 # ============================================================
 
-class TestSkipCounterOncePerNight:
-    """Verify skip counter increments correctly."""
-
-    def test_three_nights_three_skips(self):
-        """3 separate nights → counter should be 3."""
-        config = {"ev_battery_capacity_kwh": 40, "ev_target_soc": 80,
-                  "ev_min_soc_threshold": 20, "ev_max_consecutive_skips": 3}
-        detector = EVTaperDetector(config)
-        detector._soc_anchored = True
-        detector._estimated_soc = 70.0
-
-        # Night 1
-        detector.record_skip()
-        assert detector._consecutive_skips == 1
-        # Night 2
-        detector.record_skip()
-        assert detector._consecutive_skips == 2
-        # Night 3
-        detector.record_skip()
-        assert detector._consecutive_skips == 3
-
-    def test_safety_net_after_3_skips(self):
-        """After 3 consecutive skips → force charge."""
-        config = {"ev_battery_capacity_kwh": 40, "ev_target_soc": 80,
-                  "ev_min_soc_threshold": 20, "ev_max_consecutive_skips": 3}
-        detector = EVTaperDetector(config)
-        detector._soc_anchored = True
-        detector._estimated_soc = 70.0
-        detector._consecutive_skips = 3
-
-        nights, needed, reason = detector.calculate_nights_until_charge(4.4)
-        assert needed is True
-        assert "3 consecutive skips" in reason
-
-    def test_charging_resets_counter(self):
-        """After actual charging, counter should reset."""
-        config = {"ev_battery_capacity_kwh": 40, "ev_target_soc": 80,
-                  "ev_min_soc_threshold": 20, "ev_max_consecutive_skips": 3}
-        detector = EVTaperDetector(config)
-        detector._consecutive_skips = 2
-
-        detector.reset_skips()
-        assert detector._consecutive_skips == 0
-
-    def test_calling_record_skip_many_times_counts_once_if_guarded(self):
-        """Simulate coordinator guard: _skip_recorded_tonight prevents multi-count."""
-        config = {"ev_battery_capacity_kwh": 40, "ev_target_soc": 80,
-                  "ev_min_soc_threshold": 20, "ev_max_consecutive_skips": 3}
-        detector = EVTaperDetector(config)
-
-        # Simulate coordinator logic with guard
-        skip_recorded = False
-        for cycle in range(100):  # 100 cycles = ~16 minutes
-            if not skip_recorded:
-                detector.record_skip()
-                skip_recorded = True
-
-        assert detector._consecutive_skips == 1, \
-            f"Should be 1 (guarded), got {detector._consecutive_skips}"
-
-
-# ============================================================
-# 6. Multi-inverter sensor summing
-# ============================================================
+# (TestSkipCounterOncePerNight) removed in #440 — skip-decision wiring is gone.
 
 class TestMultiInverterSumming:
     """End-to-end sensor summing for multiple inverters/batteries."""
@@ -694,23 +568,8 @@ class TestPerChargerTaperDetection:
         assert d1.get_virtual_soc() == 80.0
         assert d2.get_virtual_soc() == 40.0
 
-    def test_independent_skip_decisions(self):
-        """Skip logic should work independently per detector."""
-        config = {"ev_battery_capacity_kwh": 40, "ev_target_soc": 80,
-                  "ev_min_soc_threshold": 20, "ev_max_consecutive_skips": 3}
-        d1 = EVTaperDetector(config)
-        d1._energy_since_full = 12.0  # SOC = 70%
-        d1._soc_anchored = True
-
-        d2 = EVTaperDetector(config)
-        d2._energy_since_full = 34.0  # SOC = 15%
-        d2._soc_anchored = True
-
-        _, needed1, _ = d1.calculate_nights_until_charge(4.4)
-        _, needed2, _ = d2.calculate_nights_until_charge(4.4)
-
-        assert needed1 is False  # 70% SOC → skip
-        assert needed2 is True   # 15% SOC → charge needed
+    # (test_independent_skip_decisions) removed in #440 — skip-decision
+    # wiring is gone, charge mode is the sole authority.
 
 
 # ============================================================
@@ -858,24 +717,8 @@ class TestEVNotificationTriggers:
 
         assert hass.bus.async_fire.call_count == 0
 
-    @pytest.mark.asyncio
-    async def test_skip_notification_fires(self):
-        """notify_ev_charge_skip should fire with SOC and nights."""
-        from custom_components.solar_energy_management.coordinator.notifications import NotificationManager
-        hass = MagicMock()
-        hass.bus = MagicMock()
-        hass.bus.async_fire = MagicMock()
-        hass.services = MagicMock()
-        hass.services.async_call = AsyncMock()
-        hass.services.has_service = MagicMock(return_value=False)
-
-        nm = NotificationManager(hass, {"enable_mobile_notifications": False})
-        await nm.notify_ev_charge_skip(85.0, 3)
-
-        event_data = hass.bus.async_fire.call_args[0][1]
-        assert event_data["event"] == "ev_charge_skip"
-        assert event_data["estimated_soc"] == 85
-        assert event_data["nights_remaining"] == 3
+    # (test_skip_notification_fires) removed in #440 — notify_ev_charge_skip
+    # is gone alongside the skip-decision wiring.
 
 
 # ============================================================

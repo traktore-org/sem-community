@@ -353,13 +353,20 @@ async def async_setup_entry(
                     native_min_value=0, native_max_value=200, native_step=0.5,
                     mode=NumberMode.SLIDER,
                 ), "daily_ev_target", full_config.get("daily_ev_target", 10)),
+                # (#441) Renamed from ``night_initial_current`` to
+                # ``initial_current`` (display "Vehicle Start Amps") to
+                # group with the new per-vehicle Min Amps and decouple
+                # from the now-misleading "night" prefix — the value is
+                # the session-start ramp current, used at any time the
+                # session begins, not strictly tied to nighttime.
                 (NumberEntityDescription(
-                    key=f"charger_{cid}_night_initial_current",
-                    name=f"{cname} Start Amps",
+                    key=f"charger_{cid}_initial_current",
+                    name=f"{cname} Vehicle Start Amps",
                     native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
                     native_min_value=6, native_max_value=32, native_step=1,
                     mode=NumberMode.SLIDER,
-                ), "ev_night_initial_current", full_config.get("ev_night_initial_current", 10)),
+                    icon="mdi:car-clock",
+                ), "initial_current", full_config.get("initial_current", 10)),
                 (NumberEntityDescription(
                     key=f"charger_{cid}_minimum_current",
                     name=f"{cname} Min Amps",
@@ -367,6 +374,21 @@ async def async_setup_entry(
                     native_min_value=6, native_max_value=16, native_step=1,
                     mode=NumberMode.SLIDER,
                 ), "ev_min_current", full_config.get("ev_min_current", 6)),
+                # (#440 ADR 0010 #3) per-vehicle handshake-floor minimum.
+                # Effective floor = max(ev_min_current, vehicle_min_current).
+                # Default seeds to the charger's ev_min_current so the
+                # entity is never empty in the UI; users with cars that
+                # need > 6 A (e.g. Renault Zoe handshake) bump this.
+                (NumberEntityDescription(
+                    key=f"charger_{cid}_vehicle_min_current",
+                    name=f"{cname} Vehicle Min Amps",
+                    native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+                    native_min_value=6, native_max_value=32, native_step=1,
+                    mode=NumberMode.SLIDER,
+                    icon="mdi:car-electric",
+                ), "vehicle_min_current",
+                    charger_cfg.get("vehicle_min_current") or
+                    full_config.get("ev_min_current", 6)),
                 (NumberEntityDescription(
                     key=f"charger_{cid}_target_soc",
                     name=f"{cname} Target SOC",
@@ -585,7 +607,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             DEFAULT_HEAT_PUMP_BOOST_OFFSET,
             DEFAULT_HOT_WATER_MAX_TEMP,
             DEFAULT_SYSTEM_SIZE_KWP,
-            DEFAULT_EV_NIGHT_INITIAL_CURRENT,
+            DEFAULT_EV_INITIAL_CURRENT,
             DEFAULT_EV_MIN_CURRENT,
             DEFAULT_EV_STALL_COOLDOWN,
             DEFAULT_BATTERY_CAPACITY_KWH,
@@ -616,7 +638,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "legionella_target_temp": 65.0,
             "legionella_interval_hours": 72,
             "system_size_kwp": DEFAULT_SYSTEM_SIZE_KWP,
-            "ev_night_initial_current": DEFAULT_EV_NIGHT_INITIAL_CURRENT,
+            "initial_current": DEFAULT_EV_INITIAL_CURRENT,
             "ev_minimum_current": DEFAULT_EV_MIN_CURRENT,
             "ev_stall_cooldown": DEFAULT_EV_STALL_COOLDOWN,
             "ev_phases": 3,

@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Solar Energy Management Setup",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "description": "SEM a détecté les capteurs suivants depuis votre tableau de bord Énergie Home Assistant :\n\n{summary}\n\nCliquez sur **Soumettre** pour continuer. Plus qu'une étape. Les chargeurs VE, la pompe à chaleur, le tarif et tous les autres paramètres sont configurés plus tard dans le nouvel onglet **Configuration** du tableau de bord SEM — pas besoin de les renseigner maintenant.",
         "data": {
           "observer_mode": "Test mode (read-only — do not control hardware)"
         },
@@ -908,20 +908,11 @@
       "ev_energy_since_full": {
         "name": "Énergie depuis charge complète"
       },
-      "ev_nights_until_charge": {
-        "name": "Nuits avant recharge"
-      },
       "ev_predicted_daily_consumption": {
         "name": "Consommation quotidienne prévue"
       },
       "ev_battery_health": {
         "name": "Santé batterie VE"
-      },
-      "ev_charge_needed": {
-        "name": "Recharge nécessaire"
-      },
-      "ev_charge_skip_reason": {
-        "name": "Raison du saut de charge"
       },
       "ev_charger_count": {
         "name": "Nombre de chargeurs"
@@ -985,6 +976,9 @@
       },
       "diag_ed_config": {
         "name": "Configuration du tableau de bord énergie"
+      },
+      "heat_pump_registration_status": {
+        "name": "Heat Pump Registration Status"
       }
     },
     "binary_sensor": {
@@ -1014,6 +1008,9 @@
       },
       "heat_pump_solar_boost": {
         "name": "Boost Solaire Pompe à Chaleur"
+      },
+      "heat_pump_registered": {
+        "name": "Pompe à chaleur enregistrée"
       },
       "utility_signal_active": {
         "name": "Signal Réseau Actif"
@@ -1082,9 +1079,6 @@
       "system_size_kwp": {
         "name": "Taille Installation PV"
       },
-      "ev_night_initial_current": {
-        "name": "Courant Initial Nuit VE"
-      },
       "ev_min_current": {
         "name": "Courant Minimum VE"
       },
@@ -1150,6 +1144,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Consommation du véhicule (kWh/100km)"
+      },
+      "initial_current": {
+        "name": "Courant de démarrage VE"
       }
     },
     "select": {
@@ -1202,6 +1199,26 @@
     "ev_charger_not_configured": {
       "title": "Chargeur VE non configuré",
       "description": "Aucun capteur de chargeur VE n’est configuré, les fonctions de charge VE sont donc indisponibles. Ajoutez un capteur « connecté » ou un capteur de puissance de charge dans les options de l’intégration pour activer la charge VE."
+    },
+    "sensor_unavailable": {
+      "title": "Sensor unavailable",
+      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+    },
+    "no_forecast_integration": {
+      "title": "No solar forecast integration detected",
+      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+    },
+    "no_recorder": {
+      "title": "Recorder integration unavailable",
+      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+    },
+    "heat_pump_relay_unavailable": {
+      "title": "Heat pump SG-Ready {slot} unavailable",
+      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+    },
+    "heat_pump_partial_sg_ready": {
+      "title": "Heat pump SG-Ready half-configured",
+      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
     }
   }
 }

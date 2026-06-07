@@ -1033,6 +1033,18 @@ SENSOR_TYPES = [
         key="heat_pump_sg_ready_state",
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    # #432: diagnostic sensor exposing WHY the heat pump is or is not
+    # registered. State is one of six strings (registered_sg_ready /
+    # registered_climate_only / registered_sg_ready_and_climate /
+    # not_configured / partial_sg_ready_only_relay1 /
+    # partial_sg_ready_only_relay2). Attributes expose the resolved
+    # entity ids + live HA state of each. The whole point is to let
+    # users with non-standard wiring (ESP relays / Shellies / Nibe
+    # Modbus template switches) self-diagnose remotely.
+    SensorEntityDescription(
+        key="heat_pump_registration_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 
     # ============================================================================
     # PV PERFORMANCE (Phase 5)
@@ -1339,22 +1351,15 @@ SENSOR_TYPES = [
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         suggested_display_precision=1,
     ),
-    SensorEntityDescription(
-        key="ev_nights_until_charge",
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="ev_charge_needed",
-    ),
+    # (#440) ev_nights_until_charge / ev_charge_needed / ev_charge_skip_reason
+    # were removed — the skip-decision wiring is gone, charge mode is the
+    # sole authority on whether to charge at night. ev_battery_health
+    # stays (display-only, no decision impact).
     SensorEntityDescription(
         key="ev_battery_health",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="ev_charge_skip_reason",
     ),
     # Multi-charger (#112)
     SensorEntityDescription(
@@ -1628,16 +1633,9 @@ async def async_setup_entry(
                 native_unit_of_measurement=PERCENTAGE,
                 suggested_display_precision=0,
             ),
-            SensorEntityDescription(
-                key=f"charger_{cid}_nights_until_charge",
-                name=f"{cname} Nights Until Charge",
-                state_class=SensorStateClass.MEASUREMENT,
-                suggested_display_precision=0,
-            ),
-            SensorEntityDescription(
-                key=f"charger_{cid}_charge_needed",
-                name=f"{cname} Charge Needed",
-            ),
+            # (#440) per-charger _nights_until_charge and _charge_needed
+            # were removed alongside the global versions — see comment
+            # in the main SENSOR_TYPES block.
             SensorEntityDescription(
                 key=f"charger_{cid}_taper_minutes_to_full",
                 name=f"{cname} Minutes to Full",
@@ -1852,10 +1850,10 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "loads_currently_shed", "controllable_devices_count",
         "forecast_source", "charging_recommendation",
         "tariff_price_level", "tariff_provider", "tariff_next_cheap_start",
-        "heat_pump_mode", "heat_pump_sg_ready_state",
+        "heat_pump_mode", "heat_pump_sg_ready_state", "heat_pump_registration_status",
         "pv_degradation_trend", "energy_tip", "energy_tip_category",
         "utility_signal_source",
-        "ev_taper_trend", "ev_charge_needed", "ev_charge_skip_reason",
+        "ev_taper_trend",
     }
 
     def __init__(
@@ -2222,6 +2220,25 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "next_cheap_end": d.get("tariff_next_cheap_end"),
                 "upcoming": d.get("tariff_upcoming"),
                 "schedule_today": d.get("tariff_schedule_today"),
+            })
+        elif self.entity_description.key == "heat_pump_registration_status":
+            # #432: surface WHY the heat pump is or is not registered.
+            # State is a single string from the six-value namespace
+            # (see HeatPumpSensorData). Attributes expose the resolved
+            # entity ids + their live HA state — so users can self-diagnose
+            # remotely without us owning the hardware. Mirrors the #359
+            # ``classifier_path`` pattern on tariff_price_level.
+            d = self.coordinator.data
+            attrs.update({
+                "registered": d.get("heat_pump_registered"),
+                "mode": d.get("heat_pump_mode"),
+                "sg_ready_state": d.get("heat_pump_sg_ready_state"),
+                "relay1_entity": d.get("heat_pump_relay1_entity"),
+                "relay2_entity": d.get("heat_pump_relay2_entity"),
+                "climate_entity": d.get("heat_pump_climate_entity"),
+                "relay1_state": d.get("heat_pump_relay1_state"),
+                "relay2_state": d.get("heat_pump_relay2_state"),
+                "climate_state": d.get("heat_pump_climate_state"),
             })
         elif self.entity_description.key == "tariff_price_level":
             # #359: surface WHICH classifier path produced the current level.

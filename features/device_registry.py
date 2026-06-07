@@ -311,8 +311,16 @@ class UnifiedDeviceRegistry:
 
         Removes old pattern-discovered / manually-added devices that aren't
         from this registry, keeping only:
-        - Devices managed by this registry (energy_dashboard_*)
-        - EV charger registered separately by __init__.py (load_device_ev_charger)
+        - Devices managed by this registry (``energy_dashboard_*``)
+        - Per-charger EV entries registered separately by ``__init__.py``
+          (``load_device_<charger_id>`` for every ``ev_chargers[i].id``)
+
+        #436: pre-fix this only spared the legacy hardcoded
+        ``load_device_ev_charger`` key. After #436 makes the key
+        per-charger, the second / third / Nth charger's entry uses
+        ``load_device_ev_charger_1`` etc. — these were silently pruned
+        on every device_registry sync. Widened to spare any
+        ``load_device_*`` key so the multi-charger fix actually sticks.
         """
         if not self._load_manager:
             return
@@ -320,7 +328,7 @@ class UnifiedDeviceRegistry:
         # Remove old non-registry, non-EV devices
         old_ids = [
             did for did in list(self._load_manager._devices.keys())
-            if not did.startswith("energy_dashboard_") and did != "load_device_ev_charger"
+            if not did.startswith("energy_dashboard_") and not did.startswith("load_device_")
         ]
         for did in old_ids:
             del self._load_manager._devices[did]

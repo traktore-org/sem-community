@@ -52,6 +52,21 @@ const SEM_TAB_CONFIG = {
             <circle cx="0" cy="4" r="4" fill="currentColor" opacity="0.6" stroke="none"/>
             <circle cx="12" cy="-8" r="4" fill="currentColor" opacity="0.6" stroke="none"/>`,
     },
+    config: {
+        titleKey: 'config_tab_title', subtitleKey: 'config_tab_subtitle', color: '#8DC892',
+        icon: () => svg`
+            <circle cx="0" cy="0" r="6" stroke-width="2"/>
+            <g stroke-width="2" stroke-linecap="round">
+                <line x1="0" y1="-16" x2="0" y2="-10"/>
+                <line x1="0" y1="10" x2="0" y2="16"/>
+                <line x1="-16" y1="0" x2="-10" y2="0"/>
+                <line x1="10" y1="0" x2="16" y2="0"/>
+                <line x1="-11" y1="-11" x2="-7" y2="-7"/>
+                <line x1="7" y1="7" x2="11" y2="11"/>
+                <line x1="11" y1="-11" x2="7" y2="-7"/>
+                <line x1="-7" y1="7" x2="-11" y2="11"/>
+            </g>`,
+    },
     costs: {
         titleKey: 'costs', subtitleKey: 'costs_sub', color: '#f06292',
         icon: () => svg`
@@ -152,6 +167,7 @@ class SEMTabHeader extends SEMLitBase {
         if (tab === 'battery') return [g('battery_soc'), g('battery_power'), g('battery_health_score')].join(',');
         if (tab === 'ev') return [g('ev_power'), g('daily_ev_energy'), g('charging_state')].join(',');
         if (tab === 'control') return [g('target_peak_limit'), g('controllable_devices_count'), g('surplus_active_devices')].join(',');
+        if (tab === 'config') return [g('charging_state'), g('heat_pump_registered'), g('battery_status')].join(',');
         if (tab === 'costs') return [g('daily_costs'), g('daily_savings'), g('daily_net_cost')].join(',');
         if (tab === 'system') return [g('energy_optimization_score'), g('lifetime_total_savings'), g('lifetime_co2_avoided')].join(',');
         return '';
@@ -171,6 +187,7 @@ class SEMTabHeader extends SEMLitBase {
         if (tab === 'battery') return [t('soc'), t('power'), t('health')];
         if (tab === 'ev') return [t('power'), t('today'), t('session')];
         if (tab === 'control') return [t('peak'), t('devices'), t('active')];
+        if (tab === 'config') return [t('config_stat_chargers'), t('config_stat_heatpump'), t('config_stat_battery')];
         if (tab === 'costs') return [t('cost'), t('saved'), t('net')];
         if (tab === 'system') return [t('score'), t('saved'), t('co2')];
         return ['—', '—', '—'];
@@ -205,6 +222,18 @@ class SEMTabHeader extends SEMLitBase {
             this._getState('controllable_devices_count', 0).toFixed(0),
             this._getState('surplus_active_devices', 0).toFixed(0),
         ];
+        if (tab === 'config') {
+            const t = (k) => _t(k, this._hass);
+            const chargers = Object.keys(this._hass?.states || {})
+                .filter(e => e.match(/^number\.sem_charger_.+_minimum_current$/)).length;
+            const hp = this._hass?.states[`${this._prefix}heat_pump_registered`]?.state === 'on';
+            const batt = this._hass?.states[`${this._prefix}battery_soc`];
+            return [
+                String(chargers),
+                hp ? t('on') : t('off'),
+                batt ? Math.round(parseFloat(batt.state) || 0) + '%' : '—',
+            ];
+        }
         if (tab === 'costs') return [
             this._getState('daily_costs', 0).toFixed(2) + ' ' + _c,
             this._getState('daily_savings', 0).toFixed(2) + ' ' + _c,

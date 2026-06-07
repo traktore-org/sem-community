@@ -197,14 +197,14 @@ class SEMGridCard extends SEMLitBase {
                 .hero-power-row { display: flex; gap: 14px; margin-bottom: 4px; flex-wrap: wrap; }
                 .hero-pw { display: flex; flex-direction: column; }
                 .hero-pw-label {
-                    font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px;
+                    font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px;
                     color: var(--secondary-text-color, ${textSecCol}); margin-bottom: 1px;
                 }
                 .hero-pw-val { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
                 .hero-pw-val.import { color: #488fc2; }
                 .hero-pw-val.export { color: #8353d1; }
                 .hero-status {
-                    font-size: 11px; font-weight: 500;
+                    font-size: 12px; font-weight: 500;
                     text-transform: uppercase; letter-spacing: 0.5px;
                 }
                 .section {
@@ -214,14 +214,14 @@ class SEMGridCard extends SEMLitBase {
                     border-radius: 10px;
                 }
                 .section-title {
-                    font-size: 10px; font-weight: 600; text-transform: uppercase;
+                    font-size: 12px; font-weight: 600; text-transform: uppercase;
                     letter-spacing: 0.6px; margin-bottom: 6px;
                 }
                 .metric-row {
                     display: flex; justify-content: space-between; align-items: baseline; padding: 2px 0;
                 }
                 .metric-label {
-                    font-size: 11px; color: var(--secondary-text-color, ${textSecCol}); font-weight: 500;
+                    font-size: 12px; color: var(--secondary-text-color, ${textSecCol}); font-weight: 500;
                 }
                 .metric-val {
                     font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
@@ -239,7 +239,7 @@ class SEMGridCard extends SEMLitBase {
                 }
                 .peak-bar-svg { width: 100%; height: 8px; display: block; }
                 .peak-pct-label {
-                    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+                    font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
                     margin-top: 2px; text-align: right;
                 }
                 .c-import { color: #488fc2; }

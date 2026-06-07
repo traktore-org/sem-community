@@ -281,8 +281,7 @@ class TestPerChargerSensors:
         expected_suffixes = [
             "estimated_soc",
             "vehicle_soc",
-            "nights_until_charge",
-            "charge_needed",
+            # (#440) nights_until_charge / charge_needed removed
             "taper_minutes_to_full",
         ]
         for charger in TWO_CHARGERS:

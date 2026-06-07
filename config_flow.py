@@ -144,7 +144,16 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     #     Phase A's derivation silently dropped.
     # v7 (#277 Phase C): drop the dead ev_charging_mode key (charge_mode is
     #     authoritative now; the legacy select + 3 legacy switches are gone).
-    VERSION = 8
+    # v8 (#359): flip tariff_classification_mode static→percentile when
+    #     tariff_mode == "dynamic".
+    # v9 (#440 ADR 0010 #3): add ``vehicle_min_current`` to each
+    #     ``ev_chargers`` entry (default None = use the loadpoint
+    #     ``ev_min_current``). Optional per-car handshake-floor override.
+    # v10 (#441): rename per-charger ``ev_night_initial_current`` to
+    #     ``initial_current`` (decouples from the misleading "night"
+    #     prefix — the value is the session-start ramp current, applied
+    #     whenever a session begins). Display: "Vehicle Start Amps".
+    VERSION = 11
 
     @staticmethod
     @callback
@@ -210,12 +219,18 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             )
 
-        # Energy Dashboard is configured - show summary and continue
+        # Energy Dashboard is configured - show summary and continue.
+        # Slim install (v1.7.1-beta.11+, #442): route directly to
+        # ``async_step_hardware`` and skip the EV charger step entirely.
+        # The EV step's fields stay available in the OptionsFlow for
+        # power users and via the new dashboard Configuration tab for
+        # everyone else — fresh installs no longer need to lie about
+        # their EV setup just to get past the install.
         if user_input is not None:
             # Store Energy Dashboard sensor config + the observer_mode toggle
             self._data.update(self._energy_dashboard_config.to_dict())
             self._data["observer_mode"] = user_input.get("observer_mode", False)
-            return await self.async_step_ev_charger()
+            return await self.async_step_hardware()
 
         # Show Energy Dashboard summary — list every sensor SEM picked up so the
         # user can verify the auto-detection at a glance.
@@ -430,7 +445,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
                 ),
                 # #397: per-charger tunables — `ev_surplus_priority`,
-                # `daily_ev_target` + `_max`, `ev_night_initial_current`,
+                # `daily_ev_target` + `_max`, `initial_current`,
                 # `ev_min_current`, `ev_target_soc` + `_max`,
                 # `ev_battery_capacity_kwh`, `vehicle_soc_entity` — all live
                 # in OptionsFlow only. PR #390 surfaced them at install time
@@ -495,6 +510,12 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "warning_peak_level": DEFAULT_WARNING_PEAK_LEVEL,
             "emergency_peak_level": DEFAULT_EMERGENCY_PEAK_LEVEL,
             "critical_device_protection": DEFAULT_CRITICAL_DEVICE_PROTECTION,
+            # #442 slim install: explicit empty EV chargers list so
+            # downstream code reading ``config["ev_chargers"]`` always
+            # finds a list (even though ``.get("ev_chargers") or []``
+            # would also work). Users add their first charger from the
+            # dashboard Configuration tab → OptionsFlow ``ev_charger_add``.
+            "ev_chargers": [],
         }
 
     async def async_step_hardware(
@@ -533,8 +554,11 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # if empty so config.get() returns "".
                     merged.setdefault("battery_discharge_control_entity", "")
 
-                # Wrap flat EV keys into ev_chargers list (#112 multi-charger)
-                if merged.get("ev_charging_power_sensor") and "ev_chargers" not in merged:
+                # Wrap flat EV keys into ev_chargers list (#112 multi-charger).
+                # #442: ``_install_defaults()`` now sets ``ev_chargers: []`` so
+                # downstream code always finds a list. Treat both "missing" and
+                # "empty list" as the wrap-eligible state.
+                if merged.get("ev_charging_power_sensor") and not merged.get("ev_chargers"):
                     _EV_KEYS = [
                         "ev_connected_sensor", "ev_charging_sensor",
                         "ev_charging_power_sensor", "ev_charger_service",
@@ -1044,8 +1068,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     )
                 ),
                 vol.Optional(
-                    "ev_night_initial_current",
-                    default=self._data.get("ev_night_initial_current", 10),
+                    "initial_current",
+                    default=self._data.get("initial_current", 10),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=6, max=32, step=1,
@@ -1207,8 +1231,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     )
                 ),
                 vol.Optional(
-                    "ev_night_initial_current",
-                    default=charger.get("ev_night_initial_current", self._data.get("ev_night_initial_current", 10)),
+                    "initial_current",
+                    default=charger.get("initial_current", self._data.get("initial_current", 10)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=6, max=32, step=1,
@@ -1221,6 +1245,22 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=6, max=16, step=1,
+                        unit_of_measurement="A", mode="slider",
+                    )
+                ),
+                # Per-vehicle handshake-floor minimum (ADR 0010 #3, #440).
+                # Optional; defaults to whatever ``ev_min_current`` is set to.
+                # Lets users record per-car constraints (e.g. Renault Zoe ~9 A
+                # handshake floor) without raising the SEM-side floor that
+                # other chargers in a multi-charger fleet might want at 6 A.
+                # Effective floor at the decision layer is
+                # ``max(ev_min_current, vehicle_min_current or 0)``.
+                vol.Optional(
+                    "vehicle_min_current",
+                    description={"suggested_value": charger.get("vehicle_min_current")},
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=6, max=32, step=1,
                         unit_of_measurement="A", mode="slider",
                     )
                 ),
@@ -1648,12 +1688,45 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_heat_pump(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle heat pump SG-Ready configuration."""
+        """Handle heat pump SG-Ready configuration.
+
+        Two control paths are supported (#437):
+
+        - **SG-Ready** — configure both relay entities. Drives the heat
+          pump via the standard SG-Ready 4-state protocol (BLOCKED /
+          NORMAL / BOOST / FORCE_ON). For Viessmann / Stiebel Eltron /
+          Vaillant and similar hardware-relay setups.
+        - **Climate-only** — configure only ``heat_pump_climate_entity``.
+          Drives ``climate.set_temperature`` with ``boost_offset``
+          increments when surplus is available. For Nibe, Mitsubishi,
+          Daikin and any integration that exposes a climate entity but
+          no SG-Ready binary inputs.
+
+        Both paths can also coexist (SG-Ready relays + climate boost
+        for additional thermal storage).
+
+        Configuring no relays AND no climate entity = the heat pump
+        step is intentionally skipped (existing behaviour, leaves the
+        controller unregistered).
+        """
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_battery_scheduler()
+            # #437: validate the two-path rule — if the user fills ONE
+            # of the relay entities but not BOTH, AND has no climate
+            # entity, the controller can't be driven. Reject so the
+            # user doesn't ship a half-configured heat pump that
+            # silently does nothing.
+            relay1 = user_input.get("heat_pump_relay1_entity")
+            relay2 = user_input.get("heat_pump_relay2_entity")
+            climate = user_input.get("heat_pump_climate_entity")
+            has_one_relay = bool(relay1) ^ bool(relay2)
+            has_climate = bool(climate)
+            if has_one_relay and not has_climate:
+                errors["base"] = "heat_pump_partial_relays"
+            else:
+                self._data.update(user_input)
+                return await self.async_step_battery_scheduler()
 
         current_config = {**self.config_entry.data, **self.config_entry.options}
         _c = lambda key, fb: self._cfg(current_config, key, fb)

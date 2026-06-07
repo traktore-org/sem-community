@@ -50,8 +50,8 @@ class TestDashboardTemplate:
         assert data is not None
         assert "views" in data
 
-    def test_template_has_7_views(self):
-        """Dashboard should have exactly 7 tabs."""
+    def test_template_has_8_views(self):
+        """Dashboard should have exactly 8 tabs (Configuration tab added in #442)."""
         template_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             "dashboard",
@@ -60,7 +60,7 @@ class TestDashboardTemplate:
         with open(template_path) as f:
             data = yaml.safe_load(f)
         views = data.get("views", [])
-        assert len(views) == 7, f"Expected 7 views, got {len(views)}"
+        assert len(views) == 8, f"Expected 8 views, got {len(views)}"
 
     def test_template_view_paths(self):
         """Each view should have the expected path."""
@@ -72,7 +72,7 @@ class TestDashboardTemplate:
         with open(template_path) as f:
             data = yaml.safe_load(f)
         paths = [v.get("path") for v in data.get("views", [])]
-        expected = ["home", "energy", "battery", "ev", "control", "costs", "system"]
+        expected = ["home", "energy", "battery", "ev", "control", "config", "costs", "system"]
         assert paths == expected
 
     def test_template_no_overview_tab(self):

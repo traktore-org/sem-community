@@ -11,6 +11,482 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1] - 07.06.2026
+
+## 🎉 Stable Release
+
+_Consolidates the 1.7.1-beta.1 through 1.7.1-beta.17 chain into a single stable cut. Soaked overnight on HA-PROD on real hardware (Huawei SUN2000 + LUNA2000 + KEBA P30); no regression vs 1.7.0._
+
+### 🚀 Headline features
+
+* **Slim install flow** (#442) — 3 steps → 2. EV charger is moved off the install path entirely; users without an EV configured can now finish setup without lying or quitting.
+* **In-dashboard Configuration tab** (#442) — every OptionsFlow setting is now editable inline. 10 accordion sections (Setup overview, EV chargers, Battery zones, Tariff, Heat pump, Battery scheduler, Load management, Forecast, Notifications, Advanced), `(?)` help-toggle pattern on every field, auto-save via `solar_energy_management.set_option` + read-back via `solar_energy_management.get_config`.
+* **Per-section Diagnose buttons** (#432) — every Configuration tab section gets a 🩺 button that opens a focused JSON modal with **Copy to clipboard**. The user pastes on the discussion → maintainer gets a signal-rich payload instead of the 5 MB full diagnostics dump.
+* **One-time onboarding banner** (`sem-onboarding-banner`) — points existing users at the new Configuration tab; localStorage-gated, never shown to new installs.
+
+### 🐛 Stable-quality bug fixes
+
+* **EV charging logic now strictly honours per-charger `ev_target_type`** (#446) — no silent fallback to `estimated_soc` when the SOC sensor isn't configured. v10 → v11 migration auto-resets bad-state entries on first restart; Configuration tab GUI gate prevents new ones. AST lint pins the invariant. Fixes the PROD 2026-06-06 IDLE-stuck-at-120W stall.
+* **Reliable home consumption — two-tier hold** (#444) — `_smooth_home_consumption` now uses a 10-cycle transient hold (was 2) plus a separate 30-cycle inconsistency hold triggered when the raw balance goes strongly negative (i.e. physically impossible → guaranteed sensor staleness). Measured on PROD: zero-clamp rate drops from 37 % → 3 % during active charging at variable solar.
+* **Bulletproof EV solar-path stability** (#443) — evcc-style stability layer around `_set_current` on the daytime `min_plus_solar` Zone 3/4 path: rolling-median smoothing on `budget_w`, delta guard, time debounce, heartbeat. Stops the KEBA-side current oscillation that aborted EV sessions for Huawei+KEBA users on cloudy days.
+* **HA Repairs — graceful unavailability** (#440 / beta.10) — persistent sensor / forecast / recorder problems now surface in Settings → System → Repairs instead of growing the log. Transient sub-5-minute flaps stay completely silent.
+
+### 🔍 Heat-pump observability (#432)
+
+Discussion #432 surfaced a class of bug we couldn't reproduce on our hardware: heat-pump-controller registration silently fails for users with non-standard SG-Ready wiring. **1.7.1 ships the observability tools so users can self-diagnose remotely:**
+
+* **`sensor.sem_heat_pump_registration_status`** — six-string diagnostic sensor + attributes exposing the resolved entity ids + their live HA state (including `entity_missing` when the entity id is set but doesn't exist).
+* **Two new Repair issues** — `heat_pump_relay_unavailable_<slot>_<entity_id>` (per-relay, 5 min threshold) + `heat_pump_partial_sg_ready` (singleton, half-config detection).
+* **`heat_pump` block in the diagnostics dump.**
+* **Failure-path log promoted DEBUG → INFO** at `__init__.py:1137` so users see it in standard HA logs without enabling SEM debug logging.
+
+### 📐 Architectural principle codified (`docs/ARCHITECTURE.md`)
+
+**SEM is not an integration. SEM is an energy-management layer that sits on top of HA integrations.** Kills the temptation to add brand-specific drivers inside SEM. For Nibe SG-Ready specifically, `docs/EV_CHARGING_LOGIC.md §12` now documents both valid wiring paths (physical relays vs HA Modbus template switches) — SEM treats both the same way.
+
+### 🧪 Tests
+
+* **3 239 pass, 9 skipped, 0 fail** (was 3 186 at 1.7.0 — net **+53 tests** across the 1.7.1 betas).
+* AST lints locking key invariants: `decide.py` never reads SOC fields (#446), `_calculate_remaining_need` never touches `estimated_soc` (#446), heat-pump failure log stays at INFO (#432).
+* New scenario YAML `2026-06-06_target_soc_no_sensor_must_use_kwh` replays the PROD 2026-06-06 setup through the scenario harness.
+
+### 🌍 Translations
+
+* `dashboard/translations.json`: **1 007 keys × 15 languages** (EN + DE polished, others EN fallback).
+* `strings.json` + 15 `translations/*.json`: every new OptionsFlow field, Repair issue, and entity name covered.
+
+### 📦 Schema migration
+
+* **v10 → v11** (#446) — entries with `ev_target_type="soc"` on a charger lacking `vehicle_soc_entity` are reset to `"kwh"`. No data loss; existing `target_soc` values sit idle in `entry.options` for users who later wire up a real SOC sensor.
+
+### 🙏 Thanks
+
+Massive thanks to @RienduPre for the persistent #432 reports — they directly drove the observability investment that lets us debug heat-pump issues remotely from now on.
+
+# [1.7.1-beta.17] - 07.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.16](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.16)_
+
+### 🔍 Heat-pump observability — diagnose silent registration failures remotely (#432)
+
+Discussion #432 surfaced a class of bug we couldn't reproduce on our hardware: heat-pump-controller registration silently fails for users with non-standard SG-Ready wiring (ESP relay boards, Shellies, Modbus-bridged template switches for Nibe S-Series). Pre-#432 the user saw "No heat pump configured" on the dashboard with no clue why. The maintainer was guessing at fixes each round-trip. **Beta.17 ships observability tools so users can diagnose remotely — the maintainer reads one screenshot or one diagnostics dump and knows exactly which condition is failing.**
+
+#### What's new
+
+- **`sensor.sem_heat_pump_registration_status`** — diagnostic sensor publishing one of six strings (`registered_sg_ready`, `registered_climate_only`, `registered_sg_ready_and_climate`, `not_configured`, `partial_sg_ready_only_relay1`, `partial_sg_ready_only_relay2`). Attributes expose the resolved entity ids + their live HA state (including `entity_missing` when the entity id is set but doesn't exist in `hass.states`). One screenshot tells the maintainer if the gate logic is wrong OR the entity wiring is broken. (by @traktore-org in #432)
+- **Two new Repair issues** at Settings → System → Repairs:
+  - `heat_pump_relay_unavailable_<slot>_<entity_id>` — fires when a configured relay entity has been unavailable/unknown/missing for 5+ minutes, naming the specific relay (1 or 2) and entity id. Auto-clears on recovery. Mirrors the `sensor_unavailable` pattern from beta.10.
+  - `heat_pump_partial_sg_ready` — fires when exactly one of `(relay1, relay2)` is set without a climate fallback. The SG-Ready protocol encodes its four states as a 2-bit binary across BOTH relays; a single relay can't drive it. Singleton issue (one fix per misconfig), auto-clears when the config becomes valid. (by @traktore-org in #432)
+- **`heat_pump` block in the diagnostics dump.** Settings → SEM → ⋮ → Download Diagnostics now includes a `heat_pump` block with `registered`, `registration_status`, `mode`, `sg_ready_state`, `solar_boost`, plus nested `config` (entity ids) and `live` (their HA states). One-click payload for sharing on the discussion. (by @traktore-org in #432)
+- **Failure-path log promoted from DEBUG to INFO** at `__init__.py:1137`. Pre-#432 the "Heat pump not configured" line was DEBUG-only, so users never saw it in their normal HA log view. Now it's INFO and includes the actual `relay1` / `relay2` / `climate` config values, symmetric with the success-path INFO. If the user expects registration but sees `None` values, the problem is in the config-flow save; if they see real entity ids, the problem is the entities themselves. (by @traktore-org in #432)
+
+### 🩺 Per-section Diagnose buttons in the Configuration tab (#432)
+
+Built on top of the heat-pump observability above. Every section of the Configuration tab gets a **Diagnose** button next to the section title. Click it → a modal opens with a focused JSON payload (the section's config + live state + last ~20 SEM log lines matching the section's keywords) + a **Copy to clipboard** button. The user pastes the result on the discussion or issue tracker; the maintainer gets a signal-rich payload instead of having to ask for a full 5 MB diagnostics dump.
+
+- **`solar_energy_management.diagnose` service** (`__init__.py`, `supports_response=ONLY`). Takes an optional `section` parameter (defaults to `all`). Returns `{section, payload: {version, entry_id, entry_version, config, state, recent_logs}}`. Phase 1 has dedicated slicers for `all` (Overview) and `heat_pump`; the other 8 sections use a generic prefix-match slice (per-section slicers land in a follow-up beta — the button shell + modal + copy flow are wired everywhere so the user surface is consistent). (by @traktore-org in #432)
+- **`<sem-diagnose-button>` Lit element** (`dashboard/card/src/cards/sem-diagnose-button.js`). Self-contained: button + modal + clipboard-write + busy/error states. Pluggable via `section` + `label` props. The Configuration tab's `_renderSectionHeader` mounts one per section with `@click.stop` so opening the modal doesn't toggle the accordion. (by @traktore-org in #432)
+- **Architectural design note for follow-up betas:** generic prefix-match slicers stay; we'll add dedicated slicers for the high-value sections (EV chargers, tariff, battery zones) in 1.7.2-beta.1. Each new section just needs a one-liner key set added to `__init__.py`'s slicer map — no extra UI work.
+
+#### Architectural principle codified (`docs/ARCHITECTURE.md`)
+
+**SEM is not an integration. SEM is an energy-management layer that sits on top of HA integrations.** evcc and similar tools bundle brand-specific device drivers (e.g. evcc's `nibe-s-series` template speaks Modbus directly to register 3032). SEM intentionally takes a different shape: it stays in HA's entity-and-services world. The user runs HA's `nibe` / `modbus` / `keba` integration (which owns the protocol), then plugs the resulting entities into SEM via entity pickers.
+
+For Nibe SG-Ready specifically, `docs/EV_CHARGING_LOGIC.md` now documents both valid paths (Path A: physical relays wired to AUX inputs; Path B: HA `template switch` entities backed by Modbus registers via the user's `nibe`/`modbus` integration). SEM treats both the same way — as two `switch` entities — so no protocol code lands in SEM regardless of which the user picks. (by @traktore-org in #432)
+
+### 🧪 Tests
+
+- `tests/test_heat_pump_registration_status_sensor.py` (new, 8 tests) — pins the 6-string state machine plus attribute behaviour for entity-missing and unavailable cases.
+- `tests/test_heat_pump_repair_issues.py` (new, 7 tests) — verifies the two new repair types fire with the right issue ids + translation placeholders, are idempotent across relay slots, and swallow registry exceptions without crashing cycles.
+- `tests/test_diagnostics_dump_heat_pump.py` (new, 4 tests) — AST-walks `diagnostics.py` to lock the `heat_pump` block + nested `config` / `live` subblocks. Cross-checks `coordinator/types.py` emits the diagnostic fields the dump reads.
+- `tests/test_heat_pump_failure_log_is_info.py` (new, 1 test) — AST lint on `__init__.py` to assert the NOT-registered branch logs INFO, not DEBUG. Pins the regression boundary.
+
+Full suite: **3239 pass, 9 skipped, 0 fail** (was 3217 — net +22 after the heat-pump tests).
+
+### 🌍 Translations
+
+- 70 new entries (5 keys × 14 languages): the `heat_pump_registration_status` entity name + the two new Repair issue title/description pairs. EN + DE polished, other 13 languages on EN fallback per the existing convention.
+
+# [1.7.1-beta.16] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.15](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.15)_
+
+### 🐛 EV charging logic strictly honours `ev_target_type` per charger (#446)
+
+**PROD report 2026-06-06:** EV connected, SEM showing *"Charging active"* with `commanded_current = 9 A`, but real KEBA draw stalled at **120 W** with no progress against the day's kWh counter. The user (correctly) called this out as a charging-logic bug rather than a GUI / display problem.
+
+**Root cause traced to `coordinator/coordinator.py:_calculate_remaining_need` (the kWh budget feeding `decide.py:369`).** Pre-#446 logic:
+
+```python
+if ev_target_type == "soc" and vehicle_soc is None:          # ← rescue path
+    if detector and detector._soc_anchored:
+        vehicle_soc = detector.get_virtual_soc(None)         # ← leaks estimated_soc
+
+use_soc = ev_target_type == "soc" and vehicle_soc is not None
+if use_soc:
+    return max(0, (target_soc - vehicle_soc) / 100 * ev_capacity)   # → view.target_kwh
+```
+
+PROD had `ev_target_type="soc"` saved but no `vehicle_soc_entity` configured (a combination the Configuration tab let users save before this release). The rescue path silently substituted the taper detector's `estimated_soc = 89.6 %` into the kWh budget. With `target_soc = 80 %`, `(80 − 89.6) / 100 × 40 kWh` clamped to **0 kWh** → `decide.py:369` returned `IDLE` → KEBA got pilot-off → real draw collapsed to ~120 W. The user's daily kWh counter still had 3 kWh of headroom, but SEM didn't know it.
+
+**Three-part fix per the user's architectural rule "if SOC, then SOC; if kWh, then kWh — no mixing":**
+
+1. **Runtime trusts the saved config (no override).** `_calculate_remaining_need` is now a clean `if ev_target_type == "soc": … else: kwh …` branch. The rescue path is gone — `estimated_soc` never enters the budget. If a real `vehicle_soc` reading is momentarily `None` while in SOC mode, the SOC branch returns the full capacity so SEM keeps charging until taper detection trips (taper is the hard "full" stop). (by @traktore-org in #446)
+2. **v10 → v11 schema migration cleans existing bad state.** On the first restart after upgrade, any entry that has `ev_target_type="soc"` (or the legacy `ev_target_mode` field) on a charger without a `vehicle_soc_entity` gets reset to `"kwh"`. Logged via `_LOGGER.info` with a count of fields scrubbed. Bad combinations on disk become structurally impossible. (by @traktore-org in #446)
+3. **Configuration tab GUI gate prevents future bad state.** A new "Target type" select widget per charger. The "Vehicle SOC %" option is `disabled` when `vehicle_soc_entity` is empty; help text says *"requires SOC sensor"*. Users with a real sensor can pick either kWh or SOC; users without a sensor can only see kWh. (by @traktore-org in #446)
+
+### 🧪 Tests
+
+- **`tests/test_calculate_remaining_need_no_estimated_soc.py`** (new) — AST lint over `_calculate_remaining_need`. Banned names: `_estimated_soc`, `estimated_soc`, `get_virtual_soc`, `_ev_taper_detector`, `_ev_taper_detectors`. Any future refactor that reintroduces a SOC leak fails CI. (by @traktore-org in #446)
+- **`tests/test_decide_no_soc_reads.py`** (new) — AST lint over `coordinator/decide.py`. Banned attribute reads: `target_soc`, `estimated_soc`, `vehicle_soc`. The "decision logic is pure kWh" invariant has been true since #440 but was unpinned; now it's locked. (by @traktore-org in #446)
+- **`tests/test_config_flow_migration.py`** — added 3 v10 → v11 cases: per-charger bad-combo reset, legacy `ev_target_mode` cleanup, and the kWh-mode-preserved noop case. Updated 7 existing intermediate-hop assertions to expect version 11 (the new target). (by @traktore-org in #446)
+- **`tests/test_minmax_targets.py`** + **`tests/test_ev_target_ux.py`** — deleted 3 tests that pinned the removed rescue-path behaviour; added 2 replacement tests for the new "real sensor + unavailable reading = full capacity" SOC-branch contract. (by @traktore-org in #446)
+- **`tests/scenarios/2026-06-06_target_soc_no_sensor_must_use_kwh.yaml`** (new) — replays the PROD 2026-06-06 setup through the scenario harness. Asserts `canonical_strategy` is `battery_assist` (not `idle`) when `ev_target_type="soc"` + no SOC sensor + kWh headroom. (by @traktore-org in #446)
+- **Full unit suite: 3217 pass, 9 skipped, 0 fail** (was 3214 — net +5 after the test cleanup).
+
+### 📐 Why this is safe to deploy
+
+- The runtime change is a code-path simplification, not a behaviour change for any user with a sensible config. Installs in pure kWh mode (the default) are unaffected. Installs with a real SOC sensor + SOC mode are unaffected — the SOC math is unchanged.
+- The migration is idempotent. v11 entries are noops; v10 entries with kWh mode are noops; only the PROD-2026-06-06-class bad state gets cleaned.
+- The GUI gate is purely a UX guardrail. Saved values are still honoured by the runtime; the migration handles legacy data.
+
+### 🌍 Translations
+
+- 5 new dashboard keys for the Configuration tab Target-type select (`config_ev_target_type`, `config_ev_target_type_kwh`, `config_ev_target_type_soc`, `config_ev_target_type_requires_sensor`, `config_help_ev_target_type`). EN + DE polished; other 13 languages on EN fallback. `sem-localize.js` regenerated: 1003 keys × 15 languages.
+
+# [1.7.1-beta.15] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.14](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.14)_
+
+### 🐛 Reliable home consumption — two-tier hold against sensor-staleness skew (#444)
+
+**PROD report:** the system-diagram + energy panels occasionally show `Home = 0 W` for a single-cycle blip during active EV charging, then snap back to a real value. Recorded the behavior live on PROD on 2026-06-06: **16 % of cycles** clamped home consumption to 0 during a 10-min `min_plus_solar` charging window at ~4.25 kW with variable solar (clouds).
+
+Root cause confirmed from the recording: the Huawei modbus inverter + grid meter update every ~13 s (p95 30 s), but the LUNA2000 battery sensor and the KEBA P30 EV sensor both have p95 staleness over **60 s** (max 82 s and 86 s respectively). When solar drops while grid hasn't yet caught up, the raw energy balance briefly goes physically negative (e.g. solar 4 348 W − stale grid_export 4 901 W − stale EV 120 W = **−700 W**). The existing 2-cycle hold (`HOME_HOLD_MAX_CYCLES = 2`) covered ~20 s of these gaps; the slower KEBA + LUNA2000 push gaps blew right past it.
+
+**Fix.** Two-tier hold in `_smooth_home_consumption` (`coordinator/coordinator.py`):
+
+  * **Inconsistency hold (~5 min):** when the raw balance is strongly negative (below the new `SENSOR_INCONSISTENCY_THRESHOLD_W = −100 W` gate), the inputs are guaranteed inconsistent — energy can't actually flow out faster than in. Hold the last positive value for up to `HOME_HOLD_INCONSISTENT_MAX = 30` cycles (~5 min @ 10 s coordinator cycle) while the slow sensor catches up.
+  * **Transient hold (~100 s):** when the raw balance is at or near zero (sensor noise around a real low load), keep a shorter hold via the existing `HOME_HOLD_MAX_CYCLES` knob, now bumped from `2` to `10`. A genuinely sustained zero past that window is still reported as real.
+
+Simulated against the 2026-06-06 PROD recording (200 samples × 3 s = 600 s wall, with all four raw upstream sensors + their `last_changed` timestamps captured): drops the zero-clamp rate from **37 %** (single-tier 2-cycle baseline replay) → **3 %** with the two-tier defaults. By @traktore-org in #444
+
+### 🧪 Tests
+
+- `tests/test_home_consumption_smoothing.py` extended to 9 tests (was 5). New coverage: strongly-negative raw balance triggers the inconsistency tier (`test_strongly_negative_raw_balance_uses_inconsistent_hold`), inconsistency tier eventually releases at the cap (`test_inconsistent_hold_eventually_releases`), mild negative raw balance stays on the transient tier (`test_mild_negative_raw_balance_uses_transient_hold`), and recovery resets the counter when sensors agree again (`test_inconsistency_tier_recovers_when_balance_returns_to_zero`). All 5 pre-existing tests still pass with no behavior change for raw-balance ≈ 0 cases. (by @traktore-org in #444)
+- Full unit suite: **3214 pass, 9 skipped, 0 fail** (was 3186 — net +28 tests across the recent beta cluster).
+
+### 📐 Why this is safe
+
+The inconsistency tier only fires when the raw balance is strongly negative — a physically impossible state that can only come from sensor disagreement. It does NOT mask real sustained-zero states (no one home, all loads off): those keep `raw_balance` ≈ 0 W, which falls under the transient tier, which still releases the zero after 10 cycles. Equally important, **`HOME_HOLD_INCONSISTENT_MAX` is finite** — even an integration-level outage that holds the raw balance pathologically negative is accepted as real after 5 minutes, so the energy total doesn't get permanently inflated.
+
+# [1.7.1-beta.14] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.13](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.13)_
+
+### 🐛 Stop KEBA solar-path current oscillation that aborts EV sessions
+
+**PROD report (HA-PROD, Huawei SUN2000 + KEBA P30):** EV charging current "goes up and down" so often the car closes the session and stops charging. Worked fine "a few changes ago, like last week". Traced to commit `c30a140` (the #438 commit-then-measure fix): the `min_plus_solar` Zone 3/4 day path was tightened to unconditionally command `max(min_amps, surplus_amps)` every cycle. Correct intent (the EV must draw min to bootstrap battery-assist), but the solar-path `_set_current` call at `coordinator/ev_control.py:519` had no delta or time guard (unlike the night-path call at `:440`). Huawei modbus jitter on PROD (`8 kW → 0 W → 8 kW` across cycles) propagated straight into a new `set_current` value every 10 s — KEBA P30 couldn't handshake fast enough and the car aborted.
+
+This release adds an evcc-style stability layer around the solar-path `_set_current` call. (by @traktore-org in #443)
+
+- **Layer 1 — rolling-median smoothing on `budget_w`.** Window 3 cycles (~30 s), tunable via `ev_surplus_smooth_window`. Drops single-cycle inverter flickers before they reach the amps calculation. Median (not mean) so the outlier is dropped, not averaged in.
+- **Layer 2 — delta guard.** Skip `_set_current` when `|target - last_setpoint| < ev_min_change_amps` (default 1 A). The missing parity with the night-path guard at `ev_control.py:440`.
+- **Layer 3 — time debounce.** Skip when less than `ev_min_change_interval_sec` (default 30 s) has elapsed since the last issued call. evcc's `guardduration` discipline, applied per-loadpoint.
+- **Layer 5 — heartbeat.** After `ev_state_refresh_sec` (default 300 s) of no commands, force a re-send even if Layers 2 / 3 would suppress. Defends against lost commands on transient network blips and stale per-charger state across restarts.
+- **Bypass.** `cold_start`, `mode_switch`, `stop`, `stall_recovery`, `deadline` always go through regardless of guards. Safety-critical transitions are never debounced.
+- **Audit trail.** Every suppressed call logs a structured `solar set_current suppressed layer=... charger=... target=... last=... dt_since_last_set=... reason=...` line at INFO, so PROD soak can verify the guards are firing with sensible counts.
+- **Multi-charger safe.** State lives on `PerChargerContext` (`last_set_amps_ts` + `budget_history` swap surface) so a fleet of N chargers keeps independent guards per loadpoint — `docs/MULTI_CHARGER.md` invariants preserved.
+
+Layer 4 (threshold-time-windows on enable/disable transitions) is the pre-existing `ev_enable_delay_seconds` (60 s) and `ev_disable_delay_seconds` (300 s) at `ev_control.py:495-496` — kept as-is.
+
+### 🧪 Tests
+
+- **`tests/test_ev_solar_stability.py` — 23 new tests** covering: Huawei flicker smoothed (5), delta guard suppress/pass-through (3), debounce window suppress/pass-through (3), heartbeat re-send + reset (2), every bypass reason (4), multi-charger swap correctness (1), audit logging (3), regression guards for #438 + the PROD pattern (2). (by @traktore-org in #443)
+- Existing EV-control tests untouched and green: `test_ev_control_fleet_reads`, `test_canonical_ev_budget`, `test_ev_stall_gate_commanded_amps`, `test_multi_charger_canonical_budget` (35/35). The FLEET-READ AST lint still passes.
+
+### 📊 Tunables (config defaults; can be overridden via `ConfigEntry.options` in current beta — a Configuration-tab UI is planned for a follow-up beta)
+
+| Key | Default | Why |
+|---|---|---|
+| `ev_min_change_amps` | `1` | Matches the night-path floor at `ev_control.py:440`. |
+| `ev_min_change_interval_sec` | `30` | evcc-equivalent of guardduration, scaled to per-cycle adjusts. |
+| `ev_surplus_smooth_window` | `3` | ~30 s rolling median; drops single-cycle modbus flickers. |
+| `ev_state_refresh_sec` | `300` | Heartbeat floor; never let a charger sit without a fresh command for longer. |
+
+### ✅ HA-PROD verification — Configuration tab save pipeline (beta.13 fix)
+
+8/8 fields persisted on PROD via SSH-tunneled service calls (`solar_energy_management.set_option` writes, `solar_energy_management.get_config` reads back). Confirms beta.13's fix for the silent-reject bug in beta.12 holds on real hardware:
+
+| Section | Field | Type | Before | After | Result |
+|---|---|---|---|---|---|
+| tariff | electricity_export_rate | number | 0.075 | 0.087 | ✓ |
+| tariff | tariff_mode | select | static | static | ✓ |
+| heat_pump | heat_pump_priority | slider | 4.0 | 5 | ✓ |
+| battery_scheduler | battery_capacity_kwh | number | 15.0 | 12.5 | ✓ |
+| battery_scheduler | battery_force_charge_negative_price | toggle | True | False | ✓ |
+| load_management | warning_peak_level | slider | 4.5 | 4.0 | ✓ |
+| load_management | critical_device_protection | toggle | True | False | ✓ |
+| notifications | enable_charger_notifications | toggle | (default) | False | ✓ |
+
+All values reverted to their original state after the test. PROD is clean.
+
+### ✅ HA-PROD verification — EV charge-mode walk
+
+Walked every available charge mode on PROD (target raised from 2 kWh → 10 kWh because the daily counter was already at 1.93 kWh, leaving SEM with no headroom; with 10 kWh target the modes had room to actually pull current):
+
+| Mode | Commanded | EV power | State | Verdict |
+|---|---:|---:|---|---|
+| off | 0 A | 0 W | Solar mode – Charging allowed | ✓ |
+| solar_only | 0 A | 0 W | Solar mode – Charging allowed | ⚠ |
+| min_plus_solar | 9 A | 3 330 W | Solar mode – Charging active | ✓ |
+| always_max | 32 A | 10 480 W | Solar mode – Charging active | ✓ |
+
+3/4 green on real PROD hardware (Huawei SUN2000 + LUNA2000 + KEBA P30). The `solar_only` row is the open question: SEM showed `Charging allowed` but commanded 0 A even with ~6.5 kW solar and battery at 100 %. Most likely the rapid `off → solar_only` transition hit a stall-cooldown window before SEM had a clean surplus reading — `min_plus_solar` (forced 6 A floor) immediately afterward pulled 3.3 kW and `always_max` pulled the full 10.5 kW (32 A × 3 phase). Worth digging into in a follow-up but not a blocker for either the save-pipeline fix or the #443 KEBA stability work.
+
+`solar_plus_cheap` is correctly hidden on PROD because no dynamic tariff is configured.
+
+# [1.7.1-beta.13] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.12](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.12)_
+
+### 🐛 Configuration tab save pipeline — actually works now (#442)
+
+Beta.12 wired up inline editors for every OptionsFlow field, but the underlying `config_entries/update` WebSocket call **silently rejected every option write**: HA reserves the `options` field on that endpoint exclusively for OptionsFlow walks. The UI flashed "✓ Saved" because the client believed the write succeeded; in reality `voluptuous` rejected the payload server-side with `extra keys not allowed @ data['options']` and the value never landed in `entry.options`. None of the inline editors in beta.12 actually persisted anything.
+
+Two new services close the loop:
+
+- **`solar_energy_management.set_option`** (`__init__.py`) — accepts an `options` dict, merges it into the SEM ConfigEntry's `entry.options`, and lets HA's `update_listener` decide whether to reload (the same path the OptionsFlow takes). The Configuration tab now calls this service instead of `config_entries/update`. (by @traktore-org in #442)
+- **`solar_energy_management.get_config`** (`supports_response=ONLY`) — returns the merged `data + options` dict the OptionsFlow uses internally. HA's public `config_entries/get` strips `data` and `options` for security, leaving the dashboard with no way to display current values for option-only fields. The card now reads via this service and displays the actual saved values, not just defaults. (by @traktore-org in #442)
+
+### 🧪 Save round-trip harness — 8/8 green
+
+New Playwright harness writes a value to one field per section, asserts:
+- save status flashes from "saving" → "✓ Saved" within 400 ms
+- new value is readable via `get_config` within 1 s
+- revert restores the original value cleanly
+
+Sections covered: tariff (export rate + mode select), heat pump (priority slider), battery scheduler (capacity number + force-charge toggle), load management (warning peak slider + critical-protection toggle), notifications (charger toggle). **8/8 GREEN, zero console errors.**
+
+### 🧪 Unit tests
+
+3186 pass, 9 skipped, 0 fail (unchanged from beta.12).
+
+# [1.7.1-beta.12] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.11](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.11)_
+
+### ✨ Every OptionsFlow step now inline in the Configuration tab (#442)
+
+Beta.11 shipped the Configuration tab framework; beta.12 finishes the migration. **Every field from every OptionsFlow step is now editable directly in the dashboard** — entity pickers, sliders, toggles, selects, text/number inputs. No more page-by-page wizard for any setup task.
+
+- **Heat pump inline setup.** 4 `<ha-entity-picker>` widgets (SG-Ready relays, climate entity, power sensor) + 3 sliders (boost offset, max setpoint, priority). Auto-saves on each change via `config_entries/update` → SEM's `update_listener` reloads the coordinator → `binary_sensor.sem_heat_pump_registered` flips on within ~1s once relays (or just climate) are set. Live status block (mode + SG-ready state) appears above the form once registered. (by @traktore-org in #442)
+- **Tariff & pricing inline setup.** Tariff mode select (static/dynamic/calendar) + classification mode select (percentile/static) + 3 dynamic-provider pickers (price/forecast/feedin entity, conditionally rendered only when mode=dynamic) + 4 currency-aware number inputs (import/off-peak/export/demand-charge) + 2 grid-sensor pickers (override the Energy-Dashboard auto-pick) + 2 threshold steppers backed by runtime entities. Single source of truth: `entry.options`. (by @traktore-org in #442)
+- **Battery scheduler inline setup.** All 10 fields: enable toggle, capacity number input, max charge power number input, roundtrip efficiency slider, cycle cost number input, pre-charge trigger hour slider, max target SOC slider, min deficit number input, pessimism weight slider, force-charge-on-negative-price toggle. (by @traktore-org in #442)
+- **Load management inline setup.** Enable toggle + 3 peak-level sliders (target/warning/emergency) + critical-device-protection toggle + max grid import stepper. (by @traktore-org in #442)
+- **Notifications inline setup.** 2 toggles (per-charger + mobile push) + notification-service dropdown built from `hass.services.notify` / `hass.services.rest_command`. (by @traktore-org in #442)
+- **Per-charger inline setup.** Each existing EV charger now exposes 4 inline entity pickers (connected sensor, charging power sensor, current control entity, vehicle SOC sensor) plus the existing min/start/capacity steppers. Writes use the nested-list path `ev_chargers[index][key]` via `config_entries/update`. Add/remove a charger still deep-links to HA settings — schema migration on first-charger setup is too nuanced for inline-add in v1. (by @traktore-org in #442)
+- **Auto-fetched ConfigEntry id.** Card runs one `config_entries/get` WebSocket call on connect to find the SEM entry; no need to pass `entry_id` via the dashboard YAML config. Caches `entry.data + entry.options` (the same merge the OptionsFlow uses) and re-renders on every save. (by @traktore-org in #442)
+- **Save status flash.** Every editable field shows a "Saving…" → "✓ Saved" flash on write, or an error string if `config_entries/update` rejects. Errors stick until cleared. (by @traktore-org in #442)
+- **New primitives.** `_renderPicker`, `_renderPickerNested`, `_renderOptionToggle`, `_renderOptionSelect`, `_renderOptionNumberInput`, `_renderOptionSlider` — six small render helpers that any future card can reuse for option-only fields. (by @traktore-org in #442)
+
+### 🌍 Translations
+
+- **73 new dashboard translation keys** for the inline form labels + help text (config_tariff_*, config_bs_*, config_lm_*, config_notif_*, config_ev_*, config_hp_*, config_help_*). EN + DE polished, other 13 languages on EN fallback. `sem-localize.js` regenerated: **998 keys × 15 languages**. (by @traktore-org in #442)
+
+### 🧪 Tests
+
+- Per-section verification harness (Playwright) walks the dashboard, expands every section, counts pickers/sliders/toggles/selects/number-inputs per section, asserts zero JS errors during traversal. Result: 10/10 sections render clean. (by @traktore-org in #442)
+- Unit suite: **3186 pass, 9 skipped, 0 fail** (no change from beta.11). (by @traktore-org in #442)
+
+# [1.7.1-beta.11] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.10](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.10)_
+
+### ✨ Slim install flow + new in-dashboard Configuration tab (#442)
+
+Fresh installs now take **2 forms instead of 3**, and every later tweak lives **inside the dashboard** — no more digging through Settings → Devices & Services → SEM → Configure.
+
+- **Install flow stripped to 2 steps.** `async_step_user` (welcome + observer toggle) → `async_step_hardware` (peak limit + diagram style + install dashboard). The EV-charger step is gone from the install path entirely — most users don't have an EV configured on day one and were forced to lie or quit. EV setup now happens **after** SEM is up and running, via the new Configuration tab or HA settings. `_install_defaults()` seeds an empty `ev_chargers: []` list so downstream code is identical. (by @traktore-org in #442)
+- **New "Configuration" tab** (`mdi:cog-outline`) sits between Control and Costs. Single `sem-config-card` with 10 accordion sections: Setup overview, EV chargers, Battery zones, Tariff & pricing, Heat pump, Battery scheduler, Load management, Forecast, Notifications, Advanced. Same look + (?) help-toggle pattern as the Control card from beta.7 — every setting carries a one-line explanation that toggles on with one click. (by @traktore-org in #442)
+- **Inline edits for everything backed by a runtime entity.** Battery-zone steppers, tariff thresholds, observer-mode toggle, per-charger min/start amps, heat pump boost offset — all live-write to `number.sem_*` / `switch.sem_*` / `select.sem_*` so the change is immediate, no entry reload required. Sections that need entity-pickers (vehicle SOC sensor, tariff entity, heat pump relays, etc.) carry a one-click deep-link to the legacy OptionsFlow as a v1 fallback while the new `<sem-entity-picker>` rolls in. (by @traktore-org in #442)
+- **`<sem-entity-picker>` Lit element** (`dashboard/card/src/elements/sem-entity-picker.js`). Thin wrapper around HA's stable `<ha-entity-picker>` that writes selections back via the public `config_entries/update` WebSocket command. Supports both flat options keys and nested `ev_chargers[index][key]` paths. Used by the Configuration tab; ready for power-user cards to compose against. (by @traktore-org in #442)
+- **One-time welcome banner** (`sem-onboarding-banner`) shows up on the Home tab for existing users on first dashboard open after the update. Dismissable, persisted via `localStorage` (`sem-config-tab-introduced-v1`), points one click at the new Configuration tab. New installs never see it. (by @traktore-org in #442)
+- **OptionsFlow stays intact for power users.** All 9 steps still register so the legacy "Settings → SEM → Configure" path keeps working for anyone who prefers it — and the Configuration tab's "Open in HA settings" buttons deep-link straight to it. (by @traktore-org in #442)
+
+### 🌍 Translations
+
+- **52 new dashboard translation keys** for the Configuration tab + onboarding banner (config_tab_title, config_section_*, config_help_*, onboarding_banner_*). EN + DE polished; other 13 languages use EN as placeholder pending native-speaker review (same convention as beta.6/7/10). `dashboard/translations.json` regenerated to `sem-localize.js`: **910 keys × 15 languages**. (by @traktore-org in #442)
+- Install-flow `strings.json` user-step description rewritten across all 15 languages to mention the new Configuration tab instead of "next two steps". (by @traktore-org in #442)
+
+### 🧪 Tests
+
+- New `tests/test_config_flow_slim_install.py` pins (a) the install flow is exactly 2 steps, (b) `_install_defaults()` seeds an empty ev_chargers list, (c) all 9 OptionsFlow power-user steps stay registered so Configuration-tab deep-links never 404. (by @traktore-org in #442)
+- `tests/test_dashboard_generator.py` updated for the new tab count (7 → 8) + Configuration path. Full suite: **3186 pass, 9 skipped, 0 fail** (was 3182). (by @traktore-org in #442)
+
+# [1.7.1-beta.10] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.9](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.9)_
+
+### 🚀 HA Repairs — graceful unavailability channel
+
+Honors the HA quality-check feedback "should handle unavailability gracefully instead of spamming". Persistent problems now surface in **Settings → System → Repairs** instead of growing the log.
+
+- **Persistent sensor unavailable** (`coordinator/sensor_reader.py`). New `_sensor_unavailable_since: dict[str, float]` tracks per-entity outage start in monotonic time. After `UNAVAILABLE_REPAIR_THRESHOLD_S = 300` seconds (5 min) the outage stops being "transient flap" territory and a Repair issue files — one entry per sensor in Settings → System → Repairs, severity WARNING, auto-cleared on first successful read. Transient sub-5 min flaps (Huawei modbus over WiFi commonly bouncing every 10-30 s) stay completely silent. (by @traktore-org)
+- **No forecast integration** (`coordinator/forecast_reader.py`). Pre-fix, `detect_source()` logged INFO every cycle (~10 s) when no Forecast.Solar / Solcast / custom forecast was detected — log spam. Now: INFO logs once per outage, plus a Repair issue files after **1 hour** of continuous detection failure (gives a legitimate first-boot config window). Both clear automatically when SEM detects a forecast integration. (by @traktore-org)
+- **Recorder integration unavailable** (`coordinator/ev_taper_detector.py:async_seed_from_history`). When the HA recorder isn't available, EV intelligence can't warm-start from history. Files a one-time Repair so the user has something actionable in the UI; auto-clears on next successful recorder read. (by @traktore-org)
+
+### 🌍 Translations
+
+- 3 new `issues.*` blocks (sensor_unavailable / no_forecast_integration / no_recorder) added to `strings.json` + 15 language translation files. EN + DE polished; other 13 use EN as placeholder until native-speaker review. (by @traktore-org)
+
+### 🧪 Tests
+
+- New `tests/test_repair_issues.py` (8 tests): threshold gate, recovery clears Repair, idempotent helper exceptions, forecast log-once-per-outage, forecast Repair-after-1h-threshold latching. (by @traktore-org)
+
+# [1.7.1-beta.9] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.8](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.8)_
+
+### 🐛 Bugfix — quiet sensor-recovery log spam (HA quality-check feedback)
+
+- **`Sensor X recovered — now reading Y` demoted from INFO to DEBUG** in `coordinator/sensor_reader.py:1028`. When the upstream hardware flaps (Huawei modbus over WiFi commonly bounces every 10-30 s), the per-sensor recovery line previously fired at INFO for each of the 6+ tracked sensors on every cycle that recovered, spamming the HA log. Now symmetric with the existing DEBUG-level "Sensor X unavailable" log a few lines above — recovery is not user-actionable. Honors community feedback "should handle the unavailability gracefully instead of spamming". No behaviour change: the `_sensor_unavailable` transition tracking still fires, only the log channel changed. (by @traktore-org)
+
+# [1.7.1-beta.8] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.7](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.7)_
+
+### 🐛 Bugfix — #416 forecast records the wrong weather category
+
+- **Mid-day weather snapshot for day-rollover writes** (`coordinator/forecast_tracker.py`). Pre-fix, `_save_day_record()` wrote `self._weather_today` into history at calendar rollover — which fires post-midnight when the HA weather entity reports `clear-night` / `unknown`, not the day's actual weather. Live PROD telemetry on 2026-06-05 confirmed **42 % of forecast records had `weather_category=unknown`**, so the correction cascade kept falling through from `weather × month` → `weather only` → `month only` → `weather=unknown bucket` (last resort). Fix mirrors the existing `_dampening_snapshot` pattern: capture `_weather_today` inside the `_calculate_dampening_factor` confident `blended_live` branch (snapshot taken during the day's actual daylight cycles), then have `_save_day_record()` prefer the snapshot over the live value. Backward-compat: if the day never entered the confident branch (forecast always below `MIN_FORECAST_KWH`, or HA restarted late), falls through to the live value as before. 4 new regression tests in `tests/test_forecast_tracker.py` (`test_416_*`) lock the snapshot + fallback paths. (by @traktore-org, fixes #416 write-time-weather)
+
+# [1.7.1-beta.7] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.6](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.6)_
+
+### 🎨 Inline help toggles — one mechanism across three cards
+
+Discoverable `?` icon on cards where settings benefit from a one-line explanation. Off by default keeps the surface clean; tap to reveal italic descriptions next to each setting.
+
+- **SOC Zones card** (`sem-battery-zones-card.js`) — (?) in the section header. Reveals one-line descriptions for Auto-start / Buffer / Assist Floor / Priority SOC, each with a color-coded left stripe matching its zone marker dot. (by @traktore-org)
+- **EV charger card** (`sem-ev-status-card.js`) — (?) in the bottom settings row. Toggles two things together: (1) the 3-line Surplus/Overnight/House-battery mode hint that previously was always visible, (2) per-tile descriptions for Vehicle Start Amps / Min Amps / Vehicle Min Amps / Capacity / kWh-per-100km. Off = compact (selector + deadline + plan strip only). The "Next cheap window" timing line stays visible regardless when in `solar_plus_cheap` (operational info). (by @traktore-org)
+- **Control card** (`sem-control-card.js`) — (?) at the top right. Globally toggles inline help for the two eligible sections: Battery Management (Priority / Min / Resume SOC) and Tariff & Pricing (Cheap / Expensive threshold). Other sections unchanged for now. (by @traktore-org)
+
+### 🌍 Translations
+
+- 15 new help strings × 15 languages = **225 entries**. EN + DE polished, other 13 follow the same template (native-speaker review welcome).
+
+# [1.7.1-beta.6] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.5](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.5)_
+
+### 🌍 Translations
+
+- **Heat pump dashboard keys filled in for 14 languages**. `heat_pump_title`, `heat_pump_mode`, `heat_pump_sg_ready_state`, `heat_pump_boost_offset`, and `heat_pump_not_configured` were authored in English in beta.1 but never propagated to the other languages. Users on de/nl/fr/es/it/pt/pl/sv/cs/da/fi/hu/ro/no saw raw translation keys ("heat_pump_title", "heat_pump_not_configured") in the Control tab's Heat Pump section. 70 entries added (5 keys × 14 languages). Native-speaker review welcome. (by @traktore-org)
+
+### 🎨 Polish — Control tab consistency with the EV card
+
+- **Color-accent stripe on expanded sections.** Each Control-card section now shows an inset color-coded left stripe when expanded, matching the section icon (orange = surplus/solar/peak, teal = battery/heat_pump, pink = hot_water, blue = tariff/system). Ties the multi-section settings hub to the EV card's hint-row aesthetic. (by @traktore-org)
+- **Typography bumped to match the EV / Battery card tier.** Section titles 14→15px with 0.1px letter-spacing; subtitles 12→13px; body labels (steppers, toggles, select rows) 13→14px; stepper/readonly values 13→14px. Tighter visual rhythm; readable at arm's length on phones. (by @traktore-org)
+- **Surrounding cards bumped to the same tier** so the Control tab feels coherent: `sem-load-priority-card.js` (em-based sizes scaled from 0.75-0.9em up to 0.9-1em), `sem-grid-card.js`, `sem-price-card.js`, `sem-costs-card.js`, `sem-energy-impact-card.js`, `sem-battery-zones-card.js` (10→11px and 11→12px label sizes). Same pattern as the solar-card font-polish in beta.5. (by @traktore-org)
+
+# [1.7.1-beta.5] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.4](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.4)_
+
+### 🚀 Renames + polish
+
+- **`night_initial_current` renamed to `initial_current` ("Vehicle Start Amps")** (#441). The "night" prefix on the per-charger session-start ramp current was misleading — the value is applied whenever a charging session begins, not strictly at nighttime. Renamed config key `ev_night_initial_current` → `initial_current` (top-level + per-charger), entity key `number.sem_charger_<id>_night_initial_current` → `number.sem_charger_<id>_initial_current`, display name "Start Amps" → "Vehicle Start Amps" (groups with the new "Vehicle Min Amps" tile from beta.4). Schema migration v9 → v10 renames the field on existing entries; the old number entity is auto-removed by `number.py:_cleanup_stale_entities` on next setup. New `number.py` icon `mdi:car-clock`. Translation strings updated across 15 languages. (by @traktore-org)
+- **Solar card font sizes bumped to match other cards** — the PV1/PV2 / Solar Flows Today / Per String / Forecast & Performance card was rendering at 10-11px labels and 11-12px values vs the battery card's 12-13px. Section titles, flow labels, flow values, metric labels/values, and chip labels/values all bumped one tier up for readability. (by @traktore-org)
+
+# [1.7.1-beta.4] - 06.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.3](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.3)_
+
+### 🚀 Architectural — charge mode is the sole authority on charging (BREAKING)
+
+- **EV intelligence no longer overrides charge mode.** Pre-#440, `coordinator/ev_control.py:_calculate_forecast_night_target` had two override paths that could zero the user's Min target: a SOC-based skip (`estimated_soc > target_soc → return 0`) and a solar-forecast-based reduction. The mode + Min slider therefore did NOT decide whether to charge — EV intelligence did. Post-#440 the function is a thin pass-through (`max(0, daily_target - daily_delivered)`); the user's mode + sliders are the sole authority. The `%` (SOC) target type is already structurally gated on a real `vehicle_soc_entity` in `select.py:63-65`, so estimated SOC never enters the decision. **Behaviour change**: users in `min_plus_solar` with a sunny forecast tomorrow will now charge the full Min target tonight, where pre-#440 SEM would have skipped some/all of it. (by @traktore-org, fixes #440)
+- **Skip-decision wiring deleted.** `calculate_nights_until_charge`, `record_skip`, `reset_skips`, `_consecutive_skips`, the `_skip_recorded_tonight_per_charger` latch, the `notify_ev_charge_skip` / `notify_ev_charge_recommended` notification methods, the `nights_until_charge` / `charge_needed` / `charge_skip_reason` sensor entities (both global and per-charger), and the corresponding "Charge Tonight" / "Nights Until Charge" rows on the EV card are all gone. Existing user automations referencing these entities will break — `binary_sensor.sem_charger_<id>_charge_tonight` and `sensor.sem_charger_<id>_nights_until_charge` become unavailable. The features were never reliable in the absence of a real vehicle SOC; removing is honest. The `EVTaperDetector` now serves display only: `estimated_soc`, `last_full_timestamp`, `energy_since_full`, taper trend, `battery_health_pct`. (by @traktore-org, refs #440)
+- **Per-vehicle minimum current** (ADR 0010 pattern 3). New optional per-charger `vehicle_min_current` field captures the car's handshake-floor minimum (e.g. Renault Zoe ~9 A). Effective floor at the decision layer is `max(ev_min_current, vehicle_min_current or 0)` via the new `decide.effective_min_amps()` helper, applied to all `MinPlusSolarMode` / `SolarOnlyMode` branches plus `ev_control._night_initial_amps`. Config-flow charger-edit step gains a slider; the EV card gains a "Vehicle Min Amps" tile in the bottom settings row. Schema migration v8→v9 seeds the field to `None` (= "use the loadpoint `ev_min_current`") for existing entries. (by @traktore-org, refs ADR 0010 #3)
+
+### 🐛 Bugfixes (already on this branch from earlier work)
+
+- **#438 false-full taper anchor.** Pre-fix, an 11-minute handshake-floor oscillation totalling 0.19 kWh satisfied `peak > 3 kW + 3 low samples → _full_detected=True`, anchoring SOC=100 % until physical unplug. Fix: trapezoidal energy integration in `EVTaperDetector.update()` plus a per-vehicle session-energy floor `min(1.0 kWh, capacity × 0.025)` — a 24 kWh LEAF arriving at 99 % SOC can still anchor full (~0.6 kWh threshold); a 0.19 kWh oscillation never can. 6 new regression tests in `TestPerVehicleEnergyFloor` (by @traktore-org, fixes #438)
+- **#439 daytime `min_plus_solar` idled instead of supplementing.** Pre-fix, `MinPlusSolarMode._decide_day` gated Zone 3/4 charging on `budget_w < min_w → IDLE`. The budget read `battery_assist_budget_w() = surplus + battery_discharge_w`, but `battery_discharge_w` is the inverter's *currently-flowing* discharge — zero when no EV demand has been commanded yet. Chicken-and-egg deadlock. Fix: commit-then-measure pattern from evcc — drop the gate, offer `min_amps` unconditionally, let the next cycle's sensor readings reflect the actual battery/grid split. `coordinator/decide.py` Zone 3/4 branch now matches the `min_plus_solar` UI promise verbatim. (by @traktore-org, fixes #439)
+
+### 🌍 i18n — structured 3-line mode hints
+
+- **`charge_mode_hint_*` rewritten to 3 structured rows per mode.** The old single-line `charge_mode_hint_solar_only` / `min_plus_solar` / etc. shipped one short clause each — users couldn't tell what a mode actually did for solar, the house battery, and overnight charging. Replaced with `charge_mode_hint_<mode>_surplus` / `_overnight` / `_battery` (15 new keys per language × 15 languages = 225 strings) plus 3 row labels (`hint_label_surplus` / `_overnight` / `_battery`). The battery row substitutes `{buffer}` and `{priority}` placeholders with the user's actual SOC zone values (read from `number.sem_battery_buffer_soc` / `number.sem_battery_priority_soc`) so the hint reads "Drains for EV when home battery SOC ≥ 70 % (buffer). Below 70 % … Below 30 % (priority floor) …" — concrete, not abstract. EN + DE polished manually; other 13 languages follow the same template structure with native-speaker review welcome. Card rendering moves to `.ct-hint-row` flex layout in `sem-ev-status-card.js`. (by @traktore-org)
+
+### 📝 Documentation
+
+- **ADR 0010 — evcc pattern adoption.** Records the architectural choice informing #438, #439, and the per-vehicle min-current pattern. Three patterns adopted in order: commit-then-measure for `min_plus_solar` budget (the #439 fix), pilot-state-gated session lifecycle with a session-energy floor for taper-to-full (the #438 fix), per-vehicle minimum current with three-way max (the new feature this beta). Cites the exact evcc source locations for each. (by @traktore-org)
+
+# [1.7.1-beta.3] - 05.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.2](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.2)_
+
+### 🐛 Bugfixes
+
+- **`binary_sensor.sem_heat_pump_registered` was always `off`** — pre-fix, `coordinator/coordinator.py` populated `heat_pump_registered` via `any(getattr(d, "device_id", "") == "heat_pump" for d in self._surplus_controller._devices)`. `_devices` is a `Dict[str, ControllableDevice]` keyed by device_id, so iterating it yields **keys (strings)**, never devices — and `getattr(string, "device_id", "")` always returns `""`. The check was wired to always be False, so the v1.7.1-beta.1 dashboard auto-hide kept the Heat Pump section hidden even on correctly registered climate-only installs (the exact path RienduPre would have hit). Replaced with the trivial `"heat_pump" in self._devices` dict-membership check. 4 new regression cases in `tests/test_437_heat_pump_climate_only.py` lock the new code and pin the old buggy expression as a counter-example (by @traktore-org, fixes the v1.7.1-beta.1 follow-up surfaced while reproducing discussion #432)
+
+### 📝 Documentation
+
+- **Nibe SG-Ready misconfig demo screenshots** — `docs/screenshots/nibe-sim/` adds 4 reproducible screenshots for discussion #432: config flow heat pump step + Control tab dashboard, under both Path 3 (the broken Nibe enable-flag-switches-as-relays config the other Claude recommended) and Path A (the v1.7.1-beta.1 climate-only config). Reproducible via `/config/packages/sem_sim_nibe.yaml` on HA-TEST (template switches mirroring `switch.sg_ready_heating_48282` / `switch.sg_ready_hot_water_48284` / `climate.vvm_320_heating_circuit` so the demo doesn't need real Nibe hardware) (by @traktore-org, refs #432)
+
+# [1.7.1-beta.2] - 05.06.2026
+
+## 🧪 Beta Release
+
+_Changes since [1.7.1-beta.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1-beta.1)_
+
+### 🐛 Bugfixes
+
+- **Multi-charger Load Priority collision** — pre-fix, `LoadManagementCoordinator.register_ev_charger()` hardcoded `device_id = "load_device_ev_charger"`. The per-charger loop in `__init__.py` called it N times for N chargers — each call overwrote the previous entry in `self._devices`, so the Control tab's Load Priority card showed only ONE EV row even with multiple chargers configured, and peak-shedding only acted on the LAST registered charger. `register_ev_charger()` now accepts `charger_id` + `charger_name` kwargs (defaults preserve single-charger backward compat: `load_device_ev_charger` key unchanged for `ev_chargers[0].id == "ev_charger"`); device dict gains a `charger_id` field for downstream mapping. Reviewer-caught: `features/device_registry.py:_populate_load_manager()` had a hardcoded `!= "load_device_ev_charger"` exclusion that would have silently pruned the new `load_device_ev_charger_1` entries on every registry sync — widened to `startswith("load_device_")`. 7 new tests in `tests/test_436_multi_charger_load_priority.py` covering single-charger legacy key preservation, multi-charger distinct entries, friendly-name fallback chain, idempotent re-registration, and the device_registry prune-survival regression (by @traktore-org, fixes #436)
+
+# [1.7.1-beta.1] - 05.06.2026
+
+## 🧪 Beta Release — first v1.7.1 beta
+
+_Changes since [1.7.0](https://github.com/traktore-org/sem-community/releases/tag/v1.7.0)_
+
+First feature release on top of v1.7.0 stable. Closes the heat pump integration gap surfaced by discussion #432.
+
+### 🚀 Features and enhancements
+
+- **Heat pump climate-only registration** — `__init__.py` registration gate widened from `(relay1 AND relay2)` to `(relay1 AND relay2) OR climate_entity`. Nibe, Mitsubishi, Daikin, and any HA-controlled heat pump that exposes a `climate.*` entity but no SG-Ready relays can now configure SEM's heat pump boost automation. The `HeatPumpController` itself already supported the climate-only path internally (the #421 audit telemetry's `relay_path = no_relays_configured` branch was the proof). Config flow gains explicit two-path description (SG-Ready relays vs climate-only setpoint boost) plus form validation that rejects half-configured SG-Ready (one relay without the other AND no climate fallback). New `error.heat_pump_partial_relays` translation key. Reported by @RienduPre in discussion #432 (by @traktore-org, fixes #437)
+- **Heat pump dashboard section** — `sem-control-card` gets a new "Heat Pump" section with mode (SG-Ready+climate / SG-Ready only / climate-only), current SG-Ready state, and the boost offset stepper. Auto-hides when no heat pump is registered using a new `binary_sensor.sem_heat_pump_registered` presence flag (needed because `heat_pump_sg_ready_state` defaults to `2 (NORMAL)` even when no controller exists). New translation keys: `heat_pump_title`, `heat_pump_mode`, `heat_pump_sg_ready_state`, `heat_pump_boost_offset`, `heat_pump_not_configured` (by @traktore-org, refs #437)
+
 # [1.7.0] - 04.06.2026
 
 ## 🚀 Stable Release

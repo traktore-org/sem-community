@@ -38,6 +38,10 @@ import './cards/sem-system-diagram-card.js';
 import './cards/sem-chart-card.js';
 import './cards/sem-load-priority-card.js';
 import './cards/sem-control-card.js';
+import './elements/sem-entity-picker.js';
+import './cards/sem-config-card.js';
+import './cards/sem-onboarding-banner.js';
+import './cards/sem-diagnose-button.js';
 
 // Version info
 console.info(

@@ -122,6 +122,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._ev_last_change_time = None  # Reactive control timing
         self._ev_charge_started_at = None  # Disable delay: min hold timer to prevent cycling
         self._ev_enable_surplus_since = None  # Enable delay: surplus must persist before starting
+        # Solar stability primary view (swapped per-charger by PerChargerContext).
+        self._ev_last_set_amps_ts: Optional[float] = None
+        self._ev_budget_history: list = []
         # Per-charger state dicts for multi-charger (#112)
         self._ev_stalled_since_per_charger: Dict[str, Optional[float]] = {}
         self._ev_enable_surplus_per_charger: Dict[str, Optional[float]] = {}
@@ -130,6 +133,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # False-stall guard per charger (#243)
         self._ev_reenable_attempts_per_charger: Dict[str, int] = {}
         self._ev_charge_refused_per_charger: Dict[str, bool] = {}
+        # Solar stability layer (v1.7.1-beta.14): per-charger guard state.
+        # last_set_amps_ts is the wall-clock of the most recent ``_set_current``
+        # call so the time-debounce in ``ev_control.py`` knows when it's been
+        # long enough to issue another one. budget_history is the rolling-median
+        # window over recent budget_w samples so a single-cycle Huawei modbus
+        # flicker (e.g. 8000 / 0 / 8000 W) does not propagate into a current
+        # change. Mutated in place inside the per-charger loop.
+        self._ev_last_set_amps_ts_per_charger: Dict[str, Optional[float]] = {}
+        self._ev_budget_history_per_charger: Dict[str, list] = {}
         self._daily_ev_per_charger: Dict[str, float] = {}  # Per-charger daily energy (#193)
         # Per-charger "EV day" boundary, keyed by charger id. Each charger's day
         # ends at its own ``Charge by`` deadline (#246) — NOT at sunrise — so the
@@ -327,11 +339,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # session only ends when this reaches OPPOSITE_CYCLES_TO_FLIP.
         self._battery_session_opposite_count = 0
 
-        # Per-charger night-skip safety counter latch (#351 M8). Maps
-        # charger_id → bool; the legacy single-charger path uses the
-        # ``"_fleet"`` sentinel key. Prevents charger A's skip-recorded
-        # flag from masking charger B's independent skip count.
-        self._skip_recorded_tonight_per_charger: Dict[str, bool] = {}
+        # (#440) the per-charger night-skip safety counter latch was
+        # removed alongside the skip-decision wiring — charge mode is
+        # the sole authority on whether to charge at night now.
 
         # Zone-transition debounce: holds the last stable SOC zone and the
         # candidate zone being observed. A new zone is only applied after it
@@ -382,7 +392,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         for key in (
             "daily_ev_target", "daily_ev_target_max",
             "ev_target_soc", "ev_target_soc_max",
-            "ev_min_current", "ev_night_initial_current",
+            "ev_min_current", "initial_current",
             "ev_kwh_per_100km", "ev_target_type",
             # ``ev_charging_mode`` removed in #277 Phase C — the v6→v7
             # migration drops the field; there's nothing to mirror.
@@ -603,19 +613,46 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             self._negative_balance_count = max(0, getattr(self, '_negative_balance_count', 0) - 1)
         return False
 
-    # Max consecutive cycles to hold the last home-consumption value (#237).
-    # ~2 cycles (≈20-30s) smooths single/double-cycle sensor-lag dips while a
-    # genuinely sustained zero is still reported after the hold window.
-    HOME_HOLD_MAX_CYCLES = 2
+    # Two-tier hold for transient home-consumption dips to 0 (#237, #444).
+    #
+    # The energy balance clamps ``home_consumption_power`` to 0 whenever the
+    # instantaneous input sensors don't agree (one source updates 10–60 s before
+    # another). On a typical Huawei + KEBA + LUNA2000 stack a 10-min PROD
+    # recording on 2026-06-06 showed 16% of cycles with a zero clamp during
+    # active EV charging.
+    #
+    # Two-tier hold exploits a strong signal already on hand: if the RAW balance
+    # is strongly negative, energy is "flowing out faster than in" — physically
+    # impossible, so we KNOW the inputs are inconsistent. Hold longer in that
+    # case. For shallow zeros (raw ≈ 0), keep a short hold so a genuinely
+    # sustained zero still gets reported as real.
+    #
+    # Simulated against the 2026-06-06 PROD recording: this drops the zero-clamp
+    # rate from 37% (single-tier 2-cycle baseline) to 3% during active charging
+    # at variable solar.
+    HOME_HOLD_MAX_CYCLES = 10                  # ~100 s @ 10 s coordinator cycle
+    HOME_HOLD_INCONSISTENT_MAX = 30            # ~5 min when raw balance is strongly negative
+    SENSOR_INCONSISTENCY_THRESHOLD_W = -100.0  # raw_balance < this = guaranteed stale sensor
 
     def _smooth_home_consumption(self, power) -> None:
-        """Hold the last positive home-consumption value through transient dips to 0 (#237).
+        """Hold the last positive home-consumption value through transient dips to 0 (#237, #444).
 
         The energy balance clamps ``home_consumption_power`` to 0 when instantaneous
-        sensor readings momentarily lag a large load. Rather than emit a one-cycle 0,
-        hold the last positive value for up to ``HOME_HOLD_MAX_CYCLES``; a zero that
-        persists beyond that is reported as real. Runs before energy integration so
-        the held value also keeps the home-energy total from under-counting.
+        sensor readings momentarily lag a large load. Two-tier hold:
+
+          • **Inconsistency hold** (``HOME_HOLD_INCONSISTENT_MAX`` cycles): when the
+            raw balance is strongly negative (below
+            ``SENSOR_INCONSISTENCY_THRESHOLD_W``), the inputs are guaranteed
+            inconsistent — energy can't actually flow out faster than in. Hold
+            the last positive value for up to ~5 min while the slow sensor
+            (typically Huawei battery, KEBA EV at 60+ s push gap, or grid meter
+            trailing a solar drop) catches up.
+          • **Transient hold** (``HOME_HOLD_MAX_CYCLES`` cycles): when the raw
+            balance is at or near zero, only a brief hold — a sustained zero
+            past that window is real and gets reported.
+
+        Runs before energy integration so the held value also keeps the
+        home-energy total from under-counting.
         """
         if power.home_consumption_power > 0:
             self._last_home_consumption = power.home_consumption_power
@@ -623,15 +660,39 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return
         last = getattr(self, "_last_home_consumption", 0.0)
         held = getattr(self, "_home_hold_count", 0)
-        if last > 0 and held < self.HOME_HOLD_MAX_CYCLES:
+        if last <= 0:
+            # No prior positive value — accept the zero (cold start / first cycles).
+            self._home_hold_count = held + 1
+            return
+
+        # Decide which hold tier applies using the raw balance.
+        raw_in = (
+            getattr(power, "solar_power", 0.0)
+            + getattr(power, "grid_import_power", 0.0)
+            + getattr(power, "battery_discharge_power", 0.0)
+        )
+        raw_out = (
+            getattr(power, "ev_power", 0.0)
+            + getattr(power, "grid_export_power", 0.0)
+            + getattr(power, "battery_charge_power", 0.0)
+        )
+        raw_balance = raw_in - raw_out
+        is_inconsistent = raw_balance < self.SENSOR_INCONSISTENCY_THRESHOLD_W
+        max_cycles = (
+            self.HOME_HOLD_INCONSISTENT_MAX if is_inconsistent
+            else self.HOME_HOLD_MAX_CYCLES
+        )
+
+        if held < max_cycles:
             self._home_hold_count = held + 1
             power.home_consumption_power = last
             _LOGGER.debug(
-                "Home consumption clamped to 0 — holding last value %.0fW (%d/%d)",
-                last, self._home_hold_count, self.HOME_HOLD_MAX_CYCLES,
+                "Home consumption clamped to 0 — holding last %.0fW (%d/%d, raw_balance=%.0fW, %s)",
+                last, self._home_hold_count, max_cycles, raw_balance,
+                "inconsistent" if is_inconsistent else "transient",
             )
         else:
-            # Sustained zero (beyond the hold window) — accept it as real.
+            # Hold window exhausted — accept the zero as real.
             self._home_hold_count = held + 1
 
     @staticmethod
@@ -2439,7 +2500,128 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Utility signal update failed: %s", e)
 
-        heat_pump_data = HeatPumpSensorData()
+        # Heat pump data (#437): populate ``registered`` from the
+        # surplus controller's device list so the dashboard auto-hide
+        # can distinguish "no controller registered" from "in NORMAL
+        # state". When a HeatPumpController IS registered, its current
+        # sg_ready_state / mode / boost flags will override below.
+        registered_flag = (
+            "heat_pump" in getattr(
+                getattr(self, "_surplus_controller", None),
+                "_devices",
+                {},
+            )
+        )
+        # #432: compute the registration status string + live entity
+        # state attributes so users with non-standard SG-Ready wiring
+        # (ESP relays, Shellies, Modbus-bridged template switches) can
+        # self-diagnose via ``sensor.sem_heat_pump_registration_status``.
+        # Reads the saved option values once per cycle + queries
+        # ``hass.states.get()`` for each configured entity.
+        hp_relay1 = self.config.get("heat_pump_relay1_entity") or None
+        hp_relay2 = self.config.get("heat_pump_relay2_entity") or None
+        hp_climate = self.config.get("heat_pump_climate_entity") or None
+
+        def _entity_state(eid: Optional[str]) -> Optional[str]:
+            """Return the live HA state of an entity, or "entity_missing"
+            if the entity id is set but does not exist in ``hass.states``."""
+            if not eid:
+                return None
+            st = self.hass.states.get(eid)
+            return st.state if st else "entity_missing"
+
+        if registered_flag:
+            if hp_relay1 and hp_relay2 and hp_climate:
+                _hp_status = "registered_sg_ready_and_climate"
+            elif hp_relay1 and hp_relay2:
+                _hp_status = "registered_sg_ready"
+            elif hp_climate:
+                _hp_status = "registered_climate_only"
+            else:
+                # Defensive — registration flag true but no config matches.
+                # Surfaces as a useful "investigate" signal.
+                _hp_status = "registered_unknown_mode"
+        else:
+            if hp_relay1 and not hp_relay2 and not hp_climate:
+                _hp_status = "partial_sg_ready_only_relay1"
+            elif hp_relay2 and not hp_relay1 and not hp_climate:
+                _hp_status = "partial_sg_ready_only_relay2"
+            else:
+                _hp_status = "not_configured"
+
+        relay1_state = _entity_state(hp_relay1)
+        relay2_state = _entity_state(hp_relay2)
+        climate_state = _entity_state(hp_climate)
+
+        heat_pump_data = HeatPumpSensorData(
+            heat_pump_registered=registered_flag,
+            heat_pump_registration_status=_hp_status,
+            heat_pump_relay1_entity=hp_relay1,
+            heat_pump_relay2_entity=hp_relay2,
+            heat_pump_climate_entity=hp_climate,
+            heat_pump_relay1_state=relay1_state,
+            heat_pump_relay2_state=relay2_state,
+            heat_pump_climate_state=climate_state,
+        )
+
+        # #432 — relay unavailability tracking + Repair issue. Mirrors the
+        # SensorReader pattern (``_sensor_unavailable_since``). Per-relay
+        # outage timer; if a configured relay stays unavailable past the
+        # 5-minute threshold, file a Repair so the user knows WHICH relay
+        # to investigate (ESP / Shelly / Modbus template switch). Cleared
+        # the moment the entity returns a real state.
+        try:
+            import time as _ri_time
+            from . import repair_issues as _ri
+            _now_mono = _ri_time.monotonic()
+            if not hasattr(self, "_heat_pump_relay_unavailable_since"):
+                self._heat_pump_relay_unavailable_since = {}
+                self._heat_pump_relay_repair_raised = set()
+            tracked = self._heat_pump_relay_unavailable_since
+            raised = self._heat_pump_relay_repair_raised
+            for slot, eid, state in (
+                ("relay1", hp_relay1, relay1_state),
+                ("relay2", hp_relay2, relay2_state),
+            ):
+                if not eid:
+                    continue
+                key = f"{slot}:{eid}"
+                is_bad = state in (None, "unavailable", "unknown", "entity_missing")
+                if is_bad:
+                    if key not in tracked:
+                        tracked[key] = _now_mono
+                    elif key not in raised:
+                        outage_s = _now_mono - tracked[key]
+                        if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
+                            _ri.raise_heat_pump_relay_unavailable(
+                                self.hass, slot, eid,
+                                minutes_unavailable=int(outage_s // 60),
+                            )
+                            raised.add(key)
+                else:
+                    if key in tracked:
+                        tracked.pop(key, None)
+                    if key in raised:
+                        raised.discard(key)
+                        _ri.clear_heat_pump_relay_unavailable(
+                            self.hass, slot, eid,
+                        )
+            # Partial SG-Ready repair — fires once when exactly one relay
+            # is set with no climate fallback. Auto-clears as soon as the
+            # config becomes valid (both relays set OR climate set OR
+            # both relays cleared).
+            partial = _hp_status in (
+                "partial_sg_ready_only_relay1",
+                "partial_sg_ready_only_relay2",
+            )
+            if partial and not getattr(self, "_heat_pump_partial_raised", False):
+                _ri.raise_heat_pump_partial_sg_ready(self.hass)
+                self._heat_pump_partial_raised = True
+            elif not partial and getattr(self, "_heat_pump_partial_raised", False):
+                _ri.clear_heat_pump_partial_sg_ready(self.hass)
+                self._heat_pump_partial_raised = False
+        except Exception as e:  # noqa: BLE001 — never fail a cycle over a repair
+            _LOGGER.debug("Heat-pump repair tracking failed: %s", e)
 
         # Phase 8: Consumption/solar predictor (#3)
         try:
@@ -2754,9 +2936,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # ``TypeError`` every cycle (DEBUG log spam observed on
                 # HA-TEST 2026-05-31 after the v1.6.14 deploy).
                 mins_to_full = intel.get("minutes_to_full") or 0
+                # est_soc kept for the "nearly full" notification gate
+                # logic that survived #440 (informational only — does not
+                # gate the charge command).
                 est_soc = intel.get("estimated_soc") or 0
-                charge_needed = intel.get("charge_needed") or False
-                nights = intel.get("nights_until_charge") or 0
 
                 # Per-charger draw — gate nearly-full on THIS charger's
                 # power, not the fleet flag. In a multi-charger fleet,
@@ -2787,26 +2970,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     else True
                 )
 
-                # 1. Nearly full: taper detector shows < 5 minutes remaining
+                # Nearly full: taper detector shows < 5 minutes remaining.
+                # Pure informational — does NOT gate the charge command.
+                # (#440: skip + recommended notifications removed — they
+                # were gated on estimated_soc, which is no longer load-
+                # bearing in any decision path.)
                 if mins_to_full > 0 and mins_to_full < 5 and this_charger_drawing:
                     await self._notification_manager.notify_ev_nearly_full(
                         mins_to_full, charger_name=charger_name
-                    )
-
-                # 2. Night charge skipped: night mode, EV connected, skip decided,
-                #    AND this charger's mode allows night charging at all.
-                if (is_night and charger_connected
-                        and not charge_needed and est_soc > 0
-                        and mode_allows_night):
-                    await self._notification_manager.notify_ev_charge_skip(
-                        est_soc, nights, charger_name=charger_name
-                    )
-
-                # 3. Charge recommended: night mode, SOC low, charge needed
-                if (is_night and charger_connected
-                        and charge_needed and 0 < est_soc < 30):
-                    await self._notification_manager.notify_ev_charge_recommended(
-                        est_soc, charger_name=charger_name
                     )
 
         except (ValueError, TypeError) as e:
@@ -2974,46 +3145,63 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self, energy, vehicle_soc: float | None = None, charger_cfg: dict | None = None,
         bound: str = "min",
     ) -> float:
-        """Calculate remaining EV charging need in kWh from the best available source.
+        """Calculate remaining EV charging need in kWh.
 
-        When ev_target_type is "soc" AND vehicle_soc is available: SOC-based.
-        When ev_target_type is "kwh" OR vehicle_soc is unavailable: kWh daily target.
-        Used by both _build_charging_context() and _determine_charging_strategy().
+        Clean ``if SOC else kWh`` branch — no fallback, no cross-mode
+        contamination (#446). The mode is the saved per-charger
+        ``ev_target_type`` (with legacy ``ev_target_mode`` for back-compat),
+        falling back to the integration-level default, then "kwh".
+
+        The Configuration tab GUI is the gatekeeper that ensures
+        ``ev_target_type="soc"`` is only ever saved when a real
+        ``vehicle_soc_entity`` is configured (#446 GUI gate), and the
+        v10 → v11 schema migration cleans up any pre-existing entries
+        that had the bad combination on disk (#446 migration). The
+        runtime trusts the saved config — no override, no rescue path.
+
+        Branches:
+          * **SOC branch:** compute ``(target_soc − vehicle_soc) × capacity``.
+            If the user's real SOC sensor is momentarily ``unavailable``,
+            return the full ``ev_capacity`` as the remaining need so SEM
+            keeps charging — taper detection (hardware-level) is the
+            real "full" stop. Never substitutes ``estimated_soc``.
+          * **kWh branch:** ``daily_target − delivered_today`` for this
+            specific charger (per #351 H1 per-charger accounting).
 
         ``bound`` selects which target to measure against (#245):
-          - "min" (default, floor = the existing single target): the guaranteed
-            amount; night/grid tops up to this. This is what callers usually mean
-            by "remaining to target".
-          - "max" (ceiling): surplus charges up to this, then stops. Defaults to
-            full (100% / 100 kWh ≈ unlimited) when no Max is set.
+          * ``"min"`` (default): the guaranteed-floor target. Night /
+            grid tops up to this.
+          * ``"max"`` (ceiling): surplus charges up to this then stops.
+            Defaults to "effectively unlimited" when no Max is set.
         """
         cfg = charger_cfg or {}
-        ev_capacity = cfg.get("ev_battery_capacity_kwh") if cfg.get("ev_battery_capacity_kwh") is not None else self.config.get("ev_battery_capacity_kwh", 40)
-        # ev_target_mode was renamed to ev_target_type (#235); read both for back-compat.
+        ev_capacity = (
+            cfg.get("ev_battery_capacity_kwh")
+            if cfg.get("ev_battery_capacity_kwh") is not None
+            else self.config.get("ev_battery_capacity_kwh", 40)
+        )
+        # ``ev_target_mode`` was renamed to ``ev_target_type`` (#235); read
+        # both for back-compat. Per-charger config wins over the
+        # integration-level default.
         ev_target_type = (
             cfg.get("ev_target_type") or cfg.get("ev_target_mode")
-            or self.config.get("ev_target_type") or self.config.get("ev_target_mode", "kwh")
+            or self.config.get("ev_target_type")
+            or self.config.get("ev_target_mode", "kwh")
         )
 
-        # De-trap %: if % is selected but there's no real SOC sensor, fall back to
-        # the EV-intelligence virtual SOC — but only when it has a confident anchor
-        # (a detected full charge / car-API calibration). The estimate is a *soft*
-        # ceiling: taper detection is still the hard "full" stop, and the Min floor
-        # still grid-tops-up, so an estimate error is bounded. With no real SOC and
-        # no anchored estimate, fall through to the kWh target (no silent no-op). (#245)
-        if ev_target_type == "soc" and vehicle_soc is None:
-            cid = cfg.get("id")
-            detectors = getattr(self, "_ev_taper_detectors", {}) or {}
-            detector = detectors.get(cid) if cid else getattr(self, "_ev_taper_detector", None)
-            if detector is not None and getattr(detector, "_soc_anchored", False):
-                vehicle_soc = detector.get_virtual_soc(None)
-
-        use_soc = ev_target_type == "soc" and vehicle_soc is not None
-        if use_soc:
-            # SOC ceiling defaults to 100% (car full); floor default 80%.
+        if ev_target_type == "soc":
+            # Pre-condition guaranteed by GUI gate + v10→v11 migration:
+            # a real ``vehicle_soc_entity`` is configured for this charger.
+            # If its current value is unavailable (network blip etc.),
+            # return the full capacity so SEM keeps charging — taper
+            # detection will eventually stop it on car-full. Never use
+            # estimated_soc.
+            if vehicle_soc is None:
+                return float(ev_capacity)
             soc_target = self._resolve_target(cfg, "ev_target_soc", bound, 80, 100)
             return max(0, (soc_target - vehicle_soc) / 100 * ev_capacity)
-        # kWh ceiling defaults to 100 kWh/day (≈ unlimited); floor default 10.
+
+        # kWh branch — the default mode for installs without a SOC sensor.
         daily_target = self._resolve_target(cfg, "daily_ev_target", bound, 10, 100)
         # #351 H1 — for a per-charger call (``charger_cfg`` provided),
         # subtract THIS charger's daily energy, not the fleet total.
@@ -3821,29 +4009,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._session_data.energy_kwh, session_soc,
             )
 
-        # EV consumption prediction
+        # EV consumption prediction (display-only — feeds the
+        # ``predicted_daily_ev_kwh`` diagnostic sensor; no longer
+        # drives skip decisions per #440).
         predicted_daily = self._predictor.predict_ev_consumption_tomorrow(now)
-
-        # Night charge skip calculation
-        nights, charge_needed, skip_reason = self._ev_taper_detector.calculate_nights_until_charge(
-            predicted_daily, self._cycle_vehicle_soc,
-        )
-
-        # Track consecutive skips for safety net (once per night, not every cycle).
-        # #351 M8 — keyed per-charger; this legacy single-charger path uses
-        # the ``"_fleet"`` sentinel. The per-charger intel builder uses
-        # per-charger keys so charger A's skip doesn't mask charger B's.
-        skip_flags = self._skip_recorded_tonight_per_charger
-        if self.time_manager.is_night_mode() and power.ev_connected:
-            if not charge_needed:
-                if not skip_flags.get("_fleet", False):
-                    self._ev_taper_detector.record_skip()
-                    skip_flags["_fleet"] = True
-            else:
-                self._ev_taper_detector.reset_skips()
-                skip_flags["_fleet"] = False
-        elif not self.time_manager.is_night_mode():
-            skip_flags["_fleet"] = False
 
         # No real SOC and no calibration yet → the virtual 100% default is
         # misleading. Report None so the sensor shows "unknown" until a real
@@ -3861,10 +4030,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             last_full_charge=self._ev_taper_detector.last_full_timestamp,
             energy_since_full_kwh=round(self._ev_taper_detector.energy_since_full, 2),
             predicted_daily_ev_kwh=predicted_daily,
-            nights_until_charge=nights,
-            charge_needed=charge_needed,
             ev_battery_health_pct=self._ev_taper_detector.battery_health_pct,
-            charge_skip_reason=skip_reason,
         )
 
     def _build_per_charger_intelligence(self) -> dict:
@@ -3897,33 +4063,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             else:
                 soc = detector.get_virtual_soc(per_charger_vehicle_soc)
 
-            predicted = getattr(self, '_predictor', None)
-            predicted_daily = predicted.predict_ev_consumption_tomorrow(dt_util.now()) if predicted else 0
-            nights, charge_needed, skip_reason = detector.calculate_nights_until_charge(
-                predicted_daily, per_charger_vehicle_soc,
-            )
             taper_data = detector.get_taper_data() if hasattr(detector, 'get_taper_data') else None
 
-            # Per-charger night-skip latch (#351 M8). Each charger maintains
-            # its own skip counter against its own taper detector. The
-            # per-charger flag in ``_skip_recorded_tonight_per_charger``
-            # prevents this cycle from recording skip again on the same
-            # detector, BUT a skip on charger A no longer blocks charger
-            # B's legitimate independent record (the legacy fleet flag
-            # did).
-            charger_connected = self._last_ev_connected_per_charger.get(cid, False)
-            skip_flags = self._skip_recorded_tonight_per_charger
-            if self.time_manager.is_night_mode() and charger_connected:
-                if not charge_needed:
-                    if not skip_flags.get(cid, False):
-                        detector.record_skip()
-                        skip_flags[cid] = True
-                else:
-                    detector.reset_skips()
-                    skip_flags[cid] = False
-            elif not self.time_manager.is_night_mode():
-                skip_flags[cid] = False
-
+            # (#440) Per-charger skip-decision latch removed alongside the
+            # skip-decision wiring — charge mode is the sole authority
+            # on whether to charge at night now.
             result[cid] = {
                 "estimated_soc": round(soc, 1) if soc is not None else None,
                 # #383: surface the real per-charger vehicle SOC reading
@@ -3936,9 +4080,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     round(per_charger_vehicle_soc, 1)
                     if per_charger_vehicle_soc is not None else None
                 ),
-                "nights_until_charge": nights,
-                "charge_needed": charge_needed,
-                "charge_skip_reason": skip_reason,
                 "minutes_to_full": taper_data.minutes_to_full if taper_data else None,
                 "battery_health": detector.battery_health_pct,
             }

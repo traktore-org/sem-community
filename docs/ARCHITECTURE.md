@@ -4,6 +4,33 @@ This document covers the internal architecture of Solar Energy Management (SEM) 
 
 ---
 
+## Architectural principle — SEM is not an integration
+
+**SEM is an energy-management layer that sits on top of Home Assistant integrations. It is NOT itself a device integration.**
+
+What SEM does | What SEM does NOT do
+---|---
+Read sensor entities from `hass.states` | Talk Modbus / REST / cloud APIs to hardware
+Write to `number` / `switch` / `select` / `climate` entities | Implement device protocols (KEBA, Nibe, Huawei, …)
+Call services like `switch.turn_on`, `number.set_value`, `climate.set_temperature` | Bundle protocol libraries (pymodbus, paho-mqtt, vendor SDKs)
+Express its logic in terms of HA entities | Replace HA's `nibe`, `keba`, `huawei_solar`, `wallbox`, etc. integrations
+Add OptionsFlow fields like `heat_pump_relay1_entity` (entity pickers) | Add OptionsFlow fields like `nibe_modbus_host` / `keba_ip`
+
+**Why this matters:** evcc and similar tools have built-in device drivers for specific brands (e.g. evcc has a `nibe-s-series` template that speaks Modbus directly to a Nibe S-Series). SEM intentionally takes a different shape — it stays in HA's entity-and-services world. The user runs HA's `nibe` / `modbus` / `keba` integration (which owns the protocol), then plugs the resulting entities into SEM via entity pickers.
+
+**Practical consequence for Nibe-with-Modbus-SG-Ready:**
+1. User installs HA's `nibe` integration → it exposes the heat pump's Modbus registers as entities.
+2. User creates two HA `template switch` entities that write to the SG-Ready Modbus register bits when toggled.
+3. User configures those template switches in SEM as `heat_pump_relay1_entity` / `heat_pump_relay2_entity`.
+4. SEM never knows it's Modbus. It just sees two switches. Same code path as ESP relays, Shellies, or any other SG-Ready wiring.
+
+**What this rules out** (each is a legitimate idea — just not for SEM):
+- A "native Modbus SG-Ready path for Nibe S-Series" inside `HeatPumpController`. Belongs in HA's `nibe` integration or as a custom integration alongside SEM.
+- KEBA / Wallbox / Huawei brand-specific drivers inside SEM. Belongs in HA's brand integrations.
+- A SEM "cloud bridge" for any specific vendor. Same answer.
+
+---
+
 ## v1.7.0 — Per-device primary pattern
 
 Every multi-device data point in SEM flows through one shape:

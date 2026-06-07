@@ -593,10 +593,34 @@ class TariffSensorData:
 
 @dataclass
 class HeatPumpSensorData:
-    """Heat pump data for coordinator sensors."""
+    """Heat pump data for coordinator sensors.
+
+    The ``heat_pump_registered`` flag distinguishes "no controller
+    registered" from "controller registered, currently in NORMAL
+    state" — both produce ``heat_pump_sg_ready_state == 2`` so the
+    presence flag is needed for the dashboard auto-hide logic on
+    the heat pump section (#437).
+    """
+    heat_pump_registered: bool = False
     heat_pump_mode: str = "normal"
     heat_pump_sg_ready_state: int = 2
     heat_pump_solar_boost: bool = False
+    # #432 / #446-followup: surface "why didn't the heat pump register?"
+    # so users with non-standard SG-Ready wiring (ESP relays, Shellies,
+    # Modbus-bridged template switches for Nibe S-Series) can debug
+    # without owning the hardware on our side. One of six string states:
+    #   registered_sg_ready, registered_climate_only,
+    #   registered_sg_ready_and_climate, not_configured,
+    #   partial_sg_ready_only_relay1, partial_sg_ready_only_relay2
+    # plus the resolved entity ids + their live states for the diagnostic
+    # attributes on ``sensor.sem_heat_pump_registration_status``.
+    heat_pump_registration_status: str = "not_configured"
+    heat_pump_relay1_entity: Optional[str] = None
+    heat_pump_relay2_entity: Optional[str] = None
+    heat_pump_climate_entity: Optional[str] = None
+    heat_pump_relay1_state: Optional[str] = None
+    heat_pump_relay2_state: Optional[str] = None
+    heat_pump_climate_state: Optional[str] = None
 
 
 @dataclass
@@ -643,20 +667,21 @@ class EVTaperData:
 
 @dataclass
 class EVIntelligenceData:
-    """Complete EV intelligence sensor data.
+    """EV intelligence sensor data — display-only after #440.
 
-    Combines taper detection, virtual SOC estimation, consumption
-    prediction, and charge skip logic into a single output structure.
+    Combines taper detection, virtual SOC estimation, and consumption
+    prediction. The skip-decision fields (``nights_until_charge``,
+    ``charge_needed``, ``charge_skip_reason``) were removed in #440
+    because charge mode is the sole authority on whether to charge —
+    estimated SOC and predicted consumption are diagnostic signals
+    only, they do not override the user's stated mode.
     """
     taper: EVTaperData = field(default_factory=EVTaperData)
     estimated_soc_pct: Optional[float] = 0.0  # Virtual SOC (0-100); None = unknown (no anchor yet)
     last_full_charge: Optional[str] = None   # ISO timestamp of last detected full
     energy_since_full_kwh: float = 0.0       # Energy consumed since last full
-    predicted_daily_ev_kwh: float = 0.0      # Tomorrow's predicted EV consumption
-    nights_until_charge: int = 0             # Estimated nights before charge needed
-    charge_needed: bool = True               # Whether charging is recommended tonight
-    ev_battery_health_pct: float = 0.0       # EV battery health estimate
-    charge_skip_reason: str = ""             # Human-readable skip explanation
+    predicted_daily_ev_kwh: float = 0.0      # Tomorrow's predicted EV consumption (display)
+    ev_battery_health_pct: float = 0.0       # EV battery health estimate (display)
 
 
 @dataclass
@@ -1003,9 +1028,20 @@ class SEMData:
             "tariff_classifier_path": self.tariff.tariff_classifier_path,
 
             # Heat pump (Phase 2)
+            "heat_pump_registered": self.heat_pump.heat_pump_registered,
             "heat_pump_mode": self.heat_pump.heat_pump_mode,
             "heat_pump_sg_ready_state": self.heat_pump.heat_pump_sg_ready_state,
             "heat_pump_solar_boost": self.heat_pump.heat_pump_solar_boost,
+            # #432 diagnostic surface — exposed via
+            # ``sensor.sem_heat_pump_registration_status`` state +
+            # extra_state_attributes for self-diagnosis.
+            "heat_pump_registration_status": self.heat_pump.heat_pump_registration_status,
+            "heat_pump_relay1_entity": self.heat_pump.heat_pump_relay1_entity,
+            "heat_pump_relay2_entity": self.heat_pump.heat_pump_relay2_entity,
+            "heat_pump_climate_entity": self.heat_pump.heat_pump_climate_entity,
+            "heat_pump_relay1_state": self.heat_pump.heat_pump_relay1_state,
+            "heat_pump_relay2_state": self.heat_pump.heat_pump_relay2_state,
+            "heat_pump_climate_state": self.heat_pump.heat_pump_climate_state,
 
             # PV analytics (Phase 5)
             "pv_daily_specific_yield": self.pv_analytics.pv_daily_specific_yield,
@@ -1108,8 +1144,6 @@ class SEMData:
                     # global ``sensor.sem_vehicle_soc`` which gets
                     # clobbered across the per-charger update loop.
                     f"charger_{cid}_vehicle_soc": intel.get("vehicle_soc"),
-                    f"charger_{cid}_nights_until_charge": intel.get("nights_until_charge", 0),
-                    f"charger_{cid}_charge_needed": intel.get("charge_needed", False),
                     f"charger_{cid}_taper_minutes_to_full": intel.get("minutes_to_full"),
                 })
         except Exception as e:
@@ -1126,10 +1160,7 @@ class SEMData:
                 "ev_last_full_charge": _ei.last_full_charge,
                 "ev_energy_since_full": _ei.energy_since_full_kwh,
                 "ev_predicted_daily_consumption": _ei.predicted_daily_ev_kwh,
-                "ev_nights_until_charge": _ei.nights_until_charge,
-                "ev_charge_needed": _ei.charge_needed,
                 "ev_battery_health": _ei.ev_battery_health_pct,
-                "ev_charge_skip_reason": _ei.charge_skip_reason,
             })
         except Exception as e:
             _LOGGER.warning("EV intelligence to_dict failed: %s", e)

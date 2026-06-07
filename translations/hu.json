@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Napenergia-kezelés beállítása",
-        "description": "A SEM a következő szenzorokat észlelte a Home Assistant Energia irányítópultjáról:\n\n{summary}\n\nKattintson a **Küldés** gombra a folytatáshoz. A következő két lépés automatikusan felismeri az EV töltőt és az invertert.",
+        "description": "SEM az alábbi szenzorokat észlelte a Home Assistant Energia irányítópultján:\n\n{summary}\n\nKattintson a **Küldés** gombra a folytatáshoz. Már csak egy lépés. Az EV-töltők, hőszivattyú, tarifa és minden más beállítás később az SEM irányítópult új **Konfiguráció** fülén állítható be — most nem kell ezekkel foglalkozni.",
         "data": {
           "observer_mode": "Teszt mód (csak olvasás — nem vezérli a hardvert)"
         },
@@ -908,20 +908,11 @@
       "ev_energy_since_full": {
         "name": "EV Energy Since Full"
       },
-      "ev_nights_until_charge": {
-        "name": "EV Nights Until Charge"
-      },
       "ev_predicted_daily_consumption": {
         "name": "EV Predicted Daily Consumption"
       },
       "ev_battery_health": {
         "name": "EV Akkumulátor állapot"
-      },
-      "ev_charge_needed": {
-        "name": "EV Töltés szükséges"
-      },
-      "ev_charge_skip_reason": {
-        "name": "EV Charge Skip Reason"
       },
       "ev_charger_count": {
         "name": "EV Charger Count"
@@ -985,6 +976,9 @@
       },
       "diag_ed_config": {
         "name": "Energia-irányítópult konfiguráció"
+      },
+      "heat_pump_registration_status": {
+        "name": "Heat Pump Registration Status"
       }
     },
     "binary_sensor": {
@@ -1014,6 +1008,9 @@
       },
       "heat_pump_solar_boost": {
         "name": "Heat Pump Solar Boost"
+      },
+      "heat_pump_registered": {
+        "name": "Hőszivattyú regisztrálva"
       },
       "utility_signal_active": {
         "name": "Utility Signal Active"
@@ -1082,9 +1079,6 @@
       "system_size_kwp": {
         "name": "PV System Size"
       },
-      "ev_night_initial_current": {
-        "name": "EV Night Initial Current"
-      },
       "ev_min_current": {
         "name": "EV Minimum Current"
       },
@@ -1150,6 +1144,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Jármű fogyasztás (kWh/100km)"
+      },
+      "initial_current": {
+        "name": "Jármű indítóáram"
       }
     },
     "select": {
@@ -1202,6 +1199,26 @@
     "ev_charger_not_configured": {
       "title": "Az EV-töltő nincs konfigurálva",
       "description": "Nincsenek konfigurálva EV-töltő érzékelők, ezért az EV-töltési funkciók nem érhetők el. Az EV-töltés engedélyezéséhez adjon hozzá egy „csatlakoztatva” érzékelőt vagy egy töltési teljesítmény érzékelőt az integráció beállításaiban."
+    },
+    "sensor_unavailable": {
+      "title": "Sensor unavailable",
+      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+    },
+    "no_forecast_integration": {
+      "title": "No solar forecast integration detected",
+      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+    },
+    "no_recorder": {
+      "title": "Recorder integration unavailable",
+      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+    },
+    "heat_pump_relay_unavailable": {
+      "title": "Heat pump SG-Ready {slot} unavailable",
+      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+    },
+    "heat_pump_partial_sg_ready": {
+      "title": "Heat pump SG-Ready half-configured",
+      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
     }
   }
 }

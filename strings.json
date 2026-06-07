@@ -3,12 +3,12 @@
     "step": {
       "user": {
         "title": "Solar Energy Management Setup",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. Just one more step. EV chargers, heat pumps, tariff, and all other settings are set up later in the new **Configuration** tab on the SEM dashboard — no need to handle them now.",
         "data": {
           "observer_mode": "Test mode (read-only — do not control hardware)"
         },
         "data_description": {
-          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches."
+          "observer_mode": "Leave OFF for a normal install. Turn ON only on a test/staging Home Assistant that mirrors a production instance, so SEM never sends commands to KEBA, the inverter, or any switches. You can change this any time later in the Configuration tab → Advanced."
         }
       },
       "ev_charger": {
@@ -35,7 +35,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Almost done! SEM auto-detected your battery capacity and inverter size from the hardware.\n\nSet your **Peak Power Limit** — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "Last step! Set your **Peak Power Limit** — the maximum kW your grid contract allows before SEM starts shedding load. SEM auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the **Configuration** tab on the SEM dashboard — including EV chargers, heat pump, tariff, and battery zones.",
         "data": {
           "target_peak_limit": "Peak Power Limit (kW)",
           "generate_dashboard_on_install": "Generate the SEM dashboard now (restarts HA)",
@@ -94,6 +94,7 @@
       "battery_soc_sensor": "Battery SOC sensor is required and must provide percentage readings (0-100%).",
       "battery_power_sensor": "Battery power sensor is required and must provide power readings in Watts (W). Positive = charging, Negative = discharging.",
       "ev_connected_sensor": "EV connected sensor is required and must be a binary_sensor (ON/OFF).",
+      "heat_pump_partial_relays": "SG-Ready needs BOTH relay entities. Set both relays — or leave both empty and configure only the climate entity for climate-only setpoint boost.",
       "ev_charging_sensor": "EV charging sensor is required and must be a binary_sensor (ON/OFF).",
       "ev_charging_power_sensor": "EV charging power sensor is required and must provide power readings in Watts (W)."
     },
@@ -138,21 +139,21 @@
         }
       },
       "heat_pump": {
-        "title": "Heat Pump (SG-Ready)",
-        "description": "Configure your SG-Ready heat pump for solar surplus control. Both relay entities are required for SG-Ready operation. Leave empty to skip.",
+        "title": "Heat Pump",
+        "description": "Configure your heat pump for solar surplus boost. Two control paths are supported:\n• **SG-Ready** — set both relay entities (Viessmann, Stiebel Eltron, Vaillant).\n• **Climate-only** — set just the climate entity (Nibe, Mitsubishi, Daikin and any HA-controlled heat pump without SG-Ready relays).\nBoth paths can also be combined. Leave all empty to skip.",
         "data": {
-          "heat_pump_relay1_entity": "SG-Ready Relay 1 (switch entity)",
-          "heat_pump_relay2_entity": "SG-Ready Relay 2 (switch entity)",
-          "heat_pump_climate_entity": "Climate entity for temperature boost (optional)",
+          "heat_pump_relay1_entity": "SG-Ready Relay 1 (optional switch entity)",
+          "heat_pump_relay2_entity": "SG-Ready Relay 2 (optional switch entity)",
+          "heat_pump_climate_entity": "Climate entity for setpoint boost (optional)",
           "heat_pump_power_sensor": "Power sensor (optional)",
           "heat_pump_boost_offset": "Temperature boost offset (°C)",
           "heat_pump_max_setpoint": "Maximum temperature setpoint (°C)",
           "heat_pump_priority": "Surplus priority (1=highest)"
         },
         "data_description": {
-          "heat_pump_relay1_entity": "Switch entity for SG-Ready relay 1 (normal operation signal).",
-          "heat_pump_relay2_entity": "Switch entity for SG-Ready relay 2 (surplus boost signal).",
-          "heat_pump_climate_entity": "Optional climate entity used to raise the setpoint during solar surplus.",
+          "heat_pump_relay1_entity": "Switch entity for SG-Ready relay 1 (normal operation signal). Set together with relay 2 for SG-Ready protocol.",
+          "heat_pump_relay2_entity": "Switch entity for SG-Ready relay 2 (surplus boost signal). Set together with relay 1 for SG-Ready protocol.",
+          "heat_pump_climate_entity": "Climate entity used to raise the setpoint during solar surplus. Sufficient on its own for climate-only mode (no relays needed).",
           "heat_pump_power_sensor": "Optional sensor (W) reporting the heat pump's current power consumption.",
           "heat_pump_boost_offset": "Degrees Celsius added to the normal setpoint during a solar surplus boost.",
           "heat_pump_max_setpoint": "Upper temperature limit (°C) SEM will set during a boost cycle.",
@@ -823,6 +824,9 @@
       "heat_pump_sg_ready_state": {
         "name": "Heat Pump SG-Ready State"
       },
+      "heat_pump_registration_status": {
+        "name": "Heat Pump Registration Status"
+      },
       "pv_daily_specific_yield": {
         "name": "PV Specific Yield"
       },
@@ -928,20 +932,11 @@
       "ev_energy_since_full": {
         "name": "EV Energy Since Full"
       },
-      "ev_nights_until_charge": {
-        "name": "EV Nights Until Charge"
-      },
       "ev_predicted_daily_consumption": {
         "name": "EV Predicted Daily Consumption"
       },
       "ev_battery_health": {
         "name": "EV Battery Health"
-      },
-      "ev_charge_needed": {
-        "name": "EV Charge Needed"
-      },
-      "ev_charge_skip_reason": {
-        "name": "EV Charge Skip Reason"
       },
       "ev_charger_count": {
         "name": "EV Charger Count"
@@ -1032,6 +1027,9 @@
       "heat_pump_solar_boost": {
         "name": "Heat Pump Solar Boost"
       },
+      "heat_pump_registered": {
+        "name": "Heat Pump Registered"
+      },
       "utility_signal_active": {
         "name": "Utility Signal Active"
       }
@@ -1117,8 +1115,8 @@
       "night_latest_end": {
         "name": "Night Latest End"
       },
-      "ev_night_initial_current": {
-        "name": "EV Night Initial Current"
+      "initial_current": {
+        "name": "Vehicle Start Amps"
       },
       "ev_minimum_current": {
         "name": "EV Minimum Current"
@@ -1200,12 +1198,38 @@
     },
     "mapping_service_required": {
       "message": "A service (e.g. keba.set_current) is required for the service control type."
+    },
+    "set_option_invalid_payload": {
+      "message": "set_option requires an 'options' dict mapping config keys to new values."
+    },
+    "set_option_no_entry": {
+      "message": "No SEM ConfigEntry found — install SEM via Settings → Devices & Services first."
     }
   },
   "issues": {
     "ev_charger_not_configured": {
       "title": "EV charger not configured",
       "description": "No EV charger sensors are configured. Solar EV charging optimization will not work. Go to the integration settings to configure your EV charger sensors."
+    },
+    "sensor_unavailable": {
+      "title": "Sensor unavailable",
+      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+    },
+    "no_forecast_integration": {
+      "title": "No solar forecast integration detected",
+      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+    },
+    "no_recorder": {
+      "title": "Recorder integration unavailable",
+      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+    },
+    "heat_pump_relay_unavailable": {
+      "title": "Heat pump SG-Ready {slot} unavailable",
+      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+    },
+    "heat_pump_partial_sg_ready": {
+      "title": "Heat pump SG-Ready half-configured",
+      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
     }
   }
 }

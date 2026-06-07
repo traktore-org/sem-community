@@ -1,0 +1,67 @@
+name: "2026-06-06 min_plus_solar night-branch unconditional charge at min"
+
+coverage:
+  - mode: min_plus_solar
+    regime: night_branch_authority
+    issue: "#440 charge mode is the sole authority on whether to charge"
+
+description: |
+  Companion scenario to the unit tests in
+  ``test_440_charge_mode_sole_authority.py``. The unit tests pin the
+  pass-through contract of ``_calculate_forecast_night_target``
+  (the override gate at the coordinator level). This scenario pins
+  the contract one layer down: with the override gone,
+  ``MinPlusSolarMode._decide_night`` must commit to at least min_amps
+  on every cycle — never IDLE — when the user is in ``min_plus_solar``
+  mode at night with a positive Min target.
+
+  Inputs are the post-#440 happy path:
+    mode = min_plus_solar
+    is_night = True (overridden — bypasses sunset clock)
+    solar = 0 W (true night)
+    home battery in Zone 4 (SOC = 95 %)
+    EV plugged, no current flowing yet
+    daily_ev_target = 14 kWh, daily delivered = 0
+
+  The night branch must return CHARGE_AT_AMPS at min_amps (6 A) —
+  not IDLE.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 5000
+  ev_min_current: 6
+  ev_max_current: 32
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 14.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 14.0
+
+cycle_seconds: 30
+
+timeline:
+  - t: 0
+    solar_power: 0
+    grid_power: -500          # -ve = importing 500 W baseload
+    battery_power: 0
+    battery_soc: 95
+    ev_power: 0
+    ev_connected: true
+    is_night: true
+
+  - t: 30
+  - t: 60
+  - t: 90
+  - t: 120
+
+expect:
+  # Post-#440 contract: night branch always commits — no IDLE in the
+  # reason text; the mode's name must appear.
+  strategy_not_substring: "idle"
+  strategy_contains: "min_plus_solar night"

@@ -9,15 +9,31 @@ import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semDefineCard } from '../base/sem-shared.js';
 
 const ZONES = [
-    { id: 'autostart', entity: 'number.sem_battery_auto_start_soc', icon: 'mdi:play-circle',        labelKey: 'auto_start_soc', color: '#4db6ac' },
-    { id: 'buffer',    entity: 'number.sem_battery_buffer_soc',    icon: 'mdi:shield-half-full',    labelKey: 'buffer_soc',    color: '#ff9800' },
-    { id: 'floor',     entity: 'number.sem_battery_assist_floor_soc', icon: 'mdi:arrow-collapse-down', labelKey: 'assist_floor', color: '#488fc2' },
-    { id: 'priority',  entity: 'number.sem_battery_priority_soc',  icon: 'mdi:shield-alert',       labelKey: 'priority_soc',  color: '#f44336' },
+    { id: 'autostart', entity: 'number.sem_battery_auto_start_soc', icon: 'mdi:play-circle',        labelKey: 'auto_start_soc', helpKey: 'zone_help_autostart', color: '#4db6ac' },
+    { id: 'buffer',    entity: 'number.sem_battery_buffer_soc',    icon: 'mdi:shield-half-full',    labelKey: 'buffer_soc',    helpKey: 'zone_help_buffer',    color: '#ff9800' },
+    { id: 'floor',     entity: 'number.sem_battery_assist_floor_soc', icon: 'mdi:arrow-collapse-down', labelKey: 'assist_floor', helpKey: 'zone_help_floor',    color: '#488fc2' },
+    { id: 'priority',  entity: 'number.sem_battery_priority_soc',  icon: 'mdi:shield-alert',       labelKey: 'priority_soc',  helpKey: 'zone_help_priority', color: '#f44336' },
 ];
 
 class SEMBatteryZonesCard extends SEMLitBase {
     static get watchedEntities() {
         return ZONES.map(z => z.entity);
+    }
+
+    static get properties() {
+        return {
+            ...super.properties,
+            _showHelp: { state: true },
+        };
+    }
+
+    constructor() {
+        super();
+        this._showHelp = false;
+    }
+
+    _toggleHelp() {
+        this._showHelp = !this._showHelp;
     }
 
     setConfig(config) {
@@ -46,30 +62,34 @@ class SEMBatteryZonesCard extends SEMLitBase {
         const val = this._state(z.entity);
         const decimals = this._getDecimalsForZone(z.entity);
         const label = this._t(z.labelKey);
+        const helpText = this._showHelp ? this._t(z.helpKey) : '';
 
         return html`
-            <div class="stepper-row">
-                <ha-icon icon="${z.icon}" style="--mdc-icon-size:18px;color:${z.color}"></ha-icon>
-                <span class="stepper-label">${label}</span>
-                <div class="stepper-controls">
-                    <button
-                        class="stepper-minus"
-                        aria-label="Decrease ${label}"
-                        @click=${() => this._stepNumber(z.entity, -1)}
-                        @pointerdown=${() => this._startHold(z.entity, -1)}
-                        @pointerup=${() => this._stopHold(z.entity)}
-                        @pointerleave=${() => this._stopHold(z.entity)}
-                    >−</button>
-                    <span class="stepper-value">${val.toFixed(decimals)}%</span>
-                    <button
-                        class="stepper-plus"
-                        aria-label="Increase ${label}"
-                        @click=${() => this._stepNumber(z.entity, 1)}
-                        @pointerdown=${() => this._startHold(z.entity, 1)}
-                        @pointerup=${() => this._stopHold(z.entity)}
-                        @pointerleave=${() => this._stopHold(z.entity)}
-                    >+</button>
+            <div class="stepper-cell">
+                <div class="stepper-row">
+                    <ha-icon icon="${z.icon}" style="--mdc-icon-size:18px;color:${z.color}"></ha-icon>
+                    <span class="stepper-label">${label}</span>
+                    <div class="stepper-controls">
+                        <button
+                            class="stepper-minus"
+                            aria-label="Decrease ${label}"
+                            @click=${() => this._stepNumber(z.entity, -1)}
+                            @pointerdown=${() => this._startHold(z.entity, -1)}
+                            @pointerup=${() => this._stopHold(z.entity)}
+                            @pointerleave=${() => this._stopHold(z.entity)}
+                        >−</button>
+                        <span class="stepper-value">${val.toFixed(decimals)}%</span>
+                        <button
+                            class="stepper-plus"
+                            aria-label="Increase ${label}"
+                            @click=${() => this._stepNumber(z.entity, 1)}
+                            @pointerdown=${() => this._startHold(z.entity, 1)}
+                            @pointerup=${() => this._stopHold(z.entity)}
+                            @pointerleave=${() => this._stopHold(z.entity)}
+                        >+</button>
+                    </div>
                 </div>
+                ${this._showHelp ? html`<div class="zone-help-text" style="border-left-color:${z.color}">${helpText}</div>` : nothing}
             </div>
         `;
     }
@@ -109,7 +129,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
                 .subtitle {
                     flex: 1;
                     text-align: right;
-                    font-size: 11px;
+                    font-size: 12px;
                     color: var(--secondary-text-color, ${T.textSec});
                     overflow: hidden;
                     text-overflow: ellipsis;
@@ -205,6 +225,32 @@ class SEMBatteryZonesCard extends SEMLitBase {
                     text-align: center;
                     font-variant-numeric: tabular-nums;
                 }
+                /* Help toggle in header (#sem-zone-help, 2026-06-06). Tap
+                   the (?) to reveal one-line descriptions under each
+                   stepper. Off by default — keeps the card compact. */
+                .help-toggle {
+                    cursor: pointer;
+                    color: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.7;
+                    flex-shrink: 0;
+                    transition: opacity 0.15s, color 0.15s;
+                    user-select: none;
+                    -webkit-user-select: none;
+                }
+                .help-toggle:hover { opacity: 1; }
+                .help-toggle.on { color: #4db6ac; opacity: 1; }
+                .stepper-cell { display: flex; flex-direction: column; }
+                .zone-help-text {
+                    font-size: 11px;
+                    line-height: 1.35;
+                    color: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.8;
+                    padding: 4px 6px 6px 36px;
+                    border-left: 2px solid;
+                    margin-left: 9px;
+                    margin-top: -2px;
+                    margin-bottom: 4px;
+                }
                 @media (max-width: 480px) {
                     .stepper-grid { grid-template-columns: 1fr; }
                 }
@@ -214,6 +260,13 @@ class SEMBatteryZonesCard extends SEMLitBase {
                     <ha-icon icon="mdi:battery-charging-medium" style="--mdc-icon-size:18px;color:#4db6ac"></ha-icon>
                     <span class="header-title">${this._t('soc_zones')}</span>
                     <span class="subtitle">${subtitle}</span>
+                    <ha-icon
+                        class="help-toggle ${this._showHelp ? 'on' : ''}"
+                        icon="${this._showHelp ? 'mdi:help-circle' : 'mdi:help-circle-outline'}"
+                        title="${this._t('zone_help_toggle')}"
+                        @click=${() => this._toggleHelp()}
+                        style="--mdc-icon-size:18px"
+                    ></ha-icon>
                 </div>
                 <div class="zone-bar-wrap">
                     <div class="zone-bar">

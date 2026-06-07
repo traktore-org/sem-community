@@ -52,6 +52,10 @@ views:
           - type: custom:sem-tab-header
             tab: home
 
+          # ── Configuration tab welcome banner (#442) ──
+          # Self-hides via localStorage once dismissed (one-time only)
+          - type: custom:sem-onboarding-banner
+
           # ── Dynamic price chip (#257) ── self-hides on static tariffs
           - type: custom:sem-price-card
             entity: sensor.sem_tariff_current_import_rate
@@ -325,7 +329,22 @@ views:
             entity_prefix: sensor.sem_
 
   # ============================================================
-  # VIEW 5: COSTS — Financial tracking
+  # VIEW 5b: CONFIGURATION — In-dashboard SEM setup (#442)
+  # ============================================================
+  - title: Configuration
+    path: config
+    icon: mdi:cog-outline
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:sem-tab-header
+            tab: config
+          - type: custom:sem-config-card
+            entity_prefix: sensor.sem_
+
+  # ============================================================
+  # VIEW 6: COSTS — Financial tracking
   # ============================================================
   - title: Costs
     path: costs

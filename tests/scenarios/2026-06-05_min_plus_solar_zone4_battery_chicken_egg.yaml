@@ -1,0 +1,78 @@
+name: "2026-06-05 min_plus_solar Zone 4 — must not idle when battery available"
+
+coverage:
+  - mode: min_plus_solar
+    regime: zone4_day_battery_assist_potential
+    issue: "#439 daytime min_plus_solar chicken-and-egg on battery_discharge_w"
+
+description: |
+  Reproduces the HA-PROD 2026-06-05 incident where the user expected
+  min_plus_solar to honour its UI hint ("Guarantee Min from grid +
+  solar up to Max") and either grid-supplement or battery-assist to
+  maintain the min current floor, but SEM decided IDLE instead.
+
+  Live conditions on PROD:
+    solar surplus ~4.1 kW (4106 W in the decision log)
+    home battery SOC 95 % (Zone 4: SOC ≥ auto_start_soc=90)
+    home battery actively idle — battery_discharge_w ≈ 0 because
+        solar > home demand
+    EV plugged, min_current=10 A on 3-phase 230 V → 6900 W floor
+    SEM decision: ``min_plus_solar day Zone 4: budget=4106W <
+        min=6900W — idle``
+
+  Root cause: ``coordinator/decide.py:92-122`` ``battery_assist_budget_w``
+  returns ``surplus + battery_discharge_w`` — adds the inverter's
+  CURRENT discharge, not the POTENTIAL discharge. Since the battery
+  isn't yet discharging (no demand to push it), the budget never
+  includes the battery → SEM never commands the EV → demand never
+  rises → battery never discharges. Chicken-and-egg deadlock.
+
+  This scenario pins the DESIRED post-fix behaviour: in Zone 4 with
+  sufficient SOC, min_plus_solar must NOT idle — it must commit to
+  the battery-assist regime so the inverter starts discharging to
+  fill the gap. Expected to FAIL on develop until #439 lands.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 5000     # inverter spec — what we'd USE post-fix
+  ev_min_current: 10                  # PROD-matching min (car needs 9-10 A handshake floor)
+  ev_max_current: 32
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 14.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 14.0
+
+cycle_seconds: 30
+
+# Steady Zone 4 daytime: surplus 4.1 kW (below the 6.9 kW
+# 10-A-on-3-phase floor), battery idle (0 W discharge — the
+# chicken-and-egg precondition). The EV is plugged, sitting at 0 W
+# waiting for a command.
+timeline:
+  - t: 0
+    solar_power: 5500
+    grid_power: 4100         # +ve = export — surplus of 4.1 kW
+    battery_power: 0         # IDLE — not yet discharging (the bug trigger)
+    battery_soc: 95          # Zone 4
+    ev_power: 0              # not drawing
+    ev_connected: true
+
+  - t: 30
+  - t: 60
+  - t: 90
+  - t: 120
+
+expect:
+  # Post-fix contract: SEM must commit to battery-assist regime in
+  # Zone 4, not retreat to idle just because the battery hasn't
+  # spontaneously started discharging. The fix can take either
+  # form (potential-discharge in budget, or grid-supplement fallback)
+  # — either satisfies this assertion.
+  strategy_not_substring: "idle"

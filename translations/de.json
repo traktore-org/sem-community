@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Solar Energy Management Einrichtung",
-        "description": "SEM has detected the following sensors from your Home Assistant Energy Dashboard:\n\n{summary}\n\nClick **Submit** to continue. The next two steps auto-detect your EV charger and inverter — almost everything is filled in for you.",
+        "description": "SEM hat die folgenden Sensoren aus Ihrem Home Assistant Energie-Dashboard erkannt:\n\n{summary}\n\nKlicken Sie auf **Übernehmen**, um fortzufahren. Nur noch ein Schritt. EV-Ladegeräte, Wärmepumpe, Tarif und alle anderen Einstellungen werden später im neuen **Konfiguration**-Tab des SEM-Dashboards eingerichtet — Sie müssen sie jetzt nicht angeben.",
         "data": {
           "observer_mode": "Testmodus (nur lesen — keine Hardwaresteuerung)"
         },
@@ -37,7 +37,7 @@
       },
       "hardware": {
         "title": "Hardware",
-        "description": "Two final values that depend on your installation:\n\n• Home Battery Capacity — the usable kWh of your inverter battery.\n• Peak Power Limit — the maximum kW your grid contract allows before SEM starts shedding load.\n\nSEM also auto-detected your inverter's discharge control entity: {discharge_entity}\n\nLeave the dashboard option ON to have SEM build its Lovelace dashboard for you. **Note: this triggers a Home Assistant restart about 5 seconds after install completes.**\n\nEverything else uses safe defaults that you can tune later from the integration's options.",
+        "description": "Letzter Schritt! Stellen Sie Ihr **Netz-Spitzenwert-Limit** ein — die maximale kW, die Ihr Netzvertrag zulässt, bevor SEM mit dem Lastabwurf beginnt. SEM hat die Entlade-Steuerung Ihres Wechselrichters erkannt: {discharge_entity}\n\nLassen Sie die Dashboard-Option AN, damit SEM sein Lovelace-Dashboard für Sie erstellt. **Hinweis: dies löst etwa 5 Sekunden nach Abschluss der Installation einen Home-Assistant-Neustart aus.**\n\nAlles andere verwendet sichere Standardwerte, die Sie später im **Konfiguration**-Tab des SEM-Dashboards anpassen können — einschließlich EV-Ladegeräte, Wärmepumpe, Tarif und Batterie-Zonen.",
         "data": {
           "battery_capacity_kwh": "Home Battery Capacity (kWh)",
           "target_peak_limit": "Peak Power Limit (kW)",
@@ -908,20 +908,11 @@
       "ev_energy_since_full": {
         "name": "EV Energie seit Vollladung"
       },
-      "ev_nights_until_charge": {
-        "name": "EV Nächte bis Ladung"
-      },
       "ev_predicted_daily_consumption": {
         "name": "EV Vorhergesagter Tagesverbrauch"
       },
       "ev_battery_health": {
         "name": "EV Batteriegesundheit"
-      },
-      "ev_charge_needed": {
-        "name": "EV Ladung benötigt"
-      },
-      "ev_charge_skip_reason": {
-        "name": "EV Ladeübersprungsgrund"
       },
       "ev_charger_count": {
         "name": "Anzahl EV-Lader"
@@ -985,6 +976,9 @@
       },
       "diag_ed_config": {
         "name": "Energie-Dashboard-Konfiguration"
+      },
+      "heat_pump_registration_status": {
+        "name": "Wärmepumpe Registrierungs-Status"
       }
     },
     "binary_sensor": {
@@ -1014,6 +1008,9 @@
       },
       "heat_pump_solar_boost": {
         "name": "Wärmepumpe Solar-Boost"
+      },
+      "heat_pump_registered": {
+        "name": "Wärmepumpe registriert"
       },
       "utility_signal_active": {
         "name": "EVU-Signal Aktiv"
@@ -1082,9 +1079,6 @@
       "system_size_kwp": {
         "name": "PV-Anlagengröße"
       },
-      "ev_night_initial_current": {
-        "name": "EV Nacht-Startstrom"
-      },
       "ev_min_current": {
         "name": "EV Minimalstrom"
       },
@@ -1150,6 +1144,9 @@
       },
       "ev_kwh_per_100km": {
         "name": "Fahrzeugverbrauch (kWh/100km)"
+      },
+      "initial_current": {
+        "name": "Fahrzeug Startstrom"
       }
     },
     "select": {
@@ -1202,6 +1199,26 @@
     "ev_charger_not_configured": {
       "title": "EV-Ladegerät nicht konfiguriert",
       "description": "Es sind keine Sensoren für das EV-Ladegerät konfiguriert, daher sind die EV-Ladefunktionen nicht verfügbar. Fügen Sie in den Integrationsoptionen einen „Verbunden“-Sensor oder einen Ladeleistungssensor hinzu, um das EV-Laden zu aktivieren."
+    },
+    "sensor_unavailable": {
+      "title": "Sensor nicht verfügbar",
+      "description": "Der Sensor `{entity_id}` ({friendly_name}) ist seit {minutes}+ Minuten nicht verfügbar. SEM kann ihn nicht in Berechnungen einbeziehen, bis er wieder verfügbar ist. Prüfen Sie die zugrundeliegende Integration (Huawei modbus / Solcast / Forecast.Solar / Ihr Wechselrichter-Netzwerk). Wird automatisch gelöscht, sobald der Sensor wieder einen gültigen Wert meldet."
+    },
+    "no_forecast_integration": {
+      "title": "Keine Solar-Prognose-Integration erkannt",
+      "description": "SEM hat eine Stunde nach Start nach einer Solar-Prognose-Integration (Forecast.Solar, Solcast PV Solar oder ein benutzerdefinierter Sensor) gesucht, aber keine gefunden. Prognose-Funktionen (beste Überschussfenster, smarte Nachtladung, Prognose-Dämpfung) sind inaktiv, bis Sie eine installieren. Wird automatisch gelöscht, sobald SEM eine Prognose-Integration erkennt."
+    },
+    "no_recorder": {
+      "title": "Recorder-Integration nicht verfügbar",
+      "description": "SEM wollte EV-/Lade-Verlauf aus dem HA-Recorder bootstrappen, aber der Lesevorgang ist fehlgeschlagen. EV-Intelligenz (SoC-Schätzung, tägliche Decay) kann ohne ihn nicht kalt starten — Werte füllen sich langsam aus Live-Zyklen. Meist transient — wird beim nächsten erfolgreichen Lesevorgang automatisch gelöscht."
+    },
+    "heat_pump_relay_unavailable": {
+      "title": "Wärmepumpe SG-Ready {slot} nicht verfügbar",
+      "description": "Die konfigurierte SG-Ready-Relais-Entity `{entity_id}` ({slot}) ist seit {minutes}+ Minuten nicht verfügbar/unbekannt. SEM kann die Wärmepumpensteuerung zwar registrieren, aber jeder SG-Ready-Befehl läuft ins Leere, bis die Entity wieder einen gültigen Zustand meldet. Prüfe das vorgelagerte Gerät — ESP-Relais-Board, Shelly, Modbus-Template-Switch oder wer auch immer die Entity besitzt. Die Meldung verschwindet automatisch, sobald das Relais wieder on/off meldet."
+    },
+    "heat_pump_partial_sg_ready": {
+      "title": "Wärmepumpe SG-Ready unvollständig konfiguriert",
+      "description": "Genau eines der beiden SG-Ready-Relais (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) ist in SEM gesetzt, ohne climate-Fallback. Das SG-Ready-Protokoll kodiert die vier Zustände (BLOCKED / NORMAL / BOOST / FORCE_ON) als 2-Bit-Wert über BEIDE Relais. Ein einzelnes Relais kann das Protokoll nicht ansteuern. Entweder das zweite Relais auch konfigurieren oder eine `heat_pump_climate_entity` setzen, um den climate-only Setpoint-Boost-Pfad zu nutzen. Die Meldung verschwindet automatisch, sobald die Konfiguration gültig ist."
     }
   }
 }

@@ -175,59 +175,39 @@ class TestSocRange:
         # ceiling clamped up to 80 → (80-40)/100*40 = 16.0
         assert _ceiling(coord, energy, vehicle_soc=40.0) == pytest.approx(16.0)
 
-    def test_soc_max_ignored_without_sensor_falls_back_to_kwh(self):
-        """SOC mode with no vehicle_soc uses kWh targets for both bounds."""
-        coord = _make_coordinator({
-            "ev_target_type": "soc",
-            "ev_target_soc": 50, "ev_target_soc_max": 80,
-            "daily_ev_target": 4, "daily_ev_target_max": 10,
-            "ev_battery_capacity_kwh": 40,
-        })
-        energy = _make_energy(daily_ev=2.0)
-        assert _floor(coord, energy, vehicle_soc=None) == pytest.approx(2.0)   # 4 - 2 (kWh floor)
-        assert _ceiling(coord, energy, vehicle_soc=None) == pytest.approx(8.0)  # 10 - 2 (kWh ceiling)
+    # Removed (#446): test_soc_max_ignored_without_sensor_falls_back_to_kwh.
+    # That test pinned the pre-#446 "rescue path" where ``ev_target_type="soc"``
+    # without a ``vehicle_soc_entity`` silently used kWh targets. The bad
+    # combination is now structurally prevented by the GUI gate + the
+    # v10 → v11 migration; the runtime trusts the saved config. See the
+    # new test below for the SOC-mode-with-temporarily-unavailable-sensor
+    # behaviour that replaces it.
 
-    def test_soc_uses_virtual_soc_when_anchored_and_no_sensor(self):
-        """De-trap: no real SOC but an ANCHORED EV-intelligence estimate → SOC-based."""
+    def test_soc_mode_with_unavailable_real_sensor_returns_full_capacity(self):
+        """#446: When a real ``vehicle_soc_entity`` IS configured but its current
+        reading is momentarily unavailable (network blip etc.), the SOC branch
+        returns the full capacity so SEM keeps charging — taper detection is
+        still the hard "full" stop. Does NOT fall back to the taper detector's
+        estimated SOC (pre-#446 behaviour that caused the PROD 2026-06-06 idle).
+        """
         coord = _make_coordinator({
             "ev_target_type": "soc",
             "ev_target_soc": 50, "ev_target_soc_max": 80,
             "ev_battery_capacity_kwh": 40,
+            # GUI gate guarantees this is set when ev_target_type="soc"
+            "vehicle_soc_entity": "sensor.test_car_soc",
         })
+        # Even with an anchored detector that COULD supply a virtual SOC,
+        # we must NOT use it — the user explicitly opted into SOC mode and
+        # owns a real sensor; an estimated value is not load-bearing.
         det = MagicMock(); det._soc_anchored = True; det.get_virtual_soc.return_value = 40.0
         coord._ev_taper_detector = det
         coord._ev_taper_detectors = {}
         energy = _make_energy()
-        # virtual SOC 40% → floor (50-40)/100*40=4.0 ; ceiling (80-40)/100*40=16.0
-        assert _floor(coord, energy, vehicle_soc=None) == pytest.approx(4.0)
-        assert _ceiling(coord, energy, vehicle_soc=None) == pytest.approx(16.0)
-
-    def test_soc_falls_back_to_kwh_when_estimate_not_anchored(self):
-        """No real SOC and the estimate is NOT anchored → kWh (no risky guess)."""
-        coord = _make_coordinator({
-            "ev_target_type": "soc",
-            "ev_target_soc": 50, "ev_target_soc_max": 80,
-            "daily_ev_target": 4, "daily_ev_target_max": 10,
-            "ev_battery_capacity_kwh": 40,
-        })
-        det = MagicMock(); det._soc_anchored = False
-        coord._ev_taper_detector = det
-        coord._ev_taper_detectors = {}
-        energy = _make_energy(daily_ev=2.0)
-        assert _floor(coord, energy, vehicle_soc=None) == pytest.approx(2.0)   # kWh
-        assert _ceiling(coord, energy, vehicle_soc=None) == pytest.approx(8.0)  # kWh
-
-    def test_soc_per_charger_uses_that_chargers_anchored_estimate(self):
-        """Per-charger: the charger's own anchored detector supplies the estimate."""
-        coord = _make_coordinator({"ev_battery_capacity_kwh": 40})
-        det = MagicMock(); det._soc_anchored = True; det.get_virtual_soc.return_value = 30.0
-        coord._ev_taper_detectors = {"ev1": det}
-        coord._ev_taper_detector = MagicMock()  # global detector (must not be used)
-        energy = _make_energy()
-        cfg = {"id": "ev1", "ev_target_type": "soc", "ev_target_soc": 50,
-               "ev_battery_capacity_kwh": 40}
-        # virtual 30% → floor (50-30)/100*40 = 8.0
-        assert _floor(coord, energy, vehicle_soc=None, charger_cfg=cfg) == pytest.approx(8.0)
+        # vehicle_soc=None (real sensor unavailable) → returns full capacity
+        # = 40 kWh on both floor and ceiling. Does NOT compute from virtual SOC.
+        assert _floor(coord, energy, vehicle_soc=None) == pytest.approx(40.0)
+        assert _ceiling(coord, energy, vehicle_soc=None) == pytest.approx(40.0)
 
 
 # ──────────────────────────────────────────────

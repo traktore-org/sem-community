@@ -42,6 +42,20 @@ const SECTIONS = [
         subtitleFn: () => '',
     },
     {
+        // #437 — heat pump section, surfaces SG-Ready state, boost
+        // offset stepper, and the active mode (SG-Ready vs Climate-only).
+        // Auto-hidden when no heat pump is registered (sg_ready_state
+        // entity is missing). Visible when the user configured a heat
+        // pump in either mode.
+        id: 'heatpump', icon: 'mdi:heat-pump', color: '#4db6ac', titleKey: 'heat_pump_title',
+        subtitleFn: (c) => {
+            const state = c._val('heat_pump_sg_ready_state');
+            const mode = c._val('heat_pump_mode');
+            if (!state) return '';
+            return `${mode || '—'} · ${state}`;
+        },
+    },
+    {
         id: 'solar', icon: 'mdi:solar-panel-large', color: '#ff9800', titleKey: 'solar_power_section',
         subtitleFn: () => '',
     },
@@ -82,6 +96,10 @@ const WATCHED = [
     'number.sem_battery_priority_soc', 'number.sem_battery_minimum_soc',
     'number.sem_battery_resume_soc', 'sensor.sem_diag_battery_capacity',
     'number.sem_hot_water_solar_target', 'number.sem_legionella_target_temp',
+    // #437 — heat pump section: registered? mode, sg_ready_state, boost offset
+    'binary_sensor.sem_heat_pump_registered',
+    'sensor.sem_heat_pump_sg_ready_state', 'sensor.sem_heat_pump_mode',
+    'binary_sensor.sem_heat_pump_solar_boost', 'number.sem_heat_pump_boost_offset',
     'number.sem_minimum_solar_power', 'number.sem_maximum_grid_import',
     'sensor.sem_tariff_provider', 'sensor.sem_tariff_price_level',
     'sensor.sem_tariff_current_import_rate',
@@ -97,14 +115,26 @@ const WATCHED = [
 class SEMControlCard extends SEMLitBase {
     static get watchedEntities() { return WATCHED; }
 
+    static get properties() {
+        return {
+            ...super.properties,
+            _showHelp: { state: true },
+        };
+    }
+
     constructor() {
         super();
         // ev + battery + tariff expanded by default; surplus, hotwater, solar, peak, system collapsed
         this._collapsed = {
             ev: false, surplus: true, battery: false,
-            hotwater: true, solar: true, tariff: false,
+            hotwater: true, heatpump: true, solar: true, tariff: false,
             peak: true, system: true,
         };
+        this._showHelp = false;
+    }
+
+    _toggleHelp() {
+        this._showHelp = !this._showHelp;
     }
 
     setConfig(config) {
@@ -160,7 +190,7 @@ class SEMControlCard extends SEMLitBase {
         `;
     }
 
-    _renderStepper(entityId, labelKey, T) {
+    _renderStepper(entityId, labelKey, T, helpKey) {
         const entity = this._hass?.states[entityId];
         if (!entity) return nothing;
         const frozen = this._frozenEntities[entityId];
@@ -171,25 +201,28 @@ class SEMControlCard extends SEMLitBase {
         const displayVal = val.toFixed(decimals) + (unit ? ' ' + unit : '');
 
         return html`
-            <div class="stepper-row">
-                <span class="stepper-label">${this._t(labelKey)}</span>
-                <div class="stepper-controls">
-                    <button
-                        class="stepper-minus" aria-label="Decrease"
-                        @click=${() => this._stepNumber(entityId, -1)}
-                        @pointerdown=${() => this._startHold(entityId, -1)}
-                        @pointerup=${() => this._stopHold(entityId)}
-                        @pointerleave=${() => this._stopHold(entityId)}
-                    >−</button>
-                    <span class="stepper-value">${displayVal}</span>
-                    <button
-                        class="stepper-plus" aria-label="Increase"
-                        @click=${() => this._stepNumber(entityId, 1)}
-                        @pointerdown=${() => this._startHold(entityId, 1)}
-                        @pointerup=${() => this._stopHold(entityId)}
-                        @pointerleave=${() => this._stopHold(entityId)}
-                    >+</button>
+            <div class="stepper-cell">
+                <div class="stepper-row">
+                    <span class="stepper-label">${this._t(labelKey)}</span>
+                    <div class="stepper-controls">
+                        <button
+                            class="stepper-minus" aria-label="Decrease"
+                            @click=${() => this._stepNumber(entityId, -1)}
+                            @pointerdown=${() => this._startHold(entityId, -1)}
+                            @pointerup=${() => this._stopHold(entityId)}
+                            @pointerleave=${() => this._stopHold(entityId)}
+                        >−</button>
+                        <span class="stepper-value">${displayVal}</span>
+                        <button
+                            class="stepper-plus" aria-label="Increase"
+                            @click=${() => this._stepNumber(entityId, 1)}
+                            @pointerdown=${() => this._startHold(entityId, 1)}
+                            @pointerup=${() => this._stopHold(entityId)}
+                            @pointerleave=${() => this._stopHold(entityId)}
+                        >+</button>
+                    </div>
                 </div>
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
         `;
     }
@@ -258,16 +291,50 @@ class SEMControlCard extends SEMLitBase {
 
         return html`
             <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T)}
-                ${this._renderStepper('number.sem_battery_minimum_soc', 'minimum_soc', T)}
+                ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T, 'setting_help_priority_soc')}
+                ${this._renderStepper('number.sem_battery_minimum_soc', 'minimum_soc', T, 'setting_help_minimum_soc')}
             </div>
             <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_resume_soc', 'resume_soc', T)}
+                ${this._renderStepper('number.sem_battery_resume_soc', 'resume_soc', T, 'setting_help_resume_soc')}
                 <div class="readonly-row">
                     <span class="ctrl-label">${this._t('capacity_kwh')}</span>
                     <span class="readonly-value">${capStr}</span>
                 </div>
             </div>
+        `;
+    }
+
+    _renderHeatPumpSection(T) {
+        // Auto-hide body when no HeatPumpController is registered.
+        // sg_ready_state defaults to 2 / "normal" via the dataclass
+        // even when no controller exists, so we can't gate on it
+        // (reviewer-flagged). Use the explicit ``heat_pump_registered``
+        // presence flag (coordinator/types.py:597 + populated in
+        // coordinator.py:_run_phase_pipeline from the surplus
+        // controller's device list).
+        const registered = this._val('heat_pump_registered');
+        const isRegistered = (registered === true || registered === 'True' || registered === 'on');
+        if (!isRegistered) {
+            return html`<div class="info-box-text" style="opacity:0.6">
+                ${this._t('heat_pump_not_configured')}
+            </div>`;
+        }
+        const sgStateRaw = this._val('heat_pump_sg_ready_state');
+        const mode = this._val('heat_pump_mode') || '—';
+        const boosted = this._switchOn('heat_pump_solar_boost');
+        const accent = boosted ? '#ff9800' : '#4db6ac';
+        return html`
+            <div class="readonly-row">
+                <ha-icon icon="mdi:heat-pump-outline" style="--mdc-icon-size:18px;color:${accent}"></ha-icon>
+                <span class="ctrl-label" style="flex:1">${this._t('heat_pump_mode')}</span>
+                <span class="readonly-value">${this._t(mode.toLowerCase()) || mode}</span>
+            </div>
+            <div class="readonly-row">
+                <ha-icon icon="mdi:transmission-tower" style="--mdc-icon-size:18px;color:${accent}"></ha-icon>
+                <span class="ctrl-label" style="flex:1">${this._t('heat_pump_sg_ready_state')}</span>
+                <span class="readonly-value">${sgStateRaw}</span>
+            </div>
+            ${this._renderStepper('number.sem_heat_pump_boost_offset', 'heat_pump_boost_offset', T)}
         `;
     }
 
@@ -310,8 +377,8 @@ class SEMControlCard extends SEMLitBase {
                 <span class="readonly-value tariff-rate-value">${rate} ${rateUnit}</span>
             </div>
             <div class="stepper-pair">
-                ${this._renderStepper('number.sem_cheap_price_threshold', 'cheap_threshold', T)}
-                ${this._renderStepper('number.sem_expensive_price_threshold', 'expensive_threshold', T)}
+                ${this._renderStepper('number.sem_cheap_price_threshold', 'cheap_threshold', T, 'setting_help_cheap_threshold')}
+                ${this._renderStepper('number.sem_expensive_price_threshold', 'expensive_threshold', T, 'setting_help_expensive_threshold')}
             </div>
         `;
     }
@@ -388,7 +455,8 @@ class SEMControlCard extends SEMLitBase {
     _renderSection(section, contentFn, T) {
         const collapsed = this._collapsed[section.id];
         return html`
-            <div class="section">
+            <div class="section ${collapsed ? '' : 'expanded'}"
+                 style="--section-accent: ${section.color}">
                 ${this._renderSectionHeader(section, T)}
                 <div class="section-content ${collapsed ? '' : 'expanded'}">
                     <div class="section-body">
@@ -413,6 +481,7 @@ class SEMControlCard extends SEMLitBase {
             surplus:  (T) => this._renderSurplusSection(T),
             battery:  (T) => this._renderBatterySection(T),
             hotwater: (T) => this._renderHotWaterSection(T),
+            heatpump: (T) => this._renderHeatPumpSection(T),
             solar:    (T) => this._renderSolarSection(T),
             tariff:   (T) => this._renderTariffSection(T),
             peak:     (T) => this._renderPeakSection(T),
@@ -449,30 +518,45 @@ class SEMControlCard extends SEMLitBase {
                     padding: ${obsOn ? '12px 16px' : '0 16px'};
                 }
 
-                /* ── Sections ── */
+                /* ── Sections (polish: color accent + EV-card-matching typography) ── */
                 .section {
-                    margin-bottom: 8px;
+                    margin-bottom: 10px;
                     border-radius: 14px;
                     background: ${T.surface};
                     border: 1px solid ${T.surfaceBorder};
                     overflow: hidden;
-                    transition: border-color 0.2s;
+                    transition: border-color 0.2s, box-shadow 0.2s;
+                    position: relative;
+                }
+                /* When expanded: subtle color-coded accent stripe matching the
+                   section icon's color, plus a soft glow that ties the card
+                   together with the EV card's hint-row aesthetic. */
+                .section.expanded {
+                    border-color: color-mix(in srgb, var(--section-accent) 40%, ${T.surfaceBorder});
+                    box-shadow: inset 3px 0 0 0 var(--section-accent);
                 }
                 .section:hover { border-color: ${isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)'}; }
 
                 .section-header {
-                    display: flex; align-items: center; gap: 8px;
-                    padding: 12px 14px;
+                    display: flex; align-items: center; gap: 10px;
+                    padding: 13px 14px;
                     cursor: pointer;
                     user-select: none;
                     -webkit-user-select: none;
                     transition: background 0.15s;
                 }
                 .section-header:hover { background: ${T.surfaceHover}; }
-                .section-title-text { font-size: 14px; font-weight: 600; white-space: nowrap; }
+                .section.expanded .section-header {
+                    background: color-mix(in srgb, var(--section-accent) 6%, transparent);
+                }
+                .section-title-text {
+                    font-size: 15px; font-weight: 600;
+                    white-space: nowrap;
+                    letter-spacing: 0.1px;
+                }
                 .section-subtitle {
                     flex: 1;
-                    font-size: 12px;
+                    font-size: 13px;
                     color: var(--secondary-text-color, ${T.textSec});
                     text-align: right;
                     white-space: nowrap;
@@ -499,6 +583,37 @@ class SEMControlCard extends SEMLitBase {
                 }
                 .section-body { padding: 0 14px 14px; }
 
+                /* ── Card-level help toggle (2026-06-06). Tap (?) to reveal
+                   inline one-line setting explanations across all sections
+                   that opt in (Battery, Tariff). ── */
+                .card-help-bar {
+                    display: flex; justify-content: flex-end;
+                    margin: -4px 0 6px;
+                }
+                .help-toggle {
+                    cursor: pointer;
+                    color: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.6;
+                    flex-shrink: 0;
+                    transition: opacity 0.15s, color 0.15s;
+                    user-select: none;
+                    -webkit-user-select: none;
+                    padding: 4px;
+                    border-radius: 50%;
+                }
+                .help-toggle:hover { opacity: 1; }
+                .help-toggle.on { color: ${accent}; opacity: 1; }
+                .stepper-cell { display: flex; flex-direction: column; }
+                .setting-help-text {
+                    font-size: 11px;
+                    line-height: 1.35;
+                    color: var(--secondary-text-color, ${T.textSec});
+                    opacity: 0.75;
+                    padding: 2px 4px 6px 0;
+                    margin-top: -4px;
+                    font-style: italic;
+                }
+
                 /* ── Toggle ── */
                 .toggle-group {
                     border-bottom: 1px solid ${T.surfaceBorder};
@@ -509,7 +624,7 @@ class SEMControlCard extends SEMLitBase {
                     display: flex; align-items: center; justify-content: space-between;
                     padding: 8px 0;
                 }
-                .toggle-label { font-size: 13px; font-weight: 500; }
+                .toggle-label { font-size: 14px; font-weight: 500; }
                 .toggle-track {
                     position: relative;
                     width: 42px; height: 24px;
@@ -538,14 +653,14 @@ class SEMControlCard extends SEMLitBase {
                     border-bottom: 1px solid ${T.surfaceBorder};
                     margin-bottom: 4px;
                 }
-                .ctrl-label { font-size: 13px; font-weight: 500; }
+                .ctrl-label { font-size: 14px; font-weight: 500; }
                 .sem-select {
                     background: ${T.surface};
                     border: 1px solid ${T.surfaceBorder};
                     border-radius: 8px;
                     color: var(--primary-text-color, ${T.text});
                     padding: 6px 10px;
-                    font-size: 13px;
+                    font-size: 14px;
                     font-family: inherit;
                     cursor: pointer;
                     min-width: 120px;
@@ -563,7 +678,7 @@ class SEMControlCard extends SEMLitBase {
                     padding: 7px 0;
                 }
                 .stepper-label {
-                    font-size: 13px; font-weight: 500;
+                    font-size: 14px; font-weight: 500;
                     flex: 1; min-width: 0;
                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                 }
@@ -590,7 +705,7 @@ class SEMControlCard extends SEMLitBase {
                     background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)'};
                 }
                 .stepper-value {
-                    font-size: 13px; font-weight: 600;
+                    font-size: 14px; font-weight: 600;
                     min-width: 60px; text-align: center;
                     font-variant-numeric: tabular-nums;
                 }
@@ -607,7 +722,7 @@ class SEMControlCard extends SEMLitBase {
                     padding: 7px 0;
                 }
                 .readonly-value {
-                    font-size: 13px; font-weight: 600;
+                    font-size: 14px; font-weight: 600;
                     font-variant-numeric: tabular-nums;
                     color: var(--secondary-text-color, ${T.textSec});
                 }
@@ -678,6 +793,15 @@ class SEMControlCard extends SEMLitBase {
                 <div class="observer-warning">
                     <ha-icon icon="mdi:eye-outline" style="--mdc-icon-size:20px;color:#f44336"></ha-icon>
                     <span>${this._t('observer_mode_active')} — ${this._t('observer_mode_readonly')}</span>
+                </div>
+                <div class="card-help-bar">
+                    <ha-icon
+                        class="help-toggle ${this._showHelp ? 'on' : ''}"
+                        icon="${this._showHelp ? 'mdi:help-circle' : 'mdi:help-circle-outline'}"
+                        title="${this._t('zone_help_toggle')}"
+                        @click=${() => this._toggleHelp()}
+                        style="--mdc-icon-size:18px"
+                    ></ha-icon>
                 </div>
                 ${SECTIONS.map(s => this._renderSection(s, sectionRenderers[s.id], T))}
             </div>

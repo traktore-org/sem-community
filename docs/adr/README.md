@@ -33,3 +33,4 @@ _changes_.
 | [0007](0007-real-hass-test-framework.md) | Real-hass test framework adoption and test-layer choice rule | Accepted |
 | [0008](0008-fleet-ev-power-newtype.md) | FleetEvPower newtype as type-system enforcement of fleet-vs-per-charger reads | Accepted |
 | [0009](0009-ev-budget-multi-charger-distribution.md) | Multi-charger EV power distribution is a priority cascade with 60 s hysteresis | Accepted |
+| [0010](0010-evcc-patterns-pilot-state-commit-then-measure.md) | EV control trusts the EVSE pilot state machine and commits before measuring | Proposed |

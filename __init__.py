@@ -25,7 +25,7 @@ from typing import Any, Dict
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant, SupportsResponse, callback
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
@@ -301,6 +301,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             _SEED_KEYS = (
                 "daily_ev_target", "daily_ev_target_max",
                 "ev_target_soc", "ev_target_soc_max",
+                # ``ev_night_initial_current`` is the LEGACY key name at
+                # v3 time — v9→v10 (#441) renames it to ``initial_current``
+                # later in the chain. Keep the legacy spelling here so a
+                # v3 entry's global value is actually picked up.
                 "ev_min_current", "ev_night_initial_current",
                 "ev_kwh_per_100km", "ev_target_type",
                 # #255 Phase 4 — also converted to per-charger
@@ -537,6 +541,146 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
         except Exception as e:
             _LOGGER.error(
                 "Migration from v%s to v8 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
+    if entry.version < 9:
+        try:
+            # v8 → v9 (#440 ADR 0010 #3): every ``ev_chargers`` entry
+            # gets a ``vehicle_min_current`` field defaulting to ``None``
+            # (= "use the loadpoint ``ev_min_current``"). Optional per-car
+            # override letting users record handshake-floor minimums
+            # (e.g. Renault Zoe ~9 A) without raising the SEM-side floor
+            # other chargers in the fleet may want at 6 A. Forward-compat:
+            # existing entries that already have the key are left alone.
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            for bag in (new_data, new_options):
+                chargers = bag.get("ev_chargers")
+                if isinstance(chargers, list):
+                    for c in chargers:
+                        if isinstance(c, dict) and "vehicle_min_current" not in c:
+                            c["vehicle_min_current"] = None
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=9, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v9 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
+    if entry.version < 10:
+        try:
+            # v9 → v10 (#441): rename ``ev_night_initial_current`` to
+            # ``initial_current`` at both the top level (legacy global
+            # key) and on each ``ev_chargers`` entry. The "night" prefix
+            # was misleading — the value is the session-start ramp
+            # current, applied whenever a session begins, not strictly
+            # at nighttime. Display label moves from "Start Amps" to
+            # "Vehicle Start Amps" to group with the new per-vehicle
+            # Min Amps. The old ``number.sem_charger_<id>_night_initial_current``
+            # entity is auto-removed by ``number.py:_cleanup_stale_entities``
+            # on next setup (the description key is renamed so the old
+            # key is no longer in the valid_keys set).
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            for bag in (new_data, new_options):
+                if "ev_night_initial_current" in bag and "initial_current" not in bag:
+                    bag["initial_current"] = bag.pop("ev_night_initial_current")
+                elif "ev_night_initial_current" in bag:
+                    bag.pop("ev_night_initial_current")  # both present — drop stale
+                chargers = bag.get("ev_chargers")
+                if isinstance(chargers, list):
+                    for c in chargers:
+                        if not isinstance(c, dict):
+                            continue
+                        if "ev_night_initial_current" in c and "initial_current" not in c:
+                            c["initial_current"] = c.pop("ev_night_initial_current")
+                        elif "ev_night_initial_current" in c:
+                            c.pop("ev_night_initial_current")
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=10, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v10 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
+    if entry.version < 11:
+        # v10 → v11 (#446): pre-#446 the Configuration tab allowed users to
+        # save ``ev_target_type="soc"`` without configuring a
+        # ``vehicle_soc_entity``. The runtime then silently fell back to
+        # the taper detector's ``estimated_soc`` to compute the kWh
+        # budget — causing the PROD 2026-06-06 IDLE-stuck-at-120 W bug.
+        # Going forward the GUI prevents the bad combination; here we
+        # clean up the existing data so the runtime sees only valid
+        # ``(ev_target_type, vehicle_soc_entity)`` pairs.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            cleaned = 0
+
+            def _scrub(bag: dict) -> int:
+                """Clean up a data/options bag in place. Returns scrubs."""
+                scrubs = 0
+                # Per-charger entries
+                chargers = bag.get("ev_chargers")
+                if isinstance(chargers, list):
+                    for c in chargers:
+                        if not isinstance(c, dict):
+                            continue
+                        if c.get("ev_target_type") == "soc" and not c.get("vehicle_soc_entity"):
+                            c["ev_target_type"] = "kwh"
+                            scrubs += 1
+                # Integration-level legacy default (single-charger installs)
+                if (
+                    bag.get("ev_target_type") == "soc"
+                    and not any(
+                        c.get("vehicle_soc_entity")
+                        for c in (bag.get("ev_chargers") or [])
+                        if isinstance(c, dict)
+                    )
+                ):
+                    bag["ev_target_type"] = "kwh"
+                    scrubs += 1
+                # Legacy field name ``ev_target_mode`` — same treatment
+                if (
+                    bag.get("ev_target_mode") == "soc"
+                    and not any(
+                        c.get("vehicle_soc_entity")
+                        for c in (bag.get("ev_chargers") or [])
+                        if isinstance(c, dict)
+                    )
+                ):
+                    bag["ev_target_mode"] = "kwh"
+                    scrubs += 1
+                return scrubs
+
+            cleaned += _scrub(new_data)
+            cleaned += _scrub(new_options)
+
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=11, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if cleaned:
+                _LOGGER.info(
+                    "#446 cleanup: %d ev_target_type field(s) reset from 'soc' "
+                    "to 'kwh' (no vehicle_soc_entity configured)", cleaned,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v11 failed — keeping original config: %s",
                 entry.version, e,
             )
             return False
@@ -920,7 +1064,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ev_charger_service or ev_current_entity,
             )
 
-            # Also register in load management for peak shedding
+            # Also register in load management for peak shedding (#436:
+            # pass per-charger id + name so each ev_chargers[i] gets its
+            # own ``load_device_<id>`` entry in self._devices instead of
+            # all chargers colliding on a hardcoded ``ev_charger`` key).
             if coordinator._load_manager:
                 await coordinator._load_manager.register_ev_charger(
                     current_control_entity=ev_current_entity,
@@ -928,6 +1075,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     priority=ev_priority,
                     is_critical=False,
                     charger_service=ev_charger_service,
+                    charger_id=charger_id,
+                    charger_name=charger_name,
                 )
 
         # Backward compat: _ev_device points to primary (first) charger
@@ -944,7 +1093,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         # Register heat pump SG-Ready controller if configured
         hp_relay1 = full_config.get("heat_pump_relay1_entity")
         hp_relay2 = full_config.get("heat_pump_relay2_entity")
-        if hp_relay1 and hp_relay2:
+        hp_climate = full_config.get("heat_pump_climate_entity")
+        has_sg_ready = bool(hp_relay1 and hp_relay2)
+        has_climate = bool(hp_climate)
+        # #437: registration was gated on (relay1 AND relay2) — too
+        # strict for non-SG-Ready heat pumps (Nibe, Mitsubishi, Daikin
+        # etc.) that only expose a ``climate`` entity. The controller
+        # itself already handles climate-only mode internally (the
+        # ``_set_sg_ready_state`` ``no_relays_configured`` branch is
+        # exercised by the #421 audit telemetry tests). Widen the gate
+        # to (relays) OR (climate) so climate-only installs get
+        # automatic setpoint boost on surplus.
+        if has_sg_ready or has_climate:
             from .devices.heat_pump_controller import HeatPumpController
             hp_device = HeatPumpController(
                 hass=hass,
@@ -954,7 +1114,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 priority=int(full_config.get("heat_pump_priority", 4)),
                 relay1_entity_id=hp_relay1,
                 relay2_entity_id=hp_relay2,
-                climate_entity_id=full_config.get("heat_pump_climate_entity"),
+                climate_entity_id=hp_climate,
                 power_entity_id=full_config.get("heat_pump_power_sensor"),
                 temperature_entity_id=full_config.get("heat_pump_temperature_sensor"),
                 boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
@@ -962,13 +1122,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 force_on_threshold=float(full_config.get("heat_pump_force_on_threshold", 5000)),
             )
             coordinator._surplus_controller.register_device(hp_device)
+            mode_label = (
+                "SG-Ready+climate" if has_sg_ready and has_climate
+                else "SG-Ready only" if has_sg_ready
+                else "climate-only setpoint boost"
+            )
             _LOGGER.info(
-                "Heat pump registered as SG-Ready device "
-                "(priority %d, relay1=%s, relay2=%s)",
-                hp_device.priority, hp_relay1, hp_relay2,
+                "Heat pump registered (mode=%s, priority=%d, "
+                "relay1=%s, relay2=%s, climate=%s)",
+                mode_label, hp_device.priority,
+                hp_relay1 or "—", hp_relay2 or "—", hp_climate or "—",
             )
         else:
-            _LOGGER.debug("Heat pump not configured (no relay entities)")
+            # #432: promote from DEBUG to INFO so users self-diagnosing
+            # heat-pump setup see this in the standard log view. Mirrors
+            # the success-path INFO above. The detailed config values are
+            # the load-bearing diagnostic — if the user expects the heat
+            # pump to register but sees this line with all None values,
+            # the problem is upstream (config-flow save / migration);
+            # if they see real entity ids, the problem is the entity not
+            # existing in HA.
+            _LOGGER.info(
+                "Heat pump NOT registered: relay1=%r relay2=%r climate=%r "
+                "(needs either BOTH relays OR a climate entity)",
+                hp_relay1, hp_relay2, hp_climate,
+            )
 
     except Exception:
         # Optional feature — keep setup alive so SEM still loads with
@@ -2340,3 +2518,238 @@ async def _async_register_phase_services(
     )
 
     _LOGGER.debug("Phase services registered: register_surplus_device, schedule_appliance")
+
+    # #442: in-dashboard option writes. The Configuration tab card
+    # writes one key at a time via this service rather than walking the
+    # OptionsFlow programmatically — the OptionsFlow has 7 steps and
+    # would require the card to know which step owns each key, which is
+    # the very coupling the dashboard tab is meant to avoid. The HA
+    # public ``config_entries/update`` WebSocket call rejects the
+    # ``options`` field (it's reserved for the OptionsFlow round-trip),
+    # so this service is the supported escape hatch.
+    async def async_set_option(call) -> None:
+        """Write one or more keys into the SEM ConfigEntry options.
+
+        Equivalent to walking the OptionsFlow but without forcing the
+        caller to know which step owns each key. Triggers the standard
+        ``async_update_options`` listener which decides whether a reload
+        is needed (see ``async_update_options`` comment for the skip
+        rules — runtime number/switch tweaks don't reload, structural
+        keys like entity pickers do).
+        """
+        options = call.data.get("options")
+        if not isinstance(options, dict):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="set_option_invalid_payload",
+            )
+        # Identify the SEM entry (single-instance integration).
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="set_option_no_entry",
+            )
+        target_entry = sem_entries[0]
+        if len(sem_entries) > 1:
+            for e in sem_entries:
+                if e.entry_id == call.data.get("entry_id"):
+                    target_entry = e
+                    break
+        # Merge with existing options to preserve unrelated keys, then
+        # update. HA fires the update_listener automatically.
+        merged = {**(target_entry.options or {}), **options}
+        hass.config_entries.async_update_entry(target_entry, options=merged)
+        _LOGGER.debug(
+            "set_option wrote %d key(s) to entry %s: %s",
+            len(options), target_entry.entry_id, list(options.keys()),
+        )
+
+    hass.services.async_register(
+        DOMAIN,
+        "set_option",
+        async_set_option,
+        schema=vol.Schema({
+            vol.Required("options"): dict,
+            vol.Optional("entry_id"): cv.string,
+        }),
+    )
+
+    # #442: Configuration-tab read-back service. HA's public
+    # ``config_entries/get`` WS call strips ``data`` and ``options``
+    # for security, so the dashboard has no way to display current
+    # values for option-only fields (entity pickers, slot toggles,
+    # etc.). This service returns the merged config dict the
+    # OptionsFlow uses internally.
+    async def async_get_config(call):
+        """Return the merged ``data + options`` for the SEM entry.
+
+        Uses ``supports_response=ONLY`` so the frontend can call this
+        via ``hass.callService('solar_energy_management', 'get_config',
+        {}, undefined, undefined, true)`` and receive the dict in the
+        response.
+        """
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return {"config": {}}
+        target = sem_entries[0]
+        requested = call.data.get("entry_id") if call.data else None
+        if requested and len(sem_entries) > 1:
+            for e in sem_entries:
+                if e.entry_id == requested:
+                    target = e
+                    break
+        merged = {**(target.data or {}), **(target.options or {})}
+        return {"config": merged, "entry_id": target.entry_id}
+
+    hass.services.async_register(
+        DOMAIN,
+        "get_config",
+        async_get_config,
+        schema=vol.Schema({
+            vol.Optional("entry_id"): cv.string,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    # #432: per-section Diagnose payload. The Configuration tab's
+    # ``<sem-diagnose-button>`` Lit element calls this service with a
+    # ``section`` name, gets back a focused JSON slice + recent log
+    # lines, then shows it in a modal with a "Copy to clipboard"
+    # button. The user pastes the result on the discussion → maintainer
+    # gets a signal-rich payload instead of the 5 MB diagnostics dump.
+    #
+    # Phase 1 (this beta): supports ``all`` + ``heat_pump`` cleanly.
+    # Other sections return a generic slice for now; their dedicated
+    # slicers land in a follow-up beta. The button shell + modal +
+    # copy flow are wired everywhere so the user surface is consistent.
+    _DIAGNOSE_HEAT_PUMP_KEYS = {
+        "heat_pump_registered", "heat_pump_registration_status",
+        "heat_pump_mode", "heat_pump_sg_ready_state", "heat_pump_solar_boost",
+        "heat_pump_relay1_entity", "heat_pump_relay2_entity",
+        "heat_pump_climate_entity",
+        "heat_pump_relay1_state", "heat_pump_relay2_state",
+        "heat_pump_climate_state",
+    }
+    _DIAGNOSE_HEAT_PUMP_OPTION_KEYS = {
+        "heat_pump_relay1_entity", "heat_pump_relay2_entity",
+        "heat_pump_climate_entity", "heat_pump_boost_offset",
+        "heat_pump_max_setpoint", "heat_pump_priority",
+    }
+    _DIAGNOSE_LOG_NEEDLES = {
+        "all": (),  # no filter — caller wants every recent SEM line
+        "heat_pump": ("heat_pump", "heatpump", "sg_ready", "HeatPumpController"),
+        "ev_chargers": ("ev_control", "ev_charger", "keba", "wallbox", "charger_"),
+        "battery_zones": ("battery_soc", "zone", "battery_priority"),
+        "tariff": ("tariff", "classifier", "percentile", "nordpool", "tibber"),
+        "battery_scheduler": ("battery_charge_scheduler", "precharge"),
+        "load_management": ("load_management", "peak_management"),
+        "forecast": ("forecast"),
+        "notifications": ("notification", "notify"),
+        "advanced": (),
+        "overview": (),
+    }
+
+    async def async_diagnose(call):
+        """Return a focused diagnose payload for a section.
+
+        Used by the Configuration tab Diagnose buttons. The output is a
+        dict ``{section, payload}`` where ``payload`` has three sub-blocks:
+
+          * ``config``  — the configured option keys for the section
+          * ``state``   — the live SEM-published state for the section
+          * ``recent_logs`` — last few SEM log lines matching the section
+
+        The frontend renders this as monospace JSON in a modal with a
+        Copy-to-clipboard button.
+        """
+        section = (call.data.get("section") if call.data else None) or "all"
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return {"section": section, "payload": {"error": "no_sem_entry"}}
+        target = sem_entries[0]
+        merged_cfg = {**(target.data or {}), **(target.options or {})}
+        coordinator = target.runtime_data
+        live = (coordinator.data or {}) if coordinator else {}
+
+        # Slice the config + state to the section's keys
+        if section == "heat_pump":
+            config = {k: merged_cfg.get(k) for k in _DIAGNOSE_HEAT_PUMP_OPTION_KEYS if k in merged_cfg}
+            state = {k: live.get(k) for k in _DIAGNOSE_HEAT_PUMP_KEYS if k in live}
+        elif section == "all" or section == "overview":
+            config = dict(merged_cfg)
+            state = dict(live)
+        else:
+            # Generic prefix-match slice for sections without a
+            # dedicated slicer yet. Better than nothing — RienduPre's
+            # diagnose-button doesn't 404, and the maintainer can
+            # eyeball the relevant fields.
+            prefix_map = {
+                "ev_chargers": ("ev_", "charger_", "daily_ev", "session_"),
+                "battery_zones": ("battery_",),
+                "tariff": ("tariff_", "electricity_"),
+                "battery_scheduler": ("battery_",),
+                "load_management": ("load_management", "peak_", "target_peak"),
+                "forecast": ("forecast_",),
+                "notifications": ("notification", "notify", "mobile_"),
+                "advanced": ("observer_mode", "update_interval", "power_delta",
+                             "current_delta", "soc_delta"),
+            }
+            prefixes = prefix_map.get(section, ())
+            config = {
+                k: v for k, v in merged_cfg.items()
+                if any(k.startswith(p) for p in prefixes)
+            }
+            state = {
+                k: v for k, v in live.items()
+                if any(k.startswith(p) for p in prefixes)
+            }
+
+        # Last ~20 SEM log lines (or filtered) — reuse the diagnostics
+        # log tail logic so behaviour stays consistent.
+        try:
+            from .diagnostics import _get_recent_sem_logs
+            all_logs = await _get_recent_sem_logs(hass)
+        except Exception:  # noqa: BLE001
+            all_logs = []
+        needles = _DIAGNOSE_LOG_NEEDLES.get(section, ())
+        if needles:
+            recent_logs = [
+                ln for ln in all_logs
+                if any(n.lower() in ln.lower() for n in needles)
+            ][-20:]
+        else:
+            recent_logs = list(all_logs)[-20:]
+
+        # Read SEM integration version (best effort)
+        sem_version = "unknown"
+        try:
+            import os as _os
+            import json as _json_v
+            manifest = _os.path.join(_os.path.dirname(__file__), "manifest.json")
+            with open(manifest) as _f:
+                sem_version = _json_v.load(_f).get("version", "unknown")
+        except Exception:  # noqa: BLE001
+            pass
+
+        return {
+            "section": section,
+            "payload": {
+                "version": sem_version,
+                "entry_id": target.entry_id,
+                "entry_version": f"{target.version}.{getattr(target, 'minor_version', 0)}",
+                "config": config,
+                "state": state,
+                "recent_logs": recent_logs,
+            },
+        }
+
+    hass.services.async_register(
+        DOMAIN,
+        "diagnose",
+        async_diagnose,
+        schema=vol.Schema({
+            vol.Optional("section", default="all"): cv.string,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
