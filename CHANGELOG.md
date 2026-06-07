@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2-beta.3] - 07.06.2026
+
+## 🧪 Beta Release
+
+_Hotfix on top of [1.7.2-beta.2](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.2) for the misleading "all day cheap" tariff timeline._
+
+### 🐛 Tariff timeline no longer lies on weekends with missing schedule (Discussion #432)
+
+RienduPre reported on 2026-06-06 (Saturday, Tibber NL dynamic tariff): the bottom "Schema vandaag" timeline showed a solid "Goedkoop" (cheap) bar for all 24 hours — even though the current tariff classifier on the same dashboard correctly showed "Normaal" with 0.3142 EUR/kWh between the configured 0.1/0.3 cheap/expensive thresholds.
+
+Root cause: the schedule-card's JS fallback baked a CH-shape HT/NT schedule whenever `schedule_today` wasn't published, and on weekends that fallback was `[{0..24h, cheap}]` — so any user whose provider failed to populate the schedule attribute would see a 24h-cheap lie on Sat/Sun and a misleading HT/NT shape on weekdays.
+
+- New behaviour: when `schedule_today` is unavailable, mirror the current `tariff_price_level` across the whole day so the colour matches reality. (by @traktore-org)
+- If neither is available, default to `normal` (neutral colour) rather than `cheap`.
+- The underlying gap — provider not populating `schedule_today` — is a separate diagnostic question per-install (could be Tibber price forecast not reaching SEM's cache, missing `tomorrow_prices` attribute, etc.). This fix stops the dashboard from actively misleading users while that's investigated case-by-case.
+
 # [1.7.2-beta.2] - 07.06.2026
 
 ## 🧪 Beta Release
