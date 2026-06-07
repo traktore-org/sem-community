@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _First beta on top of [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1) stable._
 
-### 🐛 EV session-energy pass-through + stale-global cleanup (#135)
+### 🐛 EV session-energy pass-through + stale-global cleanup (#449)
 
 User report on PROD 2026-06-07: KEBA's `sensor.keba_p30_session_energy` showed **14.61 kWh** but the SEM-published `sensor.sem_charger_ev_charger_session_energy` showed only **0.97 kWh**. Structural disagreement — SEM integrates its own session counter internally (load-bearing for solar-share / cost calcs) while KEBA's is a hardware truth that survives reloads + midnight rollovers.
 
@@ -25,7 +25,7 @@ User report on PROD 2026-06-07: KEBA's `sensor.keba_p30_session_energy` showed *
 - **v11 → v12 schema migration.** Drops the stale top-level `ev_session_energy_sensor` key left over from the v2 → v3 multi-charger migration. The per-charger value in `ev_chargers[].ev_session_energy_sensor` has been canonical since v3; the top-level copy was harmless but on PROD it pointed at the wrong sensor (`keba_p30_energy_target` — a user setpoint, always 0) and confused diagnostics. Defensive: only drops the top-level when at least one charger has its own value. (by @traktore-org in #135)
 - **`config_flow.py` `VERSION` bumped 11 → 12.**
 
-### 🌍 Chart "Today" window now uses HA's timezone (#136)
+### 🌍 Chart "Today" window now uses HA's timezone (#450)
 
 `sem-chart-card.js:_setDefaultPeriod` previously used `new Date(now.getFullYear(), now.getMonth(), now.getDate())` to compute "Today's midnight" — but that's the **browser's** local midnight, not HA's. When the browser timezone differs from the HA server's (Companion app on a phone roaming across timezones, desktop on a different DST schedule), the "Today" window shifted by 1+ hours. User-reported as the chart timing being "off like an hour or so".
 
@@ -46,13 +46,15 @@ Dedicated slicers landed for: **EV chargers** (per-charger nested entries via pr
 
 ### 📦 Schema migration
 
-- **v11 → v12** (#135) — drops stale top-level `ev_session_energy_sensor` when at least one charger has its own value. No data loss; per-charger value remains canonical.
+- **v11 → v12** (#449) — drops stale top-level `ev_session_energy_sensor` when at least one charger has its own value. No data loss; per-charger value remains canonical.
 
 # [1.7.1] - 07.06.2026
 
 ## 🎉 Stable Release
 
 _Consolidates the 1.7.1-beta.1 through 1.7.1-beta.17 chain into a single stable cut. Soaked overnight on HA-PROD on real hardware (Huawei SUN2000 + LUNA2000 + KEBA P30); no regression vs 1.7.0._
+
+> **Note — issue-reference correction (2026-06-07):** the entry below cites `#446` for the EV `ev_target_type` / estimated_soc fix, but that number is actually an open issue titled "Extra Dutch translations" (unrelated). The retroactive issue for the fix is [#451](https://github.com/traktore-org/sem-community/issues/451). Same applies for the `#135` / `#136` references that originally appeared in the 1.7.2-beta.1 entry — corrected to [#449](https://github.com/traktore-org/sem-community/issues/449) and [#450](https://github.com/traktore-org/sem-community/issues/450). Going forward, GitHub issues are filed BEFORE the fix lands so commit messages cite real numbers.
 
 ### 🚀 Headline features
 
