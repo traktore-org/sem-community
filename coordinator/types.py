@@ -1056,6 +1056,17 @@ class SEMData:
             "heat_pump_relay1_state": self.heat_pump.heat_pump_relay1_state,
             "heat_pump_relay2_state": self.heat_pump.heat_pump_relay2_state,
             "heat_pump_climate_state": self.heat_pump.heat_pump_climate_state,
+            # v1.7.2-beta.2: #421 audit's runtime path recorders.
+            # Internal Python attrs on HeatPumpController, now wired
+            # through the dataclass so the diagnose surface + any
+            # future "Why did the heat pump (not) activate?" UI can
+            # show concrete decision branches instead of black-box state.
+            "heat_pump_activation_path": self.heat_pump.heat_pump_activation_path,
+            "heat_pump_deactivation_path": self.heat_pump.heat_pump_deactivation_path,
+            "heat_pump_relay_path": self.heat_pump.heat_pump_relay_path,
+            "heat_pump_temperature_reading_path": self.heat_pump.heat_pump_temperature_reading_path,
+            "heat_pump_offpeak_path": self.heat_pump.heat_pump_offpeak_path,
+            "heat_pump_current_temperature": self.heat_pump.heat_pump_current_temperature,
 
             # PV analytics (Phase 5)
             "pv_daily_specific_yield": self.pv_analytics.pv_daily_specific_yield,
