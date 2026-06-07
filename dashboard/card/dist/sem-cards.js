@@ -6478,18 +6478,21 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
                 .btn:hover { background: ${t.surfaceHover}; border-color: ${e}; }
                 .modal-backdrop {
-                    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+                    position: fixed; inset: 0;
+                    background: rgba(0,0,0,0.72);
+                    backdrop-filter: blur(6px);
+                    -webkit-backdrop-filter: blur(6px);
                     display: flex; align-items: center; justify-content: center;
                     z-index: 9999; padding: 20px;
                 }
                 .modal {
-                    background: ${t.surface};
+                    background: var(--ha-card-background, var(--card-background-color, #1a1d24));
                     border: 1px solid ${t.surfaceBorder};
                     border-radius: 14px; padding: 18px;
                     max-width: 800px; width: 100%;
                     max-height: 80vh; overflow: hidden;
                     display: flex; flex-direction: column;
-                    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+                    box-shadow: 0 12px 40px rgba(0,0,0,0.65);
                     color: var(--primary-text-color, ${t.text});
                     font-family: 'Segoe UI','Roboto',sans-serif;
                 }
