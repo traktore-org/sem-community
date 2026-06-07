@@ -2264,8 +2264,19 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         # Load semLocalize via add_extra_js_url — must be available before cards
         add_extra_js_url(hass, localize_url)
 
-        # Legacy base URLs to clean up (migrated to single Lit bundle)
+        # Legacy base URLs to clean up (migrated to single Lit bundle, OR
+        # — for ``sem-localize.js`` — moved to the ``add_extra_js_url``
+        # channel which is the correct one for non-card helper JS that
+        # must be global before cards load). #448: PROD storage on
+        # 2026-06-07 still had an orphan Lovelace resource entry for
+        # ``sem-localize.js`` pinned at ``?v=1.7.1-beta.11-fca70f78`` — it
+        # was never bumped because nothing in the current registration
+        # code touched it, and the service worker happily served the
+        # stale beta.11 file. Result: every user saw raw ``config_*``
+        # translation keys for everything added in beta.12+. Listing the
+        # base URL here triggers the delete-orphan path at line ~2335.
         _legacy_bases = [
+            f"{static_path}/card/sem-localize.js",
             f"{static_path}/card/sem-shared.js",
             f"{static_path}/card/sem-reactive-base.js",
             f"{static_path}/card/sem-load-priority-card.js",
