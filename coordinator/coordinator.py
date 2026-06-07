@@ -2088,6 +2088,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Tariff schedule for dashboard card (#25)
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
                 result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
+                # v1.7.2-beta.3 (2026-06-07): diagnose-only counter so
+                # users with a misclassifying schedule (RienduPre,
+                # Tibber NL, Discussion #432) can paste back the
+                # distribution + source-entity shape. The full price
+                # array isn't published (would explode coordinator.data
+                # for any cache > 24 points) — just the counts.
+                try:
+                    _prices_for_diag = getattr(
+                        self._tariff_provider, "_prices_cache", None,
+                    ) or []
+                    _today_for_diag = dt_util.now().date()
+                    _today_prices = [
+                        p for p in _prices_for_diag
+                        if p.timestamp.date() == _today_for_diag
+                    ]
+                    if _today_prices:
+                        _level_counts: Dict[str, int] = {}
+                        for p in _today_prices:
+                            k = p.level.value if hasattr(p.level, "value") else str(p.level)
+                            _level_counts[k] = _level_counts.get(k, 0) + 1
+                        result["tariff_today_prices_count"] = len(_today_prices)
+                        result["tariff_today_level_counts"] = _level_counts
+                        result["tariff_today_first_price"] = round(_today_prices[0].price, 4)
+                        result["tariff_today_last_price"] = round(_today_prices[-1].price, 4)
+                    else:
+                        result["tariff_today_prices_count"] = 0
+                        result["tariff_today_level_counts"] = {}
+                    # Parser diag: which attribute matched + the
+                    # sample interval. Both are key for diagnosing
+                    # 15-min vs hourly NL Tibber/ENTSO-E shapes.
+                    result["tariff_parsed_attribute"] = getattr(
+                        self._tariff_provider, "_last_parsed_attribute", None,
+                    )
+                    result["tariff_parsed_count"] = getattr(
+                        self._tariff_provider, "_last_parsed_count", None,
+                    )
+                    result["tariff_parsed_interval_seconds"] = getattr(
+                        self._tariff_provider, "_last_parsed_gap_seconds", None,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    _LOGGER.debug("Tariff diag-counts failed: %s", e)
 
             # Dynamic price visibility (#257): surface the upcoming hourly price
             # curve + today's summary so the price card can render a live chart.

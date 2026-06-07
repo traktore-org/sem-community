@@ -2764,6 +2764,17 @@ async def _async_register_phase_services(
         "tariff_today_min_price", "tariff_today_max_price", "tariff_today_avg_price",
         "tariff_next_cheap_start", "tariff_next_cheap_end",
         "tariff_upcoming", "tariff_schedule_today",
+        # v1.7.2-beta.3: classifier visibility for the "all day cheap"
+        # class of misclassifications. ``tariff_today_prices_count``
+        # of 0 means SEM isn't seeing per-hour data — JS card will
+        # fall back to mirroring the current price level for the chart.
+        # ``tariff_parsed_interval_seconds`` exposes 15-min vs hourly
+        # detection so we can spot a NL Tibber Pulse / ENTSO-E shape
+        # mismatch (RienduPre, Discussion #432).
+        "tariff_today_prices_count", "tariff_today_level_counts",
+        "tariff_today_first_price", "tariff_today_last_price",
+        "tariff_parsed_attribute", "tariff_parsed_count",
+        "tariff_parsed_interval_seconds",
     }
     # Battery zones
     _DIAGNOSE_BATTERY_ZONES_OPTION = {

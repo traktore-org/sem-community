@@ -15,17 +15,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 🧪 Beta Release
 
-_Hotfix on top of [1.7.2-beta.2](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.2) for the misleading "all day cheap" tariff timeline._
+_Hotfix on top of [1.7.2-beta.2](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.2). Tariff timeline + 15-min provider support + diagnostic surface._
 
 ### 🐛 Tariff timeline no longer lies on weekends with missing schedule (Discussion #432)
 
-RienduPre reported on 2026-06-06 (Saturday, Tibber NL dynamic tariff): the bottom "Schema vandaag" timeline showed a solid "Goedkoop" (cheap) bar for all 24 hours — even though the current tariff classifier on the same dashboard correctly showed "Normaal" with 0.3142 EUR/kWh between the configured 0.1/0.3 cheap/expensive thresholds.
+RienduPre reported (2026-06-06, Saturday, Tibber NL dynamic): the bottom "Schema vandaag" timeline showed a solid "Goedkoop" bar for all 24 hours — but the current-classifier card above it correctly showed "Normaal" with 0.3142 EUR/kWh between the configured 0.1/0.3 thresholds. Two code paths, one was lying.
 
-Root cause: the schedule-card's JS fallback baked a CH-shape HT/NT schedule whenever `schedule_today` wasn't published, and on weekends that fallback was `[{0..24h, cheap}]` — so any user whose provider failed to populate the schedule attribute would see a 24h-cheap lie on Sat/Sun and a misleading HT/NT shape on weekdays.
+Root cause: `_getTariffSchedule()` in `sem-schedule-card.js` had a hardcoded fallback when `schedule_today` wasn't published:
+- Weekday → `[NT 0-7, HT 7-20, NT 20-24]` (CH-shape, wrong for NL)
+- Weekend → `[{0..24h, cheap}]` (just labels the whole day cheap)
 
-- New behaviour: when `schedule_today` is unavailable, mirror the current `tariff_price_level` across the whole day so the colour matches reality. (by @traktore-org)
-- If neither is available, default to `normal` (neutral colour) rather than `cheap`.
-- The underlying gap — provider not populating `schedule_today` — is a separate diagnostic question per-install (could be Tibber price forecast not reaching SEM's cache, missing `tomorrow_prices` attribute, etc.). This fix stops the dashboard from actively misleading users while that's investigated case-by-case.
+That weekend branch is exactly what RienduPre's Saturday screenshot showed.
+
+- **New JS fallback**: when `schedule_today` is unavailable, mirror the current `tariff_price_level` across the day instead of pretending we know per-hour data.
+- **Visual fallback indicator**: fallback blocks now render at reduced opacity (35%) with a dashed border — users can see at a glance the chart is showing best-effort, not real data. (by @traktore-org)
+- Tooltip changes to `<level> (no per-hour data — showing current level)` so the lie is structurally impossible.
+
+### 🌍 Parser now accepts 15-min ENTSO-E + Tibber Pulse shapes (Discussion #432)
+
+RienduPre's prompt — *"his tariff changes every 15 min"* — sent us deep into the parser. Two real gaps:
+
+1. **ENTSO-E attribute shape**: Day Ahead Prices integration uses `prices` (singular) array with `time` + `price` fields. The old parser only checked `prices_today` / `prices_tomorrow` / `today` / `tomorrow` with `start` / `startsAt`. Now adds `prices` + `time` + `hour` to the attribute / timestamp vocabulary.
+2. **15-min granularity gap detection**: the parser now records the detected sample interval. Tibber Pulse 15-min API + ENTSO-E 15-min zones (NL, DE) both produce 96 entries/day; the diagnostic surface now reports `tariff_parsed_interval_seconds: 900` so a 15-min vs hourly mismatch is visible at a glance.
+
+5 new tests pin these shapes — Tibber Pulse 96-entry, ENTSO-E `prices` array, `hour` key for template sensors, empty-attribute zero-diag verification, 15-min block-collapsing into chart blocks.
+
+### 🩺 New tariff diagnose fields (#448 follow-up)
+
+The `tariff` diagnose section now exposes WHAT THE PARSER ACTUALLY SAW:
+
+- `tariff_parsed_attribute` — which attribute key matched (e.g. `today`, `prices`, `raw_today`). `null` if nothing matched.
+- `tariff_parsed_count` — total PricePoints parsed from the entity.
+- `tariff_parsed_interval_seconds` — 900 for 15-min, 3600 for hourly, etc.
+- `tariff_today_prices_count` — points for today specifically (after timezone filtering).
+- `tariff_today_level_counts` — distribution: `{"cheap": 25, "normal": 50, "expensive": 21}`.
+- `tariff_today_first_price` / `tariff_today_last_price` — sanity-check the parsed values.
+
+For RienduPre / anyone hitting "all day cheap": hit the 🩺 Diagnose button on Tariff & pricing, paste the JSON. The fields tell us in one read whether (a) parser didn't recognise the attribute shape, (b) shape matched but timestamps in wrong timezone, (c) shape matched and prices are genuinely all cheap, or (d) percentile mode hit a flat-distribution fallback.
+
+### Research that informed the fix
+
+- [Home Assistant Tibber integration](https://www.home-assistant.io/integrations/tibber/) — official `today` / `tomorrow` with `startsAt` + `total`. 15-min native as of HA 2025.10.0.
+- [JaccoR/hass-entso-e](https://github.com/JaccoR/hass-entso-e) — uses `prices` (singular) + `time` + `price`. 15-min for NL/DE zones.
+- [jpawlowski/hass.tibber_prices](https://github.com/jpawlowski/hass.tibber_prices) — 100+ sensors, quarter-hourly precision.
+- [OdynBrouwer/HomeAssistantTibber](https://github.com/OdynBrouwer/HomeAssistantTibber) — Advanced fork with quarter-hourly + NL solar support.
+
+3255 tests pass, 0 fail.
 
 # [1.7.2-beta.2] - 07.06.2026
 
