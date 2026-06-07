@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-07T06:46:42.336231+00:00
+// Generated: 2026-06-07T19:28:50.401550+00:00
 const _semTranslations = {
   "en": {
     "charging": "Charging",
@@ -1008,7 +1008,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "de": {
     "charging": "Laden",
@@ -2017,7 +2020,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Sammle Diagnose…",
     "config_diagnose_copy": "In Zwischenablage kopieren",
-    "config_diagnose_clipboard_failed": "Zwischenablage fehlgeschlagen — Text manuell markieren."
+    "config_diagnose_clipboard_failed": "Zwischenablage fehlgeschlagen — Text manuell markieren.",
+    "charger_status": "Ladestation-Status",
+    "forecast_source": "Prognosequelle",
+    "load_management_status": "Lastmanagement-Status"
   },
   "fr": {
     "charging": "En charge",
@@ -3026,7 +3032,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "es": {
     "charging": "Cargando",
@@ -4035,7 +4044,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "it": {
     "charging": "In carica",
@@ -5044,7 +5056,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "nl": {
     "charging": "Laden",
@@ -6053,7 +6068,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "cs": {
     "charging": "Nabíjení",
@@ -7062,7 +7080,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "da": {
     "charging": "Oplader",
@@ -8071,7 +8092,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "fi": {
     "charging": "Lataus",
@@ -9080,7 +9104,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "hu": {
     "charging": "Töltés",
@@ -10089,7 +10116,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "no": {
     "charging": "Lader",
@@ -11098,7 +11128,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "pl": {
     "charging": "Ładowanie",
@@ -12107,7 +12140,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "pt": {
     "charging": "A carregar",
@@ -13116,7 +13152,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "ro": {
     "charging": "Încărcare",
@@ -14125,7 +14164,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   },
   "sv": {
     "charging": "Laddar",
@@ -15134,7 +15176,10 @@ const _semTranslations = {
     "config_diagnose": "Diagnose",
     "config_diagnose_busy": "Collecting diagnostics…",
     "config_diagnose_copy": "Copy to clipboard",
-    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually."
+    "config_diagnose_clipboard_failed": "Clipboard write failed — select the text manually.",
+    "charger_status": "Charger status",
+    "forecast_source": "Forecast source",
+    "load_management_status": "Load management status"
   }
 };
 
