@@ -1929,6 +1929,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 else:
                     result[f"charger_{cid}_session_energy"] = 0.0
                     result[f"charger_{cid}_session_solar_share"] = 0.0
+                # #135: pass-through of the charger's own session-energy
+                # sensor (e.g. KEBA's ``sensor.keba_p30_session_energy``).
+                # Surfaces the charger's truth alongside SEM's internal
+                # integration so users can compare on the dashboard. The
+                # SEM-integrated value above stays load-bearing for the
+                # solar-share / cost calculations.
+                _per_charger_cfg = next(
+                    (c for c in (self.config.get("ev_chargers") or [])
+                     if c.get("id") == cid), {}
+                )
+                _ext_sensor_id = _per_charger_cfg.get("ev_session_energy_sensor", "")
+                _ext_value = 0.0
+                if _ext_sensor_id:
+                    _state = self.hass.states.get(_ext_sensor_id)
+                    if _state and _state.state not in ("unavailable", "unknown", None):
+                        try:
+                            _ext_value = float(_state.state)
+                            # Auto-convert Wh → kWh if the source reports in Wh.
+                            _unit = _state.attributes.get("unit_of_measurement", "").lower()
+                            if _unit == "wh":
+                                _ext_value = _ext_value / 1000.0
+                        except (ValueError, TypeError):
+                            _ext_value = 0.0
+                result[f"charger_{cid}_session_energy_external"] = round(_ext_value, 2)
                 # Per-charger taper detection (#138)
                 taper_det = self._ev_taper_detectors.get(cid)
                 if taper_det:

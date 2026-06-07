@@ -685,6 +685,53 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 12:
+        # v11 → v12 (#135): drop the stale top-level ``ev_session_energy_sensor``
+        # left over from the v2 → v3 multi-charger migration. The per-charger
+        # ``ev_chargers[].ev_session_energy_sensor`` has been the canonical
+        # source since v3; the top-level copy was kept for back-compat but
+        # is never read by any decision path. PROD 2026-06-07 surfaced a
+        # case where it pointed at the wrong sensor (``keba_p30_energy_target``
+        # — the user setpoint, always 0) and confused diagnostics. Drop it.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            # Combine chargers from BOTH bags — the chargers list lives in
+            # one or the other depending on install age, and the stale
+            # top-level key can live in either too. We need the union when
+            # deciding whether to drop.
+            chargers_union: list = []
+            for bag in (new_data, new_options):
+                bag_chargers = bag.get("ev_chargers")
+                if isinstance(bag_chargers, list):
+                    chargers_union.extend(c for c in bag_chargers if isinstance(c, dict))
+            any_per_charger = any(
+                c.get("ev_session_energy_sensor") for c in chargers_union
+            )
+            cleaned = 0
+            if any_per_charger:
+                for bag in (new_data, new_options):
+                    if "ev_session_energy_sensor" in bag:
+                        bag.pop("ev_session_energy_sensor", None)
+                        cleaned += 1
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=12, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if cleaned:
+                _LOGGER.info(
+                    "#135 cleanup: dropped stale top-level "
+                    "ev_session_energy_sensor from %d bag(s); per-charger "
+                    "value remains canonical", cleaned,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v12 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -2623,7 +2670,14 @@ async def _async_register_phase_services(
     # Other sections return a generic slice for now; their dedicated
     # slicers land in a follow-up beta. The button shell + modal +
     # copy flow are wired everywhere so the user surface is consistent.
-    _DIAGNOSE_HEAT_PUMP_KEYS = {
+    # Per-section diagnose slicers. Each section's tuple is
+    # ``(state_keys, option_keys_or_prefix_predicate)``. State keys are
+    # SEM-published ``coordinator.data`` keys. Option key predicates
+    # are either an explicit set or a callable that selects keys from
+    # ``merged_cfg``. Heat-pump uses the explicit-set form because it
+    # has a small, stable surface; other sections use predicates so
+    # they pick up per-charger entries inside ``ev_chargers`` lists.
+    _DIAGNOSE_HEAT_PUMP_STATE = {
         "heat_pump_registered", "heat_pump_registration_status",
         "heat_pump_mode", "heat_pump_sg_ready_state", "heat_pump_solar_boost",
         "heat_pump_relay1_entity", "heat_pump_relay2_entity",
@@ -2631,11 +2685,112 @@ async def _async_register_phase_services(
         "heat_pump_relay1_state", "heat_pump_relay2_state",
         "heat_pump_climate_state",
     }
-    _DIAGNOSE_HEAT_PUMP_OPTION_KEYS = {
+    _DIAGNOSE_HEAT_PUMP_OPTION = {
         "heat_pump_relay1_entity", "heat_pump_relay2_entity",
         "heat_pump_climate_entity", "heat_pump_boost_offset",
         "heat_pump_max_setpoint", "heat_pump_priority",
     }
+    # EV chargers — fleet aggregates + per-charger nested entries
+    _DIAGNOSE_EV_OPTION_TOP = {
+        "ev_chargers",  # whole list — most useful for diagnose
+        "ev_min_current", "ev_max_current", "ev_phases", "ev_voltage",
+        "daily_ev_target", "daily_ev_target_max",
+        "ev_target_type", "ev_target_soc", "ev_target_soc_max",
+        "ev_battery_capacity_kwh", "ev_kwh_per_100km",
+        "ev_enable_delay_seconds", "ev_disable_delay_seconds",
+    }
+    _DIAGNOSE_EV_STATE_PREFIXES = ("ev_", "charger_", "daily_ev", "session_")
+    # Tariff — pricing config + classifier diagnostics
+    _DIAGNOSE_TARIFF_OPTION = {
+        "tariff_mode", "tariff_classification_mode",
+        "dynamic_tariff_entity", "dynamic_forecast_entity", "dynamic_feedin_entity",
+        "electricity_import_rate", "electricity_off_peak_rate",
+        "electricity_export_rate", "demand_charge_rate",
+        "cheap_price_threshold", "expensive_price_threshold",
+    }
+    _DIAGNOSE_TARIFF_STATE = {
+        "tariff_provider", "tariff_is_dynamic", "tariff_currency",
+        "tariff_price_level", "tariff_classifier_path",
+        "tariff_current_import_rate", "tariff_current_export_rate",
+        "tariff_today_min_price", "tariff_today_max_price", "tariff_today_avg_price",
+        "tariff_next_cheap_start", "tariff_next_cheap_end",
+        "tariff_upcoming", "tariff_schedule_today",
+    }
+    # Battery zones
+    _DIAGNOSE_BATTERY_ZONES_OPTION = {
+        "battery_priority_soc", "battery_buffer_soc", "battery_auto_start_soc",
+        "battery_assist_floor_soc", "battery_minimum_soc", "battery_resume_soc",
+        "battery_capacity_kwh",
+    }
+    _DIAGNOSE_BATTERY_ZONES_STATE = {
+        "battery_soc", "battery_power", "battery_charge_power",
+        "battery_discharge_power", "battery_status",
+        "battery_health_score", "battery_temperature",
+    }
+    # Battery scheduler
+    _DIAGNOSE_BATTERY_SCHEDULER_OPTION = {
+        "battery_charge_scheduler_enabled", "battery_capacity_kwh",
+        "battery_max_charge_power_w", "battery_roundtrip_efficiency",
+        "battery_cycle_cost", "battery_precharge_trigger_hour",
+        "battery_max_target_soc", "battery_min_deficit_kwh",
+        "battery_pessimism_weight", "battery_force_charge_negative_price",
+    }
+    _DIAGNOSE_BATTERY_SCHEDULER_STATE = {
+        "battery_scheduler_active", "battery_scheduler_target_soc",
+        "battery_scheduler_target_kwh", "battery_scheduler_window_start",
+        "battery_scheduler_window_end", "battery_scheduler_reason",
+    }
+    # Load management
+    _DIAGNOSE_LOAD_MGMT_OPTION = {
+        "load_management_enabled", "target_peak_limit",
+        "warning_peak_level", "emergency_peak_level",
+        "critical_device_protection", "maximum_grid_import",
+    }
+    _DIAGNOSE_LOAD_MGMT_STATE = {
+        "load_management_status", "load_management_recommendation",
+        "loads_currently_shed", "controllable_devices_count",
+        "consecutive_peak_15min", "monthly_consecutive_peak",
+        "current_vs_peak_percentage", "available_load_reduction",
+    }
+    # Forecast
+    _DIAGNOSE_FORECAST_OPTION = {
+        "forecast_dampening_factor",  # the one config knob that exists
+    }
+    _DIAGNOSE_FORECAST_STATE = {
+        "forecast_today_kwh", "forecast_tomorrow_kwh",
+        "forecast_source", "forecast_available",
+        "forecast_dampening_factor", "forecast_remaining_today_kwh",
+        "best_surplus_window",
+    }
+    # Notifications
+    _DIAGNOSE_NOTIFICATIONS_OPTION = {
+        "enable_charger_notifications", "enable_mobile_notifications",
+        "mobile_notification_service",
+    }
+    _DIAGNOSE_NOTIFICATIONS_STATE = set()  # notifications are fire-and-forget; no state surface
+    # Advanced
+    _DIAGNOSE_ADVANCED_OPTION = {
+        "observer_mode", "update_interval", "power_delta",
+        "current_delta", "soc_delta", "minimum_solar_power",
+    }
+    _DIAGNOSE_ADVANCED_STATE = {
+        "observer_mode", "update_interval", "power_delta",
+        "current_delta", "soc_delta", "minimum_solar_power",
+        "last_update", "delta_triggered",
+    }
+
+    _DIAGNOSE_SLICERS = {
+        "heat_pump": (_DIAGNOSE_HEAT_PUMP_OPTION, _DIAGNOSE_HEAT_PUMP_STATE),
+        "ev_chargers": (_DIAGNOSE_EV_OPTION_TOP, _DIAGNOSE_EV_STATE_PREFIXES),
+        "tariff": (_DIAGNOSE_TARIFF_OPTION, _DIAGNOSE_TARIFF_STATE),
+        "battery_zones": (_DIAGNOSE_BATTERY_ZONES_OPTION, _DIAGNOSE_BATTERY_ZONES_STATE),
+        "battery_scheduler": (_DIAGNOSE_BATTERY_SCHEDULER_OPTION, _DIAGNOSE_BATTERY_SCHEDULER_STATE),
+        "load_management": (_DIAGNOSE_LOAD_MGMT_OPTION, _DIAGNOSE_LOAD_MGMT_STATE),
+        "forecast": (_DIAGNOSE_FORECAST_OPTION, _DIAGNOSE_FORECAST_STATE),
+        "notifications": (_DIAGNOSE_NOTIFICATIONS_OPTION, _DIAGNOSE_NOTIFICATIONS_STATE),
+        "advanced": (_DIAGNOSE_ADVANCED_OPTION, _DIAGNOSE_ADVANCED_STATE),
+    }
+
     _DIAGNOSE_LOG_NEEDLES = {
         "all": (),  # no filter — caller wants every recent SEM line
         "heat_pump": ("heat_pump", "heatpump", "sg_ready", "HeatPumpController"),
@@ -2644,7 +2799,7 @@ async def _async_register_phase_services(
         "tariff": ("tariff", "classifier", "percentile", "nordpool", "tibber"),
         "battery_scheduler": ("battery_charge_scheduler", "precharge"),
         "load_management": ("load_management", "peak_management"),
-        "forecast": ("forecast"),
+        "forecast": ("forecast",),
         "notifications": ("notification", "notify"),
         "advanced": (),
         "overview": (),
@@ -2672,38 +2827,30 @@ async def _async_register_phase_services(
         coordinator = target.runtime_data
         live = (coordinator.data or {}) if coordinator else {}
 
-        # Slice the config + state to the section's keys
-        if section == "heat_pump":
-            config = {k: merged_cfg.get(k) for k in _DIAGNOSE_HEAT_PUMP_OPTION_KEYS if k in merged_cfg}
-            state = {k: live.get(k) for k in _DIAGNOSE_HEAT_PUMP_KEYS if k in live}
-        elif section == "all" or section == "overview":
+        # Slice the config + state to the section's keys via the
+        # dedicated-slicer map. ``state`` is either an explicit key set
+        # OR a tuple of prefixes (used by ``ev_chargers`` where the
+        # state surface is broad — every per-charger sensor key starts
+        # with ``charger_<id>_``).
+        if section == "all" or section == "overview":
             config = dict(merged_cfg)
             state = dict(live)
+        elif section in _DIAGNOSE_SLICERS:
+            opt_keys, state_keys = _DIAGNOSE_SLICERS[section]
+            config = {k: merged_cfg.get(k) for k in opt_keys if k in merged_cfg}
+            if isinstance(state_keys, tuple):
+                # Prefix tuple — match any key starting with one of them.
+                state = {
+                    k: v for k, v in live.items()
+                    if any(k.startswith(p) for p in state_keys)
+                }
+            else:
+                state = {k: live.get(k) for k in state_keys if k in live}
         else:
-            # Generic prefix-match slice for sections without a
-            # dedicated slicer yet. Better than nothing — RienduPre's
-            # diagnose-button doesn't 404, and the maintainer can
-            # eyeball the relevant fields.
-            prefix_map = {
-                "ev_chargers": ("ev_", "charger_", "daily_ev", "session_"),
-                "battery_zones": ("battery_",),
-                "tariff": ("tariff_", "electricity_"),
-                "battery_scheduler": ("battery_",),
-                "load_management": ("load_management", "peak_", "target_peak"),
-                "forecast": ("forecast_",),
-                "notifications": ("notification", "notify", "mobile_"),
-                "advanced": ("observer_mode", "update_interval", "power_delta",
-                             "current_delta", "soc_delta"),
-            }
-            prefixes = prefix_map.get(section, ())
-            config = {
-                k: v for k, v in merged_cfg.items()
-                if any(k.startswith(p) for p in prefixes)
-            }
-            state = {
-                k: v for k, v in live.items()
-                if any(k.startswith(p) for p in prefixes)
-            }
+            # Unknown section name — return empty payload rather than
+            # the whole dump (which the user gets via section=all).
+            config = {}
+            state = {}
 
         # Last ~20 SEM log lines (or filtered) — reuse the diagnostics
         # log tail logic so behaviour stays consistent.

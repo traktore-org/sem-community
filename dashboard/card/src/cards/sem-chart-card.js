@@ -234,6 +234,76 @@ class SEMChartCard extends SEMLitBase {
     }
 
     // ── Period handling ──
+
+    /**
+     * Compute "start of day" in HA's configured timezone, not the
+     * browser's. Returns a Date pointing at the SAME absolute moment
+     * (so it's safe to serialise to ISO and send to the history API);
+     * just the wall-clock interpretation matches HA's local time.
+     *
+     * #136 fix: pre-#136 ``new Date(now.getFullYear(), getMonth(), getDate())``
+     * built the date in browser-local time. When HA's server timezone
+     * differs (HA Companion app on a phone roaming across timezones,
+     * or a desktop on a different DST schedule than the server) the
+     * resulting "Today" window shifted by 1+ hours.
+     */
+    _startOfDayInHaTz(now) {
+        const haTz = this._hass?.config?.time_zone;
+        if (!haTz) {
+            // Fallback to browser-local (pre-#136 behaviour) when hass
+            // hasn't loaded a timezone yet.
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        }
+        try {
+            // Format ``now`` in HA's timezone to get year/month/day in
+            // that zone. Then ask for that wall-clock midnight as a UTC
+            // offset string to construct an absolute Date.
+            const fmt = new Intl.DateTimeFormat('en-US', {
+                timeZone: haTz, year: 'numeric', month: '2-digit', day: '2-digit',
+            });
+            const parts = Object.fromEntries(
+                fmt.formatToParts(now).map(p => [p.type, p.value])
+            );
+            // Compose an ISO-ish string in HA's tz, then reparse via the
+            // tz-aware DateTimeFormat by iterating offsets until we hit
+            // midnight-in-HA-tz. Simpler: use a fixed-offset trick via
+            // a probe Date round-trip.
+            //
+            // We construct a Date by serialising "YYYY-MM-DDT00:00:00"
+            // in HA's tz to UTC via a small offset-search. The reliable
+            // primitive is: take a Date, format it in haTz, compute the
+            // delta between what UTC says and what haTz says, and apply.
+            const localMidnightAssumingHaTzMatchesBrowser = new Date(
+                Number(parts.year),
+                Number(parts.month) - 1,
+                Number(parts.day),
+                0, 0, 0, 0,
+            );
+            // Now correct for the offset between browser TZ and HA TZ.
+            // What time IS this Date in HA's tz? If it differs from
+            // 00:00, shift by that difference.
+            const haTime = new Intl.DateTimeFormat('en-US', {
+                timeZone: haTz, hour: '2-digit', minute: '2-digit',
+                hour12: false,
+            }).formatToParts(localMidnightAssumingHaTzMatchesBrowser);
+            const haH = Number(haTime.find(p => p.type === 'hour').value);
+            const haM = Number(haTime.find(p => p.type === 'minute').value);
+            // If HA sees this moment as 22:30, we're 1.5h before HA midnight
+            // → add 1.5h. If HA sees 02:00, we're 2h after → subtract 2h.
+            const haMinutesPastMidnight = (haH * 60 + haM) % (24 * 60);
+            const offsetMin = haMinutesPastMidnight === 0
+                ? 0
+                : haMinutesPastMidnight <= 12 * 60
+                    ? -haMinutesPastMidnight       // ahead of midnight → roll back
+                    : (24 * 60 - haMinutesPastMidnight); // before midnight → roll forward
+            return new Date(localMidnightAssumingHaTzMatchesBrowser.getTime() + offsetMin * 60 * 1000);
+        } catch (e) {
+            // Defensive — never break the chart on a malformed TZ; fall
+            // back to browser-local midnight (pre-#136 behaviour).
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        }
+    }
+
     _setDefaultPeriod() {
         const now = new Date();
         const p = this._preset;
@@ -243,14 +313,14 @@ class SEMChartCard extends SEMLitBase {
         const isHourly = p && (wantToday || p.defaultPeriod === '24h' || (p.hourly && !p.daily));
         if (isHourly) {
             const start = wantToday
-                ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                ? this._startOfDayInHaTz(now)
                 : new Date(now.getTime() - 24 * 60 * 60 * 1000);
             const labelKey = wantToday ? 'period_today' : 'last_24h';
             const key = wantToday ? 'today' : '24h';
             this._onPeriodChange({ start, end: now, granularity: 'hour', labelKey, key });
         } else {
             const dow = now.getDay() || 7;
-            const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const mon = this._startOfDayInHaTz(now);
             mon.setDate(mon.getDate() - (dow - 1));
             this._onPeriodChange({ start: mon, end: now, granularity: 'day', labelKey: 'period_this_week', key: 'week' });
         }

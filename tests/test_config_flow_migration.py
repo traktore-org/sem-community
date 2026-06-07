@@ -71,7 +71,7 @@ async def test_v1_to_v2_remaps_legacy_battery_priority_soc(hass) -> None:
     # Re-read from the registry, not the local var — the entry registry
     # owns the post-migration truth.
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11  # all hops compose (#446 bumped target)
+    assert updated.version == 12  # all hops compose (#446 bumped target)
     assert updated.data["battery_priority_soc"] == 30
 
 
@@ -261,7 +261,7 @@ async def test_full_chain_v1_to_v7(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     # v1→v2 effect
     assert updated.data["battery_priority_soc"] == 30
     # v2→v3 effect — flat → list
@@ -307,7 +307,7 @@ async def test_v7_to_v8_flips_static_to_percentile_for_dynamic_tariff(hass) -> N
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     assert updated.options["tariff_classification_mode"] == "percentile"
 
 
@@ -329,7 +329,7 @@ async def test_v7_to_v8_keeps_static_when_tariff_mode_is_not_dynamic(hass) -> No
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     assert updated.options["tariff_classification_mode"] == "static"
 
 
@@ -362,7 +362,7 @@ async def test_v8_to_v9_seeds_vehicle_min_current(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     chargers = updated.options["ev_chargers"]
     assert chargers[0]["vehicle_min_current"] is None
     assert chargers[1]["vehicle_min_current"] == 9
@@ -398,7 +398,7 @@ async def test_v9_to_v10_renames_night_initial_current(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     # Top-level legacy global key renamed
     assert "ev_night_initial_current" not in updated.data
     assert updated.data["initial_current"] == 12
@@ -410,8 +410,8 @@ async def test_v9_to_v10_renames_night_initial_current(hass) -> None:
 
 
 @pytest.mark.asyncio
-async def test_v11_already_current_is_noop(hass) -> None:
-    """An entry already at v11 (the current target) sails through every
+async def test_v12_already_current_is_noop(hass) -> None:
+    """An entry already at v12 (the current target) sails through every
     ``if version < N`` gate untouched."""
     payload_data = {"battery_priority_soc": 30}
     payload_options = {"ev_chargers": [
@@ -420,7 +420,7 @@ async def test_v11_already_current_is_noop(hass) -> None:
     ]}
     entry = MockConfigEntry(
         domain=DOMAIN,
-        version=11,
+        version=12,
         data=payload_data,
         options=payload_options,
     )
@@ -429,9 +429,74 @@ async def test_v11_already_current_is_noop(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     assert updated.data == payload_data
     assert updated.options == payload_options
+
+
+@pytest.mark.asyncio
+async def test_v11_to_v12_drops_stale_global_ev_session_energy_sensor(hass) -> None:
+    """v11 → v12 (#135) — the stale top-level ``ev_session_energy_sensor``
+    left over from the v2→v3 multi-charger migration is dropped when at
+    least one charger has its own per-charger value. Surfaced on PROD
+    2026-06-07 where the global pointed at ``keba_p30_energy_target``
+    (the user setpoint, always 0) and confused diagnostics."""
+    payload_data = {
+        "battery_priority_soc": 30,
+        "ev_session_energy_sensor": "sensor.keba_p30_energy_target",  # stale
+    }
+    payload_options = {
+        "ev_chargers": [
+            {"id": "ev_charger", "charge_mode": "min_plus_solar",
+             "vehicle_min_current": None, "initial_current": 10,
+             # per-charger value IS set — canonical since v3
+             "ev_session_energy_sensor": "sensor.keba_p30_session_energy"},
+        ],
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=11,
+        data=payload_data, options=payload_options,
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.version == 12
+    # Top-level stale key dropped
+    assert "ev_session_energy_sensor" not in updated.data
+    # Per-charger value preserved untouched
+    assert updated.options["ev_chargers"][0]["ev_session_energy_sensor"] == "sensor.keba_p30_session_energy"
+
+
+@pytest.mark.asyncio
+async def test_v11_to_v12_preserves_top_level_when_no_per_charger_value(hass) -> None:
+    """Defensive: if SOMEHOW a charger entry has no per-charger value,
+    leave the top-level key alone — we don't want to silently drop a
+    sensor mapping that the user might still be relying on."""
+    payload_data = {
+        "battery_priority_soc": 30,
+        "ev_session_energy_sensor": "sensor.keba_p30_session_energy",  # legitimate
+    }
+    payload_options = {
+        "ev_chargers": [
+            {"id": "ev_charger", "charge_mode": "min_plus_solar",
+             "vehicle_min_current": None, "initial_current": 10},
+            # NB: no ev_session_energy_sensor on the charger
+        ],
+    }
+    entry = MockConfigEntry(
+        domain=DOMAIN, version=11,
+        data=payload_data, options=payload_options,
+    )
+    entry.add_to_hass(hass)
+
+    assert await async_migrate_entry(hass, entry) is True
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.version == 12
+    # Defensive: kept the top-level value because no per-charger override exists
+    assert updated.data["ev_session_energy_sensor"] == "sensor.keba_p30_session_energy"
 
 
 @pytest.mark.asyncio
@@ -466,7 +531,7 @@ async def test_v10_to_v11_clears_bad_ev_target_type_per_charger(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     chargers = updated.options["ev_chargers"]
     # Bad charger reset to kwh
     assert chargers[0]["ev_target_type"] == "kwh"
@@ -501,7 +566,7 @@ async def test_v10_to_v11_clears_legacy_ev_target_mode(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     assert updated.data["ev_target_mode"] == "kwh"
 
 
@@ -526,5 +591,5 @@ async def test_v10_to_v11_preserves_kwh_mode(hass) -> None:
     assert await async_migrate_entry(hass, entry) is True
 
     updated = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated.version == 11
+    assert updated.version == 12
     assert updated.options["ev_chargers"][0]["ev_target_type"] == "kwh"

@@ -11,6 +11,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2-beta.1] - 07.06.2026
+
+## 🧪 Beta Release
+
+_First beta on top of [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1) stable._
+
+### 🐛 EV session-energy pass-through + stale-global cleanup (#135)
+
+User report on PROD 2026-06-07: KEBA's `sensor.keba_p30_session_energy` showed **14.61 kWh** but the SEM-published `sensor.sem_charger_ev_charger_session_energy` showed only **0.97 kWh**. Structural disagreement — SEM integrates its own session counter internally (load-bearing for solar-share / cost calcs) while KEBA's is a hardware truth that survives reloads + midnight rollovers.
+
+- **New `sensor.sem_charger_<id>_session_energy_external`** sensor per charger. Passes through the charger's own `ev_session_energy_sensor` (e.g. KEBA's session counter) directly to the dashboard. Auto-converts Wh → kWh based on the source unit. Surfaces the charger's truth alongside SEM's internal integration so users see both numbers and can interpret the difference. (by @traktore-org in #135)
+- **v11 → v12 schema migration.** Drops the stale top-level `ev_session_energy_sensor` key left over from the v2 → v3 multi-charger migration. The per-charger value in `ev_chargers[].ev_session_energy_sensor` has been canonical since v3; the top-level copy was harmless but on PROD it pointed at the wrong sensor (`keba_p30_energy_target` — a user setpoint, always 0) and confused diagnostics. Defensive: only drops the top-level when at least one charger has its own value. (by @traktore-org in #135)
+- **`config_flow.py` `VERSION` bumped 11 → 12.**
+
+### 🌍 Chart "Today" window now uses HA's timezone (#136)
+
+`sem-chart-card.js:_setDefaultPeriod` previously used `new Date(now.getFullYear(), now.getMonth(), now.getDate())` to compute "Today's midnight" — but that's the **browser's** local midnight, not HA's. When the browser timezone differs from the HA server's (Companion app on a phone roaming across timezones, desktop on a different DST schedule), the "Today" window shifted by 1+ hours. User-reported as the chart timing being "off like an hour or so".
+
+- **New `_startOfDayInHaTz(now)` helper.** Uses `hass.config.time_zone` + `Intl.DateTimeFormat` to compute the absolute Date pointing at HA-local-midnight, regardless of browser TZ. Falls back to browser-local-midnight when `hass.config.time_zone` is unavailable. (by @traktore-org in #136)
+- Both call sites in `_setDefaultPeriod` (the `wantToday` start + the `week` Monday-of-week start) updated to use the helper.
+
+### 🩺 Per-section Diagnose slicers (#432 polish)
+
+Beta.17 wired Diagnose buttons into every Configuration tab section but only **Overview** and **Heat Pump** had dedicated key slicers; the other 8 sections used a generic prefix-match. This release adds curated state + option slicers per section so the JSON payload RienduPre (or anyone) pastes back is signal-rich, not noisy. (by @traktore-org in #432)
+
+Dedicated slicers landed for: **EV chargers** (per-charger nested entries via prefix-match on `charger_<id>_*`), **Tariff** (classifier_path + percentile breaks + price curves), **Battery zones** (zone settings + live SOC + health), **Battery scheduler** (capacity / efficiency / pessimism), **Load management** (peak levels + shedding status), **Forecast** (today/tomorrow kWh + source + dampening factor), **Notifications** (toggles + service), **Advanced** (deltas + observer mode).
+
+### 🧪 Tests
+
+- **`tests/test_config_flow_migration.py`** — 2 new v11 → v12 cases: (a) stale top-level dropped when per-charger value exists; (b) defensive — top-level preserved when no per-charger value (don't silently drop a sensor mapping the user may rely on). Existing migration tests updated for the new v12 target.
+- **`tests/test_per_charger_seed_migration.py`** + **`tests/test_277_charge_mode_phase_a.py`** + **`tests/test_277_charge_mode_phase_b.py`** — version assertions bumped 11 → 12 (chain still ends at the latest version).
+- Full suite: **3 241 pass, 9 skipped, 0 fail** (was 3 239 at 1.7.1).
+
+### 📦 Schema migration
+
+- **v11 → v12** (#135) — drops stale top-level `ev_session_energy_sensor` when at least one charger has its own value. No data loss; per-charger value remains canonical.
+
 # [1.7.1] - 07.06.2026
 
 ## 🎉 Stable Release
