@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.1.1] - 07.06.2026
+
+## 🩹 Patch Release
+
+_Single-fix patch on top of [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1)._
+
+### 🐛 Fix: raw `config_*` translation keys after upgrade to 1.7.1 (#448)
+
+Reported by @RienduPre + reproduced on the maintainer's install: after upgrading to 1.7.1 stable the Configuration tab + dashboard labels showed as raw translation keys (e.g. `config_section_overview`, `config_diagnose`, `heat_pump_title`) even though every key was present in the deployed `sem-localize.js`.
+
+**Root cause.** The Lovelace resources storage carried an orphan entry pinning `sem-localize.js?v=1.7.1-beta.11-fca70f78` from an older registration path. Nothing in the current code touched it (the file is correctly served via `add_extra_js_url` — the right channel for non-card helper JS that must be global before cards load). The browser's service worker happily kept serving the cached beta.11 file, missing every key added since.
+
+**Fix.** Added `sem-localize.js` to the existing `_legacy_bases` cleanup list in `__init__.py:_async_register_frontend_resources`. On first entry setup after the patch the existing delete-orphan loop removes the stale Lovelace resource; `add_extra_js_url` remains the single registration channel; the content-hash now bumps correctly on every deploy.
+
+Verified on HA-TEST + HA-PROD: after deploy the only SEM Lovelace resources are `sem-cards.js?v=1.7.2-beta.1-…` and `sem-system-diagram-card.js?v=1.7.2-beta.1-…`. The orphan `sem-localize.js` entry is gone.
+
+Users still need one hard refresh (or Companion app → App Configuration → Reset frontend cache) after upgrading to clear the service worker's cached copy. After that single refresh, every subsequent deploy busts the cache automatically via the content-hash.
+
 # [1.7.1] - 07.06.2026
 
 ## 🎉 Stable Release
