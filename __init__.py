@@ -2615,9 +2615,23 @@ async def _async_register_phase_services(
                     target_entry = e
                     break
         # Merge with existing options to preserve unrelated keys, then
-        # update. HA fires the update_listener automatically.
+        # update. HA fires the update_listener automatically — but that
+        # listener has a skip-reload optimization for runtime
+        # number/switch tweaks. Since ``set_option`` doesn't mirror
+        # values into coordinator memory (the runtime stepper path
+        # does), we ALWAYS need a reload here to take effect.
+        # Bug confirmed live on 2026-06-07: setting
+        # ``heat_pump_relay2_entity`` via this service updated the
+        # ``options`` dict but the heat-pump controller didn't get
+        # re-registered, leaving ``registered=false`` despite valid
+        # config. Explicit reload below makes this deterministic.
         merged = {**(target_entry.options or {}), **options}
-        hass.config_entries.async_update_entry(target_entry, options=merged)
+        if merged != (target_entry.options or {}):
+            hass.config_entries.async_update_entry(target_entry, options=merged)
+            # Block on reload so the caller's next read sees the new
+            # state. HA suppresses duplicate reloads when one is
+            # already pending from the listener.
+            await hass.config_entries.async_reload(target_entry.entry_id)
         _LOGGER.debug(
             "set_option wrote %d key(s) to entry %s: %s",
             len(options), target_entry.entry_id, list(options.keys()),
@@ -2695,11 +2709,35 @@ async def _async_register_phase_services(
         "heat_pump_climate_entity",
         "heat_pump_relay1_state", "heat_pump_relay2_state",
         "heat_pump_climate_state",
+        # v1.7.2-beta.2: #421 audit's runtime path recorders, now
+        # surfaced through coordinator.data so users can see WHY the
+        # heat pump did/didn't activate on the last cycle.
+        "heat_pump_activation_path", "heat_pump_deactivation_path",
+        "heat_pump_relay_path", "heat_pump_temperature_reading_path",
+        "heat_pump_offpeak_path", "heat_pump_current_temperature",
     }
     _DIAGNOSE_HEAT_PUMP_OPTION = {
         "heat_pump_relay1_entity", "heat_pump_relay2_entity",
         "heat_pump_climate_entity", "heat_pump_boost_offset",
         "heat_pump_max_setpoint", "heat_pump_priority",
+        "heat_pump_power_sensor", "heat_pump_temperature_sensor",
+        "heat_pump_rated_power", "heat_pump_force_on_threshold",
+    }
+    # Hot water — config visibility (controller not currently wired
+    # into the production path; v1.7.2-beta.2 surfaces config so
+    # support can verify settings, and reserves the state keys for
+    # when the controller is hooked up).
+    _DIAGNOSE_HOT_WATER_OPTION = {
+        "hot_water_entity", "hot_water_temperature_sensor",
+        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_legionella_target", "hot_water_minimum_temperature",
+        "hot_water_priority", "hot_water_rated_power",
+    }
+    _DIAGNOSE_HOT_WATER_STATE = {
+        # Surfaced once the HotWaterController runtime hookup lands.
+        # The number entities (max temp, solar target) are the only
+        # current SEM-published surfaces.
+        "hot_water_max_temperature", "hot_water_solar_target",
     }
     # EV chargers — fleet aggregates + per-charger nested entries
     _DIAGNOSE_EV_OPTION_TOP = {
@@ -2792,6 +2830,7 @@ async def _async_register_phase_services(
 
     _DIAGNOSE_SLICERS = {
         "heat_pump": (_DIAGNOSE_HEAT_PUMP_OPTION, _DIAGNOSE_HEAT_PUMP_STATE),
+        "hot_water": (_DIAGNOSE_HOT_WATER_OPTION, _DIAGNOSE_HOT_WATER_STATE),
         "ev_chargers": (_DIAGNOSE_EV_OPTION_TOP, _DIAGNOSE_EV_STATE_PREFIXES),
         "tariff": (_DIAGNOSE_TARIFF_OPTION, _DIAGNOSE_TARIFF_STATE),
         "battery_zones": (_DIAGNOSE_BATTERY_ZONES_OPTION, _DIAGNOSE_BATTERY_ZONES_STATE),
@@ -2805,6 +2844,7 @@ async def _async_register_phase_services(
     _DIAGNOSE_LOG_NEEDLES = {
         "all": (),  # no filter — caller wants every recent SEM line
         "heat_pump": ("heat_pump", "heatpump", "sg_ready", "HeatPumpController"),
+        "hot_water": ("hot_water", "hot water", "HotWaterController", "boiler", "dhw"),
         "ev_chargers": ("ev_control", "ev_charger", "keba", "wallbox", "charger_"),
         "battery_zones": ("battery_soc", "zone", "battery_priority"),
         "tariff": ("tariff", "classifier", "percentile", "nordpool", "tibber"),

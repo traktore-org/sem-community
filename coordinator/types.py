@@ -621,6 +621,20 @@ class HeatPumpSensorData:
     heat_pump_relay1_state: Optional[str] = None
     heat_pump_relay2_state: Optional[str] = None
     heat_pump_climate_state: Optional[str] = None
+    # v1.7.2-beta.2 (2026-06-07): wire the #421 audit's internal
+    # ``_last_*_path`` recorders to a user-visible surface. The audit
+    # shipped the recording in v1.7.0-beta.24 but never exposed the
+    # values, so the diagnostic surface was useless for end-user
+    # debugging. Each path is a short string naming the branch the
+    # controller last took — see HeatPumpController for the
+    # vocabulary (e.g. ``force_on``, ``boost``, ``boost+climate``,
+    # ``normal``, ``blocked``, ``parent_declines``, ``already_warm_skip``).
+    heat_pump_activation_path: Optional[str] = None
+    heat_pump_deactivation_path: Optional[str] = None
+    heat_pump_relay_path: Optional[str] = None
+    heat_pump_temperature_reading_path: Optional[str] = None
+    heat_pump_offpeak_path: Optional[str] = None
+    heat_pump_current_temperature: Optional[float] = None
 
 
 @dataclass

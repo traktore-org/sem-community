@@ -62,6 +62,13 @@ const SECTIONS = [
         subtitleFn: (c) => c._heatPumpSubtitle(),
     },
     {
+        id: 'hot_water',
+        icon: 'mdi:water-boiler',
+        color: '#5BC8D8',
+        titleKey: 'config_section_hot_water',
+        subtitleFn: (c) => c._hotWaterSubtitle(),
+    },
+    {
         id: 'battery_scheduler',
         icon: 'mdi:calendar-clock',
         color: '#f06292',
@@ -330,6 +337,17 @@ class SEMConfigCard extends SEMLitBase {
     }
     _heatPumpSubtitle() {
         return this._val('heat_pump_registered') === 'on'
+            ? this._t('configured')
+            : this._t('not_configured');
+    }
+    _hotWaterSubtitle() {
+        // The HotWaterController is not currently instantiated in the
+        // production path — until that hookup lands, the subtitle just
+        // says whether the user has configured a hot_water_entity at
+        // all. The Diagnose modal still works and shows the configured
+        // sensor + targets, useful for support.
+        const opts = this._options || {};
+        return opts.hot_water_entity
             ? this._t('configured')
             : this._t('not_configured');
     }
@@ -635,6 +653,42 @@ class SEMConfigCard extends SEMLitBase {
                     { min: 30, max: 80, step: 1, unit: '°C', default: 55 }, opts, 'config_help_hp_max_setpoint')}
                 ${this._renderOptionSlider('heat_pump_priority', 'config_hp_priority',
                     { min: 1, max: 10, step: 1, unit: '', default: 4 }, opts, 'config_help_hp_priority')}
+            </div>
+        `;
+    }
+
+    _renderHotWater(T) {
+        // The HotWaterController exists in code (devices/hot_water_controller.py)
+        // but is not yet instantiated in the production setup path —
+        // only the number entities (max temp / solar target) are wired
+        // in. This section therefore renders the config surface +
+        // entity pickers so users can configure it; the runtime
+        // status block lights up automatically when the controller
+        // hookup lands in a future beta.
+        const opts = this._options || {};
+        const configured = !!opts.hot_water_entity;
+        const intro = configured ? nothing : html`
+            <div class="setup-intro">
+                ${this._t('config_hot_water_intro')}
+            </div>
+        `;
+        return html`
+            ${intro}
+            <div class="hp-form">
+                ${this._renderPicker('hot_water_entity', 'config_hw_entity',
+                    null, null, opts, 'config_help_hw_entity')}
+                ${this._renderPicker('hot_water_temperature_sensor', 'config_hw_temp_sensor',
+                    'sensor', 'temperature', opts, 'config_help_hw_temp_sensor')}
+                ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
+                    T, 'config_help_hw_solar_target')}
+                ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',
+                    T, 'config_help_hw_max_temperature')}
+                ${this._renderOptionSlider('hot_water_legionella_target', 'config_hw_legionella_target',
+                    { min: 55, max: 80, step: 1, unit: '°C', default: 65 }, opts, 'config_help_hw_legionella_target')}
+                ${this._renderOptionSlider('hot_water_minimum_temperature', 'config_hw_min_temperature',
+                    { min: 30, max: 55, step: 1, unit: '°C', default: 40 }, opts, 'config_help_hw_min_temperature')}
+                ${this._renderOptionSlider('hot_water_priority', 'config_hw_priority',
+                    { min: 1, max: 10, step: 1, unit: '', default: 5 }, opts, 'config_help_hw_priority')}
             </div>
         `;
     }
@@ -995,6 +1049,7 @@ class SEMConfigCard extends SEMLitBase {
             battery_zones: (T) => this._renderBatteryZones(T),
             tariff: (T) => this._renderTariff(T),
             heat_pump: (T) => this._renderHeatPump(T),
+            hot_water: (T) => this._renderHotWater(T),
             battery_scheduler: (T) => this._renderBatteryScheduler(T),
             load_management: (T) => this._renderLoadManagement(T),
             forecast: (T) => this._renderForecast(T),

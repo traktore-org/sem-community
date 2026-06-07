@@ -2577,6 +2577,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         relay2_state = _entity_state(hp_relay2)
         climate_state = _entity_state(hp_climate)
 
+        # v1.7.2-beta.2: surface the #421 audit's ``_last_*_path``
+        # recorders to a user-visible diagnostic surface. The
+        # controller already records these on every cycle; we just
+        # publish them through. Falls back to ``"no_controller"`` when
+        # heat-pump isn't registered so the diagnostic surface stays
+        # consistent (vs missing keys).
+        hp_controller = None
+        if registered_flag and hasattr(self, "_surplus_controller"):
+            hp_controller = self._surplus_controller._devices.get("heat_pump")
+
+        def _hp_attr(name: str) -> Optional[str]:
+            if hp_controller is None:
+                return "no_controller" if registered_flag else None
+            return getattr(hp_controller, name, None)
+
+        hp_current_temp: Optional[float] = None
+        if hp_controller is not None:
+            try:
+                t = hp_controller.get_current_temperature() if hasattr(hp_controller, "get_current_temperature") else None
+                hp_current_temp = float(t) if t is not None else None
+            except (ValueError, TypeError, AttributeError):
+                hp_current_temp = None
+
         heat_pump_data = HeatPumpSensorData(
             heat_pump_registered=registered_flag,
             heat_pump_registration_status=_hp_status,
@@ -2586,6 +2609,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             heat_pump_relay1_state=relay1_state,
             heat_pump_relay2_state=relay2_state,
             heat_pump_climate_state=climate_state,
+            heat_pump_activation_path=_hp_attr("_last_activation_path"),
+            heat_pump_deactivation_path=_hp_attr("_last_deactivation_path"),
+            heat_pump_relay_path=_hp_attr("_last_relay_path"),
+            heat_pump_temperature_reading_path=_hp_attr("_last_temperature_reading_path"),
+            heat_pump_offpeak_path=_hp_attr("_last_offpeak_path"),
+            heat_pump_current_temperature=hp_current_temp,
         )
 
         # #432 — relay unavailability tracking + Repair issue. Mirrors the
@@ -2600,50 +2629,62 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _now_mono = _ri_time.monotonic()
             if not hasattr(self, "_heat_pump_relay_unavailable_since"):
                 self._heat_pump_relay_unavailable_since = {}
-                self._heat_pump_relay_repair_raised = set()
             tracked = self._heat_pump_relay_unavailable_since
-            raised = self._heat_pump_relay_repair_raised
+            # v1.7.2-beta.2 (2026-06-07): the prior in-memory ``raised``
+            # set was reset on every reload, so once a config change
+            # cleared the underlying condition AFTER a reload, the
+            # ``clear_*`` calls never fired and the Repair stuck in the
+            # registry forever. ``async_create_issue`` and
+            # ``async_delete_issue`` are both idempotent — call them
+            # unconditionally based on current state. The only thing we
+            # still need to track in-memory is the *since-when*
+            # threshold for the unavailable timer.
             for slot, eid, state in (
                 ("relay1", hp_relay1, relay1_state),
                 ("relay2", hp_relay2, relay2_state),
             ):
                 if not eid:
+                    # No entity configured for this slot — clear any
+                    # stale issue from before the config change and
+                    # forget the timer.
+                    _ri.clear_heat_pump_relay_unavailable(
+                        self.hass, slot, eid or "",
+                    )
                     continue
                 key = f"{slot}:{eid}"
                 is_bad = state in (None, "unavailable", "unknown", "entity_missing")
                 if is_bad:
                     if key not in tracked:
                         tracked[key] = _now_mono
-                    elif key not in raised:
-                        outage_s = _now_mono - tracked[key]
-                        if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
-                            _ri.raise_heat_pump_relay_unavailable(
-                                self.hass, slot, eid,
-                                minutes_unavailable=int(outage_s // 60),
-                            )
-                            raised.add(key)
-                else:
-                    if key in tracked:
-                        tracked.pop(key, None)
-                    if key in raised:
-                        raised.discard(key)
-                        _ri.clear_heat_pump_relay_unavailable(
+                    outage_s = _now_mono - tracked[key]
+                    if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
+                        # Idempotent — re-raises with current minute
+                        # count on every cycle past threshold; HA
+                        # collapses identical creates.
+                        _ri.raise_heat_pump_relay_unavailable(
                             self.hass, slot, eid,
+                            minutes_unavailable=int(outage_s // 60),
                         )
-            # Partial SG-Ready repair — fires once when exactly one relay
-            # is set with no climate fallback. Auto-clears as soon as the
-            # config becomes valid (both relays set OR climate set OR
-            # both relays cleared).
+                else:
+                    tracked.pop(key, None)
+                    # Idempotent — no-op if the issue isn't currently
+                    # in the registry. Crucial across reloads.
+                    _ri.clear_heat_pump_relay_unavailable(
+                        self.hass, slot, eid,
+                    )
+            # Partial SG-Ready repair — fires when exactly one relay is
+            # set with no climate fallback. Same idempotent pattern: no
+            # in-memory flag, just always raise/clear based on current
+            # status. ``_hp_status`` is already computed above from the
+            # live config.
             partial = _hp_status in (
                 "partial_sg_ready_only_relay1",
                 "partial_sg_ready_only_relay2",
             )
-            if partial and not getattr(self, "_heat_pump_partial_raised", False):
+            if partial:
                 _ri.raise_heat_pump_partial_sg_ready(self.hass)
-                self._heat_pump_partial_raised = True
-            elif not partial and getattr(self, "_heat_pump_partial_raised", False):
+            else:
                 _ri.clear_heat_pump_partial_sg_ready(self.hass)
-                self._heat_pump_partial_raised = False
         except Exception as e:  # noqa: BLE001 — never fail a cycle over a repair
             _LOGGER.debug("Heat-pump repair tracking failed: %s", e)
 

@@ -11,6 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2-beta.2] - 07.06.2026
+
+## 🧪 Beta Release
+
+_Second beta on top of [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1) stable. Two structural bug fixes found during live testing on HA-TEST, plus newly-wired telemetry surfaces for heat-pump + hot-water diagnostics._
+
+### 🐛 `set_option` service must always reload (live-test finding)
+
+Configuring `heat_pump_relay2_entity` via `solar_energy_management.set_option` updated the saved options but did NOT re-register the heat-pump controller. The `async_update_options` listener has a skip-reload optimization for runtime number/switch tweaks (intentional, ~1 s downtime saved per slider click) which was accidentally swallowing the `set_option` write too. Result: status sensor showed `not_configured` despite both relay entities being saved, until the next full HA restart. (by @traktore-org)
+
+- `set_option` now explicitly calls `async_reload` after `async_update_entry` so the new config is always picked up. The merge skip stays (no reload when nothing actually changed).
+- Caller's next read sees the new state immediately — service awaits the reload.
+
+### 🐛 Repair issues now auto-clear across reloads (also caught live + RienduPre)
+
+`heat_pump_partial_sg_ready` and `heat_pump_relay_unavailable` Repair issues used an in-memory `_raised` flag to track "have we raised this already?" That flag is per-coordinator-instance — reset on every reload. So the moment a user fixed their config (e.g. added the second SG-Ready relay), the new coordinator's flag was False, the `clear_*` call never fired, and the stale Repair stuck in the registry indefinitely. RienduPre also reported the symptom on #432 / #448. (by @traktore-org)
+
+- Removed both in-memory flags. Now always calls `raise_*` / `clear_*` based on current state — both `async_create_issue` and `async_delete_issue` are idempotent so the duplicate calls are harmless.
+- Clears any prior issue when a slot's entity is removed from config (was only clearing when the entity was present-but-broken-then-fixed).
+- Result: Repair issues correctly mirror live config state across any number of reloads.
+
+### 🩺 Heat-pump runtime path telemetry now visible (#421 follow-up)
+
+The #421 audit shipped `_last_activation_path` / `_last_deactivation_path` / `_last_relay_path` / `_last_temperature_reading_path` / `_last_offpeak_path` recorders on `HeatPumpController` in `v1.7.0-beta.24` (`494fdf9`) — but never wired them through to a user-visible surface. The audit was effectively half-done; the recordings were just internal Python attributes nothing read.
+
+- All 5 path recorders now publish through `coordinator.data` into the diagnose slicer for `heat_pump`. (by @traktore-org)
+- New `heat_pump_current_temperature` published too — the live reading the controller uses for safety decisions.
+- Diagnose modal on the Heat Pump section now shows every branch the controller took on the last cycle. Concrete vocabulary: `force_on`, `boost`, `boost+climate`, `normal`, `blocked`, `parent_declines`, `already_warm_skip`, etc.
+
+### 🩺 New Hot Water section + diagnose surface
+
+Configuration tab now has a dedicated Hot Water section with entity pickers (boiler control + temperature sensor) and the existing Solar / Max temperature steppers. New `hot_water` diagnose slicer exposes the config so support can see what's set. (by @traktore-org)
+
+- Hot Water section + diagnose button live on every install. (No runtime status block yet — the `HotWaterController` isn't wired into the production surplus loop; that's the next beta.)
+- 20 new translation keys (EN + DE polished, 13 other languages with EN fallback).
+
+### Notes for testers
+
+- After upgrade, re-check any stuck Repair issues in HA → Settings → Repairs. They'll auto-clear on the next coordinator cycle if the underlying condition is no longer true. Pre-fix orphaned issues may need a one-time manual dismiss.
+- The `set_option` reload fix means structural option changes (entity pickers, mode selects) take effect in ~3 s instead of "next restart" — much better for the Configuration tab editing flow.
+
 # [1.7.2-beta.1] - 07.06.2026
 
 ## 🧪 Beta Release
