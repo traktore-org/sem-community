@@ -15,6 +15,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semGetCurrency, semDefineCard, SEM_COLORS } from '../base/sem-shared.js';
+import { startOfDayInHaTz } from '../util/time-zone.js';
 
 /* ── Chart.js CDN singleton loader ── */
 let _chartJsReady = null;
@@ -237,71 +238,12 @@ class SEMChartCard extends SEMLitBase {
 
     /**
      * Compute "start of day" in HA's configured timezone, not the
-     * browser's. Returns a Date pointing at the SAME absolute moment
-     * (so it's safe to serialise to ISO and send to the history API);
-     * just the wall-clock interpretation matches HA's local time.
-     *
-     * #136 fix: pre-#136 ``new Date(now.getFullYear(), getMonth(), getDate())``
-     * built the date in browser-local time. When HA's server timezone
-     * differs (HA Companion app on a phone roaming across timezones,
-     * or a desktop on a different DST schedule than the server) the
-     * resulting "Today" window shifted by 1+ hours.
+     * browser's. Thin wrapper around the extracted ``startOfDayInHaTz``
+     * util so the logic is testable in isolation (see
+     * ``test/time-zone.test.js``).
      */
     _startOfDayInHaTz(now) {
-        const haTz = this._hass?.config?.time_zone;
-        if (!haTz) {
-            // Fallback to browser-local (pre-#136 behaviour) when hass
-            // hasn't loaded a timezone yet.
-            return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        }
-        try {
-            // Format ``now`` in HA's timezone to get year/month/day in
-            // that zone. Then ask for that wall-clock midnight as a UTC
-            // offset string to construct an absolute Date.
-            const fmt = new Intl.DateTimeFormat('en-US', {
-                timeZone: haTz, year: 'numeric', month: '2-digit', day: '2-digit',
-            });
-            const parts = Object.fromEntries(
-                fmt.formatToParts(now).map(p => [p.type, p.value])
-            );
-            // Compose an ISO-ish string in HA's tz, then reparse via the
-            // tz-aware DateTimeFormat by iterating offsets until we hit
-            // midnight-in-HA-tz. Simpler: use a fixed-offset trick via
-            // a probe Date round-trip.
-            //
-            // We construct a Date by serialising "YYYY-MM-DDT00:00:00"
-            // in HA's tz to UTC via a small offset-search. The reliable
-            // primitive is: take a Date, format it in haTz, compute the
-            // delta between what UTC says and what haTz says, and apply.
-            const localMidnightAssumingHaTzMatchesBrowser = new Date(
-                Number(parts.year),
-                Number(parts.month) - 1,
-                Number(parts.day),
-                0, 0, 0, 0,
-            );
-            // Now correct for the offset between browser TZ and HA TZ.
-            // What time IS this Date in HA's tz? If it differs from
-            // 00:00, shift by that difference.
-            const haTime = new Intl.DateTimeFormat('en-US', {
-                timeZone: haTz, hour: '2-digit', minute: '2-digit',
-                hour12: false,
-            }).formatToParts(localMidnightAssumingHaTzMatchesBrowser);
-            const haH = Number(haTime.find(p => p.type === 'hour').value);
-            const haM = Number(haTime.find(p => p.type === 'minute').value);
-            // If HA sees this moment as 22:30, we're 1.5h before HA midnight
-            // → add 1.5h. If HA sees 02:00, we're 2h after → subtract 2h.
-            const haMinutesPastMidnight = (haH * 60 + haM) % (24 * 60);
-            const offsetMin = haMinutesPastMidnight === 0
-                ? 0
-                : haMinutesPastMidnight <= 12 * 60
-                    ? -haMinutesPastMidnight       // ahead of midnight → roll back
-                    : (24 * 60 - haMinutesPastMidnight); // before midnight → roll forward
-            return new Date(localMidnightAssumingHaTzMatchesBrowser.getTime() + offsetMin * 60 * 1000);
-        } catch (e) {
-            // Defensive — never break the chart on a malformed TZ; fall
-            // back to browser-local midnight (pre-#136 behaviour).
-            return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        }
+        return startOfDayInHaTz(now, this._hass?.config?.time_zone);
     }
 
     _setDefaultPeriod() {
