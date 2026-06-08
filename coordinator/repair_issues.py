@@ -218,6 +218,66 @@ def clear_heat_pump_relay_unavailable(
         )
 
 
+def clear_orphan_heat_pump_relay_repairs(
+    hass: HomeAssistant,
+    *,
+    currently_configured_ids: set[str],
+) -> int:
+    """Sweep the issue registry for ``heat_pump_relayN_unavailable_<entity_id>``
+    issues whose ``<entity_id>`` is NOT in the currently-configured set, and
+    delete them.
+
+    Fixes the orphan-repair class of bug: user reconfigures from
+    ``switch.old_entity_a`` to ``switch.new_entity_b``, the new relays are
+    healthy so no new repair fires, but the OLD repair filed against
+    ``switch.old_entity_a`` stays in the registry indefinitely because the
+    per-cycle clear path only addresses CURRENTLY-configured entities.
+    Reported live by RienduPre on #448 (2026-06-08).
+
+    Returns the count of orphan repairs cleared, for log visibility.
+    """
+    try:
+        registry = ir.async_get(hass)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.async_get failed during orphan-sweep: %s", e)
+        return 0
+
+    cleared = 0
+    try:
+        # ``registry.issues`` is a dict keyed by ``(domain, issue_id)``.
+        # We can't iterate-and-mutate, so collect first.
+        candidates: list[str] = []
+        for (domain, issue_id) in list(registry.issues.keys()):
+            if domain != DOMAIN:
+                continue
+            # Issue ids: heat_pump_relay1_unavailable_<entity_id>
+            #            heat_pump_relay2_unavailable_<entity_id>
+            for prefix in ("heat_pump_relay1_unavailable_", "heat_pump_relay2_unavailable_"):
+                if issue_id.startswith(prefix):
+                    eid = issue_id[len(prefix):]
+                    if eid not in currently_configured_ids:
+                        candidates.append(issue_id)
+                    break
+        for issue_id in candidates:
+            try:
+                ir.async_delete_issue(hass, DOMAIN, issue_id)
+                cleared += 1
+                _LOGGER.info(
+                    "Cleared orphan heat-pump relay repair: %s "
+                    "(entity no longer in SEM config)",
+                    issue_id,
+                )
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug(
+                    "issue_registry.delete failed for orphan %s: %s",
+                    issue_id, e,
+                )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("Orphan heat-pump-repair sweep failed: %s", e)
+
+    return cleared
+
+
 def raise_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
     """File a repair when exactly one of the two SG-Ready relays is
     configured AND no climate fallback is set. The SG-Ready protocol

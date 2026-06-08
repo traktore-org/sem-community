@@ -110,3 +110,86 @@ def test_unavailable_threshold_is_five_minutes():
     Pin it so a refactor that bumps it doesn't silently change the
     user experience."""
     assert ri.UNAVAILABLE_REPAIR_THRESHOLD_S == 300
+
+
+# ── orphan sweep (v1.7.2-beta.5, #448) ──────────────────────────────
+
+
+def test_clear_orphan_sweep_removes_repairs_for_unconfigured_entities(hass):
+    """Repairs from a PRIOR config must be swept when their entity is
+    no longer in ``currently_configured_ids``. RienduPre #448 — user
+    reconfigured from comfoair relays to nibe SG-Ready, but the
+    comfoair repairs stayed stuck in the registry."""
+    # Mock the registry's ``issues`` dict to contain stale + current repairs
+    fake_registry = MagicMock()
+    fake_registry.issues = {
+        (ri.DOMAIN, "heat_pump_relay1_unavailable_switch.zolder_comfoair_a"): MagicMock(),
+        (ri.DOMAIN, "heat_pump_relay2_unavailable_switch.zolder_comfoair_b"): MagicMock(),
+        (ri.DOMAIN, "heat_pump_relay1_unavailable_switch.bijkeuken_nibe_a"): MagicMock(),
+        # An unrelated repair from another integration must be ignored
+        ("homeassistant", "some_other_issue"): MagicMock(),
+        # A partial-SG-Ready repair from us — singleton, not entity-keyed — left alone
+        (ri.DOMAIN, "heat_pump_partial_sg_ready"): MagicMock(),
+    }
+
+    with patch.object(ri.ir, "async_get", return_value=fake_registry), \
+         patch.object(ri.ir, "async_delete_issue") as delete:
+        cleared = ri.clear_orphan_heat_pump_relay_repairs(
+            hass,
+            currently_configured_ids={
+                "switch.bijkeuken_nibe_a",
+                "switch.bijkeuken_nibe_b",  # only b is configured but never raised
+            },
+        )
+
+    # Both stale comfoair repairs cleared; the bijkeuken_nibe_a one
+    # stays (still in current config); the cross-domain issue + the
+    # partial-SG-Ready singleton are NOT touched.
+    assert cleared == 2
+    cleared_ids = {call.args[2] for call in delete.call_args_list}
+    assert cleared_ids == {
+        "heat_pump_relay1_unavailable_switch.zolder_comfoair_a",
+        "heat_pump_relay2_unavailable_switch.zolder_comfoair_b",
+    }
+
+
+def test_clear_orphan_sweep_handles_empty_current_config(hass):
+    """When no relays are configured (user removed heat pump entirely),
+    ALL existing relay repairs must be swept."""
+    fake_registry = MagicMock()
+    fake_registry.issues = {
+        (ri.DOMAIN, "heat_pump_relay1_unavailable_switch.a"): MagicMock(),
+        (ri.DOMAIN, "heat_pump_relay2_unavailable_switch.b"): MagicMock(),
+    }
+    with patch.object(ri.ir, "async_get", return_value=fake_registry), \
+         patch.object(ri.ir, "async_delete_issue") as delete:
+        cleared = ri.clear_orphan_heat_pump_relay_repairs(
+            hass, currently_configured_ids=set(),
+        )
+    assert cleared == 2
+    assert delete.call_count == 2
+
+
+def test_clear_orphan_sweep_returns_zero_when_no_orphans(hass):
+    """Idempotent when there's nothing to clean — no errors, no deletes."""
+    fake_registry = MagicMock()
+    fake_registry.issues = {
+        (ri.DOMAIN, "heat_pump_relay1_unavailable_switch.a"): MagicMock(),
+    }
+    with patch.object(ri.ir, "async_get", return_value=fake_registry), \
+         patch.object(ri.ir, "async_delete_issue") as delete:
+        cleared = ri.clear_orphan_heat_pump_relay_repairs(
+            hass, currently_configured_ids={"switch.a"},
+        )
+    assert cleared == 0
+    delete.assert_not_called()
+
+
+def test_clear_orphan_sweep_swallows_registry_errors(hass):
+    """Like other repair helpers, must never raise into the coordinator
+    cycle — repair tracking is best-effort."""
+    with patch.object(ri.ir, "async_get", side_effect=RuntimeError("boom")):
+        cleared = ri.clear_orphan_heat_pump_relay_repairs(
+            hass, currently_configured_ids={"switch.a"},
+        )
+    assert cleared == 0

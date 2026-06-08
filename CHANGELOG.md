@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2-beta.5] - 08.06.2026
+
+## 🧪 Beta Release
+
+_Hotfix for stuck heat-pump Repair issues from prior config (RienduPre, #448)._
+
+### 🐛 Orphan heat-pump relay repairs now auto-clear (#448)
+
+RienduPre reported (2026-06-08, post-beta.4 upgrade): 2 stuck Repair issues for OLD entity names (`switch.zolder_comfoair_*`) that he'd long since replaced with new ones (`switch.bijkeuken_nibe_sg_ready_*`). The new entities work correctly + the heat pump IS registered (`registered_sg_ready` per his diagnose dump), but the old repairs stayed in the registry indefinitely.
+
+Root cause: beta.2's per-cycle clear path only addresses CURRENTLY-configured entities. Repairs from prior config — whose entity_ids are no longer in `heat_pump_relay1_entity` / `heat_pump_relay2_entity` — were never enumerated, so they sat orphaned.
+
+- **New `clear_orphan_heat_pump_relay_repairs()` sweep** in `coordinator/repair_issues.py`. Enumerates all `heat_pump_relay1_unavailable_*` and `heat_pump_relay2_unavailable_*` issues in the registry and clears any whose entity_id is NOT in the currently-configured set. (by @traktore-org)
+- **One-time per coordinator instance** — runs in the heat-pump repair tracking block, guarded by `_heat_pump_orphan_sweep_done` so it doesn't repeat every 10 s. Re-runs after each reload (which creates a fresh coordinator).
+- **Idempotent** — safe to invoke against an empty config (sweeps ALL relay repairs), safe to invoke with no orphans (no-op), defensive against issue-registry exceptions.
+
+4 new tests cover the orphan sweep, empty-config sweep, no-orphan idempotency, and registry-error defensiveness. 3259 tests pass.
+
 # [1.7.2-beta.4] - 08.06.2026
 
 ## 🧪 Beta Release

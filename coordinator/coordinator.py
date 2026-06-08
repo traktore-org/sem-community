@@ -2671,6 +2671,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if not hasattr(self, "_heat_pump_relay_unavailable_since"):
                 self._heat_pump_relay_unavailable_since = {}
             tracked = self._heat_pump_relay_unavailable_since
+            # v1.7.2-beta.5 (2026-06-08): one-time orphan sweep per
+            # coordinator instance. Cleans repairs left behind from a
+            # PRIOR config (e.g. user replaced `switch.old_entity` with
+            # `switch.new_entity` — the old repair stayed stuck in the
+            # registry because the per-cycle clear only addresses
+            # currently-configured entities). RienduPre #448.
+            if not getattr(self, "_heat_pump_orphan_sweep_done", False):
+                _ri.clear_orphan_heat_pump_relay_repairs(
+                    self.hass,
+                    currently_configured_ids={
+                        eid for eid in (hp_relay1, hp_relay2) if eid
+                    },
+                )
+                self._heat_pump_orphan_sweep_done = True
             # v1.7.2-beta.2 (2026-06-07): the prior in-memory ``raised``
             # set was reset on every reload, so once a config change
             # cleared the underlying condition AFTER a reload, the
