@@ -31,7 +31,7 @@ spamming", 2026-06-06) drove this work.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
@@ -216,6 +216,235 @@ def clear_heat_pump_relay_unavailable(
             "issue_registry.delete heat_pump_relay_unavailable failed for %s/%s: %s",
             slot, entity_id, e,
         )
+
+
+# ---------------------------------------------------------------------------
+# Hot water misconfiguration (#454)
+# ---------------------------------------------------------------------------
+
+
+def _hot_water_entity_issue_id(entity_id: str) -> str:
+    """Stable issue id for the boiler-control entity Repair."""
+    return f"hot_water_entity_unavailable_{entity_id}"
+
+
+def _hot_water_temp_sensor_issue_id(entity_id: str) -> str:
+    """Stable issue id for the temperature-sensor Repair."""
+    return f"hot_water_temperature_sensor_unavailable_{entity_id}"
+
+
+def raise_hot_water_entity_unavailable(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    minutes_unavailable: int = 5,
+) -> None:
+    """File a repair when the configured ``hot_water_entity`` (the
+    boiler control — switch/water_heater/climate) has been unavailable
+    past the threshold.
+
+    Without this, SEM can register the controller fine but every
+    surplus-dispatch command no-ops silently — the boiler is never
+    actually controlled. Mirrors the heat_pump_relay_unavailable
+    pattern (#432)."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_hot_water_entity_issue_id(entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="hot_water_entity_unavailable",
+            translation_placeholders={
+                "entity_id": entity_id,
+                "minutes": str(minutes_unavailable),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug(
+            "issue_registry.create hot_water_entity_unavailable failed for %s: %s",
+            entity_id, e,
+        )
+
+
+def clear_hot_water_entity_unavailable(
+    hass: HomeAssistant, entity_id: str,
+) -> None:
+    """Clear the boiler-control Repair when the entity recovers."""
+    try:
+        ir.async_delete_issue(
+            hass, DOMAIN, _hot_water_entity_issue_id(entity_id),
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug(
+            "issue_registry.delete hot_water_entity_unavailable failed for %s: %s",
+            entity_id, e,
+        )
+
+
+def raise_hot_water_temperature_sensor_unavailable(
+    hass: HomeAssistant,
+    entity_id: str,
+    *,
+    minutes_unavailable: int = 5,
+) -> None:
+    """File a repair when the configured ``hot_water_temperature_sensor``
+    has been unavailable past the threshold.
+
+    Distinct from the boiler-entity repair because the safety semantics
+    differ: a broken temp sensor causes ``is_temperature_safe()`` to
+    return False (post-#420 fail-safe), which means SEM stops activating
+    the boiler entirely. The user needs to KNOW why the boiler stopped
+    responding to surplus — this Repair surfaces it."""
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_hot_water_temp_sensor_issue_id(entity_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="hot_water_temperature_sensor_unavailable",
+            translation_placeholders={
+                "entity_id": entity_id,
+                "minutes": str(minutes_unavailable),
+            },
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug(
+            "issue_registry.create hot_water_temperature_sensor_unavailable failed for %s: %s",
+            entity_id, e,
+        )
+
+
+def clear_hot_water_temperature_sensor_unavailable(
+    hass: HomeAssistant, entity_id: str,
+) -> None:
+    """Clear the temp-sensor Repair when the entity recovers."""
+    try:
+        ir.async_delete_issue(
+            hass, DOMAIN, _hot_water_temp_sensor_issue_id(entity_id),
+        )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug(
+            "issue_registry.delete hot_water_temperature_sensor_unavailable failed for %s: %s",
+            entity_id, e,
+        )
+
+
+def clear_orphan_hot_water_repairs(
+    hass: HomeAssistant,
+    *,
+    currently_configured_entity: Optional[str],
+    currently_configured_temp_sensor: Optional[str],
+) -> int:
+    """Sweep orphan hot-water repairs whose entity_id is no longer in
+    config. Same pattern as ``clear_orphan_heat_pump_relay_repairs``:
+    user reconfigures the boiler from ``switch.old`` to ``switch.new``,
+    new entity works (no new repair), old repair stuck in the registry.
+
+    Returns the count cleared."""
+    try:
+        registry = ir.async_get(hass)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.async_get failed during orphan sweep: %s", e)
+        return 0
+
+    cleared = 0
+    keep_entity = {currently_configured_entity} if currently_configured_entity else set()
+    keep_temp = {currently_configured_temp_sensor} if currently_configured_temp_sensor else set()
+    try:
+        candidates: list[str] = []
+        for (domain, issue_id) in list(registry.issues.keys()):
+            if domain != DOMAIN:
+                continue
+            if issue_id.startswith("hot_water_entity_unavailable_"):
+                eid = issue_id[len("hot_water_entity_unavailable_"):]
+                if eid not in keep_entity:
+                    candidates.append(issue_id)
+            elif issue_id.startswith("hot_water_temperature_sensor_unavailable_"):
+                eid = issue_id[len("hot_water_temperature_sensor_unavailable_"):]
+                if eid not in keep_temp:
+                    candidates.append(issue_id)
+        for issue_id in candidates:
+            try:
+                ir.async_delete_issue(hass, DOMAIN, issue_id)
+                cleared += 1
+                _LOGGER.info(
+                    "Cleared orphan hot-water repair: %s "
+                    "(entity no longer in SEM config)",
+                    issue_id,
+                )
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug(
+                    "issue_registry.delete failed for orphan %s: %s",
+                    issue_id, e,
+                )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("Orphan hot-water repair sweep failed: %s", e)
+
+    return cleared
+
+
+def clear_orphan_heat_pump_relay_repairs(
+    hass: HomeAssistant,
+    *,
+    currently_configured_ids: set[str],
+) -> int:
+    """Sweep the issue registry for ``heat_pump_relayN_unavailable_<entity_id>``
+    issues whose ``<entity_id>`` is NOT in the currently-configured set, and
+    delete them.
+
+    Fixes the orphan-repair class of bug: user reconfigures from
+    ``switch.old_entity_a`` to ``switch.new_entity_b``, the new relays are
+    healthy so no new repair fires, but the OLD repair filed against
+    ``switch.old_entity_a`` stays in the registry indefinitely because the
+    per-cycle clear path only addresses CURRENTLY-configured entities.
+    Reported live by RienduPre on #448 (2026-06-08).
+
+    Returns the count of orphan repairs cleared, for log visibility.
+    """
+    try:
+        registry = ir.async_get(hass)
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.async_get failed during orphan-sweep: %s", e)
+        return 0
+
+    cleared = 0
+    try:
+        # ``registry.issues`` is a dict keyed by ``(domain, issue_id)``.
+        # We can't iterate-and-mutate, so collect first.
+        candidates: list[str] = []
+        for (domain, issue_id) in list(registry.issues.keys()):
+            if domain != DOMAIN:
+                continue
+            # Issue ids: heat_pump_relay1_unavailable_<entity_id>
+            #            heat_pump_relay2_unavailable_<entity_id>
+            for prefix in ("heat_pump_relay1_unavailable_", "heat_pump_relay2_unavailable_"):
+                if issue_id.startswith(prefix):
+                    eid = issue_id[len(prefix):]
+                    if eid not in currently_configured_ids:
+                        candidates.append(issue_id)
+                    break
+        for issue_id in candidates:
+            try:
+                ir.async_delete_issue(hass, DOMAIN, issue_id)
+                cleared += 1
+                _LOGGER.info(
+                    "Cleared orphan heat-pump relay repair: %s "
+                    "(entity no longer in SEM config)",
+                    issue_id,
+                )
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.debug(
+                    "issue_registry.delete failed for orphan %s: %s",
+                    issue_id, e,
+                )
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("Orphan heat-pump-repair sweep failed: %s", e)
+
+    return cleared
 
 
 def raise_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:

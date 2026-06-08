@@ -146,15 +146,40 @@ class SEMScheduleCard extends SEMLitBase {
                 avgPrice: s.avg_price,
             }));
         }
-        // Default weekday schedule — no dynamic provider, use HT/NT shape.
-        const day = new Date().getDay();
-        const isWeekend = day === 0 || day === 6;
-        if (isWeekend) return [{ start: 0, end: 1, level: 'cheap', type: 'NT' }];
-        return [
-            { start: 0,        end: 7 / 24,  level: 'cheap',  type: 'NT' },
-            { start: 7 / 24,   end: 20 / 24, level: 'normal', type: 'HT' },
-            { start: 20 / 24,  end: 1,       level: 'cheap',  type: 'NT' },
-        ];
+        // v1.7.2-beta.3 (2026-06-07): the previous fallback baked a
+        // CH-shape HT/NT schedule into the chart whenever
+        // ``schedule_today`` wasn't published — including on weekends
+        // where it returned ``cheap`` for ALL 24 hours. For a user on
+        // a dynamic Tibber NL tariff with the schedule attribute
+        // momentarily missing, the bottom-of-dashboard tariff
+        // timeline lied about "Goedkoop all day" even when the
+        // current price level sensor correctly said "Normaal".
+        // Reported by RienduPre on Discussion #432 (2026-06-06,
+        // Saturday — the all-cheap branch).
+        //
+        // New behaviour: if SEM hasn't published a schedule, mirror
+        // the CURRENT ``tariff_price_level`` across the whole day so
+        // at least the colour matches reality. Marked with
+        // ``isFallback: true`` so the renderer can visually
+        // distinguish fallback rows from real per-hour data (dashed
+        // stripe instead of solid fill).
+        const currentLevel = this._stateObj('tariff_price_level')?.state;
+        const knownLevels = new Set([
+            'cheap', 'very_cheap', 'normal', 'expensive', 'very_expensive',
+        ]);
+        if (currentLevel && knownLevels.has(currentLevel)) {
+            return [{
+                start: 0, end: 1,
+                level: currentLevel,
+                type: currentLevel === 'cheap' || currentLevel === 'very_cheap' ? 'NT' : 'HT',
+                isFallback: true,
+            }];
+        }
+        // Last resort — neither schedule_today nor a current price
+        // level reported. Default to ``normal`` so the colour is
+        // neutral (vs the old "cheap on weekends" misleading shape),
+        // and still mark as fallback so the renderer flags it.
+        return [{ start: 0, end: 1, level: 'normal', type: 'HT', isFallback: true }];
     }
 
     _getNightWindow() {
@@ -340,13 +365,24 @@ class SEMScheduleCard extends SEMLitBase {
             const x = toX(block.start);
             const w = toX(block.end) - x;
             const c = TARIFF_LEVEL_COLOURS[block.level] || TARIFF_LEVEL_COLOURS.normal;
-            // Native browser tooltip with the avg price when we have it —
-            // useful debug, cheap UX win since no JS event wiring needed.
-            const tip = block.avgPrice != null
-                ? `${block.level} · avg ${block.avgPrice.toFixed(2)}`
-                : block.level;
+            // v1.7.2-beta.3: fallback blocks render at reduced opacity
+            // + dashed border instead of solid, so users see at a
+            // glance that the chart is showing best-effort (mirror
+            // of current price level) instead of real per-hour data.
+            // RienduPre Discussion #432 — the silent-fallback was
+            // actively misleading.
+            const isFallback = block.isFallback === true;
+            const fillOpacity = isFallback ? c.opacity * 0.35 : c.opacity;
+            const strokeAttrs = isFallback
+                ? ` stroke="${c.fill}" stroke-width="1" stroke-opacity="0.6" stroke-dasharray="3,2"`
+                : '';
+            const tip = isFallback
+                ? `${block.level} (no per-hour data — showing current level)`
+                : block.avgPrice != null
+                    ? `${block.level} · avg ${block.avgPrice.toFixed(2)}`
+                    : block.level;
             svg += `<rect x="${x}" y="${tariffY}" width="${w}" height="${RH}"
-                rx="3" fill="${c.fill}" opacity="${c.opacity}">
+                rx="3" fill="${c.fill}" opacity="${fillOpacity}"${strokeAttrs}>
                 <title>${tip}</title></rect>`;
             if (w > 30) {
                 // Prefer the dynamic level label (Cheap/Normal/Expensive) when

@@ -89,6 +89,7 @@ class SEMEVStatusCard extends SEMLitBase {
         if (this._chargers.length >= 1) {
             key += '|' + this._chargers.map(id => [
                 `charger_${id}_power`, `charger_${id}_session_energy`,
+                `charger_${id}_session_energy_external`,
                 `charger_${id}_daily_energy`, `charger_${id}_session_solar_share`,
                 `charger_${id}_estimated_soc`, `charger_${id}_vehicle_soc`,
                 // (#440) charger_*_nights_until_charge / _charge_needed removed
@@ -443,7 +444,17 @@ class SEMEVStatusCard extends SEMLitBase {
     _renderChargerSection(id, idx) {
         const color = CHARGER_COLORS[idx % CHARGER_COLORS.length];
         const power = this._val(`charger_${id}_power`, 0);
-        const session = this._val(`charger_${id}_session_energy`, 0);
+        // #449: prefer the CHARGER's own session counter (KEBA / Wallbox /
+        // go-eCharger / Easee / … session_energy sensor) over SEM's
+        // internal integration. The charger's counter survives reloads +
+        // midnight rollovers (plug-in to plug-out); SEM's resets on
+        // coordinator restart. SEM's internal value is still load-bearing
+        // for solar-share + cost calcs — kept queryable as the
+        // ``session_energy`` sensor — but the user-facing "Session" tile
+        // now matches what the charger itself reports.
+        const sessionExt = this._val(`charger_${id}_session_energy_external`, 0);
+        const sessionInt = this._val(`charger_${id}_session_energy`, 0);
+        const session = sessionExt > 0 ? sessionExt : sessionInt;
         const dailyEnergy = this._val(`charger_${id}_daily_energy`, 0);
         const solar = this._val(`charger_${id}_session_solar_share`, 0);
         // Prefer real vehicle SOC over estimated (#193). The per-

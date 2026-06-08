@@ -1201,24 +1201,32 @@
       "description": "Er zijn geen sensoren voor de EV-lader geconfigureerd, dus EV-laadfuncties zijn niet beschikbaar. Voeg in de integratieopties een “verbonden”-sensor of een laadvermogenssensor toe om EV-laden in te schakelen."
     },
     "sensor_unavailable": {
-      "title": "Sensor unavailable",
-      "description": "The sensor `{entity_id}` ({friendly_name}) has been unavailable for {minutes}+ minutes. SEM cannot include it in calculations until it recovers. Check the upstream integration (Huawei modbus / Solcast / Forecast.Solar / your inverter network). This issue clears automatically when the sensor next reports a valid value."
+      "title": "Sensor niet beschikbaar",
+      "description": "De sensor `{entity_id}` ({friendly_name}) is al {minutes}+ minuten niet beschikbaar. SEM kan deze niet meenemen in berekeningen totdat de sensor weer actief is. Controleer de bovenliggende integratie (Huawei modbus / Solcast / Forecast.Solar / uw omvormernetwerk). Deze melding verdwijnt automatisch zodra de sensor weer een geldige waarde rapporteert."
     },
     "no_forecast_integration": {
-      "title": "No solar forecast integration detected",
-      "description": "SEM looked for a solar-forecast integration (Forecast.Solar, Solcast PV Solar, or a custom forecast sensor) for an hour after startup and didn't find one. Forecast-aware features (best-surplus-window tips, smart night charging, forecast dampening) are inactive until you install one. The issue clears automatically when SEM detects a forecast integration."
+      "title": "Geen zonneprognose-integratie gevonden",
+      "description": "SEM heeft na het opstarten een uur lang gezocht naar een zonneprognose-integratie (Forecast.Solar, Solcast PV Solar of een aangepaste prognose-sensor), maar niets gevonden. Prognose-afhankelijke functies (tips voor het beste overschotvenster, slim nachtladen, prognose-demping) zijn inactief totdat u er een installeert. De melding verdwijnt automatisch zodra SEM een prognose-integratie detecteert."
     },
     "no_recorder": {
-      "title": "Recorder integration unavailable",
-      "description": "SEM tried to bootstrap EV / charging history from the HA recorder but the read failed. EV intelligence (estimated SOC, daily decay) cannot warm-start without it; values populate slowly from live cycles instead. Usually a one-off transient — clears automatically on the next successful recorder read."
+      "title": "Recorder-integratie niet beschikbaar",
+      "description": "SEM heeft geprobeerd de EV- en laadgeschiedenis te laden vanuit de HA-recorder, maar het uitlezen is mislukt. EV-intelligentie (geschatte laadtoestand, dagelijks verval) kan niet warm opstarten zonder deze gegevens; waarden worden langzaam opgebouwd vanuit live laadcycli. Meestal een eenmalige storing — de melding verdwijnt automatisch bij de volgende geslaagde recorder-uitlezing."
     },
     "heat_pump_relay_unavailable": {
-      "title": "Heat pump SG-Ready {slot} unavailable",
-      "description": "The configured SG-Ready relay entity `{entity_id}` ({slot}) has been unavailable/unknown for {minutes}+ minutes. SEM can register the heat pump controller fine, but every SG-Ready command will silently no-op until this entity reports a real state. Check the upstream device — ESP relay board, Shelly, Modbus-bridged template switch, or whichever integration owns this entity. The issue clears automatically when the relay next reports an on/off state."
+      "title": "Warmtepomp SG-Ready {slot} niet beschikbaar",
+      "description": "De geconfigureerde SG-Ready relais-entiteit `{entity_id}` ({slot}) is al {minutes}+ minuten niet beschikbaar of onbekend. SEM kan de warmtepompcontroller gewoon registreren, maar elke SG-Ready opdracht wordt stilzwijgend genegeerd totdat deze entiteit een geldige toestand rapporteert. Controleer het onderliggende apparaat — ESP-relaiskaart, Shelly, Modbus-gekoppelde sjabloonschakelaar, of welke integratie ook eigenaar is van deze entiteit. De melding verdwijnt automatisch zodra het relais weer een aan/uit-toestand rapporteert."
     },
     "heat_pump_partial_sg_ready": {
-      "title": "Heat pump SG-Ready half-configured",
-      "description": "Exactly one of the two SG-Ready relays (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is set in SEM, with no climate-entity fallback. The SG-Ready protocol encodes the four states (BLOCKED / NORMAL / BOOST / FORCE_ON) as a 2-bit binary across BOTH relays, so a single relay cannot drive the protocol. Either configure the second relay too, or set a `heat_pump_climate_entity` to use the climate-only setpoint-boost path instead. The issue clears automatically once the config is valid."
+      "title": "Warmtepomp SG-Ready half geconfigureerd",
+      "description": "Er is maar 1 van de 2 SG-Ready relais (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is ingesteld in SEM, zonder klimaat-entiteit als terugvaloptie. Het SG-Ready protocol codeert de vier toestanden (GEBLOKKEERD / NORMAAL / BOOST / GEFORCEERD_AAN) als een 2-bits binair getal over BEIDE relais, waardoor één relais het protocol niet kan aansturen. Configureer ook het tweede relais, of stel een `heat_pump_climate_entity` in om in plaats daarvan het klimaat-instelpunt-boostpad te gebruiken. De melding verdwijnt automatisch zodra de configuratie geldig is."
+    },
+    "hot_water_entity_unavailable": {
+      "title": "Warmwater-boilerbediening niet beschikbaar",
+      "description": "De geconfigureerde warmwater-bedieningsentiteit `{entity_id}` is al {minutes}+ minuten niet beschikbaar of onbekend. SEM kan de controller gewoon registreren, maar elke overschot-opdracht wordt stilzwijgend genegeerd totdat de entiteit weer een geldige toestand rapporteert. Controleer het bijbehorende apparaat — boilerrelais, water_heater-integratie, klimaatapparaat of welke integratie ook eigenaar is van deze entiteit. De melding verdwijnt automatisch zodra de entiteit weer beschikbaar is."
+    },
+    "hot_water_temperature_sensor_unavailable": {
+      "title": "Warmwater-temperatuursensor niet beschikbaar",
+      "description": "De geconfigureerde warmwater-temperatuursensor `{entity_id}` is al {minutes}+ minuten niet beschikbaar of onbekend. SEM gedraagt zich faalveilig — de boiler wordt NIET geactiveerd door overschot totdat de sensor weer een geldige meting levert, om te voorkomen dat de boiler zonder feedback verder verwarmt. Controleer de bovenliggende integratie van de sensor. De melding verdwijnt automatisch zodra de sensor weer werkt."
     }
   }
 }

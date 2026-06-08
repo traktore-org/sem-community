@@ -100,9 +100,13 @@ def test_manifest_version_present_for_url_prefix() -> None:
     assert "version" in data, "manifest.json missing 'version' key"
     version = data["version"]
     assert isinstance(version, str), "manifest version is not a string"
-    # Sanity — every version we've shipped matches one of these shapes.
+    # Sanity — every version we've shipped matches one of these shapes:
+    #   ``X.Y.Z``          regular release            (e.g. 1.7.1)
+    #   ``X.Y.Z.P``        out-of-band patch          (e.g. 1.7.1.1 #448)
+    #   ``X.Y.Z-beta.N``   beta                       (e.g. 1.7.2-beta.1)
+    #   ``X.Y.Z-rc.N``     release candidate
     assert (
-        version.count(".") == 2
+        version.count(".") in (2, 3)
         or "-beta" in version
         or "-rc" in version
-    ), f"manifest version {version!r} doesn't match expected v?.?.? or pre-release shape"
+    ), f"manifest version {version!r} doesn't match expected v?.?.? / v?.?.?.? / pre-release shape"

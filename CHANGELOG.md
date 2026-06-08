@@ -11,11 +11,358 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2] - 08.06.2026
+
+## 🎉 Stable Release
+
+_Consolidates [1.7.2-beta.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.1) through [1.7.2-beta.7](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.7). 19 commits since [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1). 24 hours of HA-PROD soak with zero errors._
+
+### 🔥 New: Hot Water boiler control (#454)
+
+The `HotWaterController` class existed from day one but was never instantiated — setting `hot_water_entity` in the Config tab Hot Water section did nothing at runtime. This release closes that gap end-to-end:
+
+- Registration in setup mirrors the heat-pump pattern (entity + temp sensor + targets + Legionella interval + priority).
+- Live runtime state (`hot_water_current_temperature`, `hours_since_legionella`, the 5 `_last_*_path` audit recorders from #420) populated every cycle into `coordinator.data`.
+- Live-status block on the Hot Water section shows current temp, Legionella tracking, and decision paths when the controller is registered.
+- Two Repair issues fire when configured entities go unavailable: `hot_water_entity_unavailable` (boiler control) and `hot_water_temperature_sensor_unavailable` (with #420 fail-safe semantics — boiler is NOT activated on surplus when the temp sensor is broken).
+- Orphan-repair sweep handles user reconfiguring the boiler entity.
+- Diagnose modal surfaces the full state via `_DIAGNOSE_HOT_WATER_STATE`.
+- 7 new wire-up tests + 7 new repair tests. (by @traktore-org in #454)
+
+### 🔥 New: Tariff price + 15-min provider support (Discussion #432)
+
+The bottom-of-dashboard "Today's Schedule" tariff timeline was lying. Saturday on Tibber NL showed a solid "Goedkoop" bar for all 24 hours when the current price card next to it correctly showed "Normaal" at 0.31 EUR/kWh. Two unrelated code paths; one was misleading.
+
+- **JS fallback no longer lies on weekends.** Mirrors the current `tariff_price_level` across the day with a dashed/translucent indicator showing "best-effort, not real per-hour data".
+- **Parser accepts 15-min ENTSO-E + Tibber Pulse shapes.** Added `prices` (singular) attribute key + `time` / `hour` timestamp keys to the parser vocabulary. NL ENTSO-E users now get correct per-hour data SEM-side.
+- **New diagnostic fields** on the Tariff diagnose surface: `tariff_parsed_attribute`, `tariff_parsed_count`, `tariff_parsed_interval_seconds`, `tariff_today_level_counts`, `tariff_today_first_price`, `tariff_today_last_price`. One Diagnose paste tells us in one read which failure mode hit (no parser match / timezone filter / genuinely-all-cheap / percentile-fallback). (by @traktore-org)
+
+### 🩺 Heat-pump UX + diagnostics
+
+- **Configuration tab subtitle now reflects actual registration state** — was reading `sensor.sem_heat_pump_registered` (doesn't exist) instead of `binary_sensor.sem_heat_pump_registered`. New `_bin()` helper fixes 3 use sites. RienduPre #448. (by @traktore-org)
+- **Orphan heat-pump Repair issues now auto-clear** — repairs from a prior config (e.g. user switched from ESP relays to Modbus template switches) used to stay in the registry indefinitely. New sweep enumerates `heat_pump_relay{1,2}_unavailable_*` issues and clears any whose entity is no longer in current config. RienduPre #448. (by @traktore-org)
+- **Heat-pump runtime path telemetry now visible** — the #421 audit shipped `_last_*_path` recorders in `v1.7.0-beta.24` but never wired them through to a user-visible surface. All 5 paths + current temperature now publish through `coordinator.data` into the Diagnose slicer.
+- **Repair issues survive reload** — replaced in-memory `_raised` flag with idempotent always-raise/always-clear pattern. The flag was per-coordinator-instance, so reloads reset it, and stuck repairs never auto-cleared. Reported by RienduPre + caught in live testing.
+
+### 🩺 Forecast write-time-weather fix (#416)
+
+PROD telemetry on 2026-06-05 showed 42% of forecast records had `weather_category=unknown`. Root cause: weather was captured at day-rollover post-sunset when the entity is unreliable.
+
+- **Eager weather snapshot** in `update()` — any daylight cycle with a non-unknown weather value updates the snapshot. The existing `blended_live` capture still wins on confident mid-day cycles.
+- **Unknown-guard on the `blended_live` capture** — a transient `unknown` at noon no longer locks the day's record to unknown.
+- **Defensive log formatting** — the day-record info log no longer crashes on `None` dampening factor.
+- 3 new tests pin the gap-closing paths. (by @traktore-org in #416)
+
+### 🩺 Hot-water fail-safe (#420)
+
+`is_temperature_safe()` returned `True` whenever `get_current_temperature()` returned `None`. That conflated "no sensor configured" (trust thermostat) with "sensor configured but broken" (silent failure).
+
+- Split the two paths via `_last_temperature_reading_path`: `no_source_configured` → `no_sensor_configured` → `True`; everything else → `configured_sensor_broken` → `False` (fail-safe). (by @traktore-org)
+- 5 new tests pin the fixed branches. Closes #420.
+
+### 🌐 Mobile sem-localize.js delivery
+
+Beta.1 moved `sem-localize.js` from Lovelace resources onto `add_extra_js_url` only. Desktop browsers load both reliably; mobile Companion app does NOT. RienduPre #448: almost every translation key rendering raw on iOS.
+
+- **Dual-channel registration**: now registered as BOTH an `add_extra_js_url` URL AND a Lovelace resource. Same hash-suffixed URL on both channels — browser fetches once. (by @traktore-org)
+- **IIFE guard** in `sem-localize.js`: `(function() { if (window.semLocalize) return; ... })()` — defensive second load is a clean no-op.
+- Follow-up architectural cleanup tracked in #453 (drop `add_extra_js_url` once `sem-localize-ready` event ergonomics are verified).
+
+### 🩺 Per-section Diagnose surface
+
+- Heat pump diagnose now exposes `heat_pump_activation_path`, `heat_pump_deactivation_path`, `heat_pump_relay_path`, `heat_pump_temperature_reading_path`, `heat_pump_offpeak_path`, `heat_pump_current_temperature`.
+- Hot water diagnose now exposes 14 keys covering config + live state + #420 telemetry.
+- Tariff diagnose now exposes parser-shape + per-hour distribution counts + first/last price (see Tariff section above).
+- Modal opacity fix (beta.2) — was rendering at 6% opacity with cards bleeding through; now solid `--ha-card-background` with `backdrop-filter: blur(6px)`.
+
+### 🐛 Other fixes
+
+- `set_option` service now always reloads (was being swallowed by the skip-reload optimization for runtime stepper tweaks).
+- KEBA session_energy pass-through (#449) — new `sensor.sem_charger_<id>_session_energy_external` surfaces the charger's own session counter alongside SEM's internal integration.
+- Chart "Today" window now uses HA's timezone (#450) — was browser-local-midnight, drifted on TZ mismatch.
+- 3 missing translation keys added (`charger_status`, `forecast_source`, `load_management_status`).
+- Dutch translations for 5 new Repair issues (cherry-picked from RienduPre's PR #446 contribution).
+
+### 📚 Docs
+
+- `docs/SETUP_GUIDE.md` section 10 now has a dedicated "Hot water boiler (separate from heat pump)" subsection: config table, two operating modes (with/without temp sensor), fail-safe behaviour, Repair surfaces, and Diagnose troubleshooting.
+- `docs/ARCHITECTURE.md` "SEM is not an integration" principle.
+
+### Contributors
+
+Thanks to **@RienduPre** for the persistent reporting on #448 + Discussion #432 — most of the fixes in this release came from his diagnose dumps + Dutch translation contribution.
+
+### Verification
+
+- **3273 tests pass**, 0 fail.
+- 24h HA-PROD soak on `1.7.2-beta.7` — zero SEM errors, zero warnings, zero stuck Repairs.
+- Live-tested every fix on HA-TEST: heat pump partial-SG-Ready scenario, hot water configure-and-clear flow, tariff parser with synthetic 15-min ENTSO-E sensor, orphan repair sweep with injected stale entry.
+
+# [1.7.2-beta.7] - 08.06.2026
+
+## 🧪 Beta Release
+
+_#454 Phase 2-4: Hot water Repair issues + live-status block + translations + docs._
+
+### 🩺 Hot water Repair issues
+
+Two new self-diagnostic surfaces in Settings → System → Repairs:
+
+- **`hot_water_entity_unavailable`** — fires when the configured boiler-control entity has been `unavailable` / `unknown` / missing for >5 min. SEM stops issuing on/off commands (they'd silently no-op anyway); the Repair surfaces the broken state with a clear "check the upstream integration" message. (by @traktore-org)
+- **`hot_water_temperature_sensor_unavailable`** — distinct from the boiler Repair because the safety semantics differ. When a configured temp sensor breaks, `is_temperature_safe()` returns False (post-#420 fail-safe), which means SEM stops activating the boiler entirely. This Repair makes that visible to the user.
+
+Both auto-clear when the entity recovers. Both use the idempotent always-raise/always-clear pattern (no in-memory flags — lesson from beta.2/5).
+
+**Orphan sweep** (new function `clear_orphan_hot_water_repairs`): runs once per coordinator instance, enumerates all `hot_water_*_unavailable_*` issues in the registry, clears any whose entity is no longer in current config. Mirror of beta.5's heat-pump orphan sweep — handles the "user reconfigured the boiler entity, old Repair stuck forever" case.
+
+7 new tests pin: per-Repair raise + clear, distinct issue ids, registry-error defensiveness, orphan sweep with reconfigured entity, orphan sweep with no config at all.
+
+### 🩺 Live-status block on Config tab Hot Water section
+
+Pre-wire-up the Hot Water section was config-only (entity pickers + sliders). Now when the controller IS registered, the section also shows live state:
+
+- Current temperature (formatted to 1 decimal)
+- Solar target
+- Hours since the last Legionella cycle (or "Never run" / "Cycle running")
+- `temperature_reading_path` (which source the controller is reading from: `separate_sensor`, `entity_attribute`, `no_source_configured`, etc.)
+- `temperature_safety_path` (when something interesting — initial `uninitialized` hidden)
+- `activation_path` (when SEM has actually activated the boiler at least once)
+
+The path attributes surface the #420 audit's runtime telemetry directly in the UI — users can see WHY the boiler activated or didn't on the last cycle without opening the Diagnose modal.
+
+### 🌍 Translations
+
+- 7 new dashboard translation keys for the live-status labels (EN + DE polished; 13 other languages with EN fallback).
+- 2 new Repair-issue translation keys in `strings.json` + propagated to all 15 language files. EN polished, DE + NL polished (NL credited to RienduPre's prior translation work).
+
+### 📚 Docs
+
+`docs/SETUP_GUIDE.md` section 10 now has a dedicated "Hot water boiler (separate from heat pump)" subsection covering:
+
+- Config field reference table
+- The two operating modes (with vs without temp sensor)
+- What happens when the temp sensor breaks (fail-safe behaviour)
+- What happens when the boiler-control entity breaks (Repair surfaces it)
+- How to use the Diagnose surface for troubleshooting
+
+3273 tests pass. **#454 closes with this release** — all 4 phases shipped:
+1. Controller wire-up (beta.6)
+2. Repair issues (beta.7)
+3. Live-status block (beta.7)
+4. Translations + docs (beta.7)
+
+# [1.7.2-beta.6] - 08.06.2026
+
+## 🧪 Beta Release
+
+_Two follow-ups on top of beta.5: the Config tab subtitle bug from #448 + the HotWaterController wire-up (#454)._
+
+### 🐛 Config tab subtitle bug (#448 follow-up)
+
+Looking at RienduPre's diagnose dump, his heat pump IS registered (`registered_sg_ready` + `heat_pump_registered: true`). But the Config tab Heat Pump section subtitle showed "Not configured". Bug class: every card method that read `binary_sensor.sem_heat_pump_registered` was actually doing `_val('heat_pump_registered')` which prepends `sensor.sem_` — the lookup always returned an empty string because the entity is a *binary* sensor.
+
+- New `_bin(suffix)` helper on `sem-config-card.js` reads from `binary_sensor.sem_<suffix>`. (by @traktore-org)
+- Converted 3 prior `_val('heat_pump_registered') === 'on'` use sites: subtitle, overview chips bar, Setup overview body.
+- Heat Pump section subtitle now correctly reads "configured" when the controller is registered.
+
+### 🔥 HotWaterController is now actually instantiated in setup (#454)
+
+The class existed in `devices/hot_water_controller.py` with full unit-test coverage, the Config tab Hot Water section collected settings, and the dashboard expected the live state — but **the controller was never instantiated**. Setting `hot_water_entity` did nothing at runtime; the boiler was never controlled.
+
+This release closes that loop:
+
+- **`__init__.py` registration block** mirrors the heat-pump pattern. When `hot_water_entity` is set, SEM instantiates `HotWaterController` with the saved options (entity, temp sensor, solar target, max temp, Legionella target/interval, min temp, priority, optional power sensor) and registers it with the `SurplusController`. (by @traktore-org)
+- **`HotWaterSensorData`** new dataclass in `coordinator/types.py` with 14 fields covering registration state, current temperature, Legionella tracking, and all 5 `_last_*_path` telemetry recorders from the #420 audit.
+- **`coordinator.py:_update_analytics_phases`** populates `hot_water_data` from the registered controller — `get_current_temperature()`, `hours_since_legionella`, the `_legionella_cycle_active` flag, and the runtime decision-branch paths.
+- **`CoordinatorSensorData.to_dict()`** publishes all 14 keys into `coordinator.data` so the Diagnose modal + future UI surfaces can read them.
+- **`_DIAGNOSE_HOT_WATER_STATE`** in the diagnose slicer now lists actual runtime keys instead of the prior placeholder. Hitting the 🩺 Diagnose button on the Hot Water section returns a payload with concrete state.
+- 7 new tests pin: lazy-import presence, `register_device` call, gate keyed on `hot_water_entity`, dataclass field surface, default-unregistered state, `to_dict()` plumbing, diagnose slicer coverage.
+
+**Live-tested on HA-TEST** with `input_boolean` boiler + temp-sensor stand-in: registration fired, temperature read OK (`temperature_reading_path: "separate_sensor"` per #420), all config + state surfaces populated in the diagnose dump.
+
+3266 tests pass.
+
+### What's still pending under #454
+
+- **Repair issues** for boiler entity unavailable / temp sensor unavailable (mirror the heat-pump repair pattern). Not blocking the wire-up but improves the diagnostic surface.
+- **Live-status block** on the Hot Water section in `sem-config-card.js` (currently only the intro shows when not configured; needs a registered-state body showing live temp + Legionella status).
+- **Translations** for the new hot_water_* state keys + helper labels.
+- **Docs**: `docs/USER_GUIDE.md` section + README "Supported devices".
+
+These ship in follow-up betas — #454 stays open until they all land.
+
+# [1.7.2-beta.5] - 08.06.2026
+
+## 🧪 Beta Release
+
+_Hotfix for stuck heat-pump Repair issues from prior config (RienduPre, #448)._
+
+### 🐛 Orphan heat-pump relay repairs now auto-clear (#448)
+
+RienduPre reported (2026-06-08, post-beta.4 upgrade): 2 stuck Repair issues for OLD entity names (`switch.zolder_comfoair_*`) that he'd long since replaced with new ones (`switch.bijkeuken_nibe_sg_ready_*`). The new entities work correctly + the heat pump IS registered (`registered_sg_ready` per his diagnose dump), but the old repairs stayed in the registry indefinitely.
+
+Root cause: beta.2's per-cycle clear path only addresses CURRENTLY-configured entities. Repairs from prior config — whose entity_ids are no longer in `heat_pump_relay1_entity` / `heat_pump_relay2_entity` — were never enumerated, so they sat orphaned.
+
+- **New `clear_orphan_heat_pump_relay_repairs()` sweep** in `coordinator/repair_issues.py`. Enumerates all `heat_pump_relay1_unavailable_*` and `heat_pump_relay2_unavailable_*` issues in the registry and clears any whose entity_id is NOT in the currently-configured set. (by @traktore-org)
+- **One-time per coordinator instance** — runs in the heat-pump repair tracking block, guarded by `_heat_pump_orphan_sweep_done` so it doesn't repeat every 10 s. Re-runs after each reload (which creates a fresh coordinator).
+- **Idempotent** — safe to invoke against an empty config (sweeps ALL relay repairs), safe to invoke with no orphans (no-op), defensive against issue-registry exceptions.
+
+4 new tests cover the orphan sweep, empty-config sweep, no-orphan idempotency, and registry-error defensiveness. 3259 tests pass.
+
+# [1.7.2-beta.4] - 08.06.2026
+
+## 🧪 Beta Release
+
+_Mobile-only hotfix: translations were rendering as raw keys on the Companion app._
+
+### 🐛 sem-localize.js now loads on mobile (#448 follow-up)
+
+RienduPre reported (2026-06-08, iOS Companion app): almost every translation key on the dashboard rendering as the raw key (`today_plan_title`, `home_sub`, `plan_now`, etc.), not just the new beta-introduced ones. Root cause: beta.1 moved `sem-localize.js` off the Lovelace-resource channel onto `add_extra_js_url`-only. Desktop browsers load both channels reliably; mobile Companion app does NOT pick up `add_extra_js_url` scripts in many cases.
+
+- **Dual-channel registration**: `sem-localize.js` is now registered as BOTH an `add_extra_js_url` (desktop-friendly, loads before Lovelace modules) AND a Lovelace resource (mobile-friendly). Same hash-suffixed URL on both channels — browser fetches once. (by @traktore-org)
+- **IIFE guard**: `sem-localize.js` is now wrapped in `(function(){ if (window.semLocalize) return; ... })()` so a defensive second load is a clean no-op. Without the guard, a second `<script>` execution would throw on the second `const _semTranslations = {...}` declaration.
+- **Generator updated**: `scripts/regenerate_localize.py` produces the guarded output. The IIFE shape is now self-documenting in the generated file's header.
+
+After upgrade + restart, **clear the Companion app cache** (Settings → App Configuration → Reset frontend cache). The new Lovelace resource registration causes a fresh fetch, and the IIFE-guarded file works whether one or both channels load it.
+
+3255 tests pass.
+
+# [1.7.2-beta.3] - 07.06.2026
+
+## 🧪 Beta Release
+
+_Hotfix on top of [1.7.2-beta.2](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.2). Tariff timeline + 15-min provider support + diagnostic surface._
+
+### 🐛 Tariff timeline no longer lies on weekends with missing schedule (Discussion #432)
+
+RienduPre reported (2026-06-06, Saturday, Tibber NL dynamic): the bottom "Schema vandaag" timeline showed a solid "Goedkoop" bar for all 24 hours — but the current-classifier card above it correctly showed "Normaal" with 0.3142 EUR/kWh between the configured 0.1/0.3 thresholds. Two code paths, one was lying.
+
+Root cause: `_getTariffSchedule()` in `sem-schedule-card.js` had a hardcoded fallback when `schedule_today` wasn't published:
+- Weekday → `[NT 0-7, HT 7-20, NT 20-24]` (CH-shape, wrong for NL)
+- Weekend → `[{0..24h, cheap}]` (just labels the whole day cheap)
+
+That weekend branch is exactly what RienduPre's Saturday screenshot showed.
+
+- **New JS fallback**: when `schedule_today` is unavailable, mirror the current `tariff_price_level` across the day instead of pretending we know per-hour data.
+- **Visual fallback indicator**: fallback blocks now render at reduced opacity (35%) with a dashed border — users can see at a glance the chart is showing best-effort, not real data. (by @traktore-org)
+- Tooltip changes to `<level> (no per-hour data — showing current level)` so the lie is structurally impossible.
+
+### 🌍 Parser now accepts 15-min ENTSO-E + Tibber Pulse shapes (Discussion #432)
+
+RienduPre's prompt — *"his tariff changes every 15 min"* — sent us deep into the parser. Two real gaps:
+
+1. **ENTSO-E attribute shape**: Day Ahead Prices integration uses `prices` (singular) array with `time` + `price` fields. The old parser only checked `prices_today` / `prices_tomorrow` / `today` / `tomorrow` with `start` / `startsAt`. Now adds `prices` + `time` + `hour` to the attribute / timestamp vocabulary.
+2. **15-min granularity gap detection**: the parser now records the detected sample interval. Tibber Pulse 15-min API + ENTSO-E 15-min zones (NL, DE) both produce 96 entries/day; the diagnostic surface now reports `tariff_parsed_interval_seconds: 900` so a 15-min vs hourly mismatch is visible at a glance.
+
+5 new tests pin these shapes — Tibber Pulse 96-entry, ENTSO-E `prices` array, `hour` key for template sensors, empty-attribute zero-diag verification, 15-min block-collapsing into chart blocks.
+
+### 🩺 New tariff diagnose fields (#448 follow-up)
+
+The `tariff` diagnose section now exposes WHAT THE PARSER ACTUALLY SAW:
+
+- `tariff_parsed_attribute` — which attribute key matched (e.g. `today`, `prices`, `raw_today`). `null` if nothing matched.
+- `tariff_parsed_count` — total PricePoints parsed from the entity.
+- `tariff_parsed_interval_seconds` — 900 for 15-min, 3600 for hourly, etc.
+- `tariff_today_prices_count` — points for today specifically (after timezone filtering).
+- `tariff_today_level_counts` — distribution: `{"cheap": 25, "normal": 50, "expensive": 21}`.
+- `tariff_today_first_price` / `tariff_today_last_price` — sanity-check the parsed values.
+
+For RienduPre / anyone hitting "all day cheap": hit the 🩺 Diagnose button on Tariff & pricing, paste the JSON. The fields tell us in one read whether (a) parser didn't recognise the attribute shape, (b) shape matched but timestamps in wrong timezone, (c) shape matched and prices are genuinely all cheap, or (d) percentile mode hit a flat-distribution fallback.
+
+### Research that informed the fix
+
+- [Home Assistant Tibber integration](https://www.home-assistant.io/integrations/tibber/) — official `today` / `tomorrow` with `startsAt` + `total`. 15-min native as of HA 2025.10.0.
+- [JaccoR/hass-entso-e](https://github.com/JaccoR/hass-entso-e) — uses `prices` (singular) + `time` + `price`. 15-min for NL/DE zones.
+- [jpawlowski/hass.tibber_prices](https://github.com/jpawlowski/hass.tibber_prices) — 100+ sensors, quarter-hourly precision.
+- [OdynBrouwer/HomeAssistantTibber](https://github.com/OdynBrouwer/HomeAssistantTibber) — Advanced fork with quarter-hourly + NL solar support.
+
+3255 tests pass, 0 fail.
+
+# [1.7.2-beta.2] - 07.06.2026
+
+## 🧪 Beta Release
+
+_Second beta on top of [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1) stable. Two structural bug fixes found during live testing on HA-TEST, plus newly-wired telemetry surfaces for heat-pump + hot-water diagnostics._
+
+### 🐛 `set_option` service must always reload (live-test finding)
+
+Configuring `heat_pump_relay2_entity` via `solar_energy_management.set_option` updated the saved options but did NOT re-register the heat-pump controller. The `async_update_options` listener has a skip-reload optimization for runtime number/switch tweaks (intentional, ~1 s downtime saved per slider click) which was accidentally swallowing the `set_option` write too. Result: status sensor showed `not_configured` despite both relay entities being saved, until the next full HA restart. (by @traktore-org)
+
+- `set_option` now explicitly calls `async_reload` after `async_update_entry` so the new config is always picked up. The merge skip stays (no reload when nothing actually changed).
+- Caller's next read sees the new state immediately — service awaits the reload.
+
+### 🐛 Repair issues now auto-clear across reloads (also caught live + RienduPre)
+
+`heat_pump_partial_sg_ready` and `heat_pump_relay_unavailable` Repair issues used an in-memory `_raised` flag to track "have we raised this already?" That flag is per-coordinator-instance — reset on every reload. So the moment a user fixed their config (e.g. added the second SG-Ready relay), the new coordinator's flag was False, the `clear_*` call never fired, and the stale Repair stuck in the registry indefinitely. RienduPre also reported the symptom on #432 / #448. (by @traktore-org)
+
+- Removed both in-memory flags. Now always calls `raise_*` / `clear_*` based on current state — both `async_create_issue` and `async_delete_issue` are idempotent so the duplicate calls are harmless.
+- Clears any prior issue when a slot's entity is removed from config (was only clearing when the entity was present-but-broken-then-fixed).
+- Result: Repair issues correctly mirror live config state across any number of reloads.
+
+### 🩺 Heat-pump runtime path telemetry now visible (#421 follow-up)
+
+The #421 audit shipped `_last_activation_path` / `_last_deactivation_path` / `_last_relay_path` / `_last_temperature_reading_path` / `_last_offpeak_path` recorders on `HeatPumpController` in `v1.7.0-beta.24` (`494fdf9`) — but never wired them through to a user-visible surface. The audit was effectively half-done; the recordings were just internal Python attributes nothing read.
+
+- All 5 path recorders now publish through `coordinator.data` into the diagnose slicer for `heat_pump`. (by @traktore-org)
+- New `heat_pump_current_temperature` published too — the live reading the controller uses for safety decisions.
+- Diagnose modal on the Heat Pump section now shows every branch the controller took on the last cycle. Concrete vocabulary: `force_on`, `boost`, `boost+climate`, `normal`, `blocked`, `parent_declines`, `already_warm_skip`, etc.
+
+### 🩺 New Hot Water section + diagnose surface
+
+Configuration tab now has a dedicated Hot Water section with entity pickers (boiler control + temperature sensor) and the existing Solar / Max temperature steppers. New `hot_water` diagnose slicer exposes the config so support can see what's set. (by @traktore-org)
+
+- Hot Water section + diagnose button live on every install. (No runtime status block yet — the `HotWaterController` isn't wired into the production surplus loop; that's the next beta.)
+- 20 new translation keys (EN + DE polished, 13 other languages with EN fallback).
+
+### Notes for testers
+
+- After upgrade, re-check any stuck Repair issues in HA → Settings → Repairs. They'll auto-clear on the next coordinator cycle if the underlying condition is no longer true. Pre-fix orphaned issues may need a one-time manual dismiss.
+- The `set_option` reload fix means structural option changes (entity pickers, mode selects) take effect in ~3 s instead of "next restart" — much better for the Configuration tab editing flow.
+
+# [1.7.2-beta.1] - 07.06.2026
+
+## 🧪 Beta Release
+
+_First beta on top of [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1) stable._
+
+### 🐛 EV session-energy pass-through + stale-global cleanup (#449)
+
+User report on PROD 2026-06-07: KEBA's `sensor.keba_p30_session_energy` showed **14.61 kWh** but the SEM-published `sensor.sem_charger_ev_charger_session_energy` showed only **0.97 kWh**. Structural disagreement — SEM integrates its own session counter internally (load-bearing for solar-share / cost calcs) while KEBA's is a hardware truth that survives reloads + midnight rollovers.
+
+- **New `sensor.sem_charger_<id>_session_energy_external`** sensor per charger. Passes through the charger's own `ev_session_energy_sensor` (e.g. KEBA's session counter) directly to the dashboard. Auto-converts Wh → kWh based on the source unit. Surfaces the charger's truth alongside SEM's internal integration so users see both numbers and can interpret the difference. (by @traktore-org in #135)
+- **v11 → v12 schema migration.** Drops the stale top-level `ev_session_energy_sensor` key left over from the v2 → v3 multi-charger migration. The per-charger value in `ev_chargers[].ev_session_energy_sensor` has been canonical since v3; the top-level copy was harmless but on PROD it pointed at the wrong sensor (`keba_p30_energy_target` — a user setpoint, always 0) and confused diagnostics. Defensive: only drops the top-level when at least one charger has its own value. (by @traktore-org in #135)
+- **`config_flow.py` `VERSION` bumped 11 → 12.**
+
+### 🌍 Chart "Today" window now uses HA's timezone (#450)
+
+`sem-chart-card.js:_setDefaultPeriod` previously used `new Date(now.getFullYear(), now.getMonth(), now.getDate())` to compute "Today's midnight" — but that's the **browser's** local midnight, not HA's. When the browser timezone differs from the HA server's (Companion app on a phone roaming across timezones, desktop on a different DST schedule), the "Today" window shifted by 1+ hours. User-reported as the chart timing being "off like an hour or so".
+
+- **New `_startOfDayInHaTz(now)` helper.** Uses `hass.config.time_zone` + `Intl.DateTimeFormat` to compute the absolute Date pointing at HA-local-midnight, regardless of browser TZ. Falls back to browser-local-midnight when `hass.config.time_zone` is unavailable. (by @traktore-org in #136)
+- Both call sites in `_setDefaultPeriod` (the `wantToday` start + the `week` Monday-of-week start) updated to use the helper.
+
+### 🩺 Per-section Diagnose slicers (#432 polish)
+
+Beta.17 wired Diagnose buttons into every Configuration tab section but only **Overview** and **Heat Pump** had dedicated key slicers; the other 8 sections used a generic prefix-match. This release adds curated state + option slicers per section so the JSON payload RienduPre (or anyone) pastes back is signal-rich, not noisy. (by @traktore-org in #432)
+
+Dedicated slicers landed for: **EV chargers** (per-charger nested entries via prefix-match on `charger_<id>_*`), **Tariff** (classifier_path + percentile breaks + price curves), **Battery zones** (zone settings + live SOC + health), **Battery scheduler** (capacity / efficiency / pessimism), **Load management** (peak levels + shedding status), **Forecast** (today/tomorrow kWh + source + dampening factor), **Notifications** (toggles + service), **Advanced** (deltas + observer mode).
+
+### 🧪 Tests
+
+- **`tests/test_config_flow_migration.py`** — 2 new v11 → v12 cases: (a) stale top-level dropped when per-charger value exists; (b) defensive — top-level preserved when no per-charger value (don't silently drop a sensor mapping the user may rely on). Existing migration tests updated for the new v12 target.
+- **`tests/test_per_charger_seed_migration.py`** + **`tests/test_277_charge_mode_phase_a.py`** + **`tests/test_277_charge_mode_phase_b.py`** — version assertions bumped 11 → 12 (chain still ends at the latest version).
+- Full suite: **3 241 pass, 9 skipped, 0 fail** (was 3 239 at 1.7.1).
+
+### 📦 Schema migration
+
+- **v11 → v12** (#449) — drops stale top-level `ev_session_energy_sensor` when at least one charger has its own value. No data loss; per-charger value remains canonical.
+
 # [1.7.1] - 07.06.2026
 
 ## 🎉 Stable Release
 
 _Consolidates the 1.7.1-beta.1 through 1.7.1-beta.17 chain into a single stable cut. Soaked overnight on HA-PROD on real hardware (Huawei SUN2000 + LUNA2000 + KEBA P30); no regression vs 1.7.0._
+
+> **Note — issue-reference correction (2026-06-07):** the entry below cites `#446` for the EV `ev_target_type` / estimated_soc fix, but that number is actually an open issue titled "Extra Dutch translations" (unrelated). The retroactive issue for the fix is [#451](https://github.com/traktore-org/sem-community/issues/451). Same applies for the `#135` / `#136` references that originally appeared in the 1.7.2-beta.1 entry — corrected to [#449](https://github.com/traktore-org/sem-community/issues/449) and [#450](https://github.com/traktore-org/sem-community/issues/450). Going forward, GitHub issues are filed BEFORE the fix lands so commit messages cite real numbers.
 
 ### 🚀 Headline features
 

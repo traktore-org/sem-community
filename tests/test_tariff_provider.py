@@ -1152,3 +1152,155 @@ class TestTariffDataSerialization:
         d = data.to_dict()
         assert d["tariff_today_min_price"] is None
         assert d["tariff_next_cheap_start"] is None
+
+
+# ============================================================================
+# v1.7.2-beta.3 — 15-min providers + parser-diag fields (#432)
+# ============================================================================
+
+class TestExpandedParserShapes:
+    """Pin the v1.7.2-beta.3 widened attribute-key support so the
+    parser tolerates NL Tibber Pulse 15-min, ENTSO-E, EnergyZero,
+    EasyEnergy etc. shapes without manually configuring per-provider.
+
+    Background: RienduPre's Tibber NL install (Discussion #432,
+    2026-06-07) reported the bottom-of-dashboard tariff timeline as
+    "all day cheap" while the current-classifier card correctly
+    showed Normaal. The bug class was: SEM's parser didn't recognise
+    his integration's attribute shape, so ``_read_prices_list``
+    returned an empty list, ``get_schedule_for_day`` returned [],
+    coordinator.data had no ``tariff_schedule_today``, and the JS
+    card fell through to its weekend-cheap fallback.
+    """
+
+    def test_tibber_15min_pulse_shape_96_entries(self, mock_hass):
+        """Tibber Pulse 15-min API: 96 entries/day in `today` array.
+
+        Same shape as 24-entry Tibber but more granular. The parser
+        SHOULD pick them up and the gap-detection should report 900s.
+        """
+        now = datetime(2026, 6, 6, 0, 0, 0)
+        prices = []
+        for q in range(96):
+            ts = now + timedelta(minutes=15 * q)
+            prices.append({"startsAt": ts.isoformat(), "total": 0.10 + 0.0001 * q})
+
+        state = _make_price_state(0.10, attributes={"today": prices})
+        mock_hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.tibber")
+            parsed = provider._read_prices_list()
+
+        assert len(parsed) == 96
+        assert provider._last_parsed_count == 96
+        assert provider._last_parsed_gap_seconds == 900.0  # 15 min
+        assert provider._last_parsed_attribute == "today"
+
+    def test_entsoe_prices_array_shape(self, mock_hass):
+        """ENTSO-E pattern: ``prices`` (singular) array with ``time`` keys.
+
+        Common shape in NL ENTSO-E sensors. The expanded parser must
+        accept ``time`` as a timestamp key.
+        """
+        now = datetime(2026, 6, 6, 0, 0, 0)
+        prices_attr = [
+            {"time": (now + timedelta(hours=h)).isoformat(), "price": 0.08 + 0.005 * h}
+            for h in range(24)
+        ]
+        state = _make_price_state(0.08, attributes={"prices": prices_attr})
+        mock_hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.entsoe")
+            parsed = provider._read_prices_list()
+
+        assert len(parsed) == 24
+        assert provider._last_parsed_attribute == "prices"
+        assert provider._last_parsed_gap_seconds == 3600.0
+
+    def test_hour_key_for_per_hour_template_sensor(self, mock_hass):
+        """Some community template sensors use ``hour`` instead of
+        ``startsAt``/``start``/``time``. New parser must accept it."""
+        now = datetime(2026, 6, 6, 0, 0, 0)
+        prices_attr = [
+            {"hour": (now + timedelta(hours=h)).isoformat(), "value": 0.20 + 0.01 * h}
+            for h in range(24)
+        ]
+        state = _make_price_state(0.20, attributes={"prices": prices_attr})
+        mock_hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.tpl")
+            parsed = provider._read_prices_list()
+
+        assert len(parsed) == 24
+
+    def test_empty_attributes_yields_diag_zero(self, mock_hass):
+        """When the sensor has NO recognised attribute shape, the
+        diag fields must reflect zero (not stale data from a prior
+        cycle) so the diagnose surface shows the truth."""
+        # First, populate from a valid shape
+        now = datetime(2026, 6, 6, 0, 0, 0)
+        good = [{"startsAt": (now + timedelta(hours=h)).isoformat(),
+                 "total": 0.20} for h in range(24)]
+        state_good = _make_price_state(0.20, attributes={"today": good})
+
+        # Then re-read from a sensor with no recognised attrs
+        state_bad = _make_price_state(0.20, attributes={"unknown_key": [1, 2, 3]})
+
+        mock_hass.states.get = MagicMock(return_value=state_good)
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.x")
+            assert len(provider._read_prices_list()) == 24
+            assert provider._last_parsed_attribute == "today"
+
+        mock_hass.states.get = MagicMock(return_value=state_bad)
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            assert len(provider._read_prices_list()) == 0
+            assert provider._last_parsed_attribute is None
+            assert provider._last_parsed_count == 0
+            assert provider._last_parsed_gap_seconds is None
+
+
+class TestScheduleAfter15MinParse:
+    """The chart's schedule must collapse 96 15-min points into
+    sensible blocks (not 96 thin rects). Pin the block-collapsing
+    logic for the 15-min case so #432-style debugging stays honest."""
+
+    def test_15min_alternating_levels_collapses_blocks(self, mock_hass):
+        now = datetime(2026, 6, 6, 0, 0, 0)
+        # First half cheap (low), second half expensive (high) — 96 points
+        prices = []
+        for q in range(96):
+            ts = now + timedelta(minutes=15 * q)
+            # First 48 quarters (00:00-12:00) very cheap, last 48 expensive
+            price = 0.05 if q < 48 else 0.45
+            prices.append({"startsAt": ts.isoformat(), "total": price})
+
+        state = _make_price_state(0.05, attributes={"today": prices})
+        mock_hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(
+                mock_hass, price_entity="sensor.tibber",
+                classification_mode="static",
+            )
+            schedule = provider.get_schedule_for_day(now)
+
+        # The collapse should produce 2 blocks (cheap → expensive),
+        # not 96. The 15-min granularity is preserved at the
+        # _read_prices_list level but the chart blocks merge same-level
+        # consecutive points.
+        assert 1 <= len(schedule) <= 3, (
+            f"got {len(schedule)} blocks for a simple 2-band day — "
+            "block collapsing broken for 15-min granularity"
+        )
+        assert schedule[0]["start"] == "00:00"
+        assert schedule[-1]["end"] == "24:00"

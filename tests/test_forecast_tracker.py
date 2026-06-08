@@ -276,29 +276,100 @@ def test_416_snapshot_resets_on_day_rollover(mock_dt, tracker):
 
 
 @patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
-def test_416_save_record_falls_back_to_live_when_no_snapshot(mock_dt, tracker):
-    """If the day never reached the confident branch (rare: forecast
-    always below MIN_FORECAST_KWH, HA restarted late, …), the rollover
-    falls back to ``_weather_today``. This is honest under-count, not
-    a regression — we mark the record best-effort."""
+def test_416_eager_snapshot_on_low_forecast_day(mock_dt, tracker):
+    """v1.7.2 (2026-06-07): the eager-snapshot path captures weather
+    during daylight even when the day never reaches ``blended_live``
+    (rainy day with forecast < MIN_FORECAST_KWH). Without this gap,
+    low-forecast days landed in ``weather_category=unknown``."""
     mock_dt.now.return_value = _freeze_dt(day=18, hour=13)
     # Single cycle, low-forecast — won't trip the confident gate.
     tracker.update(forecast_today_kwh=10.0, actual_solar_kwh=8.0,
                    weather_condition="sunny")
+    # Eager capture must have fired — daylight + non-unknown weather.
+    assert tracker._weather_snapshot == "sunny", (
+        "eager-snapshot did not fire on low-forecast day at hour=13 — "
+        "this is the gap that left rainy/overcast days in weather=unknown."
+    )
     # Manually nudge today's forecast above the save gate so the
     # rollover writes (otherwise the < MIN_FORECAST_KWH guard skips).
     tracker._today_forecast = 12.0
-    # Ensure no snapshot was set this day
-    if tracker._weather_snapshot is not None:
-        pytest.skip("snapshot fired — test premise no longer holds")
 
     mock_dt.now.return_value = _freeze_dt(day=19, hour=1)
     tracker.update(forecast_today_kwh=11.0, actual_solar_kwh=0.0,
                    weather_condition="clear-night")
 
     assert len(tracker._history) == 1
-    # No mid-day snapshot ever fired → fall back to live ``_weather_today``
-    # as it was at the moment the rollover ran (i.e. ``clear-night``).
+    # Eager snapshot from yesterday's hour=13 cycle wins over the
+    # post-midnight live ``clear-night``.
+    assert tracker._history[0].weather == "sunny"
+
+
+@patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
+def test_416_eager_snapshot_ignores_unknown_weather(mock_dt, tracker):
+    """v1.7.2 (2026-06-07): the eager-snapshot path must skip when the
+    weather entity itself reports ``unknown``/``unavailable``. Otherwise
+    a broken weather entity would *force* every record to ``unknown``."""
+    mock_dt.now.return_value = _freeze_dt(day=18, hour=13)
+    tracker.update(forecast_today_kwh=15.0, actual_solar_kwh=2.0,
+                   weather_condition="unknown")
+    assert tracker._weather_snapshot is None, (
+        "eager-snapshot wrote ``unknown`` instead of skipping — would "
+        "lock the day's record to unknown even if a later cycle reports "
+        "a real value."
+    )
+    # A later cycle with a real value should land the snapshot.
+    tracker.update(forecast_today_kwh=15.0, actual_solar_kwh=4.0,
+                   weather_condition="partlycloudy")
+    assert tracker._weather_snapshot == "partlycloudy"
+
+
+@patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
+def test_416_eager_snapshot_skips_pre_sunrise_and_post_sunset(mock_dt, tracker):
+    """v1.7.2 (2026-06-07): the eager-snapshot path is daylight-gated.
+    A pre-sunrise or post-sunset cycle must NOT overwrite a confident
+    mid-day snapshot, because the weather entity is unreliable outside
+    daylight (``clear-night`` on Met.no, etc)."""
+    # First, mid-day capture lands a confident snapshot.
+    mock_dt.now.return_value = _freeze_dt(day=18, hour=13)
+    tracker.update(forecast_today_kwh=15.0, actual_solar_kwh=8.0,
+                   weather_condition="sunny")
+    assert tracker._weather_snapshot == "sunny"
+
+    # Now simulate a post-sunset cycle on the same day. Weather entity
+    # has flipped to ``clear-night`` — the eager path must NOT
+    # overwrite our mid-day ``sunny``.
+    mock_dt.now.return_value = _freeze_dt(day=18, hour=22)
+    tracker.update(forecast_today_kwh=15.0, actual_solar_kwh=10.0,
+                   weather_condition="clear-night")
+    assert tracker._weather_snapshot == "sunny", (
+        "post-sunset cycle overwrote the mid-day snapshot — daylight "
+        "gate is broken or absent."
+    )
+
+
+@patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
+def test_416_save_record_falls_back_to_live_when_no_snapshot(mock_dt, tracker):
+    """The fallback path still exists for the truly-degenerate case:
+    HA was restarted post-sunset AND the weather entity has been
+    ``unknown`` the entire daylight portion of the day. Then there is
+    nothing better to write than the live ``_weather_today``."""
+    # First cycle is pre-sunrise — eager gate rejects on hour.
+    mock_dt.now.return_value = _freeze_dt(day=18, hour=5)
+    tracker.update(forecast_today_kwh=10.0, actual_solar_kwh=0.0,
+                   weather_condition="clear-night")
+    tracker._today_forecast = 12.0
+    assert tracker._weather_snapshot is None, (
+        "eager gate let a pre-sunrise cycle land — daylight gate broken."
+    )
+
+    # Day rollover at hour=1 with live weather still unknown.
+    mock_dt.now.return_value = _freeze_dt(day=19, hour=1)
+    tracker.update(forecast_today_kwh=11.0, actual_solar_kwh=0.0,
+                   weather_condition="clear-night")
+
+    assert len(tracker._history) == 1
+    # No snapshot ever fired → falls back to live ``_weather_today``
+    # as it was at rollover. Best-effort.
     assert tracker._history[0].weather == "clear-night"
 
 

@@ -62,6 +62,13 @@ const SECTIONS = [
         subtitleFn: (c) => c._heatPumpSubtitle(),
     },
     {
+        id: 'hot_water',
+        icon: 'mdi:water-boiler',
+        color: '#5BC8D8',
+        titleKey: 'config_section_hot_water',
+        subtitleFn: (c) => c._hotWaterSubtitle(),
+    },
+    {
         id: 'battery_scheduler',
         icon: 'mdi:calendar-clock',
         color: '#f06292',
@@ -274,6 +281,20 @@ class SEMConfigCard extends SEMLitBase {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         return (e && e.state !== 'unavailable' && e.state !== 'unknown') ? e.state : '';
     }
+    /**
+     * Read a BINARY sensor state — ``binary_sensor.sem_<suffix>``.
+     * Returns ``true`` when state is ``"on"``, ``false`` otherwise.
+     *
+     * v1.7.2-beta.5 (#448): ``_val()`` prepends ``sensor.sem_`` so it
+     * doesn't work for binary_sensor entities. ``heat_pump_registered``,
+     * ``heat_pump_solar_boost``, ``ev_charging``, ``solar_active``, etc.
+     * are BINARY sensors. Reading them via ``_val()`` always returns ''
+     * — the subtitle ended up showing "not_configured" even when the
+     * heat pump WAS registered (RienduPre).
+     */
+    _bin(suffix) {
+        return this._hass?.states[`binary_sensor.sem_${suffix}`]?.state === 'on';
+    }
     _valNum(suffix, fallback = 0) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
@@ -309,7 +330,7 @@ class SEMConfigCard extends SEMLitBase {
 
     _overviewSubtitle() {
         const chargers = this._chargersList().length;
-        const heatpump = this._val('heat_pump_registered') === 'on';
+        const heatpump = this._bin('heat_pump_registered');
         const parts = [];
         parts.push(`${chargers} ${this._t('config_subtitle_chargers')}`);
         if (heatpump) parts.push(this._t('config_subtitle_heatpump_on'));
@@ -329,7 +350,18 @@ class SEMConfigCard extends SEMLitBase {
         return level ? `${provider} · ${this._t(level.toLowerCase()) || level}` : provider;
     }
     _heatPumpSubtitle() {
-        return this._val('heat_pump_registered') === 'on'
+        return this._bin('heat_pump_registered')
+            ? this._t('configured')
+            : this._t('not_configured');
+    }
+    _hotWaterSubtitle() {
+        // The HotWaterController is not currently instantiated in the
+        // production path — until that hookup lands, the subtitle just
+        // says whether the user has configured a hot_water_entity at
+        // all. The Diagnose modal still works and shows the configured
+        // sensor + targets, useful for support.
+        const opts = this._options || {};
+        return opts.hot_water_entity
             ? this._t('configured')
             : this._t('not_configured');
     }
@@ -442,7 +474,7 @@ class SEMConfigCard extends SEMLitBase {
     _renderOverview(T) {
         const dashboardReady = !!this._hass?.states['sensor.sem_charging_state'];
         const chargers = this._chargersList().length;
-        const heatpump = this._val('heat_pump_registered') === 'on';
+        const heatpump = this._bin('heat_pump_registered');
         return html`
             <div class="overview-grid">
                 <div class="overview-item">
@@ -597,7 +629,7 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderHeatPump(T) {
-        const registered = this._val('heat_pump_registered') === 'on';
+        const registered = this._bin('heat_pump_registered');
         const opts = this._options || {};
         // Live-status block — only when SEM has the heat pump registered
         const statusBlock = registered ? html`
@@ -635,6 +667,87 @@ class SEMConfigCard extends SEMLitBase {
                     { min: 30, max: 80, step: 1, unit: '°C', default: 55 }, opts, 'config_help_hp_max_setpoint')}
                 ${this._renderOptionSlider('heat_pump_priority', 'config_hp_priority',
                     { min: 1, max: 10, step: 1, unit: '', default: 4 }, opts, 'config_help_hp_priority')}
+            </div>
+        `;
+    }
+
+    _renderHotWater(T) {
+        // v1.7.2-beta.7 (#454 Phase 2-4): live-status block when the
+        // HotWaterController is registered with the SurplusController.
+        // Pre-wire-up this was config-only; now surfaces the runtime
+        // telemetry SEM sees on every cycle (current temp, Legionella
+        // status, the #420 decision-path attributes).
+        const opts = this._options || {};
+        const registered = this._bin('hot_water_registered');
+        const currentTemp = this._val('hot_water_current_temperature');
+        const solarTarget = this._val('hot_water_solar_target');
+        const legHours = this._val('hot_water_hours_since_legionella');
+        const legActive = this._bin('hot_water_legionella_cycle_active');
+        const tempReadingPath = this._val('hot_water_temperature_reading_path');
+        const tempSafetyPath = this._val('hot_water_temperature_safety_path');
+        const activationPath = this._val('hot_water_activation_path');
+
+        const statusBlock = registered ? html`
+            <div class="hp-status">
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('hot_water_current_temperature')}</span>
+                    <span class="readonly-value">${currentTemp ? `${parseFloat(currentTemp).toFixed(1)} °C` : '—'}</span>
+                </div>
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('hot_water_solar_target')}</span>
+                    <span class="readonly-value">${solarTarget ? `${parseFloat(solarTarget).toFixed(0)} °C` : '—'}</span>
+                </div>
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('hot_water_hours_since_legionella')}</span>
+                    <span class="readonly-value">${
+                        legActive ? this._t('hot_water_legionella_cycle_running')
+                        : (legHours && parseFloat(legHours) < 999)
+                            ? `${parseFloat(legHours).toFixed(0)} h`
+                            : this._t('hot_water_legionella_never_run')
+                    }</span>
+                </div>
+                ${tempReadingPath ? html`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t('hot_water_temperature_reading_path')}</span>
+                        <span class="readonly-value">${tempReadingPath}</span>
+                    </div>
+                ` : nothing}
+                ${tempSafetyPath && tempSafetyPath !== 'uninitialized' ? html`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t('hot_water_temperature_safety_path')}</span>
+                        <span class="readonly-value">${tempSafetyPath}</span>
+                    </div>
+                ` : nothing}
+                ${activationPath && activationPath !== 'uninitialized' ? html`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t('hot_water_activation_path')}</span>
+                        <span class="readonly-value">${activationPath}</span>
+                    </div>
+                ` : nothing}
+            </div>
+        ` : html`
+            <div class="setup-intro">
+                ${this._t('config_hot_water_intro')}
+            </div>
+        `;
+
+        return html`
+            ${statusBlock}
+            <div class="hp-form">
+                ${this._renderPicker('hot_water_entity', 'config_hw_entity',
+                    null, null, opts, 'config_help_hw_entity')}
+                ${this._renderPicker('hot_water_temperature_sensor', 'config_hw_temp_sensor',
+                    'sensor', 'temperature', opts, 'config_help_hw_temp_sensor')}
+                ${this._renderStepper('number.sem_hot_water_solar_target', 'hot_water_solar_target',
+                    T, 'config_help_hw_solar_target')}
+                ${this._renderStepper('number.sem_hot_water_max_temperature', 'hot_water_max_temperature',
+                    T, 'config_help_hw_max_temperature')}
+                ${this._renderOptionSlider('hot_water_legionella_target', 'config_hw_legionella_target',
+                    { min: 55, max: 80, step: 1, unit: '°C', default: 65 }, opts, 'config_help_hw_legionella_target')}
+                ${this._renderOptionSlider('hot_water_minimum_temperature', 'config_hw_min_temperature',
+                    { min: 30, max: 55, step: 1, unit: '°C', default: 40 }, opts, 'config_help_hw_min_temperature')}
+                ${this._renderOptionSlider('hot_water_priority', 'config_hw_priority',
+                    { min: 1, max: 10, step: 1, unit: '', default: 5 }, opts, 'config_help_hw_priority')}
             </div>
         `;
     }
@@ -995,6 +1108,7 @@ class SEMConfigCard extends SEMLitBase {
             battery_zones: (T) => this._renderBatteryZones(T),
             tariff: (T) => this._renderTariff(T),
             heat_pump: (T) => this._renderHeatPump(T),
+            hot_water: (T) => this._renderHotWater(T),
             battery_scheduler: (T) => this._renderBatteryScheduler(T),
             load_management: (T) => this._renderLoadManagement(T),
             forecast: (T) => this._renderForecast(T),

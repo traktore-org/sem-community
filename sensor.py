@@ -1583,6 +1583,23 @@ async def async_setup_entry(
                 native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
                 suggested_display_precision=2,
             ),
+            # #135: pass-through of the charger's own ``ev_session_energy_sensor``
+            # value (e.g. KEBA's ``sensor.keba_p30_session_energy`` reading
+            # 14.61 kWh across a multi-day session). SEM's ``session_energy``
+            # above is an INTERNAL integration that resets on coordinator
+            # reload and may differ from the charger's own counter — load-
+            # bearing for solar-share / cost calculations, NOT a pass-through.
+            # This new ``_external`` sensor surfaces the charger's truth
+            # alongside it so users (and the dashboard) can compare. Falls
+            # back to 0 when the configured sensor is unavailable / missing.
+            SensorEntityDescription(
+                key=f"charger_{cid}_session_energy_external",
+                name=f"{cname} Session Energy (charger)",
+                device_class=SensorDeviceClass.ENERGY,
+                state_class=SensorStateClass.TOTAL,
+                native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                suggested_display_precision=2,
+            ),
             SensorEntityDescription(
                 key=f"charger_{cid}_session_solar_share",
                 name=f"{cname} Solar Share",

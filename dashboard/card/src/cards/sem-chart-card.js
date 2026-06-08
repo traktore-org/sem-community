@@ -15,6 +15,7 @@
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
 import { semTheme, semGetCurrency, semDefineCard, SEM_COLORS } from '../base/sem-shared.js';
+import { startOfDayInHaTz } from '../util/time-zone.js';
 
 /* ── Chart.js CDN singleton loader ── */
 let _chartJsReady = null;
@@ -234,6 +235,17 @@ class SEMChartCard extends SEMLitBase {
     }
 
     // ── Period handling ──
+
+    /**
+     * Compute "start of day" in HA's configured timezone, not the
+     * browser's. Thin wrapper around the extracted ``startOfDayInHaTz``
+     * util so the logic is testable in isolation (see
+     * ``test/time-zone.test.js``).
+     */
+    _startOfDayInHaTz(now) {
+        return startOfDayInHaTz(now, this._hass?.config?.time_zone);
+    }
+
     _setDefaultPeriod() {
         const now = new Date();
         const p = this._preset;
@@ -243,14 +255,14 @@ class SEMChartCard extends SEMLitBase {
         const isHourly = p && (wantToday || p.defaultPeriod === '24h' || (p.hourly && !p.daily));
         if (isHourly) {
             const start = wantToday
-                ? new Date(now.getFullYear(), now.getMonth(), now.getDate())
+                ? this._startOfDayInHaTz(now)
                 : new Date(now.getTime() - 24 * 60 * 60 * 1000);
             const labelKey = wantToday ? 'period_today' : 'last_24h';
             const key = wantToday ? 'today' : '24h';
             this._onPeriodChange({ start, end: now, granularity: 'hour', labelKey, key });
         } else {
             const dow = now.getDay() || 7;
-            const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const mon = this._startOfDayInHaTz(now);
             mon.setDate(mon.getDate() - (dow - 1));
             this._onPeriodChange({ start: mon, end: now, granularity: 'day', labelKey: 'period_this_week', key: 'week' });
         }

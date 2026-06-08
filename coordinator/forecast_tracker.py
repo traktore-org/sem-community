@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
+from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
@@ -160,6 +161,27 @@ class ForecastTracker:
         self._today_actual = actual_solar_kwh
         self._weather_today = weather_condition
 
+        # #416 follow-up (2026-06-07): eager weather-snapshot capture.
+        # The ``blended_live`` branch of ``_calculate_dampening_factor``
+        # already captures ``_weather_snapshot`` during a confident
+        # mid-day cycle, but it only fires when a forecast exists AND
+        # expected production has accumulated past MIN_FORECAST_KWH.
+        # On overcast days where ``forecast_today_kwh < MIN_FORECAST_KWH``
+        # (path ``no_forecast``), or on days where HA was restarted past
+        # sunset (path ``outside_daylight``), the snapshot is never set
+        # and ``_save_day_record`` falls back to the live midnight
+        # ``_weather_today`` (typically ``clear-night`` / ``unknown``).
+        # Eager pre-snapshot: any time today's weather entity reports a
+        # real value, remember it. The ``blended_live`` capture below
+        # still overwrites this on confident mid-day cycles — but if
+        # that never happens, we still have today's actual weather.
+        if weather_condition and weather_condition not in (STATE_UNKNOWN, STATE_UNAVAILABLE, "none", ""):
+            sunrise_hour, sunset_hour = self._get_sun_hours()
+            now = dt_util.now()
+            hour = now.hour + now.minute / 60.0
+            if sunrise_hour <= hour <= sunset_hour:
+                self._weather_snapshot = weather_condition
+
         # Recalculate correction factor from history
         self._update_correction_factor()
         # Refresh the dampening calc so ``_dampening_path`` and the
@@ -218,10 +240,11 @@ class ForecastTracker:
         self._history.append(record)
         _LOGGER.info(
             "Forecast record saved: %s forecast=%.1f actual=%.1f accuracy=%.0f%% "
-            "factor=%.3f dampening=%.3f weather=%s",
+            "factor=%.3f dampening=%s weather=%s",
             record.date, record.forecast_kwh, record.actual_kwh,
             record.accuracy_pct, record.correction_factor,
-            record.dampening_factor, record.weather,
+            f"{record.dampening_factor:.3f}" if record.dampening_factor is not None else "n/a",
+            record.weather,
         )
 
     def _update_correction_factor(self) -> None:
@@ -526,7 +549,16 @@ class ForecastTracker:
         # ``DailyForecastRecord.weather`` reflects the day's actual
         # weather, not the post-sunset ``clear-night`` / ``unknown``
         # the weather entity is returning by the rollover firing.
-        self._weather_snapshot = self._weather_today
+        #
+        # v1.7.2 (2026-06-07): guard against an ``unknown`` /
+        # ``unavailable`` reading at this cycle — if the weather entity
+        # is momentarily broken at confident-noon, we'd lock the day's
+        # snapshot to ``unknown`` and beat the eager-snapshot's earlier
+        # good reading. Skip the overwrite when current is unusable.
+        if self._weather_today and self._weather_today not in (
+            STATE_UNKNOWN, STATE_UNAVAILABLE, "none", "",
+        ):
+            self._weather_snapshot = self._weather_today
         return clamped
 
     def apply_dampening(self, forecast_kwh: float) -> float:

@@ -835,6 +835,49 @@ configurable period, the heat pump is set to Force On regardless of surplus.
 This overrides the normal surplus-based control and ensures public health
 safety requirements are met.
 
+### Hot water boiler (separate from heat pump)
+
+A standalone hot-water boiler (electric heater, heat-pump water heater
+that exposes a `switch`/`water_heater`/`climate` entity, or any other
+HA-controllable heater) can be configured independently via the
+**Configuration tab → Hot Water** section. Unlike the heat-pump SG-Ready
+path, the hot-water boiler is a simple on/off device controlled by SEM.
+
+| Config field | What to set |
+|---|---|
+| Boiler control entity | The `switch.`, `water_heater.`, or `climate.` entity that turns the boiler on/off |
+| Temperature sensor (optional) | A `sensor.` reporting current water temperature in °C |
+| Solar target | Boiler runs on surplus until water reaches this (default 50 °C) |
+| Max temperature | Safety ceiling — SEM never activates above this regardless of mode (default 70 °C) |
+| Legionella target | Target temperature for the periodic Legionella cycle (default 65 °C) |
+| Minimum temperature | Below this, SEM force-heats from any source — not just solar (default 40 °C) |
+| Priority | Surplus-dispatch order (lower = served first, default 6) |
+
+**If the temperature sensor is omitted:** SEM operates the boiler "blind" —
+it controls the on/off but relies on the boiler's internal thermostat to
+prevent overheating. This is fine for `water_heater` and `climate` devices
+that handle their own safety. For `switch.`-only boilers, configuring a
+sensor is strongly recommended.
+
+**If the configured temperature sensor breaks** (reports `unavailable` /
+`unknown` / non-numeric for >5 min): SEM fails safe — the boiler is **not**
+activated on surplus until the sensor returns a real reading. A Repair
+issue appears in Settings → System → Repairs naming the sensor entity, so
+you know which integration to investigate.
+
+**If the boiler-control entity itself becomes unavailable:** a different
+Repair issue surfaces, this one naming the boiler entity. SEM stops issuing
+on/off commands until the entity recovers (the commands would silently
+no-op anyway, but the Repair makes the broken state visible).
+
+**Diagnose surface:** the Hot Water section's 🩺 Diagnose button (or the
+`solar_energy_management.diagnose` service with `section: "hot_water"`) returns
+a JSON dump including the current temperature reading, the
+`temperature_reading_path` (which source the controller is reading from —
+`separate_sensor`, `entity_attribute`, `no_source_configured`, etc.),
+the safety-decision path, and the hours since the last Legionella cycle.
+Paste it in a discussion / issue if SEM ever doesn't behave as expected.
+
 ### Priority relative to other devices
 
 Heat pumps register with the SurplusController like any other device. A

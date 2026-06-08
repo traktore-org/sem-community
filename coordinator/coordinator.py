@@ -41,7 +41,7 @@ from ..ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConf
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
     SurplusControlData, ForecastSensorData, TariffSensorData,
-    HeatPumpSensorData, PVAnalyticsData, EnergyAssistantSensorData,
+    HeatPumpSensorData, HotWaterSensorData, PVAnalyticsData, EnergyAssistantSensorData,
     UtilitySignalSensorData, SessionData, BatterySessionData,
 )
 from .health_check import HealthCheck
@@ -1787,7 +1787,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Steps 10–10.5: Analytics phases (extracted for readability, #29)
             forecast_data, tracker_data, tariff_data, surplus_data, \
-                pv_data, assistant_data, utility_data, heat_pump_data = \
+                pv_data, assistant_data, utility_data, heat_pump_data, \
+                hot_water_data = \
                 await self._update_analytics_phases(
                     power, energy, energy_flows, performance,
                     charging_context.available_power,
@@ -1817,6 +1818,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 forecast=forecast_data,
                 tariff=tariff_data,
                 heat_pump=heat_pump_data,
+                hot_water=hot_water_data,
                 pv_analytics=pv_data,
                 energy_assistant=assistant_data,
                 utility_signal=utility_data,
@@ -1929,6 +1931,30 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 else:
                     result[f"charger_{cid}_session_energy"] = 0.0
                     result[f"charger_{cid}_session_solar_share"] = 0.0
+                # #135: pass-through of the charger's own session-energy
+                # sensor (e.g. KEBA's ``sensor.keba_p30_session_energy``).
+                # Surfaces the charger's truth alongside SEM's internal
+                # integration so users can compare on the dashboard. The
+                # SEM-integrated value above stays load-bearing for the
+                # solar-share / cost calculations.
+                _per_charger_cfg = next(
+                    (c for c in (self.config.get("ev_chargers") or [])
+                     if c.get("id") == cid), {}
+                )
+                _ext_sensor_id = _per_charger_cfg.get("ev_session_energy_sensor", "")
+                _ext_value = 0.0
+                if _ext_sensor_id:
+                    _state = self.hass.states.get(_ext_sensor_id)
+                    if _state and _state.state not in ("unavailable", "unknown", None):
+                        try:
+                            _ext_value = float(_state.state)
+                            # Auto-convert Wh → kWh if the source reports in Wh.
+                            _unit = _state.attributes.get("unit_of_measurement", "").lower()
+                            if _unit == "wh":
+                                _ext_value = _ext_value / 1000.0
+                        except (ValueError, TypeError):
+                            _ext_value = 0.0
+                result[f"charger_{cid}_session_energy_external"] = round(_ext_value, 2)
                 # Per-charger taper detection (#138)
                 taper_det = self._ev_taper_detectors.get(cid)
                 if taper_det:
@@ -2064,6 +2090,47 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Tariff schedule for dashboard card (#25)
             if hasattr(self._tariff_provider, 'get_schedule_for_day'):
                 result["tariff_schedule_today"] = self._tariff_provider.get_schedule_for_day()
+                # v1.7.2-beta.3 (2026-06-07): diagnose-only counter so
+                # users with a misclassifying schedule (RienduPre,
+                # Tibber NL, Discussion #432) can paste back the
+                # distribution + source-entity shape. The full price
+                # array isn't published (would explode coordinator.data
+                # for any cache > 24 points) — just the counts.
+                try:
+                    _prices_for_diag = getattr(
+                        self._tariff_provider, "_prices_cache", None,
+                    ) or []
+                    _today_for_diag = dt_util.now().date()
+                    _today_prices = [
+                        p for p in _prices_for_diag
+                        if p.timestamp.date() == _today_for_diag
+                    ]
+                    if _today_prices:
+                        _level_counts: Dict[str, int] = {}
+                        for p in _today_prices:
+                            k = p.level.value if hasattr(p.level, "value") else str(p.level)
+                            _level_counts[k] = _level_counts.get(k, 0) + 1
+                        result["tariff_today_prices_count"] = len(_today_prices)
+                        result["tariff_today_level_counts"] = _level_counts
+                        result["tariff_today_first_price"] = round(_today_prices[0].price, 4)
+                        result["tariff_today_last_price"] = round(_today_prices[-1].price, 4)
+                    else:
+                        result["tariff_today_prices_count"] = 0
+                        result["tariff_today_level_counts"] = {}
+                    # Parser diag: which attribute matched + the
+                    # sample interval. Both are key for diagnosing
+                    # 15-min vs hourly NL Tibber/ENTSO-E shapes.
+                    result["tariff_parsed_attribute"] = getattr(
+                        self._tariff_provider, "_last_parsed_attribute", None,
+                    )
+                    result["tariff_parsed_count"] = getattr(
+                        self._tariff_provider, "_last_parsed_count", None,
+                    )
+                    result["tariff_parsed_interval_seconds"] = getattr(
+                        self._tariff_provider, "_last_parsed_gap_seconds", None,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    _LOGGER.debug("Tariff diag-counts failed: %s", e)
 
             # Dynamic price visibility (#257): surface the upcoming hourly price
             # curve + today's summary so the price card can render a live chart.
@@ -2553,6 +2620,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         relay2_state = _entity_state(hp_relay2)
         climate_state = _entity_state(hp_climate)
 
+        # v1.7.2-beta.2: surface the #421 audit's ``_last_*_path``
+        # recorders to a user-visible diagnostic surface. The
+        # controller already records these on every cycle; we just
+        # publish them through. Falls back to ``"no_controller"`` when
+        # heat-pump isn't registered so the diagnostic surface stays
+        # consistent (vs missing keys).
+        hp_controller = None
+        if registered_flag and hasattr(self, "_surplus_controller"):
+            hp_controller = self._surplus_controller._devices.get("heat_pump")
+
+        def _hp_attr(name: str) -> Optional[str]:
+            if hp_controller is None:
+                return "no_controller" if registered_flag else None
+            return getattr(hp_controller, name, None)
+
+        hp_current_temp: Optional[float] = None
+        if hp_controller is not None:
+            try:
+                t = hp_controller.get_current_temperature() if hasattr(hp_controller, "get_current_temperature") else None
+                hp_current_temp = float(t) if t is not None else None
+            except (ValueError, TypeError, AttributeError):
+                hp_current_temp = None
+
         heat_pump_data = HeatPumpSensorData(
             heat_pump_registered=registered_flag,
             heat_pump_registration_status=_hp_status,
@@ -2562,6 +2652,65 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             heat_pump_relay1_state=relay1_state,
             heat_pump_relay2_state=relay2_state,
             heat_pump_climate_state=climate_state,
+            heat_pump_activation_path=_hp_attr("_last_activation_path"),
+            heat_pump_deactivation_path=_hp_attr("_last_deactivation_path"),
+            heat_pump_relay_path=_hp_attr("_last_relay_path"),
+            heat_pump_temperature_reading_path=_hp_attr("_last_temperature_reading_path"),
+            heat_pump_offpeak_path=_hp_attr("_last_offpeak_path"),
+            heat_pump_current_temperature=hp_current_temp,
+        )
+
+        # ── Hot water data (#454) ───────────────────────────────────
+        # Same pattern as heat_pump_data above: pull live state from
+        # the registered controller (if any) into a sensor dataclass
+        # so the Diagnose modal + future UI surfaces show concrete
+        # decision branches instead of black-box state.
+        hw_controller = None
+        hw_entity_cfg = self.config.get("hot_water_entity") or None
+        if hasattr(self, "_surplus_controller"):
+            hw_controller = self._surplus_controller._devices.get("hot_water")
+
+        def _hw_attr(name: str) -> Optional[str]:
+            if hw_controller is None:
+                return "no_controller" if hw_entity_cfg else None
+            return getattr(hw_controller, name, None)
+
+        hw_current_temp: Optional[float] = None
+        hw_hours_since_leg: Optional[float] = None
+        hw_leg_active: bool = False
+        if hw_controller is not None:
+            try:
+                t = hw_controller.get_current_temperature() if hasattr(hw_controller, "get_current_temperature") else None
+                hw_current_temp = float(t) if t is not None else None
+            except (ValueError, TypeError, AttributeError):
+                hw_current_temp = None
+            try:
+                hw_hours_since_leg = float(hw_controller.hours_since_legionella) if hasattr(hw_controller, "hours_since_legionella") else None
+            except (ValueError, TypeError, AttributeError):
+                hw_hours_since_leg = None
+            hw_leg_active = bool(getattr(hw_controller, "_legionella_cycle_active", False))
+
+        hot_water_data = HotWaterSensorData(
+            hot_water_registered=hw_controller is not None,
+            hot_water_entity=hw_entity_cfg,
+            hot_water_temperature_sensor=self.config.get("hot_water_temperature_sensor") or None,
+            hot_water_current_temperature=hw_current_temp,
+            hot_water_solar_target=(
+                float(hw_controller.solar_target_temp) if hw_controller else None
+            ),
+            hot_water_max_temperature=(
+                float(hw_controller.max_temperature) if hw_controller else None
+            ),
+            hot_water_legionella_target=(
+                float(hw_controller.legionella_target_temp) if hw_controller else None
+            ),
+            hot_water_hours_since_legionella=hw_hours_since_leg,
+            hot_water_legionella_cycle_active=hw_leg_active,
+            hot_water_activation_path=_hw_attr("_last_activation_path"),
+            hot_water_deactivation_path=_hw_attr("_last_deactivation_path"),
+            hot_water_temperature_safety_path=_hw_attr("_last_temperature_safety_path"),
+            hot_water_temperature_reading_path=_hw_attr("_last_temperature_reading_path"),
+            hot_water_legionella_path=_hw_attr("_last_legionella_path"),
         )
 
         # #432 — relay unavailability tracking + Repair issue. Mirrors the
@@ -2576,52 +2725,144 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _now_mono = _ri_time.monotonic()
             if not hasattr(self, "_heat_pump_relay_unavailable_since"):
                 self._heat_pump_relay_unavailable_since = {}
-                self._heat_pump_relay_repair_raised = set()
             tracked = self._heat_pump_relay_unavailable_since
-            raised = self._heat_pump_relay_repair_raised
+            # v1.7.2-beta.5 (2026-06-08): one-time orphan sweep per
+            # coordinator instance. Cleans repairs left behind from a
+            # PRIOR config (e.g. user replaced `switch.old_entity` with
+            # `switch.new_entity` — the old repair stayed stuck in the
+            # registry because the per-cycle clear only addresses
+            # currently-configured entities). RienduPre #448.
+            if not getattr(self, "_heat_pump_orphan_sweep_done", False):
+                _ri.clear_orphan_heat_pump_relay_repairs(
+                    self.hass,
+                    currently_configured_ids={
+                        eid for eid in (hp_relay1, hp_relay2) if eid
+                    },
+                )
+                self._heat_pump_orphan_sweep_done = True
+            # v1.7.2-beta.2 (2026-06-07): the prior in-memory ``raised``
+            # set was reset on every reload, so once a config change
+            # cleared the underlying condition AFTER a reload, the
+            # ``clear_*`` calls never fired and the Repair stuck in the
+            # registry forever. ``async_create_issue`` and
+            # ``async_delete_issue`` are both idempotent — call them
+            # unconditionally based on current state. The only thing we
+            # still need to track in-memory is the *since-when*
+            # threshold for the unavailable timer.
             for slot, eid, state in (
                 ("relay1", hp_relay1, relay1_state),
                 ("relay2", hp_relay2, relay2_state),
             ):
                 if not eid:
+                    # No entity configured for this slot — clear any
+                    # stale issue from before the config change and
+                    # forget the timer.
+                    _ri.clear_heat_pump_relay_unavailable(
+                        self.hass, slot, eid or "",
+                    )
                     continue
                 key = f"{slot}:{eid}"
                 is_bad = state in (None, "unavailable", "unknown", "entity_missing")
                 if is_bad:
                     if key not in tracked:
                         tracked[key] = _now_mono
-                    elif key not in raised:
-                        outage_s = _now_mono - tracked[key]
-                        if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
-                            _ri.raise_heat_pump_relay_unavailable(
-                                self.hass, slot, eid,
-                                minutes_unavailable=int(outage_s // 60),
-                            )
-                            raised.add(key)
-                else:
-                    if key in tracked:
-                        tracked.pop(key, None)
-                    if key in raised:
-                        raised.discard(key)
-                        _ri.clear_heat_pump_relay_unavailable(
+                    outage_s = _now_mono - tracked[key]
+                    if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
+                        # Idempotent — re-raises with current minute
+                        # count on every cycle past threshold; HA
+                        # collapses identical creates.
+                        _ri.raise_heat_pump_relay_unavailable(
                             self.hass, slot, eid,
+                            minutes_unavailable=int(outage_s // 60),
                         )
-            # Partial SG-Ready repair — fires once when exactly one relay
-            # is set with no climate fallback. Auto-clears as soon as the
-            # config becomes valid (both relays set OR climate set OR
-            # both relays cleared).
+                else:
+                    tracked.pop(key, None)
+                    # Idempotent — no-op if the issue isn't currently
+                    # in the registry. Crucial across reloads.
+                    _ri.clear_heat_pump_relay_unavailable(
+                        self.hass, slot, eid,
+                    )
+            # Partial SG-Ready repair — fires when exactly one relay is
+            # set with no climate fallback. Same idempotent pattern: no
+            # in-memory flag, just always raise/clear based on current
+            # status. ``_hp_status`` is already computed above from the
+            # live config.
             partial = _hp_status in (
                 "partial_sg_ready_only_relay1",
                 "partial_sg_ready_only_relay2",
             )
-            if partial and not getattr(self, "_heat_pump_partial_raised", False):
+            if partial:
                 _ri.raise_heat_pump_partial_sg_ready(self.hass)
-                self._heat_pump_partial_raised = True
-            elif not partial and getattr(self, "_heat_pump_partial_raised", False):
+            else:
                 _ri.clear_heat_pump_partial_sg_ready(self.hass)
-                self._heat_pump_partial_raised = False
         except Exception as e:  # noqa: BLE001 — never fail a cycle over a repair
             _LOGGER.debug("Heat-pump repair tracking failed: %s", e)
+
+        # ── Hot water repair tracking (#454) ────────────────────────
+        # Mirror of the heat-pump repair block. Two distinct Repair
+        # surfaces:
+        #   * boiler-control entity unavailable for >5 min
+        #   * temperature sensor unavailable for >5 min
+        # Both auto-raise/clear idempotently — no in-memory ``raised``
+        # flag (lesson from beta.2/5 — flags don't survive reload).
+        try:
+            import time as _ri_time
+            from . import repair_issues as _ri
+            _now_mono = _ri_time.monotonic()
+            if not hasattr(self, "_hot_water_unavailable_since"):
+                self._hot_water_unavailable_since = {}
+            tracked_hw = self._hot_water_unavailable_since
+            # One-time orphan sweep per coordinator instance (catches
+            # stale repairs from a prior config).
+            if not getattr(self, "_hot_water_orphan_sweep_done", False):
+                _ri.clear_orphan_hot_water_repairs(
+                    self.hass,
+                    currently_configured_entity=hw_entity_cfg,
+                    currently_configured_temp_sensor=self.config.get(
+                        "hot_water_temperature_sensor"
+                    ) or None,
+                )
+                self._hot_water_orphan_sweep_done = True
+
+            hw_temp_sensor_cfg = self.config.get("hot_water_temperature_sensor") or None
+            for kind, eid in (
+                ("entity", hw_entity_cfg),
+                ("temp_sensor", hw_temp_sensor_cfg),
+            ):
+                if not eid:
+                    # Slot not configured — defensive clear of any
+                    # stale repair from before the config change.
+                    if kind == "entity":
+                        _ri.clear_hot_water_entity_unavailable(self.hass, eid or "")
+                    else:
+                        _ri.clear_hot_water_temperature_sensor_unavailable(self.hass, eid or "")
+                    continue
+                key = f"{kind}:{eid}"
+                st = self.hass.states.get(eid)
+                state_str = st.state if st else "entity_missing"
+                is_bad = state_str in (None, "unavailable", "unknown", "entity_missing")
+                if is_bad:
+                    if key not in tracked_hw:
+                        tracked_hw[key] = _now_mono
+                    outage_s = _now_mono - tracked_hw[key]
+                    if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
+                        mins = int(outage_s // 60)
+                        if kind == "entity":
+                            _ri.raise_hot_water_entity_unavailable(
+                                self.hass, eid, minutes_unavailable=mins,
+                            )
+                        else:
+                            _ri.raise_hot_water_temperature_sensor_unavailable(
+                                self.hass, eid, minutes_unavailable=mins,
+                            )
+                else:
+                    tracked_hw.pop(key, None)
+                    if kind == "entity":
+                        _ri.clear_hot_water_entity_unavailable(self.hass, eid)
+                    else:
+                        _ri.clear_hot_water_temperature_sensor_unavailable(self.hass, eid)
+        except Exception as e:  # noqa: BLE001 — never fail a cycle over a repair
+            _LOGGER.debug("Hot-water repair tracking failed: %s", e)
 
         # Phase 8: Consumption/solar predictor (#3)
         try:
@@ -2640,6 +2881,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return (
             forecast_data, tracker_data, tariff_data, surplus_data,
             pv_data, assistant_data, utility_data, heat_pump_data,
+            hot_water_data,
         )
 
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:

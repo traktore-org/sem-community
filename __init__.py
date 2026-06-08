@@ -685,6 +685,53 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 12:
+        # v11 → v12 (#135): drop the stale top-level ``ev_session_energy_sensor``
+        # left over from the v2 → v3 multi-charger migration. The per-charger
+        # ``ev_chargers[].ev_session_energy_sensor`` has been the canonical
+        # source since v3; the top-level copy was kept for back-compat but
+        # is never read by any decision path. PROD 2026-06-07 surfaced a
+        # case where it pointed at the wrong sensor (``keba_p30_energy_target``
+        # — the user setpoint, always 0) and confused diagnostics. Drop it.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            # Combine chargers from BOTH bags — the chargers list lives in
+            # one or the other depending on install age, and the stale
+            # top-level key can live in either too. We need the union when
+            # deciding whether to drop.
+            chargers_union: list = []
+            for bag in (new_data, new_options):
+                bag_chargers = bag.get("ev_chargers")
+                if isinstance(bag_chargers, list):
+                    chargers_union.extend(c for c in bag_chargers if isinstance(c, dict))
+            any_per_charger = any(
+                c.get("ev_session_energy_sensor") for c in chargers_union
+            )
+            cleaned = 0
+            if any_per_charger:
+                for bag in (new_data, new_options):
+                    if "ev_session_energy_sensor" in bag:
+                        bag.pop("ev_session_energy_sensor", None)
+                        cleaned += 1
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=12, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if cleaned:
+                _LOGGER.info(
+                    "#135 cleanup: dropped stale top-level "
+                    "ev_session_energy_sensor from %d bag(s); per-charger "
+                    "value remains canonical", cleaned,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v12 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -1146,6 +1193,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 "Heat pump NOT registered: relay1=%r relay2=%r climate=%r "
                 "(needs either BOTH relays OR a climate entity)",
                 hp_relay1, hp_relay2, hp_climate,
+            )
+
+        # ── Hot water controller (#454) ─────────────────────────────
+        # Mirrors the heat-pump pattern: when user has configured a
+        # boiler control entity (water_heater / climate / switch),
+        # instantiate HotWaterController + register with SurplusController.
+        # Without this block, the dashboard Config tab Hot Water section
+        # collects settings that the runtime never reads.
+        hw_entity = full_config.get("hot_water_entity") or None
+        if hw_entity:
+            from .devices.hot_water_controller import HotWaterController
+            hw_device = HotWaterController(
+                hass=hass,
+                device_id="hot_water",
+                name=full_config.get("hot_water_name", "Hot Water"),
+                rated_power=float(full_config.get("hot_water_rated_power", 2500)),
+                priority=int(full_config.get("hot_water_priority", 6)),
+                entity_id=hw_entity,
+                power_entity_id=full_config.get("hot_water_power_sensor"),
+                temperature_entity_id=full_config.get("hot_water_temperature_sensor"),
+                max_temperature=float(full_config.get("hot_water_max_temperature", 70.0)),
+                min_temperature=float(full_config.get("hot_water_minimum_temperature", 40.0)),
+                solar_target_temp=float(full_config.get("hot_water_solar_target", 50.0)),
+                legionella_target_temp=float(full_config.get("hot_water_legionella_target", 65.0)),
+                legionella_interval_hours=float(full_config.get("hot_water_legionella_interval_hours", 168.0)),
+            )
+            coordinator._surplus_controller.register_device(hw_device)
+            _LOGGER.info(
+                "Hot water registered (entity=%s, priority=%d, "
+                "temp_sensor=%s, solar_target=%.0f°C, max=%.0f°C)",
+                hw_entity, hw_device.priority,
+                hw_device.temperature_entity_id or "—",
+                hw_device.solar_target_temp, hw_device.max_temperature,
+            )
+        else:
+            _LOGGER.debug(
+                "Hot water NOT registered: hot_water_entity not set"
             )
 
     except Exception:
@@ -2214,10 +2298,26 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         localize_url = f"{localize_base}?v={asset_v['localize']}"
         cards_bundle_url = f"{cards_bundle_base}?v={asset_v['bundle']}"
 
-        # Load semLocalize via add_extra_js_url — must be available before cards
+        # Load semLocalize via add_extra_js_url — must be available before
+        # cards on DESKTOP (Lovelace modules load after add_extra_js_url
+        # scripts, so the global is ready by first render).
+        #
+        # v1.7.2-beta.4 (2026-06-08): mobile Companion app does NOT
+        # reliably pick up add_extra_js_url scripts — RienduPre +
+        # others reported almost ALL translation keys rendering raw
+        # on iOS Companion after beta.1 moved sem-localize.js off the
+        # Lovelace-resource channel. Fix: register on BOTH channels.
+        # sem-localize.js was regenerated in beta.4 with an IIFE +
+        # ``window.semLocalize`` guard so the second load is a clean
+        # no-op (same URL with same hash = browser fetches once anyway,
+        # but the guard prevents script-execution-twice errors if a
+        # specific browser does load it twice).
         add_extra_js_url(hass, localize_url)
 
-        # Legacy base URLs to clean up (migrated to single Lit bundle)
+        # Legacy base URLs to clean up. Migrated to the single Lit
+        # bundle. ``sem-localize.js`` is NOT in this list as of
+        # v1.7.2-beta.4 — it's actively re-registered below as a
+        # Lovelace resource (dual-channel with add_extra_js_url).
         _legacy_bases = [
             f"{static_path}/card/sem-shared.js",
             f"{static_path}/card/sem-reactive-base.js",
@@ -2311,6 +2411,22 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     diagram_item["id"], {"res_type": "module", "url": diagram_url}
                 )
                 _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
+
+            # v1.7.2-beta.4: register sem-localize.js as a Lovelace
+            # resource too (dual-channel with add_extra_js_url above).
+            # Mobile Companion app doesn't pick up add_extra_js_url
+            # scripts reliably; Lovelace resources DO load on mobile.
+            # The file has an IIFE + window.semLocalize guard so the
+            # second load is a clean no-op.
+            localize_item = existing_by_base.get(localize_base)
+            if localize_item is None:
+                await resources.async_create_item({"res_type": "module", "url": localize_url})
+                _LOGGER.info("Registered SEM localize (mobile fix): %s", localize_url)
+            elif localize_item["url"] != localize_url:
+                await resources.async_update_item(
+                    localize_item["id"], {"res_type": "module", "url": localize_url}
+                )
+                _LOGGER.info("Updated SEM localize: %s → %s", localize_item["url"], localize_url)
         except _SEMYAMLModeSkip:
             # Already logged the "manual config needed" warning above.
             pass
@@ -2557,9 +2673,23 @@ async def _async_register_phase_services(
                     target_entry = e
                     break
         # Merge with existing options to preserve unrelated keys, then
-        # update. HA fires the update_listener automatically.
+        # update. HA fires the update_listener automatically — but that
+        # listener has a skip-reload optimization for runtime
+        # number/switch tweaks. Since ``set_option`` doesn't mirror
+        # values into coordinator memory (the runtime stepper path
+        # does), we ALWAYS need a reload here to take effect.
+        # Bug confirmed live on 2026-06-07: setting
+        # ``heat_pump_relay2_entity`` via this service updated the
+        # ``options`` dict but the heat-pump controller didn't get
+        # re-registered, leaving ``registered=false`` despite valid
+        # config. Explicit reload below makes this deterministic.
         merged = {**(target_entry.options or {}), **options}
-        hass.config_entries.async_update_entry(target_entry, options=merged)
+        if merged != (target_entry.options or {}):
+            hass.config_entries.async_update_entry(target_entry, options=merged)
+            # Block on reload so the caller's next read sees the new
+            # state. HA suppresses duplicate reloads when one is
+            # already pending from the listener.
+            await hass.config_entries.async_reload(target_entry.entry_id)
         _LOGGER.debug(
             "set_option wrote %d key(s) to entry %s: %s",
             len(options), target_entry.entry_id, list(options.keys()),
@@ -2623,28 +2753,183 @@ async def _async_register_phase_services(
     # Other sections return a generic slice for now; their dedicated
     # slicers land in a follow-up beta. The button shell + modal +
     # copy flow are wired everywhere so the user surface is consistent.
-    _DIAGNOSE_HEAT_PUMP_KEYS = {
+    # Per-section diagnose slicers. Each section's tuple is
+    # ``(state_keys, option_keys_or_prefix_predicate)``. State keys are
+    # SEM-published ``coordinator.data`` keys. Option key predicates
+    # are either an explicit set or a callable that selects keys from
+    # ``merged_cfg``. Heat-pump uses the explicit-set form because it
+    # has a small, stable surface; other sections use predicates so
+    # they pick up per-charger entries inside ``ev_chargers`` lists.
+    _DIAGNOSE_HEAT_PUMP_STATE = {
         "heat_pump_registered", "heat_pump_registration_status",
         "heat_pump_mode", "heat_pump_sg_ready_state", "heat_pump_solar_boost",
         "heat_pump_relay1_entity", "heat_pump_relay2_entity",
         "heat_pump_climate_entity",
         "heat_pump_relay1_state", "heat_pump_relay2_state",
         "heat_pump_climate_state",
+        # v1.7.2-beta.2: #421 audit's runtime path recorders, now
+        # surfaced through coordinator.data so users can see WHY the
+        # heat pump did/didn't activate on the last cycle.
+        "heat_pump_activation_path", "heat_pump_deactivation_path",
+        "heat_pump_relay_path", "heat_pump_temperature_reading_path",
+        "heat_pump_offpeak_path", "heat_pump_current_temperature",
     }
-    _DIAGNOSE_HEAT_PUMP_OPTION_KEYS = {
+    _DIAGNOSE_HEAT_PUMP_OPTION = {
         "heat_pump_relay1_entity", "heat_pump_relay2_entity",
         "heat_pump_climate_entity", "heat_pump_boost_offset",
         "heat_pump_max_setpoint", "heat_pump_priority",
+        "heat_pump_power_sensor", "heat_pump_temperature_sensor",
+        "heat_pump_rated_power", "heat_pump_force_on_threshold",
     }
+    # Hot water — config visibility (controller not currently wired
+    # into the production path; v1.7.2-beta.2 surfaces config so
+    # support can verify settings, and reserves the state keys for
+    # when the controller is hooked up).
+    _DIAGNOSE_HOT_WATER_OPTION = {
+        "hot_water_entity", "hot_water_temperature_sensor",
+        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_legionella_target", "hot_water_minimum_temperature",
+        "hot_water_priority", "hot_water_rated_power",
+    }
+    _DIAGNOSE_HOT_WATER_STATE = {
+        # v1.7.2-beta.6 (#454): wire-up complete. HotWaterController
+        # is now registered with the SurplusController when
+        # ``hot_water_entity`` is set, so the runtime state surface
+        # populates these keys.
+        "hot_water_registered", "hot_water_entity",
+        "hot_water_temperature_sensor",
+        "hot_water_current_temperature",
+        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_legionella_target", "hot_water_hours_since_legionella",
+        "hot_water_legionella_cycle_active",
+        "hot_water_activation_path", "hot_water_deactivation_path",
+        "hot_water_temperature_safety_path",
+        "hot_water_temperature_reading_path",
+        "hot_water_legionella_path",
+    }
+    # EV chargers — fleet aggregates + per-charger nested entries
+    _DIAGNOSE_EV_OPTION_TOP = {
+        "ev_chargers",  # whole list — most useful for diagnose
+        "ev_min_current", "ev_max_current", "ev_phases", "ev_voltage",
+        "daily_ev_target", "daily_ev_target_max",
+        "ev_target_type", "ev_target_soc", "ev_target_soc_max",
+        "ev_battery_capacity_kwh", "ev_kwh_per_100km",
+        "ev_enable_delay_seconds", "ev_disable_delay_seconds",
+    }
+    _DIAGNOSE_EV_STATE_PREFIXES = ("ev_", "charger_", "daily_ev", "session_")
+    # Tariff — pricing config + classifier diagnostics
+    _DIAGNOSE_TARIFF_OPTION = {
+        "tariff_mode", "tariff_classification_mode",
+        "dynamic_tariff_entity", "dynamic_forecast_entity", "dynamic_feedin_entity",
+        "electricity_import_rate", "electricity_off_peak_rate",
+        "electricity_export_rate", "demand_charge_rate",
+        "cheap_price_threshold", "expensive_price_threshold",
+    }
+    _DIAGNOSE_TARIFF_STATE = {
+        "tariff_provider", "tariff_is_dynamic", "tariff_currency",
+        "tariff_price_level", "tariff_classifier_path",
+        "tariff_current_import_rate", "tariff_current_export_rate",
+        "tariff_today_min_price", "tariff_today_max_price", "tariff_today_avg_price",
+        "tariff_next_cheap_start", "tariff_next_cheap_end",
+        "tariff_upcoming", "tariff_schedule_today",
+        # v1.7.2-beta.3: classifier visibility for the "all day cheap"
+        # class of misclassifications. ``tariff_today_prices_count``
+        # of 0 means SEM isn't seeing per-hour data — JS card will
+        # fall back to mirroring the current price level for the chart.
+        # ``tariff_parsed_interval_seconds`` exposes 15-min vs hourly
+        # detection so we can spot a NL Tibber Pulse / ENTSO-E shape
+        # mismatch (RienduPre, Discussion #432).
+        "tariff_today_prices_count", "tariff_today_level_counts",
+        "tariff_today_first_price", "tariff_today_last_price",
+        "tariff_parsed_attribute", "tariff_parsed_count",
+        "tariff_parsed_interval_seconds",
+    }
+    # Battery zones
+    _DIAGNOSE_BATTERY_ZONES_OPTION = {
+        "battery_priority_soc", "battery_buffer_soc", "battery_auto_start_soc",
+        "battery_assist_floor_soc", "battery_minimum_soc", "battery_resume_soc",
+        "battery_capacity_kwh",
+    }
+    _DIAGNOSE_BATTERY_ZONES_STATE = {
+        "battery_soc", "battery_power", "battery_charge_power",
+        "battery_discharge_power", "battery_status",
+        "battery_health_score", "battery_temperature",
+    }
+    # Battery scheduler
+    _DIAGNOSE_BATTERY_SCHEDULER_OPTION = {
+        "battery_charge_scheduler_enabled", "battery_capacity_kwh",
+        "battery_max_charge_power_w", "battery_roundtrip_efficiency",
+        "battery_cycle_cost", "battery_precharge_trigger_hour",
+        "battery_max_target_soc", "battery_min_deficit_kwh",
+        "battery_pessimism_weight", "battery_force_charge_negative_price",
+    }
+    _DIAGNOSE_BATTERY_SCHEDULER_STATE = {
+        "battery_scheduler_active", "battery_scheduler_target_soc",
+        "battery_scheduler_target_kwh", "battery_scheduler_window_start",
+        "battery_scheduler_window_end", "battery_scheduler_reason",
+    }
+    # Load management
+    _DIAGNOSE_LOAD_MGMT_OPTION = {
+        "load_management_enabled", "target_peak_limit",
+        "warning_peak_level", "emergency_peak_level",
+        "critical_device_protection", "maximum_grid_import",
+    }
+    _DIAGNOSE_LOAD_MGMT_STATE = {
+        "load_management_status", "load_management_recommendation",
+        "loads_currently_shed", "controllable_devices_count",
+        "consecutive_peak_15min", "monthly_consecutive_peak",
+        "current_vs_peak_percentage", "available_load_reduction",
+    }
+    # Forecast
+    _DIAGNOSE_FORECAST_OPTION = {
+        "forecast_dampening_factor",  # the one config knob that exists
+    }
+    _DIAGNOSE_FORECAST_STATE = {
+        "forecast_today_kwh", "forecast_tomorrow_kwh",
+        "forecast_source", "forecast_available",
+        "forecast_dampening_factor", "forecast_remaining_today_kwh",
+        "best_surplus_window",
+    }
+    # Notifications
+    _DIAGNOSE_NOTIFICATIONS_OPTION = {
+        "enable_charger_notifications", "enable_mobile_notifications",
+        "mobile_notification_service",
+    }
+    _DIAGNOSE_NOTIFICATIONS_STATE = set()  # notifications are fire-and-forget; no state surface
+    # Advanced
+    _DIAGNOSE_ADVANCED_OPTION = {
+        "observer_mode", "update_interval", "power_delta",
+        "current_delta", "soc_delta", "minimum_solar_power",
+    }
+    _DIAGNOSE_ADVANCED_STATE = {
+        "observer_mode", "update_interval", "power_delta",
+        "current_delta", "soc_delta", "minimum_solar_power",
+        "last_update", "delta_triggered",
+    }
+
+    _DIAGNOSE_SLICERS = {
+        "heat_pump": (_DIAGNOSE_HEAT_PUMP_OPTION, _DIAGNOSE_HEAT_PUMP_STATE),
+        "hot_water": (_DIAGNOSE_HOT_WATER_OPTION, _DIAGNOSE_HOT_WATER_STATE),
+        "ev_chargers": (_DIAGNOSE_EV_OPTION_TOP, _DIAGNOSE_EV_STATE_PREFIXES),
+        "tariff": (_DIAGNOSE_TARIFF_OPTION, _DIAGNOSE_TARIFF_STATE),
+        "battery_zones": (_DIAGNOSE_BATTERY_ZONES_OPTION, _DIAGNOSE_BATTERY_ZONES_STATE),
+        "battery_scheduler": (_DIAGNOSE_BATTERY_SCHEDULER_OPTION, _DIAGNOSE_BATTERY_SCHEDULER_STATE),
+        "load_management": (_DIAGNOSE_LOAD_MGMT_OPTION, _DIAGNOSE_LOAD_MGMT_STATE),
+        "forecast": (_DIAGNOSE_FORECAST_OPTION, _DIAGNOSE_FORECAST_STATE),
+        "notifications": (_DIAGNOSE_NOTIFICATIONS_OPTION, _DIAGNOSE_NOTIFICATIONS_STATE),
+        "advanced": (_DIAGNOSE_ADVANCED_OPTION, _DIAGNOSE_ADVANCED_STATE),
+    }
+
     _DIAGNOSE_LOG_NEEDLES = {
         "all": (),  # no filter — caller wants every recent SEM line
         "heat_pump": ("heat_pump", "heatpump", "sg_ready", "HeatPumpController"),
+        "hot_water": ("hot_water", "hot water", "HotWaterController", "boiler", "dhw"),
         "ev_chargers": ("ev_control", "ev_charger", "keba", "wallbox", "charger_"),
         "battery_zones": ("battery_soc", "zone", "battery_priority"),
         "tariff": ("tariff", "classifier", "percentile", "nordpool", "tibber"),
         "battery_scheduler": ("battery_charge_scheduler", "precharge"),
         "load_management": ("load_management", "peak_management"),
-        "forecast": ("forecast"),
+        "forecast": ("forecast",),
         "notifications": ("notification", "notify"),
         "advanced": (),
         "overview": (),
@@ -2672,38 +2957,30 @@ async def _async_register_phase_services(
         coordinator = target.runtime_data
         live = (coordinator.data or {}) if coordinator else {}
 
-        # Slice the config + state to the section's keys
-        if section == "heat_pump":
-            config = {k: merged_cfg.get(k) for k in _DIAGNOSE_HEAT_PUMP_OPTION_KEYS if k in merged_cfg}
-            state = {k: live.get(k) for k in _DIAGNOSE_HEAT_PUMP_KEYS if k in live}
-        elif section == "all" or section == "overview":
+        # Slice the config + state to the section's keys via the
+        # dedicated-slicer map. ``state`` is either an explicit key set
+        # OR a tuple of prefixes (used by ``ev_chargers`` where the
+        # state surface is broad — every per-charger sensor key starts
+        # with ``charger_<id>_``).
+        if section == "all" or section == "overview":
             config = dict(merged_cfg)
             state = dict(live)
+        elif section in _DIAGNOSE_SLICERS:
+            opt_keys, state_keys = _DIAGNOSE_SLICERS[section]
+            config = {k: merged_cfg.get(k) for k in opt_keys if k in merged_cfg}
+            if isinstance(state_keys, tuple):
+                # Prefix tuple — match any key starting with one of them.
+                state = {
+                    k: v for k, v in live.items()
+                    if any(k.startswith(p) for p in state_keys)
+                }
+            else:
+                state = {k: live.get(k) for k in state_keys if k in live}
         else:
-            # Generic prefix-match slice for sections without a
-            # dedicated slicer yet. Better than nothing — RienduPre's
-            # diagnose-button doesn't 404, and the maintainer can
-            # eyeball the relevant fields.
-            prefix_map = {
-                "ev_chargers": ("ev_", "charger_", "daily_ev", "session_"),
-                "battery_zones": ("battery_",),
-                "tariff": ("tariff_", "electricity_"),
-                "battery_scheduler": ("battery_",),
-                "load_management": ("load_management", "peak_", "target_peak"),
-                "forecast": ("forecast_",),
-                "notifications": ("notification", "notify", "mobile_"),
-                "advanced": ("observer_mode", "update_interval", "power_delta",
-                             "current_delta", "soc_delta"),
-            }
-            prefixes = prefix_map.get(section, ())
-            config = {
-                k: v for k, v in merged_cfg.items()
-                if any(k.startswith(p) for p in prefixes)
-            }
-            state = {
-                k: v for k, v in live.items()
-                if any(k.startswith(p) for p in prefixes)
-            }
+            # Unknown section name — return empty payload rather than
+            # the whole dump (which the user gets via section=all).
+            config = {}
+            state = {}
 
         # Last ~20 SEM log lines (or filtered) — reuse the diagnostics
         # log tail logic so behaviour stays consistent.

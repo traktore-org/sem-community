@@ -139,12 +139,30 @@ def test_temperature_reading_path_entity_attribute_invalid_no_fallback(mock_hass
 # ──────────────────────────────────────────────
 
 
-def test_temperature_safety_path_no_sensor_assume_safe(mock_hass):
-    """The silent-failure surface — sensor unavailable → assume safe."""
+def test_temperature_safety_path_configured_sensor_broken(mock_hass):
+    """#420 fix (v1.7.2): configured sensor reports unavailable → FAIL
+    SAFE (was the silent-failure surface that motivated the audit; the
+    pre-fix behaviour was ``no_sensor_assume_safe → True``)."""
     mock_hass.states.get = MagicMock(return_value=_state("unavailable"))
-    h = _make(mock_hass)
+    h = _make(mock_hass)  # _make sets temperature_entity_id, so sensor IS configured
+    assert h.is_temperature_safe() is False, (
+        "configured-but-broken sensor must fail safe — pre-fix this "
+        "let SEM activate the heater forever with no temperature feedback"
+    )
+    assert h.to_dict()["temperature_safety_path"] == "configured_sensor_broken"
+
+
+def test_temperature_safety_path_no_sensor_configured(mock_hass):
+    """When the user genuinely never configured a temperature sensor,
+    rely on the device's internal thermostat — return True. Distinct
+    from the configured-but-broken case above."""
+    mock_hass.states.get = MagicMock(return_value=None)
+    h = HotWaterController(
+        hass=mock_hass, entity_id="switch.boiler",
+        temperature_entity_id=None,  # explicitly no sensor configured
+    )
     assert h.is_temperature_safe() is True
-    assert h.to_dict()["temperature_safety_path"] == "no_sensor_assume_safe"
+    assert h.to_dict()["temperature_safety_path"] == "no_sensor_configured"
 
 
 def test_temperature_safety_path_normal_below_solar_target(mock_hass):

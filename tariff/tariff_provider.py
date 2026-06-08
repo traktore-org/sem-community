@@ -385,7 +385,38 @@ class DynamicTariffProvider(TariffProvider):
         return 0.30
 
     def _read_prices_list(self) -> List[PricePoint]:
-        """Read upcoming prices from entity attributes."""
+        """Read upcoming prices from entity attributes.
+
+        Supports a range of provider attribute shapes:
+
+        * **Tibber HA core**: ``today`` / ``tomorrow`` array of dicts
+          with ``startsAt`` + ``total`` (full price incl. tax)
+        * **Tibber API v2 / Tibber Pulse 15-min** (PROD: RienduPre,
+          Discussion #432, 2026-06-07): same shape but 96 entries
+          (15-min granularity).
+        * **Nordpool**: ``raw_today`` / ``raw_tomorrow`` with
+          ``start`` + ``value`` (raw spot, no taxes).
+        * **EnergyZero NL** / **EasyEnergy NL**: ``prices_today``
+          / ``prices_tomorrow`` with ``start`` + ``price`` (15-min
+          shape on some installs).
+        * **ENTSO-E** (15-min PROD use in NL/DE): often
+          ``prices`` array with ``time`` + ``price``.
+        * **Amber Electric** / **Octopus Energy**: ``forecasts`` /
+          ``rates`` with ``start_time`` + ``per_kwh``.
+
+        v1.7.2-beta.3 (2026-06-07): also tries ``prices`` (singular)
+        + ``time`` / ``hour`` timestamp keys after seeing them in
+        community-shared NL 15-min sensor templates. The diagnose
+        surface exposes which attribute matched so an empty result
+        for a non-listed shape is visible without a maintainer
+        having to read the raw entity dump.
+        """
+        # v1.7.2-beta.3: clear the per-cycle diag fields so the
+        # diagnose surface reflects THIS read, not the prior one.
+        self._last_parsed_attribute: Optional[str] = None
+        self._last_parsed_count: int = 0
+        self._last_parsed_gap_seconds: Optional[float] = None
+
         if not self._price_entity:
             return []
 
@@ -396,13 +427,24 @@ class DynamicTariffProvider(TariffProvider):
         prices = []
         attrs = state.attributes
 
-        # Tibber: prices_today, prices_tomorrow attributes
-        for key in ("prices_today", "prices_tomorrow", "today", "tomorrow"):
+        # Tibber + NL EnergyZero/EasyEnergy + generic
+        for key in ("prices_today", "prices_tomorrow", "today", "tomorrow", "prices"):
             price_list = attrs.get(key, [])
             if isinstance(price_list, list):
                 for item in price_list:
                     if isinstance(item, dict):
-                        ts = item.get("start", item.get("startsAt"))
+                        # Expanded timestamp key vocabulary — v1.7.2-beta.3
+                        # adds ``time`` (ENTSO-E) and ``hour`` (some NL
+                        # template sensors) to the existing ``start`` /
+                        # ``startsAt``.
+                        ts = (
+                            item.get("start")
+                            or item.get("startsAt")
+                            or item.get("time")
+                            or item.get("hour")
+                        )
+                        # Expanded price key vocabulary — already covers
+                        # most providers, kept verbatim.
                         price = item.get("total", item.get("price", item.get("value")))
                         if ts and price is not None:
                             try:
@@ -418,6 +460,8 @@ class DynamicTariffProvider(TariffProvider):
                                 ))
                             except (ValueError, TypeError):
                                 continue
+            if prices and not self._last_parsed_attribute:
+                self._last_parsed_attribute = key
 
         # Nordpool: raw_today, raw_tomorrow attributes
         for key in ("raw_today", "raw_tomorrow"):
@@ -480,6 +524,15 @@ class DynamicTariffProvider(TariffProvider):
                     break  # Found data in this source, stop
 
         prices = sorted(prices, key=lambda p: p.timestamp)
+
+        # v1.7.2-beta.3: record diagnostic info about the parse for
+        # the tariff diagnose surface. Tells users (and us) which
+        # attribute matched + the detected sample interval so a
+        # 15-min vs hourly mismatch shows up cleanly.
+        self._last_parsed_count = len(prices)
+        if len(prices) >= 2:
+            gap = (prices[1].timestamp - prices[0].timestamp).total_seconds()
+            self._last_parsed_gap_seconds = gap if 0 < gap <= 3600 else None
 
         # #359: write back to the cache so ``_get_percentile_breaks``
         # can compute today's distribution. The classification done
