@@ -21,32 +21,26 @@ LOCALIZE_JS = REPO_ROOT / "dashboard" / "card" / "sem-localize.js"
 def generate_js(translations: dict) -> str:
     """Generate the sem-localize.js source from the translations dict.
 
-    v1.7.2-beta.4 (2026-06-08): the body is wrapped in a top-level
-    IIFE with a ``window.semLocalize`` guard so the file is safe to
-    load via BOTH ``add_extra_js_url`` AND as a Lovelace resource.
-    Without the guard, a second load would re-execute
-    ``const _semTranslations = {...}`` and throw a SyntaxError
-    (and the existing block-scoped semLocalize would silently shadow).
+    The body is wrapped in a top-level IIFE so ``_semTranslations``
+    stays scoped (doesn't leak as a window-level global). Only
+    ``semLocalize`` is published. At the end of the IIFE, a
+    ``sem-localize-ready`` CustomEvent fires on ``document`` so cards
+    that were constructed before this script parsed can re-render
+    (handled in ``dashboard/card/src/base/sem-lit-base.js``).
 
-    Why dual-channel: ``add_extra_js_url`` is the desktop-friendly
-    channel (loaded before Lovelace modules so cards see the global
-    immediately). Mobile Companion app does NOT reliably pick up
-    add_extra_js_url scripts (RienduPre + others, 2026-06-08), so we
-    ALSO register as a Lovelace resource. With the guard, the second
-    load is a clean no-op.
+    Single delivery channel: this file is registered as a Lovelace
+    resource only (see ``__init__.py:_async_register_frontend_resources``
+    and #453). The IIFE no longer needs a ``window.semLocalize`` guard
+    — the file loads exactly once per page.
     """
     timestamp = datetime.now(timezone.utc).isoformat()
     lines = [
         "// Auto-generated from translations.json — do not edit manually",
         f"// Generated: {timestamp}",
-        "// v1.7.2-beta.4: IIFE-wrapped with window.semLocalize guard so",
-        "// dual-channel loading (add_extra_js_url + Lovelace resource) is safe.",
+        "// IIFE-scoped translations; publishes ``window.semLocalize`` and",
+        "// dispatches ``sem-localize-ready`` on document for late-loading cards.",
         "(function() {",
         "  if (typeof window === 'undefined') return;",
-        "  // Guard: if a prior load already defined semLocalize, no-op.",
-        "  // Both load channels point at the same hash-suffixed URL, so",
-        "  // there's never a stale-vs-fresh race — they're identical.",
-        "  if (window.semLocalize) return;",
         "  const _semTranslations = {",
     ]
 
