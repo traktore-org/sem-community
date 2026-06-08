@@ -11,6 +11,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2] - 08.06.2026
+
+## 🎉 Stable Release
+
+_Consolidates [1.7.2-beta.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.1) through [1.7.2-beta.7](https://github.com/traktore-org/sem-community/releases/tag/v1.7.2-beta.7). 19 commits since [1.7.1](https://github.com/traktore-org/sem-community/releases/tag/v1.7.1). 24 hours of HA-PROD soak with zero errors._
+
+### 🔥 New: Hot Water boiler control (#454)
+
+The `HotWaterController` class existed from day one but was never instantiated — setting `hot_water_entity` in the Config tab Hot Water section did nothing at runtime. This release closes that gap end-to-end:
+
+- Registration in setup mirrors the heat-pump pattern (entity + temp sensor + targets + Legionella interval + priority).
+- Live runtime state (`hot_water_current_temperature`, `hours_since_legionella`, the 5 `_last_*_path` audit recorders from #420) populated every cycle into `coordinator.data`.
+- Live-status block on the Hot Water section shows current temp, Legionella tracking, and decision paths when the controller is registered.
+- Two Repair issues fire when configured entities go unavailable: `hot_water_entity_unavailable` (boiler control) and `hot_water_temperature_sensor_unavailable` (with #420 fail-safe semantics — boiler is NOT activated on surplus when the temp sensor is broken).
+- Orphan-repair sweep handles user reconfiguring the boiler entity.
+- Diagnose modal surfaces the full state via `_DIAGNOSE_HOT_WATER_STATE`.
+- 7 new wire-up tests + 7 new repair tests. (by @traktore-org in #454)
+
+### 🔥 New: Tariff price + 15-min provider support (Discussion #432)
+
+The bottom-of-dashboard "Today's Schedule" tariff timeline was lying. Saturday on Tibber NL showed a solid "Goedkoop" bar for all 24 hours when the current price card next to it correctly showed "Normaal" at 0.31 EUR/kWh. Two unrelated code paths; one was misleading.
+
+- **JS fallback no longer lies on weekends.** Mirrors the current `tariff_price_level` across the day with a dashed/translucent indicator showing "best-effort, not real per-hour data".
+- **Parser accepts 15-min ENTSO-E + Tibber Pulse shapes.** Added `prices` (singular) attribute key + `time` / `hour` timestamp keys to the parser vocabulary. NL ENTSO-E users now get correct per-hour data SEM-side.
+- **New diagnostic fields** on the Tariff diagnose surface: `tariff_parsed_attribute`, `tariff_parsed_count`, `tariff_parsed_interval_seconds`, `tariff_today_level_counts`, `tariff_today_first_price`, `tariff_today_last_price`. One Diagnose paste tells us in one read which failure mode hit (no parser match / timezone filter / genuinely-all-cheap / percentile-fallback). (by @traktore-org)
+
+### 🩺 Heat-pump UX + diagnostics
+
+- **Configuration tab subtitle now reflects actual registration state** — was reading `sensor.sem_heat_pump_registered` (doesn't exist) instead of `binary_sensor.sem_heat_pump_registered`. New `_bin()` helper fixes 3 use sites. RienduPre #448. (by @traktore-org)
+- **Orphan heat-pump Repair issues now auto-clear** — repairs from a prior config (e.g. user switched from ESP relays to Modbus template switches) used to stay in the registry indefinitely. New sweep enumerates `heat_pump_relay{1,2}_unavailable_*` issues and clears any whose entity is no longer in current config. RienduPre #448. (by @traktore-org)
+- **Heat-pump runtime path telemetry now visible** — the #421 audit shipped `_last_*_path` recorders in `v1.7.0-beta.24` but never wired them through to a user-visible surface. All 5 paths + current temperature now publish through `coordinator.data` into the Diagnose slicer.
+- **Repair issues survive reload** — replaced in-memory `_raised` flag with idempotent always-raise/always-clear pattern. The flag was per-coordinator-instance, so reloads reset it, and stuck repairs never auto-cleared. Reported by RienduPre + caught in live testing.
+
+### 🩺 Forecast write-time-weather fix (#416)
+
+PROD telemetry on 2026-06-05 showed 42% of forecast records had `weather_category=unknown`. Root cause: weather was captured at day-rollover post-sunset when the entity is unreliable.
+
+- **Eager weather snapshot** in `update()` — any daylight cycle with a non-unknown weather value updates the snapshot. The existing `blended_live` capture still wins on confident mid-day cycles.
+- **Unknown-guard on the `blended_live` capture** — a transient `unknown` at noon no longer locks the day's record to unknown.
+- **Defensive log formatting** — the day-record info log no longer crashes on `None` dampening factor.
+- 3 new tests pin the gap-closing paths. (by @traktore-org in #416)
+
+### 🩺 Hot-water fail-safe (#420)
+
+`is_temperature_safe()` returned `True` whenever `get_current_temperature()` returned `None`. That conflated "no sensor configured" (trust thermostat) with "sensor configured but broken" (silent failure).
+
+- Split the two paths via `_last_temperature_reading_path`: `no_source_configured` → `no_sensor_configured` → `True`; everything else → `configured_sensor_broken` → `False` (fail-safe). (by @traktore-org)
+- 5 new tests pin the fixed branches. Closes #420.
+
+### 🌐 Mobile sem-localize.js delivery
+
+Beta.1 moved `sem-localize.js` from Lovelace resources onto `add_extra_js_url` only. Desktop browsers load both reliably; mobile Companion app does NOT. RienduPre #448: almost every translation key rendering raw on iOS.
+
+- **Dual-channel registration**: now registered as BOTH an `add_extra_js_url` URL AND a Lovelace resource. Same hash-suffixed URL on both channels — browser fetches once. (by @traktore-org)
+- **IIFE guard** in `sem-localize.js`: `(function() { if (window.semLocalize) return; ... })()` — defensive second load is a clean no-op.
+- Follow-up architectural cleanup tracked in #453 (drop `add_extra_js_url` once `sem-localize-ready` event ergonomics are verified).
+
+### 🩺 Per-section Diagnose surface
+
+- Heat pump diagnose now exposes `heat_pump_activation_path`, `heat_pump_deactivation_path`, `heat_pump_relay_path`, `heat_pump_temperature_reading_path`, `heat_pump_offpeak_path`, `heat_pump_current_temperature`.
+- Hot water diagnose now exposes 14 keys covering config + live state + #420 telemetry.
+- Tariff diagnose now exposes parser-shape + per-hour distribution counts + first/last price (see Tariff section above).
+- Modal opacity fix (beta.2) — was rendering at 6% opacity with cards bleeding through; now solid `--ha-card-background` with `backdrop-filter: blur(6px)`.
+
+### 🐛 Other fixes
+
+- `set_option` service now always reloads (was being swallowed by the skip-reload optimization for runtime stepper tweaks).
+- KEBA session_energy pass-through (#449) — new `sensor.sem_charger_<id>_session_energy_external` surfaces the charger's own session counter alongside SEM's internal integration.
+- Chart "Today" window now uses HA's timezone (#450) — was browser-local-midnight, drifted on TZ mismatch.
+- 3 missing translation keys added (`charger_status`, `forecast_source`, `load_management_status`).
+- Dutch translations for 5 new Repair issues (cherry-picked from RienduPre's PR #446 contribution).
+
+### 📚 Docs
+
+- `docs/SETUP_GUIDE.md` section 10 now has a dedicated "Hot water boiler (separate from heat pump)" subsection: config table, two operating modes (with/without temp sensor), fail-safe behaviour, Repair surfaces, and Diagnose troubleshooting.
+- `docs/ARCHITECTURE.md` "SEM is not an integration" principle.
+
+### Contributors
+
+Thanks to **@RienduPre** for the persistent reporting on #448 + Discussion #432 — most of the fixes in this release came from his diagnose dumps + Dutch translation contribution.
+
+### Verification
+
+- **3273 tests pass**, 0 fail.
+- 24h HA-PROD soak on `1.7.2-beta.7` — zero SEM errors, zero warnings, zero stuck Repairs.
+- Live-tested every fix on HA-TEST: heat pump partial-SG-Ready scenario, hot water configure-and-clear flow, tariff parser with synthetic 15-min ENTSO-E sensor, orphan repair sweep with injected stale entry.
+
 # [1.7.2-beta.7] - 08.06.2026
 
 ## 🧪 Beta Release
