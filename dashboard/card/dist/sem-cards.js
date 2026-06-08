@@ -5979,12 +5979,45 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${this._renderOptionSlider("heat_pump_max_setpoint","config_hp_max_setpoint",{min:30,max:80,step:1,unit:"°C",default:55},i,"config_help_hp_max_setpoint")}
                 ${this._renderOptionSlider("heat_pump_priority","config_hp_priority",{min:1,max:10,step:1,unit:"",default:4},i,"config_help_hp_priority")}
             </div>
-        `}_renderHotWater(t){const e=this._options||{},i=!!e.hot_water_entity?K:W`
+        `}_renderHotWater(t){const e=this._options||{},i=this._bin("hot_water_registered"),s=this._val("hot_water_current_temperature"),r=this._val("hot_water_solar_target"),a=this._val("hot_water_hours_since_legionella"),o=this._bin("hot_water_legionella_cycle_active"),n=this._val("hot_water_temperature_reading_path"),l=this._val("hot_water_temperature_safety_path"),c=this._val("hot_water_activation_path"),d=i?W`
+            <div class="hp-status">
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t("hot_water_current_temperature")}</span>
+                    <span class="readonly-value">${s?`${parseFloat(s).toFixed(1)} °C`:"—"}</span>
+                </div>
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t("hot_water_solar_target")}</span>
+                    <span class="readonly-value">${r?`${parseFloat(r).toFixed(0)} °C`:"—"}</span>
+                </div>
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t("hot_water_hours_since_legionella")}</span>
+                    <span class="readonly-value">${o?this._t("hot_water_legionella_cycle_running"):a&&parseFloat(a)<999?`${parseFloat(a).toFixed(0)} h`:this._t("hot_water_legionella_never_run")}</span>
+                </div>
+                ${n?W`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t("hot_water_temperature_reading_path")}</span>
+                        <span class="readonly-value">${n}</span>
+                    </div>
+                `:K}
+                ${l&&"uninitialized"!==l?W`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t("hot_water_temperature_safety_path")}</span>
+                        <span class="readonly-value">${l}</span>
+                    </div>
+                `:K}
+                ${c&&"uninitialized"!==c?W`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t("hot_water_activation_path")}</span>
+                        <span class="readonly-value">${c}</span>
+                    </div>
+                `:K}
+            </div>
+        `:W`
             <div class="setup-intro">
                 ${this._t("config_hot_water_intro")}
             </div>
         `;return W`
-            ${i}
+            ${d}
             <div class="hp-form">
                 ${this._renderPicker("hot_water_entity","config_hw_entity",null,null,e,"config_help_hw_entity")}
                 ${this._renderPicker("hot_water_temperature_sensor","config_hw_temp_sensor","sensor","temperature",e,"config_help_hw_temp_sensor")}

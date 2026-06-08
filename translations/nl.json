@@ -1219,6 +1219,14 @@
     "heat_pump_partial_sg_ready": {
       "title": "Warmtepomp SG-Ready half geconfigureerd",
       "description": "Er is maar 1 van de 2 SG-Ready relais (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) is ingesteld in SEM, zonder klimaat-entiteit als terugvaloptie. Het SG-Ready protocol codeert de vier toestanden (GEBLOKKEERD / NORMAAL / BOOST / GEFORCEERD_AAN) als een 2-bits binair getal over BEIDE relais, waardoor één relais het protocol niet kan aansturen. Configureer ook het tweede relais, of stel een `heat_pump_climate_entity` in om in plaats daarvan het klimaat-instelpunt-boostpad te gebruiken. De melding verdwijnt automatisch zodra de configuratie geldig is."
+    },
+    "hot_water_entity_unavailable": {
+      "title": "Warmwater-boilerbediening niet beschikbaar",
+      "description": "De geconfigureerde warmwater-bedieningsentiteit `{entity_id}` is al {minutes}+ minuten niet beschikbaar of onbekend. SEM kan de controller gewoon registreren, maar elke overschot-opdracht wordt stilzwijgend genegeerd totdat de entiteit weer een geldige toestand rapporteert. Controleer het bijbehorende apparaat — boilerrelais, water_heater-integratie, klimaatapparaat of welke integratie ook eigenaar is van deze entiteit. De melding verdwijnt automatisch zodra de entiteit weer beschikbaar is."
+    },
+    "hot_water_temperature_sensor_unavailable": {
+      "title": "Warmwater-temperatuursensor niet beschikbaar",
+      "description": "De geconfigureerde warmwater-temperatuursensor `{entity_id}` is al {minutes}+ minuten niet beschikbaar of onbekend. SEM gedraagt zich faalveilig — de boiler wordt NIET geactiveerd door overschot totdat de sensor weer een geldige meting levert, om te voorkomen dat de boiler zonder feedback verder verwarmt. Controleer de bovenliggende integratie van de sensor. De melding verdwijnt automatisch zodra de sensor weer werkt."
     }
   }
 }

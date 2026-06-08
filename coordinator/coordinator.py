@@ -2798,6 +2798,72 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except Exception as e:  # noqa: BLE001 — never fail a cycle over a repair
             _LOGGER.debug("Heat-pump repair tracking failed: %s", e)
 
+        # ── Hot water repair tracking (#454) ────────────────────────
+        # Mirror of the heat-pump repair block. Two distinct Repair
+        # surfaces:
+        #   * boiler-control entity unavailable for >5 min
+        #   * temperature sensor unavailable for >5 min
+        # Both auto-raise/clear idempotently — no in-memory ``raised``
+        # flag (lesson from beta.2/5 — flags don't survive reload).
+        try:
+            import time as _ri_time
+            from . import repair_issues as _ri
+            _now_mono = _ri_time.monotonic()
+            if not hasattr(self, "_hot_water_unavailable_since"):
+                self._hot_water_unavailable_since = {}
+            tracked_hw = self._hot_water_unavailable_since
+            # One-time orphan sweep per coordinator instance (catches
+            # stale repairs from a prior config).
+            if not getattr(self, "_hot_water_orphan_sweep_done", False):
+                _ri.clear_orphan_hot_water_repairs(
+                    self.hass,
+                    currently_configured_entity=hw_entity_cfg,
+                    currently_configured_temp_sensor=self.config.get(
+                        "hot_water_temperature_sensor"
+                    ) or None,
+                )
+                self._hot_water_orphan_sweep_done = True
+
+            hw_temp_sensor_cfg = self.config.get("hot_water_temperature_sensor") or None
+            for kind, eid in (
+                ("entity", hw_entity_cfg),
+                ("temp_sensor", hw_temp_sensor_cfg),
+            ):
+                if not eid:
+                    # Slot not configured — defensive clear of any
+                    # stale repair from before the config change.
+                    if kind == "entity":
+                        _ri.clear_hot_water_entity_unavailable(self.hass, eid or "")
+                    else:
+                        _ri.clear_hot_water_temperature_sensor_unavailable(self.hass, eid or "")
+                    continue
+                key = f"{kind}:{eid}"
+                st = self.hass.states.get(eid)
+                state_str = st.state if st else "entity_missing"
+                is_bad = state_str in (None, "unavailable", "unknown", "entity_missing")
+                if is_bad:
+                    if key not in tracked_hw:
+                        tracked_hw[key] = _now_mono
+                    outage_s = _now_mono - tracked_hw[key]
+                    if outage_s >= _ri.UNAVAILABLE_REPAIR_THRESHOLD_S:
+                        mins = int(outage_s // 60)
+                        if kind == "entity":
+                            _ri.raise_hot_water_entity_unavailable(
+                                self.hass, eid, minutes_unavailable=mins,
+                            )
+                        else:
+                            _ri.raise_hot_water_temperature_sensor_unavailable(
+                                self.hass, eid, minutes_unavailable=mins,
+                            )
+                else:
+                    tracked_hw.pop(key, None)
+                    if kind == "entity":
+                        _ri.clear_hot_water_entity_unavailable(self.hass, eid)
+                    else:
+                        _ri.clear_hot_water_temperature_sensor_unavailable(self.hass, eid)
+        except Exception as e:  # noqa: BLE001 — never fail a cycle over a repair
+            _LOGGER.debug("Hot-water repair tracking failed: %s", e)
+
         # Phase 8: Consumption/solar predictor (#3)
         try:
             now = dt_util.now()

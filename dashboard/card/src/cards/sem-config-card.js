@@ -672,22 +672,67 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderHotWater(T) {
-        // The HotWaterController exists in code (devices/hot_water_controller.py)
-        // but is not yet instantiated in the production setup path —
-        // only the number entities (max temp / solar target) are wired
-        // in. This section therefore renders the config surface +
-        // entity pickers so users can configure it; the runtime
-        // status block lights up automatically when the controller
-        // hookup lands in a future beta.
+        // v1.7.2-beta.7 (#454 Phase 2-4): live-status block when the
+        // HotWaterController is registered with the SurplusController.
+        // Pre-wire-up this was config-only; now surfaces the runtime
+        // telemetry SEM sees on every cycle (current temp, Legionella
+        // status, the #420 decision-path attributes).
         const opts = this._options || {};
-        const configured = !!opts.hot_water_entity;
-        const intro = configured ? nothing : html`
+        const registered = this._bin('hot_water_registered');
+        const currentTemp = this._val('hot_water_current_temperature');
+        const solarTarget = this._val('hot_water_solar_target');
+        const legHours = this._val('hot_water_hours_since_legionella');
+        const legActive = this._bin('hot_water_legionella_cycle_active');
+        const tempReadingPath = this._val('hot_water_temperature_reading_path');
+        const tempSafetyPath = this._val('hot_water_temperature_safety_path');
+        const activationPath = this._val('hot_water_activation_path');
+
+        const statusBlock = registered ? html`
+            <div class="hp-status">
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('hot_water_current_temperature')}</span>
+                    <span class="readonly-value">${currentTemp ? `${parseFloat(currentTemp).toFixed(1)} °C` : '—'}</span>
+                </div>
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('hot_water_solar_target')}</span>
+                    <span class="readonly-value">${solarTarget ? `${parseFloat(solarTarget).toFixed(0)} °C` : '—'}</span>
+                </div>
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('hot_water_hours_since_legionella')}</span>
+                    <span class="readonly-value">${
+                        legActive ? this._t('hot_water_legionella_cycle_running')
+                        : (legHours && parseFloat(legHours) < 999)
+                            ? `${parseFloat(legHours).toFixed(0)} h`
+                            : this._t('hot_water_legionella_never_run')
+                    }</span>
+                </div>
+                ${tempReadingPath ? html`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t('hot_water_temperature_reading_path')}</span>
+                        <span class="readonly-value">${tempReadingPath}</span>
+                    </div>
+                ` : nothing}
+                ${tempSafetyPath && tempSafetyPath !== 'uninitialized' ? html`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t('hot_water_temperature_safety_path')}</span>
+                        <span class="readonly-value">${tempSafetyPath}</span>
+                    </div>
+                ` : nothing}
+                ${activationPath && activationPath !== 'uninitialized' ? html`
+                    <div class="readonly-row">
+                        <span class="ctrl-label">${this._t('hot_water_activation_path')}</span>
+                        <span class="readonly-value">${activationPath}</span>
+                    </div>
+                ` : nothing}
+            </div>
+        ` : html`
             <div class="setup-intro">
                 ${this._t('config_hot_water_intro')}
             </div>
         `;
+
         return html`
-            ${intro}
+            ${statusBlock}
             <div class="hp-form">
                 ${this._renderPicker('hot_water_entity', 'config_hw_entity',
                     null, null, opts, 'config_help_hw_entity')}

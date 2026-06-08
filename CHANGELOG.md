@@ -11,6 +11,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2-beta.7] - 08.06.2026
+
+## 🧪 Beta Release
+
+_#454 Phase 2-4: Hot water Repair issues + live-status block + translations + docs._
+
+### 🩺 Hot water Repair issues
+
+Two new self-diagnostic surfaces in Settings → System → Repairs:
+
+- **`hot_water_entity_unavailable`** — fires when the configured boiler-control entity has been `unavailable` / `unknown` / missing for >5 min. SEM stops issuing on/off commands (they'd silently no-op anyway); the Repair surfaces the broken state with a clear "check the upstream integration" message. (by @traktore-org)
+- **`hot_water_temperature_sensor_unavailable`** — distinct from the boiler Repair because the safety semantics differ. When a configured temp sensor breaks, `is_temperature_safe()` returns False (post-#420 fail-safe), which means SEM stops activating the boiler entirely. This Repair makes that visible to the user.
+
+Both auto-clear when the entity recovers. Both use the idempotent always-raise/always-clear pattern (no in-memory flags — lesson from beta.2/5).
+
+**Orphan sweep** (new function `clear_orphan_hot_water_repairs`): runs once per coordinator instance, enumerates all `hot_water_*_unavailable_*` issues in the registry, clears any whose entity is no longer in current config. Mirror of beta.5's heat-pump orphan sweep — handles the "user reconfigured the boiler entity, old Repair stuck forever" case.
+
+7 new tests pin: per-Repair raise + clear, distinct issue ids, registry-error defensiveness, orphan sweep with reconfigured entity, orphan sweep with no config at all.
+
+### 🩺 Live-status block on Config tab Hot Water section
+
+Pre-wire-up the Hot Water section was config-only (entity pickers + sliders). Now when the controller IS registered, the section also shows live state:
+
+- Current temperature (formatted to 1 decimal)
+- Solar target
+- Hours since the last Legionella cycle (or "Never run" / "Cycle running")
+- `temperature_reading_path` (which source the controller is reading from: `separate_sensor`, `entity_attribute`, `no_source_configured`, etc.)
+- `temperature_safety_path` (when something interesting — initial `uninitialized` hidden)
+- `activation_path` (when SEM has actually activated the boiler at least once)
+
+The path attributes surface the #420 audit's runtime telemetry directly in the UI — users can see WHY the boiler activated or didn't on the last cycle without opening the Diagnose modal.
+
+### 🌍 Translations
+
+- 7 new dashboard translation keys for the live-status labels (EN + DE polished; 13 other languages with EN fallback).
+- 2 new Repair-issue translation keys in `strings.json` + propagated to all 15 language files. EN polished, DE + NL polished (NL credited to RienduPre's prior translation work).
+
+### 📚 Docs
+
+`docs/SETUP_GUIDE.md` section 10 now has a dedicated "Hot water boiler (separate from heat pump)" subsection covering:
+
+- Config field reference table
+- The two operating modes (with vs without temp sensor)
+- What happens when the temp sensor breaks (fail-safe behaviour)
+- What happens when the boiler-control entity breaks (Repair surfaces it)
+- How to use the Diagnose surface for troubleshooting
+
+3273 tests pass. **#454 closes with this release** — all 4 phases shipped:
+1. Controller wire-up (beta.6)
+2. Repair issues (beta.7)
+3. Live-status block (beta.7)
+4. Translations + docs (beta.7)
+
 # [1.7.2-beta.6] - 08.06.2026
 
 ## 🧪 Beta Release

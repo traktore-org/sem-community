@@ -193,3 +193,108 @@ def test_clear_orphan_sweep_swallows_registry_errors(hass):
             hass, currently_configured_ids={"switch.a"},
         )
     assert cleared == 0
+
+
+# ── hot water repairs (v1.7.2-beta.7, #454 Phase 2) ─────────────────
+
+
+def test_raise_hot_water_entity_unavailable_files_with_entity(hass):
+    """Filing the boiler-control Repair includes the entity id in the
+    issue id + translation placeholders."""
+    with patch.object(ri.ir, "async_create_issue") as create:
+        ri.raise_hot_water_entity_unavailable(
+            hass, "switch.boiler", minutes_unavailable=8,
+        )
+    create.assert_called_once()
+    kwargs = create.call_args.kwargs
+    assert kwargs["issue_id"] == "hot_water_entity_unavailable_switch.boiler"
+    assert kwargs["translation_key"] == "hot_water_entity_unavailable"
+    assert kwargs["translation_placeholders"]["entity_id"] == "switch.boiler"
+    assert kwargs["translation_placeholders"]["minutes"] == "8"
+
+
+def test_raise_hot_water_temp_sensor_unavailable_distinct_issue_id(hass):
+    """Boiler-entity and temp-sensor repairs MUST have distinct issue
+    ids so they can coexist + clear independently."""
+    with patch.object(ri.ir, "async_create_issue") as create:
+        ri.raise_hot_water_entity_unavailable(hass, "switch.boiler")
+        ri.raise_hot_water_temperature_sensor_unavailable(hass, "sensor.water_temp")
+    assert create.call_count == 2
+    issue_ids = {call.kwargs["issue_id"] for call in create.call_args_list}
+    assert issue_ids == {
+        "hot_water_entity_unavailable_switch.boiler",
+        "hot_water_temperature_sensor_unavailable_sensor.water_temp",
+    }
+
+
+def test_clear_hot_water_entity_unavailable_targets_right_issue_id(hass):
+    with patch.object(ri.ir, "async_delete_issue") as delete:
+        ri.clear_hot_water_entity_unavailable(hass, "switch.boiler")
+    delete.assert_called_once_with(
+        hass, ri.DOMAIN, "hot_water_entity_unavailable_switch.boiler",
+    )
+
+
+def test_clear_hot_water_temp_sensor_unavailable_targets_right_issue_id(hass):
+    with patch.object(ri.ir, "async_delete_issue") as delete:
+        ri.clear_hot_water_temperature_sensor_unavailable(hass, "sensor.water_temp")
+    delete.assert_called_once_with(
+        hass, ri.DOMAIN, "hot_water_temperature_sensor_unavailable_sensor.water_temp",
+    )
+
+
+def test_raise_hot_water_repairs_swallow_registry_errors(hass):
+    """Like all SEM repairs, must never raise into the coordinator cycle."""
+    with patch.object(ri.ir, "async_create_issue", side_effect=RuntimeError("boom")):
+        ri.raise_hot_water_entity_unavailable(hass, "switch.boiler")
+        ri.raise_hot_water_temperature_sensor_unavailable(hass, "sensor.water_temp")
+    # No exception raised — that's the test
+
+
+def test_clear_orphan_hot_water_repairs_removes_unconfigured_entries(hass):
+    """When user reconfigures the boiler entity (or removes it), the
+    orphan repairs for the OLD entity must auto-clear. Mirror of the
+    heat-pump orphan sweep shipped in beta.5."""
+    fake_registry = MagicMock()
+    fake_registry.issues = {
+        (ri.DOMAIN, "hot_water_entity_unavailable_switch.old_boiler"): MagicMock(),
+        (ri.DOMAIN, "hot_water_temperature_sensor_unavailable_sensor.old_temp"): MagicMock(),
+        (ri.DOMAIN, "hot_water_entity_unavailable_switch.new_boiler"): MagicMock(),
+        # Cross-domain + cross-feature repairs must be untouched
+        ("homeassistant", "some_other"): MagicMock(),
+        (ri.DOMAIN, "heat_pump_relay1_unavailable_switch.something"): MagicMock(),
+    }
+    with patch.object(ri.ir, "async_get", return_value=fake_registry), \
+         patch.object(ri.ir, "async_delete_issue") as delete:
+        cleared = ri.clear_orphan_hot_water_repairs(
+            hass,
+            currently_configured_entity="switch.new_boiler",
+            currently_configured_temp_sensor=None,
+        )
+    # The old boiler + old temp sensor repairs cleared; the new boiler's
+    # repair stays (still in config); the cross-domain + heat-pump
+    # repairs untouched.
+    assert cleared == 2
+    cleared_ids = {call.args[2] for call in delete.call_args_list}
+    assert cleared_ids == {
+        "hot_water_entity_unavailable_switch.old_boiler",
+        "hot_water_temperature_sensor_unavailable_sensor.old_temp",
+    }
+
+
+def test_clear_orphan_hot_water_repairs_handles_no_config(hass):
+    """When user removes hot water entirely (both entity + temp sensor
+    cleared), ALL hot-water repairs must be swept."""
+    fake_registry = MagicMock()
+    fake_registry.issues = {
+        (ri.DOMAIN, "hot_water_entity_unavailable_switch.a"): MagicMock(),
+        (ri.DOMAIN, "hot_water_temperature_sensor_unavailable_sensor.b"): MagicMock(),
+    }
+    with patch.object(ri.ir, "async_get", return_value=fake_registry), \
+         patch.object(ri.ir, "async_delete_issue") as delete:
+        cleared = ri.clear_orphan_hot_water_repairs(
+            hass,
+            currently_configured_entity=None,
+            currently_configured_temp_sensor=None,
+        )
+    assert cleared == 2

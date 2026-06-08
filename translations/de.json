@@ -1219,6 +1219,14 @@
     "heat_pump_partial_sg_ready": {
       "title": "Wärmepumpe SG-Ready unvollständig konfiguriert",
       "description": "Genau eines der beiden SG-Ready-Relais (`heat_pump_relay1_entity` / `heat_pump_relay2_entity`) ist in SEM gesetzt, ohne climate-Fallback. Das SG-Ready-Protokoll kodiert die vier Zustände (BLOCKED / NORMAL / BOOST / FORCE_ON) als 2-Bit-Wert über BEIDE Relais. Ein einzelnes Relais kann das Protokoll nicht ansteuern. Entweder das zweite Relais auch konfigurieren oder eine `heat_pump_climate_entity` setzen, um den climate-only Setpoint-Boost-Pfad zu nutzen. Die Meldung verschwindet automatisch, sobald die Konfiguration gültig ist."
+    },
+    "hot_water_entity_unavailable": {
+      "title": "Warmwasser-Boiler-Steuerung nicht verfügbar",
+      "description": "Die konfigurierte Warmwasser-Steuerentität `{entity_id}` ist seit {minutes}+ Minuten nicht verfügbar oder unbekannt. SEM kann den Controller registrieren, aber jeder Überschuss-Befehl wird stillschweigend ignoriert, bis die Entität wieder einen gültigen Zustand meldet. Prüfe das Gerät — Boiler-Relais, water_heater-Integration, Klimagerät oder welche Integration auch immer diese Entität besitzt. Die Meldung verschwindet automatisch, wenn die Entität wieder verfügbar ist."
+    },
+    "hot_water_temperature_sensor_unavailable": {
+      "title": "Warmwasser-Temperatursensor nicht verfügbar",
+      "description": "Der konfigurierte Warmwasser-Temperatursensor `{entity_id}` ist seit {minutes}+ Minuten nicht verfügbar oder unbekannt. SEM verhält sich ausfallsicher — der Boiler wird NICHT mehr durch Solarüberschuss aktiviert, bis wieder eine gültige Temperaturmessung vorliegt. Prüfe die zugrundeliegende Integration des Sensors. Die Meldung verschwindet automatisch, wenn der Sensor wieder verfügbar ist."
     }
   }
 }

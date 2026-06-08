@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-08T04:29:10.542273+00:00
+// Generated: 2026-06-08T11:07:35.006869+00:00
 // v1.7.2-beta.4: IIFE-wrapped with window.semLocalize guard so
 // dual-channel loading (add_extra_js_url + Lovelace resource) is safe.
 (function() {
@@ -1039,7 +1039,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "de": {
       "charging": "Laden",
@@ -2071,7 +2078,14 @@
       "heat_pump_relay_path": "Relais-Pfad",
       "heat_pump_temperature_reading_path": "Temperaturmess-Pfad",
       "heat_pump_offpeak_path": "Off-Peak-Pfad",
-      "heat_pump_current_temperature": "Aktuelle Temperatur"
+      "heat_pump_current_temperature": "Aktuelle Temperatur",
+      "hot_water_current_temperature": "Aktuelle Temperatur",
+      "hot_water_hours_since_legionella": "Stunden seit Legionellenzyklus",
+      "hot_water_legionella_cycle_running": "Legionellenzyklus läuft",
+      "hot_water_legionella_never_run": "Noch nie gelaufen",
+      "hot_water_temperature_reading_path": "Temperaturmess-Pfad",
+      "hot_water_temperature_safety_path": "Temperatur-Sicherheits-Pfad",
+      "hot_water_activation_path": "Aktivierungspfad"
     },
     "fr": {
       "charging": "En charge",
@@ -3103,7 +3117,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "es": {
       "charging": "Cargando",
@@ -4135,7 +4156,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "it": {
       "charging": "In carica",
@@ -5167,7 +5195,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "nl": {
       "charging": "Laden",
@@ -6199,7 +6234,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7231,7 +7273,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "da": {
       "charging": "Oplader",
@@ -8263,7 +8312,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "fi": {
       "charging": "Lataus",
@@ -9295,7 +9351,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "hu": {
       "charging": "Töltés",
@@ -10327,7 +10390,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "no": {
       "charging": "Lader",
@@ -11359,7 +11429,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -12391,7 +12468,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "pt": {
       "charging": "A carregar",
@@ -13423,7 +13507,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "ro": {
       "charging": "Încărcare",
@@ -14455,7 +14546,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     },
     "sv": {
       "charging": "Laddar",
@@ -15487,7 +15585,14 @@
       "heat_pump_relay_path": "Relay path",
       "heat_pump_temperature_reading_path": "Temperature reading path",
       "heat_pump_offpeak_path": "Off-peak path",
-      "heat_pump_current_temperature": "Current temperature"
+      "heat_pump_current_temperature": "Current temperature",
+      "hot_water_current_temperature": "Current temperature",
+      "hot_water_hours_since_legionella": "Hours since legionella cycle",
+      "hot_water_legionella_cycle_running": "Legionella cycle running",
+      "hot_water_legionella_never_run": "Never run",
+      "hot_water_temperature_reading_path": "Temperature reading path",
+      "hot_water_temperature_safety_path": "Temperature safety path",
+      "hot_water_activation_path": "Activation path"
     }
   };
 
