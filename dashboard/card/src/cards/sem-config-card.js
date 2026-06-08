@@ -281,6 +281,20 @@ class SEMConfigCard extends SEMLitBase {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         return (e && e.state !== 'unavailable' && e.state !== 'unknown') ? e.state : '';
     }
+    /**
+     * Read a BINARY sensor state — ``binary_sensor.sem_<suffix>``.
+     * Returns ``true`` when state is ``"on"``, ``false`` otherwise.
+     *
+     * v1.7.2-beta.5 (#448): ``_val()`` prepends ``sensor.sem_`` so it
+     * doesn't work for binary_sensor entities. ``heat_pump_registered``,
+     * ``heat_pump_solar_boost``, ``ev_charging``, ``solar_active``, etc.
+     * are BINARY sensors. Reading them via ``_val()`` always returns ''
+     * — the subtitle ended up showing "not_configured" even when the
+     * heat pump WAS registered (RienduPre).
+     */
+    _bin(suffix) {
+        return this._hass?.states[`binary_sensor.sem_${suffix}`]?.state === 'on';
+    }
     _valNum(suffix, fallback = 0) {
         const e = this._hass?.states[`${this._prefix}${suffix}`];
         if (!e || e.state === 'unavailable' || e.state === 'unknown') return fallback;
@@ -316,7 +330,7 @@ class SEMConfigCard extends SEMLitBase {
 
     _overviewSubtitle() {
         const chargers = this._chargersList().length;
-        const heatpump = this._val('heat_pump_registered') === 'on';
+        const heatpump = this._bin('heat_pump_registered');
         const parts = [];
         parts.push(`${chargers} ${this._t('config_subtitle_chargers')}`);
         if (heatpump) parts.push(this._t('config_subtitle_heatpump_on'));
@@ -336,7 +350,7 @@ class SEMConfigCard extends SEMLitBase {
         return level ? `${provider} · ${this._t(level.toLowerCase()) || level}` : provider;
     }
     _heatPumpSubtitle() {
-        return this._val('heat_pump_registered') === 'on'
+        return this._bin('heat_pump_registered')
             ? this._t('configured')
             : this._t('not_configured');
     }
@@ -460,7 +474,7 @@ class SEMConfigCard extends SEMLitBase {
     _renderOverview(T) {
         const dashboardReady = !!this._hass?.states['sensor.sem_charging_state'];
         const chargers = this._chargersList().length;
-        const heatpump = this._val('heat_pump_registered') === 'on';
+        const heatpump = this._bin('heat_pump_registered');
         return html`
             <div class="overview-grid">
                 <div class="overview-item">
@@ -615,7 +629,7 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderHeatPump(T) {
-        const registered = this._val('heat_pump_registered') === 'on';
+        const registered = this._bin('heat_pump_registered');
         const opts = this._options || {};
         // Live-status block — only when SEM has the heat pump registered
         const statusBlock = registered ? html`
