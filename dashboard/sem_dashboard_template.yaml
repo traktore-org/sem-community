@@ -19,8 +19,8 @@
 #                      Falls back to sem-system-diagram-card when absent.
 #
 # Bundled SEM cards (auto-registered, no HACS needed):
-#   sem-flow-card            — animated power flow with daily energy, autarky, config editor
-#   sem-system-diagram-card  — animated power flow diagram (legacy, kept for compat)
+#   sem-flow-card            — schematic flow diagram, dual-mode (SEM prefix OR arbitrary entities)
+#   sem-system-diagram-card  — illustrated SVG system diagram, SEM-native (default on Home tab)
 #   sem-solar-summary-card   — solar yield summary
 #   sem-weather-card         — weather + clock header
 #   sem-chart-card           — cost / savings charts
