@@ -638,6 +638,40 @@ class HeatPumpSensorData:
 
 
 @dataclass
+class HotWaterSensorData:
+    """Hot water controller data for coordinator sensors (#454).
+
+    Surfaced when the user has configured a ``hot_water_entity`` and SEM
+    has instantiated + registered ``HotWaterController`` with the
+    SurplusController. When no boiler is configured, ``hot_water_registered``
+    stays False and the rest of the fields are None — the dashboard
+    Config tab Hot Water section uses this to auto-hide the live-status
+    block (same pattern as heat pump).
+
+    All the ``_*_path`` fields are the runtime telemetry the #420 audit
+    wired into the controller — surfaced here so the Diagnose modal
+    shows concrete decision branches instead of black-box state.
+    """
+    hot_water_registered: bool = False
+    hot_water_entity: Optional[str] = None
+    hot_water_temperature_sensor: Optional[str] = None
+    hot_water_current_temperature: Optional[float] = None
+    hot_water_solar_target: Optional[float] = None
+    hot_water_max_temperature: Optional[float] = None
+    hot_water_legionella_target: Optional[float] = None
+    hot_water_hours_since_legionella: Optional[float] = None
+    hot_water_legionella_cycle_active: bool = False
+    # #420 telemetry surface — same _last_*_path vocabulary as the
+    # controller. Pre-wire-up these were defined but never read; this
+    # dataclass plumbs them through to coordinator.data.
+    hot_water_activation_path: Optional[str] = None
+    hot_water_deactivation_path: Optional[str] = None
+    hot_water_temperature_safety_path: Optional[str] = None
+    hot_water_temperature_reading_path: Optional[str] = None
+    hot_water_legionella_path: Optional[str] = None
+
+
+@dataclass
 class PVAnalyticsData:
     """PV analytics data for coordinator sensors."""
     pv_daily_specific_yield: float = 0.0
@@ -777,6 +811,7 @@ class SEMData:
     forecast: ForecastSensorData = field(default_factory=ForecastSensorData)
     tariff: TariffSensorData = field(default_factory=TariffSensorData)
     heat_pump: HeatPumpSensorData = field(default_factory=HeatPumpSensorData)
+    hot_water: HotWaterSensorData = field(default_factory=HotWaterSensorData)
     pv_analytics: PVAnalyticsData = field(default_factory=PVAnalyticsData)
     energy_assistant: EnergyAssistantSensorData = field(default_factory=EnergyAssistantSensorData)
     utility_signal: UtilitySignalSensorData = field(default_factory=UtilitySignalSensorData)
@@ -1067,6 +1102,22 @@ class SEMData:
             "heat_pump_temperature_reading_path": self.heat_pump.heat_pump_temperature_reading_path,
             "heat_pump_offpeak_path": self.heat_pump.heat_pump_offpeak_path,
             "heat_pump_current_temperature": self.heat_pump.heat_pump_current_temperature,
+
+            # Hot water (#454)
+            "hot_water_registered": self.hot_water.hot_water_registered,
+            "hot_water_entity": self.hot_water.hot_water_entity,
+            "hot_water_temperature_sensor": self.hot_water.hot_water_temperature_sensor,
+            "hot_water_current_temperature": self.hot_water.hot_water_current_temperature,
+            "hot_water_solar_target": self.hot_water.hot_water_solar_target,
+            "hot_water_max_temperature": self.hot_water.hot_water_max_temperature,
+            "hot_water_legionella_target": self.hot_water.hot_water_legionella_target,
+            "hot_water_hours_since_legionella": self.hot_water.hot_water_hours_since_legionella,
+            "hot_water_legionella_cycle_active": self.hot_water.hot_water_legionella_cycle_active,
+            "hot_water_activation_path": self.hot_water.hot_water_activation_path,
+            "hot_water_deactivation_path": self.hot_water.hot_water_deactivation_path,
+            "hot_water_temperature_safety_path": self.hot_water.hot_water_temperature_safety_path,
+            "hot_water_temperature_reading_path": self.hot_water.hot_water_temperature_reading_path,
+            "hot_water_legionella_path": self.hot_water.hot_water_legionella_path,
 
             # PV analytics (Phase 5)
             "pv_daily_specific_yield": self.pv_analytics.pv_daily_specific_yield,

@@ -41,7 +41,7 @@ from ..ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConf
 from .types import (
     SEMData, PowerReadings, PowerFlows, SystemStatus, LoadManagementData,
     SurplusControlData, ForecastSensorData, TariffSensorData,
-    HeatPumpSensorData, PVAnalyticsData, EnergyAssistantSensorData,
+    HeatPumpSensorData, HotWaterSensorData, PVAnalyticsData, EnergyAssistantSensorData,
     UtilitySignalSensorData, SessionData, BatterySessionData,
 )
 from .health_check import HealthCheck
@@ -1787,7 +1787,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             # Steps 10–10.5: Analytics phases (extracted for readability, #29)
             forecast_data, tracker_data, tariff_data, surplus_data, \
-                pv_data, assistant_data, utility_data, heat_pump_data = \
+                pv_data, assistant_data, utility_data, heat_pump_data, \
+                hot_water_data = \
                 await self._update_analytics_phases(
                     power, energy, energy_flows, performance,
                     charging_context.available_power,
@@ -1817,6 +1818,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 forecast=forecast_data,
                 tariff=tariff_data,
                 heat_pump=heat_pump_data,
+                hot_water=hot_water_data,
                 pv_analytics=pv_data,
                 energy_assistant=assistant_data,
                 utility_signal=utility_data,
@@ -2658,6 +2660,59 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             heat_pump_current_temperature=hp_current_temp,
         )
 
+        # ── Hot water data (#454) ───────────────────────────────────
+        # Same pattern as heat_pump_data above: pull live state from
+        # the registered controller (if any) into a sensor dataclass
+        # so the Diagnose modal + future UI surfaces show concrete
+        # decision branches instead of black-box state.
+        hw_controller = None
+        hw_entity_cfg = self.config.get("hot_water_entity") or None
+        if hasattr(self, "_surplus_controller"):
+            hw_controller = self._surplus_controller._devices.get("hot_water")
+
+        def _hw_attr(name: str) -> Optional[str]:
+            if hw_controller is None:
+                return "no_controller" if hw_entity_cfg else None
+            return getattr(hw_controller, name, None)
+
+        hw_current_temp: Optional[float] = None
+        hw_hours_since_leg: Optional[float] = None
+        hw_leg_active: bool = False
+        if hw_controller is not None:
+            try:
+                t = hw_controller.get_current_temperature() if hasattr(hw_controller, "get_current_temperature") else None
+                hw_current_temp = float(t) if t is not None else None
+            except (ValueError, TypeError, AttributeError):
+                hw_current_temp = None
+            try:
+                hw_hours_since_leg = float(hw_controller.hours_since_legionella) if hasattr(hw_controller, "hours_since_legionella") else None
+            except (ValueError, TypeError, AttributeError):
+                hw_hours_since_leg = None
+            hw_leg_active = bool(getattr(hw_controller, "_legionella_cycle_active", False))
+
+        hot_water_data = HotWaterSensorData(
+            hot_water_registered=hw_controller is not None,
+            hot_water_entity=hw_entity_cfg,
+            hot_water_temperature_sensor=self.config.get("hot_water_temperature_sensor") or None,
+            hot_water_current_temperature=hw_current_temp,
+            hot_water_solar_target=(
+                float(hw_controller.solar_target_temp) if hw_controller else None
+            ),
+            hot_water_max_temperature=(
+                float(hw_controller.max_temperature) if hw_controller else None
+            ),
+            hot_water_legionella_target=(
+                float(hw_controller.legionella_target_temp) if hw_controller else None
+            ),
+            hot_water_hours_since_legionella=hw_hours_since_leg,
+            hot_water_legionella_cycle_active=hw_leg_active,
+            hot_water_activation_path=_hw_attr("_last_activation_path"),
+            hot_water_deactivation_path=_hw_attr("_last_deactivation_path"),
+            hot_water_temperature_safety_path=_hw_attr("_last_temperature_safety_path"),
+            hot_water_temperature_reading_path=_hw_attr("_last_temperature_reading_path"),
+            hot_water_legionella_path=_hw_attr("_last_legionella_path"),
+        )
+
         # #432 — relay unavailability tracking + Repair issue. Mirrors the
         # SensorReader pattern (``_sensor_unavailable_since``). Per-relay
         # outage timer; if a configured relay stays unavailable past the
@@ -2760,6 +2815,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         return (
             forecast_data, tracker_data, tariff_data, surplus_data,
             pv_data, assistant_data, utility_data, heat_pump_data,
+            hot_water_data,
         )
 
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:

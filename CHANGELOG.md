@@ -11,6 +11,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2-beta.6] - 08.06.2026
+
+## 🧪 Beta Release
+
+_Two follow-ups on top of beta.5: the Config tab subtitle bug from #448 + the HotWaterController wire-up (#454)._
+
+### 🐛 Config tab subtitle bug (#448 follow-up)
+
+Looking at RienduPre's diagnose dump, his heat pump IS registered (`registered_sg_ready` + `heat_pump_registered: true`). But the Config tab Heat Pump section subtitle showed "Not configured". Bug class: every card method that read `binary_sensor.sem_heat_pump_registered` was actually doing `_val('heat_pump_registered')` which prepends `sensor.sem_` — the lookup always returned an empty string because the entity is a *binary* sensor.
+
+- New `_bin(suffix)` helper on `sem-config-card.js` reads from `binary_sensor.sem_<suffix>`. (by @traktore-org)
+- Converted 3 prior `_val('heat_pump_registered') === 'on'` use sites: subtitle, overview chips bar, Setup overview body.
+- Heat Pump section subtitle now correctly reads "configured" when the controller is registered.
+
+### 🔥 HotWaterController is now actually instantiated in setup (#454)
+
+The class existed in `devices/hot_water_controller.py` with full unit-test coverage, the Config tab Hot Water section collected settings, and the dashboard expected the live state — but **the controller was never instantiated**. Setting `hot_water_entity` did nothing at runtime; the boiler was never controlled.
+
+This release closes that loop:
+
+- **`__init__.py` registration block** mirrors the heat-pump pattern. When `hot_water_entity` is set, SEM instantiates `HotWaterController` with the saved options (entity, temp sensor, solar target, max temp, Legionella target/interval, min temp, priority, optional power sensor) and registers it with the `SurplusController`. (by @traktore-org)
+- **`HotWaterSensorData`** new dataclass in `coordinator/types.py` with 14 fields covering registration state, current temperature, Legionella tracking, and all 5 `_last_*_path` telemetry recorders from the #420 audit.
+- **`coordinator.py:_update_analytics_phases`** populates `hot_water_data` from the registered controller — `get_current_temperature()`, `hours_since_legionella`, the `_legionella_cycle_active` flag, and the runtime decision-branch paths.
+- **`CoordinatorSensorData.to_dict()`** publishes all 14 keys into `coordinator.data` so the Diagnose modal + future UI surfaces can read them.
+- **`_DIAGNOSE_HOT_WATER_STATE`** in the diagnose slicer now lists actual runtime keys instead of the prior placeholder. Hitting the 🩺 Diagnose button on the Hot Water section returns a payload with concrete state.
+- 7 new tests pin: lazy-import presence, `register_device` call, gate keyed on `hot_water_entity`, dataclass field surface, default-unregistered state, `to_dict()` plumbing, diagnose slicer coverage.
+
+**Live-tested on HA-TEST** with `input_boolean` boiler + temp-sensor stand-in: registration fired, temperature read OK (`temperature_reading_path: "separate_sensor"` per #420), all config + state surfaces populated in the diagnose dump.
+
+3266 tests pass.
+
+### What's still pending under #454
+
+- **Repair issues** for boiler entity unavailable / temp sensor unavailable (mirror the heat-pump repair pattern). Not blocking the wire-up but improves the diagnostic surface.
+- **Live-status block** on the Hot Water section in `sem-config-card.js` (currently only the intro shows when not configured; needs a registered-state body showing live temp + Legionella status).
+- **Translations** for the new hot_water_* state keys + helper labels.
+- **Docs**: `docs/USER_GUIDE.md` section + README "Supported devices".
+
+These ship in follow-up betas — #454 stays open until they all land.
+
 # [1.7.2-beta.5] - 08.06.2026
 
 ## 🧪 Beta Release

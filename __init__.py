@@ -1195,6 +1195,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 hp_relay1, hp_relay2, hp_climate,
             )
 
+        # ── Hot water controller (#454) ─────────────────────────────
+        # Mirrors the heat-pump pattern: when user has configured a
+        # boiler control entity (water_heater / climate / switch),
+        # instantiate HotWaterController + register with SurplusController.
+        # Without this block, the dashboard Config tab Hot Water section
+        # collects settings that the runtime never reads.
+        hw_entity = full_config.get("hot_water_entity") or None
+        if hw_entity:
+            from .devices.hot_water_controller import HotWaterController
+            hw_device = HotWaterController(
+                hass=hass,
+                device_id="hot_water",
+                name=full_config.get("hot_water_name", "Hot Water"),
+                rated_power=float(full_config.get("hot_water_rated_power", 2500)),
+                priority=int(full_config.get("hot_water_priority", 6)),
+                entity_id=hw_entity,
+                power_entity_id=full_config.get("hot_water_power_sensor"),
+                temperature_entity_id=full_config.get("hot_water_temperature_sensor"),
+                max_temperature=float(full_config.get("hot_water_max_temperature", 70.0)),
+                min_temperature=float(full_config.get("hot_water_minimum_temperature", 40.0)),
+                solar_target_temp=float(full_config.get("hot_water_solar_target", 50.0)),
+                legionella_target_temp=float(full_config.get("hot_water_legionella_target", 65.0)),
+                legionella_interval_hours=float(full_config.get("hot_water_legionella_interval_hours", 168.0)),
+            )
+            coordinator._surplus_controller.register_device(hw_device)
+            _LOGGER.info(
+                "Hot water registered (entity=%s, priority=%d, "
+                "temp_sensor=%s, solar_target=%.0f°C, max=%.0f°C)",
+                hw_entity, hw_device.priority,
+                hw_device.temperature_entity_id or "—",
+                hw_device.solar_target_temp, hw_device.max_temperature,
+            )
+        else:
+            _LOGGER.debug(
+                "Hot water NOT registered: hot_water_entity not set"
+            )
+
     except Exception:
         # Optional feature — keep setup alive so SEM still loads with
         # solar / EV / battery control. Use ``exception`` so the full
@@ -2755,10 +2792,20 @@ async def _async_register_phase_services(
         "hot_water_priority", "hot_water_rated_power",
     }
     _DIAGNOSE_HOT_WATER_STATE = {
-        # Surfaced once the HotWaterController runtime hookup lands.
-        # The number entities (max temp, solar target) are the only
-        # current SEM-published surfaces.
-        "hot_water_max_temperature", "hot_water_solar_target",
+        # v1.7.2-beta.6 (#454): wire-up complete. HotWaterController
+        # is now registered with the SurplusController when
+        # ``hot_water_entity`` is set, so the runtime state surface
+        # populates these keys.
+        "hot_water_registered", "hot_water_entity",
+        "hot_water_temperature_sensor",
+        "hot_water_current_temperature",
+        "hot_water_solar_target", "hot_water_max_temperature",
+        "hot_water_legionella_target", "hot_water_hours_since_legionella",
+        "hot_water_legionella_cycle_active",
+        "hot_water_activation_path", "hot_water_deactivation_path",
+        "hot_water_temperature_safety_path",
+        "hot_water_temperature_reading_path",
+        "hot_water_legionella_path",
     }
     # EV chargers — fleet aggregates + per-charger nested entries
     _DIAGNOSE_EV_OPTION_TOP = {
