@@ -19,17 +19,40 @@ LOCALIZE_JS = REPO_ROOT / "dashboard" / "card" / "sem-localize.js"
 
 
 def generate_js(translations: dict) -> str:
-    """Generate the sem-localize.js source from the translations dict."""
+    """Generate the sem-localize.js source from the translations dict.
+
+    v1.7.2-beta.4 (2026-06-08): the body is wrapped in a top-level
+    IIFE with a ``window.semLocalize`` guard so the file is safe to
+    load via BOTH ``add_extra_js_url`` AND as a Lovelace resource.
+    Without the guard, a second load would re-execute
+    ``const _semTranslations = {...}`` and throw a SyntaxError
+    (and the existing block-scoped semLocalize would silently shadow).
+
+    Why dual-channel: ``add_extra_js_url`` is the desktop-friendly
+    channel (loaded before Lovelace modules so cards see the global
+    immediately). Mobile Companion app does NOT reliably pick up
+    add_extra_js_url scripts (RienduPre + others, 2026-06-08), so we
+    ALSO register as a Lovelace resource. With the guard, the second
+    load is a clean no-op.
+    """
     timestamp = datetime.now(timezone.utc).isoformat()
     lines = [
         "// Auto-generated from translations.json — do not edit manually",
         f"// Generated: {timestamp}",
-        "const _semTranslations = {",
+        "// v1.7.2-beta.4: IIFE-wrapped with window.semLocalize guard so",
+        "// dual-channel loading (add_extra_js_url + Lovelace resource) is safe.",
+        "(function() {",
+        "  if (typeof window === 'undefined') return;",
+        "  // Guard: if a prior load already defined semLocalize, no-op.",
+        "  // Both load channels point at the same hash-suffixed URL, so",
+        "  // there's never a stale-vs-fresh race — they're identical.",
+        "  if (window.semLocalize) return;",
+        "  const _semTranslations = {",
     ]
 
     langs = list(translations.keys())
     for lang_idx, lang in enumerate(langs):
-        lines.append(f'  "{lang}": {{')
+        lines.append(f'    "{lang}": {{')
         keys = list(translations[lang].items())
         for i, (key, value) in enumerate(keys):
             # Escape backslashes, then quotes, then newlines
@@ -39,25 +62,26 @@ def generate_js(translations: dict) -> str:
                 .replace("\n", "\\n")
             )
             comma = "," if i < len(keys) - 1 else ""
-            lines.append(f'    "{key}": "{escaped}"{comma}')
+            lines.append(f'      "{key}": "{escaped}"{comma}')
         comma = "," if lang_idx < len(langs) - 1 else ""
-        lines.append(f"  }}{comma}")
+        lines.append(f"    }}{comma}")
 
-    lines.append("};")
+    lines.append("  };")
     lines.append("")
-    lines.append("function semLocalize(key, lang) {")
+    lines.append("  function semLocalize(key, lang) {")
     lines.append('    lang = lang || "en";')
     lines.append(
         '    const t = _semTranslations[lang] || _semTranslations["en"] || {};'
     )
     lines.append('    const fallback = _semTranslations["en"] || {};')
     lines.append("    return t[key] || fallback[key] || key;")
-    lines.append("}")
+    lines.append("  }")
     lines.append("")
-    lines.append("window.semLocalize = semLocalize;")
+    lines.append("  window.semLocalize = semLocalize;")
     lines.append(
-        'document.dispatchEvent(new CustomEvent("sem-localize-ready"));'
+        '  document.dispatchEvent(new CustomEvent("sem-localize-ready"));'
     )
+    lines.append("})();")
     lines.append("")
 
     return "\n".join(lines)

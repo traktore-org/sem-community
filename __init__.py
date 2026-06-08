@@ -2261,22 +2261,27 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         localize_url = f"{localize_base}?v={asset_v['localize']}"
         cards_bundle_url = f"{cards_bundle_base}?v={asset_v['bundle']}"
 
-        # Load semLocalize via add_extra_js_url — must be available before cards
+        # Load semLocalize via add_extra_js_url — must be available before
+        # cards on DESKTOP (Lovelace modules load after add_extra_js_url
+        # scripts, so the global is ready by first render).
+        #
+        # v1.7.2-beta.4 (2026-06-08): mobile Companion app does NOT
+        # reliably pick up add_extra_js_url scripts — RienduPre +
+        # others reported almost ALL translation keys rendering raw
+        # on iOS Companion after beta.1 moved sem-localize.js off the
+        # Lovelace-resource channel. Fix: register on BOTH channels.
+        # sem-localize.js was regenerated in beta.4 with an IIFE +
+        # ``window.semLocalize`` guard so the second load is a clean
+        # no-op (same URL with same hash = browser fetches once anyway,
+        # but the guard prevents script-execution-twice errors if a
+        # specific browser does load it twice).
         add_extra_js_url(hass, localize_url)
 
-        # Legacy base URLs to clean up (migrated to single Lit bundle, OR
-        # — for ``sem-localize.js`` — moved to the ``add_extra_js_url``
-        # channel which is the correct one for non-card helper JS that
-        # must be global before cards load). #448: PROD storage on
-        # 2026-06-07 still had an orphan Lovelace resource entry for
-        # ``sem-localize.js`` pinned at ``?v=1.7.1-beta.11-fca70f78`` — it
-        # was never bumped because nothing in the current registration
-        # code touched it, and the service worker happily served the
-        # stale beta.11 file. Result: every user saw raw ``config_*``
-        # translation keys for everything added in beta.12+. Listing the
-        # base URL here triggers the delete-orphan path at line ~2335.
+        # Legacy base URLs to clean up. Migrated to the single Lit
+        # bundle. ``sem-localize.js`` is NOT in this list as of
+        # v1.7.2-beta.4 — it's actively re-registered below as a
+        # Lovelace resource (dual-channel with add_extra_js_url).
         _legacy_bases = [
-            f"{static_path}/card/sem-localize.js",
             f"{static_path}/card/sem-shared.js",
             f"{static_path}/card/sem-reactive-base.js",
             f"{static_path}/card/sem-load-priority-card.js",
@@ -2369,6 +2374,22 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     diagram_item["id"], {"res_type": "module", "url": diagram_url}
                 )
                 _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
+
+            # v1.7.2-beta.4: register sem-localize.js as a Lovelace
+            # resource too (dual-channel with add_extra_js_url above).
+            # Mobile Companion app doesn't pick up add_extra_js_url
+            # scripts reliably; Lovelace resources DO load on mobile.
+            # The file has an IIFE + window.semLocalize guard so the
+            # second load is a clean no-op.
+            localize_item = existing_by_base.get(localize_base)
+            if localize_item is None:
+                await resources.async_create_item({"res_type": "module", "url": localize_url})
+                _LOGGER.info("Registered SEM localize (mobile fix): %s", localize_url)
+            elif localize_item["url"] != localize_url:
+                await resources.async_update_item(
+                    localize_item["id"], {"res_type": "module", "url": localize_url}
+                )
+                _LOGGER.info("Updated SEM localize: %s → %s", localize_item["url"], localize_url)
         except _SEMYAMLModeSkip:
             # Already logged the "manual config needed" warning above.
             pass

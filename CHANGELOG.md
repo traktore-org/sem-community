@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.2-beta.4] - 08.06.2026
+
+## 🧪 Beta Release
+
+_Mobile-only hotfix: translations were rendering as raw keys on the Companion app._
+
+### 🐛 sem-localize.js now loads on mobile (#448 follow-up)
+
+RienduPre reported (2026-06-08, iOS Companion app): almost every translation key on the dashboard rendering as the raw key (`today_plan_title`, `home_sub`, `plan_now`, etc.), not just the new beta-introduced ones. Root cause: beta.1 moved `sem-localize.js` off the Lovelace-resource channel onto `add_extra_js_url`-only. Desktop browsers load both channels reliably; mobile Companion app does NOT pick up `add_extra_js_url` scripts in many cases.
+
+- **Dual-channel registration**: `sem-localize.js` is now registered as BOTH an `add_extra_js_url` (desktop-friendly, loads before Lovelace modules) AND a Lovelace resource (mobile-friendly). Same hash-suffixed URL on both channels — browser fetches once. (by @traktore-org)
+- **IIFE guard**: `sem-localize.js` is now wrapped in `(function(){ if (window.semLocalize) return; ... })()` so a defensive second load is a clean no-op. Without the guard, a second `<script>` execution would throw on the second `const _semTranslations = {...}` declaration.
+- **Generator updated**: `scripts/regenerate_localize.py` produces the guarded output. The IIFE shape is now self-documenting in the generated file's header.
+
+After upgrade + restart, **clear the Companion app cache** (Settings → App Configuration → Reset frontend cache). The new Lovelace resource registration causes a fresh fetch, and the IIFE-guarded file works whether one or both channels load it.
+
+3255 tests pass.
+
 # [1.7.2-beta.3] - 07.06.2026
 
 ## 🧪 Beta Release
