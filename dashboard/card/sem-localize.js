@@ -1,13 +1,9 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-08T11:07:35.006869+00:00
-// v1.7.2-beta.4: IIFE-wrapped with window.semLocalize guard so
-// dual-channel loading (add_extra_js_url + Lovelace resource) is safe.
+// Generated: 2026-06-08T19:34:55.100134+00:00
+// IIFE-scoped translations; publishes ``window.semLocalize`` and
+// dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
   if (typeof window === 'undefined') return;
-  // Guard: if a prior load already defined semLocalize, no-op.
-  // Both load channels point at the same hash-suffixed URL, so
-  // there's never a stale-vs-fresh race — they're identical.
-  if (window.semLocalize) return;
   const _semTranslations = {
     "en": {
       "charging": "Charging",

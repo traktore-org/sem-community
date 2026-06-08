@@ -1,39 +1,31 @@
-"""Unit tests for _async_register_frontend_resources (#283).
+"""Unit tests for _async_register_frontend_resources.
 
-The reporter ran YAML-mode Lovelace, where ``hass.data["lovelace"].resources``
-is a ``ResourceYAMLCollection`` that doesn't implement the mutating methods
-(``async_create_item`` / ``async_update_item`` / ``async_delete_item``).
-The integration was crashing the registration block with a generic warning,
-leaving the user with a blank dashboard and no idea what to add to
-configuration.yaml.
+Covers three contracts:
 
-These tests pin down the YAML-mode guard:
-  - It must NOT crash when ``async_create_item`` is missing.
-  - It must log a warning that contains the bundle URL the user needs to add.
-  - The storage-mode happy path must still register the resources (sanity).
+1. **YAML-mode guard (#283)** — when ``hass.data["lovelace"].resources``
+   is a ``ResourceYAMLCollection`` (no mutating methods), the registration
+   block must NOT crash and must log instructions the user can paste into
+   configuration.yaml.
+
+2. **Storage-mode happy path** — the bundle, diagram card, and
+   sem-localize.js must all be registered as Lovelace resources.
+
+3. **Single-channel localize delivery (#453)** — sem-localize.js is
+   delivered as a Lovelace resource only; ``add_extra_js_url`` must NOT
+   be imported or called from this module (dual-channel was removed
+   in v1.7.3 in favor of the ``sem-localize-ready`` event handled in
+   ``dashboard/card/src/base/sem-lit-base.js``).
 """
 import logging
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import custom_components.solar_energy_management as sem_module
 from custom_components.solar_energy_management import (
     _async_register_frontend_resources,
 )
-
-
-@pytest.fixture(autouse=True)
-def _stub_add_extra_js_url():
-    """``add_extra_js_url`` reaches into ``hass.data["frontend_extra_module_url"]``
-    which our minimal hass mock doesn't carry. The localize-script
-    registration is incidental to the YAML-mode-guard test — stub it
-    so the function under test doesn't bail at the outer try."""
-    with patch(
-        "custom_components.solar_energy_management.add_extra_js_url",
-        MagicMock(),
-    ):
-        yield
 
 
 def _hass_with_resources(resources):
@@ -105,10 +97,15 @@ class TestYAMLMode:
         # The warning message must:
         #   1. Mention YAML-mode so the user knows what's happening.
         #   2. Contain a `url: ...sem-cards.js...` line so they can paste.
-        #   3. Mention configuration.yaml so they know where it goes.
+        #   3. Contain the standalone diagram-card URL.
+        #   4. Contain sem-localize.js (#453 — YAML-mode users lose
+        #      translations without it after dual-channel removal).
+        #   5. Mention configuration.yaml so they know where it goes.
         joined = "\n".join(rec.message for rec in caplog.records)
         assert "YAML-mode" in joined or "YAML mode" in joined, joined
         assert "sem-cards.js" in joined, joined
+        assert "sem-system-diagram-card.js" in joined, joined
+        assert "sem-localize.js" in joined, joined
         assert "configuration.yaml" in joined, joined
 
     @pytest.mark.asyncio
@@ -132,14 +129,70 @@ class TestYAMLMode:
 
 class TestStorageMode:
     @pytest.mark.asyncio
-    async def test_storage_mode_still_registers_bundle(self):
-        """The YAML guard mustn't accidentally divert storage-mode users."""
+    async def test_storage_mode_registers_all_three_resources(self):
+        """Bundle + diagram card + sem-localize.js all land as Lovelace
+        resources in storage-mode. The third (localize) is #453 — was on
+        ``add_extra_js_url`` only, then dual-channel, now single Lovelace
+        resource."""
         r = _storage_mode_resources(initial_items=[])
         hass = _hass_with_resources(r)
         await _async_register_frontend_resources(hass)
-        # Bundle and diagram resources should both have been registered.
-        # Two creates: cards bundle + diagram card.
-        assert r.async_create_item.call_count >= 2
+        assert r.async_create_item.call_count >= 3
         urls = [call.args[0]["url"] for call in r.async_create_item.call_args_list]
         assert any("sem-cards.js" in u for u in urls), urls
         assert any("sem-system-diagram-card.js" in u for u in urls), urls
+        assert any("sem-localize.js" in u for u in urls), urls
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Single-channel localize delivery (#453)
+# ──────────────────────────────────────────────────────────────────────
+
+class TestSingleChannelLocalizeDelivery:
+    """Pin that ``add_extra_js_url`` is fully removed from this module.
+
+    The dual-channel mechanism (``add_extra_js_url`` + Lovelace resource)
+    was retired in v1.7.3 — cards now wait for the ``sem-localize-ready``
+    CustomEvent dispatched at the end of sem-localize.js, handled in
+    ``dashboard/card/src/base/sem-lit-base.js`` (lines ~255-276).
+
+    A future refactor that re-introduces ``add_extra_js_url`` for the
+    localize script would reintroduce the double-load — and the dead
+    ``window.semLocalize`` guard the IIFE would need to be safe.
+    These tests lock the contract.
+    """
+
+    def test_add_extra_js_url_not_imported(self):
+        """The frontend symbol is no longer imported into this module."""
+        assert not hasattr(sem_module, "add_extra_js_url"), (
+            "add_extra_js_url is back in the module namespace; "
+            "dual-channel sem-localize delivery would silently re-enable. "
+            "See #453."
+        )
+
+    def test_add_extra_js_url_not_referenced_in_source(self):
+        """Belt-and-braces: even if a future import comes through some
+        other path (e.g. a star-import or a local import inside a function),
+        the source file must contain no call to ``add_extra_js_url(``."""
+        source = Path(sem_module.__file__).read_text(encoding="utf-8")
+        # Comments referencing the historical name are fine — only block
+        # actual calls. Look for the open-paren form to distinguish.
+        assert "add_extra_js_url(" not in source, (
+            "add_extra_js_url(...) call appears in __init__.py — "
+            "dual-channel sem-localize delivery is back. See #453."
+        )
+
+    @pytest.mark.asyncio
+    async def test_storage_mode_localize_url_has_cache_bust_token(self):
+        """The Lovelace-resource URL for sem-localize.js must carry the
+        ``?v=<version>-<sha1>`` cache-bust token — otherwise the service
+        worker keeps serving stale translations across deploys (#240)."""
+        r = _storage_mode_resources(initial_items=[])
+        hass = _hass_with_resources(r)
+        await _async_register_frontend_resources(hass)
+        urls = [call.args[0]["url"] for call in r.async_create_item.call_args_list]
+        localize_urls = [u for u in urls if "sem-localize.js" in u]
+        assert localize_urls, f"sem-localize.js not registered: {urls}"
+        assert "?v=" in localize_urls[0], (
+            f"sem-localize.js URL missing cache-bust: {localize_urls[0]}"
+        )
