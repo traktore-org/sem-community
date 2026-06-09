@@ -2826,39 +2826,98 @@ async def _async_register_phase_services(
             )
             return
 
-        needs_reload = _set_option_needs_reload(options.keys())
+        # Split keys: structural (reload required) vs tunable (route
+        # through the matching ``number`` / ``switch`` / ``select``
+        # entity so the entity's own write path runs — that's the
+        # path that updates ``_attr_native_value`` + writes state,
+        # and it already snapshots ``_skip_options_reload`` so the
+        # listener short-circuits. Routing through the entity is the
+        # only way to avoid the cached-``_attr_native_value`` bug
+        # caught live on HA-TEST: setting a tunable directly via
+        # ``async_update_entry`` updates the persisted options but
+        # leaves the displayed entity stale until the next reload.
+        structural_keys = [
+            k for k in options if k in _SET_OPTION_STRUCTURAL_KEYS
+        ]
+        tunable_keys = [
+            k for k in options if k not in _SET_OPTION_STRUCTURAL_KEYS
+        ]
 
-        if needs_reload:
-            # Structural change — force a reload so controllers
-            # re-instantiate against the new wiring. The
-            # async_update_options listener will also reload, but
-            # HA suppresses duplicates so it's safe.
+        # Apply structural changes first (one reload at the end).
+        if structural_keys:
+            structural_merged = {
+                **(target_entry.options or {}),
+                **{k: options[k] for k in structural_keys},
+            }
             hass.config_entries.async_update_entry(
-                target_entry, options=merged,
+                target_entry, options=structural_merged,
             )
+
+        # Route each tunable through its per-entity write path. Each
+        # entity's ``async_set_native_value`` / ``async_select_option``
+        # / ``async_turn_on/off`` updates entity state, persists to
+        # entry.options, and snapshots _skip_options_reload — so no
+        # reload, AND entity state is fresh. Unrecognized keys
+        # (config-only with no UI surface) fall back to a direct
+        # entry write, which won't refresh entities but also won't
+        # have any to refresh.
+        unrouted: list[str] = []
+        for key in tunable_keys:
+            value = options[key]
+            if hass.states.get(f"number.sem_{key}") is not None:
+                await hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": f"number.sem_{key}", "value": value},
+                    blocking=True,
+                )
+            elif hass.states.get(f"switch.sem_{key}") is not None:
+                svc = "turn_on" if value else "turn_off"
+                await hass.services.async_call(
+                    "switch", svc,
+                    {"entity_id": f"switch.sem_{key}"},
+                    blocking=True,
+                )
+            elif hass.states.get(f"select.sem_{key}") is not None:
+                await hass.services.async_call(
+                    "select", "select_option",
+                    {"entity_id": f"select.sem_{key}", "option": str(value)},
+                    blocking=True,
+                )
+            else:
+                unrouted.append(key)
+
+        # Fall back: direct entry write for keys with no SEM entity
+        # (rare — most user-facing options have an entity).
+        if unrouted:
+            unrouted_merged = {
+                **(target_entry.options or {}),
+                **{k: options[k] for k in unrouted},
+            }
+            if unrouted_merged != (target_entry.options or {}):
+                # Mirror to coordinator.config so the read side sees
+                # the new value on the next cycle without reload.
+                coordinator = getattr(target_entry, "runtime_data", None)
+                if coordinator is not None:
+                    coordinator._skip_options_reload = dict(unrouted_merged)
+                    if isinstance(getattr(coordinator, "config", None), dict):
+                        coordinator.config.update({
+                            **(target_entry.data or {}),
+                            **unrouted_merged,
+                        })
+                hass.config_entries.async_update_entry(
+                    target_entry, options=unrouted_merged,
+                )
+
+        # One reload at the end for structural changes.
+        if structural_keys:
             await hass.config_entries.async_reload(target_entry.entry_id)
-        else:
-            # Tunable change — mirror into coordinator.config in
-            # place and snapshot _skip_options_reload so the
-            # update_listener short-circuits. Matches the per-charger
-            # select / number tweaks. No reload, no destroyed state,
-            # no split-grid re-discovery, no per-charger context loss.
-            coordinator = getattr(target_entry, "runtime_data", None)
-            if coordinator is not None:
-                coordinator._skip_options_reload = dict(merged)
-                if isinstance(getattr(coordinator, "config", None), dict):
-                    coordinator.config.update({
-                        **(target_entry.data or {}),
-                        **merged,
-                    })
-            hass.config_entries.async_update_entry(
-                target_entry, options=merged,
-            )
 
         _LOGGER.debug(
-            "set_option wrote %d key(s) to entry %s (reload=%s): %s",
-            len(options), target_entry.entry_id, needs_reload,
-            list(options.keys()),
+            "set_option wrote %d key(s) to entry %s "
+            "(structural=%s tunable=%s unrouted=%s reload=%s)",
+            len(options), target_entry.entry_id,
+            structural_keys, tunable_keys, unrouted,
+            bool(structural_keys),
         )
 
     hass.services.async_register(
