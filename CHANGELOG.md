@@ -11,6 +11,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.1] - 09.06.2026
+
+## 🩺 RienduPre v1.7.2 bug-response release
+
+Four bug reports landed on v1.7.2 within five hours this morning ([#460](https://github.com/traktore-org/sem-community/issues/460), [#461](https://github.com/traktore-org/sem-community/issues/461), [#462](https://github.com/traktore-org/sem-community/issues/462), [#464](https://github.com/traktore-org/sem-community/issues/464)) — all from the same reporter on the same install. Root-cause analysis traced the three logic bugs to a single change in v1.7.2-beta.2: the `set_option` service was switched to always-reload the integration so heat-pump entity rewires (#448) would take effect. Side effect was that every Config-card tunable tweak destroyed the SensorReader's split-grid discovery state and the per-charger context across the multi-charger loop — the candidate root cause for all three logic bugs. The fix scopes the reload to structural keys only and adds smart-merge for `ev_chargers` to prevent partial submits from dropping sibling chargers.
+
+Also unblocks #453 by structurally fixing #457 in the same release: the diagram card was the one card in the bundle that mixed Lit declarative bindings with imperative DOM mutation on the same node, crashing `requestUpdate()` whenever late translations triggered a re-render. Pure-reactive rewrite brings it in line with the other 21 bundled cards.
+
+### 🛠️ Bug fixes
+
+- **#457** Diagram card pure-reactive rewrite — eliminates the lit-html `TypeError: Cannot set properties of null` crash on `requestUpdate()`. Source -202 LOC, zero imperative writes on lit-bound nodes (by @traktore-org in [#459](https://github.com/traktore-org/sem-community/pull/459))
+- **#453** Single-channel sem-localize delivery — drops the dual-channel `add_extra_js_url` hack that masked #457 (by @traktore-org in [#463](https://github.com/traktore-org/sem-community/pull/463))
+- **#460** Clipboard copy works on plain-HTTP installs — execCommand fallback for `navigator.clipboard` (which requires HTTPS / localhost), pattern mirrors `sem-system-card._writeClipboard` from #285 (by @traktore-org in [#465](https://github.com/traktore-org/sem-community/pull/465))
+- **#462 / #464** `set_option` service: smart-merge `ev_chargers` by id + scope reload to structural keys only — restores the per-charger select.py-style skip-reload optimization for runtime tunables (modes, thresholds, switches) while keeping the #448 reload for entity-wiring keys. Pure-function helpers extracted to module scope with 20 contract tests. Strong candidate fix for #461 too (eliminates the reload-driven split-grid re-discovery) (by @traktore-org in [#467](https://github.com/traktore-org/sem-community/pull/467))
+
+### 🩺 Defensive instrumentation
+
+- Charger entity-id validation at registration — logs WARNING when configured `ev_charging_power_sensor` / `ev_current_control_entity` / `ev_charger_service_entity_id` / `ev_start_stop_entity` / `ev_charge_mode_entity` no longer exist in HA's state registry. Catches the historical bug class (#315 KEBA, #357 Wallbox) where HA-integration upgrades silently rename entities (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+- Wallbox pause-switch discovery surfaces a WARNING when no `switch.*pause_resume` is found on the device — explains the exact consequence (generic `set_current(0)` fallback, which some Wallbox firmware latches per #357) and the workaround (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+- Split-grid sensor change-detection logs WARNING with before→after IDs when the discovered import/export sensors change between cycles. Surfaces the "any-device" confidence flip behind #461 (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+
+### 🌐 i18n
+
+- Dutch translation update for the new configuration strings, contributed by the affected reporter (by @RienduPre in [#458](https://github.com/traktore-org/sem-community/pull/458))
+
+### 🙏 Thanks
+
+- **@RienduPre** for the four detailed bug reports with video evidence and for the Dutch translation contribution while we were debugging his install.
+
+---
+
 # [1.7.2] - 08.06.2026
 
 ## 🎉 Stable Release
