@@ -2809,8 +2809,21 @@ async def _async_register_phase_services(
 
         # Smart-merge ``ev_chargers`` by id (#464) — see
         # ``_merge_ev_chargers_by_id`` for the contract.
+        #
+        # Fall back to ``entry.data.ev_chargers`` when entry.options
+        # doesn't have the key — same foot-gun as the per-charger
+        # select / number setters in #469. A fresh install has its
+        # chargers in entry.data only; the smart-merge needs to see
+        # them so a partial submit doesn't append a stray ghost entry
+        # and lose the existing chargers on next reload. Caught by
+        # ``test_set_option_ev_chargers_partial_submit_preserves_sibling``
+        # in the test_services_real.py framework tests.
         if isinstance(options.get("ev_chargers"), list):
-            existing_list = (target_entry.options or {}).get("ev_chargers") or []
+            existing_list = (
+                (target_entry.options or {}).get("ev_chargers")
+                or (target_entry.data or {}).get("ev_chargers")
+                or []
+            )
             options = {
                 **options,
                 "ev_chargers": _merge_ev_chargers_by_id(

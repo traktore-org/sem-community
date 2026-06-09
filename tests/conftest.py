@@ -551,6 +551,35 @@ def charging_state_scenarios():
 
 
 @pytest.fixture
+def sem_real_hass(hass, enable_custom_integrations):
+    """Real-HA fixture for tests that drive the SEM integration end-to-end.
+
+    Composes pytest-homeassistant-custom-component's ``hass`` (real
+    HomeAssistant instance) and ``enable_custom_integrations`` (lets
+    HA's setup machinery find ``custom_components/solar_energy_management/``).
+    Without ``enable_custom_integrations`` an ``async_setup`` call
+    fails with *Integration not found*.
+
+    The reason this is NOT an autouse fixture: making
+    ``enable_custom_integrations`` autouse breaks the pre-existing
+    ``test_ev_daily_reset_boundary.py`` time-arithmetic tests because
+    of scope-wide side effects in HA's component discovery. Tests that
+    drive the SEM lifecycle should explicitly request ``sem_real_hass``;
+    everything else (pure-helper contract tests, mocked-coordinator
+    tests) keeps its current fixture set unchanged.
+
+    Usage::
+
+        async def test_set_option_does_something(sem_real_hass, sem_config_entry):
+            sem_config_entry.add_to_hass(sem_real_hass)
+            assert await sem_real_hass.config_entries.async_setup(sem_config_entry.entry_id)
+            await sem_real_hass.async_block_till_done()
+            # ... drive the integration and assert ...
+    """
+    return hass
+
+
+@pytest.fixture
 def expected_lingering_timers() -> bool:
     """Override pytest-HA's ``verify_cleanup`` strict timer check.
 
@@ -567,11 +596,25 @@ def expected_lingering_timers() -> bool:
 
 @pytest.fixture
 def sem_config_entry():
-    """A ``MockConfigEntry`` at SEM's current schema version (v7).
+    """A ``MockConfigEntry`` at SEM's current schema version (v12.1).
 
     Pre-seeded with a multi-charger-ready config (``ev_chargers`` list,
     not legacy flat keys). Test-specific tweaks can mutate ``.data`` /
     ``.options`` before calling ``entry.add_to_hass(hass)``.
+
+    Schema notes — version bumped from v7 to v12 on 2026-06-09:
+
+    * **v12.1 is current**: must match the migration target so tests
+      don't accidentally exercise the migration code path. Use the
+      ``sem_legacy_config_entry`` fixture (below) when migration IS
+      the thing under test.
+    * **No top-level ``ev_session_energy_sensor``** (v11→v12 drops it
+      when a per-charger value exists; #135).
+    * **Per-charger ``charge_mode``** is required post-#277 Phase A
+      (the named-mode consolidation that replaced
+      ``ev_charging_mode`` + ``night_charging`` + ``tariff_optimized``).
+    * **Per-charger ``min_current`` + ``vehicle_min_current``** are
+      v8→v9 additions (#440 ADR 0010 #3).
 
     Use with the real ``hass`` fixture::
 
@@ -586,7 +629,8 @@ def sem_config_entry():
 
     return MockConfigEntry(
         domain=DOMAIN,
-        version=7,
+        version=12,
+        minor_version=1,
         data={
             "grid_power_sensor": "sensor.test_grid_power",
             "battery_power_sensor": "sensor.test_battery_power",
@@ -618,14 +662,134 @@ def sem_config_entry():
                 "ev_charging_power_sensor": "sensor.test_ev_charging_power",
                 "ev_charger_service": "number.set_value",
                 "ev_charger_service_entity_id": "number.test_charger_current",
+                "ev_current_control_entity": "number.test_charger_current",
+                # v8 → v9 (#440 ADR 0010 #3) per-charger current bounds.
+                "min_current": 6,
+                "max_current": 16,
+                "vehicle_min_current": 6,
+                "phases": 3,
+                "voltage": 230,
+                # Post-#277 Phase A: charge_mode is the source of truth
+                # for the named-mode consolidation. Default is
+                # ``min_plus_solar`` (DEFAULT_EV_CHARGE_MODE).
+                "charge_mode": "min_plus_solar",
                 "daily_ev_target": 10,
                 "daily_ev_target_max": 50,
                 "ev_target_soc": 80,
                 "ev_target_soc_max": 100,
                 "ev_target_type": "kwh",
                 "ev_target_time": "07:00",
+                "ev_surplus_priority": 3,
             }],
         },
         options={},
-        title="SEM Test (real_hass)",
+        title="SEM Test (real_hass v12.1)",
+    )
+
+
+@pytest.fixture
+def sem_multi_wallbox_config_entry():
+    """A ``MockConfigEntry`` modelling RienduPre's real-world setup —
+    two Wallbox Pulsar chargers with different priorities + modes.
+
+    Seeded from his v1.7.3-beta.1 diagnostic dump on #462 / #464
+    (modulo entity-id sanitisation). Use this when a test needs to
+    exercise the multi-charger code paths against a realistic shape:
+    distinct priorities, distinct modes, distinct vehicles, distinct
+    entity bindings.
+
+    Specifically catches regressions in:
+
+    * the ``smart_merge_ev_chargers_by_id`` path (#467) — that one
+      charger's update doesn't drop the sibling.
+    * the per-charger ``async_select_option`` /
+      ``async_set_native_value`` fall-through (#469) — that
+      ``entry.options.ev_chargers`` missing the key falls back to
+      ``entry.data.ev_chargers`` instead of writing ``[]``.
+    * the per-charger select/number entity-id discovery scan
+      (``select.py:95`` loop) — that both chargers register their
+      own ``select.sem_charger_<id>_charge_mode`` entity.
+
+    Schema is v12.1 (matches ``sem_config_entry``).
+    """
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.solar_energy_management.const import DOMAIN
+
+    return MockConfigEntry(
+        domain=DOMAIN,
+        version=12,
+        minor_version=1,
+        data={
+            "grid_power_sensor": "sensor.test_grid_power",
+            "battery_power_sensor": "sensor.test_battery_power",
+            "battery_soc_sensor": "sensor.test_battery_soc",
+            "solar_power_sensor": "sensor.test_solar_power",
+            "battery_priority_soc": 90,
+            "battery_minimum_soc": 30,
+            "battery_resume_soc": 50,
+            "min_solar_power": 1000,
+            "max_grid_import": 100,
+            "battery_capacity_kwh": 15.0,
+            "peak_load": 6000,
+            "update_interval": 30,
+            "ev_chargers": [
+                {
+                    "id": "ev_charger",
+                    "name": "Laadpaal Links",
+                    "ev_connected_sensor": "binary_sensor.test_wb_left_cable_connected",
+                    "ev_charging_sensor": "sensor.test_wb_left_status",
+                    "ev_charging_power_sensor": "sensor.test_wb_left_charging_power",
+                    "ev_charger_service": "number.set_value",
+                    "ev_charger_service_entity_id": "number.test_wb_left_max_current",
+                    "ev_current_control_entity": "number.test_wb_left_max_current",
+                    "ev_total_energy_sensor": "sensor.test_wb_left_charging_energy",
+                    "vehicle_soc_entity": "sensor.test_audi_etron_state_of_charge",
+                    "vehicle_range_entity": "sensor.test_audi_etron_range",
+                    "min_current": 6,
+                    "max_current": 16,
+                    "vehicle_min_current": 6,
+                    "phases": 3,
+                    "voltage": 230,
+                    "charge_mode": "always_max",
+                    "ev_battery_capacity_kwh": 95,
+                    "ev_kwh_per_100km": 25,
+                    "daily_ev_target": 10,
+                    "daily_ev_target_max": 95,
+                    "ev_target_soc": 50,
+                    "ev_target_soc_max": 100,
+                    "ev_target_type": "soc",
+                    "ev_surplus_priority": 5,
+                    "initial_current": 10,
+                },
+                {
+                    "id": "ev_charger_1",
+                    "name": "Laadpaal Rechts",
+                    "ev_connected_sensor": "binary_sensor.test_wb_right_cable_connected",
+                    "ev_charging_sensor": "sensor.test_wb_right_status",
+                    "ev_charging_power_sensor": "sensor.test_wb_right_charging_power",
+                    "ev_charger_service": "number.set_value",
+                    "ev_charger_service_entity_id": "number.test_wb_right_max_current",
+                    "ev_current_control_entity": "number.test_wb_right_max_current",
+                    "vehicle_soc_entity": "sensor.test_cooper_state_of_charge",
+                    "vehicle_range_entity": "sensor.test_cooper_range",
+                    "min_current": 6,
+                    "max_current": 16,
+                    "vehicle_min_current": None,
+                    "phases": 3,
+                    "voltage": 230,
+                    "charge_mode": "solar_plus_cheap",
+                    "ev_battery_capacity_kwh": 29,
+                    "ev_kwh_per_100km": 18,
+                    "daily_ev_target": 10,
+                    "daily_ev_target_max": 29,
+                    "ev_target_soc": 100,
+                    "ev_target_soc_max": 100,
+                    "ev_target_type": "soc",
+                    "ev_surplus_priority": 8,
+                    "initial_current": 10,
+                },
+            ],
+        },
+        options={},
+        title="SEM Test (multi-Wallbox v12.1)",
     )
