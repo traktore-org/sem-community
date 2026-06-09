@@ -1110,6 +1110,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 ev_charger_service or ev_current_entity,
             )
 
+            # Defensive: surface dead entity_ids at registration. Each of
+            # these configured entities is something SEM will try to write
+            # to or read from during the cycle. HA's service calls succeed
+            # silently against non-existent entity_ids, so a stale id (e.g.
+            # after a Wallbox/KEBA HA-integration upgrade renamed entities
+            # under the user) results in SEM commanding nothing and the
+            # charger continuing on its own last setpoint — the symptom of
+            # #315 / #357 / #462. Logging at WARNING here makes the gap
+            # visible in any diagnostics dump or log query.
+            _to_check = [
+                ("ev_charging_power_sensor", ev_power_entity),
+                ("ev_current_control_entity", ev_current_entity),
+                ("ev_charger_service_entity_id", ev_service_entity),
+                ("ev_start_stop_entity", _cfg("ev_start_stop_entity")),
+                ("ev_charge_mode_entity", _cfg("ev_charge_mode_entity")),
+            ]
+            _missing = []
+            for _attr, _eid in _to_check:
+                if not _eid:
+                    continue
+                if hass.states.get(_eid) is None:
+                    _missing.append((_attr, _eid))
+            if _missing:
+                _LOGGER.warning(
+                    "EV charger '%s' (%s): %d configured entity ID(s) "
+                    "missing from HA's state registry — SEM commands to "
+                    "these silently no-op. Likely cause: the upstream "
+                    "integration renamed entities after a version upgrade "
+                    "(common with Wallbox/KEBA/Easee on HA core upgrades). "
+                    "Affected: %s",
+                    charger_name, charger_id, len(_missing),
+                    ", ".join(f"{a}={e}" for a, e in _missing),
+                )
+
             # Also register in load management for peak shedding (#436:
             # pass per-charger id + name so each ev_chargers[i] gets its
             # own ``load_device_<id>`` entry in self._devices instead of
