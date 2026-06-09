@@ -103,7 +103,7 @@ class TestDashboardTemplate:
         expected_cards = [
             "dist/sem-cards.js",            # Lit bundle — every dashboard card
             "sem-system-diagram-card.js",   # registered standalone (not in the bundle's registration)
-            "sem-localize.js",              # translations, registered as a Lovelace resource (single channel, #453)
+            "sem-localize.js",              # translations, loaded via add_extra_js_url
         ]
         for card in expected_cards:
             assert os.path.exists(os.path.join(card_dir, card)), f"Missing: {card}"

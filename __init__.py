@@ -26,6 +26,7 @@ from typing import Any, Dict
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, SupportsResponse, callback
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
 import voluptuous as vol
@@ -947,7 +948,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Version-change detection (v1.6.14): on first setup after an upgrade
     # — HACS pulled new code, HA restarted with it — fire a one-shot
     # persistent notification telling the user to hard-refresh.
-    # Background. Lovelace resource URLs include a content-hash
+    # Background. ``add_extra_js_url`` URLs include a content-hash
     # cache-bust (``?v={version}-{sha1}``) but the browser's loaded
     # frontend bootstrap still references the OLD URL until the page
     # is hard-reloaded. Soft reload (F5) hits cached bootstrap → loads
@@ -2297,20 +2298,26 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         localize_url = f"{localize_base}?v={asset_v['localize']}"
         cards_bundle_url = f"{cards_bundle_base}?v={asset_v['bundle']}"
 
-        # sem-localize.js is delivered as a Lovelace resource only
-        # (registered below alongside the bundle and diagram card).
-        # Cards constructed before the script finishes parsing wait
-        # for the ``sem-localize-ready`` event dispatched at the end
-        # of sem-localize.js — handled by every card's base class,
-        # ``dashboard/card/src/base/sem-lit-base.js`` (#453, v1.7.3).
-        # Earlier versions registered on a second channel via
-        # ``add_extra_js_url`` to work around a perceived first-render
-        # race; the ready-event mechanism in the base class makes
-        # that unnecessary.
+        # Load semLocalize via add_extra_js_url — must be available before
+        # cards on DESKTOP (Lovelace modules load after add_extra_js_url
+        # scripts, so the global is ready by first render).
+        #
+        # v1.7.2-beta.4 (2026-06-08): mobile Companion app does NOT
+        # reliably pick up add_extra_js_url scripts — RienduPre +
+        # others reported almost ALL translation keys rendering raw
+        # on iOS Companion after beta.1 moved sem-localize.js off the
+        # Lovelace-resource channel. Fix: register on BOTH channels.
+        # sem-localize.js was regenerated in beta.4 with an IIFE +
+        # ``window.semLocalize`` guard so the second load is a clean
+        # no-op (same URL with same hash = browser fetches once anyway,
+        # but the guard prevents script-execution-twice errors if a
+        # specific browser does load it twice).
+        add_extra_js_url(hass, localize_url)
 
         # Legacy base URLs to clean up. Migrated to the single Lit
-        # bundle. ``sem-localize.js`` is NOT in this list — it's
-        # actively re-registered below as a Lovelace resource.
+        # bundle. ``sem-localize.js`` is NOT in this list as of
+        # v1.7.2-beta.4 — it's actively re-registered below as a
+        # Lovelace resource (dual-channel with add_extra_js_url).
         _legacy_bases = [
             f"{static_path}/card/sem-shared.js",
             f"{static_path}/card/sem-reactive-base.js",
@@ -2361,11 +2368,8 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     "registered automatically. Add the following to "
                     "configuration.yaml under `lovelace.resources` and restart:\n"
                     "  - url: %s\n    type: module\n"
-                    "  - url: %s\n    type: module\n"
                     "  - url: %s\n    type: module",
-                    cards_bundle_url,
-                    f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
-                    localize_url,
+                    cards_bundle_url, f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
                 )
                 # Skip the rest of the registration block — none of the
                 # mutating methods below are callable in YAML mode.
@@ -2408,15 +2412,16 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 )
                 _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
 
-            # Register sem-localize.js as a Lovelace resource (single
-            # delivery channel; see #453). Cards constructed before
-            # this script parses listen for ``sem-localize-ready`` in
-            # ``sem-lit-base.js`` and re-render once the global is
-            # available.
+            # v1.7.2-beta.4: register sem-localize.js as a Lovelace
+            # resource too (dual-channel with add_extra_js_url above).
+            # Mobile Companion app doesn't pick up add_extra_js_url
+            # scripts reliably; Lovelace resources DO load on mobile.
+            # The file has an IIFE + window.semLocalize guard so the
+            # second load is a clean no-op.
             localize_item = existing_by_base.get(localize_base)
             if localize_item is None:
                 await resources.async_create_item({"res_type": "module", "url": localize_url})
-                _LOGGER.info("Registered SEM localize: %s", localize_url)
+                _LOGGER.info("Registered SEM localize (mobile fix): %s", localize_url)
             elif localize_item["url"] != localize_url:
                 await resources.async_update_item(
                     localize_item["id"], {"res_type": "module", "url": localize_url}
