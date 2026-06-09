@@ -598,10 +598,33 @@ class SensorReader:
             self._uses_split_grid = True
             disc = self._split_grid_discovery
             if disc["confidence"] != "same-device":
+                # Capture the previous picks BEFORE re-discovery so we can
+                # detect mid-run switches. Any-device confidence re-runs
+                # every cycle so a flicker in HA's state list can flip the
+                # discovered sensor without warning — that's the candidate
+                # root cause for #461 (Growatt sign inversion that
+                # "sometimes works, sometimes inverted"). Logging at
+                # WARNING when the picks change makes the cause visible
+                # in any user-supplied log dump.
+                _prev_imp = disc["import"]
+                _prev_exp = disc["export"]
                 imp, exp, conf = self._discover_split_grid_power(ed)
                 disc["import"] = imp
                 disc["export"] = exp
                 disc["confidence"] = conf
+                if (_prev_imp is not None or _prev_exp is not None) and (
+                    _prev_imp != imp or _prev_exp != exp
+                ):
+                    _LOGGER.warning(
+                        "Split-grid sensor picks changed mid-run "
+                        "(confidence=%s) — import: %s → %s, export: %s → %s. "
+                        "This flips the computed grid_power sign if the new "
+                        "picks identify the meters in the opposite role. "
+                        "Candidate root cause for #461. Set "
+                        "grid_import_power_entity / grid_export_power_entity "
+                        "explicitly in the config to lock the picks.",
+                        conf, _prev_imp, imp, _prev_exp, exp,
+                    )
             if disc["import"]:
                 import_w = self._read_sensor(disc["import"], "grid_import")
                 export_w = self._read_sensor(disc["export"], "grid_export") if disc["export"] else 0.0
