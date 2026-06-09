@@ -11,6 +11,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.3] - 09.06.2026
+
+## 🛠️ Per-charger options-fallback fix (#464 follow-up)
+
+Follow-up to v1.7.3-beta.2 for the **asymmetric multi-charger symptom** RienduPre reported under #464 — *"change on charger 1 works, change on charger 2 does nothing"*. Investigation of his diagnostic dump traced the asymmetry to a latent bug in **both** per-charger setters:
+
+```python
+# select.py:async_select_option  and  number.py:async_set_native_value
+new_options = {**self._entry.options}
+ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]   # ← [] when missing
+for charger in ev_chargers:                                            # ← iterates nothing
+    if charger.get("id") == self._charger_id:
+        charger[self._config_key] = value
+        break
+new_options["ev_chargers"] = ev_chargers                               # ← writes [] back
+```
+
+When `entry.options.ev_chargers` doesn't exist (fresh install where the user has never opened the Config card), the setter writes `entry.options["ev_chargers"] = []`. On the next reload, the merge `{**entry.data, **entry.options}` overrides the data-side chargers with the empty options-side list — **every charger disappears**, all per-charger entities go unavailable. Latent since the multi-charger arc landed.
+
+### 🛠️ Bug fix
+
+- **#464 follow-up** Per-charger select + number setters now fall back to `entry.data.ev_chargers` when `entry.options` doesn't have the key (by @traktore-org in [#469](https://github.com/traktore-org/sem-community/pull/469))
+
+### 🙏 Thanks
+
+- **@RienduPre** for the full diagnose dump on v1.7.3-beta.1 — without it the asymmetric pattern would have stayed buried.
+
+---
+
 # [1.7.3-beta.2] - 09.06.2026
 
 ## 🩺 RienduPre v1.7.2 bug-response release
