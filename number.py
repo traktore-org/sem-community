@@ -747,7 +747,19 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         new_options = {**self._entry.options}
         # Copy each charger dict — in-place mutation leaves entry.options unchanged,
         # so async_update_entry skips persisting and the value reverts on restart (#245).
-        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
+        #
+        # Fall back to entry.data.ev_chargers when entry.options doesn't have
+        # the key yet (fresh install / never edited via the Config card). Without
+        # the fallback this writes ``new_options["ev_chargers"] = []`` and the
+        # merge ``{**data, **options}`` on next reload overrides data's chargers
+        # with the empty list — every charger disappears. Same latent foot-gun
+        # as in select.py:SEMPerChargerSelect.async_select_option.
+        source_chargers = (
+            new_options.get("ev_chargers")
+            or (self._entry.data or {}).get("ev_chargers")
+            or []
+        )
+        ev_chargers = [dict(c) for c in source_chargers]
         for charger in ev_chargers:
             if charger.get("id") == self._charger_id:
                 charger[self._config_key] = value

@@ -362,7 +362,21 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         # Copy each charger dict — mutating the shared dicts in place leaves
         # entry.options == new_options, so async_update_entry detects no change
         # and never persists to .storage (the value then reverts on restart). (#245)
-        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
+        #
+        # Fall back to entry.data.ev_chargers when entry.options doesn't have
+        # the key yet (fresh install / never edited via the Config card). Without
+        # the fallback this writes ``new_options["ev_chargers"] = []`` and the
+        # merge ``{**data, **options}`` on next reload overrides data's chargers
+        # with the empty list — every charger disappears, all per-charger entities
+        # go unavailable. Latent since multi-charger landed; would manifest the
+        # first time any user clicked a per-charger select without first having
+        # touched a Config-card field that populates options.ev_chargers.
+        source_chargers = (
+            new_options.get("ev_chargers")
+            or (self._entry.data or {}).get("ev_chargers")
+            or []
+        )
+        ev_chargers = [dict(c) for c in source_chargers]
         for charger in ev_chargers:
             if charger.get("id") == self._charger_id:
                 charger[self._config_key] = option
