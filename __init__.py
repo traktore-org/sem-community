@@ -168,6 +168,97 @@ PLATFORMS: list[Platform] = [
 ]
 
 
+# ─────────────────────────────────────────────────────────────────────
+# set_option helpers (#462/#464)
+# ─────────────────────────────────────────────────────────────────────
+
+# Structural option keys — changes to these require re-instantiating
+# controllers because they wire SEM to HA entities. Everything else
+# (modes, thresholds, targets, tunables) is read each cycle from
+# coordinator.config and can be hot-swapped without a reload.
+#
+# Conservative on ``ev_chargers``: any change to the list shape
+# (charger added/removed/per-charger entity rewired) needs a reload
+# so the actuator bindings get refreshed. Per-charger tunables inside
+# the list (charge_mode, target_soc, daily_ev_target) go through the
+# select.py / number.py paths instead of set_option, so they don't
+# hit this list.
+_SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
+    "heat_pump_relay1_entity", "heat_pump_relay2_entity",
+    "heat_pump_climate_entity", "heat_pump_power_sensor",
+    "heat_pump_temperature_sensor",
+    "hot_water_entity", "hot_water_power_sensor",
+    "hot_water_temperature_sensor",
+    "ev_chargers",
+})
+
+
+def _set_option_needs_reload(option_keys) -> bool:
+    """True iff at least one key in ``option_keys`` is structural.
+
+    Structural keys (entity wiring) require an integration reload so
+    the controllers re-instantiate against the new wiring. Tunable
+    keys (modes, thresholds, switches) are read from
+    ``coordinator.config`` on every cycle, so an in-place mirror is
+    sufficient — no reload needed.
+    """
+    return any(k in _SET_OPTION_STRUCTURAL_KEYS for k in option_keys)
+
+
+def _merge_ev_chargers_by_id(
+    existing: list, incoming: list,
+) -> list:
+    """Merge an ``ev_chargers`` list by ``id`` rather than full-replace.
+
+    Built for the set_option service path so a partial submit from the
+    Config card (one charger's worth of fields) can never drop sibling
+    chargers from the persisted state — the bug class behind #464.
+
+    Contract:
+
+    * Each entry in ``incoming`` is merged INTO the matching entry in
+      ``existing`` by ``id``, with incoming fields winning. Fields
+      present in the existing entry but absent from the incoming entry
+      are preserved (no key is silently removed).
+    * Existing chargers whose ``id`` is NOT in the incoming list are
+      kept verbatim. This is the actual fix for the cross-talk: a
+      one-charger update never affects siblings.
+    * Incoming chargers without a matching existing ``id`` (a fresh
+      add) are appended verbatim.
+    * Non-dict entries on either side are skipped (defensive).
+    * Output preserves the existing order; new chargers are appended.
+
+    Pure function — no I/O, no HA dependencies. Tested in
+    ``tests/test_set_option_smart_merge.py``.
+    """
+    existing_by_id: dict[str, dict] = {
+        c["id"]: dict(c) for c in (existing or [])
+        if isinstance(c, dict) and c.get("id")
+    }
+    seen_ids: set[str] = set()
+    merged: list[dict] = []
+    for inc in incoming or []:
+        if not isinstance(inc, dict):
+            continue
+        cid = inc.get("id")
+        if cid and cid in existing_by_id:
+            base = existing_by_id[cid]
+            base.update(inc)
+            merged.append(base)
+            seen_ids.add(cid)
+        else:
+            merged.append(dict(inc))
+            if cid:
+                seen_ids.add(cid)
+    # Preserve existing chargers not mentioned in the incoming list —
+    # appended after the incoming-derived entries to keep the result
+    # deterministic.
+    for cid, c in existing_by_id.items():
+        if cid not in seen_ids:
+            merged.append(c)
+    return merged
+
+
 async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     """Migrate old config entry data to current schema.
 
@@ -2675,12 +2766,26 @@ async def _async_register_phase_services(
     async def async_set_option(call) -> None:
         """Write one or more keys into the SEM ConfigEntry options.
 
-        Equivalent to walking the OptionsFlow but without forcing the
-        caller to know which step owns each key. Triggers the standard
-        ``async_update_options`` listener which decides whether a reload
-        is needed (see ``async_update_options`` comment for the skip
-        rules — runtime number/switch tweaks don't reload, structural
-        keys like entity pickers do).
+        Two behaviors based on key kind (#462/#464 fix):
+
+        * **Structural keys** (entity wiring — heat pump relays, hot
+          water entity, ev_chargers list shape): force an integration
+          reload so controllers get re-instantiated against the new
+          wiring. This preserves the #448 heat-pump-relay fix that
+          motivated the v1.7.2-beta.2 always-reload behavior.
+
+        * **Tunable keys** (everything else — modes, thresholds,
+          targets, switches): mirror the new value into
+          ``coordinator.config`` in place and suppress the listener's
+          reload via ``_skip_options_reload``. Matches the per-charger
+          ``select.py`` / ``number.py`` runtime-tweak pattern that
+          existed in v1.7.1 and earlier. Avoids destroying + recreating
+          the coordinator (with all attendant per-charger / split-grid
+          state) on every tunable change.
+
+        Plus: when ``ev_chargers`` is in the payload, **merge by id**
+        instead of full-replace so a partial submit from the Config
+        card can never drop a sibling charger (#464 cross-talk).
         """
         options = call.data.get("options")
         if not isinstance(options, dict):
@@ -2701,27 +2806,59 @@ async def _async_register_phase_services(
                 if e.entry_id == call.data.get("entry_id"):
                     target_entry = e
                     break
-        # Merge with existing options to preserve unrelated keys, then
-        # update. HA fires the update_listener automatically — but that
-        # listener has a skip-reload optimization for runtime
-        # number/switch tweaks. Since ``set_option`` doesn't mirror
-        # values into coordinator memory (the runtime stepper path
-        # does), we ALWAYS need a reload here to take effect.
-        # Bug confirmed live on 2026-06-07: setting
-        # ``heat_pump_relay2_entity`` via this service updated the
-        # ``options`` dict but the heat-pump controller didn't get
-        # re-registered, leaving ``registered=false`` despite valid
-        # config. Explicit reload below makes this deterministic.
+
+        # Smart-merge ``ev_chargers`` by id (#464) — see
+        # ``_merge_ev_chargers_by_id`` for the contract.
+        if isinstance(options.get("ev_chargers"), list):
+            existing_list = (target_entry.options or {}).get("ev_chargers") or []
+            options = {
+                **options,
+                "ev_chargers": _merge_ev_chargers_by_id(
+                    existing_list, options["ev_chargers"],
+                ),
+            }
+
         merged = {**(target_entry.options or {}), **options}
-        if merged != (target_entry.options or {}):
-            hass.config_entries.async_update_entry(target_entry, options=merged)
-            # Block on reload so the caller's next read sees the new
-            # state. HA suppresses duplicate reloads when one is
-            # already pending from the listener.
+        if merged == (target_entry.options or {}):
+            _LOGGER.debug(
+                "set_option no-op (values unchanged): %s",
+                list(options.keys()),
+            )
+            return
+
+        needs_reload = _set_option_needs_reload(options.keys())
+
+        if needs_reload:
+            # Structural change — force a reload so controllers
+            # re-instantiate against the new wiring. The
+            # async_update_options listener will also reload, but
+            # HA suppresses duplicates so it's safe.
+            hass.config_entries.async_update_entry(
+                target_entry, options=merged,
+            )
             await hass.config_entries.async_reload(target_entry.entry_id)
+        else:
+            # Tunable change — mirror into coordinator.config in
+            # place and snapshot _skip_options_reload so the
+            # update_listener short-circuits. Matches the per-charger
+            # select / number tweaks. No reload, no destroyed state,
+            # no split-grid re-discovery, no per-charger context loss.
+            coordinator = getattr(target_entry, "runtime_data", None)
+            if coordinator is not None:
+                coordinator._skip_options_reload = dict(merged)
+                if isinstance(getattr(coordinator, "config", None), dict):
+                    coordinator.config.update({
+                        **(target_entry.data or {}),
+                        **merged,
+                    })
+            hass.config_entries.async_update_entry(
+                target_entry, options=merged,
+            )
+
         _LOGGER.debug(
-            "set_option wrote %d key(s) to entry %s: %s",
-            len(options), target_entry.entry_id, list(options.keys()),
+            "set_option wrote %d key(s) to entry %s (reload=%s): %s",
+            len(options), target_entry.entry_id, needs_reload,
+            list(options.keys()),
         )
 
     hass.services.async_register(
