@@ -11,6 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.4] - 09.06.2026
+
+## 🧪 Framework tests + caught third instance of #469 fall-through
+
+While writing the real-HA integration tests for the `set_option` service path, the test against `sem_multi_wallbox_config_entry` (a fresh-install fixture with chargers only in `entry.data`) caught the **same `entry.options.get("ev_chargers", [])` fall-through pattern** PR #469 fixed for the per-charger setters — but this time in the `__init__.py` smart-merge itself. A fresh-install multi-charger user opening the Config card for the first time and editing one charger's field would hit it: the merge appends the partial submit as a stray entry (no matching id in the empty existing list) and the next reload clobbers `entry.data.ev_chargers` with the partial-options-side list. Same symptom as #464 but on the fresh-install path — patched in the same PR as the test that caught it.
+
+### 🛠️ Bug fix
+
+- **#464 follow-up #2** `set_option` smart-merge falls back to `entry.data.ev_chargers` when `entry.options` doesn't have the key. Latent since v1.7.2-beta.2 (`set_option` rework). Affected: fresh-install multi-charger users editing per-charger fields via the Config card before any prior write had populated `entry.options.ev_chargers` (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+
+### 🧪 Test infrastructure
+
+- `tests/test_services_real.py` — four real-HA integration tests that drive `solar_energy_management.set_option` through the service registry and assert on `hass.states.get(...).state`. The test layer that would have caught the v1.7.3-beta.1 number-entity staleness regression (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `sem_multi_wallbox_config_entry` fixture — seeded from RienduPre's diagnose dump, reusable for any multi-charger contract test (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `sem_config_entry` fixture bumped from schema v7 → v12.1 (stale since the #135 v11→v12 migration) (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `tests/scenarios/2026-06-09_rienduPre_dual_wallbox.yaml` — YAML scenario replay of RienduPre's dual-Wallbox setup running through the existing scenario harness; locks the `solar_plus_cheap`-outside-cheap-window mode-isolation contract (by @traktore-org in [#472](https://github.com/traktore-org/sem-community/pull/472))
+
+### 🩹 Process retirement
+
+The `[live-test-before-deploy]` policy memo from earlier today is now backed by a mechanical CI gate via `test_services_real.py`. Future PRs touching `__init__.py` / `select.py` / `number.py` set_option paths have the same green-or-red signal pytest already gives for pure-helper bugs.
+
+---
+
 # [1.7.3-beta.3] - 09.06.2026
 
 ## 🛠️ Per-charger options-fallback fix (#464 follow-up)
