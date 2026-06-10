@@ -5879,11 +5879,11 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:18px;color:#5BC8D8"></ha-icon>
                         ${this._chargerFriendlyName(a)}
                     </div>
-                    ${this._renderPickerNested(r,"ev_connected_sensor","config_ev_connected_sensor","binary_sensor",null,e,"config_help_ev_connected_sensor")}
-                    ${this._renderPickerNested(r,"ev_charging_power_sensor","config_ev_charging_power","sensor","power",e,"config_help_ev_charging_power")}
-                    ${this._renderPickerNested(r,"ev_current_control_entity","config_ev_current_control","number",null,e,"config_help_ev_current_control")}
-                    ${this._renderPickerNested(r,"vehicle_soc_entity","config_ev_vehicle_soc","sensor",null,e,"config_help_ev_vehicle_soc")}
-                    ${this._renderTargetTypeSelectNested(r,i,e)}
+                    ${this._renderPickerNested(r,a,"ev_connected_sensor","config_ev_connected_sensor","binary_sensor",null,e,"config_help_ev_connected_sensor")}
+                    ${this._renderPickerNested(r,a,"ev_charging_power_sensor","config_ev_charging_power","sensor","power",e,"config_help_ev_charging_power")}
+                    ${this._renderPickerNested(r,a,"ev_current_control_entity","config_ev_current_control","number",null,e,"config_help_ev_current_control")}
+                    ${this._renderPickerNested(r,a,"vehicle_soc_entity","config_ev_vehicle_soc","sensor",null,e,"config_help_ev_vehicle_soc")}
+                    ${this._renderTargetTypeSelectNested(r,a,i,e)}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${a}_minimum_current`,"minimum_soc",t,"tile_help_min_amps")}
                         ${this._renderStepper(`number.sem_charger_${a}_vehicle_min_current`,"vehicle_min_current",t,"tile_help_vehicle_min_amps")}
@@ -6007,40 +6007,40 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${this._renderOptionSlider("hot_water_minimum_temperature","config_hw_min_temperature",{min:30,max:55,step:1,unit:"°C",default:40},e,"config_help_hw_min_temperature")}
                 ${this._renderOptionSlider("hot_water_priority","config_hw_priority",{min:1,max:10,step:1,unit:"",default:5},e,"config_help_hw_priority")}
             </div>
-        `}_renderTargetTypeSelectNested(t,e,i){const s=e.ev_target_type||"kwh",r=!!e.vehicle_soc_entity,a=`ev_chargers.${t}.ev_target_type`,o=this._saveStatus[a];return W`
+        `}_renderTargetTypeSelectNested(t,e,i,s){const r=i.ev_target_type||"kwh",a=!!i.vehicle_soc_entity,o=`ev_chargers.${t}.ev_target_type`,n=this._saveStatus[o];return W`
             <div class="stepper-cell">
                 <div class="ctrl-row">
                     <span class="ctrl-label">${this._t("config_ev_target_type")}</span>
-                    <select class="sem-select" .value=${s} @change=${async e=>{const s=e.target.value,r=(i.ev_chargers||[]).map(t=>({...t}));r[t]||(r[t]={}),r[t].ev_target_type=s,await this._saveOption("ev_chargers",r,a)}}>
-                        <option value="kwh" ?selected=${"soc"!==s}>
+                    <select class="sem-select" .value=${r} @change=${async i=>{const r=i.target.value,a=(s.ev_chargers||[]).map(t=>({...t}));a[t]||(a[t]={}),!a[t].id&&e&&(a[t].id=e),a[t].ev_target_type=r,await this._saveOption("ev_chargers",a,o)}}>
+                        <option value="kwh" ?selected=${"soc"!==r}>
                             ${this._t("config_ev_target_type_kwh")}
                         </option>
-                        <option value="soc" ?disabled=${!r}
-                                            ?selected=${"soc"===s}>
-                            ${this._t("config_ev_target_type_soc")}${r?"":" — "+this._t("config_ev_target_type_requires_sensor")}
+                        <option value="soc" ?disabled=${!a}
+                                            ?selected=${"soc"===r}>
+                            ${this._t("config_ev_target_type_soc")}${a?"":" — "+this._t("config_ev_target_type_requires_sensor")}
                         </option>
                     </select>
                 </div>
-                ${"saving"===o?W`<div class="save-status">${this._t("config_saving")}…</div>`:K}
-                ${"ok"===o?W`<div class="save-status ok">✓</div>`:K}
+                ${"saving"===n?W`<div class="save-status">${this._t("config_saving")}…</div>`:K}
+                ${"ok"===n?W`<div class="save-status ok">✓</div>`:K}
                 ${this._showHelp?W`<div class="setting-help-text">${this._t("config_help_ev_target_type")}</div>`:K}
             </div>
-        `}_renderPickerNested(t,e,i,s,r,a,o){const n=a.ev_chargers||[],l=n[t]?.[e]||"",c=`ev_chargers.${t}.${e}`,d=this._saveStatus[c],p=async i=>{const s=(a.ev_chargers||[]).map(t=>({...t}));s[t]||(s[t]={}),s[t][e]=i,await this._saveOption("ev_chargers",s,c)};return W`
+        `}_renderPickerNested(t,e,i,s,r,a,o,n){const l=o.ev_chargers||[],c=l[t]?.[i]||"",d=`ev_chargers.${t}.${i}`,p=this._saveStatus[d],h=async s=>{const r=(o.ev_chargers||[]).map(t=>({...t}));r[t]||(r[t]={}),!r[t].id&&e&&(r[t].id=e),r[t][i]=s,await this._saveOption("ev_chargers",r,d)};return W`
             <div class="picker-cell">
                 <div class="picker-row">
-                    <span class="picker-label">${this._t(i)}</span>
+                    <span class="picker-label">${this._t(s)}</span>
                     <ha-entity-picker
                         .hass=${this._hass}
-                        .value=${l}
-                        .includeDomains=${[s]}
-                        .includeDeviceClasses=${r?[r]:void 0}
+                        .value=${c}
+                        .includeDomains=${[r]}
+                        .includeDeviceClasses=${a?[a]:void 0}
                         .allowCustomEntity=${!1}
-                        @value-changed=${t=>p(t.detail?.value||"")}>
+                        @value-changed=${t=>h(t.detail?.value||"")}>
                     </ha-entity-picker>
                 </div>
-                ${"saving"===d?W`<div class="save-status">${this._t("config_saving")}…</div>`:K}
-                ${"ok"===d?W`<div class="save-status ok">✓ ${this._t("config_saved")}</div>`:K}
-                ${this._showHelp&&o?W`<div class="setting-help-text">${this._t(o)}</div>`:K}
+                ${"saving"===p?W`<div class="save-status">${this._t("config_saving")}…</div>`:K}
+                ${"ok"===p?W`<div class="save-status ok">✓ ${this._t("config_saved")}</div>`:K}
+                ${this._showHelp&&n?W`<div class="setting-help-text">${this._t(n)}</div>`:K}
             </div>
         `}_renderPicker(t,e,i,s,r,a){const o=r[t]||"",n=this._saveStatus[t];return W`
             <div class="picker-cell">

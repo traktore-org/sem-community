@@ -285,3 +285,100 @@ async def test_per_charger_select_falls_back_to_entry_data(
         "entry.options.ev_chargers because the setter wrote [] back when "
         "it couldn't find the key in options."
     )
+
+
+# ---------------------------------------------------------------------------
+# Poisoned-storage heal (#462/#464 follow-up) — setup repairs a partial
+# options.ev_chargers list left behind by v1.7.2..v1.7.3-beta.3 builds
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_setup_heals_poisoned_options_ev_chargers(
+    sem_real_hass, sem_multi_wallbox_config_entry,
+) -> None:
+    """Setup must repair a PARTIAL ``options.ev_chargers`` list.
+
+    The writer fixes (#467/#468/#469 + beta.4) stopped new corruption,
+    but an install that went through the broken builds can already have
+    options.ev_chargers = [charger 1 only] in storage (e.g. via the
+    pre-#469 ``[]`` clobber followed by the auto-discovery reseed). The
+    ``{**data, **options}`` merge then hides charger 2 forever: it never
+    registers, and per-charger writes targeting its id silently no-op —
+    the persistent "charger 2 does nothing" report on #462/#464.
+
+    This test seeds exactly that storage shape, boots SEM, and asserts:
+    (a) the options list is healed to contain both chargers, with the
+    options-side field winning for the charger that was present;
+    (b) charger 2 registered (its per-charger select exists);
+    (c) a charger-2 mode flip lands in persisted options.
+    """
+    _seed_sem_input_sensors(sem_real_hass)
+    for eid in (
+        "sensor.test_wb_left_charging_power", "sensor.test_wb_right_charging_power",
+        "number.test_wb_left_max_current", "number.test_wb_right_max_current",
+    ):
+        sem_real_hass.states.async_set(eid, "0", {"unit_of_measurement": "W"})
+    for eid in (
+        "binary_sensor.test_wb_left_cable_connected",
+        "binary_sensor.test_wb_right_cable_connected",
+    ):
+        sem_real_hass.states.async_set(eid, "off")
+    for eid in ("sensor.test_wb_left_status", "sensor.test_wb_right_status"):
+        sem_real_hass.states.async_set(eid, "idle")
+
+    entry = sem_multi_wallbox_config_entry
+    entry.add_to_hass(sem_real_hass)
+    # Poisoned shape: options has charger 1 ONLY (with a diverged mode),
+    # data still has both chargers. Mirrors the auto-discovery reseed
+    # aftermath seen on RienduPre's install.
+    sem_real_hass.config_entries.async_update_entry(
+        entry,
+        options={
+            "ev_chargers": [
+                {
+                    "id": "ev_charger",
+                    "name": "Laadpaal Links",
+                    "charge_mode": "always_max",
+                },
+            ],
+        },
+    )
+
+    assert await sem_real_hass.config_entries.async_setup(entry.entry_id)
+    await sem_real_hass.async_block_till_done()
+
+    # (a) storage healed: both chargers back, options-side mode preserved
+    healed = entry.options.get("ev_chargers") or []
+    by_id = {c["id"]: c for c in healed if isinstance(c, dict)}
+    assert set(by_id) == {"ev_charger", "ev_charger_1"}, (
+        "setup-time heal did not restore the data-side sibling into "
+        "options.ev_chargers — partial options list still shadows entry.data."
+    )
+    assert by_id["ev_charger"]["charge_mode"] == "always_max"
+    assert by_id["ev_charger_1"]["charge_mode"] == "solar_plus_cheap"
+
+    # (b) charger 2 actually registered — its per-charger select exists
+    assert sem_real_hass.states.get(
+        "select.sem_charger_ev_charger_1_charge_mode"
+    ) is not None, (
+        "charger 2 did not register its per-charger entities — the merged "
+        "config at setup still came up without it."
+    )
+
+    # (c) a charger-2 write lands
+    await sem_real_hass.services.async_call(
+        "select", "select_option",
+        {
+            "entity_id": "select.sem_charger_ev_charger_1_charge_mode",
+            "option": "off",
+        },
+        blocking=True,
+    )
+    await sem_real_hass.async_block_till_done()
+    persisted = {
+        c["id"]: c
+        for c in (entry.options.get("ev_chargers") or [])
+        if isinstance(c, dict)
+    }
+    assert persisted["ev_charger_1"]["charge_mode"] == "off"

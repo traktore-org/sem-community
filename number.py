@@ -754,16 +754,36 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         # merge ``{**data, **options}`` on next reload overrides data's chargers
         # with the empty list — every charger disappears. Same latent foot-gun
         # as in select.py:SEMPerChargerSelect.async_select_option.
-        source_chargers = (
-            new_options.get("ev_chargers")
-            or (self._entry.data or {}).get("ev_chargers")
-            or []
-        )
-        ev_chargers = [dict(c) for c in source_chargers]
+        data_chargers = (self._entry.data or {}).get("ev_chargers") or []
+        source_chargers = new_options.get("ev_chargers") or data_chargers
+        ev_chargers = [dict(c) for c in source_chargers if isinstance(c, dict)]
         for charger in ev_chargers:
             if charger.get("id") == self._charger_id:
                 charger[self._config_key] = value
                 break
+        else:
+            # This charger's id is missing from the options-side list — a
+            # *partially* poisoned ``options.ev_chargers`` (v1.7.2 ..
+            # v1.7.3-beta.3 builds could strip a sibling from it). The
+            # ``or``-fallback above only fires for missing/empty lists, so
+            # without this branch the write is a silent no-op and the user
+            # sees "changing charger 2 does nothing" (#462/#464). Recover
+            # the charger's dict from entry.data and append it.
+            recovered = next(
+                (dict(c) for c in data_chargers
+                 if isinstance(c, dict) and c.get("id") == self._charger_id),
+                {"id": self._charger_id},
+            )
+            recovered[self._config_key] = value
+            ev_chargers.append(recovered)
+            _LOGGER.warning(
+                "Charger '%s' was missing from the stored ev_chargers list "
+                "(ids: %s) — recovered it from entry.data so the %s write "
+                "isn't lost",
+                self._charger_id,
+                [c.get("id") for c in ev_chargers[:-1]],
+                self._config_key,
+            )
         new_options["ev_chargers"] = ev_chargers
 
         if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):

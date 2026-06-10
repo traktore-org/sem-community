@@ -528,15 +528,15 @@ class SEMConfigCard extends SEMLitBase {
                         <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:18px;color:#5BC8D8"></ha-icon>
                         ${this._chargerFriendlyName(cid)}
                     </div>
-                    ${this._renderPickerNested(idx, 'ev_connected_sensor', 'config_ev_connected_sensor',
+                    ${this._renderPickerNested(idx, cid, 'ev_connected_sensor', 'config_ev_connected_sensor',
                         'binary_sensor', null, opts, 'config_help_ev_connected_sensor')}
-                    ${this._renderPickerNested(idx, 'ev_charging_power_sensor', 'config_ev_charging_power',
+                    ${this._renderPickerNested(idx, cid, 'ev_charging_power_sensor', 'config_ev_charging_power',
                         'sensor', 'power', opts, 'config_help_ev_charging_power')}
-                    ${this._renderPickerNested(idx, 'ev_current_control_entity', 'config_ev_current_control',
+                    ${this._renderPickerNested(idx, cid, 'ev_current_control_entity', 'config_ev_current_control',
                         'number', null, opts, 'config_help_ev_current_control')}
-                    ${this._renderPickerNested(idx, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
+                    ${this._renderPickerNested(idx, cid, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
-                    ${this._renderTargetTypeSelectNested(idx, charger, opts)}
+                    ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'minimum_soc', T, 'tile_help_min_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_vehicle_min_current`, 'vehicle_min_current', T, 'tile_help_vehicle_min_amps')}
@@ -757,7 +757,7 @@ class SEMConfigCard extends SEMLitBase {
     // no ``vehicle_soc_entity`` configured — preventing the saved-bad-state
     // class of bug that idled PROD 2026-06-06. The runtime trusts the
     // saved config; the GUI is the only gatekeeper.
-    _renderTargetTypeSelectNested(chargerIndex, charger, opts) {
+    _renderTargetTypeSelectNested(chargerIndex, cid, charger, opts) {
         const cur = charger.ev_target_type || 'kwh';
         const hasSensor = !!charger.vehicle_soc_entity;
         const statusKey = `ev_chargers.${chargerIndex}.ev_target_type`;
@@ -766,6 +766,10 @@ class SEMConfigCard extends SEMLitBase {
             const val = e.target.value;
             const newChargers = (opts.ev_chargers || []).map(c => ({ ...c }));
             if (!newChargers[chargerIndex]) newChargers[chargerIndex] = {};
+            // Always carry the charger id — the backend smart-merge targets
+            // by id and drops id-less entries (would otherwise become a
+            // ghost charger colliding with a real sibling, #462/#464).
+            if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
             newChargers[chargerIndex].ev_target_type = val;
             await this._saveOption('ev_chargers', newChargers, statusKey);
         };
@@ -792,7 +796,7 @@ class SEMConfigCard extends SEMLitBase {
 
     // Entity picker bound to ev_chargers[index][key] — writes the nested
     // list shape back via config_entries/update.
-    _renderPickerNested(chargerIndex, chargerKey, labelKey, domain, deviceClass, opts, helpKey) {
+    _renderPickerNested(chargerIndex, cid, chargerKey, labelKey, domain, deviceClass, opts, helpKey) {
         const chargers = opts.ev_chargers || [];
         const cur = chargers[chargerIndex]?.[chargerKey] || '';
         const statusKey = `ev_chargers.${chargerIndex}.${chargerKey}`;
@@ -800,6 +804,10 @@ class SEMConfigCard extends SEMLitBase {
         const onChange = async (val) => {
             const newChargers = (opts.ev_chargers || []).map(c => ({ ...c }));
             if (!newChargers[chargerIndex]) newChargers[chargerIndex] = {};
+            // Always carry the charger id — the backend smart-merge targets
+            // by id and drops id-less entries (would otherwise become a
+            // ghost charger colliding with a real sibling, #462/#464).
+            if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
             newChargers[chargerIndex][chargerKey] = val;
             await this._saveOption('ev_chargers', newChargers, statusKey);
         };

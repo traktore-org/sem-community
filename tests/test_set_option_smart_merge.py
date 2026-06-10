@@ -131,16 +131,23 @@ class TestMergeEvChargersById:
         result[0]["charge_mode"] = "always_max"
         assert existing[0]["charge_mode"] == "off"
 
-    def test_incoming_without_id_is_appended(self):
-        """An incoming dict missing an id is appended (no merge target)."""
+    def test_incoming_without_id_is_dropped(self):
+        """An incoming dict missing an id is dropped, not appended.
+
+        Contract changed post-beta.4 (#462/#464 follow-up): id-less
+        entries are untargetable by every per-charger write path, and at
+        registration they get assigned a positional ``ev_charger_<idx>``
+        id that can collide with a real sibling — a ghost charger. The
+        Config card's nested editors used to materialize exactly this
+        shape (``newChargers[idx] = {}``).
+        """
         existing = [{"id": "A", "charge_mode": "off"}]
         incoming = [{"name": "Stray", "charge_mode": "solar_only"}]
         result = _merge_ev_chargers_by_id(existing, incoming)
-        assert len(result) == 2
-        # Existing 'A' preserved
-        assert any(c.get("id") == "A" for c in result)
-        # Stray appended
-        assert any(c.get("name") == "Stray" for c in result)
+        assert len(result) == 1
+        # Existing 'A' preserved; stray ghost dropped
+        assert result[0].get("id") == "A"
+        assert not any(c.get("name") == "Stray" for c in result)
 
     def test_non_dict_entries_are_skipped(self):
         """Defensive — garbage entries on either side never raise."""

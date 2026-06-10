@@ -11,6 +11,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.5] - 10.06.2026
+
+## 🩹 Storage heal for poisoned `options.ev_chargers` (#462/#464 follow-up #3)
+
+The writer fixes shipped in beta.1–beta.4 (#467/#468/#469 + the smart-merge
+fall-through) stopped **new** corruption of the options-side charger list, but
+none of them repaired storage that the v1.7.2 .. v1.7.3-beta.3 builds had
+already corrupted. Once `entry.options.ev_chargers` is a *partial* list
+(e.g. charger 1 only — the auto-discovery reseed plants exactly that shape
+after a `[]` clobber), the `{**data, **options}` merge hides the data-side
+sibling forever and every per-charger write targeting the missing id
+silently no-ops: the persistent "changing charger 2 does nothing at all"
+report on #462/#464 that survived all three betas. The #469 `or`-fallback
+only fires for missing/empty lists, not partial ones.
+
+### 🛠️ Bug fixes
+
+- **Setup-time storage heal** — `async_setup_entry` reconciles a poisoned `options.ev_chargers` against `entry.data` by id-union (options fields win per charger, data-only siblings restored, id-less ghost entries dropped). Idempotent: one healing write, then quiet. Logs a WARNING naming the before/after ids so support can see it happened
+- **Per-charger writers never silently no-op** — `SEMPerChargerSelect.async_select_option` / `SEMPerChargerNumber.async_set_native_value` recover a charger missing from the stored list out of `entry.data` (full dict, or a minimal `{"id": ...}` stub) and append it, with a WARNING — instead of dropping the write on the floor
+- **`_merge_ev_chargers_by_id` drops id-less entries** — they're untargetable by every write path and at registration get assigned a positional `ev_charger_<idx>` id that can collide with a real sibling (ghost charger)
+- **Config card stamps the charger `id`** — the nested per-charger editors (`sem-config-card.js`) now always carry `id` on the entries they submit, so a partial submit can never produce an id-less ghost
+
+### 🔍 Diagnostics
+
+- `diagnose` payload for the `ev_chargers` (and `all`) section now includes `ev_chargers_storage_split` — the per-side `entry.data` vs `entry.options` charger lists (id / name / charge_mode). The merged `config` block hid exactly the fact that mattered during the #462/#464 triage
+
+### 🧪 Tests
+
+- `tests/test_ev_chargers_storage_heal.py` — heal contract, writer recovery (select + number), ghost-drop contract
+- `tests/test_services_real.py::test_setup_heals_poisoned_options_ev_chargers` — real-HA boot with RienduPre-shaped poisoned storage: asserts the options list heals, charger 2 registers, and a charger-2 mode flip lands
+
+---
+
 # [1.7.3-beta.4] - 09.06.2026
 
 ## 🧪 Framework tests + caught third instance of #469 fall-through
