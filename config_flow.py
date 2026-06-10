@@ -1500,7 +1500,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # Try to find Tibber/Nordpool/aWATTar entity automatically
                 for state in self.hass.states.async_all("sensor"):
                     eid = state.entity_id
-                    if any(p in eid for p in ("electricity_price", "nordpool", "awattar")):
+                    # Official Nord Pool core integration uses
+                    # sensor.nord_pool_<area>_current_price (underscored,
+                    # so the HACS "nordpool" pattern doesn't match it).
+                    if (
+                        "nord_pool" in eid and eid.endswith("_current_price")
+                    ) or any(
+                        p in eid for p in ("electricity_price", "nordpool", "awattar")
+                    ):
                         user_input["dynamic_tariff_entity"] = eid
                         _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
                         break
@@ -1562,23 +1569,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                # #417: max raised 1.0 -> 5.0 (and export 0.5 -> 5.0) for
+                # high-unit currencies (SEK/NOK/CZK/PLN ~1-5 per kWh) --
+                # same fix the cheap/expensive threshold number entities
+                # got in v1.7.0-beta.21. The import rate doubles as the
+                # dynamic-tariff fallback price, so capping it at 1.0
+                # forced a wrong fallback on those markets.
                 vol.Optional(
                     "electricity_import_rate",
                     default=_c("electricity_import_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_off_peak_rate",
                     default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_export_rate",
                     default=_c("electricity_export_rate", 0.075),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=0.50, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "demand_charge_rate",
@@ -1841,7 +1854,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     "battery_cycle_cost",
-                    default=_c("battery_cycle_cost", 0.0),
+                    default=_c("battery_cycle_cost", 0.02),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0, max=0.50, step=0.001,
@@ -1858,6 +1871,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.SLIDER,
                     )
                 ),
+                vol.Optional(
+                    "battery_replan_interval_min",
+                    default=_c("battery_replan_interval_min", 30),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=120, step=5,
+                        unit_of_measurement="min",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    "battery_prefer_consecutive_window",
+                    default=_c("battery_prefer_consecutive_window", True),
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "battery_max_target_soc",
                     default=_c("battery_max_target_soc", 95.0),

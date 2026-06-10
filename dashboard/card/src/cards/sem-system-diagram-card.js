@@ -154,6 +154,46 @@ class SEMSystemDiagramCard extends SEMLitBase {
         return this._stateStr(`${this._prefix}${suffix}`);
     }
 
+    /**
+     * Read a numeric sensor with a "hold last good value" buffer for the
+     * Huawei modbus flicker class. Returns ``{value, stale}``:
+     *
+     *  - Entity available and parseable → cache & return ``{value, stale:false}``.
+     *  - Entity unavailable/unknown but a cached value exists from less
+     *    than ``maxStaleMs`` ago → return the cached value with
+     *    ``{stale:false}`` so the UI doesn't visibly flicker.
+     *  - Entity unavailable/unknown and either no cache OR cache older
+     *    than ``maxStaleMs`` → return ``{value:0, stale:true}`` so the
+     *    caller can surface a real-stale indicator.
+     *
+     * Cache is stored under ``cacheKey`` on the instance (string field name
+     * so the linter can flag accidental collisions). Holds across re-renders
+     * because instance fields survive Lit re-render cycles.
+     */
+    _readWithHold(suffix, cacheKey, maxStaleMs) {
+        const entity = this._hass?.states[`${this._prefix}${suffix}`];
+        const raw = entity?.state;
+        const available = entity && raw !== 'unavailable' && raw !== 'unknown';
+        const now = Date.now();
+        const tsKey = cacheKey + 'Ts';
+        // ``cacheKey`` is something like 'this._lastBattPower' — strip the
+        // ``this.`` prefix so we can use bracket access on the instance.
+        const k = cacheKey.startsWith('this.') ? cacheKey.slice(5) : cacheKey;
+        const t = tsKey.startsWith('this.') ? tsKey.slice(5) : tsKey;
+        if (available) {
+            const v = parseFloat(raw);
+            if (!Number.isNaN(v)) {
+                this[k] = v;
+                this[t] = now;
+                return { value: v, stale: false };
+            }
+        }
+        if (this[k] != null && (now - (this[t] || 0)) < maxStaleMs) {
+            return { value: this[k], stale: false };
+        }
+        return { value: 0, stale: true };
+    }
+
     // ── Animated counter tick: damped-lerp + batched property write per frame ──
     _startTickIfIdle() {
         if (this._counterRaf) return;
@@ -310,13 +350,28 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
         // State reads
         const solar = this._val('solar_power');
-        const battery = this._val('battery_power');
-        const battCharge = Math.max(0, battery);
-        const battDischarge = Math.max(0, -battery);
         const gridImport = this._val('grid_import_power');
         const gridExport = this._val('grid_export_power');
         const ev = this._val('ev_power');
-        const soc = this._val('battery_soc');
+
+        // Battery reads with last-known-good hold for Huawei modbus flicker.
+        // Per CLAUDE.md the Huawei modbus over WiFi bounces every 10–30 s;
+        // each bounce flips ``sensor.sem_battery_soc`` and ``sensor.sem_battery_power``
+        // to ``unavailable`` for 25–35 s before recovering. Without the hold
+        // the diagram card collapses each flicker into "0% empty battery"
+        // because ``_val()`` returns its fallback 0 when the entity is
+        // unavailable. Visually that looks like an emergency. The hold caches
+        // the most recent valid reading and uses it for up to 60 s of
+        // continuous unavailability; past that, the card shows a stale
+        // marker so a genuinely-broken sensor is still surfaced.
+        const { value: battery, stale: battStale } =
+            this._readWithHold('battery_power', 'this._lastBattPower', 60000);
+        const { value: soc, stale: socStale } =
+            this._readWithHold('battery_soc', 'this._lastBattSoc', 60000);
+        const battSensorStale = battStale || socStale;
+        const battCharge = Math.max(0, battery);
+        const battDischarge = Math.max(0, -battery);
+
         const home = Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
 
         // Sun pose (pure)
@@ -627,8 +682,15 @@ class SEMSystemDiagramCard extends SEMLitBase {
                           text-anchor="middle" font-family="${F}" font-size="${fs - 1}"
                           fill="#96CAEE" opacity="0.35">${invStatusStr}</text>
 
-                    <!-- Battery -->
-                    <g filter="url(#glowBattery)" class="clickable" @click=${() => this._showMoreInfo('battery_soc')}>
+                    <!-- Battery — group opacity fades to 0.35 if both
+                         battery_soc and battery_power have been
+                         unavailable for >60 s (Huawei modbus hard
+                         dropout). Brief flickers (<60 s) are absorbed
+                         by ``_readWithHold`` upstream so the user
+                         doesn't see a visual emergency. -->
+                    <g filter="url(#glowBattery)" class="clickable"
+                       opacity="${battSensorStale ? 0.35 : 1}"
+                       @click=${() => this._showMoreInfo('battery_soc')}>
                         ${this._illustrationBattery(L.B.cx, L.B.cy, L.B.r, socFillH, socFillY, battFillColor, showBattBolt, soc)}
                     </g>
                     <text x="${L.B.cx}" y="${L.B.labelY}" text-anchor="middle"
@@ -637,10 +699,11 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     <text x="${L.B.cx}" y="${L.B.labelY + fv * 1.0}" class="clickable"
                           @click=${() => this._showMoreInfo('battery_power')}
                           text-anchor="middle" font-family="${F}" font-size="${fv}"
-                          font-weight="800" fill="${battColor}">${dispBatt}</text>
+                          font-weight="800" fill="${battColor}"
+                          opacity="${battSensorStale ? 0.4 : 1}">${battSensorStale ? '— W' : dispBatt}</text>
                     <text x="${L.B.cx}" y="${L.B.labelY + fv * 1.0 + fl}"
                           text-anchor="middle" font-family="${F}" font-size="${fl}"
-                          fill="${battStateFill}" opacity="0.6">${battStateText}</text>
+                          fill="${battStateFill}" opacity="0.6">${battSensorStale ? this._t('sensor_unavailable') : battStateText}</text>
                     <text x="${L.B.cx}" y="${L.B.labelY + fv * 1.0 + fl + fs + 2}" class="clickable"
                           @click=${() => this._showMoreInfo('daily_battery_charge_energy')}
                           text-anchor="middle" font-family="${F}" font-size="${fs + 1}"
