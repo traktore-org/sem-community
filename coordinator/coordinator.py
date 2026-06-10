@@ -2065,6 +2065,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _disc = getattr(self._sensor_reader, "_split_grid_discovery", None) or {}
             if self.config.get("grid_import_power_entity") or self.config.get("grid_export_power_entity"):
                 result["diag_grid_mode"] = "manual"
+                # #461 follow-up: observe-only audit verdict — True when the
+                # manual import/export assignment has contradicted the
+                # Energy Dashboard counters for 5+ cycles (swapped fields).
+                result["diag_grid_manual_mismatch"] = bool(
+                    getattr(self._sensor_reader, "_manual_grid_mismatch", False)
+                )
             elif _disc.get("import"):
                 result["diag_grid_mode"] = "split" if _disc.get("confidence") == "same-device" else "split-lowconf"
             else:

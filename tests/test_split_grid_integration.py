@@ -1931,3 +1931,126 @@ class TestSplitGridPickStability:
         states["sensor.mix_export_to_grid"] = _state(0, device_class="power")
         reader.read_power()
         assert reader._split_grid_discovery["import"] == "sensor.mix_import_from_grid"
+
+
+# ════════════════════════════════════════════
+# #461 follow-up: manual grid override validation + observe-only sign audit
+# ════════════════════════════════════════════
+
+class TestManualGridAudit:
+    """When grid_import/export_power_entity are set explicitly, all sign
+    auto-detection is bypassed — a swapped / one-sided / wrong-kind config
+    yields a statically inverted grid with zero feedback (RienduPre's #461
+    shape: explicit entities configured, no discovery logs, grid shows
+    export while importing). The audit compares the manual-computed sign
+    against the Energy Dashboard counters and warns on contradiction."""
+
+    def _reader(self, manual_import, manual_export, states):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar",
+            grid_import_power=None,
+            grid_import_energy="sensor.grid_import_kwh",
+            grid_export_energy="sensor.grid_export_kwh",
+            battery_power=None,
+        )
+        extra = {}
+        if manual_import:
+            extra["grid_import_power_entity"] = manual_import
+        if manual_export:
+            extra["grid_export_power_entity"] = manual_export
+        reader = _make_reader_with_states(hass, states, ed, extra_config=extra)
+        return reader
+
+    def test_swapped_manual_entities_flag_mismatch(self, caplog):
+        """Physically importing 1500 W with the two fields swapped → SEM
+        computes +1500 (export) while the import counter grows. Five
+        consecutive contradictions set the mismatch flag + WARNING."""
+        states = {
+            "sensor.solar": _state(0),
+            "sensor.real_import": _state(1500, device_class="power"),
+            "sensor.real_export": _state(0, device_class="power"),
+            "sensor.grid_import_kwh": _state(100.0, unit="kWh"),
+            "sensor.grid_export_kwh": _state(50.0, unit="kWh"),
+        }
+        # User swapped the roles: import field → the export meter, etc.
+        reader = self._reader("sensor.real_export", "sensor.real_import", states)
+
+        for cycle in range(7):
+            states["sensor.grid_import_kwh"] = _state(100.0 + 0.1 * cycle, unit="kWh")
+            power = reader.read_power()
+            assert power.grid_power == 1500  # statically inverted
+
+        assert reader._manual_grid_mismatch is True
+        assert "SWAPPED" in caplog.text
+        assert "sensor.real_export" in caplog.text
+
+    def test_correct_manual_entities_stay_clean(self):
+        states = {
+            "sensor.solar": _state(0),
+            "sensor.real_import": _state(1500, device_class="power"),
+            "sensor.real_export": _state(0, device_class="power"),
+            "sensor.grid_import_kwh": _state(100.0, unit="kWh"),
+            "sensor.grid_export_kwh": _state(50.0, unit="kWh"),
+        }
+        reader = self._reader("sensor.real_import", "sensor.real_export", states)
+
+        for cycle in range(7):
+            states["sensor.grid_import_kwh"] = _state(100.0 + 0.1 * cycle, unit="kWh")
+            power = reader.read_power()
+            assert power.grid_power == -1500  # SEM convention: negative = import
+
+        assert reader._manual_grid_mismatch is False
+        assert reader._manual_grid_mismatch_votes == 0
+
+    def test_mismatch_clears_when_agreement_returns(self):
+        """After the user fixes the swap (counters and manual sign agree
+        again), the flag clears."""
+        states = {
+            "sensor.solar": _state(0),
+            "sensor.real_import": _state(1500, device_class="power"),
+            "sensor.real_export": _state(0, device_class="power"),
+            "sensor.grid_import_kwh": _state(100.0, unit="kWh"),
+            "sensor.grid_export_kwh": _state(50.0, unit="kWh"),
+        }
+        reader = self._reader("sensor.real_export", "sensor.real_import", states)
+        for cycle in range(7):
+            states["sensor.grid_import_kwh"] = _state(100.0 + 0.1 * cycle, unit="kWh")
+            reader.read_power()
+        assert reader._manual_grid_mismatch is True
+
+        # Physical flow reverses to genuine export: the export counter now
+        # grows, matching the (still-positive) manual sign — agreement on
+        # the next judged cycle clears the flag.
+        for cycle in range(2):
+            states["sensor.grid_export_kwh"] = _state(50.0 + 0.1 * (cycle + 1), unit="kWh")
+            reader.read_power()
+        assert reader._manual_grid_mismatch is False
+
+    def test_energy_counter_in_power_field_warns(self, caplog):
+        """A kWh counter configured as a manual POWER entity is flagged."""
+        states = {
+            "sensor.solar": _state(0),
+            "sensor.import_counter": _state(5432.1, unit="kWh", device_class="energy"),
+            "sensor.real_export": _state(0, device_class="power"),
+            "sensor.grid_import_kwh": _state(100.0, unit="kWh"),
+            "sensor.grid_export_kwh": _state(50.0, unit="kWh"),
+        }
+        reader = self._reader("sensor.import_counter", "sensor.real_export", states)
+        reader.read_power()
+        assert "ENERGY" in caplog.text
+        assert "sensor.import_counter" in caplog.text
+
+    def test_one_sided_manual_config_warns(self, caplog):
+        """Only one manual entity while both flow counters exist → the
+        missing side reads a hard 0 W and that direction can never show."""
+        states = {
+            "sensor.solar": _state(0),
+            "sensor.real_export": _state(800, device_class="power"),
+            "sensor.grid_import_kwh": _state(100.0, unit="kWh"),
+            "sensor.grid_export_kwh": _state(50.0, unit="kWh"),
+        }
+        reader = self._reader(None, "sensor.real_export", states)
+        power = reader.read_power()
+        assert power.grid_power == 800  # permanently one-signed
+        assert "Only one manual grid power entity" in caplog.text

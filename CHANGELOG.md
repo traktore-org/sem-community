@@ -11,7 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased]
+# [1.7.3-beta.7] - 10.06.2026
+
+## 🔎 Manual grid override validation + sign audit (#461 follow-up)
+
+v1.7.3-beta.6's pick-stability fix addressed the auto-discovery path — but an install with `grid_import_power_entity` / `grid_export_power_entity` set explicitly bypasses ALL sign machinery, so a swapped, one-sided, or wrong-kind (energy counter as power sensor) configuration produces a statically inverted grid with zero feedback. Exactly the verified #461 shape: explicit entities configured, no discovery log lines, grid shows export while importing, house consumption 0, surplus invisible to every controller.
+
+### 🛠️ Fixes
+
+- **Manual grid config validation** (warn-once): an ENERGY counter (kWh) configured in a POWER field; only one side configured while the Energy Dashboard tracks both flows (the missing side reads a hard 0 W — "always exporting")
+- **Observe-only sign audit**: the manual-computed grid sign is cross-checked against the Energy Dashboard import/export counters every cycle; 5 consecutive contradictions log a WARNING naming both configured entities ("most likely SWAPPED") and set `diag_grid_manual_mismatch` in the diagnostics — SEM never silently overrides manual config, it makes the misconfiguration loud
+- Counter-reset and ambiguous-delta cycles are excluded from the audit (same guards as the autodetect path)
 
 ## 🧰 Robustness batch (#476, part 1)
 
