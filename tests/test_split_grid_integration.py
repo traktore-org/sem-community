@@ -2054,3 +2054,42 @@ class TestManualGridAudit:
         power = reader.read_power()
         assert power.grid_power == 800  # permanently one-signed
         assert "Only one manual grid power entity" in caplog.text
+
+    def test_dual_tariff_counters_are_summed(self, caplog):
+        """NL DSMR meters split each direction into tarief 1/2 counters that
+        can move in different hours. The audit sums the LISTS, so a swap is
+        still caught when only the tarief-2 counter is moving."""
+        states = {
+            "sensor.solar": _state(0),
+            "sensor.real_import": _state(1500, device_class="power"),
+            "sensor.real_export": _state(0, device_class="power"),
+            "sensor.import_t1": _state(100.0, unit="kWh"),
+            "sensor.import_t2": _state(200.0, unit="kWh"),
+            "sensor.export_t1": _state(50.0, unit="kWh"),
+            "sensor.export_t2": _state(30.0, unit="kWh"),
+        }
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.solar",
+            grid_import_power=None,
+            grid_import_energy="sensor.import_t1",
+            grid_export_energy="sensor.export_t1",
+            battery_power=None,
+        )
+        ed.grid_import_energy_list = ["sensor.import_t1", "sensor.import_t2"]
+        ed.grid_export_energy_list = ["sensor.export_t1", "sensor.export_t2"]
+        # Swapped manual fields, as in the two-counter base case.
+        reader = _make_reader_with_states(
+            hass, states, ed,
+            extra_config={
+                "grid_import_power_entity": "sensor.real_export",
+                "grid_export_power_entity": "sensor.real_import",
+            },
+        )
+
+        for cycle in range(7):
+            # Only the tarief-2 import counter moves (peak hours).
+            states["sensor.import_t2"] = _state(200.0 + 0.1 * cycle, unit="kWh")
+            reader.read_power()
+
+        assert reader._manual_grid_mismatch is True

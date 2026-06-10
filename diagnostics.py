@@ -42,6 +42,23 @@ async def _get_recent_sem_logs(hass: HomeAssistant) -> list[str]:
     raises: a failure here must not break the rest of the diagnostics
     dump.
     """
+    # Preferred source: the in-memory ring buffer attached at setup
+    # (utils/log_buffer.py). Works on EVERY install type — Supervisor
+    # routes HA's log to journald, so there is no flat file to tail and
+    # the whole #461/#462 triage ran blind on recent_logs. Type-guarded:
+    # tests run with MagicMock hass objects whose ``data.get`` returns a
+    # truthy mock.
+    from .utils.log_buffer import SEMLogBuffer
+    buffer = hass.data.get(f"{DOMAIN}_log_buffer")
+    if isinstance(buffer, SEMLogBuffer):
+        try:
+            lines = buffer.get_lines(_LOG_MAX_LINES)
+            if lines:
+                return lines
+            return ["<no SEM log records captured since startup>"]
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("Log buffer read failed: %s", e)
+
     try:
         log_path = Path(hass.config.config_dir) / "home-assistant.log"
         if not log_path.exists():

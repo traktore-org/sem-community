@@ -535,6 +535,10 @@ class CurrentControlDevice(ControllableDevice):
         # whether to skip a same-value write (recent) or force a heartbeat
         # refresh (interval elapsed).
         self._last_write_at: float = 0.0
+        # #462 follow-up: consecutive set-current failures → Repair issue
+        # at 3 (cleared on the next successful write).
+        self._actuation_failures: int = 0
+        self._actuation_repair_raised: bool = False
         self._session_active: bool = False
         self._min_power_change_interval = min_power_change_interval
 
@@ -648,7 +652,22 @@ class CurrentControlDevice(ControllableDevice):
             return self._status.current_consumption_w
 
         try:
-            if self.charger_service:
+            if self.charger_service == "number.set_value":
+                # Misconfigured-but-recoverable shape (#462, RienduPre):
+                # ``number.set_value`` configured as the charger SERVICE.
+                # Its schema takes ``value`` + ``entity_id`` — sending the
+                # per-integration param name produced
+                # "extra keys not allowed @ data['current']" on EVERY
+                # command, so the charger never received a single
+                # setpoint (including the 0 A for off-mode). Map it to
+                # the number-entity write it was meant to be.
+                target = self.current_entity_id or self.charger_service_entity_id
+                await self.hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": target, "value": current},
+                    blocking=True,
+                )
+            elif self.charger_service:
                 # Service-based control — param name varies per integration (#82)
                 domain, service = self.charger_service.split(".", 1)
                 service_data = {self.service_param_name: current}
@@ -671,6 +690,8 @@ class CurrentControlDevice(ControllableDevice):
                     blocking=True,
                 )
 
+            self._clear_actuation_failure()
+
             self._current_setpoint = current
             self._last_write_at = now  # #392: heartbeat tracker
             self._record_power_change()
@@ -691,7 +712,44 @@ class CurrentControlDevice(ControllableDevice):
             _LOGGER.error("Failed to set current on %s: %s", self.name, e)
             self._status.state = DeviceState.ERROR
             self._status.error_message = str(e)
+            self._record_actuation_failure(e)
             return self._status.current_consumption_w
+
+    def _record_actuation_failure(self, error: Exception) -> None:
+        """Track consecutive set-current failures; raise a Repair at 3.
+
+        RienduPre's #462 install failed EVERY current command for days
+        with the evidence buried in per-cycle ERROR log lines — the user
+        saw "SEM doesn't react" with no actionable surface. Three
+        consecutive failures now raise a user-visible Repair naming the
+        device and the error; it clears on the next successful write.
+        """
+        self._actuation_failures += 1
+        if self._actuation_failures < 3 or self._actuation_repair_raised:
+            return
+        self._actuation_repair_raised = True
+        try:
+            from ..coordinator import repair_issues as _ri
+            _ri.raise_charger_actuation_failed(
+                self.hass, self.device_id,
+                name=self.name, error=str(error),
+            )
+        except Exception as exc:  # noqa: BLE001 — never fail the cycle over a repair
+            _LOGGER.debug("actuation-failure repair raise failed: %s", exc)
+
+    def _clear_actuation_failure(self) -> None:
+        """Reset the failure streak; clear the Repair after a good write."""
+        if self._actuation_failures == 0 and not self._actuation_repair_raised:
+            return
+        self._actuation_failures = 0
+        if not self._actuation_repair_raised:
+            return
+        self._actuation_repair_raised = False
+        try:
+            from ..coordinator import repair_issues as _ri
+            _ri.clear_charger_actuation_failed(self.hass, self.device_id)
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("actuation-failure repair clear failed: %s", exc)
 
     async def start_session(self, energy_target_kwh: float = 0) -> None:
         """Start a charging session.

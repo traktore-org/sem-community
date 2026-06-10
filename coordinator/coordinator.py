@@ -695,17 +695,27 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Hold window exhausted — accept the zero as real.
             self._home_hold_count = held + 1
 
-    @staticmethod
-    def _get_version() -> str:
+    # Class-level cache — the manifest never changes within a run, but
+    # _get_version() used to re-open it on EVERY cycle (diag_version),
+    # flagged live as "Detected blocking call to open" (#476 follow-up).
+    # Setup warms the cache via async_add_executor_job so the single
+    # file read happens off the event loop.
+    _version_cache: str | None = None
+
+    @classmethod
+    def _get_version(cls) -> str:
         """Read version from manifest.json (single source of truth with HACS)."""
+        if cls._version_cache is not None:
+            return cls._version_cache
         import json as _json
         import os
         manifest = os.path.join(os.path.dirname(os.path.dirname(__file__)), "manifest.json")
         try:
             with open(manifest) as f:
-                return _json.load(f).get("version", "0.0.0")
+                cls._version_cache = _json.load(f).get("version", "0.0.0")
         except (OSError, ValueError):
-            return "0.0.0"
+            cls._version_cache = "0.0.0"
+        return cls._version_cache
 
     async def async_initialize_energy_dashboard(self, quiet: bool = False) -> bool:
         """Initialize sensors from HA Energy Dashboard.
@@ -1582,7 +1592,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             cid, per_mode, decision.intent.value,
                             decision.commanded_amps, decision.budget_w, decision.reason,
                         )
-                        charging_context.charging_strategy = decision.reason
+                        # Fleet-level strategy display: only the PRIMARY
+                        # charger may write it, and it writes BOTH fields.
+                        # Pre-fix every loop iteration overwrote
+                        # ``charging_strategy`` (last charger won) while
+                        # ``charging_strategy_reason`` kept the primary's
+                        # value — RienduPre's dump showed strategy from
+                        # charger 2 ("always_max …") next to reason from
+                        # charger 1 ("off mode …"). Per-charger detail
+                        # lives in ``charger_<id>_charging_state``.
+                        _fleet_primary_cid = (
+                            (self.config.get("ev_chargers") or [{}])[0].get("id")
+                            or "ev_charger"
+                        )
+                        if cid == _fleet_primary_cid:
+                            charging_context.charging_strategy = decision.reason
+                            charging_context.charging_strategy_reason = decision.reason
                         # Reflect decision into the effective_state sensor
                         # (for dashboards that read sem_charging_state).
                         #
