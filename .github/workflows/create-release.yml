@@ -1,0 +1,73 @@
+name: Create Release
+
+# Manual release publisher. Creates the tag at the dispatched ref and
+# publishes the GitHub release in one step — the path used when a release
+# is cut from an environment that has no direct tag-push rights (e.g. a
+# Claude Code remote session, which is scoped to its own branch).
+#
+# Note: releases created with the default GITHUB_TOKEN do NOT fire the
+# `on: release published` validation workflow (GitHub suppresses
+# token-triggered chains). The full test suite gates the merge to
+# develop, so the release-side run is belt-and-braces only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create (e.g. v1.7.3-beta.6) — must match manifest.json version on the dispatched ref"
+        required: true
+        type: string
+      title:
+        description: "Release title (defaults to the tag name)"
+        required: false
+        type: string
+      notes:
+        description: "Release notes (markdown). Empty = GitHub auto-generated notes."
+        required: false
+        type: string
+      prerelease:
+        description: "Mark as pre-release"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    name: Tag + publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify manifest version matches tag
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          MANIFEST=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          echo "Tag: $TAG — Manifest: v$MANIFEST"
+          if [ "v$MANIFEST" != "$TAG" ]; then
+            echo "::error::Tag ($TAG) does not match manifest version (v$MANIFEST) on the dispatched ref"
+            exit 1
+          fi
+
+      - name: Create release (creates the tag at the dispatched ref)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          TITLE: ${{ inputs.title }}
+          NOTES: ${{ inputs.notes }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          ARGS=(--target "$GITHUB_SHA" --title "${TITLE:-$TAG}")
+          if [ "$PRERELEASE" = "true" ]; then
+            ARGS+=(--prerelease)
+          fi
+          if [ -n "$NOTES" ]; then
+            printf '%s' "$NOTES" > /tmp/notes.md
+            ARGS+=(--notes-file /tmp/notes.md)
+          else
+            ARGS+=(--generate-notes)
+          fi
+          gh release create "$TAG" "${ARGS[@]}"
