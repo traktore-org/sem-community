@@ -246,10 +246,20 @@ def _merge_ev_chargers_by_id(
             base.update(inc)
             merged.append(base)
             seen_ids.add(cid)
-        else:
+        elif cid:
             merged.append(dict(inc))
-            if cid:
-                seen_ids.add(cid)
+            seen_ids.add(cid)
+        else:
+            # Id-less entries are untargetable ghosts: per-charger writes
+            # match on ``id``, and at registration a ghost gets assigned a
+            # positional ``ev_charger_<idx>`` id that can collide with a
+            # real sibling. The Config card's nested editors used to
+            # materialize such entries (``newChargers[idx] = {}``) — drop
+            # them instead of appending.
+            _LOGGER.warning(
+                "Dropping id-less ev_chargers entry from merge: %s",
+                dict(inc),
+            )
     # Preserve existing chargers not mentioned in the incoming list —
     # appended after the incoming-derived entries to keep the result
     # deterministic.
@@ -257,6 +267,37 @@ def _merge_ev_chargers_by_id(
         if cid not in seen_ids:
             merged.append(c)
     return merged
+
+
+def _heal_ev_chargers_options(
+    data_chargers: list | None, opts_chargers: list | None,
+) -> list | None:
+    """Reconcile a poisoned ``entry.options.ev_chargers`` against entry.data.
+
+    v1.7.2 through v1.7.3-beta.3 builds could corrupt the options-side
+    charger list in several ways: the naive set_option full-replace from a
+    stale Config-card cache (#464), the pre-#469 ``[]`` clobber in the
+    per-charger select/number writers, the pre-beta.4 smart-merge
+    fall-through, and the setup-time auto-discovery reseed that plants a
+    single ``id: "ev_charger"`` entry when the merged list comes up empty.
+    Once poisoned, the merge ``{**data, **options}`` hides data-side
+    chargers forever and per-charger writes for the missing ids silently
+    no-op — the "charger 2 does nothing" symptom (#462/#464).
+
+    Heals by union-by-id: options-side fields win per charger, chargers
+    that only exist in ``entry.data`` are restored, id-less ghost entries
+    are dropped. Returns the healed list, or ``None`` when the stored list
+    is already complete (no write needed). Pure function — tested in
+    ``tests/test_ev_chargers_storage_heal.py``.
+    """
+    cleaned = [
+        c for c in (opts_chargers or [])
+        if isinstance(c, dict) and c.get("id")
+    ]
+    healed = _merge_ev_chargers_by_id(data_chargers or [], cleaned)
+    if healed == list(opts_chargers or []):
+        return None
+    return healed
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
@@ -970,6 +1011,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
     # Idempotent; only acts while the legacy key is present.
     _migrate_limit_surplus_to_max(hass, entry)
+
+    # Heal a poisoned ``options.ev_chargers`` list (#462/#464 follow-up).
+    # v1.7.2..v1.7.3-beta.3 builds could leave options with a partial or
+    # ghost-ridden charger list that shadows entry.data on the merge below;
+    # writer fixes alone don't repair already-corrupted storage. Idempotent:
+    # after one healing write the reconcile returns None on every later boot.
+    if "ev_chargers" in (entry.options or {}):
+        _healed = _heal_ev_chargers_options(
+            (entry.data or {}).get("ev_chargers"),
+            entry.options.get("ev_chargers"),
+        )
+        if _healed is not None:
+            _LOGGER.warning(
+                "Healed ev_chargers options list: stored ids %s -> healed ids %s "
+                "(data-side ids: %s). See #462/#464.",
+                [c.get("id") for c in (entry.options.get("ev_chargers") or [])
+                 if isinstance(c, dict)],
+                [c.get("id") for c in _healed],
+                [c.get("id") for c in ((entry.data or {}).get("ev_chargers") or [])
+                 if isinstance(c, dict)],
+            )
+            hass.config_entries.async_update_entry(
+                entry, options={**entry.options, "ev_chargers": _healed},
+            )
 
     # Remove orphaned per-charger set-default button entities — the
     # button itself was retired in v1.7.0-beta.11 (#355 follow-up).
@@ -3247,17 +3312,42 @@ async def _async_register_phase_services(
         except Exception:  # noqa: BLE001
             pass
 
-        return {
-            "section": section,
-            "payload": {
-                "version": sem_version,
-                "entry_id": target.entry_id,
-                "entry_version": f"{target.version}.{getattr(target, 'minor_version', 0)}",
-                "config": config,
-                "state": state,
-                "recent_logs": recent_logs,
-            },
+        payload = {
+            "version": sem_version,
+            "entry_id": target.entry_id,
+            "entry_version": f"{target.version}.{getattr(target, 'minor_version', 0)}",
+            "config": config,
+            "state": state,
+            "recent_logs": recent_logs,
         }
+
+        # ev_chargers storage split (#462/#464 follow-up). The merged
+        # ``config`` block hides whether a charger entry lives in
+        # entry.data or entry.options — the load-bearing fact when a
+        # per-charger write silently no-ops because the options-side
+        # list is partial. Surface both sides so the next triage round
+        # doesn't need .storage access.
+        if section in ("all", "ev_chargers"):
+            def _chargers_brief(side: dict | None):
+                lst = (side or {}).get("ev_chargers")
+                if not isinstance(lst, list):
+                    return "absent"
+                return [
+                    {
+                        "id": c.get("id"),
+                        "name": c.get("name"),
+                        "charge_mode": c.get("charge_mode"),
+                    }
+                    if isinstance(c, dict)
+                    else {"invalid_entry": type(c).__name__}
+                    for c in lst
+                ]
+            payload["ev_chargers_storage_split"] = {
+                "data": _chargers_brief(target.data),
+                "options": _chargers_brief(target.options),
+            }
+
+        return {"section": section, "payload": payload}
 
     hass.services.async_register(
         DOMAIN,
