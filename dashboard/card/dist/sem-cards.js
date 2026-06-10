@@ -5866,19 +5866,21 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${this._t(t)}
             </button>
         `}_renderOverview(t){const e=!!this._hass?.states["sensor.sem_charging_state"],i=this._chargersList().length,s=this._bin("heat_pump_registered");return W`
-            <div class="overview-grid">
-                <div class="overview-item">
-                    <ha-icon icon="mdi:flash" style="color:#ff9800"></ha-icon>
-                    <span>${this._t("config_overview_energy_dashboard")}</span>
-                    <span class="overview-status ${e?"ok":"warn"}">${e?"✓":"!"}</span>
+            <div class="chips">
+                <div class="chip">
+                    <ha-icon icon="mdi:flash" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
+                    <div class="chip-label">${this._t("config_overview_energy_dashboard")}</div>
+                    <div class="chip-value ${e?"c-ok":"c-warn"}">${e?"✓":"!"}</div>
                 </div>
-                <div class="overview-item">
-                    <ha-icon icon="mdi:ev-station" style="color:#5BC8D8"></ha-icon>
-                    <span>${this._t("config_overview_chargers")}: ${i}</span>
+                <div class="chip">
+                    <ha-icon icon="mdi:ev-station" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
+                    <div class="chip-label">${this._t("config_overview_chargers")}</div>
+                    <div class="chip-value" style="color:#5BC8D8">${i}</div>
                 </div>
-                <div class="overview-item">
-                    <ha-icon icon="mdi:heat-pump" style="color:#4db6ac"></ha-icon>
-                    <span>${this._t("heat_pump_title")}: ${s?this._t("configured"):this._t("not_configured")}</span>
+                <div class="chip">
+                    <ha-icon icon="mdi:heat-pump" style="--mdc-icon-size:16px;color:#4db6ac"></ha-icon>
+                    <div class="chip-label">${this._t("heat_pump_title")}</div>
+                    <div class="chip-value" style="color:#4db6ac">${s?this._t("configured"):this._t("not_configured")}</div>
                 </div>
             </div>
             <div class="overview-help">${this._t("config_overview_help")}</div>
@@ -6188,9 +6190,10 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             ${this._renderStepper("number.sem_minimum_solar_power","min_solar_power",t,"config_help_min_solar_power")}
         `}_renderSectionHeader(t,e){const i=this._collapsed[t.id]?"rotate(-90deg)":"rotate(0deg)",s=t.subtitleFn(this),r="overview"===t.id?"all":t.id;return W`
             <div class="section-header" @click=${()=>this._toggleSection(t.id)}>
+                <div class="section-dot" style="background:${t.color}"></div>
                 <ha-icon icon="${t.icon}" style="--mdc-icon-size:20px;color:${t.color}"></ha-icon>
                 <span class="section-title-text">${this._t(t.titleKey)}</span>
-                <span class="section-subtitle">${s}</span>
+                <span class="section-subtitle" style="color:${s?t.color:""}">${s}</span>
                 <sem-diagnose-button
                     .hass=${this._hass}
                     section="${r}"
@@ -6214,10 +6217,9 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             <style>
                 :host { display: block; contain: layout style paint; }
                 .wrap {
-                    padding: 16px;
-                    background:
-                        radial-gradient(ellipse 70% 60% at 50% 25%, rgba(141,200,146,0.06) 0%, transparent 100%),
-                        radial-gradient(circle at 2px 2px, ${t.dotColor} 0.7px, transparent 0.7px);
+                    padding: 16px 20px;
+                    position: relative;
+                    background: ${ut(t,"#8DC892")};
                     background-size: 100% 100%, 50px 50px;
                     font-family: 'Segoe UI','Roboto',sans-serif;
                     color: var(--primary-text-color, ${t.text});
@@ -6239,13 +6241,16 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 .help-toggle:hover { opacity: 1; }
                 .help-toggle.on { color: ${i}; opacity: 1; }
 
+                /* ── Sections: same surface shape as the battery card's
+                       per-battery sections (.battery-section) so the
+                       Config tab reads like the Battery tab. ── */
                 .section {
-                    margin-bottom: 10px;
-                    border-radius: 14px;
+                    margin-bottom: 12px;
+                    border-radius: 12px;
                     background: ${t.surface};
                     border: 1px solid ${t.surfaceBorder};
                     overflow: hidden;
-                    transition: border-color 0.2s, box-shadow 0.2s;
+                    transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.2s;
                     position: relative;
                 }
                 .section.expanded {
@@ -6254,18 +6259,25 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
                 .section:hover { border-color: ${e?"rgba(255,255,255,0.18)":"rgba(0,0,0,0.12)"}; }
                 .section-header {
-                    display: flex; align-items: center; gap: 10px;
-                    padding: 13px 14px; cursor: pointer; user-select: none;
+                    display: flex; align-items: center; gap: 8px;
+                    padding: 12px 14px; cursor: pointer; user-select: none;
                     transition: background 0.15s;
                 }
                 .section.expanded .section-header {
                     background: color-mix(in srgb, var(--section-accent) 6%, transparent);
                 }
+                .section-dot {
+                    width: 8px; height: 8px;
+                    border-radius: 50%;
+                    flex-shrink: 0;
+                }
                 .section-title-text {
-                    font-size: 15px; font-weight: 600; white-space: nowrap; letter-spacing: 0.1px;
+                    font-size: 0.95em; font-weight: 600; white-space: nowrap;
+                    color: var(--primary-text-color, ${t.text});
                 }
                 .section-subtitle {
-                    flex: 1; font-size: 13px;
+                    flex: 1; font-size: 0.75em; font-weight: 500;
+                    text-transform: uppercase; letter-spacing: 0.05em;
                     color: var(--secondary-text-color, ${t.textSec});
                     text-align: right; white-space: nowrap;
                     overflow: hidden; text-overflow: ellipsis; margin-right: 4px;
@@ -6279,13 +6291,24 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 .section-body { padding: 0 14px 14px; }
                 .section-footer { display: flex; justify-content: flex-end; margin-top: 10px; }
 
-                /* Overview tiles */
-                .overview-grid { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; }
-                .overview-item { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 0; }
-                .overview-item span { flex: 1; }
-                .overview-status { font-weight: 700; font-size: 14px; }
-                .overview-status.ok { color: #8DC892; }
-                .overview-status.warn { color: #ff9800; }
+                /* Overview chips — same shape as the battery card's
+                   daily chips (.chip / .chip-label / .chip-value). */
+                .chips { display: flex; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
+                .chip {
+                    flex: 1; min-width: 80px;
+                    background: var(--secondary-background-color, ${t.surface});
+                    border: 1px solid var(--divider-color, ${t.surfaceBorder});
+                    border-radius: 10px; padding: 8px 10px; text-align: center;
+                    transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1);
+                }
+                .chip:hover { border-color: var(--divider-color, ${t.surfaceHover}); }
+                .chip-label {
+                    font-size: 10px; color: var(--secondary-text-color, ${t.textSec});
+                    font-weight: 500; letter-spacing: 0.3px; margin: 3px 0;
+                }
+                .chip-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+                .c-ok { color: #8DC892; }
+                .c-warn { color: #ff9800; }
                 .overview-help { font-size: 12px; color: var(--secondary-text-color, ${t.textSec}); padding: 4px 0; }
                 .overview-actions { display: flex; gap: 8px; margin-top: 10px; }
 
@@ -6335,9 +6358,10 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 .stepper-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
                 @media (max-width: 480px) { .stepper-pair { grid-template-columns: 1fr; } }
                 .readonly-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; }
+                .readonly-row .ctrl-label { font-size: 12px; color: var(--secondary-text-color, ${t.textSec}); font-weight: 500; }
                 .readonly-value {
-                    font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;
-                    color: var(--secondary-text-color, ${t.textSec});
+                    font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
+                    color: var(--primary-text-color, ${t.text});
                 }
                 .tariff-rate-row { gap: 8px; border-bottom: 1px solid ${t.surfaceBorder}; margin-bottom: 8px; padding-bottom: 10px; }
                 .tariff-rate-value { font-size: 15px; font-weight: 700; color: ${t.text}; }
@@ -6434,18 +6458,20 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
                 .ha-settings-btn:hover { background: ${t.surfaceHover}; border-color: ${i}; }
             </style>
-            <div class="wrap">
-                <div class="card-help-bar">
-                    <ha-icon
-                        class="help-toggle ${this._showHelp?"on":""}"
-                        icon="${this._showHelp?"mdi:help-circle":"mdi:help-circle-outline"}"
-                        title="${this._t("zone_help_toggle")}"
-                        @click=${()=>this._toggleHelp()}
-                        style="--mdc-icon-size:18px"
-                    ></ha-icon>
+            <ha-card>
+                <div class="wrap">
+                    <div class="card-help-bar">
+                        <ha-icon
+                            class="help-toggle ${this._showHelp?"on":""}"
+                            icon="${this._showHelp?"mdi:help-circle":"mdi:help-circle-outline"}"
+                            title="${this._t("zone_help_toggle")}"
+                            @click=${()=>this._toggleHelp()}
+                            style="--mdc-icon-size:18px"
+                        ></ha-icon>
+                    </div>
+                    ${ze.map(e=>this._renderSection(e,s[e.id],t))}
                 </div>
-                ${ze.map(e=>this._renderSection(e,s[e.id],t))}
-            </div>
+            </ha-card>
         `}getCardSize(){return 12}static getStubConfig(){return{entity_prefix:"sensor.sem_"}}},{type:"custom:sem-config-card",name:"SEM Configuration Card",description:"In-dashboard SEM configuration surface (replaces the Settings → SEM → Configure flow for most users)",preview:!1});const De="sem-config-tab-introduced-v1";yt("sem-onboarding-banner",class extends xt{static get watchedEntities(){return[]}static get properties(){return{...super.properties,_dismissed:{state:!0}}}constructor(){super(),this._dismissed=this._isDismissed()}setConfig(t){super.setConfig(t),this._configPath=t.config_tab_path||"/config"}_isDismissed(){try{return"1"===localStorage.getItem(De)}catch(t){return!1}}_dismiss(){try{localStorage.setItem(De,"1")}catch(t){}this._dismissed=!0}_openConfig(){const t=window.location.pathname.split("/").filter(Boolean);if(t.length>=2){const e="/"+t.slice(0,-1).join("/");window.history.pushState(null,"",`${e}/config`)}else window.history.pushState(null,"",this._configPath);window.dispatchEvent(new Event("location-changed",{composed:!0})),this._dismiss()}render(){if(this._dismissed)return K;if(!this._config)return K;const t=this._theme(),e="#8DC892";return W`
             <style>
                 :host { display: block; }
