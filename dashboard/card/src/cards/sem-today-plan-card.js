@@ -67,9 +67,38 @@ class SEMTodayPlanCard extends SEMLitBase {
     get hass() { return this._hass; }
 
     _hm(iso) {
+        // Date-aware time formatter. Bug pre-this-fix: stripped to HH:MM
+        // only — a tomorrow event for the "Night charging window opens"
+        // at 21:33 rendered identically to a past event from today at
+        // 21:33. Confusing once today's window is already open and the
+        // backend bumps ``night_start`` to the next day's window.
+        //
+        // Today: ``21:33``
+        // Tomorrow: ``Tomorrow 21:33`` (localized via ``_t('tomorrow')``)
+        // Further out: ``Wed 21:33`` (HA's locale weekday short)
         if (!iso) return '—';
-        try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
-        catch (e) { return '—'; }
+        try {
+            const d = new Date(iso);
+            const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            // Compare calendar days only — ignore time-of-day.
+            const dDay = d.toDateString();
+            const today = new Date();
+            if (dDay === today.toDateString()) return time;
+
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            if (dDay === tomorrow.toDateString()) {
+                const label = this._t('tomorrow') || 'Tomorrow';
+                return `${label} ${time}`;
+            }
+
+            // 2+ days out — show weekday for context.
+            const weekday = d.toLocaleDateString([], { weekday: 'short' });
+            return `${weekday} ${time}`;
+        } catch (e) {
+            return '—';
+        }
     }
 
     _format(key, values) {
