@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased]
+# [1.7.3-beta.8] - 10.06.2026
 
 ## 🔌 Actuation hardening + triage surfaces (#462 follow-up batch)
 
