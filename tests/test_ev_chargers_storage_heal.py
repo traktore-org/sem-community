@@ -214,6 +214,56 @@ class TestPerChargerWriterRecovery:
         assert "missing from the stored ev_chargers list" in caplog.text
 
     @pytest.mark.asyncio
+    async def test_time_write_recovers_charger_missing_from_options(self, caplog):
+        """time.py was missed by the original #469 patch round — it still
+        clobbered ev_chargers to [] when options lacked the key and silently
+        no-op'd on a partial list. Same contract as select/number now."""
+        from datetime import time as dt_time
+        from homeassistant.components.time import TimeEntityDescription
+        from custom_components.solar_energy_management.time import SEMPerChargerTime
+
+        coord, entry = _poisoned_fixtures()
+        desc = TimeEntityDescription(key="charger_ev_charger_1_target_time")
+        ent = SEMPerChargerTime(
+            coord, desc, entry, "ev_charger_1", "ev_target_time", "07:00",
+        )
+        ent.hass = coord.hass = MagicMock()
+        ent.async_write_ha_state = MagicMock()
+
+        await ent.async_set_value(dt_time(6, 30))
+
+        new_options = ent.hass.config_entries.async_update_entry.call_args[1]["options"]
+        by_id = {c["id"]: c for c in new_options["ev_chargers"]}
+        assert by_id["ev_charger_1"]["ev_target_time"] == "06:30"
+        assert by_id["ev_charger"]["charge_mode"] == "always_max"
+        assert "missing from the stored ev_chargers list" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_time_write_falls_back_to_entry_data(self):
+        """Options without the ev_chargers key must not be clobbered to []."""
+        from datetime import time as dt_time
+        from homeassistant.components.time import TimeEntityDescription
+        from custom_components.solar_energy_management.time import SEMPerChargerTime
+
+        data = {"ev_chargers": [dict(c) for c in TWO_CHARGERS_DATA]}
+        coord = _mock_coordinator(dict(data))
+        entry = _mock_entry(data, {})
+        desc = TimeEntityDescription(key="charger_ev_charger_target_time")
+        ent = SEMPerChargerTime(
+            coord, desc, entry, "ev_charger", "ev_target_time", "07:00",
+        )
+        ent.hass = coord.hass = MagicMock()
+        ent.async_write_ha_state = MagicMock()
+
+        await ent.async_set_value(dt_time(5, 45))
+
+        new_options = ent.hass.config_entries.async_update_entry.call_args[1]["options"]
+        by_id = {c["id"]: c for c in new_options["ev_chargers"]}
+        # both chargers survived the write — no [] clobber
+        assert set(by_id) == {"ev_charger", "ev_charger_1"}
+        assert by_id["ev_charger"]["ev_target_time"] == "05:45"
+
+    @pytest.mark.asyncio
     async def test_select_write_unknown_charger_creates_stub(self):
         """Charger missing from BOTH sides still persists the write under a
         minimal ``{"id": ...}`` stub rather than vanishing."""
