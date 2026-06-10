@@ -1,6 +1,6 @@
 {
-  "tag": "v1.7.3-beta.7",
-  "title": "v1.7.3-beta.7 — manual grid override audit (#461) + #476 robustness batch",
+  "tag": "v1.7.3-beta.8",
+  "title": "v1.7.3-beta.8 — charger actuation hardening + Repair surface + log buffer (#462)",
   "prerelease": true,
-  "notes_file": ".github/release-notes/v1.7.3-beta.7.md"
+  "notes_file": ".github/release-notes/v1.7.3-beta.8.md"
 }
