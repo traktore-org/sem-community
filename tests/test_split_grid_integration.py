@@ -1818,3 +1818,116 @@ class TestSplitGridDiagnostics:
         assert "confidence" in disc
         assert disc["confidence"] in ("same-device", "any-device")
         assert disc["import"] is not None
+
+
+# ════════════════════════════════════════════
+# #461: split-grid pick stability — any-device picks must not flip
+# while the held picks still resolve
+# ════════════════════════════════════════════
+
+class TestSplitGridPickStability:
+    """Any-device discovery re-runs while there's no same-device lock, but
+    fresh picks are only ADOPTED when there's no working pick yet, the new
+    match is a same-device upgrade, or a held pick went unavailable.
+    Unconditional adoption let a flicker in HA's state-list iteration order
+    swap import/export mid-run — inverting the computed grid_power sign
+    (#461, Growatt 'sometimes works, sometimes inverted')."""
+
+    def _reader(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.mix_import_from_grid_today",
+            grid_export_energy="sensor.mix_export_to_grid_today",
+            battery_power=None,
+        )
+        states = {
+            "sensor.growatt_solar_power": _state(3000),
+            "sensor.mix_import_from_grid": _state(500, device_class="power"),
+            "sensor.mix_export_to_grid": _state(0, device_class="power"),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        return reader, states
+
+    def test_held_picks_survive_flipped_rediscovery(self):
+        """A re-discovery returning swapped roles must NOT be adopted."""
+        reader, states = self._reader()
+        reader.read_power()
+        disc = reader._split_grid_discovery
+        first = (disc["import"], disc["export"])
+        assert disc["import"] is not None
+        disc["confidence"] = "any-device"  # ensure the re-discovery branch runs
+
+        with patch.object(
+            reader, "_discover_split_grid_power",
+            return_value=(
+                "sensor.mix_export_to_grid", "sensor.mix_import_from_grid",
+                "any-device",
+            ),
+        ):
+            reader.read_power()
+
+        assert (disc["import"], disc["export"]) == first, (
+            "#461 regression: a state-list flicker swapped the split-grid "
+            "import/export picks mid-run even though the held picks still "
+            "resolved — this inverts the computed grid sign."
+        )
+
+    def test_same_device_upgrade_is_adopted(self):
+        """A same-device match is deterministic — upgrade is allowed."""
+        reader, states = self._reader()
+        reader.read_power()
+        disc = reader._split_grid_discovery
+        disc["confidence"] = "any-device"
+        states["sensor.meter_import"] = _state(400, device_class="power")
+        states["sensor.meter_export"] = _state(0, device_class="power")
+
+        with patch.object(
+            reader, "_discover_split_grid_power",
+            return_value=("sensor.meter_import", "sensor.meter_export", "same-device"),
+        ):
+            reader.read_power()
+
+        assert disc["import"] == "sensor.meter_import"
+        assert disc["confidence"] == "same-device"
+
+    def test_unavailable_pick_reopens_adoption(self):
+        """When a held pick goes unavailable, re-discovery may adopt anew."""
+        reader, states = self._reader()
+        reader.read_power()
+        disc = reader._split_grid_discovery
+        disc["confidence"] = "any-device"
+        states["sensor.mix_import_from_grid"].state = "unavailable"
+        states["sensor.new_import"] = _state(250, device_class="power")
+        states["sensor.new_export"] = _state(0, device_class="power")
+
+        with patch.object(
+            reader, "_discover_split_grid_power",
+            return_value=("sensor.new_import", "sensor.new_export", "any-device"),
+        ):
+            reader.read_power()
+
+        assert disc["import"] == "sensor.new_import"
+
+    def test_late_loading_meter_still_discovered(self):
+        """#166 contract preserved: with no pick yet, every cycle re-discovers."""
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.mix_import_from_grid_today",
+            grid_export_energy="sensor.mix_export_to_grid_today",
+            battery_power=None,
+        )
+        states = {"sensor.growatt_solar_power": _state(3000)}
+        reader = _make_reader_with_states(hass, states, ed)
+
+        reader.read_power()
+        assert reader._split_grid_discovery["import"] is None
+
+        # Meter loads late — next cycle must pick it up
+        states["sensor.mix_import_from_grid"] = _state(500, device_class="power")
+        states["sensor.mix_export_to_grid"] = _state(0, device_class="power")
+        reader.read_power()
+        assert reader._split_grid_discovery["import"] == "sensor.mix_import_from_grid"

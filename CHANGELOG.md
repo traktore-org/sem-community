@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased]
+
+## 🩹 2026-06-10 review fixes — P1 batch
+
+Top findings from the full-codebase review (the unfixed remainder is tracked in #475 / #476):
+
+### 🛠️ Bug fixes
+
+- **#461 root cause: split-grid pick stability** — any-device split-grid discovery re-ran every cycle and adopted the result unconditionally, so a flicker in HA's state-list iteration order could swap which sensor plays import vs export, inverting the computed `grid_power` sign ("sometimes works, sometimes inverted", Growatt). New adoption gate: held picks win unless there's no pick yet, the new match is a same-device upgrade, or a held pick went unavailable. Late-loading DSMR discovery (#166) preserved
+- **`time.py` per-charger writer hardened** — the deadline writer was missed by the #469 patch round: it still clobbered `ev_chargers` to `[]` when options lacked the key, and silently no-op'd on a partial list. Now identical to the select.py / number.py contract (data fallback + recovery-append + WARNING)
+- **`sem-chart-card` empty-state crash (second instance of the #457 class)** — the card lit-bound `${this._t('loading')}` AND overwrote the same node via `.textContent` in `_showEmpty()`, destroying lit's text part so the next `requestUpdate()` threw and froze the card. Empty-state and canvas visibility are now fully lit-rendered (bundle rebuilt)
+
+### 🧪 Tests
+
+- `TestSplitGridPickStability` (4 tests): flipped re-discovery is not adopted; same-device upgrade is; unavailable pick reopens adoption; late-loading meter still discovered
+- `time.py` recovery + data-fallback contract tests in `test_ev_chargers_storage_heal.py`
+
+---
+
 # [1.7.3-beta.5] - 10.06.2026
 
 ## 🩹 Storage heal for poisoned `options.ev_chargers` (#462/#464 follow-up #3)

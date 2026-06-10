@@ -598,33 +598,38 @@ class SensorReader:
             self._uses_split_grid = True
             disc = self._split_grid_discovery
             if disc["confidence"] != "same-device":
-                # Capture the previous picks BEFORE re-discovery so we can
-                # detect mid-run switches. Any-device confidence re-runs
-                # every cycle so a flicker in HA's state list can flip the
-                # discovered sensor without warning — that's the candidate
+                # Re-discovery runs while we don't hold a same-device lock,
+                # but new ANY-DEVICE picks are only ADOPTED when (a) we have
+                # no working picks yet, (b) the new match is a same-device
+                # upgrade (deterministic), or (c) a current pick has gone
+                # unavailable. Unconditional adoption let a flicker in HA's
+                # state-list iteration order swap which sensor plays import
+                # vs export, flipping the computed grid_power sign — the
                 # root cause for #461 (Growatt sign inversion that
-                # "sometimes works, sometimes inverted"). Logging at
-                # WARNING when the picks change makes the cause visible
-                # in any user-supplied log dump.
+                # "sometimes works, sometimes inverted"). The late-loading
+                # DSMR case (#166) still works: until a pick exists, every
+                # cycle re-discovers; once a pick dies, re-adoption is
+                # allowed again.
                 _prev_imp = disc["import"]
                 _prev_exp = disc["export"]
                 imp, exp, conf = self._discover_split_grid_power(ed)
-                disc["import"] = imp
-                disc["export"] = exp
-                disc["confidence"] = conf
-                if (_prev_imp is not None or _prev_exp is not None) and (
-                    _prev_imp != imp or _prev_exp != exp
-                ):
-                    _LOGGER.warning(
-                        "Split-grid sensor picks changed mid-run "
-                        "(confidence=%s) — import: %s → %s, export: %s → %s. "
-                        "This flips the computed grid_power sign if the new "
-                        "picks identify the meters in the opposite role. "
-                        "Candidate root cause for #461. Set "
-                        "grid_import_power_entity / grid_export_power_entity "
-                        "explicitly in the config to lock the picks.",
-                        conf, _prev_imp, imp, _prev_exp, exp,
-                    )
+                if self._should_adopt_split_grid_picks(disc, conf):
+                    disc["import"] = imp
+                    disc["export"] = exp
+                    disc["confidence"] = conf
+                    if (_prev_imp is not None or _prev_exp is not None) and (
+                        _prev_imp != imp or _prev_exp != exp
+                    ):
+                        _LOGGER.warning(
+                            "Split-grid sensor picks changed mid-run "
+                            "(confidence=%s) — import: %s → %s, export: %s → %s. "
+                            "This flips the computed grid_power sign if the new "
+                            "picks identify the meters in the opposite role. "
+                            "Set grid_import_power_entity / "
+                            "grid_export_power_entity explicitly in the "
+                            "config to lock the picks. (#461)",
+                            conf, _prev_imp, imp, _prev_exp, exp,
+                        )
             if disc["import"]:
                 import_w = self._read_sensor(disc["import"], "grid_import")
                 export_w = self._read_sensor(disc["export"], "grid_export") if disc["export"] else 0.0
@@ -786,6 +791,37 @@ class SensorReader:
             )
 
         return readings
+
+    def _should_adopt_split_grid_picks(self, disc: dict, new_confidence) -> bool:
+        """Gate adopting freshly discovered split-grid picks (#461).
+
+        Any-device discovery pattern-matches over ``hass.states.async_all``,
+        whose iteration order isn't contractual — re-running it every cycle
+        and adopting the result unconditionally let the import/export
+        assignment swap mid-run, inverting the computed grid sign. Adopt
+        only when:
+
+        * we hold no import pick yet (initial discovery / late-loading
+          DSMR meter, #166), or
+        * the new match is ``same-device`` (deterministic — locks
+          permanently at the call site), or
+        * a currently held pick has gone unavailable (sensor renamed or
+          integration reloaded — re-discovery is the recovery path).
+
+        Otherwise the held picks win: stability over freshness.
+        """
+        if not disc.get("import"):
+            return True
+        if new_confidence == "same-device":
+            return True
+        for side in ("import", "export"):
+            eid = disc.get(side)
+            if not eid:
+                continue
+            state = self.hass.states.get(eid)
+            if state is None or state.state in ("unavailable", "unknown"):
+                return True
+        return False
 
     def _discover_split_grid_power(self, ed) -> tuple[Optional[str], Optional[str], Optional[str]]:
         """Discover separate import/export power sensors for setups without combined grid power.

@@ -126,6 +126,7 @@ class SEMChartCard extends SEMLitBase {
         this._boundPeriodHandler = (e) => this._onPeriodChange(e.detail);
         this._prefix = 'sensor.sem_';
         this._preset = null;
+        this._emptyMsg = '';
     }
 
     setConfig(config) {
@@ -226,8 +227,8 @@ class SEMChartCard extends SEMLitBase {
                         <div class="chart-subtitle">${subtitle}</div>
                     </div>
                     <div class="chart-container">
-                        <canvas></canvas>
-                        <div class="empty-msg">${this._t('loading')}</div>
+                        <canvas style="display:${this._emptyMsg ? 'none' : 'block'}"></canvas>
+                        <div class="empty-msg ${this._emptyMsg ? 'visible' : ''}">${this._emptyMsg}</div>
                     </div>
                 </div>
             </ha-card>
@@ -364,6 +365,9 @@ class SEMChartCard extends SEMLitBase {
         }
 
         this._hideEmpty();
+        // Canvas visibility is lit-bound to _emptyMsg now — wait for the
+        // update to land so Chart.js sizes against a visible canvas.
+        await this.updateComplete;
         await this._renderChart(datasets, series);
     }
 
@@ -587,18 +591,20 @@ class SEMChartCard extends SEMLitBase {
         this._chart = new Chart(ctx2d, config);
     }
 
+    // Empty-state is fully lit-rendered via _emptyMsg. The previous version
+    // imperatively overwrote .textContent on a node that ALSO had a lit text
+    // binding — destroying lit's text part so the next requestUpdate() threw
+    // "Cannot set properties of null" and froze the card (the #457 bug
+    // class; this was its second instance, after the system diagram card).
     _showEmpty(msg) {
-        const el = this.renderRoot.querySelector('.empty-msg');
-        if (el) { el.textContent = msg; el.classList.add('visible'); }
-        const c = this.renderRoot.querySelector('canvas');
-        if (c) c.style.display = 'none';
+        this._emptyMsg = msg;
+        this.requestUpdate();
     }
 
     _hideEmpty() {
-        const el = this.renderRoot.querySelector('.empty-msg');
-        if (el) el.classList.remove('visible');
-        const c = this.renderRoot.querySelector('canvas');
-        if (c) c.style.display = 'block';
+        if (!this._emptyMsg) return;
+        this._emptyMsg = '';
+        this.requestUpdate();
     }
 
     getCardSize() { return 5; }
