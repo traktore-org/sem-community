@@ -567,14 +567,27 @@ class BatteryChargeScheduler:
         battery_max_w = self._config.battery_max_charge_power_w
         slots: List[TimeSlot] = []
 
-        # Determine available hours (from cheapest prices or default NT window)
+        # Determine available slots (from cheapest prices or default NT window)
         if cheapest_prices:
+            # Slot length from the smallest gap between selected slots —
+            # SDAC markets are quarter-hourly since 2025-10-01, so a
+            # hardcoded 1h slot would overstate each slot's energy 4×
+            # and stop the plan after a quarter of the needed windows.
+            interval = timedelta(hours=1)
+            gaps = [
+                (b.timestamp - a.timestamp).total_seconds()
+                for a, b in zip(cheapest_prices, cheapest_prices[1:])
+            ]
+            positive = [g for g in gaps if 0 < g <= 3600]
+            if positive:
+                interval = timedelta(seconds=min(positive))
             available_hours = [
-                (p.timestamp, p.timestamp + timedelta(hours=1), getattr(p, "price", 0.0))
+                (p.timestamp, p.timestamp + interval, getattr(p, "price", 0.0))
                 for p in cheapest_prices
             ]
         else:
             # Default: 8 hours starting from now (full NT window)
+            interval = timedelta(hours=1)
             available_hours = [
                 (now + timedelta(hours=i), now + timedelta(hours=i + 1), 0.0)
                 for i in range(8)
@@ -582,6 +595,11 @@ class BatteryChargeScheduler:
 
         battery_remaining_kwh = battery_kwh_needed
         ev_remaining_kwh = ev_kwh_needed
+        # "Don't overshoot" caps below convert the remaining energy into
+        # the power that delivers it within ONE slot — which is only
+        # remaining*1000 W for 1h slots; quarter-hourly slots may charge
+        # 4× harder to deliver the same energy.
+        slot_hours = max(interval.total_seconds() / 3600.0, 1e-9)
 
         for start, end, price in available_hours:
             if battery_remaining_kwh <= 0 and ev_remaining_kwh <= 0:
@@ -592,39 +610,39 @@ class BatteryChargeScheduler:
                 # No peak limit — both at max simultaneously
                 slot_battery_w = min(
                     battery_max_w,
-                    battery_remaining_kwh * 1000,  # Don't overshoot
+                    battery_remaining_kwh * 1000 / slot_hours,  # Don't overshoot
                 )
                 slot_ev_w = min(
                     ev_max_power_w,
-                    ev_remaining_kwh * 1000,
+                    ev_remaining_kwh * 1000 / slot_hours,
                 )
             else:
                 # Peak-constrained: EV gets priority, battery gets remainder
                 if self._config.ev_priority:
                     slot_ev_w = min(
                         ev_max_power_w,
-                        ev_remaining_kwh * 1000,
+                        ev_remaining_kwh * 1000 / slot_hours,
                         peak_limit,
                     )
                     remaining_capacity = max(0, peak_limit - slot_ev_w)
                     slot_battery_w = min(
                         battery_max_w,
-                        battery_remaining_kwh * 1000,
+                        battery_remaining_kwh * 1000 / slot_hours,
                         remaining_capacity,
                     )
                 else:
                     # Proportional split
                     total_demand = (
-                        min(battery_max_w, battery_remaining_kwh * 1000)
-                        + min(ev_max_power_w, ev_remaining_kwh * 1000)
+                        min(battery_max_w, battery_remaining_kwh * 1000 / slot_hours)
+                        + min(ev_max_power_w, ev_remaining_kwh * 1000 / slot_hours)
                     )
                     if total_demand > 0 and total_demand > peak_limit:
                         ratio = peak_limit / total_demand
-                        slot_battery_w = min(battery_max_w, battery_remaining_kwh * 1000) * ratio
-                        slot_ev_w = min(ev_max_power_w, ev_remaining_kwh * 1000) * ratio
+                        slot_battery_w = min(battery_max_w, battery_remaining_kwh * 1000 / slot_hours) * ratio
+                        slot_ev_w = min(ev_max_power_w, ev_remaining_kwh * 1000 / slot_hours) * ratio
                     else:
-                        slot_battery_w = min(battery_max_w, battery_remaining_kwh * 1000)
-                        slot_ev_w = min(ev_max_power_w, ev_remaining_kwh * 1000)
+                        slot_battery_w = min(battery_max_w, battery_remaining_kwh * 1000 / slot_hours)
+                        slot_ev_w = min(ev_max_power_w, ev_remaining_kwh * 1000 / slot_hours)
 
             # Clamp to zero
             slot_battery_w = max(0, slot_battery_w)
@@ -640,7 +658,7 @@ class BatteryChargeScheduler:
                 )
                 slots.append(slot)
 
-                # Deduct energy delivered in this slot (1 hour per slot)
+                # Deduct energy delivered in this slot (TimeSlot derives kWh from start/end)
                 battery_remaining_kwh -= slot.battery_energy_kwh
                 ev_remaining_kwh -= slot.ev_energy_kwh
 

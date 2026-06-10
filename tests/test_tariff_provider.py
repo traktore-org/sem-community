@@ -599,7 +599,12 @@ class TestAmberElectricProvider:
             assert d["tariff_current_export_rate"] == pytest.approx(0.06)
 
     def test_amber_find_cheapest_hours(self, mock_hass):
-        """find_cheapest_hours works with 30-minute Amber intervals."""
+        """find_cheapest_hours works with 30-minute Amber intervals.
+
+        ``hours_needed`` is charging *time*: 2 hours of 30-min slots is
+        4 slots, not 2 — selecting only 2 would cover half the requested
+        charge time (#274/H2).
+        """
         now = datetime(2026, 5, 3, 14, 0, 0)
         forecasts = [
             {"start_time": (now + timedelta(minutes=30 * i)).isoformat(), "per_kwh": price}
@@ -613,10 +618,10 @@ class TestAmberElectricProvider:
             provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
             cheapest = provider.find_cheapest_hours(2, within_hours=6)
 
-        assert len(cheapest) == 2
-        # Two cheapest are 0.02 and 0.05
+        assert len(cheapest) == 4
+        # Four cheapest 30-min slots of the six on offer
         prices_found = sorted([p.price for p in cheapest])
-        assert prices_found == [0.02, 0.05]
+        assert prices_found == [0.02, 0.05, 0.08, 0.25]
 
     # ── Edge cases ──
 
