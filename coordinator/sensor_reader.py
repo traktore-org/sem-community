@@ -121,6 +121,19 @@ class SensorReader:
         # Warn-once guard for the discovery-*exception* path (#259); distinct from the
         # dict "warned" key (which guards "no sensor found"). Reset on cache invalidate.
         self._split_grid_discovery_warned: bool = False
+        # Manual grid override audit (#461 follow-up). When the user sets
+        # grid_import_power_entity / grid_export_power_entity explicitly,
+        # ALL sign auto-detection is bypassed — a swapped, single-sided or
+        # wrong-kind (energy counter as power) configuration produces a
+        # statically inverted grid with zero feedback. The audit compares
+        # the manual-computed sign against the Energy Dashboard counters
+        # in observe-only mode and warns loudly on sustained contradiction.
+        self._manual_grid_config_warned: set[str] = set()
+        self._manual_grid_import_baseline: Optional[float] = None
+        self._manual_grid_export_baseline: Optional[float] = None
+        self._manual_grid_mismatch_votes: int = 0
+        self._manual_grid_mismatch: bool = False
+        self._manual_grid_mismatch_warned: bool = False
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -604,11 +617,17 @@ class SensorReader:
         manual_import = self._raw_config.get("grid_import_power_entity")
         manual_export = self._raw_config.get("grid_export_power_entity")
         if manual_import or manual_export:
-            # Manual override — user explicitly set grid power sensors
+            # Manual override — user explicitly set grid power sensors.
+            # NO auto-detection runs on this path, so misconfiguration
+            # (swapped roles, one side missing, energy counter instead of
+            # power sensor) yields a statically wrong grid sign with zero
+            # feedback (#461, RienduPre). Validate + audit below.
+            self._validate_manual_grid_config(ed, manual_import, manual_export)
             import_w = self._read_sensor(manual_import, "grid_import") if manual_import else 0.0
             export_w = self._read_sensor(manual_export, "grid_export") if manual_export else 0.0
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
+            self._audit_manual_grid_sign(readings.grid_power, ed)
         elif len(ed.grid_power_list) > 1:
             # Multiple grid power sensors — sum all (e.g. multi-meter setups)
             readings.grid_power = self._read_sensors_sum(ed.grid_power_list, "grid")
@@ -816,6 +835,142 @@ class SensorReader:
             )
 
         return readings
+
+    def _validate_manual_grid_config(
+        self, ed, manual_import: Optional[str], manual_export: Optional[str],
+    ) -> None:
+        """One-shot sanity checks on explicitly configured grid entities (#461).
+
+        Each finding warns once per install run (keyed per entity / shape):
+
+        * Entity is an ENERGY counter (kWh device-class/unit) — the manual
+          fields take POWER sensors; a counter reads as a huge pseudo-watt
+          value and swamps ``grid_power = export - import``.
+        * Only one side is configured while the Energy Dashboard has BOTH
+          flow counters — the missing side reads a hard 0 W, so the grid
+          can never show that direction ("always exporting" / "always
+          importing").
+        """
+        for role, eid in (("import", manual_import), ("export", manual_export)):
+            if not eid or eid in self._manual_grid_config_warned:
+                continue
+            state = self.hass.states.get(eid)
+            if state is None:
+                continue  # unavailability is handled by _read_sensor/Repairs
+            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            device_class = state.attributes.get("device_class")
+            if device_class == "energy" or unit in ("wh", "kwh", "mwh"):
+                self._manual_grid_config_warned.add(eid)
+                _LOGGER.warning(
+                    "grid_%s_power_entity is set to %s, which is an ENERGY "
+                    "counter (%s) — this field takes a POWER sensor (W/kW). "
+                    "The computed grid power will be wrong until this is "
+                    "fixed in the SEM config. (#461)",
+                    role, eid, unit or device_class,
+                )
+        one_sided = bool(manual_import) != bool(manual_export)
+        if (
+            one_sided
+            and "__one_sided__" not in self._manual_grid_config_warned
+            and getattr(ed, "grid_import_energy", None)
+            and getattr(ed, "grid_export_energy", None)
+        ):
+            self._manual_grid_config_warned.add("__one_sided__")
+            missing = "grid_export_power_entity" if manual_import else "grid_import_power_entity"
+            _LOGGER.warning(
+                "Only one manual grid power entity is configured (%s is "
+                "missing) while the Energy Dashboard tracks BOTH import and "
+                "export. The missing side always reads 0 W, so SEM can never "
+                "see that flow direction — the energy flow will look stuck "
+                "on one side. Configure both entities (or neither). (#461)",
+                missing,
+            )
+
+    def _audit_manual_grid_sign(self, grid_power: float, ed) -> None:
+        """Observe-only cross-check of the manual grid sign (#461).
+
+        The Energy Dashboard's import/export counters are ground truth for
+        flow DIRECTION. Under SEM convention (negative = import), the
+        import counter growing while the manual-computed ``grid_power`` is
+        positive (or export growing while it's negative) means the manual
+        entities are assigned in swapped roles — or the wrong sensors
+        entirely. Five consecutive contradictions set
+        ``_manual_grid_mismatch`` (surfaced as ``diag_grid_manual_mismatch``)
+        and log one WARNING naming the configured entities.
+
+        Observe-only by design: manual config is explicit user intent, so
+        SEM never silently re-flips it — it makes the misconfiguration loud
+        instead.
+        """
+        import_entity = getattr(ed, "grid_import_energy", None)
+        export_entity = getattr(ed, "grid_export_energy", None)
+        if not import_entity or not export_entity:
+            return
+        if abs(grid_power) < 100:
+            return  # too little flow to judge direction
+        import_state = self.hass.states.get(import_entity)
+        export_state = self.hass.states.get(export_entity)
+        if not import_state or import_state.state in ("unknown", "unavailable"):
+            return
+        if not export_state or export_state.state in ("unknown", "unavailable"):
+            return
+        try:
+            import_val = float(import_state.state)
+            export_val = float(export_state.state)
+        except (ValueError, TypeError):
+            return
+
+        if self._manual_grid_import_baseline is None:
+            self._manual_grid_import_baseline = import_val
+            self._manual_grid_export_baseline = export_val
+            return
+        import_delta = import_val - self._manual_grid_import_baseline
+        export_delta = export_val - self._manual_grid_export_baseline
+        self._manual_grid_import_baseline = import_val
+        self._manual_grid_export_baseline = export_val
+
+        # Counter reset (#476) or ambiguous deltas → no judgement this cycle.
+        if import_delta < -0.001 or export_delta < -0.001:
+            return
+        if import_delta > 0.001 and export_delta < 0.001:
+            counters_say_export = False
+        elif export_delta > 0.001 and import_delta < 0.001:
+            counters_say_export = True
+        else:
+            return
+
+        manual_says_export = grid_power > 0
+        if manual_says_export != counters_say_export:
+            self._manual_grid_mismatch_votes += 1
+        else:
+            self._manual_grid_mismatch_votes = 0
+            if self._manual_grid_mismatch:
+                self._manual_grid_mismatch = False
+                _LOGGER.info(
+                    "Manual grid entities agree with the Energy Dashboard "
+                    "counters again — clearing the mismatch flag."
+                )
+            return
+
+        if self._manual_grid_mismatch_votes >= 5 and not self._manual_grid_mismatch:
+            self._manual_grid_mismatch = True
+            if not self._manual_grid_mismatch_warned:
+                self._manual_grid_mismatch_warned = True
+                _LOGGER.warning(
+                    "Manual grid power entities CONTRADICT the Energy "
+                    "Dashboard counters for 5+ cycles: SEM computes %s "
+                    "(grid_power=%.0f W) while the %s counter is the one "
+                    "increasing. grid_import_power_entity=%s / "
+                    "grid_export_power_entity=%s are most likely SWAPPED "
+                    "(or point at the wrong meters). SEM does not override "
+                    "manual config — fix the two fields in the SEM config. "
+                    "(#461)",
+                    "EXPORT" if manual_says_export else "IMPORT",
+                    grid_power,
+                    "import" if not counters_say_export else "export",
+                    self._raw_config.get("grid_import_power_entity"),
+                    self._raw_config.get("grid_export_power_entity"),
+                )
 
     def _should_adopt_split_grid_picks(self, disc: dict, new_confidence) -> bool:
         """Gate adopting freshly discovered split-grid picks (#461).

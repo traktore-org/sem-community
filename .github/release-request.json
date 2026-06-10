@@ -1,6 +1,6 @@
 {
-  "tag": "v1.7.3-beta.6",
-  "title": "v1.7.3-beta.6 — split-grid pick stability (#461) + storage heal (#462/#464)",
+  "tag": "v1.7.3-beta.7",
+  "title": "v1.7.3-beta.7 — manual grid override audit (#461) + #476 robustness batch",
   "prerelease": true,
-  "notes_file": ".github/release-notes/v1.7.3-beta.6.md"
+  "notes_file": ".github/release-notes/v1.7.3-beta.7.md"
 }
