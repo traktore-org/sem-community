@@ -1,9 +1,17 @@
 name: Create Release
 
-# Manual release publisher. Creates the tag at the dispatched ref and
-# publishes the GitHub release in one step — the path used when a release
-# is cut from an environment that has no direct tag-push rights (e.g. a
-# Claude Code remote session, which is scoped to its own branch).
+# Release publisher. Two triggers:
+#
+# 1. workflow_dispatch — a human (or a token with actions:write) runs it
+#    from the Actions tab with explicit inputs.
+# 2. push to develop touching .github/release-request.json — the
+#    request-file path. Merging a PR that updates the request file IS the
+#    explicit "tag it" act (#419 policy: no silent auto-tagging). This is
+#    the path used by environments that can merge PRs but have neither
+#    tag-push nor actions:write rights (e.g. Claude Code remote sessions).
+#
+# Both paths verify the tag against manifest.json on the built ref and
+# no-op cleanly when the release already exists (idempotent re-runs).
 #
 # Note: releases created with the default GITHUB_TOKEN do NOT fire the
 # `on: release published` validation workflow (GitHub suppresses
@@ -30,6 +38,9 @@ on:
         required: false
         type: boolean
         default: true
+  push:
+    branches: [develop]
+    paths: ['.github/release-request.json']
 
 permissions:
   contents: write
@@ -41,32 +52,66 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify manifest version matches tag
+      - name: Resolve release request
         env:
-          TAG: ${{ inputs.tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          IN_TAG: ${{ inputs.tag }}
+          IN_TITLE: ${{ inputs.title }}
+          IN_NOTES: ${{ inputs.notes }}
+          IN_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "TAG=$IN_TAG" >> "$GITHUB_ENV"
+            echo "TITLE=${IN_TITLE:-$IN_TAG}" >> "$GITHUB_ENV"
+            echo "PRERELEASE=$IN_PRERELEASE" >> "$GITHUB_ENV"
+            if [ -n "$IN_NOTES" ]; then
+              printf '%s' "$IN_NOTES" > /tmp/notes.md
+              echo "NOTES_PATH=/tmp/notes.md" >> "$GITHUB_ENV"
+            fi
+          else
+            python3 - << 'EOF' >> "$GITHUB_ENV"
+          import json
+          req = json.load(open(".github/release-request.json"))
+          tag = req["tag"]
+          print(f"TAG={tag}")
+          print(f"TITLE={req.get('title') or tag}")
+          print(f"PRERELEASE={str(req.get('prerelease', True)).lower()}")
+          notes_file = req.get("notes_file") or ""
+          if notes_file:
+              print(f"NOTES_PATH={notes_file}")
+          EOF
+          fi
+
+      - name: Skip when the release already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" --json tagName > /dev/null 2>&1; then
+            echo "Release $TAG already exists — nothing to do."
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify manifest version matches tag
+        if: env.SKIP != 'true'
         run: |
           MANIFEST=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
           echo "Tag: $TAG — Manifest: v$MANIFEST"
           if [ "v$MANIFEST" != "$TAG" ]; then
-            echo "::error::Tag ($TAG) does not match manifest version (v$MANIFEST) on the dispatched ref"
+            echo "::error::Tag ($TAG) does not match manifest version (v$MANIFEST) on the built ref"
             exit 1
           fi
 
-      - name: Create release (creates the tag at the dispatched ref)
+      - name: Create release (creates the tag at the built ref)
+        if: env.SKIP != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ inputs.tag }}
-          TITLE: ${{ inputs.title }}
-          NOTES: ${{ inputs.notes }}
-          PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          ARGS=(--target "$GITHUB_SHA" --title "${TITLE:-$TAG}")
+          ARGS=(--target "$GITHUB_SHA" --title "$TITLE")
           if [ "$PRERELEASE" = "true" ]; then
             ARGS+=(--prerelease)
           fi
-          if [ -n "$NOTES" ]; then
-            printf '%s' "$NOTES" > /tmp/notes.md
-            ARGS+=(--notes-file /tmp/notes.md)
+          if [ -n "${NOTES_PATH:-}" ] && [ -f "$NOTES_PATH" ]; then
+            ARGS+=(--notes-file "$NOTES_PATH")
           else
             ARGS+=(--generate-notes)
           fi
