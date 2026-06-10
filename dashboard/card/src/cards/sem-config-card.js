@@ -972,9 +972,13 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderOptionSlider('battery_roundtrip_efficiency', 'config_bs_efficiency',
                 { min: 0.70, max: 0.99, step: 0.01, unit: '', default: 0.92 }, opts, 'config_help_bs_efficiency')}
             ${this._renderOptionNumberInput('battery_cycle_cost', 'config_bs_cycle_cost',
-                { min: 0, max: 0.5, step: 0.001, unit: 'EUR/kWh', default: 0.0 }, opts, 'config_help_bs_cycle_cost')}
+                { min: 0, max: 0.5, step: 0.001, unit: 'EUR/kWh', default: 0.02 }, opts, 'config_help_bs_cycle_cost')}
             ${this._renderOptionSlider('battery_precharge_trigger_hour', 'config_bs_trigger_hour',
                 { min: 18, max: 23, step: 1, unit: 'h', default: 21 }, opts, 'config_help_bs_trigger_hour')}
+            ${this._renderOptionSlider('battery_replan_interval_min', 'config_bs_replan_interval',
+                { min: 5, max: 120, step: 5, unit: 'min', default: 30 }, opts, 'config_help_bs_replan_interval')}
+            ${this._renderOptionToggle('battery_prefer_consecutive_window', 'config_bs_block_mode',
+                opts, 'config_help_bs_block_mode', true)}
             ${this._renderOptionSlider('battery_max_target_soc', 'config_bs_max_target_soc',
                 { min: 50, max: 100, step: 5, unit: '%', default: 95.0 }, opts, 'config_help_bs_max_target_soc')}
             ${this._renderOptionNumberInput('battery_min_deficit_kwh', 'config_bs_min_deficit',

@@ -2862,6 +2862,7 @@ async def _async_register_phase_services(
         "battery_cycle_cost", "battery_precharge_trigger_hour",
         "battery_max_target_soc", "battery_min_deficit_kwh",
         "battery_pessimism_weight", "battery_force_charge_negative_price",
+        "battery_replan_interval_min", "battery_prefer_consecutive_window",
     }
     _DIAGNOSE_BATTERY_SCHEDULER_STATE = {
         "battery_scheduler_active", "battery_scheduler_target_soc",

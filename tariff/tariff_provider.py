@@ -815,46 +815,129 @@ class DynamicTariffProvider(TariffProvider):
 
         return data
 
+    def _slot_interval(self, prices: List[PricePoint]) -> timedelta:
+        """Detect the slot length of the price series (15/30/60 min).
+
+        Dynamic price feeds moved from hourly to 30-min (Amber, Octopus)
+        and 15-min (EPEX quarter-hourly since late 2025) granularity.
+        Derived from the gap between the first two points; anything
+        outside (0, 1h] falls back to hourly.
+        """
+        if len(prices) >= 2:
+            gap = (prices[1].timestamp - prices[0].timestamp).total_seconds()
+            if 0 < gap <= 3600:
+                return timedelta(seconds=gap)
+        return timedelta(hours=1)
+
     def find_cheapest_hours(
         self,
-        hours_needed: int,
+        hours_needed: float,
         within_hours: int = 24,
         prefer_consecutive: bool = False,
     ) -> List[PricePoint]:
-        """Find the cheapest hours for scheduling night charging.
+        """Find the cheapest slots covering ``hours_needed`` hours of charging.
 
         Args:
-            hours_needed: Number of price slots to select.
-            within_hours: How far ahead to look.
-            prefer_consecutive: When True, return the cheapest *contiguous* block
-                of ``hours_needed`` slots (lowest summed price) instead of the
-                globally-cheapest scattered slots. Block-wise scheduling (#247)
-                avoids fragmenting a charge across the night and reduces
-                start/stop cycling on the charger. Falls back to scattered
-                selection when fewer than ``hours_needed`` slots are available.
+            hours_needed: Charge duration in HOURS (fractional allowed).
+                Converted to a slot count using the detected slot interval,
+                so a 2 h request selects 8 slots on a 15-min market and
+                2 slots on an hourly one (the old code treated this
+                as a raw slot count, shrinking the charge window 4x on
+                quarter-hourly feeds).
+            within_hours: Lookahead horizon in HOURS (time-based; was previously
+                a raw slot count).
+            prefer_consecutive: When True, return the cheapest *contiguous*
+                block of slots (lowest summed price) instead of the
+                globally-cheapest scattered slots. Block-wise scheduling
+                (#247) avoids fragmenting a charge across the night and
+                reduces start/stop cycling on the charger. Falls back to
+                scattered selection when fewer slots are available.
         """
         prices = self._read_prices_list()
         now = dt_util.now()
+        interval = self._slot_interval(prices)
+        slot_hours = interval.total_seconds() / 3600
         # Include the slot currently in progress (started <= now < start+interval)
-        # so "is now cheap?" works at the top of an hour.
-        future_prices = [p for p in prices if p.timestamp > now - timedelta(hours=1)][:within_hours]
+        # so "is now cheap?" works at the top of a slot.
+        horizon = now + timedelta(hours=within_hours)
+        future_prices = [
+            p for p in prices
+            if p.timestamp > now - interval and p.timestamp < horizon
+        ]
 
-        if not future_prices or len(future_prices) < hours_needed:
+        slots_needed = 0
+        if hours_needed > 0:
+            slots_needed = max(1, int(-(-float(hours_needed) // slot_hours)))  # ceil
+
+        if not future_prices or len(future_prices) < slots_needed:
             return future_prices
 
-        if prefer_consecutive and hours_needed > 0:
+        if prefer_consecutive and slots_needed > 0:
             ordered = sorted(future_prices, key=lambda p: p.timestamp)
             best_start, best_sum = 0, None
-            for i in range(0, len(ordered) - hours_needed + 1):
-                window = ordered[i:i + hours_needed]
+            for i in range(0, len(ordered) - slots_needed + 1):
+                window = ordered[i:i + slots_needed]
                 total = sum(p.price for p in window)
                 if best_sum is None or total < best_sum:
                     best_sum, best_start = total, i
-            return ordered[best_start:best_start + hours_needed]
+            return ordered[best_start:best_start + slots_needed]
 
         # Cheapest scattered slots (default, back-compat behaviour).
         sorted_by_price = sorted(future_prices, key=lambda p: p.price)
-        return sorted(sorted_by_price[:hours_needed], key=lambda p: p.timestamp)
+        return sorted(sorted_by_price[:slots_needed], key=lambda p: p.timestamp)
+
+    def get_charge_window_rate(
+        self, hours: float = 4.0, within_hours: int = 12,
+    ) -> Optional[float]:
+        """Average price of the cheapest ``hours`` worth of upcoming slots.
+
+        This is the rate a night charge would actually pay — the break-even
+        input the battery scheduler needs. Returns ``None`` when no price
+        data is known (caller falls back to static config rates).
+        """
+        slots = self.find_cheapest_hours(hours, within_hours=within_hours)
+        if not slots:
+            return None
+        return sum(p.price for p in slots) / len(slots)
+
+    def get_next_daytime_rate(
+        self, peak_start: int = 7, peak_end: int = 20,
+    ) -> Optional[float]:
+        """Average price over the next daytime discharge window.
+
+        Averages all known FUTURE slots that fall into [peak_start,
+        peak_end) local time: at the 21:00 evaluation that is tomorrow's
+        published day-ahead daytime; at an after-midnight re-plan it is
+        today's daytime. Returns ``None`` when no future daytime slots
+        are known (caller falls back to static config rates).
+        """
+        prices = self._read_prices_list()
+        if not prices:
+            return None
+        now = dt_util.now()
+        day_prices = [
+            p.price for p in prices
+            if p.timestamp > now
+            and peak_start <= dt_util.as_local(p.timestamp).hour < peak_end
+        ]
+        if not day_prices:
+            return None
+        return sum(day_prices) / len(day_prices)
+
+    def price_series_fingerprint(self) -> Optional[int]:
+        """Stable fingerprint of the known price series.
+
+        Changes whenever new day-ahead prices arrive or existing values
+        change — the battery scheduler compares this against the value
+        captured at evaluation time to re-plan on price updates.
+        Returns ``None`` when no prices are known.
+        """
+        prices = self._read_prices_list()
+        if not prices:
+            return None
+        return hash(tuple(
+            (p.timestamp.isoformat(), round(p.price, 6)) for p in prices
+        ))
 
     def get_schedule_for_day(
         self, date: Optional[datetime] = None,

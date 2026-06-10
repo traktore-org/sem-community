@@ -6149,8 +6149,10 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             ${this._renderOptionNumberInput("battery_capacity_kwh","config_bs_capacity",{min:1,max:100,step:.5,unit:"kWh",default:10},e,"config_help_bs_capacity")}
             ${this._renderOptionNumberInput("battery_max_charge_power_w","config_bs_max_charge",{min:500,max:25e3,step:100,unit:"W",default:5e3},e,"config_help_bs_max_charge")}
             ${this._renderOptionSlider("battery_roundtrip_efficiency","config_bs_efficiency",{min:.7,max:.99,step:.01,unit:"",default:.92},e,"config_help_bs_efficiency")}
-            ${this._renderOptionNumberInput("battery_cycle_cost","config_bs_cycle_cost",{min:0,max:.5,step:.001,unit:"EUR/kWh",default:0},e,"config_help_bs_cycle_cost")}
+            ${this._renderOptionNumberInput("battery_cycle_cost","config_bs_cycle_cost",{min:0,max:.5,step:.001,unit:"EUR/kWh",default:.02},e,"config_help_bs_cycle_cost")}
             ${this._renderOptionSlider("battery_precharge_trigger_hour","config_bs_trigger_hour",{min:18,max:23,step:1,unit:"h",default:21},e,"config_help_bs_trigger_hour")}
+            ${this._renderOptionSlider("battery_replan_interval_min","config_bs_replan_interval",{min:5,max:120,step:5,unit:"min",default:30},e,"config_help_bs_replan_interval")}
+            ${this._renderOptionToggle("battery_prefer_consecutive_window","config_bs_block_mode",e,"config_help_bs_block_mode",!0)}
             ${this._renderOptionSlider("battery_max_target_soc","config_bs_max_target_soc",{min:50,max:100,step:5,unit:"%",default:95},e,"config_help_bs_max_target_soc")}
             ${this._renderOptionNumberInput("battery_min_deficit_kwh","config_bs_min_deficit",{min:.5,max:10,step:.5,unit:"kWh",default:2},e,"config_help_bs_min_deficit")}
             ${this._renderOptionSlider("battery_pessimism_weight","config_bs_pessimism",{min:0,max:1,step:.1,unit:"",default:.3},e,"config_help_bs_pessimism")}

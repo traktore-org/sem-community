@@ -530,14 +530,19 @@ class TestSchedulerEvaluation:
         assert decision.target_soc == 90.0  # Capped
 
     def test_hours_needed_calculation(self, mock_hass, scheduler_config):
-        """Hours needed = charge_kwh / charge_power_kw, rounded up."""
+        """Hours needed = charge_kwh / charge_power_kw, rounded up (ceil).
+
+        was round-half-up (2.09 → 2), which booked a duration too
+        short to actually reach the target. Ceil guarantees the adapter
+        duration covers the full charge.
+        """
         scheduler_config.battery_max_charge_power_w = 2500  # 2.5 kW
         scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
-        # deficit = 10 - (2*0.8) = 8.4 kWh
+        # deficit = 10 - (2*0.8 blended) = 8.4 kWh
         # target_soc = 40 + (8.4/9.5)*100 = 40 + 88.4 = 95 (capped)
         # actual_charge = (95-40)/100 * 9.5 = 5.225 kWh
-        # hours = 5.225 / 2.5 = 2.09 → 2 hours
+        # hours = 5.225 / 2.5 = 2.09 → ceil → 3 hours
         decision = scheduler.evaluate(
             current_soc=40.0,
             forecast_tomorrow_kwh=2.0,
@@ -547,7 +552,7 @@ class TestSchedulerEvaluation:
             correction_factor=1.0,
         )
 
-        assert decision.hours_needed == 2
+        assert decision.hours_needed == 3
 
 
 # ---------------------------------------------------------------------------

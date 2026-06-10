@@ -1841,7 +1841,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     "battery_cycle_cost",
-                    default=_c("battery_cycle_cost", 0.0),
+                    default=_c("battery_cycle_cost", 0.02),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0, max=0.50, step=0.001,
@@ -1858,6 +1858,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.SLIDER,
                     )
                 ),
+                vol.Optional(
+                    "battery_replan_interval_min",
+                    default=_c("battery_replan_interval_min", 30),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=120, step=5,
+                        unit_of_measurement="min",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    "battery_prefer_consecutive_window",
+                    default=_c("battery_prefer_consecutive_window", True),
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     "battery_max_target_soc",
                     default=_c("battery_max_target_soc", 95.0),

@@ -3028,9 +3028,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         now = dt_util.now()
 
         if not scheduler.should_trigger_evaluation(now):
-            # Check for re-plan trigger (SOC drift / EV change)
+            # Check for re-plan trigger (price update / SOC drift / EV change)
             ev_connected = bool(getattr(power, "ev_connected", False))
-            if scheduler.should_replan(power.battery_soc, ev_connected):
+            price_fp = None
+            if hasattr(self._tariff_provider, "price_series_fingerprint"):
+                price_fp = self._tariff_provider.price_series_fingerprint()
+            if scheduler.should_replan(
+                power.battery_soc, ev_connected, price_fingerprint=price_fp,
+            ):
                 scheduler._last_evaluation_date = None
                 _LOGGER.info(
                     "Battery scheduler: re-plan triggered, will re-evaluate"
@@ -3038,7 +3043,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             return
 
         forecast = self._forecast_reader.read_forecast()
-        forecast_tomorrow = forecast.forecast_tomorrow_kwh if forecast.available else 0.0
+        # Rolling horizon: evaluations after midnight plan for
+        # *today's* solar day; the evening evaluation plans for tomorrow.
+        forecast_tomorrow = 0.0
+        if forecast.available:
+            forecast_tomorrow = (
+                forecast.forecast_today_kwh
+                if now.hour < 12
+                else forecast.forecast_tomorrow_kwh
+            )
         forecast_age = 0.0
         if hasattr(forecast, "last_update") and forecast.last_update:
             forecast_age = (now - forecast.last_update).total_seconds() / 3600
@@ -3049,17 +3062,37 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if expected_consumption <= 0:
             expected_consumption = 12.0
 
-        off_peak_rate = (
-            self._tariff_provider.get_price_at(now.replace(hour=2, minute=0))
-            if hasattr(self._tariff_provider, "get_price_at")
-            else self.config.get("electricity_off_peak_rate")
-            or self.config.get("electricity_nt_rate", 0.22)
-        )
-        peak_rate = (
-            self._tariff_provider.get_price_at(now.replace(hour=14, minute=0))
-            if hasattr(self._tariff_provider, "get_price_at")
-            else self.config.get("electricity_import_rate", 0.30)
-        )
+        # Break-even rates: derive from the actual day-ahead series.
+        # The legacy code sampled get_price_at(today 02:00 / 14:00) — both
+        # already in the past at the 21:00 trigger, so dynamic tariffs fed
+        # the break-even with stale morning prices (or None once the slots
+        # rolled off, crashing the scheduler's division).
+        off_peak_rate = None
+        peak_rate = None
+        if hasattr(self._tariff_provider, "get_charge_window_rate"):
+            off_peak_rate = self._tariff_provider.get_charge_window_rate(
+                hours=4.0, within_hours=12,
+            )
+        if hasattr(self._tariff_provider, "get_next_daytime_rate"):
+            peak_rate = self._tariff_provider.get_next_daytime_rate()
+        if off_peak_rate is None and hasattr(self._tariff_provider, "get_price_at"):
+            # Static rule-based providers price purely by time-of-day, so
+            # the date does not matter; dynamic providers without data
+            # return None and fall through to the config rates.
+            off_peak_rate = self._tariff_provider.get_price_at(
+                now.replace(hour=2, minute=0)
+            )
+        if peak_rate is None and hasattr(self._tariff_provider, "get_price_at"):
+            peak_rate = self._tariff_provider.get_price_at(
+                now.replace(hour=14, minute=0)
+            )
+        if off_peak_rate is None:
+            off_peak_rate = (
+                self.config.get("electricity_off_peak_rate")
+                or self.config.get("electricity_nt_rate", 0.22)
+            )
+        if peak_rate is None:
+            peak_rate = self.config.get("electricity_import_rate", 0.30)
 
         current_price = 0.0
         if hasattr(self._tariff_provider, "get_current_import_rate"):
