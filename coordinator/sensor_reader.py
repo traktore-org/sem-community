@@ -886,6 +886,23 @@ class SensorReader:
                 missing,
             )
 
+    def _sum_counter_states(self, entity_ids: list) -> Optional[float]:
+        """Sum energy-counter states; ``None`` when any is unreadable.
+
+        Partial sums are worse than no judgement — one missing tariff
+        counter mid-cycle would look like a counter reset.
+        """
+        total = 0.0
+        for eid in entity_ids:
+            state = self.hass.states.get(eid)
+            if not state or state.state in ("unknown", "unavailable"):
+                return None
+            try:
+                total += float(state.state)
+            except (ValueError, TypeError):
+                return None
+        return total
+
     def _audit_manual_grid_sign(self, grid_power: float, ed) -> None:
         """Observe-only cross-check of the manual grid sign (#461).
 
@@ -902,22 +919,25 @@ class SensorReader:
         SEM never silently re-flips it — it makes the misconfiguration loud
         instead.
         """
-        import_entity = getattr(ed, "grid_import_energy", None)
-        export_entity = getattr(ed, "grid_export_energy", None)
-        if not import_entity or not export_entity:
+        # Sum across the counter LISTS when present — Dutch dual-tariff
+        # DSMR meters split each direction into tarief 1 + tarief 2
+        # counters; judging from one tariff's counter alone leaves the
+        # audit blind during the other tariff's hours.
+        import_entities = (
+            list(getattr(ed, "grid_import_energy_list", None) or [])
+            or ([ed.grid_import_energy] if getattr(ed, "grid_import_energy", None) else [])
+        )
+        export_entities = (
+            list(getattr(ed, "grid_export_energy_list", None) or [])
+            or ([ed.grid_export_energy] if getattr(ed, "grid_export_energy", None) else [])
+        )
+        if not import_entities or not export_entities:
             return
         if abs(grid_power) < 100:
             return  # too little flow to judge direction
-        import_state = self.hass.states.get(import_entity)
-        export_state = self.hass.states.get(export_entity)
-        if not import_state or import_state.state in ("unknown", "unavailable"):
-            return
-        if not export_state or export_state.state in ("unknown", "unavailable"):
-            return
-        try:
-            import_val = float(import_state.state)
-            export_val = float(export_state.state)
-        except (ValueError, TypeError):
+        import_val = self._sum_counter_states(import_entities)
+        export_val = self._sum_counter_states(export_entities)
+        if import_val is None or export_val is None:
             return
 
         if self._manual_grid_import_baseline is None:

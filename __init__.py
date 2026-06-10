@@ -1008,6 +1008,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Initialize domain data storage (kept for backward compatibility with services)
     hass.data.setdefault(DOMAIN, {})
 
+    # In-memory SEM log ring buffer for the diagnose surface (#461/#462
+    # triage gap on Supervisor installs — no flat log file to tail).
+    # Idempotent across reloads. Stored under its own key so code that
+    # treats hass.data[DOMAIN] values as coordinators is unaffected.
+    from .utils.log_buffer import ensure_attached as _attach_log_buffer
+    hass.data[f"{DOMAIN}_log_buffer"] = _attach_log_buffer()
+
+    # Warm the blocking-I/O caches off the event loop (caught live as
+    # "Detected blocking call to open" on RienduPre's install): the
+    # dashboard translations file and the manifest version are both
+    # lazily opened from sync code inside the loop on first use.
+    from .utils.translate import preload_translations as _preload_translations
+    await hass.async_add_executor_job(_preload_translations)
+    await hass.async_add_executor_job(SEMCoordinator._get_version)
+
     # Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
     # Idempotent; only acts while the legacy key is present.
     _migrate_limit_surplus_to_max(hass, entry)
@@ -1250,6 +1265,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             if not ev_power_entity or not (ev_charger_service or ev_current_entity):
                 _LOGGER.debug("Charger %s missing power sensor or control method, skipping", charger_id)
                 continue
+
+            # #462 follow-up: ``number.set_value`` configured as the charger
+            # SERVICE needs a writable number entity to target. With a
+            # non-number target (RienduPre's old config pointed at a
+            # SENSOR), every set-current command bounces off the service
+            # schema and the charger is silently uncontrollable.
+            if ev_charger_service == "number.set_value":
+                _svc_target = ev_current_entity or ev_service_entity
+                if not _svc_target or not str(_svc_target).startswith("number."):
+                    _LOGGER.warning(
+                        "Charger '%s': ev_charger_service=number.set_value "
+                        "needs a number.* target entity, but got %s — current "
+                        "commands will fail. Set ev_current_control_entity to "
+                        "the charger's max-current number entity.",
+                        charger_id, _svc_target,
+                    )
 
             ev_device = CurrentControlDevice(
                 hass=hass,
@@ -3345,16 +3376,10 @@ async def _async_register_phase_services(
         else:
             recent_logs = list(all_logs)[-20:]
 
-        # Read SEM integration version (best effort)
-        sem_version = "unknown"
-        try:
-            import os as _os
-            import json as _json_v
-            manifest = _os.path.join(_os.path.dirname(__file__), "manifest.json")
-            with open(manifest) as _f:
-                sem_version = _json_v.load(_f).get("version", "unknown")
-        except Exception:  # noqa: BLE001
-            pass
+        # Read SEM integration version — cached classmethod, warmed off-loop
+        # at setup (the previous inline open() was a blocking call in the
+        # event loop on every diagnose invocation).
+        sem_version = SEMCoordinator._get_version()
 
         payload = {
             "version": sem_version,

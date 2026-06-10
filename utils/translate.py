@@ -35,6 +35,18 @@ def _load_translations() -> Dict[str, Dict[str, str]]:
     return _translations_cache
 
 
+def preload_translations() -> None:
+    """Warm the module cache from a worker thread.
+
+    ``_load_translations`` opens dashboard/translations.json lazily on the
+    first ``get_text`` call — which happens inside the event loop (caught
+    live as "Detected blocking call to open", utils/translate.py:30).
+    Setup calls this via ``hass.async_add_executor_job`` so the one-and-
+    only file read happens off-loop; every later call hits the cache.
+    """
+    _load_translations()
+
+
 def get_text(hass: HomeAssistant, key: str, default: str = "", **kwargs: Any) -> str:
     """Get translated text for a key.
 

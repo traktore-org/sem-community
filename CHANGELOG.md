@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased]
+
+## 🔌 Actuation hardening + triage surfaces (#462 follow-up batch)
+
+RienduPre's attached error log revealed the final #462 mechanism: with `ev_charger_service: number.set_value`, SEM sent `{current: X}` through the service path — `number.set_value` only accepts `value`, so **every current command on both chargers failed** (`extra keys not allowed @ data['current']`), including the 0 A for off-mode, with the evidence buried in per-cycle ERROR log lines.
+
+### 🛠️ Fixes
+
+- **`number.set_value` as charger service is now mapped to the number-entity write it was meant to be** (`value` + entity_id) — the misconfigured-but-recoverable shape can no longer leave a charger silently uncontrollable
+- **Repair issue on repeated actuation failure**: 3 consecutive rejected set-current commands raise a user-visible Repair naming the charger and the error (severity ERROR, translated EN/NL/DE + EN fallback for the rest); clears automatically on the next successful write
+- **Registration WARNING** when `ev_charger_service=number.set_value` has no `number.*` target entity
+- **Fleet `charging_strategy` / `charging_strategy_reason` are now consistent** — the per-charger loop let the *last* charger overwrite `charging_strategy` while `charging_strategy_reason` kept the primary's value ("always_max …" next to "off mode …" in the same dump); only the primary charger writes both now (per-charger detail lives in `charger_<id>_charging_state`)
+
+### 🔍 Triage surfaces
+
+- **In-memory SEM log ring buffer** — the diagnose payload's `recent_logs` now carries the last ~300 INFO+ SEM log lines on EVERY install type; Supervisor installs (journald, no flat log file) previously got a "please run `ha core logs`" placeholder, which left the whole #461/#462 triage blind
+- **Manual-grid audit is dual-tariff aware** — the sign cross-check sums the import/export counter *lists*, so NL DSMR tarief-1/2 splits no longer blind it during one tariff's hours
+- **Blocking `open()` calls removed from the event loop** ("Detected blocking call" in RienduPre's log): translations and the manifest version are warmed off-loop at setup and cached (`diag_version` no longer re-opens manifest.json every cycle)
+- TROUBLESHOOTING: manual grid entity checklist (import vs export roles, power-not-energy, both-or-neither) + Dutch dual-tariff Energy-Dashboard guidance
+
+### 🧪 Tests
+
+- New framework tier `tests/test_actuation_real.py`: real-HA schema-strict `number.set_value` shape test + the failure → Repair → recovery → clear cycle through the real issue registry
+- `test_services_real.py`: diagnose `recent_logs` served from the ring buffer (Supervisor parity) + cached version
+- Unit: actuation routing/param contracts, Repair threshold/idempotence/intermittent-flap behavior, log-buffer capture/capacity/idempotence, dual-tariff audit summing
+
+---
+
 # [1.7.3-beta.7] - 10.06.2026
 
 ## 🔎 Manual grid override validation + sign audit (#461 follow-up)

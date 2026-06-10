@@ -382,3 +382,41 @@ async def test_setup_heals_poisoned_options_ev_chargers(
         if isinstance(c, dict)
     }
     assert persisted["ev_charger_1"]["charge_mode"] == "off"
+
+
+# ---------------------------------------------------------------------------
+# Diagnose recent_logs from the in-memory ring buffer (Supervisor installs
+# have no flat log file — the #461/#462 triage ran blind on recent_logs)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_diagnose_recent_logs_come_from_ring_buffer(
+    sem_real_hass, sem_config_entry,
+) -> None:
+    """The diagnose payload's ``recent_logs`` must carry real SEM log lines
+    captured by the ring buffer — independent of whether a flat
+    ``home-assistant.log`` exists on disk (it doesn't on Supervisor)."""
+    import logging as _logging
+
+    _seed_sem_input_sensors(sem_real_hass)
+    await _setup_sem(sem_real_hass, sem_config_entry)
+
+    marker = "ring-buffer-framework-test-marker"
+    _logging.getLogger(
+        "custom_components.solar_energy_management.coordinator"
+    ).info("%s", marker)
+
+    response = await sem_real_hass.services.async_call(
+        "solar_energy_management", "diagnose",
+        {"section": "overview"},
+        blocking=True,
+        return_response=True,
+    )
+    logs = response["payload"]["recent_logs"]
+    assert any(marker in line for line in logs), (
+        "recent_logs did not include the in-memory buffer's records — "
+        "Supervisor installs would still get the journald placeholder."
+    )
+    # Version comes from the cached manifest read (warmed off-loop at setup)
+    assert response["payload"]["version"] not in ("unknown", "0.0.0")
