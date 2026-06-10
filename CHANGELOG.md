@@ -11,6 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased]
+
+## 🧰 Robustness batch (#476, part 1)
+
+Soundness/stability items from the 2026-06-10 review. No behavior changes on the happy path.
+
+### 🛠️ Fixes
+
+- **Back-to-back runtime writes no longer trigger a spurious reload** — the options-update listener consumed the `_skip_options_reload` snapshot on first match, so the second of two quick entity writes found no snapshot and reloaded the integration. Snapshot is now kept on match and cleared on mismatch — provably leak-free (HA only fires the listener when options actually change)
+- **Energy-counter reset guard** — Growatt-style daily counters can reset at midnight in *different* update cycles; the surviving side's increment could cast a wrong grid/battery sign vote. Negative delta on either side now re-baselines and skips the vote (grid + per-battery variants)
+- **`set_option` mixed payloads** — the skip snapshot is no longer armed when structural keys force a reload anyway (stale state on a discarded coordinator)
+- **Charger-id sanity at registration** — WARNING on id-less entries (positional fallback can collide with a real sibling) and on duplicate ids (writes target only the first match)
+- **Config card**: per-charger rows with no resolvable id are skipped instead of rendering `…_undefined_…` entity lookups; save-status timers cancelled on disconnect (same for the diagnose button's copy timer)
+
+### 📝 Notes
+
+- Heal-vs-auto-discovery ordering documented as intentionally heal-first (prevents the reseed from firing on heal-able installs)
+- Deliberately deferred from #476: sign-state persistence (persisting a wrongly-locked sign would make bad locks permanent — needs a validation design first) and vote-threshold changes (3-vote lock-in is pinned as contract by the #352 test suite; the dominant reset windows are already closed)
+
+---
+
 # [1.7.3-beta.6] - 10.06.2026
 
 ## 🩹 2026-06-10 review fixes — P1 batch

@@ -733,3 +733,66 @@ class TestPerBatterySignAutoDetect404:
         # The dicts have separate entries
         assert "b1" in reader._battery_sign_inverted
         assert reader._FLEET_BID in reader._battery_sign_inverted
+
+
+class TestCounterResetGuard:
+    """#476: daily energy counters (Growatt firmware resets at midnight) can
+    reset in DIFFERENT update cycles. A negative delta on either side means
+    both deltas are garbage for that cycle — one side can still show a
+    legitimate-looking increment and cast a wrong sign vote. The guard
+    re-baselines and sits the cycle out."""
+
+    def test_battery_counter_reset_does_not_vote(self, sensor_reader, mock_hass):
+        from custom_components.solar_energy_management.coordinator.types import PowerReadings
+        ed = _make_energy_dashboard_config()
+        sensor_reader.set_energy_dashboard_config(ed)
+
+        # Baseline at high counter values just before midnight.
+        mock_hass.states.get = lambda eid: {
+            "sensor.battery_charge_total": _make_sensor_state(100.0, "kWh"),
+            "sensor.battery_discharge_total": _make_sensor_state(50.0, "kWh"),
+        }.get(eid)
+        sensor_reader._detect_battery_sign(PowerReadings(battery_power=500.0))
+
+        # Midnight: charge counter reset to 0, discharge still pre-reset and
+        # showing a small increment — without the guard this is a clean
+        # "discharge growing" vote in whatever direction power points.
+        for _ in range(3):
+            mock_hass.states.get = lambda eid: {
+                "sensor.battery_charge_total": _make_sensor_state(0.0, "kWh"),
+                "sensor.battery_discharge_total": _make_sensor_state(50.2, "kWh"),
+            }.get(eid)
+            sensor_reader._detect_battery_sign(PowerReadings(battery_power=500.0))
+
+        # First post-reset cycle re-baselines (0.0 / 50.2); later identical
+        # reads produce zero deltas → no votes either way. Nothing locked.
+        bid = "__fleet__"
+        assert sensor_reader._battery_sign_detected.get(bid, False) is False
+        assert sensor_reader._battery_sign_votes.get(bid, 0) == 0
+
+    def test_grid_counter_reset_does_not_vote(self, sensor_reader, mock_hass):
+        from custom_components.solar_energy_management.coordinator.types import PowerReadings
+        ed = _make_energy_dashboard_config()
+        sensor_reader.set_energy_dashboard_config(ed)
+
+        # Baseline.
+        mock_hass.states.get = lambda eid: {
+            "sensor.grid_import_total": _make_sensor_state(200.0, "kWh"),
+            "sensor.grid_export_total": _make_sensor_state(80.0, "kWh"),
+        }.get(eid)
+        sensor_reader._detect_grid_sign(PowerReadings(grid_power=800.0))
+
+        # Import counter resets at midnight while export ticks up — the
+        # export increment would otherwise vote "negate" on positive power.
+        mock_hass.states.get = lambda eid: {
+            "sensor.grid_import_total": _make_sensor_state(0.0, "kWh"),
+            "sensor.grid_export_total": _make_sensor_state(80.1, "kWh"),
+        }.get(eid)
+        result = sensor_reader._detect_grid_sign(PowerReadings(grid_power=800.0))
+
+        assert result is False
+        assert sensor_reader._grid_sign_detected is False
+        assert sensor_reader._grid_sign_votes == 0
+        # Baselines were reset to the post-reset values.
+        assert sensor_reader._grid_import_baseline == 0.0
+        assert sensor_reader._grid_export_baseline == 80.1

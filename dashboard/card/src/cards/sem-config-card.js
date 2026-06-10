@@ -151,6 +151,16 @@ class SEMConfigCard extends SEMLitBase {
         this._showHelp = false;
         this._entryId = '';
         this._saveStatus = {};  // { fieldKey: 'saving' | 'ok' | error-msg }
+        this._statusTimers = new Set();  // pending ✓-clear timeouts (#476)
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        // Cancel pending save-status clears — they hold `this` alive and
+        // fire requestUpdate() on a detached element when the dashboard
+        // is switched away mid-save (#476).
+        for (const t of this._statusTimers) clearTimeout(t);
+        this._statusTimers.clear();
     }
 
     setConfig(config) {
@@ -202,11 +212,13 @@ class SEMConfigCard extends SEMLitBase {
             // immediately — without waiting for the next render cycle.
             this._options = { ...this._options, [key]: value };
             this.requestUpdate();
-            setTimeout(() => {
+            const timer = setTimeout(() => {
+                this._statusTimers.delete(timer);
                 this._saveStatus = { ...this._saveStatus };
                 delete this._saveStatus[fieldKey || key];
                 this.requestUpdate();
             }, 1200);
+            this._statusTimers.add(timer);
         } catch (err) {
             console.error('[sem-config-card] save failed', key, err);
             this._saveStatus = { ...this._saveStatus, [fieldKey || key]: err?.message || 'save failed' };
@@ -521,7 +533,12 @@ class SEMConfigCard extends SEMLitBase {
         const rows = optsChargers.length ? optsChargers : runtimeIds.map(_ => ({}));
         return html`
             ${rows.map((charger, idx) => {
+                // No id on the entry AND no runtime id at this position
+                // (opts list longer than discovered chargers): skip rather
+                // than render steppers against entities like
+                // number.sem_charger_undefined_minimum_current (#476).
                 const cid = charger.id || runtimeIds[idx];
+                if (!cid) return nothing;
                 return html`
                 <div class="charger-block">
                     <div class="charger-block-title">

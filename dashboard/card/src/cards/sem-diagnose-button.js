@@ -47,6 +47,15 @@ class SEMDiagnoseButton extends SEMLitBase {
         this._payload = null;
         this._error = null;
         this._copied = false;
+        this._copiedTimer = null;
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        if (this._copiedTimer) {
+            clearTimeout(this._copiedTimer);
+            this._copiedTimer = null;
+        }
     }
 
     // No HA-state subscription needed — purely on-demand modal.
@@ -86,7 +95,11 @@ class SEMDiagnoseButton extends SEMLitBase {
         const succeed = () => {
             this._copied = true;
             this._error = null;
-            setTimeout(() => { this._copied = false; }, 1500);
+            if (this._copiedTimer) clearTimeout(this._copiedTimer);
+            this._copiedTimer = setTimeout(() => {
+                this._copiedTimer = null;
+                this._copied = false;
+            }, 1500);
         };
 
         // Modern path — only works in secure contexts (HTTPS / localhost).

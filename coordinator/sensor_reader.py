@@ -365,6 +365,20 @@ class SensorReader:
         self._grid_import_baseline = import_val
         self._grid_export_baseline = export_val
 
+        # Counter-reset guard (#476): some inverters (Growatt) reset their
+        # daily energy counters at midnight, and the two counters can reset
+        # in DIFFERENT update cycles. A negative delta on either side means
+        # the deltas this cycle are garbage — one side could still show a
+        # legitimate-looking increment and cast a wrong vote. Re-baseline
+        # (done above) and sit this cycle out.
+        if import_delta < -0.001 or export_delta < -0.001:
+            _LOGGER.debug(
+                "Grid energy counter reset detected (import_delta=%.3f, "
+                "export_delta=%.3f) — re-baselined, skipping sign vote",
+                import_delta, export_delta,
+            )
+            return self._grid_sign_inverted
+
         # Determine convention from correlation:
         # power > 0 + import growing → HA convention (+ = import) → negate
         # power > 0 + export growing → SEM convention (+ = export) → no negate
@@ -487,6 +501,17 @@ class SensorReader:
         # Update baselines for next cycle
         self._battery_charge_baseline[bid] = charge_val
         self._battery_discharge_baseline[bid] = discharge_val
+
+        # Counter-reset guard (#476) — same rationale as the grid variant:
+        # daily counters can reset in different cycles; a negative delta on
+        # either side invalidates BOTH deltas for this cycle.
+        if charge_delta < -0.001 or discharge_delta < -0.001:
+            _LOGGER.debug(
+                "Battery '%s' energy counter reset detected (charge_delta=%.3f, "
+                "discharge_delta=%.3f) — re-baselined, skipping sign vote",
+                bid, charge_delta, discharge_delta,
+            )
+            return self._battery_sign_inverted[bid]
 
         # Determine convention from correlation:
         # power > 0 + charge growing → SEM convention (+ = charge) → no negate

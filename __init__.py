@@ -1017,6 +1017,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # ghost-ridden charger list that shadows entry.data on the merge below;
     # writer fixes alone don't repair already-corrupted storage. Idempotent:
     # after one healing write the reconcile returns None on every later boot.
+    #
+    # Ordering note (#476): the heal deliberately runs BEFORE full_config is
+    # built and therefore before the EV auto-discovery reseed further down.
+    # Heal-first means an options-side ``[]`` clobber is repaired from
+    # entry.data before the merged config is evaluated, so the reseed (which
+    # only fires when the merged config has no chargers at all) never plants
+    # its single ``id: "ev_charger"`` entry on top of a heal-able install.
     if "ev_chargers" in (entry.options or {}):
         _healed = _heal_ev_chargers_options(
             (entry.data or {}).get("ev_chargers"),
@@ -1194,8 +1201,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         from .devices.base import CurrentControlDevice
         coordinator._ev_devices = {}
 
+        # Charger-id sanity (#476): every per-charger write path matches on
+        # ``id``, and a missing id gets a POSITIONAL fallback below that can
+        # collide with a real sibling (two id-less entries both become
+        # untargetable; an id-less entry at index 1 collides with a real
+        # "ev_charger_1"). Surface both shapes loudly — they are config
+        # corruption, not normal states.
+        _seen_charger_ids: set[str] = set()
         for idx, charger_cfg in enumerate(ev_chargers_config):
+            if not charger_cfg.get("id"):
+                _LOGGER.warning(
+                    "EV charger at index %d has no 'id' — assigning positional "
+                    "fallback 'ev_charger_%d'. Per-charger settings writes can "
+                    "misbehave until the entry gets a stable id.",
+                    idx, idx,
+                )
             charger_id = charger_cfg.get("id", f"ev_charger_{idx}")
+            if charger_id in _seen_charger_ids:
+                _LOGGER.warning(
+                    "Duplicate EV charger id '%s' at index %d — per-charger "
+                    "entities and settings writes will target only the first "
+                    "charger with this id. Fix the ev_chargers list.",
+                    charger_id, idx,
+                )
+            _seen_charger_ids.add(charger_id)
             charger_name = charger_cfg.get("name", f"EV Charger {idx + 1}")
 
             # Resolve config: charger-specific keys, fall back to global config
@@ -1631,20 +1660,30 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     entities for ~1 s) is wasteful.
 
     The skip is keyed to the *exact* options payload the entity persisted
-    (``_skip_options_reload`` holds that snapshot), and is consumed once. A
-    bare boolean used to leak — a stale flag from an earlier stepper could
-    swallow a later options-FLOW save (e.g. ``vehicle_soc_entity``), which then
-    only took effect after a full restart (#245 review #1). Comparing against
-    the snapshot makes a flow change (different options) always reload.
+    (``_skip_options_reload`` holds that snapshot). A bare boolean used to
+    leak — a stale flag from an earlier stepper could swallow a later
+    options-FLOW save (e.g. ``vehicle_soc_entity``), which then only took
+    effect after a full restart (#245 review #1). Comparing against the
+    snapshot makes a flow change (different options) always reload.
+
+    Consumption semantics (#476): the snapshot is kept on a MATCH and
+    cleared on a MISMATCH. Two back-to-back runtime writes fire one
+    listener invocation each, and both invocations see the final merged
+    options — clearing on the first match made the second invocation
+    reload spuriously (the exact disruption this mechanism avoids). Keeping
+    the snapshot is leak-free: the snapshot always equals the LAST runtime
+    write's payload, and HA only fires this listener when options actually
+    change, so any externally-saved options either differ from the snapshot
+    (→ mismatch → reload + clear) or never produce an event at all.
     """
     coordinator = entry.runtime_data if hasattr(entry, "runtime_data") else None
     snapshot = getattr(coordinator, "_skip_options_reload", None) if coordinator else None
-    if coordinator is not None:
-        coordinator._skip_options_reload = None  # always consume — no leak
     if isinstance(snapshot, dict) and dict(entry.options) == snapshot:
         _LOGGER.debug("Options update from runtime tweak — skipping reload")
         return
 
+    if coordinator is not None:
+        coordinator._skip_options_reload = None  # stale — clear before reload
     _LOGGER.info("Config options updated, reloading integration")
     await hass.config_entries.async_reload(entry.entry_id)
 
@@ -2976,7 +3015,12 @@ async def _async_register_phase_services(
                 # the new value on the next cycle without reload.
                 coordinator = getattr(target_entry, "runtime_data", None)
                 if coordinator is not None:
-                    coordinator._skip_options_reload = dict(unrouted_merged)
+                    # Only arm the skip snapshot when NO structural key is
+                    # in the payload — a mixed payload ends in a forced
+                    # reload anyway, and the snapshot would just be stale
+                    # state on the (discarded) coordinator (#476).
+                    if not structural_keys:
+                        coordinator._skip_options_reload = dict(unrouted_merged)
                     if isinstance(getattr(coordinator, "config", None), dict):
                         coordinator.config.update({
                             **(target_entry.data or {}),
