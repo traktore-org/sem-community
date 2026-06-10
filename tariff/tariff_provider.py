@@ -9,6 +9,7 @@ Used by EnergyCalculator for accurate cost calculations and by
 SurplusController for price-responsive device control.
 """
 import logging
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -19,6 +20,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _as_local(timestamp: datetime) -> datetime:
+    """Convert an aware ``timestamp`` to HA's local tz.
+
+    Naive datetimes pass through unchanged (same contract as
+    ``_local_date`` — old tests and call sites build naive clocks).
+    """
+    if timestamp.tzinfo is None:
+        return timestamp
+    return dt_util.as_local(timestamp)
 
 
 def _local_date(timestamp: datetime):
@@ -34,9 +46,7 @@ def _local_date(timestamp: datetime):
     Naive datetimes (no tz info) pass through unchanged so old tests
     and call sites that build their own clocks aren't disturbed.
     """
-    if timestamp.tzinfo is None:
-        return timestamp.date()
-    return dt_util.as_local(timestamp).date()
+    return _as_local(timestamp).date()
 
 
 class PriceLevel(Enum):
@@ -460,8 +470,8 @@ class DynamicTariffProvider(TariffProvider):
                                 ))
                             except (ValueError, TypeError):
                                 continue
-            if prices and not self._last_parsed_attribute:
-                self._last_parsed_attribute = key
+                if prices and not self._last_parsed_attribute:
+                    self._last_parsed_attribute = key
 
         # Nordpool: raw_today, raw_tomorrow attributes
         for key in ("raw_today", "raw_tomorrow"):
@@ -485,6 +495,8 @@ class DynamicTariffProvider(TariffProvider):
                                 ))
                             except (ValueError, TypeError):
                                 continue
+                if prices and not self._last_parsed_attribute:
+                    self._last_parsed_attribute = key
 
         # Generic forecast: "forecasts" or "rates" attribute (Amber Electric,
         # Octopus Energy, or any provider that stores an array of price dicts).
@@ -519,11 +531,42 @@ class DynamicTariffProvider(TariffProvider):
                                     ))
                                 except (ValueError, TypeError):
                                     continue
+                        if prices and not self._last_parsed_attribute:
+                            self._last_parsed_attribute = attr_key
                         break  # Found data in this attribute, stop
                 if prices:
                     break  # Found data in this source, stop
 
+        # Mixed naive/aware timestamps (e.g. a template sensor emitting
+        # naive ISO strings alongside an aware provider array) would make
+        # the sort below raise TypeError. Tag naive entries with HA's
+        # local tz; all-naive arrays (legacy tests / custom clocks) pass
+        # through untouched.
+        if any(p.timestamp.tzinfo is not None for p in prices) and any(
+            p.timestamp.tzinfo is None for p in prices
+        ):
+            for p in prices:
+                if p.timestamp.tzinfo is None:
+                    p.timestamp = p.timestamp.replace(
+                        tzinfo=dt_util.DEFAULT_TIME_ZONE,
+                    )
+
         prices = sorted(prices, key=lambda p: p.timestamp)
+
+        # Dedupe identical timestamps (keep first): entities that expose
+        # the same curve under two recognised attribute names (e.g.
+        # ``prices`` plus ``prices_today``, or Tibber ``today`` next to
+        # Nordpool-style ``raw_today``) would otherwise double every
+        # point and skew the percentile breaks and today's avg.
+        if prices:
+            seen: set = set()
+            deduped: List[PricePoint] = []
+            for p in prices:
+                if p.timestamp in seen:
+                    continue
+                seen.add(p.timestamp)
+                deduped.append(p)
+            prices = deduped
 
         # v1.7.2-beta.3: record diagnostic info about the parse for
         # the tariff diagnose surface. Tells users (and us) which
@@ -671,7 +714,7 @@ class DynamicTariffProvider(TariffProvider):
             )
             _LOGGER.debug(
                 "tariff/#359: percentile fallback — today's price array "
-                "has %d / %d points (need ≥4); using static thresholds",
+                "has %d / %d points (need ≥4); classifying as NORMAL",
                 len(today_prices), len(self._prices_cache),
             )
             return None
@@ -700,8 +743,8 @@ class DynamicTariffProvider(TariffProvider):
         # near-flat day collapses every break to the same value, which
         # would classify every price as VERY_CHEAP and over-trigger
         # any cheap-window logic downstream. Threshold = 1 ct/kWh —
-        # narrower than that is functionally flat, so fall through to
-        # the static path.
+        # narrower than that is functionally flat, so classification
+        # falls back to the NORMAL safe default.
         if (breaks["p90"] - breaks["p10"]) < 0.01:
             self._last_classifier_path = (
                 f"percentile_fallback_flat_day("
@@ -709,7 +752,7 @@ class DynamicTariffProvider(TariffProvider):
             )
             _LOGGER.debug(
                 "tariff/#359: degenerate distribution — p90-p10=%.4f < 0.01 "
-                "(%d today points); using static thresholds",
+                "(%d today points); classifying as NORMAL",
                 breaks["p90"] - breaks["p10"], len(today_prices),
             )
             return None
@@ -747,16 +790,24 @@ class DynamicTariffProvider(TariffProvider):
     def get_price_level(self) -> PriceLevel:
         return self._classify_price(self._read_current_price())
 
+    @staticmethod
+    def _detect_interval(prices: List[PricePoint]) -> timedelta:
+        """Slot length from the gap between the first two points.
+
+        Hourly is the default; 15/30-min markets are detected from the
+        data (gaps over an hour — e.g. a day boundary — are ignored).
+        """
+        if len(prices) >= 2:
+            gap = (prices[1].timestamp - prices[0].timestamp).total_seconds()
+            if 0 < gap <= 3600:
+                return timedelta(seconds=gap)
+        return timedelta(hours=1)
+
     def get_price_at(self, when: datetime) -> Optional[float]:
         prices = self._read_prices_list()
         if not prices:
             return None
-        # Determine interval from gap between first two prices (30min or 60min)
-        interval = timedelta(hours=1)
-        if len(prices) >= 2:
-            gap = (prices[1].timestamp - prices[0].timestamp).total_seconds()
-            if 0 < gap <= 3600:
-                interval = timedelta(seconds=gap)
+        interval = self._detect_interval(prices)
         for p in prices:
             if p.timestamp <= when < p.timestamp + interval:
                 return p.price
@@ -771,21 +822,33 @@ class DynamicTariffProvider(TariffProvider):
         # which path produced the level — surface it on TariffData so
         # the sensor attribute documents the path.
         price_level = self._classify_price(current_price)
+        now = dt_util.now()
+        # Genuinely upcoming slots: the one in progress plus the future,
+        # capped at 48 points (covers two hourly days / half a 15-min
+        # day). ``prices[:24]`` used to return the first 24 slots from
+        # midnight — mostly the past by the afternoon, and never
+        # tomorrow's curve.
+        interval = self._detect_interval(prices)
+        upcoming = [p for p in prices if p.timestamp + interval > now][:48]
         data = TariffData(
-            current_import_rate=current_price,
+            # For SpotMarketProvider the effective rate adds grid fees +
+            # taxes on top of the raw spot price — report the effective
+            # rate (it feeds the cost accumulators), but classify the
+            # raw price: the cached distribution is raw spot too.
+            current_import_rate=self.get_current_import_rate(),
             current_export_rate=self.get_current_export_rate(),
             price_level=price_level,
             currency=self.currency,
             provider=self._provider_name,
             is_dynamic=True,
             classifier_path=self._last_classifier_path,
-            upcoming_prices=prices[:24],  # Next 24 hours
+            upcoming_prices=upcoming,
         )
 
         if prices:
             # #359: use the timestamp's local-tz date — see _get_percentile_breaks
             # for the same UTC-vs-local pitfall.
-            today = dt_util.now().date()
+            today = now.date()
             today_prices = [
                 p.price for p in prices
                 if _local_date(p.timestamp) == today
@@ -796,7 +859,6 @@ class DynamicTariffProvider(TariffProvider):
                 data.today_avg_price = sum(today_prices) / len(today_prices)
 
             # Find next cheap window
-            now = dt_util.now()
             for p in prices:
                 if p.timestamp > now and p.level in (PriceLevel.CHEAP, PriceLevel.VERY_CHEAP, PriceLevel.NEGATIVE):
                     data.next_cheap_window_start = p.timestamp
@@ -821,40 +883,57 @@ class DynamicTariffProvider(TariffProvider):
         within_hours: int = 24,
         prefer_consecutive: bool = False,
     ) -> List[PricePoint]:
-        """Find the cheapest hours for scheduling night charging.
+        """Find the cheapest price slots covering ``hours_needed`` hours.
 
         Args:
-            hours_needed: Number of price slots to select.
-            within_hours: How far ahead to look.
-            prefer_consecutive: When True, return the cheapest *contiguous* block
-                of ``hours_needed`` slots (lowest summed price) instead of the
-                globally-cheapest scattered slots. Block-wise scheduling (#247)
-                avoids fragmenting a charge across the night and reduces
+            hours_needed: Charging time to cover, in hours. On sub-hourly
+                markets (Amber 30-min, Tibber Pulse 15-min) this selects
+                proportionally more slots — ``hours_needed`` slots would
+                only cover a half/quarter of the requested time and the
+                EV/battery planners would silently under-schedule
+                (#274/H2).
+            within_hours: Time horizon to look ahead. (Used to be a slot
+                count, which shrank the lookahead to 6h on 15-min data.)
+            prefer_consecutive: When True, return the cheapest *contiguous*
+                block (lowest summed price) instead of the globally-cheapest
+                scattered slots. Block-wise scheduling (#247) avoids
+                fragmenting a charge across the night and reduces
                 start/stop cycling on the charger. Falls back to scattered
-                selection when fewer than ``hours_needed`` slots are available.
+                selection when fewer slots than needed are available.
         """
         prices = self._read_prices_list()
         now = dt_util.now()
-        # Include the slot currently in progress (started <= now < start+interval)
-        # so "is now cheap?" works at the top of an hour.
-        future_prices = [p for p in prices if p.timestamp > now - timedelta(hours=1)][:within_hours]
+        interval = self._detect_interval(prices)
+        # Include the slot currently in progress (started <= now <
+        # start+interval) so "is now cheap?" works at the top of a slot,
+        # but not slots that already ended (the old fixed 1-hour lookback
+        # included up to 3 stale slots on 15-min markets).
+        horizon = now + timedelta(hours=within_hours)
+        future_prices = [
+            p for p in prices
+            if p.timestamp + interval > now and p.timestamp <= horizon
+        ]
 
-        if not future_prices or len(future_prices) < hours_needed:
+        slots_needed = (
+            math.ceil(hours_needed * 3600 / interval.total_seconds())
+            if hours_needed > 0 else 0
+        )
+        if not future_prices or len(future_prices) < slots_needed:
             return future_prices
 
-        if prefer_consecutive and hours_needed > 0:
+        if prefer_consecutive and slots_needed > 0:
             ordered = sorted(future_prices, key=lambda p: p.timestamp)
             best_start, best_sum = 0, None
-            for i in range(0, len(ordered) - hours_needed + 1):
-                window = ordered[i:i + hours_needed]
+            for i in range(0, len(ordered) - slots_needed + 1):
+                window = ordered[i:i + slots_needed]
                 total = sum(p.price for p in window)
                 if best_sum is None or total < best_sum:
                     best_sum, best_start = total, i
-            return ordered[best_start:best_start + hours_needed]
+            return ordered[best_start:best_start + slots_needed]
 
         # Cheapest scattered slots (default, back-compat behaviour).
         sorted_by_price = sorted(future_prices, key=lambda p: p.price)
-        return sorted(sorted_by_price[:hours_needed], key=lambda p: p.timestamp)
+        return sorted(sorted_by_price[:slots_needed], key=lambda p: p.timestamp)
 
     def get_schedule_for_day(
         self, date: Optional[datetime] = None,
@@ -875,8 +954,11 @@ class DynamicTariffProvider(TariffProvider):
         """
         prices = self._read_prices_list()
         target_date = (date or dt_util.now()).date()
+        # #359-class bug: compare (and later label) in HA's local tz.
+        # Nordpool emits UTC timestamps — a naked .date() shifts the
+        # schedule by the UTC offset and drops the late-evening blocks.
         today_prices = sorted(
-            [p for p in prices if p.timestamp.date() == target_date],
+            [p for p in prices if _local_date(p.timestamp) == target_date],
             key=lambda p: p.timestamp,
         )
         if not today_prices:
@@ -912,7 +994,8 @@ class DynamicTariffProvider(TariffProvider):
 
         for p in today_prices:
             lvl = _coarse_level(p.level)
-            time_str = f"{p.timestamp.hour:02d}:{p.timestamp.minute:02d}"
+            local_ts = _as_local(p.timestamp)
+            time_str = f"{local_ts.hour:02d}:{local_ts.minute:02d}"
             if lvl != current_level:
                 _close_block(time_str)
                 block_start = time_str

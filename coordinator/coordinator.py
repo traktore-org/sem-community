@@ -59,6 +59,7 @@ from .ev_control import EVControlMixin
 from .battery_protection import BatteryProtectionMixin
 from ..tariff import StaticTariffProvider, DynamicTariffProvider, PriceLevel
 from ..tariff.calendar_provider import CalendarTariffProvider
+from ..tariff.tariff_provider import _local_date as _tariff_local_date
 from ..analytics.pv_performance import PVPerformanceAnalyzer
 from ..analytics.consumption_predictor import ConsumptionPredictor
 from .ev_taper_detector import EVTaperDetector
@@ -2103,7 +2104,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     _today_for_diag = dt_util.now().date()
                     _today_prices = [
                         p for p in _prices_for_diag
-                        if p.timestamp.date() == _today_for_diag
+                        if _tariff_local_date(p.timestamp) == _today_for_diag
                     ]
                     if _today_prices:
                         _level_counts: Dict[str, int] = {}
