@@ -438,3 +438,310 @@ class TestParserRobustness:
             provider._read_prices_list()
 
         assert provider._last_parsed_attribute == "forecasts"
+
+
+# ---------------------------------------------------------------------------
+# Official Nord Pool core integration (service-based, core#132856)
+# ---------------------------------------------------------------------------
+
+from unittest.mock import AsyncMock  # noqa: E402
+
+from custom_components.solar_energy_management.tariff.tariff_provider import (  # noqa: E402
+    PricePoint,
+)
+from custom_components.solar_energy_management.coordinator.battery_charge_scheduler import (  # noqa: E402
+    BatteryChargeScheduler,
+    SchedulerConfig,
+)
+from homeassistant.util import dt as dt_util  # noqa: E402
+
+
+def _nordpool_service_hass(response):
+    """hass mock exposing the official integration's service surface."""
+    hass = MagicMock()
+    hass.states.async_all = MagicMock(return_value=[])
+    hass.services.has_service = MagicMock(return_value=True)
+    entry = MagicMock()
+    entry.entry_id = "np-entry-1"
+    hass.config_entries.async_entries = MagicMock(return_value=[entry])
+    hass.services.async_call = AsyncMock(side_effect=response)
+    return hass
+
+
+def _nordpool_action_response(start, count=24, base_mwh=120.0):
+    """Action response shape: area-keyed list of start/end/price per MWh."""
+    return {
+        "CH": [
+            {
+                "start": (start + timedelta(hours=i)).isoformat(),
+                "end": (start + timedelta(hours=i + 1)).isoformat(),
+                "price": base_mwh + i,
+            }
+            for i in range(count)
+        ],
+    }
+
+
+class TestOfficialNordPool:
+
+    def test_detects_official_entity(self):
+        hass = MagicMock()
+        np_state = MagicMock()
+        np_state.entity_id = "sensor.nord_pool_ch_current_price"
+        np_state.attributes = {}
+        hass.states.get = MagicMock(return_value=None)
+        hass.states.async_all = MagicMock(return_value=[np_state])
+
+        provider = DynamicTariffProvider(hass)
+        assert provider.detect_provider() == "nordpool_official"
+        assert provider._price_entity == "sensor.nord_pool_ch_current_price"
+
+    async def test_service_fetch_scales_mwh_to_kwh(self):
+        midnight = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = _nordpool_action_response(midnight, base_mwh=120.0)
+        hass = _nordpool_service_hass([today, ValueError("tomorrow not published")])
+        provider = DynamicTariffProvider(hass, price_entity="sensor.nord_pool_ch_current_price")
+
+        assert await provider.async_refresh_service_prices() is True
+        assert len(provider._service_prices) == 24
+        # 120 CHF/MWh -> 0.120 CHF/kWh ("All prices are returned in
+        # [Currency]/MWh" — integration docs)
+        assert provider._service_prices[0].price == pytest.approx(0.120)
+        # The failed tomorrow call must not poison the result.
+        assert hass.services.async_call.await_count == 2
+
+    async def test_service_prices_feed_read_prices_list(self):
+        midnight = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = _nordpool_action_response(midnight)
+        hass = _nordpool_service_hass([today, ValueError("no tomorrow")])
+        # current_price sensor exists but exposes no arrays (core#132856)
+        price_state = _make_price_state(0.121, attributes={})
+        hass.states.get = MagicMock(return_value=price_state)
+        provider = DynamicTariffProvider(hass, price_entity="sensor.nord_pool_ch_current_price")
+
+        await provider.async_refresh_service_prices()
+        prices = provider._read_prices_list()
+
+        assert len(prices) == 24
+        assert provider._last_parsed_attribute == "service:nordpool.get_prices_for_date"
+        # Percentile classification works off the service curve.
+        assert provider._classify_price(0.120) is PriceLevel.VERY_CHEAP
+
+    async def test_service_fetch_throttled(self):
+        midnight = dt_util.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today = _nordpool_action_response(midnight)
+        hass = _nordpool_service_hass([today, ValueError("no tomorrow"), today, today])
+        provider = DynamicTariffProvider(hass, price_entity="sensor.nord_pool_ch_current_price")
+
+        assert await provider.async_refresh_service_prices() is True
+        calls_after_first = hass.services.async_call.await_count
+        # Within the refresh window: no further service calls.
+        assert await provider.async_refresh_service_prices() is False
+        assert hass.services.async_call.await_count == calls_after_first
+
+    async def test_no_service_is_a_noop(self):
+        hass = MagicMock()
+        hass.services.has_service = MagicMock(return_value=False)
+        hass.services.async_call = AsyncMock()
+        provider = DynamicTariffProvider(hass, price_entity="sensor.whatever")
+        assert await provider.async_refresh_service_prices() is False
+        hass.services.async_call.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# Rolling 24h percentile window
+# ---------------------------------------------------------------------------
+
+class TestRollingPercentileWindow:
+
+    def test_evening_price_classified_against_night_ahead(self, mock_hass):
+        """22:00, tomorrow published: a 0.30 evening price must be
+        bucketed against the cheap night/tomorrow ahead (expensive),
+        not against today's flat 0.30 curve (which the old per-day
+        window reduced to a flat-day NORMAL fallback)."""
+        now = datetime(2026, 6, 10, 22, 0)
+        midnight = now.replace(hour=0, minute=0)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.p")
+        cache = [
+            PricePoint(timestamp=midnight + timedelta(hours=h), price=0.30)
+            for h in range(24)
+        ] + [
+            PricePoint(
+                timestamp=midnight + timedelta(days=1, hours=h),
+                price=0.10 + h * 0.001,
+            )
+            for h in range(24)
+        ]
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider._prices_cache = cache
+            level = provider._classify_price(0.30)
+
+        assert level is PriceLevel.VERY_EXPENSIVE
+        assert provider._last_classifier_path.startswith("percentile_active(")
+
+    def test_short_future_padded_with_recent_past(self, mock_hass):
+        """20:00 with a today-only cache: the window pads backwards so
+        classification still sees a full day of context instead of
+        falling back on 4 remaining points."""
+        now = datetime(2026, 6, 10, 20, 0)
+        midnight = now.replace(hour=0, minute=0)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.p")
+        provider._prices_cache = [
+            PricePoint(timestamp=midnight + timedelta(hours=h), price=0.10 + h * 0.02)
+            for h in range(24)
+        ]
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            breaks = provider._get_percentile_breaks()
+
+        assert breaks is not None
+        assert "n=24" in provider._last_classifier_path
+
+    def test_recompute_when_slot_advances(self, mock_hass):
+        """Breaks must not stay pinned to the day — moving to a later
+        slot with tomorrow cached shifts the window (and the breaks)."""
+        midnight = datetime(2026, 6, 10, 0, 0)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.p")
+        provider._prices_cache = [
+            PricePoint(timestamp=midnight + timedelta(hours=h), price=0.40 + h * 0.01)
+            for h in range(24)
+        ] + [
+            PricePoint(
+                timestamp=midnight + timedelta(days=1, hours=h),
+                price=0.10 + h * 0.001,
+            )
+            for h in range(24)
+        ]
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = midnight.replace(hour=1)
+            morning_breaks = provider._get_percentile_breaks()
+            mock_dt.now.return_value = midnight.replace(hour=23)
+            evening_breaks = provider._get_percentile_breaks()
+
+        assert morning_breaks is not None and evening_breaks is not None
+        # Evening window is dominated by tomorrow's cheap prices.
+        assert evening_breaks["p90"] < morning_breaks["p90"]
+
+
+# ---------------------------------------------------------------------------
+# Configurable fallback price
+# ---------------------------------------------------------------------------
+
+class TestConfigurableFallbackPrice:
+
+    def test_configured_fallback_replaces_constant(self, mock_hass):
+        unavailable = MagicMock()
+        unavailable.state = "unavailable"
+        unavailable.attributes = {}
+        mock_hass.states.get = MagicMock(return_value=unavailable)
+        provider = DynamicTariffProvider(
+            mock_hass, price_entity="sensor.p", fallback_price=2.5,  # SEK-ish
+        )
+        assert provider._read_current_price() == pytest.approx(2.5)
+
+    def test_default_fallback_unchanged(self, mock_hass):
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(return_value=[])
+        provider = DynamicTariffProvider(mock_hass)
+        assert provider._read_current_price() == pytest.approx(0.30)
+
+    def test_stale_cache_average_beats_constant(self, mock_hass):
+        """Cache holds only yesterday (no slot covers now): derive the
+        fallback from the cached average rather than any constant."""
+        now = datetime(2026, 6, 10, 12, 0)
+        yesterday = now - timedelta(days=1)
+        unavailable = MagicMock()
+        unavailable.state = "unavailable"
+        unavailable.attributes = {}
+        mock_hass.states.get = MagicMock(return_value=unavailable)
+        provider = DynamicTariffProvider(
+            mock_hass, price_entity="sensor.p", fallback_price=0.30,
+        )
+        provider._prices_cache = [
+            PricePoint(timestamp=yesterday.replace(hour=h), price=1.00)
+            for h in range(24)
+        ]
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            rate = provider._read_current_price()
+        assert rate == pytest.approx(1.00)
+
+
+# ---------------------------------------------------------------------------
+# Battery scheduler: 15-minute slot awareness in _plan_night_schedule
+# ---------------------------------------------------------------------------
+
+class TestNightScheduleSlotAwareness:
+
+    def _scheduler(self, max_charge_w=5000.0):
+        config = SchedulerConfig(
+            enabled=True,
+            battery_usable_capacity_kwh=10.0,
+            battery_max_charge_power_w=max_charge_w,
+            peak_limit_w=0.0,
+        )
+        return BatteryChargeScheduler(MagicMock(), MagicMock(), config)
+
+    def test_15min_slots_use_real_duration(self):
+        """8 quarter-hour slots at 5 kW deliver 10 kWh — the hardcoded
+        1h slot end would have claimed 5 kWh per slot and stopped the
+        plan after 2 slots (30 minutes of real charging)."""
+        now = datetime(2026, 6, 10, 22, 0)
+        cheapest = [
+            PricePoint(timestamp=now + timedelta(minutes=15 * i), price=0.10)
+            for i in range(8)
+        ]
+        scheduler = self._scheduler()
+        schedule = scheduler._plan_night_schedule(
+            battery_kwh_needed=10.0,
+            ev_kwh_needed=0.0,
+            ev_max_power_w=0.0,
+            cheapest_prices=cheapest,
+            now=now,
+        )
+        assert len(schedule.slots) == 8
+        for s in schedule.slots:
+            assert (s.end - s.start) == timedelta(minutes=15)
+            assert s.battery_power_w == pytest.approx(5000)
+        assert schedule.total_battery_kwh == pytest.approx(10.0)
+
+    def test_tail_slot_overshoot_cap_is_slot_aware(self):
+        """Remaining 0.5 kWh in a 15-min slot may be delivered at
+        2 kW — the 1h-shaped cap (500 W) under-allocated 4×."""
+        now = datetime(2026, 6, 10, 22, 0)
+        cheapest = [
+            PricePoint(timestamp=now + timedelta(minutes=15 * i), price=0.10)
+            for i in range(2)
+        ]
+        scheduler = self._scheduler()
+        schedule = scheduler._plan_night_schedule(
+            battery_kwh_needed=1.75,  # 1.25 in slot 1, 0.5 left for slot 2
+            ev_kwh_needed=0.0,
+            ev_max_power_w=0.0,
+            cheapest_prices=cheapest,
+            now=now,
+        )
+        assert len(schedule.slots) == 2
+        assert schedule.slots[0].battery_power_w == pytest.approx(5000)
+        assert schedule.slots[1].battery_power_w == pytest.approx(2000)
+        assert schedule.total_battery_kwh == pytest.approx(1.75)
+
+    def test_hourly_slots_unchanged(self):
+        now = datetime(2026, 6, 10, 22, 0)
+        cheapest = [
+            PricePoint(timestamp=now + timedelta(hours=i), price=0.10)
+            for i in range(2)
+        ]
+        scheduler = self._scheduler()
+        schedule = scheduler._plan_night_schedule(
+            battery_kwh_needed=10.0,
+            ev_kwh_needed=0.0,
+            ev_max_power_w=0.0,
+            cheapest_prices=cheapest,
+            now=now,
+        )
+        assert len(schedule.slots) == 2
+        for s in schedule.slots:
+            assert (s.end - s.start) == timedelta(hours=1)
+        assert schedule.total_battery_kwh == pytest.approx(10.0)

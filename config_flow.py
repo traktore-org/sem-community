@@ -1500,7 +1500,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 # Try to find Tibber/Nordpool/aWATTar entity automatically
                 for state in self.hass.states.async_all("sensor"):
                     eid = state.entity_id
-                    if any(p in eid for p in ("electricity_price", "nordpool", "awattar")):
+                    # Official Nord Pool core integration uses
+                    # sensor.nord_pool_<area>_current_price (underscored,
+                    # so the HACS "nordpool" pattern doesn't match it).
+                    if (
+                        "nord_pool" in eid and eid.endswith("_current_price")
+                    ) or any(
+                        p in eid for p in ("electricity_price", "nordpool", "awattar")
+                    ):
                         user_input["dynamic_tariff_entity"] = eid
                         _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
                         break

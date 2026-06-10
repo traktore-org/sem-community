@@ -200,6 +200,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 classification_mode=config.get(
                     "tariff_classification_mode", "percentile",
                 ),
+                # Last-resort rate when the price entity is unavailable
+                # and no cached curve covers "now". The user's configured
+                # import rate beats the CHF-shaped 0.30 constant on
+                # SEK/NOK/HUF installs.
+                fallback_price=config.get("electricity_import_rate") or 0.30,
             )
         elif tariff_mode == "calendar":
             schedule = {}  # Was config.get("tariff_schedule", {}) — never set via UI
@@ -1019,6 +1024,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # different cadences, so the energy balance momentarily clamps home to 0
             # for a single cycle. Hold the last positive value through brief dips.
             self._smooth_home_consumption(power)
+
+            # Official Nord Pool core integration exposes its day-ahead
+            # curve only via the get_prices_for_date action (no attribute
+            # arrays, core#132856) — fetch it on the event loop before the
+            # sync attribute-parsing below. Self-throttled inside the
+            # provider; no-op for every other provider.
+            _svc_refresh = getattr(
+                self._tariff_provider, "async_refresh_service_prices", None,
+            )
+            if _svc_refresh is not None:
+                try:
+                    await _svc_refresh()
+                except Exception as e:  # noqa: BLE001
+                    _LOGGER.debug("Tariff service-price refresh failed: %s", e)
 
             # Update tariff rates before energy/cost calculation so cost accumulators
             # use the current rate for this cycle (fixes dynamic tariff mid-day bug)
