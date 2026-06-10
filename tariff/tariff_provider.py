@@ -1152,7 +1152,7 @@ class DynamicTariffProvider(TariffProvider):
 
     def find_cheapest_hours(
         self,
-        hours_needed: int,
+        hours_needed: float,
         within_hours: int = 24,
         prefer_consecutive: bool = False,
     ) -> List[PricePoint]:
@@ -1207,6 +1207,59 @@ class DynamicTariffProvider(TariffProvider):
         # Cheapest scattered slots (default, back-compat behaviour).
         sorted_by_price = sorted(future_prices, key=lambda p: p.price)
         return sorted(sorted_by_price[:slots_needed], key=lambda p: p.timestamp)
+
+    def get_charge_window_rate(
+        self, hours: float = 4.0, within_hours: int = 12,
+    ) -> Optional[float]:
+        """Average price of the cheapest ``hours`` worth of upcoming slots.
+
+        This is the rate a night charge would actually pay — the break-even
+        input the battery scheduler needs. Returns ``None`` when no price
+        data is known (caller falls back to static config rates).
+        """
+        slots = self.find_cheapest_hours(hours, within_hours=within_hours)
+        if not slots:
+            return None
+        return sum(p.price for p in slots) / len(slots)
+
+    def get_next_daytime_rate(
+        self, peak_start: int = 7, peak_end: int = 20,
+    ) -> Optional[float]:
+        """Average price over the next daytime discharge window.
+
+        Averages all known FUTURE slots that fall into [peak_start,
+        peak_end) local time: at the 21:00 evaluation that is tomorrow's
+        published day-ahead daytime; at an after-midnight re-plan it is
+        today's daytime. Returns ``None`` when no future daytime slots
+        are known (caller falls back to static config rates).
+        """
+        prices = self._read_prices_list()
+        if not prices:
+            return None
+        now = dt_util.now()
+        day_prices = [
+            p.price for p in prices
+            if p.timestamp > now
+            and peak_start <= dt_util.as_local(p.timestamp).hour < peak_end
+        ]
+        if not day_prices:
+            return None
+        return sum(day_prices) / len(day_prices)
+
+    def price_series_fingerprint(self) -> Optional[int]:
+        """Stable fingerprint of the known price series.
+
+        Changes whenever new day-ahead prices arrive or existing values
+        change — the battery scheduler compares this against the value
+        captured at evaluation time to re-plan on price updates.
+        Returns ``None`` when no prices are known.
+        """
+        prices = self._read_prices_list()
+        if not prices:
+            return None
+        return hash(tuple(
+            (p.timestamp.isoformat(), round(p.price, 6)) for p in prices
+        ))
 
     def get_schedule_for_day(
         self, date: Optional[datetime] = None,
