@@ -1569,23 +1569,29 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                # #417: max raised 1.0 -> 5.0 (and export 0.5 -> 5.0) for
+                # high-unit currencies (SEK/NOK/CZK/PLN ~1-5 per kWh) --
+                # same fix the cheap/expensive threshold number entities
+                # got in v1.7.0-beta.21. The import rate doubles as the
+                # dynamic-tariff fallback price, so capping it at 1.0
+                # forced a wrong fallback on those markets.
                 vol.Optional(
                     "electricity_import_rate",
                     default=_c("electricity_import_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_off_peak_rate",
                     default=_c("electricity_off_peak_rate", None) or _c("electricity_nt_rate", 0.3387),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=1.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "electricity_export_rate",
                     default=_c("electricity_export_rate", 0.075),
                 ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0.0, max=0.50, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
+                    selector.NumberSelectorConfig(min=0.0, max=5.0, step=0.001, unit_of_measurement=f"{currency}/kWh", mode="box")
                 ),
                 vol.Optional(
                     "demand_charge_rate",

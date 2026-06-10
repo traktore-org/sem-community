@@ -302,6 +302,11 @@ class DynamicTariffProvider(TariffProvider):
         # ``_read_prices_list`` when attribute parsing yields nothing.
         self._service_prices: List[PricePoint] = []
         self._service_prices_fetched_at: Optional[datetime] = None
+        # #359 (RienduPre's derivative-entity setup): one-shot WARNING
+        # when the configured entity is readable but exposes no price
+        # array — percentile classification silently degrades to NORMAL
+        # and only the classifier_path attribute hints at why.
+        self._no_price_array_warned = False
         # Cached percentile breakpoints, recomputed when the price
         # cache or the rolling window's slot changes.
         # Keys: ``p10``, ``p25``, ``p75``, ``p90``.
@@ -760,6 +765,32 @@ class DynamicTariffProvider(TariffProvider):
             gap = (prices[1].timestamp - prices[0].timestamp).total_seconds()
             self._last_parsed_gap_seconds = gap if 0 < gap <= 3600 else None
 
+        # #359 derivative-entity diagnostic: a template/derivative sensor
+        # that only mirrors the current price (no array attributes) makes
+        # percentile classification silently degrade to NORMAL-only and
+        # disables cheap-window planning. Surface it once, actionably,
+        # instead of leaving the hint buried in classifier_path.
+        if prices:
+            self._no_price_array_warned = False  # recovered
+        elif (
+            state is not None
+            and state.state not in ("unknown", "unavailable")
+            and not self._no_price_array_warned
+        ):
+            self._no_price_array_warned = True
+            _LOGGER.warning(
+                "Tariff entity %s has a readable state but exposes no "
+                "recognised price-array attribute (prices_today / today / "
+                "tomorrow / prices / raw_today / forecasts / rates). "
+                "Percentile classification and cheap-window planning are "
+                "degraded (#359). If this is a derivative/template sensor, "
+                "pass the provider's array through (attributes: "
+                "prices_today: \"{{ state_attr('sensor.<provider>', "
+                "'prices_today') }}\") or point SEM at the provider's "
+                "native sensor.",
+                self._price_entity,
+            )
+
         # Entity flap guard (HA core#166742: Tibber reads ``unavailable``
         # between polls since the 2026.1 OAuth2 migration, dropping its
         # attributes): an empty parse from an *unavailable* entity must
@@ -1074,7 +1105,14 @@ class DynamicTariffProvider(TariffProvider):
             current_export_rate=self.get_current_export_rate(),
             price_level=price_level,
             currency=self.currency,
-            provider=self._provider_name,
+            # A user-configured entity never runs autodetection, so the
+            # name stayed "unknown" in diagnostics (#359 dump). Report
+            # it as "custom" — same name detect_provider would assign.
+            provider=(
+                self._provider_name
+                if self._provider_name != "unknown"
+                else ("custom" if self._price_entity else "unknown")
+            ),
             is_dynamic=True,
             classifier_path=self._last_classifier_path,
             upcoming_prices=upcoming,

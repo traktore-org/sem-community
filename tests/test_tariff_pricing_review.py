@@ -745,3 +745,97 @@ class TestNightScheduleSlotAwareness:
         for s in schedule.slots:
             assert (s.end - s.start) == timedelta(hours=1)
         assert schedule.total_battery_kwh == pytest.approx(10.0)
+
+
+# ---------------------------------------------------------------------------
+# #359 / #417 follow-ups from the issue tracker
+# ---------------------------------------------------------------------------
+
+class TestDerivativeEntityDiagnostic:
+    """#359 ended with a derivative/template entity that mirrors only the
+    current price (no array attributes): percentile silently degraded to
+    NORMAL with nothing but classifier_path hinting why. SEM now warns
+    once, actionably."""
+
+    def _no_array_state(self):
+        return _make_price_state(0.30, attributes={"unit": "EUR/kWh"})
+
+    def test_warns_once_for_readable_entity_without_array(self, mock_hass, caplog):
+        import logging
+        mock_hass.states.get = MagicMock(return_value=self._no_array_state())
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.derivative")
+
+        with caplog.at_level(logging.WARNING):
+            provider._read_prices_list()
+            provider._read_prices_list()  # second cycle: no repeat
+
+        warnings = [
+            r for r in caplog.records
+            if "no recognised price-array attribute" in r.message
+        ]
+        assert len(warnings) == 1
+        assert "sensor.derivative" in warnings[0].message
+
+    def test_no_warning_when_entity_unavailable(self, mock_hass, caplog):
+        import logging
+        unavailable = MagicMock()
+        unavailable.state = "unavailable"
+        unavailable.attributes = {}
+        mock_hass.states.get = MagicMock(return_value=unavailable)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.p")
+
+        with caplog.at_level(logging.WARNING):
+            provider._read_prices_list()
+
+        assert not [
+            r for r in caplog.records
+            if "no recognised price-array attribute" in r.message
+        ]
+
+    def test_warning_rearms_after_recovery(self, mock_hass, caplog):
+        import logging
+        now = datetime(2026, 6, 10, 12, 0)
+        good = _make_price_state(0.30, attributes={
+            "prices_today": [
+                {"start": now.replace(hour=h).isoformat(), "total": 0.20}
+                for h in range(24)
+            ],
+        })
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.p")
+
+        with caplog.at_level(logging.WARNING), patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            mock_hass.states.get = MagicMock(return_value=self._no_array_state())
+            provider._read_prices_list()  # warn #1
+            mock_hass.states.get = MagicMock(return_value=good)
+            provider._read_prices_list()  # recovery resets the latch
+            mock_hass.states.get = MagicMock(return_value=self._no_array_state())
+            provider._read_prices_list()  # warn #2
+
+        warnings = [
+            r for r in caplog.records
+            if "no recognised price-array attribute" in r.message
+        ]
+        assert len(warnings) == 2
+
+
+class TestProviderNameForConfiguredEntity:
+
+    def test_configured_entity_reports_custom_not_unknown(self, mock_hass):
+        """#359 diagnostics dump showed provider: unknown for a manually
+        configured entity (autodetect never runs for those)."""
+        mock_hass.states.get = MagicMock(return_value=_make_price_state(0.25))
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.my_prices")
+        data = provider.get_tariff_data()
+        assert data.provider == "custom"
+
+    def test_detected_provider_name_unchanged(self, mock_hass):
+        tibber_state = MagicMock()
+        tibber_state.entity_id = "sensor.electricity_price_home"
+        tibber_state.attributes = {"integration": "tibber"}
+        mock_hass.states.get = MagicMock(return_value=_make_price_state(0.25))
+        mock_hass.states.async_all = MagicMock(return_value=[tibber_state])
+        provider = DynamicTariffProvider(mock_hass)
+        provider.detect_provider()
+        data = provider.get_tariff_data()
+        assert data.provider == "tibber"
