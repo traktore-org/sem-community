@@ -357,6 +357,72 @@ class TestParserRobustness:
 
         assert provider._last_parsed_attribute == "raw_today"
 
+    def test_unavailable_entity_falls_back_to_cached_curve(self, mock_hass):
+        """HA core#166742: Tibber flaps to ``unavailable`` between polls
+        since the 2026.1 OAuth2 migration. The current rate must come
+        from the cached day-ahead curve, not the hard-coded 0.30."""
+        now = datetime(2026, 6, 10, 12, 30)
+        midnight = now.replace(hour=12, minute=0)
+        good_state = _make_price_state(0.42, attributes={
+            "today": [
+                {"startsAt": (midnight + timedelta(hours=h)).isoformat(),
+                 "total": 0.40 + h * 0.01}
+                for h in range(8)
+            ],
+        })
+        unavailable = MagicMock()
+        unavailable.state = "unavailable"
+        unavailable.attributes = {}
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.p")
+            # Warm the cache from a successful poll …
+            mock_hass.states.get = MagicMock(return_value=good_state)
+            provider._read_prices_list()
+            # … then the entity flaps.
+            mock_hass.states.get = MagicMock(return_value=unavailable)
+            rate = provider._read_current_price()
+
+        # 12:00 slot price, not the 0.30 constant.
+        assert rate == pytest.approx(0.40)
+
+    def test_unavailable_entity_without_cache_keeps_default(self, mock_hass):
+        unavailable = MagicMock()
+        unavailable.state = "unavailable"
+        unavailable.attributes = {}
+        mock_hass.states.get = MagicMock(return_value=unavailable)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.p")
+        assert provider._read_current_price() == 0.30
+
+    def test_empty_parse_does_not_wipe_cache(self, mock_hass):
+        """An entity flap (attributes gone) must not destroy the cached
+        curve — percentile classification and the schedule card depend
+        on it until the next successful poll."""
+        now = datetime(2026, 6, 10, 12, 30)
+        midnight = now.replace(hour=0, minute=0)
+        good_state = _make_price_state(0.20, attributes={
+            "today": [
+                {"startsAt": (midnight + timedelta(hours=h)).isoformat(),
+                 "total": 0.10 + h * 0.02}
+                for h in range(24)
+            ],
+        })
+        unavailable = MagicMock()
+        unavailable.state = "unavailable"
+        unavailable.attributes = {}
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(mock_hass, price_entity="sensor.p")
+            mock_hass.states.get = MagicMock(return_value=good_state)
+            assert len(provider._read_prices_list()) == 24
+            mock_hass.states.get = MagicMock(return_value=unavailable)
+            prices = provider._read_prices_list()
+
+        assert len(prices) == 24, "flap must serve the last good curve"
+        assert len(provider._prices_cache) == 24
+
     def test_forecasts_path_records_parsed_attribute(self, mock_hass):
         now = datetime(2026, 6, 10, 14, 0)
         forecasts = [

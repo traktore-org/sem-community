@@ -392,7 +392,34 @@ class DynamicTariffProvider(TariffProvider):
                 return float(state.state)
             except (ValueError, TypeError):
                 pass
+
+        # Entity temporarily unavailable: prefer the cached price curve
+        # over the hard-coded default. HA core's Tibber integration has
+        # been flapping to ``unavailable`` between polls since the
+        # 2026.1 OAuth2 migration (core#166742) — a constant 0.30 here
+        # would silently distort cost accumulation and classification
+        # for most of every poll cycle, while the day-ahead curve in
+        # the cache is still perfectly valid.
+        cached = self._cached_price_for(dt_util.now())
+        if cached is not None:
+            return cached
         return 0.30
+
+    def _cached_price_for(self, when: datetime) -> Optional[float]:
+        """Price of the cached slot covering ``when``, if any."""
+        cache = self._prices_cache
+        if not cache:
+            return None
+        interval = self._detect_interval(cache)
+        for p in cache:
+            try:
+                if p.timestamp <= when < p.timestamp + interval:
+                    return p.price
+            except TypeError:
+                # naive/aware mismatch between cache and clock — treat
+                # as a cache miss rather than blowing up the update loop
+                return None
+        return None
 
     def _read_prices_list(self) -> List[PricePoint]:
         """Read upcoming prices from entity attributes.
@@ -576,6 +603,22 @@ class DynamicTariffProvider(TariffProvider):
         if len(prices) >= 2:
             gap = (prices[1].timestamp - prices[0].timestamp).total_seconds()
             self._last_parsed_gap_seconds = gap if 0 < gap <= 3600 else None
+
+        # Entity flap guard (HA core#166742: Tibber reads ``unavailable``
+        # between polls since the 2026.1 OAuth2 migration, dropping its
+        # attributes): an empty parse from an *unavailable* entity must
+        # not wipe a previously good cache. Day-ahead prices don't go
+        # stale within a poll cycle, and wiping would break percentile
+        # classification, the cheap windows and the schedule card until
+        # the next successful poll. An *available* entity with no
+        # recognised shape still yields [] so the diagnose surface
+        # reflects the truth.
+        if (
+            not prices
+            and self._prices_cache
+            and state.state in ("unknown", "unavailable")
+        ):
+            return self._prices_cache
 
         # #359: write back to the cache so ``_get_percentile_breaks``
         # can compute today's distribution. The classification done
