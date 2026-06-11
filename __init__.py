@@ -288,6 +288,58 @@ def _merge_ev_chargers_by_id(
     return merged
 
 
+def persist_per_charger_option(
+    hass, entry, coordinator, charger_id: str, key: str, value,
+) -> None:
+    """Persist ONE per-charger option without an integration reload.
+
+    Single write path for every per-charger entity platform (#485 K2 —
+    select/number/time each carried a ~30-line copy of this hardening,
+    and the time.py copy was missed by the original #469 patch round,
+    clobbering ev_chargers until v1.7.3-beta.5):
+
+    * Copies charger dicts — in-place mutation leaves entry.options
+      unchanged, so async_update_entry never persists (#245).
+    * Falls back to ``entry.data.ev_chargers`` when options lacks the
+      key — otherwise ``[]`` is written back and the ``{**data,
+      **options}`` merge hides every charger on the next reload.
+    * Recovers THIS charger from entry.data when a partially poisoned
+      options list dropped its id (#462/#464) instead of silently
+      no-op'ing the write.
+    * Mirrors into ``coordinator.config`` and arms the reload-skip
+      snapshot before the entry write.
+    """
+    new_options = {**(entry.options or {})}
+    data_chargers = (entry.data or {}).get("ev_chargers") or []
+    source_chargers = new_options.get("ev_chargers") or data_chargers
+    ev_chargers = [dict(c) for c in source_chargers if isinstance(c, dict)]
+    for charger in ev_chargers:
+        if charger.get("id") == charger_id:
+            charger[key] = value
+            break
+    else:
+        recovered = next(
+            (dict(c) for c in data_chargers
+             if isinstance(c, dict) and c.get("id") == charger_id),
+            {"id": charger_id},
+        )
+        recovered[key] = value
+        ev_chargers.append(recovered)
+        _LOGGER.warning(
+            "Charger '%s' was missing from the stored ev_chargers list "
+            "(ids: %s) — recovered it from entry.data so the %s write "
+            "isn't lost",
+            charger_id,
+            [c.get("id") for c in ev_chargers[:-1]],
+            key,
+        )
+    new_options["ev_chargers"] = ev_chargers
+    if isinstance(getattr(coordinator, "config", None), dict):
+        coordinator.config.update({**(entry.data or {}), **new_options})
+    coordinator._skip_options_reload = new_options
+    hass.config_entries.async_update_entry(entry, options=new_options)
+
+
 def _heal_ev_chargers_options(
     data_chargers: list | None, opts_chargers: list | None,
 ) -> list | None:

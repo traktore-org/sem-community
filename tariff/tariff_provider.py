@@ -446,6 +446,28 @@ class DynamicTariffProvider(TariffProvider):
         )
         return True
 
+    @staticmethod
+    def is_price_entity_candidate(entity_id: str) -> bool:
+        """Whether an entity id looks like a dynamic-tariff price sensor.
+
+        Shared by runtime provider detection and the options-flow
+        auto-fill (#485 K5) — the two lists had drifted: the flow
+        missed Octopus and Amber despite its own dropdown label
+        promising them, while knowing the official Nord Pool shape the
+        runtime had just learned. Keep this in sync with the provider
+        branches in ``detect_provider``.
+        """
+        eid = entity_id.lower()
+        if "nord_pool" in eid and eid.endswith("_current_price"):
+            return True  # official Nord Pool core integration
+        if "electricity_price" in eid:
+            return True  # Tibber
+        if "amber" in eid and "general_price" in eid:
+            return True
+        if "octopus_energy" in eid and "current_rate" in eid:
+            return True
+        return any(p in eid for p in ("nordpool", "awattar"))
+
     def detect_provider(self) -> Optional[str]:
         """Auto-detect available price integration."""
         if self._price_entity:
