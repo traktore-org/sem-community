@@ -641,6 +641,15 @@ class DynamicTariffProvider(TariffProvider):
           ``prices`` array with ``time`` + ``price``.
         * **Amber Electric** / **Octopus Energy**: ``forecasts`` /
           ``rates`` with ``start_time`` + ``per_kwh``.
+        * **Tibber Grid Reward** (HACS, #491 — covers Tibber Pulse
+          accounts where the core integration provisions no
+          ``electricity_price`` forecast sensor, upstream
+          core#153312): ``today_raw`` / ``tomorrow_raw`` with
+          ``time`` + ``price`` (its ``today`` / ``tomorrow`` are
+          comma-joined *strings*, skipped by the list guard). The
+          entity id (``sensor.current_price``) is too generic to
+          auto-detect — users configure it via
+          ``dynamic_tariff_entity``.
 
         v1.7.2-beta.3 (2026-06-07): also tries ``prices`` (singular)
         + ``time`` / ``hour`` timestamp keys after seeing them in
@@ -691,8 +700,11 @@ class DynamicTariffProvider(TariffProvider):
         prices = []
         attrs = state.attributes if state else {}
 
-        # Tibber + NL EnergyZero/EasyEnergy + generic
-        for key in ("prices_today", "prices_tomorrow", "today", "tomorrow", "prices"):
+        # Tibber + NL EnergyZero/EasyEnergy + Tibber Grid Reward + generic
+        for key in (
+            "prices_today", "prices_tomorrow", "today", "tomorrow",
+            "prices", "today_raw", "tomorrow_raw",
+        ):
             price_list = attrs.get(key, [])
             if isinstance(price_list, list):
                 for item in price_list:
@@ -861,7 +873,8 @@ class DynamicTariffProvider(TariffProvider):
             _LOGGER.warning(
                 "Tariff entity %s has a readable state but exposes no "
                 "recognised price-array attribute (prices_today / today / "
-                "tomorrow / prices / raw_today / forecasts / rates). "
+                "tomorrow / prices / today_raw / raw_today / forecasts / "
+                "rates). "
                 "Percentile classification and cheap-window planning are "
                 "degraded (#359). If this is a derivative/template sensor, "
                 "pass the provider's array through (attributes: "
