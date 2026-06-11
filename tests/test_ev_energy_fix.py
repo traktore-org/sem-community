@@ -68,6 +68,7 @@ class TestLayer1ConfigKeyMismatch:
         config = {"ev_power_sensor": "sensor.keba_p30_charging_power"}
         hass = _make_hass()
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_power_sensor == "sensor.keba_p30_charging_power"
 
     def test_config_flow_key_ev_charging_power_sensor(self):
@@ -75,6 +76,7 @@ class TestLayer1ConfigKeyMismatch:
         config = {"ev_charging_power_sensor": "sensor.keba_p30_charging_power"}
         hass = _make_hass()
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_power_sensor == "sensor.keba_p30_charging_power"
 
     def test_both_keys_legacy_wins(self):
@@ -85,6 +87,7 @@ class TestLayer1ConfigKeyMismatch:
         }
         hass = _make_hass()
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_power_sensor == "sensor.legacy_ev"
 
     def test_neither_key_is_none(self):
@@ -92,6 +95,7 @@ class TestLayer1ConfigKeyMismatch:
         config = {}
         hass = _make_hass()
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_power_sensor is None
 
     def test_legacy_read_uses_resolved_sensor(self):
@@ -104,6 +108,7 @@ class TestLayer1ConfigKeyMismatch:
         config = {"ev_charging_power_sensor": "sensor.keba_p30_charging_power"}
         hass = _make_hass(sensors)
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         readings = reader.read_power()
         assert readings.ev_power == 7200.0
 
@@ -128,6 +133,7 @@ class TestLayer2EnergyDashboardFallback:
         }
         hass = _make_hass(sensors)
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         ed = EnergyDashboardConfig(
             solar_power="sensor.ed_solar",
@@ -151,6 +157,7 @@ class TestLayer2EnergyDashboardFallback:
         }
         hass = _make_hass(sensors)
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         # Energy Dashboard has solar but no ev_power
         ed = EnergyDashboardConfig(
@@ -172,6 +179,7 @@ class TestLayer2EnergyDashboardFallback:
         config = {}
         hass = _make_hass(sensors)
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         ed = EnergyDashboardConfig(solar_power="sensor.ed_solar", ev_power=None)
         reader.set_energy_dashboard_config(ed)
@@ -340,6 +348,7 @@ class TestKebaAutoDetection:
         config = {"ev_charging_power_sensor": "sensor.keba_p30_charging_power"}
         hass = _make_hass()
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_daily_energy_sensor is None
 
     def test_non_keba_power_sensor_no_auto_detect(self):
@@ -347,6 +356,7 @@ class TestKebaAutoDetection:
         config = {"ev_charging_power_sensor": "sensor.wallbox_power"}
         hass = _make_hass()
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_daily_energy_sensor is None
 
     def test_explicit_daily_sensor_overrides_auto_detect(self):
@@ -357,6 +367,7 @@ class TestKebaAutoDetection:
         }
         hass = _make_hass()
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_daily_energy_sensor == "sensor.my_custom_daily"
 
     def test_no_ev_sensor_no_crash(self):
@@ -364,6 +375,7 @@ class TestKebaAutoDetection:
         config = {}
         hass = _make_hass()
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_daily_energy_sensor is None
 
 
@@ -403,6 +415,7 @@ class TestEndToEndOriginalBug:
 
         # Layer 1: SensorReader resolves the key mismatch
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
         assert reader.config.ev_power_sensor == "sensor.keba_p30_charging_power"
 
         # Energy Dashboard has no ev_power

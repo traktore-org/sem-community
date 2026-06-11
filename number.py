@@ -743,25 +743,14 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
         """Update the per-charger setting value."""
         self._attr_native_value = value
 
-        # Keep coordinator's in-memory config in sync immediately
-        new_options = {**self._entry.options}
-        # Copy each charger dict — in-place mutation leaves entry.options unchanged,
-        # so async_update_entry skips persisting and the value reverts on restart (#245).
-        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
-        for charger in ev_chargers:
-            if charger.get("id") == self._charger_id:
-                charger[self._config_key] = value
-                break
-        new_options["ev_chargers"] = ev_chargers
-
-        if hasattr(self.coordinator, "config") and isinstance(self.coordinator.config, dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-
-        # Persist without triggering integration reload (snapshot-keyed skip)
-        self.coordinator._skip_options_reload = new_options
-        self.hass.config_entries.async_update_entry(
-            self._entry,
-            options=new_options,
+        # Shared per-charger write path (#485 K2) — owns the data-side
+        # fallback, missing-charger recovery (#462/#464), coordinator
+        # mirror and reload-skip arming. Do NOT inline a copy here; the
+        # copy-paste class already produced one missed writer (#469).
+        from . import persist_per_charger_option
+        persist_per_charger_option(
+            self.hass, self._entry, self.coordinator,
+            self._charger_id, self._config_key, value,
         )
 
         self.async_write_ha_state()

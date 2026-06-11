@@ -11,6 +11,281 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.10] - 11.06.2026
+
+## 💶 Tibber Grid Reward price arrays (#491)
+
+Tibber Pulse accounts where the core Tibber integration provisions no `electricity_price` forecast sensor (upstream core#153312) get their only day-ahead curve from the HACS [tibber_grid_reward](https://github.com/JohNan/homeassistant-tibber_grid_rewards) `sensor.current_price`.
+
+- **`today_raw` / `tomorrow_raw` price arrays are now parsed** — the `{time, price}` item keys were already known; only the two attribute names were missing. Configure the sensor via *Tariff settings → Dynamic tariff entity*; its id is too generic to auto-detect (reported by @RienduPre in #491, fixed in #495)
+- The Grid Reward sensor's `today`/`tomorrow` attributes are comma-joined *strings* — skipped by the list guard, so the curve is never double-counted
+
+## 🔋 Battery scheduler crash with saved options (#493)
+
+- **Scheduler evaluation no longer dies on every cycle for users who ever saved the battery-scheduler options page** — the options-flow slider stores the trigger hour as a float (`21.0`) and `datetime.replace(hour=21.0)` raised `TypeError`, killing nightly planning entirely; trigger hour/minute are now coerced (`int(float(...))`, surviving string-shaped storage too). Untouched configs keep the int default, which is why soaks missed it (reported by @RienduPre on #487, fixed in #496)
+
+---
+
+# [1.7.3-beta.9] - 11.06.2026
+
+## 🔌 Wallbox actuation: entity-range bounds + working stop path (#487)
+
+RienduPre's error log exposed the real "keeps charging in off mode" mechanism: SEM wrote 0 A (stop) and >entity-max amps to the Wallbox max-current number entity — HA core rejects both with `out_of_range` **before anything reaches the charger** (167× per charger in the log).
+
+- **Current writes are bounded into the target entity's own min/max** — a charger whose entity allows 6–16 A gets 16 A when SEM wants 32, instead of a rejected command (by @traktore-org in #490)
+- **0 A stop intents skip the structurally impossible number write** — the stop goes through the adapter's pause-switch / stop_session path (Wallbox min=6 A, IEC 61851)
+- **`ev_start_stop_entity` is now actually honored** as the Wallbox pause/resume switch — the adapter's own WARNING recommended it as the workaround but never read the field (RienduPre's #462 finding)
+- **Health-check violation WARNINGs are rate-limited** — after 6 consecutive violating cycles they drop to debug until they clear (413 identical lines flooded the log + the diagnose ring buffer)
+
+## 🧭 Grid-sign restart hardening (live PROD flip, #487 follow-up)
+
+A restart locked `grid_sign_inverted=True` on a Huawei install whose convention needs NO correction — 3 sign votes cast while HA's recorder was still replaying counter states (#476 items 5/6 gap, observed live 2026-06-11).
+
+- **Sign votes are ignored for the first 12 cycles after startup** (~2 min) — baselines stay fresh, nothing locks
+- **The sign-lock log line now names the voting counter entities**, so a wrong lock is diagnosable after the fact
+
+## 🖼️ Diagram card blank on Home tab (#488)
+
+- **Backticks inside a lit-template HTML comment terminated the template literal** — the remainder re-parsed as a tagged-template chain: syntactically valid JS (rollup/CI green) that threw at render time, blanking the system diagram. Fixed + a lint test forbidding backticks in card-template comments (by @traktore-org in #489)
+
+## 🔍 Pre-stable review batch (#485)
+
+A full 7-angle review of everything on develop since v1.7.2 surfaced 23 verified findings — two of them stable-release blockers in this release's headline features. All fixed in one batch.
+
+### 🚨 Blockers
+
+- **Rolling-horizon scheduler no longer ratchets the charge target** — `evaluate()` re-anchored the target on the live SOC every 30-min re-plan, stacking the deficit on top of charging progress until the battery grid-charged to ~95% every profitable night. The target is now anchored on the SOC at the first evaluation of the night's window, and a mid-charge re-evaluation that lands on NOT_NEEDED/NOT_PROFITABLE stops the active forced charge (by @traktore-org in #485)
+- **`set_option` on construction-time keys reloads again** — keys like `tariff_mode` and the `battery_*` scheduler params persisted + mirrored into a config dict nothing re-reads, so the live Config-card select "succeeded" while the constructed provider/scheduler kept the old value until restart (the #462 silent-no-op class) (by @traktore-org in #485)
+
+### 🛠️ Fixes
+
+- **Re-plan trigger fires once per price update** — day-ahead prices publishing ~13:00 used to log two INFO lines every ~10 s cycle until the 21:00 window opened (thousands/day), evicting everything useful from the 300-line diagnose ring buffer built for #461/#462 triage
+- **15-min markets: slot length comes from the provider** — gap inference over *selected* slots booked 2–4× oversized slots for scattered selections, corrupting the night plan's energy accounting
+- **`battery_cycle_cost` runtime default back to 0.0** — the silent 0.0→0.02 flip tightened the break-even on upgrade and stopped thin-margin night charging with no config change; 0.02 stays as the *visible* form default for new configs
+- **Nord Pool fetch failure backoff** — an API outage used to trigger two blocking service calls every cycle (~17k/day); failures now back off 5 minutes
+- **`_merge_ev_chargers_by_id` preserves charger order** — a partial submit (or the setup heal) could reorder the fleet, silently swapping the index-0 primary and default surplus priorities
+- **set_option mixed payloads are atomic** — tunables route through entities first, then ONE direct write + ONE reload (the structural write used to fire a listener reload racing the still-running tunable calls, dropping values mid-payload)
+- **set_option switch routing coerces YAML strings** — `"off"`/`"false"`/`"0"` were truthy and turned the switch ON
+- **Split-grid: a late-loading export sensor now completes a one-sided pick** — including the same-device case that blocked re-discovery until restart; the held import side is never re-rolled
+- **Dual-tariff auto sign vote** — `_detect_grid_sign` sums the NL DSMR tarief-1/2 counter lists (beta.8 fixed only the manual-audit path)
+- **Deterministic split-grid discovery** — candidates scan sorted by entity_id, so import/export roles can't re-roll across restarts
+- **Stale actuation Repair clears after a reload** — the persistent ERROR Repair raised before a config fix stayed in the UI forever because the new device instance's flags started fresh
+- **Canonical primary-charger id** — the fleet-strategy gate's `"ev_charger"` fallback disagreed with registration's `"ev_charger_0"` for id-less chargers, freezing the strategy sensor on exactly the corrupted configs this release hardens against
+- **Entity-domain charger services generalized** — `input_number.set_value` / `select.select_option` configured as the charger service bounced off their schemas exactly like the beta.8 `number.set_value` case
+- **Configured 0.0 electricity rates are respected** — `config.get(...) or 0.30` treated a real zero rate as missing
+- **Reload-skip snapshots expire after 60 s** — a lingering snapshot could swallow a legitimate reload on a future data/title-only entry update
+
+### ⚡ Performance
+
+- **Price curve parse memoized** — the full parse (isoformat + classify + sort + dedupe) ran 3–5× per coordinator cycle; now keyed on entity-state identity + service-fetch timestamp + percentile slot epoch
+- **Split-grid sensor scan throttled** — with healthy two-sided picks held, the full `hass.states` scan runs every 30 cycles instead of per cycle with the result discarded; the per-cycle INFO log only fires when the result changes
+
+### 🧹 Cleanup
+
+- `persist_per_charger_option()` — single write path replaces the ~30-line copies in select/number/time (the time.py copy was the writer #469 missed); `_saveChargerField` dedups the config-card's nested editors; `semFormatTime` unifies the dashboard's two clashing time formats; tariff auto-detect shares the provider's candidate matcher (the flow missed Octopus/Amber); dead `_set_option_needs_reload` helper removed; shared `_counter_deltas` reset guard for the three sign voters
+
+### 🧪 Tests
+
+- ~60 new tests: target-SOC anchor + mid-charge stop, replan one-shot, slot-hours hint, fetch backoff, parse memo, falsy-zero rates, merge order contract, switch coercion, unrouted-key reload (real-hass), late-export adoption, scan throttle, dual-tariff vote, deterministic discovery, entity-domain service routing, stale-Repair clear, primary-charger id contract
+
+---
+
+# [1.7.3-beta.8] - 10.06.2026
+
+## 🔌 Actuation hardening + triage surfaces (#462 follow-up batch)
+
+RienduPre's attached error log revealed the final #462 mechanism: with `ev_charger_service: number.set_value`, SEM sent `{current: X}` through the service path — `number.set_value` only accepts `value`, so **every current command on both chargers failed** (`extra keys not allowed @ data['current']`), including the 0 A for off-mode, with the evidence buried in per-cycle ERROR log lines.
+
+### 🛠️ Fixes
+
+- **`number.set_value` as charger service is now mapped to the number-entity write it was meant to be** (`value` + entity_id) — the misconfigured-but-recoverable shape can no longer leave a charger silently uncontrollable
+- **Repair issue on repeated actuation failure**: 3 consecutive rejected set-current commands raise a user-visible Repair naming the charger and the error (severity ERROR, translated EN/NL/DE + EN fallback for the rest); clears automatically on the next successful write
+- **Registration WARNING** when `ev_charger_service=number.set_value` has no `number.*` target entity
+- **Fleet `charging_strategy` / `charging_strategy_reason` are now consistent** — the per-charger loop let the *last* charger overwrite `charging_strategy` while `charging_strategy_reason` kept the primary's value ("always_max …" next to "off mode …" in the same dump); only the primary charger writes both now (per-charger detail lives in `charger_<id>_charging_state`)
+
+### 🔍 Triage surfaces
+
+- **In-memory SEM log ring buffer** — the diagnose payload's `recent_logs` now carries the last ~300 INFO+ SEM log lines on EVERY install type; Supervisor installs (journald, no flat log file) previously got a "please run `ha core logs`" placeholder, which left the whole #461/#462 triage blind
+- **Manual-grid audit is dual-tariff aware** — the sign cross-check sums the import/export counter *lists*, so NL DSMR tarief-1/2 splits no longer blind it during one tariff's hours
+- **Blocking `open()` calls removed from the event loop** ("Detected blocking call" in RienduPre's log): translations and the manifest version are warmed off-loop at setup and cached (`diag_version` no longer re-opens manifest.json every cycle)
+- TROUBLESHOOTING: manual grid entity checklist (import vs export roles, power-not-energy, both-or-neither) + Dutch dual-tariff Energy-Dashboard guidance
+
+### 🧪 Tests
+
+- New framework tier `tests/test_actuation_real.py`: real-HA schema-strict `number.set_value` shape test + the failure → Repair → recovery → clear cycle through the real issue registry
+- `test_services_real.py`: diagnose `recent_logs` served from the ring buffer (Supervisor parity) + cached version
+- Unit: actuation routing/param contracts, Repair threshold/idempotence/intermittent-flap behavior, log-buffer capture/capacity/idempotence, dual-tariff audit summing
+
+---
+
+# [1.7.3-beta.7] - 10.06.2026
+
+## 🔎 Manual grid override validation + sign audit (#461 follow-up)
+
+v1.7.3-beta.6's pick-stability fix addressed the auto-discovery path — but an install with `grid_import_power_entity` / `grid_export_power_entity` set explicitly bypasses ALL sign machinery, so a swapped, one-sided, or wrong-kind (energy counter as power sensor) configuration produces a statically inverted grid with zero feedback. Exactly the verified #461 shape: explicit entities configured, no discovery log lines, grid shows export while importing, house consumption 0, surplus invisible to every controller.
+
+### 🛠️ Fixes
+
+- **Manual grid config validation** (warn-once): an ENERGY counter (kWh) configured in a POWER field; only one side configured while the Energy Dashboard tracks both flows (the missing side reads a hard 0 W — "always exporting")
+- **Observe-only sign audit**: the manual-computed grid sign is cross-checked against the Energy Dashboard import/export counters every cycle; 5 consecutive contradictions log a WARNING naming both configured entities ("most likely SWAPPED") and set `diag_grid_manual_mismatch` in the diagnostics — SEM never silently overrides manual config, it makes the misconfiguration loud
+- Counter-reset and ambiguous-delta cycles are excluded from the audit (same guards as the autodetect path)
+
+## 🧰 Robustness batch (#476, part 1)
+
+Soundness/stability items from the 2026-06-10 review. No behavior changes on the happy path.
+
+### 🛠️ Fixes
+
+- **Back-to-back runtime writes no longer trigger a spurious reload** — the options-update listener consumed the `_skip_options_reload` snapshot on first match, so the second of two quick entity writes found no snapshot and reloaded the integration. Snapshot is now kept on match and cleared on mismatch — provably leak-free (HA only fires the listener when options actually change)
+- **Energy-counter reset guard** — Growatt-style daily counters can reset at midnight in *different* update cycles; the surviving side's increment could cast a wrong grid/battery sign vote. Negative delta on either side now re-baselines and skips the vote (grid + per-battery variants)
+- **`set_option` mixed payloads** — the skip snapshot is no longer armed when structural keys force a reload anyway (stale state on a discarded coordinator)
+- **Charger-id sanity at registration** — WARNING on id-less entries (positional fallback can collide with a real sibling) and on duplicate ids (writes target only the first match)
+- **Config card**: per-charger rows with no resolvable id are skipped instead of rendering `…_undefined_…` entity lookups; save-status timers cancelled on disconnect (same for the diagnose button's copy timer)
+
+### 📝 Notes
+
+- Heal-vs-auto-discovery ordering documented as intentionally heal-first (prevents the reseed from firing on heal-able installs)
+- Deliberately deferred from #476: sign-state persistence (persisting a wrongly-locked sign would make bad locks permanent — needs a validation design first) and vote-threshold changes (3-vote lock-in is pinned as contract by the #352 test suite; the dominant reset windows are already closed)
+
+---
+
+# [1.7.3-beta.6] - 10.06.2026
+
+## 🩹 2026-06-10 review fixes — P1 batch
+
+Top findings from the full-codebase review (the unfixed remainder is tracked in #475 / #476):
+
+### 🛠️ Bug fixes
+
+- **#461 root cause: split-grid pick stability** — any-device split-grid discovery re-ran every cycle and adopted the result unconditionally, so a flicker in HA's state-list iteration order could swap which sensor plays import vs export, inverting the computed `grid_power` sign ("sometimes works, sometimes inverted", Growatt). New adoption gate: held picks win unless there's no pick yet, the new match is a same-device upgrade, or a held pick went unavailable. Late-loading DSMR discovery (#166) preserved
+- **`time.py` per-charger writer hardened** — the deadline writer was missed by the #469 patch round: it still clobbered `ev_chargers` to `[]` when options lacked the key, and silently no-op'd on a partial list. Now identical to the select.py / number.py contract (data fallback + recovery-append + WARNING)
+- **`sem-chart-card` empty-state crash (second instance of the #457 class)** — the card lit-bound `${this._t('loading')}` AND overwrote the same node via `.textContent` in `_showEmpty()`, destroying lit's text part so the next `requestUpdate()` threw and froze the card. Empty-state and canvas visibility are now fully lit-rendered (bundle rebuilt)
+
+### 🧪 Tests
+
+- `TestSplitGridPickStability` (4 tests): flipped re-discovery is not adopted; same-device upgrade is; unavailable pick reopens adoption; late-loading meter still discovered
+- `time.py` recovery + data-fallback contract tests in `test_ev_chargers_storage_heal.py`
+
+---
+
+# [1.7.3-beta.5] - 10.06.2026
+
+## 🩹 Storage heal for poisoned `options.ev_chargers` (#462/#464 follow-up #3)
+
+The writer fixes shipped in beta.1–beta.4 (#467/#468/#469 + the smart-merge
+fall-through) stopped **new** corruption of the options-side charger list, but
+none of them repaired storage that the v1.7.2 .. v1.7.3-beta.3 builds had
+already corrupted. Once `entry.options.ev_chargers` is a *partial* list
+(e.g. charger 1 only — the auto-discovery reseed plants exactly that shape
+after a `[]` clobber), the `{**data, **options}` merge hides the data-side
+sibling forever and every per-charger write targeting the missing id
+silently no-ops: the persistent "changing charger 2 does nothing at all"
+report on #462/#464 that survived all three betas. The #469 `or`-fallback
+only fires for missing/empty lists, not partial ones.
+
+### 🛠️ Bug fixes
+
+- **Setup-time storage heal** — `async_setup_entry` reconciles a poisoned `options.ev_chargers` against `entry.data` by id-union (options fields win per charger, data-only siblings restored, id-less ghost entries dropped). Idempotent: one healing write, then quiet. Logs a WARNING naming the before/after ids so support can see it happened
+- **Per-charger writers never silently no-op** — `SEMPerChargerSelect.async_select_option` / `SEMPerChargerNumber.async_set_native_value` recover a charger missing from the stored list out of `entry.data` (full dict, or a minimal `{"id": ...}` stub) and append it, with a WARNING — instead of dropping the write on the floor
+- **`_merge_ev_chargers_by_id` drops id-less entries** — they're untargetable by every write path and at registration get assigned a positional `ev_charger_<idx>` id that can collide with a real sibling (ghost charger)
+- **Config card stamps the charger `id`** — the nested per-charger editors (`sem-config-card.js`) now always carry `id` on the entries they submit, so a partial submit can never produce an id-less ghost
+
+### 🔍 Diagnostics
+
+- `diagnose` payload for the `ev_chargers` (and `all`) section now includes `ev_chargers_storage_split` — the per-side `entry.data` vs `entry.options` charger lists (id / name / charge_mode). The merged `config` block hid exactly the fact that mattered during the #462/#464 triage
+
+### 🧪 Tests
+
+- `tests/test_ev_chargers_storage_heal.py` — heal contract, writer recovery (select + number), ghost-drop contract
+- `tests/test_services_real.py::test_setup_heals_poisoned_options_ev_chargers` — real-HA boot with RienduPre-shaped poisoned storage: asserts the options list heals, charger 2 registers, and a charger-2 mode flip lands
+
+---
+
+# [1.7.3-beta.4] - 09.06.2026
+
+## 🧪 Framework tests + caught third instance of #469 fall-through
+
+While writing the real-HA integration tests for the `set_option` service path, the test against `sem_multi_wallbox_config_entry` (a fresh-install fixture with chargers only in `entry.data`) caught the **same `entry.options.get("ev_chargers", [])` fall-through pattern** PR #469 fixed for the per-charger setters — but this time in the `__init__.py` smart-merge itself. A fresh-install multi-charger user opening the Config card for the first time and editing one charger's field would hit it: the merge appends the partial submit as a stray entry (no matching id in the empty existing list) and the next reload clobbers `entry.data.ev_chargers` with the partial-options-side list. Same symptom as #464 but on the fresh-install path — patched in the same PR as the test that caught it.
+
+### 🛠️ Bug fix
+
+- **#464 follow-up #2** `set_option` smart-merge falls back to `entry.data.ev_chargers` when `entry.options` doesn't have the key. Latent since v1.7.2-beta.2 (`set_option` rework). Affected: fresh-install multi-charger users editing per-charger fields via the Config card before any prior write had populated `entry.options.ev_chargers` (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+
+### 🧪 Test infrastructure
+
+- `tests/test_services_real.py` — four real-HA integration tests that drive `solar_energy_management.set_option` through the service registry and assert on `hass.states.get(...).state`. The test layer that would have caught the v1.7.3-beta.1 number-entity staleness regression (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `sem_multi_wallbox_config_entry` fixture — seeded from RienduPre's diagnose dump, reusable for any multi-charger contract test (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `sem_config_entry` fixture bumped from schema v7 → v12.1 (stale since the #135 v11→v12 migration) (by @traktore-org in [#471](https://github.com/traktore-org/sem-community/pull/471))
+- `tests/scenarios/2026-06-09_rienduPre_dual_wallbox.yaml` — YAML scenario replay of RienduPre's dual-Wallbox setup running through the existing scenario harness; locks the `solar_plus_cheap`-outside-cheap-window mode-isolation contract (by @traktore-org in [#472](https://github.com/traktore-org/sem-community/pull/472))
+
+### 🩹 Process retirement
+
+The `[live-test-before-deploy]` policy memo from earlier today is now backed by a mechanical CI gate via `test_services_real.py`. Future PRs touching `__init__.py` / `select.py` / `number.py` set_option paths have the same green-or-red signal pytest already gives for pure-helper bugs.
+
+---
+
+# [1.7.3-beta.3] - 09.06.2026
+
+## 🛠️ Per-charger options-fallback fix (#464 follow-up)
+
+Follow-up to v1.7.3-beta.2 for the **asymmetric multi-charger symptom** RienduPre reported under #464 — *"change on charger 1 works, change on charger 2 does nothing"*. Investigation of his diagnostic dump traced the asymmetry to a latent bug in **both** per-charger setters:
+
+```python
+# select.py:async_select_option  and  number.py:async_set_native_value
+new_options = {**self._entry.options}
+ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]   # ← [] when missing
+for charger in ev_chargers:                                            # ← iterates nothing
+    if charger.get("id") == self._charger_id:
+        charger[self._config_key] = value
+        break
+new_options["ev_chargers"] = ev_chargers                               # ← writes [] back
+```
+
+When `entry.options.ev_chargers` doesn't exist (fresh install where the user has never opened the Config card), the setter writes `entry.options["ev_chargers"] = []`. On the next reload, the merge `{**entry.data, **entry.options}` overrides the data-side chargers with the empty options-side list — **every charger disappears**, all per-charger entities go unavailable. Latent since the multi-charger arc landed.
+
+### 🛠️ Bug fix
+
+- **#464 follow-up** Per-charger select + number setters now fall back to `entry.data.ev_chargers` when `entry.options` doesn't have the key (by @traktore-org in [#469](https://github.com/traktore-org/sem-community/pull/469))
+
+### 🙏 Thanks
+
+- **@RienduPre** for the full diagnose dump on v1.7.3-beta.1 — without it the asymmetric pattern would have stayed buried.
+
+---
+
+# [1.7.3-beta.2] - 09.06.2026
+
+## 🩺 RienduPre v1.7.2 bug-response release
+
+> v1.7.3-beta.1 was tagged and immediately retracted today — live HA-TEST verification (post-merge, pre-soak) caught that the skip-reload optimization left number entities stale at their old value after `set_option`. The full pytest suite was green but mocks don't model HA's entity lifecycle. Hotfix in [#468](https://github.com/traktore-org/sem-community/pull/468) routes tunable changes through each entity's own write path, which updates `_attr_native_value` + writes state synchronously. The post-incident `[live-test-before-deploy]` memory was added so backend changes touching HA's config-entry / entity-state pipeline now require live entity-state verification BEFORE merge, not just pytest.
+
+Four bug reports landed on v1.7.2 within five hours this morning ([#460](https://github.com/traktore-org/sem-community/issues/460), [#461](https://github.com/traktore-org/sem-community/issues/461), [#462](https://github.com/traktore-org/sem-community/issues/462), [#464](https://github.com/traktore-org/sem-community/issues/464)) — all from the same reporter on the same install. Root-cause analysis traced the three logic bugs to a single change in v1.7.2-beta.2: the `set_option` service was switched to always-reload the integration so heat-pump entity rewires (#448) would take effect. Side effect was that every Config-card tunable tweak destroyed the SensorReader's split-grid discovery state and the per-charger context across the multi-charger loop — the candidate root cause for all three logic bugs. The fix scopes the reload to structural keys only, routes tunables through their matching entity's write path, and adds smart-merge for `ev_chargers` to prevent partial submits from dropping sibling chargers.
+
+Also unblocks #453 by structurally fixing #457 in the same release: the diagram card was the one card in the bundle that mixed Lit declarative bindings with imperative DOM mutation on the same node, crashing `requestUpdate()` whenever late translations triggered a re-render. Pure-reactive rewrite brings it in line with the other 21 bundled cards.
+
+### 🛠️ Bug fixes
+
+- **#457** Diagram card pure-reactive rewrite — eliminates the lit-html `TypeError: Cannot set properties of null` crash on `requestUpdate()`. Source -202 LOC, zero imperative writes on lit-bound nodes (by @traktore-org in [#459](https://github.com/traktore-org/sem-community/pull/459))
+- **#453** Single-channel sem-localize delivery — drops the dual-channel `add_extra_js_url` hack that masked #457 (by @traktore-org in [#463](https://github.com/traktore-org/sem-community/pull/463))
+- **#460** Clipboard copy works on plain-HTTP installs — execCommand fallback for `navigator.clipboard` (which requires HTTPS / localhost), pattern mirrors `sem-system-card._writeClipboard` from #285 (by @traktore-org in [#465](https://github.com/traktore-org/sem-community/pull/465))
+- **#462 / #464** `set_option` service: smart-merge `ev_chargers` by id (so a partial Config-card submit can never drop sibling chargers) + scope reload to structural entity-wiring keys only + route tunable changes through each entity's own write path (`number.set_value` / `switch.turn_on/off` / `select.select_option`), so the entity state refreshes synchronously without reloading the integration. Pure-function helpers extracted to module scope with 20 contract tests. Strong candidate fix for #461 too (eliminates the reload-driven split-grid re-discovery) (by @traktore-org in [#467](https://github.com/traktore-org/sem-community/pull/467) + hotfix [#468](https://github.com/traktore-org/sem-community/pull/468))
+
+### 🩺 Defensive instrumentation
+
+- Charger entity-id validation at registration — logs WARNING when configured `ev_charging_power_sensor` / `ev_current_control_entity` / `ev_charger_service_entity_id` / `ev_start_stop_entity` / `ev_charge_mode_entity` no longer exist in HA's state registry. Catches the historical bug class (#315 KEBA, #357 Wallbox) where HA-integration upgrades silently rename entities (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+- Wallbox pause-switch discovery surfaces a WARNING when no `switch.*pause_resume` is found on the device — explains the exact consequence (generic `set_current(0)` fallback, which some Wallbox firmware latches per #357) and the workaround (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+- Split-grid sensor change-detection logs WARNING with before→after IDs when the discovered import/export sensors change between cycles. Surfaces the "any-device" confidence flip behind #461 (by @traktore-org in [#466](https://github.com/traktore-org/sem-community/pull/466))
+
+### 🌐 i18n
+
+- Dutch translation update for the new configuration strings, contributed by the affected reporter (by @RienduPre in [#458](https://github.com/traktore-org/sem-community/pull/458))
+
+### 🙏 Thanks
+
+- **@RienduPre** for the four detailed bug reports with video evidence and for the Dutch translation contribution while we were debugging his install.
+
+---
+
 # [1.7.2] - 08.06.2026
 
 ## 🎉 Stable Release

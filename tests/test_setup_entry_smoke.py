@@ -82,7 +82,8 @@ def test_sem_config_entry_uses_current_schema_version(sem_config_entry) -> None:
 
     assert isinstance(sem_config_entry, MockConfigEntry)
     assert sem_config_entry.domain == DOMAIN
-    assert sem_config_entry.version == 7
+    assert sem_config_entry.version == 12
+    assert sem_config_entry.minor_version == 1
     # Multi-charger schema — wrapped list, not legacy flat keys.
     assert "ev_chargers" in sem_config_entry.data
     assert isinstance(sem_config_entry.data["ev_chargers"], list)
@@ -109,4 +110,4 @@ async def test_config_entry_can_register_with_hass(
     entries = hass.config_entries.async_entries(DOMAIN)
     assert len(entries) == 1
     assert entries[0].entry_id == sem_config_entry.entry_id
-    assert entries[0].version == 7
+    assert entries[0].version == 12

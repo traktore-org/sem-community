@@ -1,8 +1,13 @@
 /**
  * SEM Control Card — LitElement migration
  *
- * Consolidated control panel with 8 collapsible sections:
- *   EV Charging · Surplus · Battery · Hot Water · Solar · Tariff · Peak · System
+ * Live-operations panel with 6 collapsible sections:
+ *   Surplus · Battery · Hot Water · Heat Pump · Tariff · Peak
+ *
+ * #492: settings de-duplicated to sem-config-card — this card is the
+ * monitoring/live-status view; every writable setting lives on the
+ * Configuration tab (the cards target the same HA entities, so the
+ * live values here always reflect Config-tab changes).
  *
  * Config:
  *   type: custom:sem-control-card
@@ -56,10 +61,6 @@ const SECTIONS = [
         },
     },
     {
-        id: 'solar', icon: 'mdi:solar-panel-large', color: '#ff9800', titleKey: 'solar_power_section',
-        subtitleFn: () => '',
-    },
-    {
         id: 'tariff', icon: 'mdi:cash-multiple', color: '#96CAEE', titleKey: 'tariff_pricing',
         subtitleFn: (c) => {
             const provider = c._val('tariff_provider') || '—';
@@ -75,10 +76,6 @@ const SECTIONS = [
             return `${c._t('peak')} ${peak} kW · ${c._t('monthly_peak')} ${monthly} kW`;
         },
     },
-    {
-        id: 'system', icon: 'mdi:cog-outline', color: '#96CAEE', titleKey: 'system',
-        subtitleFn: () => '',
-    },
 ];
 
 /** All entity IDs watched for shouldUpdate comparison.
@@ -86,24 +83,26 @@ const SECTIONS = [
  * Cleaned in #282 audit: dropped all EV-related entities now that the EV
  * section has been removed from this card (per-charger controls live on
  * the EV tab via sem-ev-status-card).
+ *
+ * Pruned again in #492: the 10 settings duplicated on sem-config-card
+ * (SOC steppers, price thresholds, solar/grid limits, boost offset,
+ * solar-target, observer toggle) render only there now, so their
+ * number.* entities are no longer read here. switch.sem_observer_mode
+ * stays — the live observer-warning banner reads it.
  */
 const WATCHED = [
     'sensor.sem_surplus_active_devices', 'sensor.sem_surplus_total_devices',
     'sensor.sem_surplus_allocated_w', 'sensor.sem_surplus_total_w',
     'sensor.sem_surplus_distributable_w', 'sensor.sem_surplus_unallocated_w',
-    'number.sem_regulation_offset',
     'sensor.sem_battery_soc', 'sensor.sem_battery_status',
-    'number.sem_battery_priority_soc', 'number.sem_battery_minimum_soc',
-    'number.sem_battery_resume_soc', 'sensor.sem_diag_battery_capacity',
-    'number.sem_hot_water_solar_target', 'number.sem_legionella_target_temp',
-    // #437 — heat pump section: registered? mode, sg_ready_state, boost offset
+    'sensor.sem_diag_battery_capacity',
+    'number.sem_legionella_target_temp',
+    // #437 — heat pump section: registered? mode, sg_ready_state
     'binary_sensor.sem_heat_pump_registered',
     'sensor.sem_heat_pump_sg_ready_state', 'sensor.sem_heat_pump_mode',
-    'binary_sensor.sem_heat_pump_solar_boost', 'number.sem_heat_pump_boost_offset',
-    'number.sem_minimum_solar_power', 'number.sem_maximum_grid_import',
+    'binary_sensor.sem_heat_pump_solar_boost',
     'sensor.sem_tariff_provider', 'sensor.sem_tariff_price_level',
     'sensor.sem_tariff_current_import_rate',
-    'number.sem_cheap_price_threshold', 'number.sem_expensive_price_threshold',
     'sensor.sem_consecutive_peak_15min', 'sensor.sem_monthly_consecutive_peak',
     'sensor.sem_current_vs_peak_percentage', 'sensor.sem_load_management_status',
     'sensor.sem_load_management_recommendation',
@@ -116,25 +115,17 @@ class SEMControlCard extends SEMLitBase {
     static get watchedEntities() { return WATCHED; }
 
     static get properties() {
-        return {
-            ...super.properties,
-            _showHelp: { state: true },
-        };
+        return { ...super.properties };
     }
 
     constructor() {
         super();
-        // ev + battery + tariff expanded by default; surplus, hotwater, solar, peak, system collapsed
+        // battery + tariff expanded by default; surplus, hotwater, heatpump, peak collapsed
         this._collapsed = {
-            ev: false, surplus: true, battery: false,
-            hotwater: true, heatpump: true, solar: true, tariff: false,
-            peak: true, system: true,
+            surplus: true, battery: false,
+            hotwater: true, heatpump: true, tariff: false,
+            peak: true,
         };
-        this._showHelp = false;
-    }
-
-    _toggleHelp() {
-        this._showHelp = !this._showHelp;
     }
 
     setConfig(config) {
@@ -177,18 +168,6 @@ class SEMControlCard extends SEMLitBase {
     }
 
     // ── Shared control renderers ──
-
-    _renderToggle(entityId, labelKey, T) {
-        const isOn = this._hass?.states[entityId]?.state === 'on';
-        return html`
-            <div class="toggle-row">
-                <span class="toggle-label">${this._t(labelKey)}</span>
-                <div class="toggle-track ${isOn ? 'on' : ''}" @click=${() => this._toggleSwitch(entityId)}>
-                    <div class="toggle-thumb"></div>
-                </div>
-            </div>
-        `;
-    }
 
     _renderStepper(entityId, labelKey, T, helpKey) {
         const entity = this._hass?.states[entityId];
@@ -281,7 +260,6 @@ class SEMControlCard extends SEMLitBase {
                     </div>
                 </div>
             </div>
-            ${this._renderStepper('number.sem_regulation_offset', 'regulation_offset', T)}
         `;
     }
 
@@ -290,16 +268,9 @@ class SEMControlCard extends SEMLitBase {
         const capStr = capacity > 0 ? capacity.toFixed(1) + ' kWh' : '—';
 
         return html`
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T, 'setting_help_priority_soc')}
-                ${this._renderStepper('number.sem_battery_minimum_soc', 'minimum_soc', T, 'setting_help_minimum_soc')}
-            </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_resume_soc', 'resume_soc', T, 'setting_help_resume_soc')}
-                <div class="readonly-row">
-                    <span class="ctrl-label">${this._t('capacity_kwh')}</span>
-                    <span class="readonly-value">${capStr}</span>
-                </div>
+            <div class="readonly-row">
+                <span class="ctrl-label">${this._t('capacity_kwh')}</span>
+                <span class="readonly-value">${capStr}</span>
             </div>
         `;
     }
@@ -334,16 +305,17 @@ class SEMControlCard extends SEMLitBase {
                 <span class="ctrl-label" style="flex:1">${this._t('heat_pump_sg_ready_state')}</span>
                 <span class="readonly-value">${sgStateRaw}</span>
             </div>
-            ${this._renderStepper('number.sem_heat_pump_boost_offset', 'heat_pump_boost_offset', T)}
         `;
     }
 
     _renderHotWaterSection(T) {
+        // #492: solar_boost_target moved to sem-config-card. The
+        // legionella stepper deliberately stays — it's a global number
+        // entity with no Config-card equivalent (Config's
+        // hot_water_legionella_target is a *different* storage path via
+        // set_option; unifying them is the out-of-scope follow-up).
         return html`
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_hot_water_solar_target', 'solar_boost_target', T)}
-                ${this._renderStepper('number.sem_legionella_target_temp', 'legionella_target', T)}
-            </div>
+            ${this._renderStepper('number.sem_legionella_target_temp', 'legionella_target', T)}
             <div class="info-box">
                 <ha-icon icon="mdi:shield-alert" style="--mdc-icon-size:16px;color:#ff9800"></ha-icon>
                 <div>
@@ -352,15 +324,6 @@ class SEMControlCard extends SEMLitBase {
                         DE (DVGW W 551): ≥ 60°C · CH (SIA 385/1): ≥ 60°C · AT (ÖNORM B 5019): 60°C / 70°C 3 min
                     </div>
                 </div>
-            </div>
-        `;
-    }
-
-    _renderSolarSection(T) {
-        return html`
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_minimum_solar_power', 'min_solar', T)}
-                ${this._renderStepper('number.sem_maximum_grid_import', 'max_grid_import', T)}
             </div>
         `;
     }
@@ -375,10 +338,6 @@ class SEMControlCard extends SEMLitBase {
                 <ha-icon icon="mdi:flash" style="--mdc-icon-size:18px;color:#ff9800"></ha-icon>
                 <span class="ctrl-label" style="flex:1">${this._t('current_electricity_price')}</span>
                 <span class="readonly-value tariff-rate-value">${rate} ${rateUnit}</span>
-            </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_cheap_price_threshold', 'cheap_threshold', T, 'setting_help_cheap_threshold')}
-                ${this._renderStepper('number.sem_expensive_price_threshold', 'expensive_threshold', T, 'setting_help_expensive_threshold')}
             </div>
         `;
     }
@@ -414,14 +373,6 @@ class SEMControlCard extends SEMLitBase {
                         <span class="info-tile-value">${shed.toFixed(1)} kW · ${shedDevices} ${this._t('devices')}</span>
                     </div>
                 </div>
-            </div>
-        `;
-    }
-
-    _renderSystemSection(T) {
-        return html`
-            <div class="toggle-group">
-                ${this._renderToggle('switch.sem_observer_mode', 'observer_mode', T)}
             </div>
         `;
     }
@@ -482,10 +433,8 @@ class SEMControlCard extends SEMLitBase {
             battery:  (T) => this._renderBatterySection(T),
             hotwater: (T) => this._renderHotWaterSection(T),
             heatpump: (T) => this._renderHeatPumpSection(T),
-            solar:    (T) => this._renderSolarSection(T),
             tariff:   (T) => this._renderTariffSection(T),
             peak:     (T) => this._renderPeakSection(T),
-            system:   (T) => this._renderSystemSection(T),
         };
 
         return html`
@@ -583,68 +532,7 @@ class SEMControlCard extends SEMLitBase {
                 }
                 .section-body { padding: 0 14px 14px; }
 
-                /* ── Card-level help toggle (2026-06-06). Tap (?) to reveal
-                   inline one-line setting explanations across all sections
-                   that opt in (Battery, Tariff). ── */
-                .card-help-bar {
-                    display: flex; justify-content: flex-end;
-                    margin: -4px 0 6px;
-                }
-                .help-toggle {
-                    cursor: pointer;
-                    color: var(--secondary-text-color, ${T.textSec});
-                    opacity: 0.6;
-                    flex-shrink: 0;
-                    transition: opacity 0.15s, color 0.15s;
-                    user-select: none;
-                    -webkit-user-select: none;
-                    padding: 4px;
-                    border-radius: 50%;
-                }
-                .help-toggle:hover { opacity: 1; }
-                .help-toggle.on { color: ${accent}; opacity: 1; }
                 .stepper-cell { display: flex; flex-direction: column; }
-                .setting-help-text {
-                    font-size: 11px;
-                    line-height: 1.35;
-                    color: var(--secondary-text-color, ${T.textSec});
-                    opacity: 0.75;
-                    padding: 2px 4px 6px 0;
-                    margin-top: -4px;
-                    font-style: italic;
-                }
-
-                /* ── Toggle ── */
-                .toggle-group {
-                    border-bottom: 1px solid ${T.surfaceBorder};
-                    margin-bottom: 8px;
-                    padding-bottom: 4px;
-                }
-                .toggle-row {
-                    display: flex; align-items: center; justify-content: space-between;
-                    padding: 8px 0;
-                }
-                .toggle-label { font-size: 14px; font-weight: 500; }
-                .toggle-track {
-                    position: relative;
-                    width: 42px; height: 24px;
-                    border-radius: 12px;
-                    background: ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.18)'};
-                    cursor: pointer;
-                    transition: background 0.2s;
-                    flex-shrink: 0;
-                }
-                .toggle-track.on { background: ${accent}; }
-                .toggle-thumb {
-                    position: absolute;
-                    top: 2px; left: 2px;
-                    width: 20px; height: 20px;
-                    border-radius: 50%;
-                    background: white;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                    transition: left 0.2s;
-                }
-                .toggle-track.on .toggle-thumb { left: 20px; }
 
                 /* ── Select ── */
                 .ctrl-row {
@@ -793,15 +681,6 @@ class SEMControlCard extends SEMLitBase {
                 <div class="observer-warning">
                     <ha-icon icon="mdi:eye-outline" style="--mdc-icon-size:20px;color:#f44336"></ha-icon>
                     <span>${this._t('observer_mode_active')} — ${this._t('observer_mode_readonly')}</span>
-                </div>
-                <div class="card-help-bar">
-                    <ha-icon
-                        class="help-toggle ${this._showHelp ? 'on' : ''}"
-                        icon="${this._showHelp ? 'mdi:help-circle' : 'mdi:help-circle-outline'}"
-                        title="${this._t('zone_help_toggle')}"
-                        @click=${() => this._toggleHelp()}
-                        style="--mdc-icon-size:18px"
-                    ></ha-icon>
                 </div>
                 ${SECTIONS.map(s => this._renderSection(s, sectionRenderers[s.id], T))}
             </div>

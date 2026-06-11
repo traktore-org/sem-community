@@ -35,6 +35,19 @@ export function semFormatEnergy(kwh) {
     return kwh.toFixed(kwh < 10 ? 2 : 1) + ' kWh';
 }
 
+/* ── Time formatting — locale-aware HH:MM (#485 K6) ──
+   One formatter for every card's time labels: a 12-hour-locale user
+   used to see "9:33 PM" on the today-plan card next to a hard-coded
+   24h "21:33" on the system diagram's sunrise/sunset. */
+export function semFormatTime(iso) {
+    if (!iso) return '—';
+    try {
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+        return '—';
+    }
+}
+
 /* ── Animation duration from power (higher power = faster animation) ── */
 export function semCalcDuration(watts) {
     const abs = Math.abs(watts);

@@ -530,14 +530,19 @@ class TestSchedulerEvaluation:
         assert decision.target_soc == 90.0  # Capped
 
     def test_hours_needed_calculation(self, mock_hass, scheduler_config):
-        """Hours needed = charge_kwh / charge_power_kw, rounded up."""
+        """Hours needed = charge_kwh / charge_power_kw, rounded up (ceil).
+
+        was round-half-up (2.09 → 2), which booked a duration too
+        short to actually reach the target. Ceil guarantees the adapter
+        duration covers the full charge.
+        """
         scheduler_config.battery_max_charge_power_w = 2500  # 2.5 kW
         scheduler = self._make_scheduler(mock_hass, scheduler_config)
 
-        # deficit = 10 - (2*0.8) = 8.4 kWh
+        # deficit = 10 - (2*0.8 blended) = 8.4 kWh
         # target_soc = 40 + (8.4/9.5)*100 = 40 + 88.4 = 95 (capped)
         # actual_charge = (95-40)/100 * 9.5 = 5.225 kWh
-        # hours = 5.225 / 2.5 = 2.09 → 2 hours
+        # hours = 5.225 / 2.5 = 2.09 → ceil → 3 hours
         decision = scheduler.evaluate(
             current_soc=40.0,
             forecast_tomorrow_kwh=2.0,
@@ -547,7 +552,7 @@ class TestSchedulerEvaluation:
             correction_factor=1.0,
         )
 
-        assert decision.hours_needed == 2
+        assert decision.hours_needed == 3
 
 
 # ---------------------------------------------------------------------------
@@ -826,6 +831,48 @@ class TestSchedulerConfig:
         assert config.max_target_soc == 100.0
         assert config.peak_limit_w == 9000.0
         assert config.ev_priority is False
+
+    def test_from_config_float_trigger_hour_from_options_flow(self, mock_hass):
+        """#493: the options-flow NumberSelector stores floats (21.0).
+
+        ``datetime.replace(hour=21.0)`` raises ``TypeError: 'float'
+        object cannot be interpreted as an integer`` — on PROD
+        (RienduPre, #487 comment, v1.7.3-beta.9) this killed the
+        scheduler evaluation on every coordinator cycle for any user
+        who ever saved the battery-scheduler options page. Defaults
+        stay int, which is why soaks on untouched configs missed it.
+
+        Exercise the exact crashing path: float-shaped config →
+        ``should_trigger_evaluation`` → ``_in_planning_window`` →
+        ``_window_start`` → ``now.replace(hour=...)``.
+        """
+        config = SchedulerConfig.from_config({
+            "battery_charge_scheduler_enabled": True,
+            "battery_precharge_trigger_hour": 21.0,
+            "battery_precharge_trigger_minute": 0.0,
+        })
+        assert config.trigger_hour == 21
+        assert isinstance(config.trigger_hour, int)
+        assert isinstance(config.trigger_minute, int)
+
+        # String-shaped storage ("21.0") must coerce too — a bare int()
+        # would swap the TypeError for a ValueError (review finding on
+        # PR #496).
+        config_str = SchedulerConfig.from_config({
+            "battery_precharge_trigger_hour": "21.0",
+            "battery_precharge_trigger_minute": "30",
+        })
+        assert config_str.trigger_hour == 21
+        assert config_str.trigger_minute == 30
+
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, config)
+        # Must not raise — and inside the window it must trigger, so
+        # the call demonstrably reached the production logic.
+        in_window = dt_util.now().replace(hour=21, minute=5, second=0)
+        assert scheduler.should_trigger_evaluation(in_window) is True
+        outside = dt_util.now().replace(hour=12, minute=0, second=0)
+        assert scheduler.should_trigger_evaluation(outside) is False
 
 
 # ---------------------------------------------------------------------------

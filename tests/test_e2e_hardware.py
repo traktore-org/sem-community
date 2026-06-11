@@ -334,6 +334,7 @@ class E2ETestBase:
             "ev_charging_sensor": self.charger.charging_sensor,
         }
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         # Solar power should be positive
         solar = reader._read_sensor(self.inverter.solar_power, "solar")
@@ -359,6 +360,7 @@ class E2ETestBase:
             hass.states.get = lambda eid: _state(3500, unit="W", device_class="power")
 
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         value = reader._read_sensor(self.charger.power_sensor, "ev")
         assert value == 3500.0, f"{self.charger.name}: expected 3500W, got {value}"
 
@@ -440,6 +442,7 @@ class E2ETestBase:
             "battery_soc_sensor": inv.battery_soc,
         }
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         # Set up Energy Dashboard config for sign detection
         ed = MagicMock()
@@ -487,6 +490,7 @@ class E2ETestBase:
             "battery_power_sensor": inv.battery_power,
         }
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         ed = MagicMock()
         ed.solar_power = inv.solar_power
@@ -540,6 +544,7 @@ class E2ETestBase:
 
         hass = MagicMock()
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         chg = self.charger
 
         # Test connected state

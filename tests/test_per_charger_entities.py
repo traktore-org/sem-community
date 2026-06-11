@@ -382,6 +382,7 @@ class TestPerChargerAggregation:
         }
 
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         # Mock sensor states
         def mock_get(entity_id):
@@ -422,6 +423,7 @@ class TestPerChargerAggregation:
             "ev_chargers": three_chargers,
         }
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         def mock_get(entity_id):
             states = {
@@ -459,6 +461,7 @@ class TestPerChargerAggregation:
             "ev_chargers": four_chargers,
         }
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         def mock_get(entity_id):
             powers = {"sensor.c1_power": "1500", "sensor.c2_power": "2500",
@@ -532,6 +535,7 @@ class TestPerChargerAggregation:
             "ev_chargers": chargers,
         }
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         # Only charger 2 connected, charger 1 disconnected
         def mock_get(entity_id):
@@ -574,6 +578,7 @@ class TestPerChargerAggregation:
             "ev_chargers": chargers,
         }
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         def mock_get(entity_id):
             states = {
@@ -631,6 +636,7 @@ class TestPerChargerAggregation:
         }
 
         reader = SensorReader(hass, config)
+        reader._sign_vote_warmup = 0
 
         def mock_get(entity_id):
             states = {

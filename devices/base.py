@@ -535,6 +535,13 @@ class CurrentControlDevice(ControllableDevice):
         # whether to skip a same-value write (recent) or force a heartbeat
         # refresh (interval elapsed).
         self._last_write_at: float = 0.0
+        # #462 follow-up: consecutive set-current failures → Repair issue
+        # at 3 (cleared on the next successful write).
+        self._actuation_failures: int = 0
+        self._actuation_repair_raised: bool = False
+        # #485 H5: whether this instance has cleared a possible STALE
+        # persistent Repair left by a previous device instance.
+        self._stale_repair_checked: bool = False
         self._session_active: bool = False
         self._min_power_change_interval = min_power_change_interval
 
@@ -627,6 +634,48 @@ class CurrentControlDevice(ControllableDevice):
         )
         return await self._set_current(target_current)
 
+    def _bound_to_entity_range(
+        self, entity_id: str, current: float,
+    ) -> tuple:
+        """Bound a current command to the target number entity's range.
+
+        Returns ``(bounded_current, skip_write)``. ``skip_write`` is
+        True for a stop intent (``current <= 0``) on an entity whose
+        minimum is above 0 — the write would be rejected by HA core's
+        range validation before reaching the charger (#487), so the
+        caller must rely on the adapter's stop mechanism instead.
+        Unreadable entities/attributes leave the command untouched.
+        """
+        state = self.hass.states.get(entity_id) if entity_id else None
+        attrs = getattr(state, "attributes", None)
+        if not isinstance(attrs, dict):
+            return current, False
+
+        def _as_float(value):
+            # Real numerics/strings only — duck-typed mocks support
+            # __float__ and would fabricate bounds.
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                try:
+                    return float(value)
+                except ValueError:
+                    return None
+            return None
+
+        ent_min = _as_float(attrs.get("min"))
+        ent_max = _as_float(attrs.get("max"))
+
+        if current <= 0:
+            return current, bool(ent_min is not None and ent_min > 0)
+        if ent_max is not None and current > ent_max:
+            current = ent_max
+        if ent_min is not None and current < ent_min:
+            current = ent_min
+        return current, False
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)
@@ -647,8 +696,69 @@ class CurrentControlDevice(ControllableDevice):
         ):
             return self._status.current_consumption_w
 
+        # Entity-platform services have strict schemas — sending the
+        # per-integration param name produced "extra keys not allowed"
+        # on EVERY command (#462, RienduPre, for number.set_value).
+        # Generalized to the whole misconfigured-but-recoverable shape
+        # (#485 K1): input_number.set_value and select.select_option
+        # configured as the charger service bounced identically.
+        _svc = (self.charger_service or "").strip().lower()
+        _entity_svc_domain = _svc.split(".", 1)[0] if "." in _svc else ""
+
+        # #487: HA core validates number writes against the ENTITY's
+        # min/max BEFORE anything reaches the charger. Wallbox exposes
+        # min=6 (IEC 61851), so writing 0 A to stop is structurally
+        # impossible — it raised out_of_range every idle cycle (167×
+        # in RienduPre's log) and, since the actuation Repair landed,
+        # would false-trip it. Likewise a configured max above the
+        # entity's max (Links: 6-16 A) bounced every ramp-up command.
+        # Bound the write to the entity's range; a 0 A stop intent
+        # skips the write entirely — the actual stop is the adapter's
+        # job (pause switch / stop_session), and the number entity
+        # cannot express it.
+        _entity_target = None
+        if _entity_svc_domain in ("number", "input_number"):
+            _entity_target = self.current_entity_id or self.charger_service_entity_id
+        elif not self.charger_service and self.current_entity_id:
+            _entity_target = self.current_entity_id
+        skip_entity_write = False
+        if _entity_target:
+            bounded, skip_entity_write = self._bound_to_entity_range(
+                _entity_target, current,
+            )
+            if not skip_entity_write and bounded != current:
+                _LOGGER.debug(
+                    "%s: clamping commanded %.0f A into %s's range → %.0f A",
+                    self.name, current, _entity_target, bounded,
+                )
+                current = bounded
+
         try:
-            if self.charger_service:
+            if skip_entity_write:
+                # Stop intent on a number entity that can't express 0 A.
+                _LOGGER.debug(
+                    "%s: 0 A stop not writable to %s (entity min > 0) — "
+                    "relying on the adapter stop path (pause switch / "
+                    "stop_session) (#487)",
+                    self.name, _entity_target,
+                )
+            elif _entity_svc_domain in ("number", "input_number"):
+                # Map it to the entity write it was meant to be.
+                target = self.current_entity_id or self.charger_service_entity_id
+                await self.hass.services.async_call(
+                    _entity_svc_domain, "set_value",
+                    {"entity_id": target, "value": current},
+                    blocking=True,
+                )
+            elif _entity_svc_domain == "select":
+                # Amps exposed as a select: options are amp strings.
+                target = self.current_entity_id or self.charger_service_entity_id
+                await self.hass.services.async_call(
+                    "select", "select_option",
+                    {"entity_id": target, "option": str(int(current))},
+                    blocking=True,
+                )
+            elif self.charger_service:
                 # Service-based control — param name varies per integration (#82)
                 domain, service = self.charger_service.split(".", 1)
                 service_data = {self.service_param_name: current}
@@ -671,6 +781,8 @@ class CurrentControlDevice(ControllableDevice):
                     blocking=True,
                 )
 
+            self._clear_actuation_failure()
+
             self._current_setpoint = current
             self._last_write_at = now  # #392: heartbeat tracker
             self._record_power_change()
@@ -691,7 +803,57 @@ class CurrentControlDevice(ControllableDevice):
             _LOGGER.error("Failed to set current on %s: %s", self.name, e)
             self._status.state = DeviceState.ERROR
             self._status.error_message = str(e)
+            self._record_actuation_failure(e)
             return self._status.current_consumption_w
+
+    def _record_actuation_failure(self, error: Exception) -> None:
+        """Track consecutive set-current failures; raise a Repair at 3.
+
+        RienduPre's #462 install failed EVERY current command for days
+        with the evidence buried in per-cycle ERROR log lines — the user
+        saw "SEM doesn't react" with no actionable surface. Three
+        consecutive failures now raise a user-visible Repair naming the
+        device and the error; it clears on the next successful write.
+        """
+        self._actuation_failures += 1
+        if self._actuation_failures < 3 or self._actuation_repair_raised:
+            return
+        self._actuation_repair_raised = True
+        try:
+            from ..coordinator import repair_issues as _ri
+            _ri.raise_charger_actuation_failed(
+                self.hass, self.device_id,
+                name=self.name, error=str(error),
+            )
+        except Exception as exc:  # noqa: BLE001 — never fail the cycle over a repair
+            _LOGGER.debug("actuation-failure repair raise failed: %s", exc)
+
+    def _clear_actuation_failure(self) -> None:
+        """Reset the failure streak; clear the Repair after a good write."""
+        if self._actuation_failures == 0 and not self._actuation_repair_raised:
+            # #485 H5: the Repair is persistent (survives restart) but
+            # these flags are instance state. After the reload that
+            # fixing the config causes, the new instance's successful
+            # writes hit this early-return and the stale ERROR Repair
+            # stayed in the UI forever. Delete it once per instance —
+            # async_delete_issue is a no-op when no issue exists.
+            if not self._stale_repair_checked:
+                self._stale_repair_checked = True
+                try:
+                    from ..coordinator import repair_issues as _ri
+                    _ri.clear_charger_actuation_failed(self.hass, self.device_id)
+                except Exception as exc:  # noqa: BLE001
+                    _LOGGER.debug("stale actuation-repair clear failed: %s", exc)
+            return
+        self._actuation_failures = 0
+        if not self._actuation_repair_raised:
+            return
+        self._actuation_repair_raised = False
+        try:
+            from ..coordinator import repair_issues as _ri
+            _ri.clear_charger_actuation_failed(self.hass, self.device_id)
+        except Exception as exc:  # noqa: BLE001
+            _LOGGER.debug("actuation-failure repair clear failed: %s", exc)
 
     async def start_session(self, energy_target_kwh: float = 0) -> None:
         """Start a charging session.

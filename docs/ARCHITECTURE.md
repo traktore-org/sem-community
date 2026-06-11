@@ -338,16 +338,30 @@ patches `ChargingContext.soc_limit_active` / `night_target_kwh` per charger befo
 
 Forecast-aware grid-to-battery charging during cheap night hours. **Disabled by default** — enable via config flow.
 
-### Decision Pipeline (runs daily at configurable trigger hour, default 21:00)
+### Decision Pipeline (rolling horizon)
+
+The first evaluation of the night runs when the planning window opens
+(trigger hour, default 21:00); the scheduler then re-evaluates every
+`battery_replan_interval_min` (default 30 min) until the window closes
+(`battery_planning_window_hours` later, default 06:00), picking up price
+updates, forecast refreshes and SOC drift MPC-style.
 
 1. **Forecast resolve** — 3-tier fallback: fresh Solcast → stale (doubled pessimism) → offline (conservative)
 2. **Deficit calculation** — `expected_consumption - corrected_forecast × confidence × (1 - pessimism)`
 3. **Negative tariff override** — force-charge to max SOC during negative prices regardless of forecast
 4. **Threshold check** — skip if deficit < `min_deficit_kwh` (default 2 kWh)
 5. **Break-even check** — `(off_peak_rate / efficiency) + (2 × cycle_cost) < peak_rate` — includes battery degradation
-6. **Target SOC** — `current_soc + (deficit / usable_capacity × 100)`, capped at `max_target_soc`
-7. **Schedule planning** — time-slotted power allocation for battery + EV under peak constraints
+6. **Target SOC** — `anchor_soc + (deficit / usable_capacity × 100)`, capped at `max_target_soc`.
+   The anchor is the SOC at the **first** evaluation of the night's window (#485):
+   re-evaluations recompute the plan against fresh prices/forecasts but never stack
+   the deficit on top of charging progress — anchoring on the live SOC would ratchet
+   the target toward `max_target_soc` every profitable night.
+7. **Schedule planning** — time-slotted power allocation for battery + EV under peak constraints;
+   slot length comes from the tariff provider's detected market interval (15/30/60 min)
 8. **Cheapest hours** — dynamic tariff: `find_cheapest_hours(N, 12h)` | static: full NT window
+
+A mid-charge re-evaluation that lands on NOT_NEEDED / NOT_PROFITABLE stops the
+active forced charge instead of leaving the inverter charging unsupervised.
 
 ### Night Charge Schedule
 
@@ -360,6 +374,9 @@ The schedule adapts at runtime when actual EV power differs from planned.
 
 ### Re-plan Triggers
 
+- Day-ahead price series updated (`price_series_fingerprint` changed) — fires
+  **once per series update** (#485); the next evaluation runs when the planning
+  window is open
 - SOC deviation > 5% from evaluation time
 - EV connects/disconnects
 
@@ -380,8 +397,11 @@ The schedule adapts at runtime when actual EV power differs from planned.
 | `battery_capacity_kwh` | 10.0 | Usable battery capacity |
 | `battery_max_charge_power_w` | 5000 | Inverter max charge rate |
 | `battery_roundtrip_efficiency` | 0.92 | Round-trip efficiency |
-| `battery_cycle_cost` | 0.0 | Degradation cost per kWh throughput |
-| `battery_precharge_trigger_hour` | 21 | Daily evaluation hour |
+| `battery_cycle_cost` | 0.0 | Degradation cost per kWh throughput (0 = check disabled; the config form suggests 0.02 for new setups) |
+| `battery_precharge_trigger_hour` | 21 | Planning window opens (first evaluation) |
+| `battery_replan_interval_min` | 30 | Rolling re-evaluation cadence inside the window |
+| `battery_planning_window_hours` | 9 | Window length (21:00 → 06:00 by default) |
+| `battery_prefer_consecutive_window` | `true` | Charge in one contiguous block vs scattered cheapest slots |
 | `battery_max_target_soc` | 95% | Never plan above this |
 | `battery_min_deficit_kwh` | 2.0 | Minimum deficit to bother charging |
 | `battery_pessimism_weight` | 0.3 | Forecast pessimism (0=trust, 1=worst case) |

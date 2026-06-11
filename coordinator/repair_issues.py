@@ -100,6 +100,53 @@ def clear_sensor_unavailable(hass: HomeAssistant, entity_id: str) -> None:
         _LOGGER.debug("issue_registry.delete failed for %s: %s", entity_id, e)
 
 
+def _actuation_issue_id(device_id: str) -> str:
+    return f"charger_actuation_failed_{device_id}"
+
+
+def raise_charger_actuation_failed(
+    hass: HomeAssistant,
+    device_id: str,
+    *,
+    name: str,
+    error: str,
+) -> None:
+    """File a repair when a charger rejects set-current commands repeatedly.
+
+    #462 follow-up: a misconfigured control surface (e.g.
+    ``number.set_value`` configured as the charger service, a renamed
+    entity after an upstream integration update) made EVERY command fail
+    with only per-cycle ERROR log lines as evidence. The user experience
+    was "SEM doesn't react" with nothing actionable in the UI. Raised by
+    ``CurrentControlDevice`` after 3 consecutive failures; cleared on the
+    next successful write.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_actuation_issue_id(device_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="charger_actuation_failed",
+            translation_placeholders={
+                "name": name,
+                "error": error,
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", device_id, e)
+
+
+def clear_charger_actuation_failed(hass: HomeAssistant, device_id: str) -> None:
+    """Clear the actuation repair after a successful write."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _actuation_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
 # ---------------------------------------------------------------------------
 # Setup-time integration checks (once per setup)
 # ---------------------------------------------------------------------------

@@ -135,21 +135,26 @@ A help line under the selector explains what the currently-selected mode does. F
 
 ### Control
 
-All settings and device management in one place.
+Live operations and device management. Since #492 this tab is a
+**monitoring view** — every writable setting lives on the
+[Configuration](#configuration) tab instead (both tabs read the same HA
+entities, so changes made there are reflected here immediately). The
+EV section moved to per-charger cards on the EV tab in v1.6.3.
 
 ![Control Tab](images/sem_control_tab.png)
 
 | Card | Description |
 |------|-------------|
-| **EV Charging** | Per-charger [Charge mode](#charging-mode-selector-v163) selector, target range, current settings (the standalone `night_charging` and `smart_night_charging` toggles were removed in v1.6.3 — their intent is now carried by the mode) |
-| **Surplus Control** | Surplus available indicator, regulation offset |
-| **Battery Management** | Priority/minimum/resume SOC, capacity |
-| **Heat Pump & Hot Water** | Boost offset, hot water max temperature |
-| **Solar & Power** | Min solar power, max grid import |
-| **Tariff & Pricing** | Current rates, cheap/expensive thresholds |
+| **Surplus Control** | Live surplus: available/distributable and allocated/free watts |
+| **Battery Management** | SOC + status (subtitle), capacity |
+| **Hot Water** | Legionella disinfection target + regulatory info (the solar-boost target is set on Configuration) |
+| **Heat Pump** | Active mode and SG-Ready state (auto-hidden when no heat pump is configured) |
+| **Tariff & Pricing** | Provider, price level, current import rate |
+| **Peak & Load Management** | Live % of peak limit, peak margin, sheddable devices |
 | **Load Priority** | Drag-and-drop device ordering with real-time power, controllable/critical toggles, per-device control mode (Off / Peak Only / Surplus), and a per-device **Configure** button (see below). EV chargers have no mode dropdown here — their charge target is set in the **Charge Target** block on the EV card |
-| **Peak & Load Management** | Target peak limit, peak margin, sheddable devices |
-| **Observer Mode** | Read-only toggle for safe monitoring |
+
+A red observer-mode banner appears at the top whenever Observer Mode
+(read-only monitoring) is enabled on the Configuration tab.
 
 #### Configure a device's control (manual mapping)
 
@@ -163,6 +168,19 @@ When SEM can't auto-detect how to control a load (e.g. a Shelly Pro3EM meter who
 | **Service call** | service-driven chargers (KEBA, Easee) | the service (e.g. `keba.set_current`), parameter, and reduce/restore values |
 
 Entity types use a searchable entity picker filtered to the right domain. **Reset to auto-detect** removes a manual mapping and reverts the device to auto-discovery (for an auto-discoverable device this re-populates the same entity; to stop SEM controlling a device entirely, set its control mode to **Off**).
+
+### Configuration
+
+The single home for **every changeable setting** (`sem-config-card`),
+organized in collapsible sections: Setup overview, EV chargers, Battery
+zones, Tariff & pricing, Heat pump, Hot water, Battery scheduler, Load
+management, Solar forecast, Notifications, and Advanced (update
+interval, deltas, min solar power, regulation offset, Observer Mode).
+Each section header has a **Diagnose** button that dumps that section's
+live config + state via the `solar_energy_management.diagnose` action —
+attach its output to bug reports. Settings written here apply
+immediately; structural changes (e.g. tariff mode) reload the
+integration automatically.
 
 ### Costs
 

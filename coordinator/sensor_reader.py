@@ -72,6 +72,14 @@ class SensorReader:
         self._grid_sign_votes: int = 0  # Consecutive same-sign detections needed
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
+        # #487 follow-up (live PROD flip 2026-06-11): during HA's
+        # come-up window counter states replay in bursts while power
+        # sensors are already live — 3 quick wrong votes locked
+        # grid_sign_inverted=True on a Huawei install whose convention
+        # needs NO correction (RAM-only state, #476 item 5/6 gap).
+        # Sign votes are ignored for the first cycles after
+        # construction (~2 min at the 10 s interval).
+        self._sign_vote_warmup: int = 12
         # Battery sign autodetect — #404: per-battery state.
         # Multi-battery installs (≥ 2 ``battery_power_list`` entries) run
         # the detection independently per battery using each one's own
@@ -121,6 +129,22 @@ class SensorReader:
         # Warn-once guard for the discovery-*exception* path (#259); distinct from the
         # dict "warned" key (which guards "no sensor found"). Reset on cache invalidate.
         self._split_grid_discovery_warned: bool = False
+        # Last (import, export, confidence) discovery result that was
+        # logged at INFO — unchanged re-scans drop to debug (#485 H3).
+        self._last_split_grid_log: Optional[tuple] = None
+        # Manual grid override audit (#461 follow-up). When the user sets
+        # grid_import_power_entity / grid_export_power_entity explicitly,
+        # ALL sign auto-detection is bypassed — a swapped, single-sided or
+        # wrong-kind (energy counter as power) configuration produces a
+        # statically inverted grid with zero feedback. The audit compares
+        # the manual-computed sign against the Energy Dashboard counters
+        # in observe-only mode and warns loudly on sustained contradiction.
+        self._manual_grid_config_warned: set[str] = set()
+        self._manual_grid_import_baseline: Optional[float] = None
+        self._manual_grid_export_baseline: Optional[float] = None
+        self._manual_grid_mismatch_votes: int = 0
+        self._manual_grid_mismatch: bool = False
+        self._manual_grid_mismatch_warned: bool = False
 
     def _parse_config(self, config: Dict[str, Any]) -> SensorConfig:
         """Parse configuration into SensorConfig."""
@@ -231,6 +255,12 @@ class SensorReader:
         """Read all power values from sensors."""
         readings = PowerReadings()
 
+        # Sign-vote warm-up ticks once per cycle (#487 follow-up) —
+        # decremented here so it expires even on installs where one
+        # voter early-returns before its own check.
+        if self._sign_vote_warmup > 0:
+            self._sign_vote_warmup -= 1
+
         # Try Energy Dashboard config first, then legacy config
         if self._energy_dashboard_config:
             readings = self._read_from_energy_dashboard()
@@ -326,30 +356,45 @@ class SensorReader:
         if not ed:
             return False  # No Energy Dashboard → trust the sensor
 
-        import_entity = ed.grid_import_energy
-        export_entity = ed.grid_export_energy
+        # Sum across the counter LISTS when present (#485 H4): Dutch
+        # dual-tariff DSMR meters split each direction into tarief 1 +
+        # tarief 2 counters that move in different hours. Reading only
+        # the first counter left the auto sign vote blind whenever the
+        # untracked tariff was the active one — the beta.8 fix gave
+        # only the manual-audit path this treatment.
+        import_list = getattr(ed, "grid_import_energy_list", None)
+        export_list = getattr(ed, "grid_export_energy_list", None)
+        import_entities = (
+            list(import_list) if isinstance(import_list, (list, tuple)) and import_list
+            else ([ed.grid_import_energy] if ed.grid_import_energy else [])
+        )
+        export_entities = (
+            list(export_list) if isinstance(export_list, (list, tuple)) and export_list
+            else ([ed.grid_export_energy] if ed.grid_export_energy else [])
+        )
 
-        if not import_entity or not export_entity:
+        if not import_entities or not export_entities:
             return False
+
+        # Startup warm-up (#487 follow-up): no votes while HA's
+        # recorder is still replaying counter states — keep baselines
+        # fresh but cast nothing.
+        if self._sign_vote_warmup > 0:
+            iv = self._sum_counter_states(import_entities)
+            ev = self._sum_counter_states(export_entities)
+            if iv is not None and ev is not None:
+                self._grid_import_baseline = iv
+                self._grid_export_baseline = ev
+            return self._grid_sign_inverted
 
         # Need meaningful power to detect (ignore noise)
         power = readings.grid_power
         if abs(power) < 100:
             return self._grid_sign_inverted  # Keep last known state
 
-        # Read energy counter values
-        import_state = self.hass.states.get(import_entity)
-        export_state = self.hass.states.get(export_entity)
-
-        if not import_state or import_state.state in ("unknown", "unavailable"):
-            return self._grid_sign_inverted
-        if not export_state or export_state.state in ("unknown", "unavailable"):
-            return self._grid_sign_inverted
-
-        try:
-            import_val = float(import_state.state)
-            export_val = float(export_state.state)
-        except (ValueError, TypeError):
+        import_val = self._sum_counter_states(import_entities)
+        export_val = self._sum_counter_states(export_entities)
+        if import_val is None or export_val is None:
             return self._grid_sign_inverted
 
         # First call: store baselines, don't correct yet
@@ -358,12 +403,23 @@ class SensorReader:
             self._grid_export_baseline = export_val
             return False
 
-        import_delta = import_val - self._grid_import_baseline
-        export_delta = export_val - self._grid_export_baseline
+        deltas = self._counter_deltas(
+            self._grid_import_baseline, self._grid_export_baseline,
+            import_val, export_val,
+        )
 
         # Update baselines for next cycle
         self._grid_import_baseline = import_val
         self._grid_export_baseline = export_val
+
+        if deltas is None:
+            # Counter reset (#476) — re-baselined above, sit this cycle out.
+            _LOGGER.debug(
+                "Grid energy counter reset detected — re-baselined, "
+                "skipping sign vote",
+            )
+            return self._grid_sign_inverted
+        import_delta, export_delta = deltas
 
         # Determine convention from correlation:
         # power > 0 + import growing → HA convention (+ = import) → negate
@@ -393,11 +449,17 @@ class SensorReader:
             if abs(self._grid_sign_votes) >= 3:
                 self._grid_sign_inverted = detected
                 self._grid_sign_detected = True
+                # Name the evidence (#487 follow-up): a wrong lock is
+                # otherwise undiagnosable after the fact — the 2026-06-11
+                # PROD flip left only 'diag_grid_sign: negated' with no
+                # trail of WHICH counters voted.
                 _LOGGER.info(
                     "Grid sign detected from Energy Dashboard counters: %s "
-                    "(power=%.0fW, import_delta=%.3f, export_delta=%.3f)",
+                    "(power=%.0fW, import_delta=%.3f, export_delta=%.3f, "
+                    "import_counters=%s, export_counters=%s)",
                     "negating (HA convention)" if detected else "no correction (SEM convention)",
                     power, import_delta, export_delta,
+                    import_entities, export_entities,
                 )
 
         return self._grid_sign_inverted
@@ -456,6 +518,12 @@ class SensorReader:
         if not charge_entity or not discharge_entity:
             return self._battery_sign_inverted[bid]
 
+        # Startup warm-up (#487 follow-up) — same restart-window
+        # protection as the grid voter; baselines refresh below on
+        # the first post-warmup cycle.
+        if self._sign_vote_warmup > 0:
+            return self._battery_sign_inverted[bid]
+
         # Need meaningful power to detect (ignore noise)
         if abs(power) < 100:
             return self._battery_sign_inverted[bid]  # Keep last known state
@@ -481,12 +549,25 @@ class SensorReader:
             self._battery_discharge_baseline[bid] = discharge_val
             return False
 
-        charge_delta = charge_val - self._battery_charge_baseline[bid]
-        discharge_delta = discharge_val - self._battery_discharge_baseline[bid]
+        deltas = self._counter_deltas(
+            self._battery_charge_baseline[bid],
+            self._battery_discharge_baseline[bid],
+            charge_val, discharge_val,
+        )
 
         # Update baselines for next cycle
         self._battery_charge_baseline[bid] = charge_val
         self._battery_discharge_baseline[bid] = discharge_val
+
+        if deltas is None:
+            # Counter reset (#476) — re-baselined above, sit this cycle out.
+            _LOGGER.debug(
+                "Battery '%s' energy counter reset detected — re-baselined, "
+                "skipping sign vote",
+                bid,
+            )
+            return self._battery_sign_inverted[bid]
+        charge_delta, discharge_delta = deltas
 
         # Determine convention from correlation:
         # power > 0 + charge growing → SEM convention (+ = charge) → no negate
@@ -579,11 +660,17 @@ class SensorReader:
         manual_import = self._raw_config.get("grid_import_power_entity")
         manual_export = self._raw_config.get("grid_export_power_entity")
         if manual_import or manual_export:
-            # Manual override — user explicitly set grid power sensors
+            # Manual override — user explicitly set grid power sensors.
+            # NO auto-detection runs on this path, so misconfiguration
+            # (swapped roles, one side missing, energy counter instead of
+            # power sensor) yields a statically wrong grid sign with zero
+            # feedback (#461, RienduPre). Validate + audit below.
+            self._validate_manual_grid_config(ed, manual_import, manual_export)
             import_w = self._read_sensor(manual_import, "grid_import") if manual_import else 0.0
             export_w = self._read_sensor(manual_export, "grid_export") if manual_export else 0.0
             readings.grid_power = export_w - import_w
             self._grid_sign_detected = True
+            self._audit_manual_grid_sign(readings.grid_power, ed)
         elif len(ed.grid_power_list) > 1:
             # Multiple grid power sensors — sum all (e.g. multi-meter setups)
             readings.grid_power = self._read_sensors_sum(ed.grid_power_list, "grid")
@@ -597,11 +684,64 @@ class SensorReader:
             # (issue #166) takes over within one update interval.
             self._uses_split_grid = True
             disc = self._split_grid_discovery
-            if disc["confidence"] != "same-device":
+            # The same-device lock only holds for a COMPLETE pair
+            # (#485 H2): an import-only same-device pick used to stop
+            # re-discovery entirely, so a later-loading export sensor
+            # was never adopted until restart.
+            locked = (
+                disc["confidence"] == "same-device"
+                and disc["import"] and disc["export"]
+            )
+            if not locked and self._split_grid_scan_due(disc):
+                # Re-discovery runs while we don't hold a same-device lock,
+                # but new ANY-DEVICE picks are only ADOPTED when (a) we have
+                # no working picks yet, (b) the new match is a same-device
+                # upgrade (deterministic), or (c) a current pick has gone
+                # unavailable. Unconditional adoption let a flicker in HA's
+                # state-list iteration order swap which sensor plays import
+                # vs export, flipping the computed grid_power sign — the
+                # root cause for #461 (Growatt sign inversion that
+                # "sometimes works, sometimes inverted"). The late-loading
+                # DSMR case (#166) still works: until a pick exists, every
+                # cycle re-discovers; once a pick dies, re-adoption is
+                # allowed again. With healthy two-sided picks held the
+                # full sensor scan only runs periodically for the
+                # same-device upgrade case (#485 H3 — the result was
+                # otherwise computed and discarded every cycle).
+                _prev_imp = disc["import"]
+                _prev_exp = disc["export"]
                 imp, exp, conf = self._discover_split_grid_power(ed)
-                disc["import"] = imp
-                disc["export"] = exp
-                disc["confidence"] = conf
+                if self._should_adopt_split_grid_picks(disc, conf):
+                    disc["import"] = imp
+                    disc["export"] = exp
+                    disc["confidence"] = conf
+                    if (_prev_imp is not None or _prev_exp is not None) and (
+                        _prev_imp != imp or _prev_exp != exp
+                    ):
+                        _LOGGER.warning(
+                            "Split-grid sensor picks changed mid-run "
+                            "(confidence=%s) — import: %s → %s, export: %s → %s. "
+                            "This flips the computed grid_power sign if the new "
+                            "picks identify the meters in the opposite role. "
+                            "Set grid_import_power_entity / "
+                            "grid_export_power_entity explicitly in the "
+                            "config to lock the picks. (#461)",
+                            conf, _prev_imp, imp, _prev_exp, exp,
+                        )
+                elif exp and disc["import"] and not disc["export"]:
+                    # #485 H2: a late-loading export sensor completes a
+                    # one-sided pick. The held import stays locked — only
+                    # the MISSING side is filled (wholesale adoption here
+                    # could re-roll the import side from an arbitrary
+                    # any-device scan). The import-missing mirror case is
+                    # covered by the gate (no import pick → adopt all).
+                    disc["export"] = exp
+                    _LOGGER.info(
+                        "Split-grid export sensor appeared after the "
+                        "import-only adoption — completing the pair: "
+                        "import=%s (held), export=%s",
+                        disc["import"], exp,
+                    )
             if disc["import"]:
                 import_w = self._read_sensor(disc["import"], "grid_import")
                 export_w = self._read_sensor(disc["export"], "grid_export") if disc["export"] else 0.0
@@ -764,6 +904,259 @@ class SensorReader:
 
         return readings
 
+    def _validate_manual_grid_config(
+        self, ed, manual_import: Optional[str], manual_export: Optional[str],
+    ) -> None:
+        """One-shot sanity checks on explicitly configured grid entities (#461).
+
+        Each finding warns once per install run (keyed per entity / shape):
+
+        * Entity is an ENERGY counter (kWh device-class/unit) — the manual
+          fields take POWER sensors; a counter reads as a huge pseudo-watt
+          value and swamps ``grid_power = export - import``.
+        * Only one side is configured while the Energy Dashboard has BOTH
+          flow counters — the missing side reads a hard 0 W, so the grid
+          can never show that direction ("always exporting" / "always
+          importing").
+        """
+        for role, eid in (("import", manual_import), ("export", manual_export)):
+            if not eid or eid in self._manual_grid_config_warned:
+                continue
+            state = self.hass.states.get(eid)
+            if state is None:
+                continue  # unavailability is handled by _read_sensor/Repairs
+            unit = (state.attributes.get("unit_of_measurement") or "").lower()
+            device_class = state.attributes.get("device_class")
+            if device_class == "energy" or unit in ("wh", "kwh", "mwh"):
+                self._manual_grid_config_warned.add(eid)
+                _LOGGER.warning(
+                    "grid_%s_power_entity is set to %s, which is an ENERGY "
+                    "counter (%s) — this field takes a POWER sensor (W/kW). "
+                    "The computed grid power will be wrong until this is "
+                    "fixed in the SEM config. (#461)",
+                    role, eid, unit or device_class,
+                )
+        one_sided = bool(manual_import) != bool(manual_export)
+        if (
+            one_sided
+            and "__one_sided__" not in self._manual_grid_config_warned
+            and getattr(ed, "grid_import_energy", None)
+            and getattr(ed, "grid_export_energy", None)
+        ):
+            self._manual_grid_config_warned.add("__one_sided__")
+            missing = "grid_export_power_entity" if manual_import else "grid_import_power_entity"
+            _LOGGER.warning(
+                "Only one manual grid power entity is configured (%s is "
+                "missing) while the Energy Dashboard tracks BOTH import and "
+                "export. The missing side always reads 0 W, so SEM can never "
+                "see that flow direction — the energy flow will look stuck "
+                "on one side. Configure both entities (or neither). (#461)",
+                missing,
+            )
+
+    @staticmethod
+    def _counter_deltas(
+        prev_a: Optional[float], prev_b: Optional[float],
+        new_a: float, new_b: float,
+    ) -> Optional[tuple]:
+        """Delta pair for a counter couple, with the reset guard (#476).
+
+        Single home for the counter-reset threshold (#485 K4 — the
+        grid voter, the per-battery voter, and the manual-grid audit
+        each hand-rolled this with the same magic number). Some
+        inverters (Growatt) reset daily counters at midnight, and the
+        two counters can reset in DIFFERENT cycles — a negative delta
+        on either side means BOTH deltas are garbage this cycle (the
+        surviving side could still cast a wrong vote). Returns ``None``
+        on a reset; the caller re-baselines and sits the cycle out.
+        """
+        if prev_a is None or prev_b is None:
+            return None
+        delta_a = new_a - prev_a
+        delta_b = new_b - prev_b
+        if delta_a < -0.001 or delta_b < -0.001:
+            return None
+        return delta_a, delta_b
+
+    def _sum_counter_states(self, entity_ids: list) -> Optional[float]:
+        """Sum energy-counter states; ``None`` when any is unreadable.
+
+        Partial sums are worse than no judgement — one missing tariff
+        counter mid-cycle would look like a counter reset.
+        """
+        total = 0.0
+        for eid in entity_ids:
+            state = self.hass.states.get(eid)
+            if not state or state.state in ("unknown", "unavailable"):
+                return None
+            try:
+                total += float(state.state)
+            except (ValueError, TypeError):
+                return None
+        return total
+
+    def _audit_manual_grid_sign(self, grid_power: float, ed) -> None:
+        """Observe-only cross-check of the manual grid sign (#461).
+
+        The Energy Dashboard's import/export counters are ground truth for
+        flow DIRECTION. Under SEM convention (negative = import), the
+        import counter growing while the manual-computed ``grid_power`` is
+        positive (or export growing while it's negative) means the manual
+        entities are assigned in swapped roles — or the wrong sensors
+        entirely. Five consecutive contradictions set
+        ``_manual_grid_mismatch`` (surfaced as ``diag_grid_manual_mismatch``)
+        and log one WARNING naming the configured entities.
+
+        Observe-only by design: manual config is explicit user intent, so
+        SEM never silently re-flips it — it makes the misconfiguration loud
+        instead.
+        """
+        # Sum across the counter LISTS when present — Dutch dual-tariff
+        # DSMR meters split each direction into tarief 1 + tarief 2
+        # counters; judging from one tariff's counter alone leaves the
+        # audit blind during the other tariff's hours.
+        import_entities = (
+            list(getattr(ed, "grid_import_energy_list", None) or [])
+            or ([ed.grid_import_energy] if getattr(ed, "grid_import_energy", None) else [])
+        )
+        export_entities = (
+            list(getattr(ed, "grid_export_energy_list", None) or [])
+            or ([ed.grid_export_energy] if getattr(ed, "grid_export_energy", None) else [])
+        )
+        if not import_entities or not export_entities:
+            return
+        if abs(grid_power) < 100:
+            return  # too little flow to judge direction
+        import_val = self._sum_counter_states(import_entities)
+        export_val = self._sum_counter_states(export_entities)
+        if import_val is None or export_val is None:
+            return
+
+        if self._manual_grid_import_baseline is None:
+            self._manual_grid_import_baseline = import_val
+            self._manual_grid_export_baseline = export_val
+            return
+        deltas = self._counter_deltas(
+            self._manual_grid_import_baseline, self._manual_grid_export_baseline,
+            import_val, export_val,
+        )
+        self._manual_grid_import_baseline = import_val
+        self._manual_grid_export_baseline = export_val
+
+        # Counter reset (#476) or ambiguous deltas → no judgement this cycle.
+        if deltas is None:
+            return
+        import_delta, export_delta = deltas
+        if import_delta > 0.001 and export_delta < 0.001:
+            counters_say_export = False
+        elif export_delta > 0.001 and import_delta < 0.001:
+            counters_say_export = True
+        else:
+            return
+
+        manual_says_export = grid_power > 0
+        if manual_says_export != counters_say_export:
+            self._manual_grid_mismatch_votes += 1
+        else:
+            self._manual_grid_mismatch_votes = 0
+            if self._manual_grid_mismatch:
+                self._manual_grid_mismatch = False
+                _LOGGER.info(
+                    "Manual grid entities agree with the Energy Dashboard "
+                    "counters again — clearing the mismatch flag."
+                )
+            return
+
+        if self._manual_grid_mismatch_votes >= 5 and not self._manual_grid_mismatch:
+            self._manual_grid_mismatch = True
+            if not self._manual_grid_mismatch_warned:
+                self._manual_grid_mismatch_warned = True
+                _LOGGER.warning(
+                    "Manual grid power entities CONTRADICT the Energy "
+                    "Dashboard counters for 5+ cycles: SEM computes %s "
+                    "(grid_power=%.0f W) while the %s counter is the one "
+                    "increasing. grid_import_power_entity=%s / "
+                    "grid_export_power_entity=%s are most likely SWAPPED "
+                    "(or point at the wrong meters). SEM does not override "
+                    "manual config — fix the two fields in the SEM config. "
+                    "(#461)",
+                    "EXPORT" if manual_says_export else "IMPORT",
+                    grid_power,
+                    "import" if not counters_say_export else "export",
+                    self._raw_config.get("grid_import_power_entity"),
+                    self._raw_config.get("grid_export_power_entity"),
+                )
+
+    # With healthy two-sided any-device picks held, re-scan only every
+    # N cycles for the same-device upgrade case (#485 H3). At the
+    # default ~10s update interval this is one scan per ~5 minutes.
+    _SPLIT_GRID_UPGRADE_SCAN_CYCLES = 30
+
+    def _split_grid_scan_due(self, disc: dict) -> bool:
+        """Whether the full split-grid sensor scan is worth running (#485 H3).
+
+        The scan iterates every sensor state + does registry lookups;
+        running it per cycle just to discard the result (the adopt gate
+        refuses healthy held picks) wasted the work on every update.
+        Scan every cycle while a side is missing or a held pick is
+        unavailable (the adoption / recovery paths), otherwise only
+        periodically for the same-device upgrade chance.
+        """
+        if not disc.get("import") and not disc.get("export"):
+            return True  # nothing held → scan every cycle (#166)
+        if not disc.get("import") or not disc.get("export"):
+            # One side held, other missing (#485 H2): keep looking for
+            # the late-loading side, but at ~1-min cadence — systems
+            # that genuinely lack one sensor would otherwise pay the
+            # full scan every cycle forever.
+            countdown = disc.get("one_sided_scan_countdown", 0) - 1
+            if countdown <= 0:
+                disc["one_sided_scan_countdown"] = 6
+                return True
+            disc["one_sided_scan_countdown"] = countdown
+            return False
+        for side in ("import", "export"):
+            state = self.hass.states.get(disc[side])
+            if state is None or state.state in ("unavailable", "unknown"):
+                return True  # recovery path — re-discover now
+        countdown = disc.get("upgrade_scan_countdown", 0) - 1
+        if countdown <= 0:
+            disc["upgrade_scan_countdown"] = self._SPLIT_GRID_UPGRADE_SCAN_CYCLES
+            return True
+        disc["upgrade_scan_countdown"] = countdown
+        return False
+
+    def _should_adopt_split_grid_picks(self, disc: dict, new_confidence) -> bool:
+        """Gate adopting freshly discovered split-grid picks (#461).
+
+        Any-device discovery pattern-matches over ``hass.states.async_all``,
+        whose iteration order isn't contractual — re-running it every cycle
+        and adopting the result unconditionally let the import/export
+        assignment swap mid-run, inverting the computed grid sign. Adopt
+        only when:
+
+        * we hold no import pick yet (initial discovery / late-loading
+          DSMR meter, #166), or
+        * the new match is ``same-device`` (deterministic — locks
+          permanently at the call site), or
+        * a currently held pick has gone unavailable (sensor renamed or
+          integration reloaded — re-discovery is the recovery path).
+
+        Otherwise the held picks win: stability over freshness.
+        """
+        if not disc.get("import"):
+            return True
+        if new_confidence == "same-device":
+            return True
+        for side in ("import", "export"):
+            eid = disc.get(side)
+            if not eid:
+                continue
+            state = self.hass.states.get(eid)
+            if state is None or state.state in ("unavailable", "unknown"):
+                return True
+        return False
+
     def _discover_split_grid_power(self, ed) -> tuple[Optional[str], Optional[str], Optional[str]]:
         """Discover separate import/export power sensors for setups without combined grid power.
 
@@ -794,7 +1187,16 @@ class SensorReader:
             same_device = {"import": None, "export": None}
             any_device = {"import": None, "export": None}
 
-            for state in self.hass.states.async_all("sensor"):
+            # Deterministic candidate order (#485 H6): async_all's
+            # iteration order isn't contractual, and any-device picks
+            # are first-match-wins — an unsorted scan could re-roll
+            # which sensor plays import vs export across restarts,
+            # silently swapping the grid sign (the first-adoption case
+            # the mid-run swap WARNING can't see).
+            for state in sorted(
+                self.hass.states.async_all("sensor"),
+                key=lambda s: s.entity_id,
+            ):
                 eid = state.entity_id.lower()
                 attrs = state.attributes
                 # Must be a power sensor
@@ -834,10 +1236,22 @@ class SensorReader:
             export_is_same = (export_power is None or export_power == same_device["export"])
             if import_power or export_power:
                 confidence = "same-device" if (import_is_same and export_is_same) else "any-device"
-                _LOGGER.info(
-                    "Discovered split grid power sensors (%s): import=%s, export=%s",
-                    confidence, import_power, export_power,
-                )
+                # Log at INFO only when the result CHANGED (#485 H3) —
+                # the periodic upgrade scan re-finding the same pair
+                # wrote one INFO line per scan into the log + the
+                # diagnose ring buffer.
+                result_key = (import_power, export_power, confidence)
+                if result_key != self._last_split_grid_log:
+                    self._last_split_grid_log = result_key
+                    _LOGGER.info(
+                        "Discovered split grid power sensors (%s): import=%s, export=%s",
+                        confidence, import_power, export_power,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Split grid power re-scan unchanged (%s): import=%s, export=%s",
+                        confidence, import_power, export_power,
+                    )
             else:
                 confidence = None
                 _LOGGER.debug("No split grid power sensors found")
@@ -872,6 +1286,7 @@ class SensorReader:
         # Re-allow the discovery-exception warning after a rediscovery (#259) — circumstances
         # have changed (e.g. a new sensor appeared), so a fresh failure is worth surfacing.
         self._split_grid_discovery_warned = False
+        self._last_split_grid_log = None  # next discovery logs at INFO again
 
     def _get_device_for_entity(self, entity_id: str) -> Optional[str]:
         """Get device_id for an entity from the entity registry."""

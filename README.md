@@ -41,6 +41,7 @@ SEM monitors your solar production, battery, grid, EV charger, and household dev
 - **Solar forecast integration** — Solcast or Forecast.Solar for smart charging decisions
 - **Dynamic tariff support** — Tibber, Nordpool, aWATTar, Amber Electric, Octopus Energy price-responsive charging
 - **200+ sensors and entities** — power, energy, flows, costs, performance, forecasts, and more
+- **Per-PV-string visibility** — auto-discovered per-string power + daily-energy sensors and a chip strip on the system diagram + flow cards (when your inverter exposes per-string data). Works on Huawei, GoodWe, Growatt, Kostal, Sungrow, Fronius, SolarEdge, SolaX, with V·I synthesis fallback for inverters that expose voltage + current separately.
 - **Built-in dashboard** — theme-aware styling (works on both dark and light HA themes), animated system diagram, Sankey, and native HA energy cards
 - **PV performance analytics** — specific yield, forecast accuracy, degradation tracking
 - **Smart recommendations** — forecast-aware tips ("Best window for appliances: 11:00-14:00", "Low solar tomorrow — charge EV tonight")
@@ -438,13 +439,29 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ---
 
-## Recent Improvements (v1.5.x)
+## Recent Improvements
 
-### Unreleased
-- **EV charge-by deadline** (#246) — per-charger "reach Min by HH:MM" (`time.sem_charger_<id>_target_time`). When set earlier than the night-window end, night current scales to hit Min by the deadline (overriding the gentle ramp / peak limit); an impossible deadline raises a "can't reach target in time" notification. A new **Set Target As Default** button copies a charger's Min/Max + deadline to the global defaults. Default deadline (= window end) keeps existing peak-managed behaviour unchanged.
-- **EV tariff-optimized charging** (#247) — opt-in per-charger switch (`switch.sem_charger_<id>_tariff_optimized`). Night charging defers to the cheapest *contiguous* price window via a new `TARIFF_WAITING_FOR_CHEAP` state (Min still guaranteed by the deadline); the wait/reach calc is **peak-aware** (sized to `peak limit − learned overnight home consumption`, so it never waits for a window it can't fill at the peak-limited rate and then miss Min), with a shared peak budget keeping a multi-charger fleet under the limit. Daytime Min+PV grid top-up pauses during expensive hours and resumes on a price drop or sufficient solar. Next cheap window is surfaced on the EV card. Consolidates the parked #6 EV scheduling.
-- **Price card** (#257) — `sem-price-card` showing the current import price, price level, today's min/avg/max, the next cheap window, and an hourly price strip for the upcoming ~24h (bars colored green→amber→red by level, current hour outlined). A **compact chip** at the top of the Home tab (glance); the **full panel with chart** on the Costs tab. **Self-hides on static tariffs**.
-- **`generate_dashboard` reloads live — no more HA restart** — the service now pushes the regenerated config through HA's own Lovelace store (updates in-memory cache + fires `lovelace_updated`), so adding a charger, switching language, or any future regen shows up immediately. A browser hard-refresh is enough.
+### v1.7.2 — Hot Water boiler control (08.06.2026)
+- **HotWaterController fully wired** (#454) — setting `hot_water_entity` now actually controls the boiler at runtime (the class existed from day one but was never instantiated). Live status block, Repair issues for unavailable temp sensor / boiler entity, fail-safe semantics (boiler is NOT activated on surplus when the temp sensor is broken), and orphan-repair sweep when the user reconfigures the boiler entity.
+
+### v1.7.1 — Slim install + in-dashboard config (07.06.2026)
+- **Slim install flow** (#442) — 3 steps → 2; users without an EV configured can now finish setup without quitting.
+- **In-dashboard Configuration tab** (#442) — every OptionsFlow setting editable inline with `(?)` help, auto-save, and per-section 🩺 Diagnose buttons (#432) that copy focused JSON to the clipboard for sharing in discussions.
+- **EV `ev_target_type` strictly honoured** (#451) — no silent fallback to `estimated_soc` when the SOC sensor isn't configured. Fixes the IDLE-stuck-at-120W stall reported on Huawei+KEBA in PROD.
+- **Bulletproof EV solar-path stability** (#443) — evcc-style smoothing + delta-guard + heartbeat around `_set_current` on the daytime `min_plus_solar` Zone 3/4 path. Stops KEBA-side current oscillation on cloudy days.
+- **HA Repairs integration** (#440) — persistent sensor / forecast / recorder issues surface in Settings → Repairs instead of growing the log; transient sub-5-min flaps stay silent.
+
+### v1.7.0 — Audit telemetry + architecture cleanup (04.06.2026)
+- **Per-PV-string visibility** (#312) — auto-discovered per-string power + daily-energy sensors plus a chip strip on the system diagram and flow cards. Works on Huawei, GoodWe, Growatt, Kostal, Sungrow, Fronius, SolarEdge, SolaX, with V·I synthesis fallback for inverters that expose voltage + current separately.
+- **Audit telemetry across 10 modules** — decision-path enums published as sensor attributes (forecast_tracker, hot_water_controller, heat_pump_controller, pv_performance, time_manager, consumption_predictor, appliance_scheduler, utility_signals, load_management, forecast_reader) so you can self-diagnose without us reading a debug log.
+- **FleetCycleState refactor** — single source of truth for fleet-level coordinator inputs; eliminates the class of fleet-vs-per-charger read bugs that produced four hotfixes between v1.6.0 and v1.6.6.
+- **9 Architecture Decision Records** committed under `docs/adr/` (PerChargerContext, EVBudget, sign-convention boundary, home_consumption clamp, per-brand pipeline test, FleetCycleState, real-hass test framework, FleetEvPower newtype, multi-charger priority cascade).
+- **v7 → v8 config schema migration** (#359) — auto-flips legacy `tariff_classification_mode=static` to `percentile` for dynamic-tariff users on first restart.
+
+### v1.6.x — Multi-charger fleet, EV budget unification, named charge modes
+- **v1.6.3 — Five named charge modes** (#277) replace the four-toggle soup: *Solar only* / *Solar + cheapest hours* / *Min + Solar* / *Always (max)* / *Off*. Each mode composes with the per-charger Min/Max range and the Charge-by deadline.
+- **v1.6.0 — Canonical EV budget** across publish path, state machine, actuator, and multi-charger distribution. `sensor.sem_available_power` and `sensor.sem_calculated_current` now publish the same value the state machine and actuator read.
+- **v1.6.4 – v1.6.17 — Multi-charger correctness sweep** — `PerChargerContext`, `FleetCycleState` foundation, AST lint pinning fleet-vs-per-charger invariants in CI.
 
 ### v1.5.15 — Cold-start readings fix
 - **Readings start automatically after an HA restart** (#274) — SEM derives its real-time power sensors from the source integration's device. On a cold start it could run that derivation before the source integration (e.g. solax-modbus) had registered its entities, leaving every reading at 0 until you manually reloaded the integration. SEM now re-derives the power sensors each update cycle until they resolve, so the readings come up on their own within a cycle or two of the source loading — no reload needed. Bounded and a complete no-op for setups that already resolve normally.

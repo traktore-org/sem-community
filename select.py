@@ -358,20 +358,15 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         if option not in self.options:
             return
         self._value = option
-        new_options = {**self._entry.options}
-        # Copy each charger dict — mutating the shared dicts in place leaves
-        # entry.options == new_options, so async_update_entry detects no change
-        # and never persists to .storage (the value then reverts on restart). (#245)
-        ev_chargers = [dict(c) for c in new_options.get("ev_chargers", [])]
-        for charger in ev_chargers:
-            if charger.get("id") == self._charger_id:
-                charger[self._config_key] = option
-                break
-        new_options["ev_chargers"] = ev_chargers
-        if isinstance(getattr(self.coordinator, "config", None), dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-        self.coordinator._skip_options_reload = new_options
-        self.hass.config_entries.async_update_entry(self._entry, options=new_options)
+        # Shared per-charger write path (#485 K2) — owns the data-side
+        # fallback, missing-charger recovery (#462/#464), coordinator
+        # mirror and reload-skip arming. Do NOT inline a copy here; the
+        # copy-paste class already produced one missed writer (#469).
+        from . import persist_per_charger_option
+        persist_per_charger_option(
+            self.hass, self._entry, self.coordinator,
+            self._charger_id, self._config_key, option,
+        )
         self.async_write_ha_state()
         _LOGGER.info(
             "Updated per-charger %s.%s to %s",

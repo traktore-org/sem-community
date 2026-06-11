@@ -87,6 +87,7 @@ class TestKEBADiscovery:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(3.5, unit="kW") if "power" in eid else None
         reader = SensorReader(hass, {"ev_power_sensor": "sensor.keba_kecontact_p30_charging_power"})
+        reader._sign_vote_warmup = 0
         value = reader._read_sensor("sensor.keba_kecontact_p30_charging_power", "ev")
         assert value == 3500.0  # 3.5 kW → 3500 W
 
@@ -95,6 +96,7 @@ class TestKEBADiscovery:
         hass = MagicMock()
         hass.states.get = lambda eid: _state("on")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_binary_sensor("binary_sensor.keba_kecontact_p30_plug", "ev_plug") is True
         hass.states.get = lambda eid: _state("off")
         assert reader._read_binary_sensor("binary_sensor.keba_kecontact_p30_plug", "ev_plug") is False
@@ -129,6 +131,7 @@ class TestEaseeDiscovery:
         hass = MagicMock()
         hass.states.get = lambda eid: _state("ready_to_charge")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_binary_sensor("sensor.easee_home_status", "ev_plug") is True
         assert reader._read_binary_sensor("sensor.easee_home_status", "ev_charging") is False
 
@@ -137,6 +140,7 @@ class TestEaseeDiscovery:
         hass = MagicMock()
         hass.states.get = lambda eid: _state("charging")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_binary_sensor("sensor.easee_home_status", "ev_plug") is True
         assert reader._read_binary_sensor("sensor.easee_home_status", "ev_charging") is True
 
@@ -145,6 +149,7 @@ class TestEaseeDiscovery:
         hass = MagicMock()
         hass.states.get = lambda eid: _state("disconnected")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_binary_sensor("sensor.easee_home_status", "ev_plug") is False
         assert reader._read_binary_sensor("sensor.easee_home_status", "ev_charging") is False
 
@@ -153,6 +158,7 @@ class TestEaseeDiscovery:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(3.5, unit="kW")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_sensor("sensor.easee_home_power", "ev") == 3500.0
 
 
@@ -183,6 +189,7 @@ class TestWallboxDiscovery:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(7.4, unit="kW")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_sensor("sensor.wallbox_pulsar_plus_charging_power", "ev") == 7400.0
 
 
@@ -213,6 +220,7 @@ class TestGoEChargerMQTTDiscovery:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(4800, unit="W")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_sensor("sensor.go_echarger_123456_nrg_current_power", "ev") == 4800.0
 
 
@@ -318,6 +326,7 @@ class TestInverterSignConventions:
         """Create a SensorReader with mock Energy Dashboard config."""
         config = {"battery_power_sensor": "sensor.battery_power"}
         reader = SensorReader(mock_hass, config)
+        reader._sign_vote_warmup = 0
 
         ed = MagicMock()
         ed.solar_power = "sensor.solar_power"
@@ -584,6 +593,7 @@ class TestPowerUnitConversion:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(5.2, unit="kW")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_sensor("sensor.growatt_mix_wattage_pv_all", "solar") == 5200.0
 
     def test_powerwall_meter_kw(self):
@@ -591,6 +601,7 @@ class TestPowerUnitConversion:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(2.5, unit="kW")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_sensor("sensor.powerwall_solar_instant_power", "solar") == 2500.0
 
     def test_sma_daily_yield_wh(self):
@@ -598,6 +609,7 @@ class TestPowerUnitConversion:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(3500, unit="W")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_sensor("sensor.sma_pv_power", "solar") == 3500.0
 
     def test_solaredge_power_watts(self):
@@ -605,6 +617,7 @@ class TestPowerUnitConversion:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(8000, unit="W")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_sensor("sensor.solaredge_ac_power", "solar") == 8000.0
 
     def test_sonnen_power_watts(self):
@@ -612,6 +625,7 @@ class TestPowerUnitConversion:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(4500, unit="W")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         assert reader._read_sensor("sensor.sonnenbatterie_state_production", "solar") == 4500.0
 
 
@@ -632,6 +646,7 @@ class TestMonitoringOnlyChargers:
             "sensor.tesla_wall_connector_session_energy_wh": _state(12500, unit="Wh"),
         }.get(eid)
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         # No power sensor → returns 0
         assert reader._read_sensor("sensor.tesla_wall_connector_power", "ev") == 0.0
 
@@ -640,5 +655,6 @@ class TestMonitoringOnlyChargers:
         hass = MagicMock()
         hass.states.get = lambda eid: _state(3200, unit="W")
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         # Can read power (monitoring works)
         assert reader._read_sensor("sensor.myenergi_zappi_ct1_power", "ev") == 3200.0

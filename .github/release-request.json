@@ -1,0 +1,6 @@
+{
+  "tag": "v1.7.3-beta.9",
+  "title": "v1.7.3-beta.9 \u2014 pre-stable review batch + Wallbox actuation + diagram fix",
+  "prerelease": true,
+  "notes_file": ".github/release-notes/v1.7.3-beta.9.md"
+}

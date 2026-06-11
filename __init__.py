@@ -26,9 +26,9 @@ from typing import Any, Dict
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, SupportsResponse, callback
-from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
@@ -167,6 +167,208 @@ PLATFORMS: list[Platform] = [
     Platform.SELECT,
     Platform.TIME,
 ]
+
+
+# ─────────────────────────────────────────────────────────────────────
+# set_option helpers (#462/#464)
+# ─────────────────────────────────────────────────────────────────────
+
+# Structural option keys — changes to these require re-instantiating
+# controllers because they wire SEM to HA entities. Everything else
+# (modes, thresholds, targets, tunables) is read each cycle from
+# coordinator.config and can be hot-swapped without a reload.
+#
+# Conservative on ``ev_chargers``: any change to the list shape
+# (charger added/removed/per-charger entity rewired) needs a reload
+# so the actuator bindings get refreshed. Per-charger tunables inside
+# the list (charge_mode, target_soc, daily_ev_target) go through the
+# select.py / number.py paths instead of set_option, so they don't
+# hit this list.
+# #485 G5: how long an armed reload-skip snapshot stays valid. The
+# listener fires within milliseconds of the runtime write that armed
+# it; anything older is a leftover that must not mask a real reload.
+_SKIP_RELOAD_SNAPSHOT_TTL_S = 60.0
+
+_SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
+    "heat_pump_relay1_entity", "heat_pump_relay2_entity",
+    "heat_pump_climate_entity", "heat_pump_power_sensor",
+    "heat_pump_temperature_sensor",
+    "hot_water_entity", "hot_water_power_sensor",
+    "hot_water_temperature_sensor",
+    "ev_chargers",
+})
+
+
+def _coerce_switch_on(value) -> bool:
+    """Interpret a set_option value as a switch on/off intent.
+
+    YAML service data arrives as strings — plain truthiness turned
+    ``"off"`` / ``"false"`` / ``"0"`` into turn_on (#485 G3).
+    """
+    if isinstance(value, str):
+        return value.strip().lower() not in ("", "0", "false", "off", "no")
+    return bool(value)
+
+
+def _merge_ev_chargers_by_id(
+    existing: list, incoming: list,
+) -> list:
+    """Merge an ``ev_chargers`` list by ``id`` rather than full-replace.
+
+    Built for the set_option service path so a partial submit from the
+    Config card (one charger's worth of fields) can never drop sibling
+    chargers from the persisted state — the bug class behind #464.
+
+    Contract:
+
+    * Each entry in ``incoming`` is merged INTO the matching entry in
+      ``existing`` by ``id``, with incoming fields winning. Fields
+      present in the existing entry but absent from the incoming entry
+      are preserved (no key is silently removed).
+    * Existing chargers whose ``id`` is NOT in the incoming list are
+      kept verbatim. This is the actual fix for the cross-talk: a
+      one-charger update never affects siblings.
+    * Incoming chargers without a matching existing ``id`` (a fresh
+      add) are appended verbatim.
+    * Non-dict entries on either side are skipped (defensive).
+    * Output preserves the existing order; new chargers are appended.
+
+    Pure function — no I/O, no HA dependencies. Tested in
+    ``tests/test_set_option_smart_merge.py``.
+    """
+    incoming_by_id: dict[str, dict] = {}
+    new_ids: list[str] = []
+    existing_ids = {
+        c.get("id") for c in (existing or []) if isinstance(c, dict)
+    }
+    for inc in incoming or []:
+        if not isinstance(inc, dict):
+            continue
+        cid = inc.get("id")
+        if not cid:
+            # Id-less entries are untargetable ghosts: per-charger writes
+            # match on ``id``, and at registration a ghost gets assigned a
+            # positional ``ev_charger_<idx>`` id that can collide with a
+            # real sibling. The Config card's nested editors used to
+            # materialize such entries (``newChargers[idx] = {}``) — drop
+            # them instead of appending.
+            _LOGGER.warning(
+                "Dropping id-less ev_chargers entry from merge: %s",
+                dict(inc),
+            )
+            continue
+        if cid in incoming_by_id:
+            incoming_by_id[cid].update(inc)
+        else:
+            incoming_by_id[cid] = dict(inc)
+            if cid not in existing_ids:
+                new_ids.append(cid)
+
+    # EXISTING order is the output order (#485 G2): charger list order
+    # is load-bearing — index 0 is the fleet primary for the strategy
+    # sensors and default surplus priorities derive from the position.
+    # The previous incoming-first iteration let a partial submit (or
+    # the setup-time heal, whose ``incoming`` is the poisoned options
+    # list) silently reorder the fleet.
+    merged: list[dict] = []
+    merged_ids: set[str] = set()
+    for c in existing or []:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id")
+        if not cid or cid in merged_ids:
+            continue
+        base = dict(c)
+        if cid in incoming_by_id:
+            base.update(incoming_by_id[cid])
+        merged.append(base)
+        merged_ids.add(cid)
+    for cid in new_ids:
+        merged.append(dict(incoming_by_id[cid]))
+    return merged
+
+
+def persist_per_charger_option(
+    hass, entry, coordinator, charger_id: str, key: str, value,
+) -> None:
+    """Persist ONE per-charger option without an integration reload.
+
+    Single write path for every per-charger entity platform (#485 K2 —
+    select/number/time each carried a ~30-line copy of this hardening,
+    and the time.py copy was missed by the original #469 patch round,
+    clobbering ev_chargers until v1.7.3-beta.5):
+
+    * Copies charger dicts — in-place mutation leaves entry.options
+      unchanged, so async_update_entry never persists (#245).
+    * Falls back to ``entry.data.ev_chargers`` when options lacks the
+      key — otherwise ``[]`` is written back and the ``{**data,
+      **options}`` merge hides every charger on the next reload.
+    * Recovers THIS charger from entry.data when a partially poisoned
+      options list dropped its id (#462/#464) instead of silently
+      no-op'ing the write.
+    * Mirrors into ``coordinator.config`` and arms the reload-skip
+      snapshot before the entry write.
+    """
+    new_options = {**(entry.options or {})}
+    data_chargers = (entry.data or {}).get("ev_chargers") or []
+    source_chargers = new_options.get("ev_chargers") or data_chargers
+    ev_chargers = [dict(c) for c in source_chargers if isinstance(c, dict)]
+    for charger in ev_chargers:
+        if charger.get("id") == charger_id:
+            charger[key] = value
+            break
+    else:
+        recovered = next(
+            (dict(c) for c in data_chargers
+             if isinstance(c, dict) and c.get("id") == charger_id),
+            {"id": charger_id},
+        )
+        recovered[key] = value
+        ev_chargers.append(recovered)
+        _LOGGER.warning(
+            "Charger '%s' was missing from the stored ev_chargers list "
+            "(ids: %s) — recovered it from entry.data so the %s write "
+            "isn't lost",
+            charger_id,
+            [c.get("id") for c in ev_chargers[:-1]],
+            key,
+        )
+    new_options["ev_chargers"] = ev_chargers
+    if isinstance(getattr(coordinator, "config", None), dict):
+        coordinator.config.update({**(entry.data or {}), **new_options})
+    coordinator._skip_options_reload = new_options
+    hass.config_entries.async_update_entry(entry, options=new_options)
+
+
+def _heal_ev_chargers_options(
+    data_chargers: list | None, opts_chargers: list | None,
+) -> list | None:
+    """Reconcile a poisoned ``entry.options.ev_chargers`` against entry.data.
+
+    v1.7.2 through v1.7.3-beta.3 builds could corrupt the options-side
+    charger list in several ways: the naive set_option full-replace from a
+    stale Config-card cache (#464), the pre-#469 ``[]`` clobber in the
+    per-charger select/number writers, the pre-beta.4 smart-merge
+    fall-through, and the setup-time auto-discovery reseed that plants a
+    single ``id: "ev_charger"`` entry when the merged list comes up empty.
+    Once poisoned, the merge ``{**data, **options}`` hides data-side
+    chargers forever and per-charger writes for the missing ids silently
+    no-op — the "charger 2 does nothing" symptom (#462/#464).
+
+    Heals by union-by-id: options-side fields win per charger, chargers
+    that only exist in ``entry.data`` are restored, id-less ghost entries
+    are dropped. Returns the healed list, or ``None`` when the stored list
+    is already complete (no write needed). Pure function — tested in
+    ``tests/test_ev_chargers_storage_heal.py``.
+    """
+    cleaned = [
+        c for c in (opts_chargers or [])
+        if isinstance(c, dict) and c.get("id")
+    ]
+    healed = _merge_ev_chargers_by_id(data_chargers or [], cleaned)
+    if healed == list(opts_chargers or []):
+        return None
+    return healed
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
@@ -877,9 +1079,55 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Initialize domain data storage (kept for backward compatibility with services)
     hass.data.setdefault(DOMAIN, {})
 
+    # In-memory SEM log ring buffer for the diagnose surface (#461/#462
+    # triage gap on Supervisor installs — no flat log file to tail).
+    # Idempotent across reloads. Stored under its own key so code that
+    # treats hass.data[DOMAIN] values as coordinators is unaffected.
+    from .utils.log_buffer import ensure_attached as _attach_log_buffer
+    hass.data[f"{DOMAIN}_log_buffer"] = _attach_log_buffer()
+
+    # Warm the blocking-I/O caches off the event loop (caught live as
+    # "Detected blocking call to open" on RienduPre's install): the
+    # dashboard translations file and the manifest version are both
+    # lazily opened from sync code inside the loop on first use.
+    from .utils.translate import preload_translations as _preload_translations
+    await hass.async_add_executor_job(_preload_translations)
+    await hass.async_add_executor_job(SEMCoordinator._get_version)
+
     # Fold the removed ev_limit_surplus switch (#235) into the Max ceiling (#245).
     # Idempotent; only acts while the legacy key is present.
     _migrate_limit_surplus_to_max(hass, entry)
+
+    # Heal a poisoned ``options.ev_chargers`` list (#462/#464 follow-up).
+    # v1.7.2..v1.7.3-beta.3 builds could leave options with a partial or
+    # ghost-ridden charger list that shadows entry.data on the merge below;
+    # writer fixes alone don't repair already-corrupted storage. Idempotent:
+    # after one healing write the reconcile returns None on every later boot.
+    #
+    # Ordering note (#476): the heal deliberately runs BEFORE full_config is
+    # built and therefore before the EV auto-discovery reseed further down.
+    # Heal-first means an options-side ``[]`` clobber is repaired from
+    # entry.data before the merged config is evaluated, so the reseed (which
+    # only fires when the merged config has no chargers at all) never plants
+    # its single ``id: "ev_charger"`` entry on top of a heal-able install.
+    if "ev_chargers" in (entry.options or {}):
+        _healed = _heal_ev_chargers_options(
+            (entry.data or {}).get("ev_chargers"),
+            entry.options.get("ev_chargers"),
+        )
+        if _healed is not None:
+            _LOGGER.warning(
+                "Healed ev_chargers options list: stored ids %s -> healed ids %s "
+                "(data-side ids: %s). See #462/#464.",
+                [c.get("id") for c in (entry.options.get("ev_chargers") or [])
+                 if isinstance(c, dict)],
+                [c.get("id") for c in _healed],
+                [c.get("id") for c in ((entry.data or {}).get("ev_chargers") or [])
+                 if isinstance(c, dict)],
+            )
+            hass.config_entries.async_update_entry(
+                entry, options={**entry.options, "ev_chargers": _healed},
+            )
 
     # Remove orphaned per-charger set-default button entities — the
     # button itself was retired in v1.7.0-beta.11 (#355 follow-up).
@@ -948,7 +1196,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
     # Version-change detection (v1.6.14): on first setup after an upgrade
     # — HACS pulled new code, HA restarted with it — fire a one-shot
     # persistent notification telling the user to hard-refresh.
-    # Background. ``add_extra_js_url`` URLs include a content-hash
+    # Background. Lovelace resource URLs include a content-hash
     # cache-bust (``?v={version}-{sha1}``) but the browser's loaded
     # frontend bootstrap still references the OLD URL until the page
     # is hard-reloaded. Soft reload (F5) hits cached bootstrap → loads
@@ -1039,8 +1287,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
         from .devices.base import CurrentControlDevice
         coordinator._ev_devices = {}
 
+        # Charger-id sanity (#476): every per-charger write path matches on
+        # ``id``, and a missing id gets a POSITIONAL fallback below that can
+        # collide with a real sibling (two id-less entries both become
+        # untargetable; an id-less entry at index 1 collides with a real
+        # "ev_charger_1"). Surface both shapes loudly — they are config
+        # corruption, not normal states.
+        _seen_charger_ids: set[str] = set()
         for idx, charger_cfg in enumerate(ev_chargers_config):
-            charger_id = charger_cfg.get("id", f"ev_charger_{idx}")
+            if not charger_cfg.get("id"):
+                _LOGGER.warning(
+                    "EV charger at index %d has no 'id' — assigning positional "
+                    "fallback 'ev_charger_%d'. Per-charger settings writes can "
+                    "misbehave until the entry gets a stable id.",
+                    idx, idx,
+                )
+            # ``or`` (not a get-default) so empty-string/None ids take the
+            # positional fallback too — must stay in sync with the
+            # coordinator's ``primary_charger_id()`` (#485 H1).
+            charger_id = charger_cfg.get("id") or f"ev_charger_{idx}"
+            if charger_id in _seen_charger_ids:
+                _LOGGER.warning(
+                    "Duplicate EV charger id '%s' at index %d — per-charger "
+                    "entities and settings writes will target only the first "
+                    "charger with this id. Fix the ev_chargers list.",
+                    charger_id, idx,
+                )
+            _seen_charger_ids.add(charger_id)
             charger_name = charger_cfg.get("name", f"EV Charger {idx + 1}")
 
             # Resolve config: charger-specific keys, fall back to global config
@@ -1066,6 +1339,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             if not ev_power_entity or not (ev_charger_service or ev_current_entity):
                 _LOGGER.debug("Charger %s missing power sensor or control method, skipping", charger_id)
                 continue
+
+            # #462 follow-up (generalized in #485 K1): an entity-platform
+            # service (number/input_number/select) configured as the
+            # charger SERVICE needs a matching writable entity to target.
+            # With a wrong-domain target (RienduPre's old config pointed
+            # at a SENSOR), every set-current command bounces off the
+            # service schema and the charger is silently uncontrollable.
+            _svc_domain = str(ev_charger_service or "").strip().lower().split(".", 1)[0]
+            if "." in str(ev_charger_service or "") and _svc_domain in (
+                "number", "input_number", "select",
+            ):
+                _svc_target = ev_current_entity or ev_service_entity
+                if not _svc_target or not str(_svc_target).startswith(f"{_svc_domain}."):
+                    _LOGGER.warning(
+                        "Charger '%s': ev_charger_service=%s needs a %s.* "
+                        "target entity, but got %s — current commands will "
+                        "fail. Set ev_current_control_entity to the "
+                        "charger's max-current entity.",
+                        charger_id, ev_charger_service, _svc_domain, _svc_target,
+                    )
 
             ev_device = CurrentControlDevice(
                 hass=hass,
@@ -1110,6 +1403,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 int(ev_device.max_current),
                 ev_charger_service or ev_current_entity,
             )
+
+            # Defensive: surface dead entity_ids at registration. Each of
+            # these configured entities is something SEM will try to write
+            # to or read from during the cycle. HA's service calls succeed
+            # silently against non-existent entity_ids, so a stale id (e.g.
+            # after a Wallbox/KEBA HA-integration upgrade renamed entities
+            # under the user) results in SEM commanding nothing and the
+            # charger continuing on its own last setpoint — the symptom of
+            # #315 / #357 / #462. Logging at WARNING here makes the gap
+            # visible in any diagnostics dump or log query.
+            _to_check = [
+                ("ev_charging_power_sensor", ev_power_entity),
+                ("ev_current_control_entity", ev_current_entity),
+                ("ev_charger_service_entity_id", ev_service_entity),
+                ("ev_start_stop_entity", _cfg("ev_start_stop_entity")),
+                ("ev_charge_mode_entity", _cfg("ev_charge_mode_entity")),
+            ]
+            _missing = []
+            for _attr, _eid in _to_check:
+                if not _eid:
+                    continue
+                if hass.states.get(_eid) is None:
+                    _missing.append((_attr, _eid))
+            if _missing:
+                _LOGGER.warning(
+                    "EV charger '%s' (%s): %d configured entity ID(s) "
+                    "missing from HA's state registry — SEM commands to "
+                    "these silently no-op. Likely cause: the upstream "
+                    "integration renamed entities after a version upgrade "
+                    "(common with Wallbox/KEBA/Easee on HA core upgrades). "
+                    "Affected: %s",
+                    charger_name, charger_id, len(_missing),
+                    ", ".join(f"{a}={e}" for a, e in _missing),
+                )
 
             # Also register in load management for peak shedding (#436:
             # pass per-charger id + name so each ev_chargers[i] gets its
@@ -1442,20 +1769,42 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     entities for ~1 s) is wasteful.
 
     The skip is keyed to the *exact* options payload the entity persisted
-    (``_skip_options_reload`` holds that snapshot), and is consumed once. A
-    bare boolean used to leak — a stale flag from an earlier stepper could
-    swallow a later options-FLOW save (e.g. ``vehicle_soc_entity``), which then
-    only took effect after a full restart (#245 review #1). Comparing against
-    the snapshot makes a flow change (different options) always reload.
+    (``_skip_options_reload`` holds that snapshot). A bare boolean used to
+    leak — a stale flag from an earlier stepper could swallow a later
+    options-FLOW save (e.g. ``vehicle_soc_entity``), which then only took
+    effect after a full restart (#245 review #1). Comparing against the
+    snapshot makes a flow change (different options) always reload.
+
+    Consumption semantics (#476): the snapshot is kept on a MATCH and
+    cleared on a MISMATCH. Two back-to-back runtime writes fire one
+    listener invocation each, and both invocations see the final merged
+    options — clearing on the first match made the second invocation
+    reload spuriously (the exact disruption this mechanism avoids). Keeping
+    the snapshot is leak-free: the snapshot always equals the LAST runtime
+    write's payload, and HA only fires this listener when options actually
+    change, so any externally-saved options either differ from the snapshot
+    (→ mismatch → reload + clear) or never produce an event at all.
     """
     coordinator = entry.runtime_data if hasattr(entry, "runtime_data") else None
     snapshot = getattr(coordinator, "_skip_options_reload", None) if coordinator else None
-    if coordinator is not None:
-        coordinator._skip_options_reload = None  # always consume — no leak
-    if isinstance(snapshot, dict) and dict(entry.options) == snapshot:
+    # #485 G5: only honor a recently-armed snapshot. HA fires this
+    # listener for data/title-only entry updates too — there options
+    # still equal a snapshot lingering from the last runtime tweak,
+    # and matching it would silently swallow a legitimate reload.
+    # Non-numeric armed_at (legacy writers, mocks) is treated as fresh.
+    # NB: stdlib ``time`` is shadowed by this package's time.py
+    # platform under pytest's path insertion — use dt_util timestamps.
+    armed_at = getattr(coordinator, "_skip_options_reload_armed_at", None)
+    snapshot_fresh = (
+        not isinstance(armed_at, (int, float))
+        or (dt_util.utcnow().timestamp() - armed_at) <= _SKIP_RELOAD_SNAPSHOT_TTL_S
+    )
+    if isinstance(snapshot, dict) and snapshot_fresh and dict(entry.options) == snapshot:
         _LOGGER.debug("Options update from runtime tweak — skipping reload")
         return
 
+    if coordinator is not None:
+        coordinator._skip_options_reload = None  # stale — clear before reload
     _LOGGER.info("Config options updated, reloading integration")
     await hass.config_entries.async_reload(entry.entry_id)
 
@@ -2298,26 +2647,20 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
         localize_url = f"{localize_base}?v={asset_v['localize']}"
         cards_bundle_url = f"{cards_bundle_base}?v={asset_v['bundle']}"
 
-        # Load semLocalize via add_extra_js_url — must be available before
-        # cards on DESKTOP (Lovelace modules load after add_extra_js_url
-        # scripts, so the global is ready by first render).
-        #
-        # v1.7.2-beta.4 (2026-06-08): mobile Companion app does NOT
-        # reliably pick up add_extra_js_url scripts — RienduPre +
-        # others reported almost ALL translation keys rendering raw
-        # on iOS Companion after beta.1 moved sem-localize.js off the
-        # Lovelace-resource channel. Fix: register on BOTH channels.
-        # sem-localize.js was regenerated in beta.4 with an IIFE +
-        # ``window.semLocalize`` guard so the second load is a clean
-        # no-op (same URL with same hash = browser fetches once anyway,
-        # but the guard prevents script-execution-twice errors if a
-        # specific browser does load it twice).
-        add_extra_js_url(hass, localize_url)
+        # sem-localize.js is delivered as a Lovelace resource only
+        # (registered below alongside the bundle and diagram card).
+        # Cards constructed before the script finishes parsing wait
+        # for the ``sem-localize-ready`` event dispatched at the end
+        # of sem-localize.js — handled by every card's base class,
+        # ``dashboard/card/src/base/sem-lit-base.js`` (#453, v1.7.3).
+        # Earlier versions registered on a second channel via
+        # ``add_extra_js_url`` to work around a perceived first-render
+        # race; the ready-event mechanism in the base class makes
+        # that unnecessary.
 
         # Legacy base URLs to clean up. Migrated to the single Lit
-        # bundle. ``sem-localize.js`` is NOT in this list as of
-        # v1.7.2-beta.4 — it's actively re-registered below as a
-        # Lovelace resource (dual-channel with add_extra_js_url).
+        # bundle. ``sem-localize.js`` is NOT in this list — it's
+        # actively re-registered below as a Lovelace resource.
         _legacy_bases = [
             f"{static_path}/card/sem-shared.js",
             f"{static_path}/card/sem-reactive-base.js",
@@ -2368,8 +2711,11 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                     "registered automatically. Add the following to "
                     "configuration.yaml under `lovelace.resources` and restart:\n"
                     "  - url: %s\n    type: module\n"
+                    "  - url: %s\n    type: module\n"
                     "  - url: %s\n    type: module",
-                    cards_bundle_url, f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
+                    cards_bundle_url,
+                    f"{static_path}/card/sem-system-diagram-card.js?v={asset_v['diagram']}",
+                    localize_url,
                 )
                 # Skip the rest of the registration block — none of the
                 # mutating methods below are callable in YAML mode.
@@ -2412,16 +2758,15 @@ async def _async_register_frontend_resources(hass: HomeAssistant) -> None:
                 )
                 _LOGGER.info("Updated SEM diagram card: %s → %s", diagram_item["url"], diagram_url)
 
-            # v1.7.2-beta.4: register sem-localize.js as a Lovelace
-            # resource too (dual-channel with add_extra_js_url above).
-            # Mobile Companion app doesn't pick up add_extra_js_url
-            # scripts reliably; Lovelace resources DO load on mobile.
-            # The file has an IIFE + window.semLocalize guard so the
-            # second load is a clean no-op.
+            # Register sem-localize.js as a Lovelace resource (single
+            # delivery channel; see #453). Cards constructed before
+            # this script parses listen for ``sem-localize-ready`` in
+            # ``sem-lit-base.js`` and re-render once the global is
+            # available.
             localize_item = existing_by_base.get(localize_base)
             if localize_item is None:
                 await resources.async_create_item({"res_type": "module", "url": localize_url})
-                _LOGGER.info("Registered SEM localize (mobile fix): %s", localize_url)
+                _LOGGER.info("Registered SEM localize: %s", localize_url)
             elif localize_item["url"] != localize_url:
                 await resources.async_update_item(
                     localize_item["id"], {"res_type": "module", "url": localize_url}
@@ -2646,12 +2991,26 @@ async def _async_register_phase_services(
     async def async_set_option(call) -> None:
         """Write one or more keys into the SEM ConfigEntry options.
 
-        Equivalent to walking the OptionsFlow but without forcing the
-        caller to know which step owns each key. Triggers the standard
-        ``async_update_options`` listener which decides whether a reload
-        is needed (see ``async_update_options`` comment for the skip
-        rules — runtime number/switch tweaks don't reload, structural
-        keys like entity pickers do).
+        Two behaviors based on key kind (#462/#464 fix):
+
+        * **Structural keys** (entity wiring — heat pump relays, hot
+          water entity, ev_chargers list shape): force an integration
+          reload so controllers get re-instantiated against the new
+          wiring. This preserves the #448 heat-pump-relay fix that
+          motivated the v1.7.2-beta.2 always-reload behavior.
+
+        * **Tunable keys** (everything else — modes, thresholds,
+          targets, switches): mirror the new value into
+          ``coordinator.config`` in place and suppress the listener's
+          reload via ``_skip_options_reload``. Matches the per-charger
+          ``select.py`` / ``number.py`` runtime-tweak pattern that
+          existed in v1.7.1 and earlier. Avoids destroying + recreating
+          the coordinator (with all attendant per-charger / split-grid
+          state) on every tunable change.
+
+        Plus: when ``ev_chargers`` is in the payload, **merge by id**
+        instead of full-replace so a partial submit from the Config
+        card can never drop a sibling charger (#464 cross-talk).
         """
         options = call.data.get("options")
         if not isinstance(options, dict):
@@ -2672,27 +3031,120 @@ async def _async_register_phase_services(
                 if e.entry_id == call.data.get("entry_id"):
                     target_entry = e
                     break
-        # Merge with existing options to preserve unrelated keys, then
-        # update. HA fires the update_listener automatically — but that
-        # listener has a skip-reload optimization for runtime
-        # number/switch tweaks. Since ``set_option`` doesn't mirror
-        # values into coordinator memory (the runtime stepper path
-        # does), we ALWAYS need a reload here to take effect.
-        # Bug confirmed live on 2026-06-07: setting
-        # ``heat_pump_relay2_entity`` via this service updated the
-        # ``options`` dict but the heat-pump controller didn't get
-        # re-registered, leaving ``registered=false`` despite valid
-        # config. Explicit reload below makes this deterministic.
+
+        # Smart-merge ``ev_chargers`` by id (#464) — see
+        # ``_merge_ev_chargers_by_id`` for the contract.
+        #
+        # Fall back to ``entry.data.ev_chargers`` when entry.options
+        # doesn't have the key — same foot-gun as the per-charger
+        # select / number setters in #469. A fresh install has its
+        # chargers in entry.data only; the smart-merge needs to see
+        # them so a partial submit doesn't append a stray ghost entry
+        # and lose the existing chargers on next reload. Caught by
+        # ``test_set_option_ev_chargers_partial_submit_preserves_sibling``
+        # in the test_services_real.py framework tests.
+        if isinstance(options.get("ev_chargers"), list):
+            existing_list = (
+                (target_entry.options or {}).get("ev_chargers")
+                or (target_entry.data or {}).get("ev_chargers")
+                or []
+            )
+            options = {
+                **options,
+                "ev_chargers": _merge_ev_chargers_by_id(
+                    existing_list, options["ev_chargers"],
+                ),
+            }
+
         merged = {**(target_entry.options or {}), **options}
-        if merged != (target_entry.options or {}):
-            hass.config_entries.async_update_entry(target_entry, options=merged)
-            # Block on reload so the caller's next read sees the new
-            # state. HA suppresses duplicate reloads when one is
-            # already pending from the listener.
-            await hass.config_entries.async_reload(target_entry.entry_id)
+        if merged == (target_entry.options or {}):
+            _LOGGER.debug(
+                "set_option no-op (values unchanged): %s",
+                list(options.keys()),
+            )
+            return
+
+        # Split keys: structural (reload required) vs tunable (route
+        # through the matching ``number`` / ``switch`` / ``select``
+        # entity so the entity's own write path runs — that's the
+        # path that updates ``_attr_native_value`` + writes state,
+        # and it already snapshots ``_skip_options_reload`` so the
+        # listener short-circuits. Routing through the entity is the
+        # only way to avoid the cached-``_attr_native_value`` bug
+        # caught live on HA-TEST: setting a tunable directly via
+        # ``async_update_entry`` updates the persisted options but
+        # leaves the displayed entity stale until the next reload.
+        structural_keys = [
+            k for k in options if k in _SET_OPTION_STRUCTURAL_KEYS
+        ]
+        tunable_keys = [
+            k for k in options if k not in _SET_OPTION_STRUCTURAL_KEYS
+        ]
+
+        # Route each tunable through its per-entity write path FIRST
+        # (#485 G4): the direct entry write below triggers a reload,
+        # and routing entities while that reload tears them down made
+        # mixed payloads drop tunable values mid-loop. Each entity's
+        # write path updates entity state, persists to entry.options,
+        # and snapshots _skip_options_reload — so no reload, AND
+        # entity state is fresh. Unrecognized keys fall through to
+        # the direct write.
+        unrouted: list[str] = []
+        for key in tunable_keys:
+            value = options[key]
+            if hass.states.get(f"number.sem_{key}") is not None:
+                await hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": f"number.sem_{key}", "value": value},
+                    blocking=True,
+                )
+            elif hass.states.get(f"switch.sem_{key}") is not None:
+                svc = "turn_on" if _coerce_switch_on(value) else "turn_off"
+                await hass.services.async_call(
+                    "switch", svc,
+                    {"entity_id": f"switch.sem_{key}"},
+                    blocking=True,
+                )
+            elif hass.states.get(f"select.sem_{key}") is not None:
+                await hass.services.async_call(
+                    "select", "select_option",
+                    {"entity_id": f"select.sem_{key}", "option": str(value)},
+                    blocking=True,
+                )
+            else:
+                unrouted.append(key)
+
+        # ONE direct entry write for everything that didn't go through
+        # an entity (structural wiring + unrouted keys), then ONE
+        # reload. Unrouted keys reload too (#485 G1): keys like
+        # ``tariff_mode`` or the ``battery_*`` scheduler params are
+        # consumed at coordinator construction only — the previous
+        # mirror into ``coordinator.config`` looked successful in
+        # diagnostics while the constructed provider/scheduler kept
+        # the old value until the next restart (the #462 silent-no-op
+        # class). The skip snapshot is armed so the update listener
+        # doesn't schedule a SECOND reload racing the explicit one.
+        direct_keys = structural_keys + unrouted
+        if direct_keys:
+            direct_merged = {
+                **(target_entry.options or {}),
+                **{k: options[k] for k in direct_keys},
+            }
+            if direct_merged != (target_entry.options or {}):
+                coordinator = getattr(target_entry, "runtime_data", None)
+                if coordinator is not None:
+                    coordinator._skip_options_reload = dict(direct_merged)
+                hass.config_entries.async_update_entry(
+                    target_entry, options=direct_merged,
+                )
+                await hass.config_entries.async_reload(target_entry.entry_id)
+
         _LOGGER.debug(
-            "set_option wrote %d key(s) to entry %s: %s",
-            len(options), target_entry.entry_id, list(options.keys()),
+            "set_option wrote %d key(s) to entry %s "
+            "(structural=%s tunable=%s unrouted=%s reload=%s)",
+            len(options), target_entry.entry_id,
+            structural_keys, tunable_keys, unrouted,
+            bool(direct_keys),
         )
 
     hass.services.async_register(
@@ -2862,6 +3314,7 @@ async def _async_register_phase_services(
         "battery_cycle_cost", "battery_precharge_trigger_hour",
         "battery_max_target_soc", "battery_min_deficit_kwh",
         "battery_pessimism_weight", "battery_force_charge_negative_price",
+        "battery_replan_interval_min", "battery_prefer_consecutive_window",
     }
     _DIAGNOSE_BATTERY_SCHEDULER_STATE = {
         "battery_scheduler_active", "battery_scheduler_target_soc",
@@ -2998,28 +3451,47 @@ async def _async_register_phase_services(
         else:
             recent_logs = list(all_logs)[-20:]
 
-        # Read SEM integration version (best effort)
-        sem_version = "unknown"
-        try:
-            import os as _os
-            import json as _json_v
-            manifest = _os.path.join(_os.path.dirname(__file__), "manifest.json")
-            with open(manifest) as _f:
-                sem_version = _json_v.load(_f).get("version", "unknown")
-        except Exception:  # noqa: BLE001
-            pass
+        # Read SEM integration version — cached classmethod, warmed off-loop
+        # at setup (the previous inline open() was a blocking call in the
+        # event loop on every diagnose invocation).
+        sem_version = SEMCoordinator._get_version()
 
-        return {
-            "section": section,
-            "payload": {
-                "version": sem_version,
-                "entry_id": target.entry_id,
-                "entry_version": f"{target.version}.{getattr(target, 'minor_version', 0)}",
-                "config": config,
-                "state": state,
-                "recent_logs": recent_logs,
-            },
+        payload = {
+            "version": sem_version,
+            "entry_id": target.entry_id,
+            "entry_version": f"{target.version}.{getattr(target, 'minor_version', 0)}",
+            "config": config,
+            "state": state,
+            "recent_logs": recent_logs,
         }
+
+        # ev_chargers storage split (#462/#464 follow-up). The merged
+        # ``config`` block hides whether a charger entry lives in
+        # entry.data or entry.options — the load-bearing fact when a
+        # per-charger write silently no-ops because the options-side
+        # list is partial. Surface both sides so the next triage round
+        # doesn't need .storage access.
+        if section in ("all", "ev_chargers"):
+            def _chargers_brief(side: dict | None):
+                lst = (side or {}).get("ev_chargers")
+                if not isinstance(lst, list):
+                    return "absent"
+                return [
+                    {
+                        "id": c.get("id"),
+                        "name": c.get("name"),
+                        "charge_mode": c.get("charge_mode"),
+                    }
+                    if isinstance(c, dict)
+                    else {"invalid_entry": type(c).__name__}
+                    for c in lst
+                ]
+            payload["ev_chargers_storage_split"] = {
+                "data": _chargers_brief(target.data),
+                "options": _chargers_brief(target.options),
+            }
+
+        return {"section": section, "payload": payload}
 
     hass.services.async_register(
         DOMAIN,
