@@ -123,6 +123,9 @@ const WATCHED = [
     'number.sem_minimum_solar_power', 'number.sem_maximum_grid_import',
     'number.sem_update_interval', 'number.sem_power_delta',
     'number.sem_current_delta', 'number.sem_soc_delta',
+    // #492: regulation_offset moved here from sem-control-card (Config
+    // is the single settings home; Control is live-ops only).
+    'number.sem_regulation_offset',
     'switch.sem_observer_mode',
 ];
 
@@ -1081,7 +1084,10 @@ class SEMConfigCard extends SEMLitBase {
                 ${this._renderStepper('number.sem_current_delta', 'current_delta', T, 'config_help_current_delta')}
                 ${this._renderStepper('number.sem_soc_delta', 'soc_delta', T, 'config_help_soc_delta')}
             </div>
-            ${this._renderStepper('number.sem_minimum_solar_power', 'min_solar_power', T, 'config_help_min_solar_power')}
+            <div class="stepper-pair">
+                ${this._renderStepper('number.sem_minimum_solar_power', 'min_solar_power', T, 'config_help_min_solar_power')}
+                ${this._renderStepper('number.sem_regulation_offset', 'regulation_offset', T)}
+            </div>
         `;
     }
 
