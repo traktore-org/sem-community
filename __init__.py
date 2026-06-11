@@ -28,6 +28,7 @@ from homeassistant.const import Platform, EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import HomeAssistant, SupportsResponse, callback
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, issue_registry as ir
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 from homeassistant.helpers import config_validation as cv
 
@@ -183,6 +184,11 @@ PLATFORMS: list[Platform] = [
 # the list (charge_mode, target_soc, daily_ev_target) go through the
 # select.py / number.py paths instead of set_option, so they don't
 # hit this list.
+# #485 G5: how long an armed reload-skip snapshot stays valid. The
+# listener fires within milliseconds of the runtime write that armed
+# it; anything older is a leftover that must not mask a real reload.
+_SKIP_RELOAD_SNAPSHOT_TTL_S = 60.0
+
 _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     "heat_pump_relay1_entity", "heat_pump_relay2_entity",
     "heat_pump_climate_entity", "heat_pump_power_sensor",
@@ -193,16 +199,15 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
 })
 
 
-def _set_option_needs_reload(option_keys) -> bool:
-    """True iff at least one key in ``option_keys`` is structural.
+def _coerce_switch_on(value) -> bool:
+    """Interpret a set_option value as a switch on/off intent.
 
-    Structural keys (entity wiring) require an integration reload so
-    the controllers re-instantiate against the new wiring. Tunable
-    keys (modes, thresholds, switches) are read from
-    ``coordinator.config`` on every cycle, so an in-place mirror is
-    sufficient — no reload needed.
+    YAML service data arrives as strings — plain truthiness turned
+    ``"off"`` / ``"false"`` / ``"0"`` into turn_on (#485 G3).
     """
-    return any(k in _SET_OPTION_STRUCTURAL_KEYS for k in option_keys)
+    if isinstance(value, str):
+        return value.strip().lower() not in ("", "0", "false", "off", "no")
+    return bool(value)
 
 
 def _merge_ev_chargers_by_id(
@@ -231,25 +236,16 @@ def _merge_ev_chargers_by_id(
     Pure function — no I/O, no HA dependencies. Tested in
     ``tests/test_set_option_smart_merge.py``.
     """
-    existing_by_id: dict[str, dict] = {
-        c["id"]: dict(c) for c in (existing or [])
-        if isinstance(c, dict) and c.get("id")
+    incoming_by_id: dict[str, dict] = {}
+    new_ids: list[str] = []
+    existing_ids = {
+        c.get("id") for c in (existing or []) if isinstance(c, dict)
     }
-    seen_ids: set[str] = set()
-    merged: list[dict] = []
     for inc in incoming or []:
         if not isinstance(inc, dict):
             continue
         cid = inc.get("id")
-        if cid and cid in existing_by_id:
-            base = existing_by_id[cid]
-            base.update(inc)
-            merged.append(base)
-            seen_ids.add(cid)
-        elif cid:
-            merged.append(dict(inc))
-            seen_ids.add(cid)
-        else:
+        if not cid:
             # Id-less entries are untargetable ghosts: per-charger writes
             # match on ``id``, and at registration a ghost gets assigned a
             # positional ``ev_charger_<idx>`` id that can collide with a
@@ -260,13 +256,88 @@ def _merge_ev_chargers_by_id(
                 "Dropping id-less ev_chargers entry from merge: %s",
                 dict(inc),
             )
-    # Preserve existing chargers not mentioned in the incoming list —
-    # appended after the incoming-derived entries to keep the result
-    # deterministic.
-    for cid, c in existing_by_id.items():
-        if cid not in seen_ids:
-            merged.append(c)
+            continue
+        if cid in incoming_by_id:
+            incoming_by_id[cid].update(inc)
+        else:
+            incoming_by_id[cid] = dict(inc)
+            if cid not in existing_ids:
+                new_ids.append(cid)
+
+    # EXISTING order is the output order (#485 G2): charger list order
+    # is load-bearing — index 0 is the fleet primary for the strategy
+    # sensors and default surplus priorities derive from the position.
+    # The previous incoming-first iteration let a partial submit (or
+    # the setup-time heal, whose ``incoming`` is the poisoned options
+    # list) silently reorder the fleet.
+    merged: list[dict] = []
+    merged_ids: set[str] = set()
+    for c in existing or []:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id")
+        if not cid or cid in merged_ids:
+            continue
+        base = dict(c)
+        if cid in incoming_by_id:
+            base.update(incoming_by_id[cid])
+        merged.append(base)
+        merged_ids.add(cid)
+    for cid in new_ids:
+        merged.append(dict(incoming_by_id[cid]))
     return merged
+
+
+def persist_per_charger_option(
+    hass, entry, coordinator, charger_id: str, key: str, value,
+) -> None:
+    """Persist ONE per-charger option without an integration reload.
+
+    Single write path for every per-charger entity platform (#485 K2 —
+    select/number/time each carried a ~30-line copy of this hardening,
+    and the time.py copy was missed by the original #469 patch round,
+    clobbering ev_chargers until v1.7.3-beta.5):
+
+    * Copies charger dicts — in-place mutation leaves entry.options
+      unchanged, so async_update_entry never persists (#245).
+    * Falls back to ``entry.data.ev_chargers`` when options lacks the
+      key — otherwise ``[]`` is written back and the ``{**data,
+      **options}`` merge hides every charger on the next reload.
+    * Recovers THIS charger from entry.data when a partially poisoned
+      options list dropped its id (#462/#464) instead of silently
+      no-op'ing the write.
+    * Mirrors into ``coordinator.config`` and arms the reload-skip
+      snapshot before the entry write.
+    """
+    new_options = {**(entry.options or {})}
+    data_chargers = (entry.data or {}).get("ev_chargers") or []
+    source_chargers = new_options.get("ev_chargers") or data_chargers
+    ev_chargers = [dict(c) for c in source_chargers if isinstance(c, dict)]
+    for charger in ev_chargers:
+        if charger.get("id") == charger_id:
+            charger[key] = value
+            break
+    else:
+        recovered = next(
+            (dict(c) for c in data_chargers
+             if isinstance(c, dict) and c.get("id") == charger_id),
+            {"id": charger_id},
+        )
+        recovered[key] = value
+        ev_chargers.append(recovered)
+        _LOGGER.warning(
+            "Charger '%s' was missing from the stored ev_chargers list "
+            "(ids: %s) — recovered it from entry.data so the %s write "
+            "isn't lost",
+            charger_id,
+            [c.get("id") for c in ev_chargers[:-1]],
+            key,
+        )
+    new_options["ev_chargers"] = ev_chargers
+    if isinstance(getattr(coordinator, "config", None), dict):
+        coordinator.config.update({**(entry.data or {}), **new_options})
+    coordinator._skip_options_reload = new_options
+    hass.config_entries.async_update_entry(entry, options=new_options)
 
 
 def _heal_ev_chargers_options(
@@ -1231,7 +1302,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     "misbehave until the entry gets a stable id.",
                     idx, idx,
                 )
-            charger_id = charger_cfg.get("id", f"ev_charger_{idx}")
+            # ``or`` (not a get-default) so empty-string/None ids take the
+            # positional fallback too — must stay in sync with the
+            # coordinator's ``primary_charger_id()`` (#485 H1).
+            charger_id = charger_cfg.get("id") or f"ev_charger_{idx}"
             if charger_id in _seen_charger_ids:
                 _LOGGER.warning(
                     "Duplicate EV charger id '%s' at index %d — per-charger "
@@ -1266,20 +1340,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 _LOGGER.debug("Charger %s missing power sensor or control method, skipping", charger_id)
                 continue
 
-            # #462 follow-up: ``number.set_value`` configured as the charger
-            # SERVICE needs a writable number entity to target. With a
-            # non-number target (RienduPre's old config pointed at a
-            # SENSOR), every set-current command bounces off the service
-            # schema and the charger is silently uncontrollable.
-            if ev_charger_service == "number.set_value":
+            # #462 follow-up (generalized in #485 K1): an entity-platform
+            # service (number/input_number/select) configured as the
+            # charger SERVICE needs a matching writable entity to target.
+            # With a wrong-domain target (RienduPre's old config pointed
+            # at a SENSOR), every set-current command bounces off the
+            # service schema and the charger is silently uncontrollable.
+            _svc_domain = str(ev_charger_service or "").strip().lower().split(".", 1)[0]
+            if "." in str(ev_charger_service or "") and _svc_domain in (
+                "number", "input_number", "select",
+            ):
                 _svc_target = ev_current_entity or ev_service_entity
-                if not _svc_target or not str(_svc_target).startswith("number."):
+                if not _svc_target or not str(_svc_target).startswith(f"{_svc_domain}."):
                     _LOGGER.warning(
-                        "Charger '%s': ev_charger_service=number.set_value "
-                        "needs a number.* target entity, but got %s — current "
-                        "commands will fail. Set ev_current_control_entity to "
-                        "the charger's max-current number entity.",
-                        charger_id, _svc_target,
+                        "Charger '%s': ev_charger_service=%s needs a %s.* "
+                        "target entity, but got %s — current commands will "
+                        "fail. Set ev_current_control_entity to the "
+                        "charger's max-current entity.",
+                        charger_id, ev_charger_service, _svc_domain, _svc_target,
                     )
 
             ev_device = CurrentControlDevice(
@@ -1709,7 +1787,19 @@ async def async_update_options(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """
     coordinator = entry.runtime_data if hasattr(entry, "runtime_data") else None
     snapshot = getattr(coordinator, "_skip_options_reload", None) if coordinator else None
-    if isinstance(snapshot, dict) and dict(entry.options) == snapshot:
+    # #485 G5: only honor a recently-armed snapshot. HA fires this
+    # listener for data/title-only entry updates too — there options
+    # still equal a snapshot lingering from the last runtime tweak,
+    # and matching it would silently swallow a legitimate reload.
+    # Non-numeric armed_at (legacy writers, mocks) is treated as fresh.
+    # NB: stdlib ``time`` is shadowed by this package's time.py
+    # platform under pytest's path insertion — use dt_util timestamps.
+    armed_at = getattr(coordinator, "_skip_options_reload_armed_at", None)
+    snapshot_fresh = (
+        not isinstance(armed_at, (int, float))
+        or (dt_util.utcnow().timestamp() - armed_at) <= _SKIP_RELOAD_SNAPSHOT_TTL_S
+    )
+    if isinstance(snapshot, dict) and snapshot_fresh and dict(entry.options) == snapshot:
         _LOGGER.debug("Options update from runtime tweak — skipping reload")
         return
 
@@ -2991,24 +3081,14 @@ async def _async_register_phase_services(
             k for k in options if k not in _SET_OPTION_STRUCTURAL_KEYS
         ]
 
-        # Apply structural changes first (one reload at the end).
-        if structural_keys:
-            structural_merged = {
-                **(target_entry.options or {}),
-                **{k: options[k] for k in structural_keys},
-            }
-            hass.config_entries.async_update_entry(
-                target_entry, options=structural_merged,
-            )
-
-        # Route each tunable through its per-entity write path. Each
-        # entity's ``async_set_native_value`` / ``async_select_option``
-        # / ``async_turn_on/off`` updates entity state, persists to
-        # entry.options, and snapshots _skip_options_reload — so no
-        # reload, AND entity state is fresh. Unrecognized keys
-        # (config-only with no UI surface) fall back to a direct
-        # entry write, which won't refresh entities but also won't
-        # have any to refresh.
+        # Route each tunable through its per-entity write path FIRST
+        # (#485 G4): the direct entry write below triggers a reload,
+        # and routing entities while that reload tears them down made
+        # mixed payloads drop tunable values mid-loop. Each entity's
+        # write path updates entity state, persists to entry.options,
+        # and snapshots _skip_options_reload — so no reload, AND
+        # entity state is fresh. Unrecognized keys fall through to
+        # the direct write.
         unrouted: list[str] = []
         for key in tunable_keys:
             value = options[key]
@@ -3019,7 +3099,7 @@ async def _async_register_phase_services(
                     blocking=True,
                 )
             elif hass.states.get(f"switch.sem_{key}") is not None:
-                svc = "turn_on" if value else "turn_off"
+                svc = "turn_on" if _coerce_switch_on(value) else "turn_off"
                 await hass.services.async_call(
                     "switch", svc,
                     {"entity_id": f"switch.sem_{key}"},
@@ -3034,43 +3114,37 @@ async def _async_register_phase_services(
             else:
                 unrouted.append(key)
 
-        # Fall back: direct entry write for keys with no SEM entity
-        # (rare — most user-facing options have an entity).
-        if unrouted:
-            unrouted_merged = {
+        # ONE direct entry write for everything that didn't go through
+        # an entity (structural wiring + unrouted keys), then ONE
+        # reload. Unrouted keys reload too (#485 G1): keys like
+        # ``tariff_mode`` or the ``battery_*`` scheduler params are
+        # consumed at coordinator construction only — the previous
+        # mirror into ``coordinator.config`` looked successful in
+        # diagnostics while the constructed provider/scheduler kept
+        # the old value until the next restart (the #462 silent-no-op
+        # class). The skip snapshot is armed so the update listener
+        # doesn't schedule a SECOND reload racing the explicit one.
+        direct_keys = structural_keys + unrouted
+        if direct_keys:
+            direct_merged = {
                 **(target_entry.options or {}),
-                **{k: options[k] for k in unrouted},
+                **{k: options[k] for k in direct_keys},
             }
-            if unrouted_merged != (target_entry.options or {}):
-                # Mirror to coordinator.config so the read side sees
-                # the new value on the next cycle without reload.
+            if direct_merged != (target_entry.options or {}):
                 coordinator = getattr(target_entry, "runtime_data", None)
                 if coordinator is not None:
-                    # Only arm the skip snapshot when NO structural key is
-                    # in the payload — a mixed payload ends in a forced
-                    # reload anyway, and the snapshot would just be stale
-                    # state on the (discarded) coordinator (#476).
-                    if not structural_keys:
-                        coordinator._skip_options_reload = dict(unrouted_merged)
-                    if isinstance(getattr(coordinator, "config", None), dict):
-                        coordinator.config.update({
-                            **(target_entry.data or {}),
-                            **unrouted_merged,
-                        })
+                    coordinator._skip_options_reload = dict(direct_merged)
                 hass.config_entries.async_update_entry(
-                    target_entry, options=unrouted_merged,
+                    target_entry, options=direct_merged,
                 )
-
-        # One reload at the end for structural changes.
-        if structural_keys:
-            await hass.config_entries.async_reload(target_entry.entry_id)
+                await hass.config_entries.async_reload(target_entry.entry_id)
 
         _LOGGER.debug(
             "set_option wrote %d key(s) to entry %s "
             "(structural=%s tunable=%s unrouted=%s reload=%s)",
             len(options), target_entry.entry_id,
             structural_keys, tunable_keys, unrouted,
-            bool(structural_keys),
+            bool(direct_keys),
         )
 
     hass.services.async_register(

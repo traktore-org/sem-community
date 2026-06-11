@@ -70,6 +70,19 @@ power before SEM catches the self-resume; if you observe sustained
 draw beyond that, file an issue with the SEM log line and the KEBA
 `max_current` setpoint reported at the moment of the resume.
 
+**Cause (entity service configured as charger service, v1.7.3+):** If
+`ev_charger_service` is set to an entity service like `number.set_value`,
+`input_number.set_value` or `select.select_option`, SEM maps the command
+to the matching entity write automatically (v1.7.3-beta.8 for
+`number.set_value`, generalized in beta.9). It needs a matching target:
+set `ev_current_control_entity` to the charger's max-current
+`number.*` / `input_number.*` / `select.*` entity. A wrong-domain target
+logs a registration WARNING naming the charger. After 3 consecutive
+rejected commands SEM raises a Repair ("EV charger not accepting
+commands") — it clears automatically on the next successful write, and
+since beta.9 a stale Repair left over from before a config fix is also
+cleared on the first good write after the reload.
+
 ---
 
 ## Car charged overnight when I only wanted solar surplus

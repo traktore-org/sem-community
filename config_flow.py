@@ -1497,17 +1497,14 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             # Auto-detect dynamic tariff provider entity if mode=dynamic
             if user_input.get("tariff_mode") == "dynamic" and not user_input.get("dynamic_tariff_entity"):
-                # Try to find Tibber/Nordpool/aWATTar entity automatically
+                # Shared candidate matcher (#485 K5): the flow used to
+                # keep its own pattern subset, which drifted from the
+                # runtime provider's detection (it missed Octopus and
+                # Amber despite the dropdown label promising them).
+                from .tariff.tariff_provider import DynamicTariffProvider
                 for state in self.hass.states.async_all("sensor"):
                     eid = state.entity_id
-                    # Official Nord Pool core integration uses
-                    # sensor.nord_pool_<area>_current_price (underscored,
-                    # so the HACS "nordpool" pattern doesn't match it).
-                    if (
-                        "nord_pool" in eid and eid.endswith("_current_price")
-                    ) or any(
-                        p in eid for p in ("electricity_price", "nordpool", "awattar")
-                    ):
+                    if DynamicTariffProvider.is_price_entity_candidate(eid):
                         user_input["dynamic_tariff_entity"] = eid
                         _LOGGER.info("Auto-detected dynamic tariff entity: %s", eid)
                         break

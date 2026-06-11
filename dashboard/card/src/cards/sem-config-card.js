@@ -771,6 +771,22 @@ class SEMConfigCard extends SEMLitBase {
         `;
     }
 
+    // Single write path for nested per-charger fields (#485 K3 — the
+    // clone/materialize/inject-id/save closure was duplicated per
+    // renderer; the id-injection guard below is what keeps ghost
+    // chargers out of the backend smart-merge, so it must not rely on
+    // every future nested editor remembering to copy it).
+    async _saveChargerField(chargerIndex, cid, key, value, statusKey, opts) {
+        const newChargers = (opts.ev_chargers || []).map(c => ({ ...c }));
+        if (!newChargers[chargerIndex]) newChargers[chargerIndex] = {};
+        // Always carry the charger id — the backend smart-merge targets
+        // by id and drops id-less entries (would otherwise become a
+        // ghost charger colliding with a real sibling, #462/#464).
+        if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
+        newChargers[chargerIndex][key] = value;
+        await this._saveOption('ev_chargers', newChargers, statusKey);
+    }
+
     // EV target-type select bound to ev_chargers[index].ev_target_type.
     // The SOC option is disabled (#446 GUI gate) when this charger has
     // no ``vehicle_soc_entity`` configured — preventing the saved-bad-state
@@ -781,17 +797,9 @@ class SEMConfigCard extends SEMLitBase {
         const hasSensor = !!charger.vehicle_soc_entity;
         const statusKey = `ev_chargers.${chargerIndex}.ev_target_type`;
         const status = this._saveStatus[statusKey];
-        const onChange = async (e) => {
-            const val = e.target.value;
-            const newChargers = (opts.ev_chargers || []).map(c => ({ ...c }));
-            if (!newChargers[chargerIndex]) newChargers[chargerIndex] = {};
-            // Always carry the charger id — the backend smart-merge targets
-            // by id and drops id-less entries (would otherwise become a
-            // ghost charger colliding with a real sibling, #462/#464).
-            if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
-            newChargers[chargerIndex].ev_target_type = val;
-            await this._saveOption('ev_chargers', newChargers, statusKey);
-        };
+        const onChange = (e) => this._saveChargerField(
+            chargerIndex, cid, 'ev_target_type', e.target.value, statusKey, opts,
+        );
         return html`
             <div class="stepper-cell">
                 <div class="ctrl-row">
@@ -820,16 +828,9 @@ class SEMConfigCard extends SEMLitBase {
         const cur = chargers[chargerIndex]?.[chargerKey] || '';
         const statusKey = `ev_chargers.${chargerIndex}.${chargerKey}`;
         const status = this._saveStatus[statusKey];
-        const onChange = async (val) => {
-            const newChargers = (opts.ev_chargers || []).map(c => ({ ...c }));
-            if (!newChargers[chargerIndex]) newChargers[chargerIndex] = {};
-            // Always carry the charger id — the backend smart-merge targets
-            // by id and drops id-less entries (would otherwise become a
-            // ghost charger colliding with a real sibling, #462/#464).
-            if (!newChargers[chargerIndex].id && cid) newChargers[chargerIndex].id = cid;
-            newChargers[chargerIndex][chargerKey] = val;
-            await this._saveOption('ev_chargers', newChargers, statusKey);
-        };
+        const onChange = (val) => this._saveChargerField(
+            chargerIndex, cid, chargerKey, val, statusKey, opts,
+        );
         return html`
             <div class="picker-cell">
                 <div class="picker-row">

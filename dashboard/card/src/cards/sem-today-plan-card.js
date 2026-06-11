@@ -16,7 +16,7 @@
  */
 
 import { SEMLitBase, html, css, nothing } from '../base/sem-lit-base.js';
-import { semDefineCard } from '../base/sem-shared.js';
+import { semDefineCard, semFormatTime } from '../base/sem-shared.js';
 
 const DEFAULT_ENTITY = 'sensor.sem_charging_state';
 
@@ -79,7 +79,7 @@ class SEMTodayPlanCard extends SEMLitBase {
         if (!iso) return '—';
         try {
             const d = new Date(iso);
-            const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const time = semFormatTime(iso);  // shared locale-aware HH:MM (#485 K6)
 
             // Compare calendar days only — ignore time-of-day.
             const dDay = d.toDateString();

@@ -2093,3 +2093,194 @@ class TestManualGridAudit:
             reader.read_power()
 
         assert reader._manual_grid_mismatch is True
+
+
+# ════════════════════════════════════════════
+# #485 pre-stable review batch (H2/H3/H4/H6)
+# ════════════════════════════════════════════
+
+class TestLateExportAdoption:
+    """#485 H2: a late-loading export sensor completes a one-sided pick."""
+
+    def _dsmr_setup(self, states):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power="sensor.growatt_solar_power",
+            grid_import_power=None,
+            grid_import_energy="sensor.electricity_meter_energy_consumption_tariff_1",
+            grid_export_energy="sensor.electricity_meter_energy_production_tariff_1",
+            battery_power="sensor.sessy_power",
+        )
+        reader = _make_reader_with_states(hass, states, ed)
+        return reader, states
+
+    def test_export_sensor_appearing_later_is_adopted(self):
+        states = {
+            "sensor.growatt_solar_power": _state(500),
+            "sensor.sessy_power": _state(0),
+            # Only the consumption (import) side has loaded so far.
+            "sensor.electricity_meter_power_consumption": _state(1500, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+        reader, states = self._dsmr_setup(states)
+        reader.read_power()
+        disc = reader._split_grid_discovery
+        assert disc["import"] == "sensor.electricity_meter_power_consumption"
+        assert disc["export"] is None
+        held_import = disc["import"]
+
+        # The production (export) sensor loads on a later cycle. The
+        # one-sided re-scan runs at ~6-cycle cadence, so allow a few
+        # cycles for the pickup.
+        states["sensor.electricity_meter_power_production"] = _state(
+            0, device_class="power",
+        )
+        for _ in range(7):
+            reader.read_power()
+            if disc["export"]:
+                break
+        assert disc["export"] == "sensor.electricity_meter_power_production"
+        # The held import pick must NOT be re-rolled by the completion.
+        assert disc["import"] == held_import
+
+    def test_completed_pair_computes_grid_power(self):
+        states = {
+            "sensor.growatt_solar_power": _state(5000),
+            "sensor.sessy_power": _state(0),
+            "sensor.electricity_meter_power_consumption": _state(0, device_class="power"),
+            "sensor.electricity_meter_energy_consumption_tariff_1": _state(150, "kWh"),
+            "sensor.electricity_meter_energy_production_tariff_1": _state(200, "kWh"),
+        }
+        reader, states = self._dsmr_setup(states)
+        reader.read_power()
+
+        states["sensor.electricity_meter_power_production"] = _state(
+            2000, device_class="power",
+        )
+        power = None
+        for _ in range(7):
+            power = reader.read_power()
+            if reader._split_grid_discovery["export"]:
+                power = reader.read_power()
+                break
+        assert power.grid_power == 2000  # export visible after completion
+
+
+class TestSplitGridScanThrottle:
+    """#485 H3: held healthy picks throttle the full sensor scan."""
+
+    def _reader_with_picks(self, imp="sensor.imp", exp="sensor.exp"):
+        hass = MagicMock()
+        states = {
+            imp: _state(100, device_class="power"),
+            exp: _state(0, device_class="power"),
+        }
+        hass.states.get = lambda eid: states.get(eid)
+        reader = SensorReader(hass, {"update_interval": 10})
+        reader._split_grid_discovery.update(
+            {"import": imp, "export": exp, "confidence": "any-device"},
+        )
+        return reader, states
+
+    def test_two_sided_healthy_picks_scan_periodically(self):
+        reader, _ = self._reader_with_picks()
+        disc = reader._split_grid_discovery
+        assert reader._split_grid_scan_due(disc) is True  # first call seeds
+        for _ in range(reader._SPLIT_GRID_UPGRADE_SCAN_CYCLES - 1):
+            assert reader._split_grid_scan_due(disc) is False
+        assert reader._split_grid_scan_due(disc) is True  # periodic upgrade
+
+    def test_one_sided_pick_scans_on_short_cadence(self):
+        reader, _ = self._reader_with_picks()
+        disc = reader._split_grid_discovery
+        disc["export"] = None
+        assert reader._split_grid_scan_due(disc) is True  # seeds countdown
+        # Throttled, but on a much shorter cadence than the two-sided
+        # upgrade scan — the missing side should be found within ~1 min.
+        due_within = [reader._split_grid_scan_due(disc) for _ in range(6)]
+        assert any(due_within)
+
+    def test_empty_picks_scan_every_cycle(self):
+        reader, _ = self._reader_with_picks()
+        disc = reader._split_grid_discovery
+        disc["import"] = None
+        disc["export"] = None
+        assert reader._split_grid_scan_due(disc) is True
+        assert reader._split_grid_scan_due(disc) is True
+
+    def test_unavailable_held_pick_scans_immediately(self):
+        reader, states = self._reader_with_picks()
+        disc = reader._split_grid_discovery
+        reader._split_grid_scan_due(disc)  # seed countdown
+        states["sensor.imp"] = _state("unavailable")
+        states["sensor.imp"].state = "unavailable"
+        assert reader._split_grid_scan_due(disc) is True
+
+
+class TestDualTariffAutoSignVote:
+    """#485 H4: the auto sign vote sums dual-tariff counter lists."""
+
+    def _reader(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            grid_import_energy="sensor.t1_consumption",
+            grid_export_energy="sensor.t_production",
+        )
+        # Dutch dual-tariff: two import counters, one production.
+        ed.grid_import_energy_list = [
+            "sensor.t1_consumption", "sensor.t2_consumption",
+        ]
+        ed.grid_export_energy_list = ["sensor.t_production"]
+        states = {}
+        reader = _make_reader_with_states(hass, states, ed)
+        return reader, states
+
+    def test_other_tariff_counter_still_votes(self):
+        from custom_components.solar_energy_management.coordinator.types import (
+            PowerReadings,
+        )
+        reader, states = self._reader()
+
+        def set_counters(t1, t2, prod):
+            states["sensor.t1_consumption"] = _state(t1, "kWh")
+            states["sensor.t2_consumption"] = _state(t2, "kWh")
+            states["sensor.t_production"] = _state(prod, "kWh")
+
+        # Tariff 1 counter is FROZEN (other tariff's hours); only
+        # tariff 2 moves. Pre-fix the vote read t1 alone → blind.
+        set_counters(150.0, 80.0, 200.0)
+        reader._detect_grid_sign(PowerReadings(grid_power=800.0))  # baseline
+        for step in range(1, 4):
+            set_counters(150.0, 80.0 + step * 0.1, 200.0)
+            result = reader._detect_grid_sign(PowerReadings(grid_power=800.0))
+
+        # Import grows while power is positive → HA convention → negate.
+        assert reader._grid_sign_detected is True
+        assert result is True
+
+
+class TestDeterministicDiscoveryOrder:
+    """#485 H6: any-device picks are deterministic across state order."""
+
+    def test_alphabetical_first_match_wins_regardless_of_insertion(self):
+        hass = MagicMock()
+        ed = _make_energy_dashboard_config(
+            solar_power=None,
+            grid_import_power=None,
+            grid_import_energy="sensor.meter_energy",
+            grid_export_energy="sensor.meter_energy_out",
+            battery_power=None,
+        )
+        # Two import-pattern candidates inserted Z-first: an unsorted
+        # scan picks Z (insertion order); the sorted scan must pick A.
+        states = {
+            "sensor.z_grid_import": _state(100, device_class="power"),
+            "sensor.a_grid_import": _state(100, device_class="power"),
+            "sensor.meter_energy": _state(150, "kWh"),
+            "sensor.meter_energy_out": _state(20, "kWh"),
+        }
+        reader = _make_reader_with_states(hass, states, ed)
+        reader._get_device_for_entity = lambda eid: None
+        imp, exp, conf = reader._discover_split_grid_power(ed)
+        assert imp == "sensor.a_grid_import"

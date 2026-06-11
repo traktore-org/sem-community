@@ -358,54 +358,15 @@ class SEMPerChargerSelect(CoordinatorEntity, SelectEntity):
         if option not in self.options:
             return
         self._value = option
-        new_options = {**self._entry.options}
-        # Copy each charger dict — mutating the shared dicts in place leaves
-        # entry.options == new_options, so async_update_entry detects no change
-        # and never persists to .storage (the value then reverts on restart). (#245)
-        #
-        # Fall back to entry.data.ev_chargers when entry.options doesn't have
-        # the key yet (fresh install / never edited via the Config card). Without
-        # the fallback this writes ``new_options["ev_chargers"] = []`` and the
-        # merge ``{**data, **options}`` on next reload overrides data's chargers
-        # with the empty list — every charger disappears, all per-charger entities
-        # go unavailable. Latent since multi-charger landed; would manifest the
-        # first time any user clicked a per-charger select without first having
-        # touched a Config-card field that populates options.ev_chargers.
-        data_chargers = (self._entry.data or {}).get("ev_chargers") or []
-        source_chargers = new_options.get("ev_chargers") or data_chargers
-        ev_chargers = [dict(c) for c in source_chargers if isinstance(c, dict)]
-        for charger in ev_chargers:
-            if charger.get("id") == self._charger_id:
-                charger[self._config_key] = option
-                break
-        else:
-            # This charger's id is missing from the options-side list — a
-            # *partially* poisoned ``options.ev_chargers`` (v1.7.2 ..
-            # v1.7.3-beta.3 builds could strip a sibling from it). The
-            # ``or``-fallback above only fires for missing/empty lists, so
-            # without this branch the write is a silent no-op and the user
-            # sees "changing charger 2 does nothing" (#462/#464). Recover
-            # the charger's dict from entry.data and append it.
-            recovered = next(
-                (dict(c) for c in data_chargers
-                 if isinstance(c, dict) and c.get("id") == self._charger_id),
-                {"id": self._charger_id},
-            )
-            recovered[self._config_key] = option
-            ev_chargers.append(recovered)
-            _LOGGER.warning(
-                "Charger '%s' was missing from the stored ev_chargers list "
-                "(ids: %s) — recovered it from entry.data so the %s write "
-                "isn't lost",
-                self._charger_id,
-                [c.get("id") for c in ev_chargers[:-1]],
-                self._config_key,
-            )
-        new_options["ev_chargers"] = ev_chargers
-        if isinstance(getattr(self.coordinator, "config", None), dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-        self.coordinator._skip_options_reload = new_options
-        self.hass.config_entries.async_update_entry(self._entry, options=new_options)
+        # Shared per-charger write path (#485 K2) — owns the data-side
+        # fallback, missing-charger recovery (#462/#464), coordinator
+        # mirror and reload-skip arming. Do NOT inline a copy here; the
+        # copy-paste class already produced one missed writer (#469).
+        from . import persist_per_charger_option
+        persist_per_charger_option(
+            self.hass, self._entry, self.coordinator,
+            self._charger_id, self._config_key, option,
+        )
         self.async_write_ha_state()
         _LOGGER.info(
             "Updated per-charger %s.%s to %s",

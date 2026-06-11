@@ -378,6 +378,9 @@ class TestCheapestWindowRequest:
         ]
         provider = MagicMock()
         provider.find_cheapest_hours.return_value = points
+        # #485 F3: the market interval now comes from the provider
+        # (selected-slot gap inference remains the fallback only).
+        provider.detect_slot_hours.return_value = 0.25
         scheduler = _make_scheduler(scheduler_config)
         decision = self._evaluate(scheduler, provider)
 
@@ -426,6 +429,9 @@ class TestPriceUpdateReplan:
         scheduler._decision = SchedulerDecision(state=state, target_soc=80.0)
         scheduler._planned_soc = 50.0
         scheduler._price_fingerprint = fp
+        # An evaluation has notionally run (#485 F2: should_replan
+        # short-circuits while a re-plan is pending / pre-first-eval).
+        scheduler._last_evaluation_date = dt_util.now()
         return scheduler
 
     def test_changed_fingerprint_triggers_replan(self, scheduler_config):
@@ -565,7 +571,10 @@ class TestRollingHorizonTrigger:
 class TestSchedulerConfigRework:
     def test_new_defaults(self):
         config = SchedulerConfig.from_config({})
-        assert config.battery_cycle_cost == pytest.approx(0.02)
+        # Runtime fallback stays 0.0 so upgrading installs that never
+        # set the key keep their pre-v1.7.3 break-even (#485 F5); the
+        # 0.02 suggestion lives in the config-flow form default only.
+        assert config.battery_cycle_cost == 0.0
         assert config.replan_interval_min == 30
         assert config.planning_window_hours == 9
         assert config.prefer_consecutive_window is True
@@ -744,3 +753,291 @@ class TestCoordinatorRateDerivation:
         assert kwargs["price_fingerprint"] == 777
         assert scheduler._last_evaluation_date is None
         scheduler.evaluate.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# #485 pre-stable review batch (F1-F7)
+# ---------------------------------------------------------------------------
+
+SCHED_DT_PATH = (
+    "custom_components.solar_energy_management.coordinator."
+    "battery_charge_scheduler.dt_util"
+)
+
+
+def _stub_provider(fingerprint=1, cheapest=None, slot_hours=None):
+    """Tariff-provider stub with the duck-typed scheduler surface."""
+    prov = MagicMock()
+    prov.price_series_fingerprint = MagicMock(return_value=fingerprint)
+    prov.find_cheapest_hours = MagicMock(return_value=cheapest or [])
+    prov.detect_slot_hours = MagicMock(return_value=slot_hours)
+    return prov
+
+
+class TestTargetSocAnchor:
+    """#485 F1: re-evaluations must not ratchet the target with charge progress."""
+
+    def _evaluate(self, scheduler, now, soc, provider=None):
+        with patch(SCHED_DT_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            return scheduler.evaluate(
+                current_soc=soc,
+                forecast_tomorrow_kwh=8.0,
+                expected_consumption_kwh=8.0,
+                off_peak_rate=0.10,
+                peak_rate=0.30,
+                tariff_provider=provider,
+            )
+
+    def test_replan_keeps_anchor_target(self, scheduler_config):
+        scheduler = _make_scheduler(scheduler_config)
+        first = self._evaluate(scheduler, _local(21, 5), soc=50.0)
+        assert first.state == SchedulerState.SCHEDULED
+        target_first = first.target_soc
+
+        # 30 min later the battery has charged 50% → 60%; the target
+        # must NOT grow by the charge progress.
+        second = self._evaluate(scheduler, _local(21, 35), soc=60.0)
+        assert second.state == SchedulerState.SCHEDULED
+        assert second.target_soc == pytest.approx(target_first, abs=0.01)
+
+    def test_new_window_re_anchors(self, scheduler_config):
+        scheduler = _make_scheduler(scheduler_config)
+        first = self._evaluate(scheduler, _local(21, 5), soc=50.0)
+        increase = first.target_soc - 50.0
+
+        # Next night, battery starts at 60% → fresh anchor.
+        nxt = self._evaluate(
+            scheduler, _local(21, 5, day_offset=1), soc=60.0,
+        )
+        assert nxt.target_soc == pytest.approx(60.0 + increase, abs=0.01)
+
+    def test_reset_clears_anchor(self, scheduler_config):
+        scheduler = _make_scheduler(scheduler_config)
+        self._evaluate(scheduler, _local(21, 5), soc=50.0)
+        scheduler.reset()
+        assert scheduler._window_anchor_soc is None
+        assert scheduler._window_anchor_at is None
+
+    async def test_update_stops_active_charge_on_not_needed(self, scheduler_config):
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        adapter.is_active = True
+        adapter.stop_forced_charge = AsyncMock()
+        scheduler = _make_scheduler(scheduler_config, adapter=adapter)
+        scheduler._decision = SchedulerDecision(state=SchedulerState.NOT_NEEDED)
+
+        state = await scheduler.update(current_soc=70.0)
+
+        assert state == SchedulerState.NOT_NEEDED
+        adapter.stop_forced_charge.assert_awaited_once()
+
+    async def test_update_leaves_inactive_adapter_alone(self, scheduler_config):
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        adapter.is_active = False
+        adapter.stop_forced_charge = AsyncMock()
+        scheduler = _make_scheduler(scheduler_config, adapter=adapter)
+        scheduler._decision = SchedulerDecision(state=SchedulerState.NOT_PROFITABLE)
+
+        await scheduler.update(current_soc=70.0)
+
+        adapter.stop_forced_charge.assert_not_awaited()
+
+
+class TestReplanTriggerOneShot:
+    """#485 F2: price-update replan fires once per series change."""
+
+    def _evaluated_scheduler(self, scheduler_config):
+        scheduler = _make_scheduler(scheduler_config)
+        provider = _stub_provider(fingerprint=111)
+        with patch(SCHED_DT_PATH) as mock_dt:
+            mock_dt.now.return_value = _local(21, 5)
+            scheduler.evaluate(
+                current_soc=50.0,
+                forecast_tomorrow_kwh=8.0,
+                expected_consumption_kwh=8.0,
+                off_peak_rate=0.10,
+                peak_rate=0.30,
+                tariff_provider=provider,
+            )
+        return scheduler
+
+    def test_price_update_fires_once(self, scheduler_config):
+        scheduler = self._evaluated_scheduler(scheduler_config)
+        assert scheduler.should_replan(50.0, False, price_fingerprint=222) is True
+        # Same updated series next cycle: consumed, no re-fire.
+        assert scheduler.should_replan(50.0, False, price_fingerprint=222) is False
+        # Another update fires again.
+        assert scheduler.should_replan(50.0, False, price_fingerprint=333) is True
+
+    def test_no_refire_while_replan_pending(self, scheduler_config):
+        scheduler = self._evaluated_scheduler(scheduler_config)
+        # Coordinator arms a re-plan by clearing the evaluation date.
+        scheduler._last_evaluation_date = None
+        assert scheduler.should_replan(50.0, False, price_fingerprint=999) is False
+
+    def test_has_price_fingerprint_property(self, scheduler_config):
+        scheduler = _make_scheduler(scheduler_config)
+        assert scheduler.has_price_fingerprint is False
+        scheduler._price_fingerprint = 42
+        assert scheduler.has_price_fingerprint is True
+
+
+class TestSlotHoursFromProvider:
+    """#485 F3: slot length comes from the market, not from selected-slot gaps."""
+
+    def test_scattered_15min_slots_use_provider_interval(self, scheduler_config):
+        start = _local(22, 0)
+        # Scattered 15-min picks 30 minutes apart — gap inference
+        # would wrongly yield 0.5h slots.
+        cheapest = [
+            PricePoint(timestamp=start + timedelta(minutes=30 * i),
+                       price=0.05, level=PriceLevel.CHEAP)
+            for i in range(3)
+        ]
+        provider = _stub_provider(cheapest=cheapest, slot_hours=0.25)
+        scheduler = _make_scheduler(scheduler_config)
+        with patch(SCHED_DT_PATH) as mock_dt:
+            mock_dt.now.return_value = _local(21, 5)
+            decision = scheduler.evaluate(
+                current_soc=50.0,
+                forecast_tomorrow_kwh=8.0,
+                expected_consumption_kwh=8.0,
+                off_peak_rate=0.10,
+                peak_rate=0.30,
+                tariff_provider=provider,
+            )
+        assert decision.schedule is not None and decision.schedule.slots
+        slot = decision.schedule.slots[0]
+        assert (slot.end - slot.start) == timedelta(minutes=15)
+
+    def test_gap_inference_still_used_without_hint(self, scheduler_config):
+        start = _local(22, 0)
+        cheapest = [
+            PricePoint(timestamp=start + timedelta(minutes=15 * i),
+                       price=0.05, level=PriceLevel.CHEAP)
+            for i in range(4)
+        ]
+        provider = _stub_provider(cheapest=cheapest, slot_hours=None)
+        scheduler = _make_scheduler(scheduler_config)
+        with patch(SCHED_DT_PATH) as mock_dt:
+            mock_dt.now.return_value = _local(21, 5)
+            decision = scheduler.evaluate(
+                current_soc=50.0,
+                forecast_tomorrow_kwh=8.0,
+                expected_consumption_kwh=8.0,
+                off_peak_rate=0.10,
+                peak_rate=0.30,
+                tariff_provider=provider,
+            )
+        slot = decision.schedule.slots[0]
+        assert (slot.end - slot.start) == timedelta(minutes=15)
+
+
+class TestServicePriceBackoff:
+    """#485 F6: failed Nord Pool service fetches back off instead of hammering."""
+
+    def _provider_with_failing_service(self):
+        hass = MagicMock()
+        hass.services.has_service = MagicMock(return_value=True)
+        hass.services.async_call = AsyncMock(side_effect=Exception("API down"))
+        entry = MagicMock()
+        entry.entry_id = "np_entry"
+        hass.config_entries.async_entries = MagicMock(return_value=[entry])
+        prov = DynamicTariffProvider(hass, price_entity=None)
+        return prov, hass
+
+    async def test_failed_fetch_backs_off(self):
+        prov, hass = self._provider_with_failing_service()
+        assert await prov.async_refresh_service_prices() is False
+        calls_after_first = hass.services.async_call.await_count
+        assert calls_after_first == 2  # today + tomorrow attempted
+
+        # Immediately retried cycle: throttled, no new service calls.
+        assert await prov.async_refresh_service_prices() is False
+        assert hass.services.async_call.await_count == calls_after_first
+
+    async def test_retry_after_backoff_window(self):
+        prov, hass = self._provider_with_failing_service()
+        await prov.async_refresh_service_prices()
+        # Age the failure beyond the retry window.
+        prov._service_prices_failed_at = (
+            dt_util.now() - prov.SERVICE_PRICE_RETRY - timedelta(seconds=1)
+        )
+        await prov.async_refresh_service_prices()
+        assert hass.services.async_call.await_count == 4
+
+
+class TestPriceParseMemo:
+    """#485 F7: _read_prices_list memoizes per entity-state change."""
+
+    def _make_provider(self):
+        hass = MagicMock()
+        start = dt_util.now().replace(minute=0, second=0, microsecond=0)
+        state = MagicMock()
+        state.state = "0.20"
+        state.last_updated = start
+        state.attributes = {
+            "raw_today": [
+                {"start": (start + timedelta(hours=i)).isoformat(), "value": 0.2 + i * 0.01}
+                for i in range(4)
+            ]
+        }
+        hass.states.get = MagicMock(return_value=state)
+        prov = DynamicTariffProvider(
+            hass, price_entity="sensor.price", classification_mode="static",
+        )
+        return prov, hass, state
+
+    def test_second_read_is_memo_hit(self):
+        prov, hass, state = self._make_provider()
+        first = prov._read_prices_list()
+        assert len(first) == 4
+        second = prov._read_prices_list()
+        assert second is first  # same object → no reparse
+
+    def test_entity_update_invalidates_memo(self):
+        prov, hass, state = self._make_provider()
+        first = prov._read_prices_list()
+
+        new_state = MagicMock()
+        new_state.state = "0.25"
+        new_state.last_updated = state.last_updated + timedelta(minutes=5)
+        new_state.attributes = state.attributes
+        hass.states.get = MagicMock(return_value=new_state)
+
+        second = prov._read_prices_list()
+        assert second is not first
+        assert len(second) == 4
+
+
+class TestCfgRateFalsyZero:
+    """#485 F4: a configured 0.0 rate is a value, not a missing key."""
+
+    def test_zero_is_respected(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            _cfg_rate,
+        )
+        assert _cfg_rate({"electricity_import_rate": 0.0},
+                         "electricity_import_rate", default=0.30) == 0.0
+
+    def test_missing_falls_back(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            _cfg_rate,
+        )
+        assert _cfg_rate({}, "electricity_import_rate", default=0.30) == 0.30
+
+    def test_chained_keys(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            _cfg_rate,
+        )
+        assert _cfg_rate(
+            {"electricity_nt_rate": 0.0},
+            "electricity_off_peak_rate", "electricity_nt_rate", default=0.22,
+        ) == 0.0
+
+    def test_non_numeric_skipped(self):
+        from custom_components.solar_energy_management.coordinator.coordinator import (
+            _cfg_rate,
+        )
+        assert _cfg_rate({"electricity_import_rate": "abc"},
+                         "electricity_import_rate", default=0.30) == 0.30

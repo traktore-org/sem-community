@@ -170,10 +170,12 @@ class SchedulerConfig:
 
     # Degradation cost: battery_price / (capacity * 2 * rated_cycles)
     # Example LUNA2000 10kWh, 6000 cycles, 8000 EUR → 0.067 EUR/kWh
-    # Default 0.02 EUR/kWh: ignoring wear overstates arbitrage
-    # profit — a conservative non-zero default protects the battery.
-    # Set to 0 to disable the degradation-aware arbitrage check.
-    battery_cycle_cost: float = 0.02  # Cost per kWh throughput (half-cycle)
+    # Runtime fallback is 0.0 (check disabled) so upgrading installs
+    # that never set the key keep their pre-v1.7.3 break-even behavior
+    # (#485 F5 — a silent 0.02 default flipped thin-margin nights to
+    # NOT_PROFITABLE). New configs get 0.02 suggested in the form
+    # (config_flow), where the value is visible before it applies.
+    battery_cycle_cost: float = 0.0  # Cost per kWh throughput (half-cycle)
 
     # Scheduling parameters
     trigger_hour: int = 21  # Hour the nightly planning window opens (0-23)
@@ -222,7 +224,7 @@ class SchedulerConfig:
             battery_min_soc=config.get("battery_min_soc", 5.0),
             battery_max_charge_power_w=config.get("battery_max_charge_power_w", 5000.0),
             roundtrip_efficiency=config.get("battery_roundtrip_efficiency", 0.92),
-            battery_cycle_cost=config.get("battery_cycle_cost", 0.02),
+            battery_cycle_cost=config.get("battery_cycle_cost", 0.0),
             trigger_hour=config.get("battery_precharge_trigger_hour", 21),
             trigger_minute=config.get("battery_precharge_trigger_minute", 0),
             replan_interval_min=max(5, int(config.get("battery_replan_interval_min", 30))),
@@ -268,6 +270,14 @@ class BatteryChargeScheduler:
         self._planned_soc: Optional[float] = None  # For re-plan deviation check
         self._last_ev_connected: Optional[bool] = None  # For re-plan on EV change
         self._price_fingerprint: Optional[int] = None  # For re-plan on price updates
+        # Rolling-horizon anchor (#485 F1): the SOC at the FIRST
+        # evaluation of the night's planning window. Re-evaluations
+        # compute the charge target from this anchor, not from the
+        # live SOC — otherwise every replan re-adds the full deficit
+        # on top of the energy already grid-charged tonight and the
+        # target ratchets toward max_target_soc.
+        self._window_anchor_soc: Optional[float] = None
+        self._window_anchor_at: Optional[datetime] = None
 
     @property
     def enabled(self) -> bool:
@@ -283,6 +293,15 @@ class BatteryChargeScheduler:
     def state(self) -> SchedulerState:
         """Current scheduler state."""
         return self._decision.state
+
+    @property
+    def has_price_fingerprint(self) -> bool:
+        """Whether a price fingerprint was captured at evaluation time.
+
+        The coordinator skips computing the live series fingerprint
+        when there is nothing to compare it against (#485 F2).
+        """
+        return self._price_fingerprint is not None
 
     def evaluate(
         self,
@@ -320,6 +339,16 @@ class BatteryChargeScheduler:
         """
         now = dt_util.now()
         self._last_evaluation_date = now
+
+        # Anchor the night's target on the SOC at the first evaluation
+        # of this planning window (#485 F1). Later re-evaluations keep
+        # the anchor: fresh prices/forecasts can still change the plan,
+        # but charging progress must not inflate the target.
+        window_start = self._window_start(now)
+        if self._window_anchor_at != window_start or self._window_anchor_soc is None:
+            self._window_anchor_soc = current_soc
+            self._window_anchor_at = window_start
+        anchor_soc = self._window_anchor_soc
 
         # Capture the price-series fingerprint so should_replan() can
         # detect day-ahead price updates that arrive after this plan.
@@ -446,11 +475,13 @@ class BatteryChargeScheduler:
             )
             return self._decision
 
-        # Calculate target SOC
+        # Calculate target SOC from the window anchor, NOT the live SOC
+        # (#485 F1): re-evaluations during an active charge would
+        # otherwise stack the deficit on top of the charging progress.
         soc_increase_needed = (deficit_kwh / self._config.battery_usable_capacity_kwh) * 100
         target_soc = min(
             self._config.max_target_soc,
-            current_soc + soc_increase_needed,
+            anchor_soc + soc_increase_needed,
         )
 
         # Already at or above target
@@ -479,6 +510,7 @@ class BatteryChargeScheduler:
         # block mode (#247) keeps the charge contiguous.
         charge_windows: List[datetime] = []
         cheapest_prices: List = []
+        slot_hours_hint: Optional[float] = None
         if tariff_provider and hasattr(tariff_provider, "find_cheapest_hours"):
             cheapest_prices = tariff_provider.find_cheapest_hours(
                 hours_needed_f,
@@ -486,6 +518,20 @@ class BatteryChargeScheduler:
                 prefer_consecutive=self._config.prefer_consecutive_window,
             )
             charge_windows = [p.timestamp for p in cheapest_prices]
+            # Ask the provider for the market's real slot length (#485
+            # F3): inferring it from gaps between the SELECTED slots
+            # overestimates the duration whenever a scattered selection
+            # picks no two adjacent slots (15-min market → 0.5-1.0 h
+            # inferred → per-slot energy 2-4× off).
+            if hasattr(tariff_provider, "detect_slot_hours"):
+                try:
+                    hint = tariff_provider.detect_slot_hours()
+                    slot_hours_hint = (
+                        float(hint) if hint is not None and float(hint) > 0
+                        else None
+                    )
+                except (ValueError, TypeError, AttributeError):
+                    slot_hours_hint = None
 
         # Build the night charge schedule with time-slotted power allocation
         schedule = self._plan_night_schedule(
@@ -494,6 +540,7 @@ class BatteryChargeScheduler:
             ev_max_power_w=ev_max_power_w,
             cheapest_prices=cheapest_prices,
             now=now,
+            slot_hours_hint=slot_hours_hint,
         )
 
         self._decision = SchedulerDecision(
@@ -579,6 +626,15 @@ class BatteryChargeScheduler:
         2. SOC deviated significantly from when plan was made
         3. EV connected/disconnected since last evaluation
         """
+        # A re-plan is already pending (the coordinator clears
+        # _last_evaluation_date to arm one) or no evaluation has run
+        # yet — nothing new to detect. Without this, a price update
+        # arriving outside the planning window re-fired the trigger
+        # (and its INFO line) every coordinator cycle until the window
+        # opened, ~2 lines per 10s for hours (#485 F2).
+        if self._last_evaluation_date is None:
+            return False
+
         if (
             price_fingerprint is not None
             and self._price_fingerprint is not None
@@ -588,6 +644,9 @@ class BatteryChargeScheduler:
                 SchedulerState.TARGET_REACHED,
             )
         ):
+            # Consume the change: one trigger per series update. The
+            # next evaluate() re-captures the authoritative value.
+            self._price_fingerprint = price_fingerprint
             _LOGGER.info(
                 "Battery scheduler re-plan triggered: price series updated"
             )
@@ -629,6 +688,7 @@ class BatteryChargeScheduler:
         ev_max_power_w: float,
         cheapest_prices: List,
         now: datetime,
+        slot_hours_hint: Optional[float] = None,
     ) -> NightChargeSchedule:
         """Plan time-slotted power allocation for battery + EV.
 
@@ -648,7 +708,14 @@ class BatteryChargeScheduler:
         # Slot length follows the price market (15/30/60 min) — the
         # energy accounting below derives from each slot's real duration.
         if cheapest_prices:
-            slot_hours = self._infer_slot_hours(cheapest_prices)
+            # Prefer the provider's authoritative market interval; the
+            # gap-based inference is the fallback for providers that
+            # can't report one (#485 F3).
+            slot_hours = (
+                slot_hours_hint
+                if slot_hours_hint and slot_hours_hint > 0
+                else self._infer_slot_hours(cheapest_prices)
+            )
             slot_len = timedelta(hours=slot_hours)
             available_hours = [
                 (p.timestamp, p.timestamp + slot_len, getattr(p, "price", 0.0))
@@ -802,6 +869,17 @@ class BatteryChargeScheduler:
             SchedulerState.NOT_PROFITABLE,
             SchedulerState.FAILED,
         ):
+            # A mid-charge re-evaluation (rolling horizon) can land on
+            # NOT_NEEDED / NOT_PROFITABLE while the adapter is still
+            # force-charging from the previous plan — stop it instead
+            # of leaving the inverter charging unsupervised (#485 F1).
+            if self._adapter.is_active:
+                _LOGGER.info(
+                    "Battery scheduler: stopping active charge — "
+                    "re-evaluation decided %s",
+                    self._decision.state.value,
+                )
+                await self._adapter.stop_forced_charge()
             return self._decision.state
 
         # Check if target reached
@@ -952,6 +1030,8 @@ class BatteryChargeScheduler:
         self._planned_soc = None
         self._last_ev_connected = None
         self._price_fingerprint = None
+        self._window_anchor_soc = None
+        self._window_anchor_at = None
 
     def _window_start(self, now: datetime) -> datetime:
         """Start of the current (or most recent) planning window."""

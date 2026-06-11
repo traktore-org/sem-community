@@ -69,6 +69,25 @@ from ..utility_signals import UtilitySignalMonitor
 _LOGGER = logging.getLogger(__name__)
 
 
+def _cfg_rate(config: dict, *keys: str, default: float) -> float:
+    """First explicitly-configured numeric value among ``keys``.
+
+    ``config.get(key) or default`` treats a configured 0.0 rate as
+    missing and substitutes the constant (#485 F4) — a real value for
+    free/zero-rate plans. Only ``None`` / non-numeric values fall
+    through here.
+    """
+    for key in keys:
+        value = config.get(key)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return default
+
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMixin):
     """Coordinator for Solar Energy Management.
 
@@ -84,6 +103,50 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     (EVControlMixin, BatteryProtectionMixin) to keep this file focused
     on orchestration.
     """
+
+    # #485 G5: the reload-skip snapshot is a property so arming it
+    # automatically timestamps it. async_update_options only honors a
+    # snapshot younger than its TTL — a lingering snapshot from the
+    # last runtime tweak hours ago must not swallow a future listener
+    # invocation (HA fires the listener for data/title-only entry
+    # updates too, where options still equal the stale snapshot).
+    @property
+    def _skip_options_reload(self):
+        return getattr(self, "_skip_options_reload_value", None)
+
+    @_skip_options_reload.setter
+    def _skip_options_reload(self, value):
+        # NB: stdlib ``time`` is shadowed by this package's time.py
+        # platform under pytest's path insertion — use dt_util.
+        self._skip_options_reload_value = value
+        self._skip_options_reload_armed_at = (
+            dt_util.utcnow().timestamp() if value is not None else None
+        )
+
+    def _primary_charger_cfg(self) -> Dict[str, Any]:
+        """Config dict of the fleet-primary charger (ev_chargers[0]).
+
+        Single accessor for the ``(config.get("ev_chargers") or
+        [{}])[0]`` idiom that was inlined at five call sites (#485 H1).
+        """
+        chargers = self.config.get("ev_chargers") or [{}]
+        first = chargers[0]
+        return first if isinstance(first, dict) else {}
+
+    def primary_charger_id(self) -> str:
+        """Canonical id of the fleet-primary charger (#485 H1).
+
+        Mirrors registration's fallback (``ev_charger_<idx>`` for
+        id-less entries, __init__.py): the strategy-display gate used
+        a DIFFERENT fallback ("ev_charger"), so on an id-less first
+        charger the equality never held and the fleet strategy sensor
+        froze. The flat-key single-charger shape (no ev_chargers list)
+        keeps the legacy "ev_charger" id.
+        """
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers or not isinstance(chargers[0], dict):
+            return "ev_charger"
+        return chargers[0].get("id") or "ev_charger_0"
 
     def __init__(self, hass: HomeAssistant, config: Dict[str, Any]) -> None:
         """Initialize the coordinator."""
@@ -204,14 +267,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # and no cached curve covers "now". The user's configured
                 # import rate beats the CHF-shaped 0.30 constant on
                 # SEK/NOK/HUF installs.
-                fallback_price=config.get("electricity_import_rate") or 0.30,
+                fallback_price=_cfg_rate(
+                    config, "electricity_import_rate", default=0.30,
+                ),
             )
         elif tariff_mode == "calendar":
             schedule = {}  # Was config.get("tariff_schedule", {}) — never set via UI
             self._tariff_provider = CalendarTariffProvider(
                 hass,
                 peak_rate=config.get("electricity_import_rate", 0.35),
-                off_peak_rate=config.get("electricity_off_peak_rate") or config.get("electricity_nt_rate", 0.22),
+                off_peak_rate=_cfg_rate(
+                    config, "electricity_off_peak_rate", "electricity_nt_rate",
+                    default=0.22,
+                ),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 rules=schedule.get("rules", []),
                 default_tariff=schedule.get("default_tariff", "off_peak"),
@@ -222,7 +290,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         else:
             self._tariff_provider = StaticTariffProvider(
                 peak_rate=config.get("electricity_import_rate", 0.3387),
-                off_peak_rate=config.get("electricity_off_peak_rate") or config.get("electricity_nt_rate", 0.3387),
+                off_peak_rate=_cfg_rate(
+                    config, "electricity_off_peak_rate", "electricity_nt_rate",
+                    default=0.3387,
+                ),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 currency=currency,
             )
@@ -546,7 +617,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         pcd = dict(self._daily_ev_per_charger)
         chargers = self.config.get("ev_chargers") or []
         if len(chargers) == 1 and isinstance(chargers[0], dict):
-            cid = chargers[0].get("id", "ev_charger")
+            # Same id fallback as registration (#485 H1) — an id-less
+            # charger registers as ev_charger_0, and this key must hit
+            # the same per-charger accumulator slot.
+            cid = self.primary_charger_id()
             pcd[cid] = round(getattr(energy, "daily_ev", 0.0) or 0.0, 3)
         return pcd
 
@@ -1621,10 +1695,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         # charger 2 ("always_max …") next to reason from
                         # charger 1 ("off mode …"). Per-charger detail
                         # lives in ``charger_<id>_charging_state``.
-                        _fleet_primary_cid = (
-                            (self.config.get("ev_chargers") or [{}])[0].get("id")
-                            or "ev_charger"
-                        )
+                        _fleet_primary_cid = self.primary_charger_id()
                         if cid == _fleet_primary_cid:
                             charging_context.charging_strategy = decision.reason
                             charging_context.charging_strategy_reason = decision.reason
@@ -1713,8 +1784,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
                 # Resolve mode from global config (no per-charger cfg in this branch).
                 per_mode = self._effective_charge_mode_for(
-                    self.config.get("ev_chargers", [{}])[0]
-                    if self.config.get("ev_chargers") else {}
+                    self._primary_charger_cfg()
                 )
                 view = build_charger_view(
                     self._cycle_fleet_state,
@@ -2069,7 +2139,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if "ev_remaining_range" not in result and self._cycle_vehicle_soc is not None:
                 # Capacity + efficiency are per-car → read the (primary) charger's
                 # values, falling back to global config. One car per charger (#245).
-                _pcfg = (self.config.get("ev_chargers") or [{}])[0]
+                _pcfg = self._primary_charger_cfg()
 
                 def _per_car(key, default):
                     v = _pcfg.get(key)
@@ -2093,7 +2163,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # surfaced for the EV card / status. target_time + tariff toggle are
             # always available (config); the deadline/cheap-window fields come from
             # the per-cycle night plan (primary charger), present only at night.
-            _dl_pcfg = (self.config.get("ev_chargers") or [{}])[0]
+            _dl_pcfg = self._primary_charger_cfg()
             result["ev_target_time"] = self._charger_target_time(_dl_pcfg)
             result["ev_tariff_optimized"] = self._tariff_optimized_for(_dl_pcfg)
             _night_plan = self._cycle_night_plan
@@ -3082,7 +3152,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Check for re-plan trigger (price update / SOC drift / EV change)
             ev_connected = bool(getattr(power, "ev_connected", False))
             price_fp = None
-            if hasattr(self._tariff_provider, "price_series_fingerprint"):
+            # Only worth computing when the scheduler holds a
+            # fingerprint to compare against (#485 F2) — before the
+            # first evaluation (or while a re-plan is already armed)
+            # the comparison can't fire.
+            if (
+                getattr(scheduler, "has_price_fingerprint", False)
+                and hasattr(self._tariff_provider, "price_series_fingerprint")
+            ):
                 price_fp = self._tariff_provider.price_series_fingerprint()
             if scheduler.should_replan(
                 power.battery_soc, ev_connected, price_fingerprint=price_fp,
@@ -3138,9 +3215,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 now.replace(hour=14, minute=0)
             )
         if off_peak_rate is None:
-            off_peak_rate = (
-                self.config.get("electricity_off_peak_rate")
-                or self.config.get("electricity_nt_rate", 0.22)
+            off_peak_rate = _cfg_rate(
+                self.config, "electricity_off_peak_rate", "electricity_nt_rate",
+                default=0.22,
             )
         if peak_rate is None:
             peak_rate = self.config.get("electricity_import_rate", 0.30)
@@ -3634,7 +3711,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # #351 M9 — capture the cycle SOC into a local before the two
         # calls so both reads see the same value (mirrors the
         # per-charger-loop fix above).
-        _primary_cfg = (self.config.get("ev_chargers") or [{}])[0]
+        _primary_cfg = self._primary_charger_cfg()
         cycle_soc_local = self._cycle_vehicle_soc
         remaining = self._calculate_remaining_need(
             energy, cycle_soc_local, _primary_cfg, bound="max"

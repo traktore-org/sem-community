@@ -8,11 +8,7 @@ pieces it depends on are pulled out to module-level pure helpers:
 * ``_merge_ev_chargers_by_id`` — smart-merge to prevent the #464
   cross-talk where a partial Config-card submit could drop sibling
   chargers.
-* ``_set_option_needs_reload`` — gate that determines whether a write
-  is structural (needs reload) or a runtime tunable (in-memory mirror
-  is sufficient). Restores the per-charger select.py-style
-  skip-reload optimization for the service path so a Config-card
-  tweak doesn't destroy + recreate the coordinator on every change.
+* ``_coerce_switch_on`` — YAML-string-safe switch intent (#485 G3).
 * ``_SET_OPTION_STRUCTURAL_KEYS`` — the source-of-truth set.
 
 These tests lock the contract behind those three names so future edits
@@ -25,8 +21,8 @@ import pytest
 
 from custom_components.solar_energy_management import (
     _SET_OPTION_STRUCTURAL_KEYS,
+    _coerce_switch_on,
     _merge_ev_chargers_by_id,
-    _set_option_needs_reload,
 )
 
 
@@ -176,79 +172,77 @@ class TestMergeEvChargersById:
 
 
 # ─────────────────────────────────────────────────────────────────
-# _set_option_needs_reload — the #462 reload-scope gate
+# Merge order (#485 G2) — existing order is load-bearing
 # ─────────────────────────────────────────────────────────────────
 
 
 @pytest.mark.unit
-class TestSetOptionNeedsReload:
-    """Reload gate for the set_option service path.
+class TestMergeOrderPreserved:
+    """Charger list order is load-bearing (#485 G2).
 
-    Background: v1.7.2-beta.2 added an always-reload to ``set_option``
-    so heat-pump entity rewires (#448) would take effect. Side effect:
-    every Config-card tunable tweak (mode/threshold/switch) triggered
-    a full coordinator reload, destroying the SensorReader's split-
-    grid discovery state (candidate root cause for #461) and the
-    per-charger context across the multi-charger loop (candidate for
-    #462/#464). The gate restores the in-memory mirror for non-
-    structural keys.
+    Index 0 is the fleet primary for the strategy sensors and default
+    surplus priorities derive from list position. The merge must keep
+    the EXISTING order regardless of the incoming list's order or
+    completeness — the pre-fix incoming-first iteration let a partial
+    submit (or the setup-time heal, whose ``incoming`` is the poisoned
+    options list) silently reorder the fleet.
     """
 
-    def test_heat_pump_entity_keys_need_reload(self):
-        """Structural entity-wiring keys still force a reload (#448 path)."""
-        assert _set_option_needs_reload(["heat_pump_relay1_entity"])
-        assert _set_option_needs_reload(["heat_pump_relay2_entity"])
-        assert _set_option_needs_reload(["heat_pump_climate_entity"])
-        assert _set_option_needs_reload(["heat_pump_temperature_sensor"])
-        assert _set_option_needs_reload(["heat_pump_power_sensor"])
+    def test_partial_submit_keeps_existing_order(self):
+        existing = [{"id": "A", "name": "1"}, {"id": "B", "name": "2"}]
+        incoming = [{"id": "B", "charge_mode": "off"}]
+        result = _merge_ev_chargers_by_id(existing, incoming)
+        assert [c["id"] for c in result] == ["A", "B"]
+        assert result[1]["charge_mode"] == "off"
 
-    def test_hot_water_entity_keys_need_reload(self):
-        """Hot water wiring keys reload too (#454 path)."""
-        assert _set_option_needs_reload(["hot_water_entity"])
-        assert _set_option_needs_reload(["hot_water_temperature_sensor"])
-        assert _set_option_needs_reload(["hot_water_power_sensor"])
+    def test_reversed_full_submit_keeps_existing_order(self):
+        existing = [{"id": "A"}, {"id": "B"}]
+        incoming = [{"id": "B", "x": 1}, {"id": "A", "y": 2}]
+        result = _merge_ev_chargers_by_id(existing, incoming)
+        assert [c["id"] for c in result] == ["A", "B"]
+        assert result[0]["y"] == 2
+        assert result[1]["x"] == 1
 
-    def test_ev_chargers_list_needs_reload(self):
-        """List-shape changes need reload so actuator bindings refresh."""
-        assert _set_option_needs_reload(["ev_chargers"])
+    def test_heal_shape_options_subset_keeps_data_order(self):
+        """The heal calls merge(existing=data, incoming=options)."""
+        data = [{"id": "A", "name": "1"}, {"id": "B", "name": "2"}]
+        poisoned_options = [{"id": "B", "charge_mode": "solar_only"}]
+        result = _merge_ev_chargers_by_id(data, poisoned_options)
+        assert [c["id"] for c in result] == ["A", "B"]
 
-    def test_runtime_tunables_skip_reload(self):
-        """Modes / thresholds / switches don't reload — coordinator reads them each cycle."""
-        # Numbers
-        assert not _set_option_needs_reload(["ev_target_soc"])
-        assert not _set_option_needs_reload(["daily_ev_target"])
-        assert not _set_option_needs_reload(["target_peak_limit"])
-        assert not _set_option_needs_reload(["cheap_price_threshold"])
-        assert not _set_option_needs_reload(["minimum_solar_power"])
-        # Modes
-        assert not _set_option_needs_reload(["charge_mode"])
-        assert not _set_option_needs_reload(["tariff_mode"])
-        # Switches
-        assert not _set_option_needs_reload(["observer_mode"])
-        assert not _set_option_needs_reload(["night_charging"])
-        # Multi-key tunable batch
-        assert not _set_option_needs_reload([
-            "ev_target_soc", "daily_ev_target", "target_peak_limit",
-        ])
+    def test_new_chargers_append_in_incoming_order(self):
+        existing = [{"id": "A"}]
+        incoming = [{"id": "C"}, {"id": "B"}]
+        result = _merge_ev_chargers_by_id(existing, incoming)
+        assert [c["id"] for c in result] == ["A", "C", "B"]
 
-    def test_mixed_payload_reloads_when_any_key_structural(self):
-        """One structural key in a mixed batch is enough to force reload."""
-        assert _set_option_needs_reload([
-            "ev_target_soc", "heat_pump_relay1_entity",
-        ])
-        assert _set_option_needs_reload([
-            "charge_mode", "hot_water_entity",
-        ])
+    def test_duplicate_existing_ids_deduped_keeping_first(self):
+        existing = [{"id": "A", "v": 1}, {"id": "A", "v": 2}]
+        result = _merge_ev_chargers_by_id(existing, [])
+        assert len(result) == 1
+        assert result[0]["v"] == 1
 
-    def test_empty_payload_does_not_reload(self):
-        """No keys = no reload (caller short-circuits earlier anyway)."""
-        assert not _set_option_needs_reload([])
 
-    def test_keys_accept_any_iterable(self):
-        """Accepts list, set, dict_keys, generator — caller-friendly."""
-        assert _set_option_needs_reload({"ev_chargers"})
-        assert _set_option_needs_reload({"ev_chargers": None}.keys())
-        assert _set_option_needs_reload(k for k in ("ev_chargers",))
+# ─────────────────────────────────────────────────────────────────
+# _coerce_switch_on (#485 G3) — YAML string truthiness
+# ─────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.unit
+class TestCoerceSwitchOn:
+    """set_option switch routing: string "off" must not turn ON."""
+
+    @pytest.mark.parametrize("value", ["off", "Off", "OFF", "false", "0", "no", "", " off "])
+    def test_falsy_strings_turn_off(self, value):
+        assert _coerce_switch_on(value) is False
+
+    @pytest.mark.parametrize("value", ["on", "true", "1", "yes", True, 1])
+    def test_truthy_values_turn_on(self, value):
+        assert _coerce_switch_on(value) is True
+
+    @pytest.mark.parametrize("value", [False, 0, None])
+    def test_falsy_natives_turn_off(self, value):
+        assert _coerce_switch_on(value) is False
 
 
 # ─────────────────────────────────────────────────────────────────

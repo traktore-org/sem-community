@@ -302,6 +302,23 @@ class DynamicTariffProvider(TariffProvider):
         # ``_read_prices_list`` when attribute parsing yields nothing.
         self._service_prices: List[PricePoint] = []
         self._service_prices_fetched_at: Optional[datetime] = None
+        # #485 F6: failure backoff for the service fetch. Without it a
+        # Nord Pool API outage meant two blocking service calls per
+        # ~10s coordinator cycle for the outage's duration.
+        self._service_prices_failed_at: Optional[datetime] = None
+        # #485 F7: memoized result of ``_read_prices_list``. The parse
+        # (fromisoformat + classify + sort + dedupe over a 100-200
+        # point curve) ran 3-5× per coordinator cycle; the curve only
+        # changes when the source entity updates, the service fetch
+        # refreshes, or the percentile window's slot rolls over — all
+        # captured in the memo key.
+        self._parse_memo: Optional[List[PricePoint]] = None
+        self._parse_memo_key: Optional[tuple] = None
+        # Parse diagnostics (also read by the memo key derivation —
+        # must exist before the first parse).
+        self._last_parsed_attribute: Optional[str] = None
+        self._last_parsed_count: int = 0
+        self._last_parsed_gap_seconds: Optional[float] = None
         # #359 (RienduPre's derivative-entity setup): one-shot WARNING
         # when the configured entity is readable but exposes no price
         # array — percentile classification silently degrades to NORMAL
@@ -322,6 +339,9 @@ class DynamicTariffProvider(TariffProvider):
     # Day-ahead curves don't change once published; re-fetch only to
     # pick up tomorrow's prices when they publish (~13:00 CET).
     SERVICE_PRICE_REFRESH = timedelta(minutes=30)
+    # After a failed fetch (API outage, integration starting), don't
+    # retry every cycle — wait this long (#485 F6).
+    SERVICE_PRICE_RETRY = timedelta(minutes=5)
 
     async def async_refresh_service_prices(self) -> bool:
         """Fetch the day-ahead curve from the official Nord Pool core
@@ -346,6 +366,16 @@ class DynamicTariffProvider(TariffProvider):
             self._service_prices
             and self._service_prices_fetched_at is not None
             and now - self._service_prices_fetched_at < self.SERVICE_PRICE_REFRESH
+        ):
+            return False
+
+        # Failure backoff (#485 F6): a fetch that yielded nothing
+        # timestamps the attempt too, so an outage costs one retry per
+        # SERVICE_PRICE_RETRY instead of two blocking service calls
+        # every coordinator cycle.
+        if (
+            self._service_prices_failed_at is not None
+            and now - self._service_prices_failed_at < self.SERVICE_PRICE_RETRY
         ):
             return False
 
@@ -401,9 +431,11 @@ class DynamicTariffProvider(TariffProvider):
                 break
 
         if not points:
+            self._service_prices_failed_at = now
             return False
         self._service_prices = sorted(points, key=lambda p: p.timestamp)
         self._service_prices_fetched_at = now
+        self._service_prices_failed_at = None
         if self._provider_name == "unknown":
             self._provider_name = "nordpool_official"
         _LOGGER.debug(
@@ -413,6 +445,28 @@ class DynamicTariffProvider(TariffProvider):
             self._service_prices[-1].timestamp.isoformat(),
         )
         return True
+
+    @staticmethod
+    def is_price_entity_candidate(entity_id: str) -> bool:
+        """Whether an entity id looks like a dynamic-tariff price sensor.
+
+        Shared by runtime provider detection and the options-flow
+        auto-fill (#485 K5) — the two lists had drifted: the flow
+        missed Octopus and Amber despite its own dropdown label
+        promising them, while knowing the official Nord Pool shape the
+        runtime had just learned. Keep this in sync with the provider
+        branches in ``detect_provider``.
+        """
+        eid = entity_id.lower()
+        if "nord_pool" in eid and eid.endswith("_current_price"):
+            return True  # official Nord Pool core integration
+        if "electricity_price" in eid:
+            return True  # Tibber
+        if "amber" in eid and "general_price" in eid:
+            return True
+        if "octopus_energy" in eid and "current_rate" in eid:
+            return True
+        return any(p in eid for p in ("nordpool", "awattar"))
 
     def detect_provider(self) -> Optional[str]:
         """Auto-detect available price integration."""
@@ -595,18 +649,44 @@ class DynamicTariffProvider(TariffProvider):
         for a non-listed shape is visible without a maintainer
         having to read the raw entity dump.
         """
-        # v1.7.2-beta.3: clear the per-cycle diag fields so the
-        # diagnose surface reflects THIS read, not the prior one.
-        self._last_parsed_attribute: Optional[str] = None
-        self._last_parsed_count: int = 0
-        self._last_parsed_gap_seconds: Optional[float] = None
-
         state = (
             self.hass.states.get(self._price_entity)
             if self._price_entity else None
         )
         if state is None and not self._service_prices:
             return []
+
+        # #485 F7: memo check. HA State objects are immutable — a new
+        # object (new id + last_updated) appears on every entity update,
+        # so identity + last_updated is a free change detector. The slot
+        # epoch invalidates when the percentile window's slot rolls over
+        # (cached PricePoint.level values are classified against that
+        # window). A hit skips the full parse AND keeps the diag fields
+        # from the last real parse.
+        fc_state = (
+            self.hass.states.get(self._forecast_entity)
+            if self._forecast_entity else None
+        )
+        memo_interval_s = getattr(self, "_last_parsed_gap_seconds", None) or 3600.0
+        memo_key = (
+            id(state),
+            getattr(state, "last_updated", None),
+            id(fc_state),
+            getattr(fc_state, "last_updated", None),
+            self._service_prices_fetched_at,
+            int(dt_util.now().timestamp() // memo_interval_s),
+        )
+        if (
+            memo_key == getattr(self, "_parse_memo_key", None)
+            and getattr(self, "_parse_memo", None) is not None
+        ):
+            return self._parse_memo
+
+        # v1.7.2-beta.3: clear the per-cycle diag fields so the
+        # diagnose surface reflects THIS read, not the prior one.
+        self._last_parsed_attribute: Optional[str] = None
+        self._last_parsed_count: int = 0
+        self._last_parsed_gap_seconds: Optional[float] = None
 
         prices = []
         attrs = state.attributes if state else {}
@@ -805,6 +885,8 @@ class DynamicTariffProvider(TariffProvider):
             and self._prices_cache
             and (state is None or state.state in ("unknown", "unavailable"))
         ):
+            self._parse_memo = self._prices_cache
+            self._parse_memo_key = memo_key
             return self._prices_cache
 
         # #359: write back to the cache so ``_get_percentile_breaks``
@@ -820,6 +902,18 @@ class DynamicTariffProvider(TariffProvider):
         if self.classification_mode == "percentile" and prices:
             for p in prices:
                 p.level = self._classify_price(p.price)
+
+        # Re-key the memo with the real detected gap (the provisional
+        # key used the previous parse's gap — a first parse on a 15-min
+        # market would otherwise hold a too-coarse hourly slot epoch).
+        if self._last_parsed_gap_seconds and (
+            self._last_parsed_gap_seconds != memo_interval_s
+        ):
+            memo_key = memo_key[:-1] + (
+                int(dt_util.now().timestamp() // self._last_parsed_gap_seconds),
+            )
+        self._parse_memo = prices
+        self._parse_memo_key = memo_key
 
         return prices
 
@@ -1068,6 +1162,18 @@ class DynamicTariffProvider(TariffProvider):
             if 0 < gap <= 3600:
                 return timedelta(seconds=gap)
         return timedelta(hours=1)
+
+    def detect_slot_hours(self) -> Optional[float]:
+        """Authoritative market slot length in hours (None if unknown).
+
+        The battery scheduler uses this instead of inferring the slot
+        length from gaps between its *selected* slots, which
+        overestimates the duration for scattered selections (#485 F3).
+        """
+        prices = self._read_prices_list()
+        if len(prices) < 2:
+            return None
+        return self._detect_interval(prices).total_seconds() / 3600.0
 
     def get_price_at(self, when: datetime) -> Optional[float]:
         prices = self._read_prices_list()

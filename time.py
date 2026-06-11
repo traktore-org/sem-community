@@ -111,47 +111,15 @@ class SEMPerChargerTime(CoordinatorEntity, TimeEntity):
         self._attr_native_value = value
         hhmm = value.strftime("%H:%M")
 
-        new_options = {**self._entry.options}
-        # Copy charger dicts — in-place mutation leaves entry.options unchanged so
-        # async_update_entry skips persisting and the value reverts on restart (#245).
-        #
-        # Same hardening as select.py / number.py (#462/#464 follow-up): fall
-        # back to entry.data.ev_chargers when entry.options doesn't have the
-        # key (otherwise this writes [] back and clobbers every charger on the
-        # next merge), and recover the charger from entry.data when its id is
-        # missing from a partial options-side list instead of silently
-        # no-op'ing the write. This writer was missed by the original #469
-        # patch round.
-        data_chargers = (self._entry.data or {}).get("ev_chargers") or []
-        source_chargers = new_options.get("ev_chargers") or data_chargers
-        ev_chargers = [dict(c) for c in source_chargers if isinstance(c, dict)]
-        for charger in ev_chargers:
-            if charger.get("id") == self._charger_id:
-                charger[self._config_key] = hhmm
-                break
-        else:
-            recovered = next(
-                (dict(c) for c in data_chargers
-                 if isinstance(c, dict) and c.get("id") == self._charger_id),
-                {"id": self._charger_id},
-            )
-            recovered[self._config_key] = hhmm
-            ev_chargers.append(recovered)
-            _LOGGER.warning(
-                "Charger '%s' was missing from the stored ev_chargers list "
-                "(ids: %s) — recovered it from entry.data so the %s write "
-                "isn't lost",
-                self._charger_id,
-                [c.get("id") for c in ev_chargers[:-1]],
-                self._config_key,
-            )
-        new_options["ev_chargers"] = ev_chargers
-
-        if isinstance(getattr(self.coordinator, "config", None), dict):
-            self.coordinator.config.update({**self._entry.data, **new_options})
-
-        self.coordinator._skip_options_reload = new_options
-        self.hass.config_entries.async_update_entry(self._entry, options=new_options)
+        # Shared per-charger write path (#485 K2) — owns the data-side
+        # fallback, missing-charger recovery (#462/#464), coordinator
+        # mirror and reload-skip arming. Do NOT inline a copy here; this
+        # writer was the copy the original #469 patch round missed.
+        from . import persist_per_charger_option
+        persist_per_charger_option(
+            self.hass, self._entry, self.coordinator,
+            self._charger_id, self._config_key, hhmm,
+        )
         self.async_write_ha_state()
         _LOGGER.info(
             "Updated per-charger %s.%s to %s",

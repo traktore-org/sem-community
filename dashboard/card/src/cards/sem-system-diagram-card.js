@@ -24,7 +24,7 @@
 
 import { SEMLitBase, html, css, svg, nothing } from '../base/sem-lit-base.js';
 import {
-    semFormatPower, semCalcDuration, semDefineCard, SEM_DEVICE_COLORS,
+    semFormatPower, semFormatTime, semCalcDuration, semDefineCard, SEM_DEVICE_COLORS,
     semDiscoverPVStrings, semPVStringsCSS, semPVStringStatesKey,
 } from '../base/sem-shared.js';
 
@@ -382,8 +382,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
         // Sun time labels
         const sunAttrs = this._hass?.states['sun.sun']?.attributes;
-        const sunRiseStr = sunAttrs?.next_rising ? this._fmtHM(sunAttrs.next_rising) : '';
-        const sunSetStr  = sunAttrs?.next_setting ? this._fmtHM(sunAttrs.next_setting) : '';
+        const sunRiseStr = sunAttrs?.next_rising ? semFormatTime(sunAttrs.next_rising) : '';
+        const sunSetStr  = sunAttrs?.next_setting ? semFormatTime(sunAttrs.next_setting) : '';
 
         // Battery SOC geometry (mirrors _illustrationBattery scale)
         const battS = L.B.r / 50;
@@ -780,11 +780,6 @@ class SEMSystemDiagramCard extends SEMLitBase {
                 </svg>
             </ha-card>
         `;
-    }
-
-    _fmtHM(iso) {
-        const d = new Date(iso);
-        return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     }
 
     // ══════════════════════════════════════════════════════════════════
