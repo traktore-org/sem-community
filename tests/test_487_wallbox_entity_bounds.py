@@ -122,7 +122,7 @@ class TestHealthCheckLogRateLimit:
             for _ in range(hc._WARN_CYCLES + 4):
                 hc.run_all_checks(power)
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING
-                    and "Health check violation" in r.message]
+                    and "Health check violation:" in r.message]
         assert len(warnings) == hc._WARN_CYCLES
         # the violations keep counting even while quiet
         assert hc.total_violations >= hc._WARN_CYCLES + 4

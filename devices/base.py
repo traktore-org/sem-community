@@ -647,15 +647,26 @@ class CurrentControlDevice(ControllableDevice):
         Unreadable entities/attributes leave the command untouched.
         """
         state = self.hass.states.get(entity_id) if entity_id else None
-        attrs = getattr(state, "attributes", None) or {}
-        try:
-            ent_min = float(attrs["min"]) if attrs.get("min") is not None else None
-        except (TypeError, ValueError):
-            ent_min = None
-        try:
-            ent_max = float(attrs["max"]) if attrs.get("max") is not None else None
-        except (TypeError, ValueError):
-            ent_max = None
+        attrs = getattr(state, "attributes", None)
+        if not isinstance(attrs, dict):
+            return current, False
+
+        def _as_float(value):
+            # Real numerics/strings only — duck-typed mocks support
+            # __float__ and would fabricate bounds.
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                try:
+                    return float(value)
+                except ValueError:
+                    return None
+            return None
+
+        ent_min = _as_float(attrs.get("min"))
+        ent_max = _as_float(attrs.get("max"))
 
         if current <= 0:
             return current, bool(ent_min is not None and ent_min > 0)
