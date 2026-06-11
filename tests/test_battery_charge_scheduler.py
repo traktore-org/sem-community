@@ -855,6 +855,16 @@ class TestSchedulerConfig:
         assert isinstance(config.trigger_hour, int)
         assert isinstance(config.trigger_minute, int)
 
+        # String-shaped storage ("21.0") must coerce too — a bare int()
+        # would swap the TypeError for a ValueError (review finding on
+        # PR #496).
+        config_str = SchedulerConfig.from_config({
+            "battery_precharge_trigger_hour": "21.0",
+            "battery_precharge_trigger_minute": "30",
+        })
+        assert config_str.trigger_hour == 21
+        assert config_str.trigger_minute == 30
+
         adapter = MagicMock(spec=BatteryChargeAdapter)
         scheduler = BatteryChargeScheduler(mock_hass, adapter, config)
         # Must not raise — and inside the window it must trigger, so
