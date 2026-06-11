@@ -1274,6 +1274,94 @@ class TestExpandedParserShapes:
             assert provider._last_parsed_count == 0
             assert provider._last_parsed_gap_seconds is None
 
+    def test_tibber_grid_reward_today_raw_shape(self, mock_hass):
+        """Tibber Grid Reward (HACS) shape, #491 (RienduPre, Growatt NL).
+
+        Tibber Pulse accounts where core Tibber provisions no
+        ``electricity_price`` forecast sensor (core#153312) get their
+        only price arrays from the Grid Reward integration's
+        ``sensor.current_price``:
+
+        * ``today_raw`` / ``tomorrow_raw``: ``[{"time": iso,
+          "price": total, "rating": ...}, ...]``
+        * ``today`` / ``tomorrow``: comma-joined *strings* of the same
+          totals — must be skipped by the list guard, NOT parsed and
+          NOT double-counted against the raw arrays.
+
+        Users point ``dynamic_tariff_entity`` at the sensor (the
+        entity id is too generic to auto-detect).
+        """
+        now = datetime(2026, 6, 11, 0, 0, 0)
+        today_raw = []
+        for h in range(24):
+            ts = now + timedelta(hours=h)
+            today_raw.append({
+                "time": ts.isoformat(),
+                "price": 0.18 + 0.01 * h,
+                "rating": "NORMAL",
+            })
+        tomorrow_raw = []
+        for h in range(24):
+            ts = now + timedelta(hours=24 + h)
+            tomorrow_raw.append({
+                "time": ts.isoformat(),
+                "price": 0.15 + 0.01 * h,
+                "rating": "NORMAL",
+            })
+
+        state = _make_price_state(0.18, attributes={
+            "today": ", ".join(str(p["price"]) for p in today_raw),
+            "today_raw": today_raw,
+            "tomorrow": ", ".join(str(p["price"]) for p in tomorrow_raw),
+            "tomorrow_raw": tomorrow_raw,
+        })
+        mock_hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(
+                mock_hass, price_entity="sensor.current_price"
+            )
+            parsed = provider._read_prices_list()
+
+        # 24 today + 24 tomorrow, no double-counting from the
+        # comma-joined string attributes
+        assert len(parsed) == 48
+        assert provider._last_parsed_count == 48
+        assert provider._last_parsed_attribute == "today_raw"
+        assert provider._last_parsed_gap_seconds == 3600.0
+        assert parsed[0].price == 0.18
+        assert parsed[-1].price == pytest.approx(0.15 + 0.01 * 23)
+
+    def test_tibber_grid_reward_no_tomorrow_yet(self, mock_hass):
+        """Before ~13:00 Tibber publishes no tomorrow prices — Grid
+        Reward emits ``tomorrow: None`` + ``tomorrow_raw: []``. The
+        parser must still return today's 24 points."""
+        now = datetime(2026, 6, 11, 8, 0, 0)
+        midnight = now.replace(hour=0)
+        today_raw = [
+            {"time": (midnight + timedelta(hours=h)).isoformat(),
+             "price": 0.20, "rating": "NORMAL"}
+            for h in range(24)
+        ]
+        state = _make_price_state(0.20, attributes={
+            "today": ", ".join("0.2" for _ in range(24)),
+            "today_raw": today_raw,
+            "tomorrow": None,
+            "tomorrow_raw": [],
+        })
+        mock_hass.states.get = MagicMock(return_value=state)
+
+        with patch(DT_UTIL_PATH) as mock_dt:
+            mock_dt.now.return_value = now
+            provider = DynamicTariffProvider(
+                mock_hass, price_entity="sensor.current_price"
+            )
+            parsed = provider._read_prices_list()
+
+        assert len(parsed) == 24
+        assert provider._last_parsed_attribute == "today_raw"
+
 
 class TestScheduleAfter15MinParse:
     """The chart's schedule must collapse 96 15-min points into
