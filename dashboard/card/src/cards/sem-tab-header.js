@@ -283,14 +283,19 @@ class SEMTabHeader extends SEMLitBase {
                 }
                 .icon-ring { position: relative; flex-shrink: 0; width: 64px; height: 64px; }
                 .icon-ring svg { width: 100%; height: 100%; }
-                .title-area { flex: 1; min-width: 0; }
+                /* min-width keeps the title readable next to the stats;
+                   when there isn't room for both, the stats wrap below
+                   instead of crushing the title to zero width. */
+                .title-area { flex: 1 1 auto; min-width: 140px; }
                 .tab-title {
                     font-size: 20px; font-weight: 700; color: ${titleColor};
                     letter-spacing: 0.5px; text-shadow: ${titleShadow};
+                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                 }
                 .tab-subtitle {
                     font-size: 12px; color: var(--secondary-text-color, ${T.textSec});
                     margin-top: 2px; font-weight: 500;
+                    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                 }
                 .stats { display: flex; gap: 16px; flex-shrink: 0; }
                 .stat { text-align: center; min-width: 50px; }
@@ -299,11 +304,11 @@ class SEMTabHeader extends SEMLitBase {
                     color: var(--primary-text-color, ${T.text});
                 }
                 .stat-label {
-                    font-size: 10px; color: var(--secondary-text-color, ${T.textTertiary});
+                    font-size: 11px; color: var(--secondary-text-color, ${T.textTertiary});
                     font-weight: 500; margin-top: 1px;
                 }
                 @media (max-width: 500px) {
-                    .header-wrap { padding: 12px 14px; gap: 12px; }
+                    .header-wrap { padding: 12px 14px; gap: 8px 12px; flex-wrap: wrap; }
                     .icon-ring { width: 48px; height: 48px; }
                     .tab-title { font-size: 16px; }
                     .stats { gap: 10px; }

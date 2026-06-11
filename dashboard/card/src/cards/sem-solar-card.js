@@ -212,7 +212,7 @@ class SEMSolarCard extends SEMLitBase {
                     line-height: 1.2;
                 }
                 .solar-daily-value {
-                    font-size: 10px; color: var(--secondary-text-color,${T.textSec});
+                    font-size: 11px; color: var(--secondary-text-color,${T.textSec});
                     font-variant-numeric: tabular-nums;
                 }
 
@@ -245,7 +245,7 @@ class SEMSolarCard extends SEMLitBase {
                     color: var(--primary-text-color,${T.text});
                 }
                 .flow-energy {
-                    font-size: 10px; color: var(--secondary-text-color,${T.textSec});
+                    font-size: 11px; color: var(--secondary-text-color,${T.textSec});
                     font-variant-numeric: tabular-nums;
                 }
 
@@ -469,7 +469,7 @@ class SEMSolarCard extends SEMLitBase {
                                 <span class="metric-label">${this._t('peak_power')}</span>
                                 <span class="metric-val">
                                     ${peakW > 0 ? semFormatPower(peakW) : '—'}
-                                    <span style="font-size:10px;opacity:0.7;margin-left:4px">${peakTime || '—'}</span>
+                                    <span style="font-size:11px;opacity:0.7;margin-left:4px">${peakTime || '—'}</span>
                                 </span>
                             </div>
                             <div class="metric-row">

@@ -735,7 +735,7 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
                     <!-- Entity status indicator (#38) -->
                     <foreignObject x="10" y="${this._compact ? 1030 : 750}" width="200" height="20">
-                        <div xmlns="http://www.w3.org/1999/xhtml" id="entity-status" style="display:none;font-family:'Segoe UI','Roboto',sans-serif;font-size:10px;color:#ef5350;opacity:0.7"></div>
+                        <div xmlns="http://www.w3.org/1999/xhtml" id="entity-status" style="display:none;font-family:'Segoe UI','Roboto',sans-serif;font-size:11px;color:#ef5350;opacity:0.7"></div>
                     </foreignObject>
 
                     <!-- SEM watermark -->

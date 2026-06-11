@@ -129,7 +129,7 @@ class SEMSolarSummaryCard extends SEMLitBase {
             <style>
                 :host { display: block; }
                 .wrap {
-                    padding: 20px;
+                    padding: 16px 20px;
                     position: relative;
                     background:
                         radial-gradient(ellipse 70% 60% at 50% 25%, rgba(255,152,0,0.06) 0%, transparent 100%),
@@ -186,7 +186,7 @@ class SEMSolarSummaryCard extends SEMLitBase {
                     text-shadow: 0 0 8px rgba(255,152,0,0.3);
                 }
                 .ring-icon .label {
-                    font-size: 10px;
+                    font-size: 11px;
                     color: rgba(255,152,0,0.6);
                     font-weight: 500;
                     letter-spacing: 1px;
@@ -238,7 +238,7 @@ class SEMSolarSummaryCard extends SEMLitBase {
                     border-color: var(--divider-color, ${T.surfaceHover});
                 }
                 .metric-label {
-                    font-size: 10px;
+                    font-size: 11px;
                     color: var(--secondary-text-color, ${T.textTertiary});
                     font-weight: 500;
                     letter-spacing: 0.3px;

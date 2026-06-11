@@ -486,7 +486,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     <!-- Entity status indicator -->
                     <foreignObject x="${c ? 8 : 10}" y="${L.statusY}" width="220" height="22">
                         <div xmlns="http://www.w3.org/1999/xhtml" id="entity-status"
-                             style="display:none;font-family:'Segoe UI','Roboto',sans-serif;font-size:10px;color:#ef5350;opacity:0.75;white-space:nowrap"></div>
+                             style="display:none;font-family:'Segoe UI','Roboto',sans-serif;font-size:11px;color:#ef5350;opacity:0.75;white-space:nowrap"></div>
                     </foreignObject>
 
                     <!-- SEM watermark -->

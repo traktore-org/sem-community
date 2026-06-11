@@ -351,14 +351,14 @@ class SEMBatteryCard extends SEMLitBase {
                 }
                 .chip:hover { border-color: var(--divider-color, ${surfHover}); }
                 .chip-label {
-                    font-size: 10px; color: var(--secondary-text-color, ${chipLblCol});
+                    font-size: 11px; color: var(--secondary-text-color, ${chipLblCol});
                     font-weight: 500; letter-spacing: 0.3px; margin-bottom: 3px;
                 }
                 .chip-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
                 .c-charge { color: #f06292; }
                 .c-discharge { color: #4db6ac; }
                 .c-savings { color: #8DC892; }
-                .chip-src { font-size: 9px; color: var(--secondary-text-color, ${chipLblCol}); margin-top: 1px; }
+                .chip-src { font-size: 10px; color: var(--secondary-text-color, ${chipLblCol}); margin-top: 1px; }
                 .session-section {
                     margin-top: 14px; padding: 10px 12px;
                     background: var(--secondary-background-color, ${surfaceCol});
@@ -371,7 +371,7 @@ class SEMBatteryCard extends SEMLitBase {
                     text-transform: uppercase; letter-spacing: 0.5px;
                 }
                 .sess-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
-                .sess-item-label { font-size: 10px; color: var(--secondary-text-color, ${chipLblCol}); }
+                .sess-item-label { font-size: 11px; color: var(--secondary-text-color, ${chipLblCol}); }
                 .sess-item-value {
                     font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
@@ -407,7 +407,7 @@ class SEMBatteryCard extends SEMLitBase {
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                 }
                 .battery-section-status {
-                    font-size: 0.75em; font-weight: 500;
+                    font-size: 0.8em; font-weight: 500;
                     text-transform: uppercase; letter-spacing: 0.05em;
                 }
                 .battery-section-body {
@@ -418,7 +418,7 @@ class SEMBatteryCard extends SEMLitBase {
                 }
                 .battery-section-soc-label {
                     display: block;
-                    font-size: 9px; color: ${textSecCol};
+                    font-size: 10px; color: ${textSecCol};
                     margin-top: 2px;
                     text-transform: uppercase; letter-spacing: 0.05em;
                 }
@@ -428,14 +428,14 @@ class SEMBatteryCard extends SEMLitBase {
                 }
                 .bs-row {
                     display: flex; justify-content: space-between; align-items: baseline;
-                    padding: 1px 0;
+                    padding: 2px 0;
                 }
                 .bs-label {
-                    font-size: 10px; color: ${textSecCol};
+                    font-size: 11px; color: ${textSecCol};
                     font-weight: 500;
                 }
                 .bs-val {
-                    font-size: 11px; font-weight: 600;
+                    font-size: 12px; font-weight: 600;
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                     font-variant-numeric: tabular-nums;
                 }

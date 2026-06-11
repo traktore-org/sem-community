@@ -252,7 +252,7 @@ export const semPVStringsCSS = `
     }
     .pv-chip:hover { background: rgba(255, 152, 0, 0.18); }
     .pv-chip-label {
-        font-size: 10px;
+        font-size: 11px;
         letter-spacing: 0.5px;
         text-transform: uppercase;
         opacity: 0.7;

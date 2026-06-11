@@ -327,7 +327,7 @@ class SEMScheduleCard extends SEMLitBase {
         for (let h = 0; h <= 24; h += 2) {
             const x = toX(h / 24);
             svg += `<text x="${x}" y="${LBL}" text-anchor="middle" fill="${textSecCol}"
-                font-size="9" font-family="'Segoe UI','Roboto',sans-serif"
+                font-size="10" font-family="'Segoe UI','Roboto',sans-serif"
                 font-variant-numeric="tabular-nums">${h.toString().padStart(2, '0')}</text>`;
         }
 
@@ -336,7 +336,7 @@ class SEMScheduleCard extends SEMLitBase {
         rowLabels.forEach((label, i) => {
             const y = FRY + i * (RH + RG) + RH / 2 + 3.5;
             svg += `<text x="${ML - 4}" y="${y}" text-anchor="end" fill="${textTertCol}"
-                font-size="9" font-family="'Segoe UI','Roboto',sans-serif">${label}</text>`;
+                font-size="10" font-family="'Segoe UI','Roboto',sans-serif">${label}</text>`;
         });
 
         // Row backgrounds
@@ -392,7 +392,7 @@ class SEMScheduleCard extends SEMLitBase {
                     ? TARIFF_LEVEL_LABEL_KEY[block.level]
                     : block.type.toLowerCase();
                 svg += `<text x="${x + w / 2}" y="${tariffY + RH / 2 + 3.5}" text-anchor="middle"
-                    fill="rgba(255,255,255,0.92)" font-size="8" font-weight="600"
+                    fill="rgba(255,255,255,0.92)" font-size="9" font-weight="600"
                     font-family="'Segoe UI','Roboto',sans-serif">${this._t(labelKey)}</text>`;
             }
         }
@@ -570,14 +570,14 @@ class SEMScheduleCard extends SEMLitBase {
                 .now-badge {
                     display: inline-block; padding: 1px 7px;
                     border-radius: 999px; border: 1px solid;
-                    font-size: 10.5px; font-weight: 600;
+                    font-size: 11px; font-weight: 600;
                     text-transform: capitalize;
                 }
                 .legend {
                     display: flex; gap: 14px; flex-wrap: wrap;
                     margin-top: 6px; padding-top: 6px;
                     border-top: 1px dashed rgba(255,255,255,0.06);
-                    font-size: 10px; color: var(--secondary-text-color, #888);
+                    font-size: 11px; color: var(--secondary-text-color, #888);
                 }
                 .legend .item {
                     display: inline-flex; align-items: center; gap: 4px;
