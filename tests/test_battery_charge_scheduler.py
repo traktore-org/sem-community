@@ -832,6 +832,48 @@ class TestSchedulerConfig:
         assert config.peak_limit_w == 9000.0
         assert config.ev_priority is False
 
+    def test_from_config_float_trigger_hour_from_options_flow(self, mock_hass):
+        """#493: the options-flow NumberSelector stores floats (21.0).
+
+        ``datetime.replace(hour=21.0)`` raises ``TypeError: 'float'
+        object cannot be interpreted as an integer`` — on PROD
+        (RienduPre, #487 comment, v1.7.3-beta.9) this killed the
+        scheduler evaluation on every coordinator cycle for any user
+        who ever saved the battery-scheduler options page. Defaults
+        stay int, which is why soaks on untouched configs missed it.
+
+        Exercise the exact crashing path: float-shaped config →
+        ``should_trigger_evaluation`` → ``_in_planning_window`` →
+        ``_window_start`` → ``now.replace(hour=...)``.
+        """
+        config = SchedulerConfig.from_config({
+            "battery_charge_scheduler_enabled": True,
+            "battery_precharge_trigger_hour": 21.0,
+            "battery_precharge_trigger_minute": 0.0,
+        })
+        assert config.trigger_hour == 21
+        assert isinstance(config.trigger_hour, int)
+        assert isinstance(config.trigger_minute, int)
+
+        # String-shaped storage ("21.0") must coerce too — a bare int()
+        # would swap the TypeError for a ValueError (review finding on
+        # PR #496).
+        config_str = SchedulerConfig.from_config({
+            "battery_precharge_trigger_hour": "21.0",
+            "battery_precharge_trigger_minute": "30",
+        })
+        assert config_str.trigger_hour == 21
+        assert config_str.trigger_minute == 30
+
+        adapter = MagicMock(spec=BatteryChargeAdapter)
+        scheduler = BatteryChargeScheduler(mock_hass, adapter, config)
+        # Must not raise — and inside the window it must trigger, so
+        # the call demonstrably reached the production logic.
+        in_window = dt_util.now().replace(hour=21, minute=5, second=0)
+        assert scheduler.should_trigger_evaluation(in_window) is True
+        outside = dt_util.now().replace(hour=12, minute=0, second=0)
+        assert scheduler.should_trigger_evaluation(outside) is False
+
 
 # ---------------------------------------------------------------------------
 # Integration-style Tests

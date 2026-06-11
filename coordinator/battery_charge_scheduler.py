@@ -225,8 +225,15 @@ class SchedulerConfig:
             battery_max_charge_power_w=config.get("battery_max_charge_power_w", 5000.0),
             roundtrip_efficiency=config.get("battery_roundtrip_efficiency", 0.92),
             battery_cycle_cost=config.get("battery_cycle_cost", 0.0),
-            trigger_hour=config.get("battery_precharge_trigger_hour", 21),
-            trigger_minute=config.get("battery_precharge_trigger_minute", 0),
+            # int(float()) coercion is load-bearing (#493): the
+            # options-flow NumberSelector stores floats (21.0) and
+            # datetime.replace(hour=21.0) raises TypeError — killing the
+            # scheduler evaluation on every cycle for any user who ever
+            # saved the battery-scheduler options page. The float() hop
+            # also survives string-shaped storage ("21.0"), which a bare
+            # int() would re-crash on with ValueError.
+            trigger_hour=int(float(config.get("battery_precharge_trigger_hour", 21))),
+            trigger_minute=int(float(config.get("battery_precharge_trigger_minute", 0))),
             replan_interval_min=max(5, int(config.get("battery_replan_interval_min", 30))),
             planning_window_hours=max(1, min(24, int(config.get("battery_planning_window_hours", 9)))),
             prefer_consecutive_window=config.get("battery_prefer_consecutive_window", True),
