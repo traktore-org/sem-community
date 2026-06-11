@@ -1,6 +1,18 @@
 # ADR 0010 — EV control trusts the EVSE pilot state machine and commits before measuring
 
 **Status:** Proposed (2026-06-05) · informs issues #438, #439, and a new per-vehicle min-current issue
+**Amended (2026-06-11, #501):** Pattern 1's *unconditional* commit
+overshot. In PROD it caused sustained (not one-cycle) grid import and
+battery drain on cloudy Zone-3/4 afternoons — including after the
+daily Min was already met. The commit-then-measure offer is now
+**need-gated**: it engages only when the remaining Min exceeds what
+tonight's window can deliver at max current
+(`ChargerView.night_deliverable_kwh`). The non-gating half of the
+pattern stands unchanged — the assist budget is never gated on
+currently-flowing discharge (the #439 chicken-and-egg); it is the
+capped SOC-based potential (`battery_assist_potential_w`), bounded to
+the surplus→min gap so assist makes the minimum *reachable* rather
+than boosting past surplus.
 
 ## Context
 

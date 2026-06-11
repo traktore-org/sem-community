@@ -93,34 +93,54 @@ def self_consumption_surplus_w(view: ChargerView) -> float:
 def battery_assist_budget_w(view: ChargerView) -> float:
     """Budget for Zone 3/4 battery-assist charging.
 
-    In ``min_plus_solar`` / ``solar_plus_cheap`` / ``always_max``
-    modes (NOT solar_only / off), when the home battery is
-    high enough (Zone 3 or 4), it can discharge to bridge the gap
-    between solar surplus and EV demand. The budget here is:
+    Called exclusively from ``MinPlusSolarMode._decide_day()`` (the
+    Zone 3/4 path) — ``solar_plus_cheap`` delegates its day path to
+    ``solar_only`` and ``always_max`` ignores any budget. When the
+    home battery is high enough (Zone 3 or 4), it can discharge to
+    bridge the gap between solar surplus and EV demand.
 
-      Zone 4 (SOC ≥ auto_start_soc): solar - home + usable_battery
-        usable_battery = (SOC - floor_soc) / 100 × capacity, scaled
-        per-cycle so we don't drain in one cycle. Bound by
-        battery_discharge_w (the physical max the battery is
-        currently providing).
+    #501: the assist component is the shared SOC-based POTENTIAL
+    (``flow_calculator.battery_assist_potential_w``) — capped by the
+    user's ``battery_assist_max_power``, zeroed below the assist
+    floor SOC, and bounded to the GAP between surplus and the
+    charger minimum. Assist exists to make the min current
+    *reachable* when surplus falls just short (scenario-matrix row 4:
+    "battery assists, tops up to EV minimum") — never to boost past
+    surplus, which would cycle the battery for no self-consumption
+    gain.
 
-      Zone 3 (buffer_soc ≤ SOC < auto_start_soc): same formula but
-        only when forecast shows tomorrow has plenty of sun (legacy
-        ``_zone_based_strategy`` line 2742-2750 — forecast check
-        deferred to Step 5 here; for now we treat Zone 3 same as
-        Zone 4).
+    The pre-#501 formula added ``f.battery_discharge_w`` (the
+    battery's TOTAL measured discharge, house share included), which
+    ignored the config caps and ratcheted the commanded current
+    upward on every home-load spike: more home draw → more discharge
+    → bigger "EV budget" → higher amps → more discharge. Using
+    potential instead of measurement also preserves the #439 fix —
+    no chicken-and-egg gate on currently-flowing discharge.
 
       Zone 1/2: no battery assist. Return surplus only.
     """
+    from .flow_calculator import battery_assist_potential_w
+
     f = view.fleet
     surplus = self_consumption_surplus_w(view)
     zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
     if zone < 3:
         return surplus
-    # Zone 3 or 4: add the battery's actual current discharge to
-    # the EV budget. (Don't speculate on future discharge; use what
-    # the inverter is reporting right now.)
-    return surplus + f.battery_discharge_w
+    potential = battery_assist_potential_w(
+        f.battery_soc,
+        f.battery_assist_floor_soc,
+        f.buffer_soc,
+        f.auto_start_soc,
+        f.battery_assist_max_power_w,
+    )
+    cfg = view.config if isinstance(view.config, dict) else {}
+    min_power_w = (
+        effective_min_amps(cfg, 6)
+        * int(cfg.get("ev_phases", 3))
+        * int(cfg.get("ev_voltage", 230))
+    )
+    gap_w = max(0.0, min_power_w - surplus)
+    return surplus + min(potential, gap_w)
 
 
 def _relabel(decision: ChargerDecision, mode: str, prefix: str) -> ChargerDecision:
@@ -457,14 +477,10 @@ class MinPlusSolarMode(ModeStrategy):
                 _SOLAR_ONLY.decide(view), "min_plus_solar",
                 f"min_plus_solar day Zone 2 (SOC={f.battery_soc:.0f}%)",
             )
-        # Zone 3 / 4: commit-then-measure (#439, ADR 0010). The mode
-        # name promises "guarantee min from grid + solar up to max",
-        # and in Zone 3/4 the home battery is available to supplement.
-        # Offer ``min_amps`` unconditionally — the inverter / grid will
-        # fill the gap next cycle. Do NOT gate on "is the battery
-        # currently discharging?" — that's the chicken-and-egg bug
-        # that idled this mode when battery sat at 0 W discharge
-        # because the EV hadn't been told to start drawing yet.
+        # Zone 3 / 4: surplus + capped SOC-based battery assist (#501).
+        # The budget uses the battery's POTENTIAL (never gated on
+        # currently-flowing discharge — that was the #439
+        # chicken-and-egg) capped at ``battery_assist_max_power``.
         budget_w = battery_assist_budget_w(view)
         cfg = view.config if isinstance(view.config, dict) else {}
         min_amps = effective_min_amps(cfg, 6)
@@ -472,15 +488,54 @@ class MinPlusSolarMode(ModeStrategy):
         phases = int(cfg.get("ev_phases", 3))
         voltage = int(cfg.get("ev_voltage", 230))
         surplus_amps = amps_from_watts(budget_w, phases, voltage)
-        amps = max(min_amps, min(max_amps, surplus_amps))
+
+        # Need-gated min floor (#501, amends ADR 0010 pattern 1).
+        # The mode's Min guarantee lives in the night top-up; the
+        # daytime floor (commit-then-measure, grid backfills) engages
+        # ONLY when tonight's window can no longer deliver the
+        # remaining Min at max current — i.e. when waiting genuinely
+        # risks the guarantee. Pre-#501 the floor was unconditional
+        # in Zone 3/4: a cloudy afternoon at 70-90% SOC ground the
+        # home battery into the EV with sustained grid backfill, and
+        # the floor even applied after Min was already met.
+        remaining = view.target_kwh
+        floor_needed = (
+            remaining is not None
+            and remaining > 0.1
+            and remaining > view.night_deliverable_kwh
+        )
+        if floor_needed:
+            amps = max(min_amps, min(max_amps, surplus_amps))
+            return ChargerDecision(
+                charger_id=cid, mode="min_plus_solar",
+                intent=ChargerIntent.CHARGE_AT_AMPS,
+                commanded_amps=amps, budget_w=budget_w,
+                reason=(
+                    f"min_plus_solar day Zone {zone}: Min floor engaged "
+                    f"({remaining:.1f} kWh remaining > "
+                    f"{view.night_deliverable_kwh:.1f} kWh night-deliverable) "
+                    f"→ {amps}A (budget={budget_w:.0f}W, floor={min_amps}A)"
+                ),
+            )
+        if surplus_amps >= min_amps:
+            amps = min(max_amps, surplus_amps)
+            return ChargerDecision(
+                charger_id=cid, mode="min_plus_solar",
+                intent=ChargerIntent.CHARGE_AT_AMPS,
+                commanded_amps=amps, budget_w=budget_w,
+                reason=(
+                    f"min_plus_solar day Zone {zone}: budget={budget_w:.0f}W "
+                    f"→ {amps}A (solar surplus + capped battery assist)"
+                ),
+            )
+        remaining_str = f"{remaining:.1f}" if remaining is not None else "?"
         return ChargerDecision(
             charger_id=cid, mode="min_plus_solar",
-            intent=ChargerIntent.CHARGE_AT_AMPS,
-            commanded_amps=amps, budget_w=budget_w,
+            intent=ChargerIntent.IDLE,
             reason=(
                 f"min_plus_solar day Zone {zone}: budget={budget_w:.0f}W "
-                f"→ {amps}A floor={min_amps}A (solar={f.solar_w:.0f}W "
-                f"+ battery_dis={f.battery_discharge_w:.0f}W)"
+                f"below {min_amps}A min — Min ({remaining_str} kWh) is "
+                f"covered by the night window, staying self-consumption-only"
             ),
         )
 

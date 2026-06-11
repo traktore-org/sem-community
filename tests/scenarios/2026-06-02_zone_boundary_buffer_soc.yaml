@@ -21,9 +21,13 @@ description: |
   This scenario walks the SOC up from 65 to 75 — through the
   exact buffer_soc=70 threshold — and asserts that the resulting
   strategy is internally consistent. With min_plus_solar mode +
-  is_night=false:
-    * Zone 2 (SOC < 70) → solar_only branch (Z2 strategy)
-    * Zone 3 (70 ≤ SOC < 90) → battery_assist branch
+  is_night=false and a real 2.5 kW surplus (#501: the assist
+  budget is the capped SOC potential, so the Zone-3 cycles need
+  surplus + potential ≥ charger min to charge):
+    * Zone 2 (SOC < 70) → solar_only branch (surplus alone is
+      below the 6 A min → idle)
+    * Zone 3 (70 ≤ SOC < 90) → battery_assist branch (surplus +
+      capped potential clears the min → charge)
   The transition cycle (SOC=70) should land in Zone 3
   (buffer_soc is the FLOOR of Zone 3, inclusive).
 
@@ -47,13 +51,14 @@ config:
 cycle_seconds: 30
 
 # Walk SOC from 65 (Zone 2) through 70 (boundary) up to 75
-# (Zone 3 proper). Battery actively discharging to power EV in
-# Zone 3 so the budget clears charger min.
+# (Zone 3 proper). Real surplus (solar 6 kW, home 3.5 kW) so the
+# Zone-3 budget (surplus + capped assist potential) clears the
+# charger min while Zone 2 (surplus only, 2.5 kW < 4.14 kW) idles.
 timeline:
   - t: 0
-    solar_power: 2000
-    grid_power: 2000
-    battery_power: -5000
+    solar_power: 6000
+    grid_power: 2500
+    battery_power: 0
     battery_soc: 65
     ev_power: 0
     ev_connected: true

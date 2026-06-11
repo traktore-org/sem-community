@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## ☀️ `min_plus_solar` daytime is self-consumption-maximizing again (#501)
+
+Daytime `min_plus_solar` in battery Zone 3/4 was draining the home battery into the EV and importing from the grid when it should maximize self-consumption — a cloudy afternoon at 70–90% SOC got ground into the car.
+
+- **The daytime min-current floor is now need-gated** — it engages only when the remaining daily Min can no longer be delivered by tonight's charging window (new per-charger `night_deliverable_kwh`). Otherwise daytime is pure surplus + capped battery assist, and idles below the charger minimum. Restores the documented "Min comes from the night top-up, not a forced grid pull at noon" promise; `always_max` stays the "just charge" escape hatch (#501)
+- **One shared, capped battery-assist formula** — `decide` and `flow_calculator` had diverged (ADR 0002 regression); both now use the same SOC-based *potential* (capped by `battery_assist_max_power`, zeroed below the assist-floor SOC, bounded to the surplus→min gap). No more measured-discharge branch, so a home-load spike can't ratchet the EV current upward, and #439's chicken-and-egg stays structurally fixed (#501)
+- Amends ADR 0010 pattern 1; `EV_CHARGING_LOGIC.md` mode table corrected
+
 # [1.7.3-beta.12] - 12.06.2026
 
 ## 🎨 Plan-strip legend always-visible + tariff colours (#464 follow-up)

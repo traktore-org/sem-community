@@ -36,6 +36,7 @@ def build_charger_view(
     deadline_amps: int = 0,
     tariff_wait: bool = False,
     solar_committed_w: float = 0.0,
+    night_deliverable_kwh: float = float("inf"),
 ) -> ChargerView:
     """Construct a ChargerView from a per-cycle FleetCycleState +
     per-charger overrides.
@@ -128,8 +129,12 @@ def build_charger_view(
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),
-        battery_floor_soc=float(config.get("battery_assist_floor_soc", 60)),
+        battery_assist_floor_soc=float(config.get("battery_assist_floor_soc", 60)),
         battery_capacity_kwh=float(config.get("battery_capacity_kwh", 15)),
+        battery_assist_max_power_w=float(config.get(
+            "battery_assist_max_power",
+            config.get("super_charger_power", 4500),
+        )),
         solar_committed_w=float(solar_committed_w),
         forecast_remaining_kwh=fleet_state.forecast_remaining_kwh,
     )
@@ -149,4 +154,5 @@ def build_charger_view(
         target_kwh=target_kwh,
         target_soc=target_soc,
         deadline_amps=deadline_amps,
+        night_deliverable_kwh=night_deliverable_kwh,
     )

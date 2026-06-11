@@ -195,6 +195,48 @@ def battery_redirect_w(
         return 0
 
 
+def battery_assist_potential_w(
+    battery_soc: float,
+    battery_assist_floor_soc: float,
+    battery_buffer_soc: float,
+    battery_auto_start_soc: float,
+    battery_assist_max_power_w: float,
+) -> float:
+    """SOC-based POTENTIAL battery-assist power for the EV (#501).
+
+    The one assist formula. Used by BOTH the strategy decision
+    (``decide.battery_assist_budget_w``) and the canonical budget
+    (``FlowCalculator._calculate_battery_assist_w``) so the two layers
+    cannot disagree (the #282 class).
+
+    Deliberately has NO measured-discharge input:
+
+    * Not gated on "is the battery currently discharging" — that was
+      the #439 chicken-and-egg (EV never starts because the battery
+      hasn't started covering a draw that doesn't exist yet).
+    * Not raised to the measured discharge either — total discharge
+      includes the share serving the HOUSE; attributing it to the EV
+      budget created a positive-feedback ratchet (home-load spike →
+      more discharge → bigger EV budget → higher amps) and silently
+      bypassed the user's ``battery_assist_max_power`` cap (#501).
+
+    Shape:
+      * SOC ≤ assist floor          → 0 (battery off-limits)
+      * SOC ≥ auto_start (Zone 4)   → full ``battery_assist_max_power_w``
+      * buffer ≤ SOC < auto_start   → ramp 0.5 → 1.0 × cap across the band
+      * SOC < buffer (Zone 1/2)     → 0
+    """
+    if battery_soc <= battery_assist_floor_soc:
+        return 0.0
+    if battery_soc >= battery_auto_start_soc:
+        return battery_assist_max_power_w
+    if battery_soc >= battery_buffer_soc:
+        band = max(1.0, battery_auto_start_soc - battery_buffer_soc)
+        ratio = (battery_soc - battery_buffer_soc) / band
+        return battery_assist_max_power_w * (0.5 + 0.5 * ratio)
+    return 0.0
+
+
 class FlowCalculator:
     """Calculates power and energy flows using proportional allocation."""
 
@@ -868,7 +910,14 @@ class FlowCalculator:
             )
 
         # ─── BATTERY_ASSIST ─────────────────────────────────────────
-        # Surplus + redirect + active battery discharge to EV.
+        # Surplus + redirect + battery assist. #501: the assist is the
+        # capped SOC-based POTENTIAL, bounded to the gap between
+        # surplus+redirect and the charger minimum (``min_power_floor_w``
+        # — callers pass it for this strategy too). Assist makes the
+        # min current REACHABLE when solar falls just short; it never
+        # boosts past surplus (that would cycle the battery for no
+        # self-consumption gain). With ``min_power_floor_w`` unset the
+        # full potential applies (legacy callers/tests).
         if strategy == EVBudgetStrategy.BATTERY_ASSIST:
             redirect = self._calculate_battery_redirect(
                 power.battery_charge_power, battery_soc,
@@ -879,6 +928,9 @@ class FlowCalculator:
                 battery_auto_start_soc, battery_buffer_soc,
                 battery_assist_floor_soc, battery_assist_max_power_w,
             )
+            if min_power_floor_w > 0:
+                gap_w = max(0.0, min_power_floor_w - (raw_surplus + redirect))
+                assist = min(assist, gap_w)
             net_w = raw_surplus + redirect + assist
             return EVBudget(
                 strategy=strategy,
@@ -937,33 +989,23 @@ class FlowCalculator:
         battery_assist_floor_soc: float,
         battery_assist_max_power_w: float,
     ) -> float:
-        """How much battery discharge to attribute to EV in battery_assist mode.
+        """How much battery power to attribute to EV in battery_assist mode.
 
-        Mirrors the legacy formula from `_calculate_solar_ev_budget` in
-        ev_control.py (the only place this lived before unification):
-
-        - SOC below assist floor: 0 (the battery shouldn't assist).
-        - Battery already discharging (>= 100 W): use measured value.
-        - Battery not yet discharging:
-            - Zone 4 (SOC >= auto_start_soc): full assist.
-            - Zone 3 (SOC >= buffer_soc):
-                proportional ramp 0.5 → 1.0 across the [buffer, auto_start]
-                band.
-            - Zone 2 (SOC < buffer_soc): 0 (shouldn't reach here — the
-                strategy decision should have chosen solar_only — but
-                guard anyway).
+        #501: delegates to the shared module-level
+        :func:`battery_assist_potential_w` — the SOC-based POTENTIAL,
+        capped by the user's ``battery_assist_max_power``. The legacy
+        ``measured discharge ≥ 100 W → return measured`` branch is
+        gone: it returned the battery's TOTAL discharge (including the
+        house's share) uncapped, which misattributed home consumption
+        to the EV budget and ratcheted the commanded current upward on
+        every home-load spike. ``power`` stays in the signature for
+        call-site compatibility (and future per-battery splits).
         """
-        if battery_soc <= battery_assist_floor_soc:
-            return 0.0
-
-        measured_discharge = max(0.0, power.battery_discharge_power)
-        if measured_discharge >= 100:
-            return measured_discharge
-
-        if battery_soc >= battery_auto_start_soc:
-            return battery_assist_max_power_w
-        if battery_soc >= battery_buffer_soc:
-            band = max(1.0, battery_auto_start_soc - battery_buffer_soc)
-            ratio = (battery_soc - battery_buffer_soc) / band
-            return battery_assist_max_power_w * (0.5 + 0.5 * ratio)
-        return 0.0
+        del power  # #501 — measured discharge intentionally unused
+        return battery_assist_potential_w(
+            battery_soc,
+            battery_assist_floor_soc,
+            battery_buffer_soc,
+            battery_auto_start_soc,
+            battery_assist_max_power_w,
+        )

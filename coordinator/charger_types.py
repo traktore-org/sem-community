@@ -505,8 +505,17 @@ class FleetContext:
     auto_start_soc: float = 90.0
     buffer_soc: float = 70.0
     priority_soc: float = 30.0
-    battery_floor_soc: float = 60.0
+    battery_assist_floor_soc: float = 60.0
     battery_capacity_kwh: float = 15.0
+
+    battery_assist_max_power_w: float = 4500.0
+    """User-configured discharge cap when the battery assists the EV
+    (``battery_assist_max_power``). #501: the Zone 3/4 day budget in
+    ``decide.battery_assist_budget_w`` is capped by this — pre-#501 it
+    added the battery's TOTAL measured discharge (including the share
+    serving the house), which both ignored this cap and created a
+    positive-feedback ratchet (home-load spike → more discharge →
+    bigger EV budget → higher commanded amps → more discharge)."""
 
     min_solar_w: float = 200.0
     """Solar below this is treated as "no meaningful solar" — the
@@ -613,6 +622,16 @@ class ChargerView:
     deadline_amps: int = 0
     """The peak-aware required current to reach Min by the per-
     charger ``ev_target_time`` (#246). ``0`` when no deadline."""
+
+    night_deliverable_kwh: float = float("inf")
+    """How much energy tonight's window (night start → this charger's
+    deadline) can deliver at the charger's max current (#501). The
+    daytime ``min_plus_solar`` floor only engages when
+    ``target_kwh > night_deliverable_kwh`` — i.e. when waiting for the
+    night top-up would genuinely risk the Min-by-deadline guarantee.
+    Default ``inf`` (floor never engages) so call sites that don't
+    compute it get the self-consumption-maximizing behaviour rather
+    than silent grid pull."""
 
 
 # ─────────────────────────────────────────────────────────────────
