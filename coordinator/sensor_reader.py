@@ -72,6 +72,14 @@ class SensorReader:
         self._grid_sign_votes: int = 0  # Consecutive same-sign detections needed
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
+        # #487 follow-up (live PROD flip 2026-06-11): during HA's
+        # come-up window counter states replay in bursts while power
+        # sensors are already live — 3 quick wrong votes locked
+        # grid_sign_inverted=True on a Huawei install whose convention
+        # needs NO correction (RAM-only state, #476 item 5/6 gap).
+        # Sign votes are ignored for the first cycles after
+        # construction (~2 min at the 10 s interval).
+        self._sign_vote_warmup: int = 12
         # Battery sign autodetect — #404: per-battery state.
         # Multi-battery installs (≥ 2 ``battery_power_list`` entries) run
         # the detection independently per battery using each one's own
@@ -247,6 +255,12 @@ class SensorReader:
         """Read all power values from sensors."""
         readings = PowerReadings()
 
+        # Sign-vote warm-up ticks once per cycle (#487 follow-up) —
+        # decremented here so it expires even on installs where one
+        # voter early-returns before its own check.
+        if self._sign_vote_warmup > 0:
+            self._sign_vote_warmup -= 1
+
         # Try Energy Dashboard config first, then legacy config
         if self._energy_dashboard_config:
             readings = self._read_from_energy_dashboard()
@@ -362,6 +376,17 @@ class SensorReader:
         if not import_entities or not export_entities:
             return False
 
+        # Startup warm-up (#487 follow-up): no votes while HA's
+        # recorder is still replaying counter states — keep baselines
+        # fresh but cast nothing.
+        if self._sign_vote_warmup > 0:
+            iv = self._sum_counter_states(import_entities)
+            ev = self._sum_counter_states(export_entities)
+            if iv is not None and ev is not None:
+                self._grid_import_baseline = iv
+                self._grid_export_baseline = ev
+            return self._grid_sign_inverted
+
         # Need meaningful power to detect (ignore noise)
         power = readings.grid_power
         if abs(power) < 100:
@@ -424,11 +449,17 @@ class SensorReader:
             if abs(self._grid_sign_votes) >= 3:
                 self._grid_sign_inverted = detected
                 self._grid_sign_detected = True
+                # Name the evidence (#487 follow-up): a wrong lock is
+                # otherwise undiagnosable after the fact — the 2026-06-11
+                # PROD flip left only 'diag_grid_sign: negated' with no
+                # trail of WHICH counters voted.
                 _LOGGER.info(
                     "Grid sign detected from Energy Dashboard counters: %s "
-                    "(power=%.0fW, import_delta=%.3f, export_delta=%.3f)",
+                    "(power=%.0fW, import_delta=%.3f, export_delta=%.3f, "
+                    "import_counters=%s, export_counters=%s)",
                     "negating (HA convention)" if detected else "no correction (SEM convention)",
                     power, import_delta, export_delta,
+                    import_entities, export_entities,
                 )
 
         return self._grid_sign_inverted
@@ -485,6 +516,12 @@ class SensorReader:
         self._battery_discharge_baseline.setdefault(bid, None)
 
         if not charge_entity or not discharge_entity:
+            return self._battery_sign_inverted[bid]
+
+        # Startup warm-up (#487 follow-up) — same restart-window
+        # protection as the grid voter; baselines refresh below on
+        # the first post-warmup cycle.
+        if self._sign_vote_warmup > 0:
             return self._battery_sign_inverted[bid]
 
         # Need meaningful power to detect (ignore noise)

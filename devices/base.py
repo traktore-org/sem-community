@@ -634,6 +634,48 @@ class CurrentControlDevice(ControllableDevice):
         )
         return await self._set_current(target_current)
 
+    def _bound_to_entity_range(
+        self, entity_id: str, current: float,
+    ) -> tuple:
+        """Bound a current command to the target number entity's range.
+
+        Returns ``(bounded_current, skip_write)``. ``skip_write`` is
+        True for a stop intent (``current <= 0``) on an entity whose
+        minimum is above 0 — the write would be rejected by HA core's
+        range validation before reaching the charger (#487), so the
+        caller must rely on the adapter's stop mechanism instead.
+        Unreadable entities/attributes leave the command untouched.
+        """
+        state = self.hass.states.get(entity_id) if entity_id else None
+        attrs = getattr(state, "attributes", None)
+        if not isinstance(attrs, dict):
+            return current, False
+
+        def _as_float(value):
+            # Real numerics/strings only — duck-typed mocks support
+            # __float__ and would fabricate bounds.
+            if isinstance(value, bool):
+                return None
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, str):
+                try:
+                    return float(value)
+                except ValueError:
+                    return None
+            return None
+
+        ent_min = _as_float(attrs.get("min"))
+        ent_max = _as_float(attrs.get("max"))
+
+        if current <= 0:
+            return current, bool(ent_min is not None and ent_min > 0)
+        if ent_max is not None and current > ent_max:
+            current = ent_max
+        if ent_min is not None and current < ent_min:
+            current = ent_min
+        return current, False
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)
@@ -662,8 +704,45 @@ class CurrentControlDevice(ControllableDevice):
         # configured as the charger service bounced identically.
         _svc = (self.charger_service or "").strip().lower()
         _entity_svc_domain = _svc.split(".", 1)[0] if "." in _svc else ""
+
+        # #487: HA core validates number writes against the ENTITY's
+        # min/max BEFORE anything reaches the charger. Wallbox exposes
+        # min=6 (IEC 61851), so writing 0 A to stop is structurally
+        # impossible — it raised out_of_range every idle cycle (167×
+        # in RienduPre's log) and, since the actuation Repair landed,
+        # would false-trip it. Likewise a configured max above the
+        # entity's max (Links: 6-16 A) bounced every ramp-up command.
+        # Bound the write to the entity's range; a 0 A stop intent
+        # skips the write entirely — the actual stop is the adapter's
+        # job (pause switch / stop_session), and the number entity
+        # cannot express it.
+        _entity_target = None
+        if _entity_svc_domain in ("number", "input_number"):
+            _entity_target = self.current_entity_id or self.charger_service_entity_id
+        elif not self.charger_service and self.current_entity_id:
+            _entity_target = self.current_entity_id
+        skip_entity_write = False
+        if _entity_target:
+            bounded, skip_entity_write = self._bound_to_entity_range(
+                _entity_target, current,
+            )
+            if not skip_entity_write and bounded != current:
+                _LOGGER.debug(
+                    "%s: clamping commanded %.0f A into %s's range → %.0f A",
+                    self.name, current, _entity_target, bounded,
+                )
+                current = bounded
+
         try:
-            if _entity_svc_domain in ("number", "input_number"):
+            if skip_entity_write:
+                # Stop intent on a number entity that can't express 0 A.
+                _LOGGER.debug(
+                    "%s: 0 A stop not writable to %s (entity min > 0) — "
+                    "relying on the adapter stop path (pause switch / "
+                    "stop_session) (#487)",
+                    self.name, _entity_target,
+                )
+            elif _entity_svc_domain in ("number", "input_number"):
                 # Map it to the entity write it was meant to be.
                 target = self.current_entity_id or self.charger_service_entity_id
                 await self.hass.services.async_call(

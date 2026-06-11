@@ -8,9 +8,15 @@ _LOGGER = logging.getLogger(__name__)
 class HealthCheck:
     """Validates energy balance and calculation integrity each cycle."""
 
+    # After this many consecutive violating cycles the per-cycle WARNING
+    # drops to debug until the violations clear (#487 triage logs: 413
+    # near-identical lines drowned the log + diagnose ring buffer).
+    _WARN_CYCLES = 6
+
     def __init__(self) -> None:
         self._violation_count: int = 0
         self._last_violations: list[str] = []
+        self._violation_streak: int = 0
 
     def check_power_balance(self, power: PowerReadings) -> list[str]:
         """Verify energy balance: solar + import + discharge ≈ home + ev + export + charge."""
@@ -126,8 +132,24 @@ class HealthCheck:
         if violations:
             self._violation_count += len(violations)
             self._last_violations = violations
-            for v in violations:
-                _LOGGER.warning("Health check violation: %s", v)
+            self._violation_streak += 1
+            if self._violation_streak <= self._WARN_CYCLES:
+                for v in violations:
+                    _LOGGER.warning("Health check violation: %s", v)
+                if self._violation_streak == self._WARN_CYCLES:
+                    _LOGGER.warning(
+                        "Health check violations persist — further "
+                        "occurrences drop to debug until they clear "
+                        "(diag: sem health sensors keep counting)",
+                    )
+            else:
+                for v in violations:
+                    _LOGGER.debug("Health check violation: %s", v)
+        else:
+            if self._violation_streak > self._WARN_CYCLES:
+                _LOGGER.info("Health check violations cleared")
+            self._violation_streak = 0
+            self._last_violations = []
 
         return violations
 

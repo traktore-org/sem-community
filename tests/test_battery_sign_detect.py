@@ -59,7 +59,10 @@ def mock_hass():
 @pytest.fixture
 def sensor_reader(mock_hass):
     """Create a SensorReader with empty config."""
-    return SensorReader(mock_hass, {})
+    r = SensorReader(mock_hass, {})
+    r._sign_vote_warmup = 0
+    r._sign_vote_warmup = 0  # unit tests exercise post-warmup voting (#487)
+    return r
 
 
 class TestBatterySignAutoDetect:
@@ -300,6 +303,7 @@ class TestBatteryCapacityAutoDetect:
     def _make_reader(self, mock_hass):
         config = {"battery_power_sensor": "sensor.battery_power"}
         reader = SensorReader(mock_hass, config)
+        reader._sign_vote_warmup = 0
         ed = _make_energy_dashboard_config()
         reader.set_energy_dashboard_config(ed)
         return reader
@@ -552,6 +556,7 @@ class TestPerBatterySignAutoDetect404:
         hass = Mock()
         hass.states = Mock()
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         ed = _make_multi_battery_ed(
             battery_power_list=[f"sensor.b{i+1}_power" for i in range(len(charge_vals))],
             battery_charge_energy_list=[f"sensor.b{i+1}_charge" for i in range(len(charge_vals))],
@@ -676,6 +681,7 @@ class TestPerBatterySignAutoDetect404:
         returns the stored default (False) for that battery — no crash.
         """
         reader = SensorReader(Mock(states=Mock()), {})
+        reader._sign_vote_warmup = 0
         # No charge/discharge entities provided
         result = reader._detect_battery_sign_for("b1", 500.0, None, None)
         assert result is False
@@ -724,6 +730,7 @@ class TestPerBatterySignAutoDetect404:
         doesn't cross-contaminate.
         """
         reader = SensorReader(Mock(states=Mock()), {})
+        reader._sign_vote_warmup = 0
         # Prime fleet path
         reader._detect_battery_sign_for("b1", 500.0, None, None)
         reader._detect_battery_sign_for(reader._FLEET_BID, 500.0, None, None)

@@ -106,6 +106,7 @@ def test_sensor_reader_transient_flap_does_not_raise(mock_ri_module):
     states = {"sensor.foo": None}  # missing → counts as unavailable
     hass = _hass_with(states)
     reader = SensorReader(hass, {})
+    reader._sign_vote_warmup = 0
     # First call — sensor goes unavailable. No Repair on first miss.
     val = reader._read_sensor("sensor.foo", "test")
     assert val == 0.0
@@ -128,6 +129,7 @@ def test_sensor_reader_raises_after_threshold(mock_ri_module):
     states = {"sensor.foo": _state("unavailable", friendly="Foo Sensor")}
     hass = _hass_with(states)
     reader = SensorReader(hass, {})
+    reader._sign_vote_warmup = 0
 
     # First read → stamps the outage start.
     with patch("time.monotonic", return_value=1000.0):
@@ -159,6 +161,7 @@ def test_sensor_reader_clears_repair_on_recovery(mock_ri_module):
     states = {"sensor.foo": _state("unavailable")}
     hass = _hass_with(states)
     reader = SensorReader(hass, {})
+    reader._sign_vote_warmup = 0
 
     with patch("time.monotonic", return_value=1000.0):
         reader._read_sensor("sensor.foo", "test")
