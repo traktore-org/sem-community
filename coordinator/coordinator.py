@@ -69,6 +69,25 @@ from ..utility_signals import UtilitySignalMonitor
 _LOGGER = logging.getLogger(__name__)
 
 
+def _cfg_rate(config: dict, *keys: str, default: float) -> float:
+    """First explicitly-configured numeric value among ``keys``.
+
+    ``config.get(key) or default`` treats a configured 0.0 rate as
+    missing and substitutes the constant (#485 F4) — a real value for
+    free/zero-rate plans. Only ``None`` / non-numeric values fall
+    through here.
+    """
+    for key in keys:
+        value = config.get(key)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return default
+
+
 class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMixin):
     """Coordinator for Solar Energy Management.
 
@@ -204,14 +223,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # and no cached curve covers "now". The user's configured
                 # import rate beats the CHF-shaped 0.30 constant on
                 # SEK/NOK/HUF installs.
-                fallback_price=config.get("electricity_import_rate") or 0.30,
+                fallback_price=_cfg_rate(
+                    config, "electricity_import_rate", default=0.30,
+                ),
             )
         elif tariff_mode == "calendar":
             schedule = {}  # Was config.get("tariff_schedule", {}) — never set via UI
             self._tariff_provider = CalendarTariffProvider(
                 hass,
                 peak_rate=config.get("electricity_import_rate", 0.35),
-                off_peak_rate=config.get("electricity_off_peak_rate") or config.get("electricity_nt_rate", 0.22),
+                off_peak_rate=_cfg_rate(
+                    config, "electricity_off_peak_rate", "electricity_nt_rate",
+                    default=0.22,
+                ),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 rules=schedule.get("rules", []),
                 default_tariff=schedule.get("default_tariff", "off_peak"),
@@ -222,7 +246,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         else:
             self._tariff_provider = StaticTariffProvider(
                 peak_rate=config.get("electricity_import_rate", 0.3387),
-                off_peak_rate=config.get("electricity_off_peak_rate") or config.get("electricity_nt_rate", 0.3387),
+                off_peak_rate=_cfg_rate(
+                    config, "electricity_off_peak_rate", "electricity_nt_rate",
+                    default=0.3387,
+                ),
                 export_rate=config.get("electricity_export_rate", 0.075),
                 currency=currency,
             )
@@ -3082,7 +3109,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # Check for re-plan trigger (price update / SOC drift / EV change)
             ev_connected = bool(getattr(power, "ev_connected", False))
             price_fp = None
-            if hasattr(self._tariff_provider, "price_series_fingerprint"):
+            # Only worth computing when the scheduler holds a
+            # fingerprint to compare against (#485 F2) — before the
+            # first evaluation (or while a re-plan is already armed)
+            # the comparison can't fire.
+            if (
+                getattr(scheduler, "has_price_fingerprint", False)
+                and hasattr(self._tariff_provider, "price_series_fingerprint")
+            ):
                 price_fp = self._tariff_provider.price_series_fingerprint()
             if scheduler.should_replan(
                 power.battery_soc, ev_connected, price_fingerprint=price_fp,
@@ -3138,9 +3172,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 now.replace(hour=14, minute=0)
             )
         if off_peak_rate is None:
-            off_peak_rate = (
-                self.config.get("electricity_off_peak_rate")
-                or self.config.get("electricity_nt_rate", 0.22)
+            off_peak_rate = _cfg_rate(
+                self.config, "electricity_off_peak_rate", "electricity_nt_rate",
+                default=0.22,
             )
         if peak_rate is None:
             peak_rate = self.config.get("electricity_import_rate", 0.30)
