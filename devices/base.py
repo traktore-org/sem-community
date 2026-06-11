@@ -539,6 +539,9 @@ class CurrentControlDevice(ControllableDevice):
         # at 3 (cleared on the next successful write).
         self._actuation_failures: int = 0
         self._actuation_repair_raised: bool = False
+        # #485 H5: whether this instance has cleared a possible STALE
+        # persistent Repair left by a previous device instance.
+        self._stale_repair_checked: bool = False
         self._session_active: bool = False
         self._min_power_change_interval = min_power_change_interval
 
@@ -651,20 +654,29 @@ class CurrentControlDevice(ControllableDevice):
         ):
             return self._status.current_consumption_w
 
+        # Entity-platform services have strict schemas — sending the
+        # per-integration param name produced "extra keys not allowed"
+        # on EVERY command (#462, RienduPre, for number.set_value).
+        # Generalized to the whole misconfigured-but-recoverable shape
+        # (#485 K1): input_number.set_value and select.select_option
+        # configured as the charger service bounced identically.
+        _svc = (self.charger_service or "").strip().lower()
+        _entity_svc_domain = _svc.split(".", 1)[0] if "." in _svc else ""
         try:
-            if self.charger_service == "number.set_value":
-                # Misconfigured-but-recoverable shape (#462, RienduPre):
-                # ``number.set_value`` configured as the charger SERVICE.
-                # Its schema takes ``value`` + ``entity_id`` — sending the
-                # per-integration param name produced
-                # "extra keys not allowed @ data['current']" on EVERY
-                # command, so the charger never received a single
-                # setpoint (including the 0 A for off-mode). Map it to
-                # the number-entity write it was meant to be.
+            if _entity_svc_domain in ("number", "input_number"):
+                # Map it to the entity write it was meant to be.
                 target = self.current_entity_id or self.charger_service_entity_id
                 await self.hass.services.async_call(
-                    "number", "set_value",
+                    _entity_svc_domain, "set_value",
                     {"entity_id": target, "value": current},
+                    blocking=True,
+                )
+            elif _entity_svc_domain == "select":
+                # Amps exposed as a select: options are amp strings.
+                target = self.current_entity_id or self.charger_service_entity_id
+                await self.hass.services.async_call(
+                    "select", "select_option",
+                    {"entity_id": target, "option": str(int(current))},
                     blocking=True,
                 )
             elif self.charger_service:
@@ -740,6 +752,19 @@ class CurrentControlDevice(ControllableDevice):
     def _clear_actuation_failure(self) -> None:
         """Reset the failure streak; clear the Repair after a good write."""
         if self._actuation_failures == 0 and not self._actuation_repair_raised:
+            # #485 H5: the Repair is persistent (survives restart) but
+            # these flags are instance state. After the reload that
+            # fixing the config causes, the new instance's successful
+            # writes hit this early-return and the stale ERROR Repair
+            # stayed in the UI forever. Delete it once per instance —
+            # async_delete_issue is a no-op when no issue exists.
+            if not self._stale_repair_checked:
+                self._stale_repair_checked = True
+                try:
+                    from ..coordinator import repair_issues as _ri
+                    _ri.clear_charger_actuation_failed(self.hass, self.device_id)
+                except Exception as exc:  # noqa: BLE001
+                    _LOGGER.debug("stale actuation-repair clear failed: %s", exc)
             return
         self._actuation_failures = 0
         if not self._actuation_repair_raised:

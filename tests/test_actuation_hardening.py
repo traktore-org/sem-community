@@ -144,3 +144,67 @@ class TestActuationFailureRepair:
                 dev.hass.services.async_call = AsyncMock()
                 await dev._set_current(12 + round_no)
             raise_repair.assert_not_called()
+
+
+@pytest.mark.unit
+class TestEntityDomainServiceShapes:
+    """#485 K1: the number.set_value remap generalized to all
+    entity-platform service shapes (input_number, select)."""
+
+    @pytest.mark.asyncio
+    async def test_input_number_set_value_routes_with_value_param(self):
+        dev = _device(
+            charger_service="input_number.set_value",
+            current_entity_id="input_number.charger_amps",
+        )
+        await dev._set_current(16)
+        dev.hass.services.async_call.assert_awaited_once_with(
+            "input_number", "set_value",
+            {"entity_id": "input_number.charger_amps", "value": 16},
+            blocking=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_select_select_option_routes_with_option_param(self):
+        dev = _device(
+            charger_service="select.select_option",
+            current_entity_id="select.charger_current",
+        )
+        await dev._set_current(16)
+        dev.hass.services.async_call.assert_awaited_once_with(
+            "select", "select_option",
+            {"entity_id": "select.charger_current", "option": "16"},
+            blocking=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_case_and_whitespace_variance_still_remapped(self):
+        dev = _device(
+            charger_service=" Number.set_value ",
+            current_entity_id="number.charger_amps",
+        )
+        await dev._set_current(8)
+        call = dev.hass.services.async_call.await_args
+        assert call.args[0] == "number"
+        assert call.args[2] == {"entity_id": "number.charger_amps", "value": 8}
+
+
+@pytest.mark.unit
+class TestStaleRepairClearedAfterReload:
+    """#485 H5: a persistent Repair from a PREVIOUS device instance is
+    deleted on the new instance's first good write."""
+
+    @pytest.mark.asyncio
+    async def test_first_good_write_clears_stale_repair(self):
+        dev = _device(current_entity_id="number.fixed_now")
+        with patch(
+            "custom_components.solar_energy_management.coordinator."
+            "repair_issues.clear_charger_actuation_failed"
+        ) as clear_repair:
+            # Fresh instance (post-reload flags), no failures recorded:
+            # the early-return path must still delete a possible stale
+            # persistent Repair — exactly once.
+            await dev._set_current(10)
+            clear_repair.assert_called_once_with(dev.hass, "ev_charger_1")
+            await dev._set_current(12)
+            clear_repair.assert_called_once()  # not re-checked

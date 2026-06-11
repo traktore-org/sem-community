@@ -1250,7 +1250,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                     "misbehave until the entry gets a stable id.",
                     idx, idx,
                 )
-            charger_id = charger_cfg.get("id", f"ev_charger_{idx}")
+            # ``or`` (not a get-default) so empty-string/None ids take the
+            # positional fallback too — must stay in sync with the
+            # coordinator's ``primary_charger_id()`` (#485 H1).
+            charger_id = charger_cfg.get("id") or f"ev_charger_{idx}"
             if charger_id in _seen_charger_ids:
                 _LOGGER.warning(
                     "Duplicate EV charger id '%s' at index %d — per-charger "
@@ -1285,20 +1288,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 _LOGGER.debug("Charger %s missing power sensor or control method, skipping", charger_id)
                 continue
 
-            # #462 follow-up: ``number.set_value`` configured as the charger
-            # SERVICE needs a writable number entity to target. With a
-            # non-number target (RienduPre's old config pointed at a
-            # SENSOR), every set-current command bounces off the service
-            # schema and the charger is silently uncontrollable.
-            if ev_charger_service == "number.set_value":
+            # #462 follow-up (generalized in #485 K1): an entity-platform
+            # service (number/input_number/select) configured as the
+            # charger SERVICE needs a matching writable entity to target.
+            # With a wrong-domain target (RienduPre's old config pointed
+            # at a SENSOR), every set-current command bounces off the
+            # service schema and the charger is silently uncontrollable.
+            _svc_domain = str(ev_charger_service or "").strip().lower().split(".", 1)[0]
+            if "." in str(ev_charger_service or "") and _svc_domain in (
+                "number", "input_number", "select",
+            ):
                 _svc_target = ev_current_entity or ev_service_entity
-                if not _svc_target or not str(_svc_target).startswith("number."):
+                if not _svc_target or not str(_svc_target).startswith(f"{_svc_domain}."):
                     _LOGGER.warning(
-                        "Charger '%s': ev_charger_service=number.set_value "
-                        "needs a number.* target entity, but got %s — current "
-                        "commands will fail. Set ev_current_control_entity to "
-                        "the charger's max-current number entity.",
-                        charger_id, _svc_target,
+                        "Charger '%s': ev_charger_service=%s needs a %s.* "
+                        "target entity, but got %s — current commands will "
+                        "fail. Set ev_current_control_entity to the "
+                        "charger's max-current entity.",
+                        charger_id, ev_charger_service, _svc_domain, _svc_target,
                     )
 
             ev_device = CurrentControlDevice(

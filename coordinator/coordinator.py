@@ -123,6 +123,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             dt_util.utcnow().timestamp() if value is not None else None
         )
 
+    def _primary_charger_cfg(self) -> Dict[str, Any]:
+        """Config dict of the fleet-primary charger (ev_chargers[0]).
+
+        Single accessor for the ``(config.get("ev_chargers") or
+        [{}])[0]`` idiom that was inlined at five call sites (#485 H1).
+        """
+        chargers = self.config.get("ev_chargers") or [{}]
+        first = chargers[0]
+        return first if isinstance(first, dict) else {}
+
+    def primary_charger_id(self) -> str:
+        """Canonical id of the fleet-primary charger (#485 H1).
+
+        Mirrors registration's fallback (``ev_charger_<idx>`` for
+        id-less entries, __init__.py): the strategy-display gate used
+        a DIFFERENT fallback ("ev_charger"), so on an id-less first
+        charger the equality never held and the fleet strategy sensor
+        froze. The flat-key single-charger shape (no ev_chargers list)
+        keeps the legacy "ev_charger" id.
+        """
+        chargers = self.config.get("ev_chargers") or []
+        if not chargers or not isinstance(chargers[0], dict):
+            return "ev_charger"
+        return chargers[0].get("id") or "ev_charger_0"
+
     def __init__(self, hass: HomeAssistant, config: Dict[str, Any]) -> None:
         """Initialize the coordinator."""
         self.hass = hass
@@ -592,7 +617,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         pcd = dict(self._daily_ev_per_charger)
         chargers = self.config.get("ev_chargers") or []
         if len(chargers) == 1 and isinstance(chargers[0], dict):
-            cid = chargers[0].get("id", "ev_charger")
+            # Same id fallback as registration (#485 H1) — an id-less
+            # charger registers as ev_charger_0, and this key must hit
+            # the same per-charger accumulator slot.
+            cid = self.primary_charger_id()
             pcd[cid] = round(getattr(energy, "daily_ev", 0.0) or 0.0, 3)
         return pcd
 
@@ -1667,10 +1695,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         # charger 2 ("always_max …") next to reason from
                         # charger 1 ("off mode …"). Per-charger detail
                         # lives in ``charger_<id>_charging_state``.
-                        _fleet_primary_cid = (
-                            (self.config.get("ev_chargers") or [{}])[0].get("id")
-                            or "ev_charger"
-                        )
+                        _fleet_primary_cid = self.primary_charger_id()
                         if cid == _fleet_primary_cid:
                             charging_context.charging_strategy = decision.reason
                             charging_context.charging_strategy_reason = decision.reason
@@ -1759,8 +1784,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
                 # Resolve mode from global config (no per-charger cfg in this branch).
                 per_mode = self._effective_charge_mode_for(
-                    self.config.get("ev_chargers", [{}])[0]
-                    if self.config.get("ev_chargers") else {}
+                    self._primary_charger_cfg()
                 )
                 view = build_charger_view(
                     self._cycle_fleet_state,
@@ -2115,7 +2139,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if "ev_remaining_range" not in result and self._cycle_vehicle_soc is not None:
                 # Capacity + efficiency are per-car → read the (primary) charger's
                 # values, falling back to global config. One car per charger (#245).
-                _pcfg = (self.config.get("ev_chargers") or [{}])[0]
+                _pcfg = self._primary_charger_cfg()
 
                 def _per_car(key, default):
                     v = _pcfg.get(key)
@@ -2139,7 +2163,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # surfaced for the EV card / status. target_time + tariff toggle are
             # always available (config); the deadline/cheap-window fields come from
             # the per-cycle night plan (primary charger), present only at night.
-            _dl_pcfg = (self.config.get("ev_chargers") or [{}])[0]
+            _dl_pcfg = self._primary_charger_cfg()
             result["ev_target_time"] = self._charger_target_time(_dl_pcfg)
             result["ev_tariff_optimized"] = self._tariff_optimized_for(_dl_pcfg)
             _night_plan = self._cycle_night_plan
@@ -3687,7 +3711,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # #351 M9 — capture the cycle SOC into a local before the two
         # calls so both reads see the same value (mirrors the
         # per-charger-loop fix above).
-        _primary_cfg = (self.config.get("ev_chargers") or [{}])[0]
+        _primary_cfg = self._primary_charger_cfg()
         cycle_soc_local = self._cycle_vehicle_soc
         remaining = self._calculate_remaining_need(
             energy, cycle_soc_local, _primary_cfg, bound="max"
