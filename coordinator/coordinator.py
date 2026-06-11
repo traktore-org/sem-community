@@ -104,6 +104,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     on orchestration.
     """
 
+    # #485 G5: the reload-skip snapshot is a property so arming it
+    # automatically timestamps it. async_update_options only honors a
+    # snapshot younger than its TTL — a lingering snapshot from the
+    # last runtime tweak hours ago must not swallow a future listener
+    # invocation (HA fires the listener for data/title-only entry
+    # updates too, where options still equal the stale snapshot).
+    @property
+    def _skip_options_reload(self):
+        return getattr(self, "_skip_options_reload_value", None)
+
+    @_skip_options_reload.setter
+    def _skip_options_reload(self, value):
+        # NB: stdlib ``time`` is shadowed by this package's time.py
+        # platform under pytest's path insertion — use dt_util.
+        self._skip_options_reload_value = value
+        self._skip_options_reload_armed_at = (
+            dt_util.utcnow().timestamp() if value is not None else None
+        )
+
     def __init__(self, hass: HomeAssistant, config: Dict[str, Any]) -> None:
         """Initialize the coordinator."""
         self.hass = hass

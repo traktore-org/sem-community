@@ -160,6 +160,48 @@ async def test_set_option_tunable_does_not_trigger_reload(
     )
 
 
+@pytest.mark.asyncio
+async def test_set_option_unrouted_key_triggers_reload(
+    sem_real_hass, sem_config_entry,
+) -> None:
+    """``set_option`` on a key with NO entity must reload (#485 G1).
+
+    Keys like ``tariff_mode`` and the ``battery_*`` scheduler params
+    are consumed at coordinator construction only. The pre-fix
+    unrouted fallback persisted the value and mirrored it into
+    ``coordinator.config`` — which diagnostics happily displayed while
+    the constructed tariff provider / scheduler kept the old value
+    until restart: the #462 silent-no-op class, reintroduced for every
+    construction-time key outside the structural allowlist.
+
+    Coordinator identity must CHANGE (reload) so the new value is
+    actually consumed.
+    """
+    _seed_sem_input_sensors(sem_real_hass)
+    await _setup_sem(sem_real_hass, sem_config_entry)
+
+    coordinator_before = sem_config_entry.runtime_data
+    assert coordinator_before is not None
+    # Precondition for the unrouted path: no SEM entity backs the key.
+    assert sem_real_hass.states.get("number.sem_tariff_mode") is None
+    assert sem_real_hass.states.get("select.sem_tariff_mode") is None
+    assert sem_real_hass.states.get("switch.sem_tariff_mode") is None
+
+    await sem_real_hass.services.async_call(
+        DOMAIN, "set_option",
+        {"options": {"tariff_mode": "dynamic"}},
+        blocking=True,
+    )
+    await sem_real_hass.async_block_till_done()
+
+    assert (sem_config_entry.options or {}).get("tariff_mode") == "dynamic"
+    coordinator_after = sem_config_entry.runtime_data
+    assert coordinator_after is not coordinator_before, (
+        "Unrouted construction-time key did not reload the integration — "
+        "the persisted value is dead until the next restart (#485 G1)."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Smart-merge contract — set_option(ev_chargers=...) preserves siblings (#467)
 # ---------------------------------------------------------------------------
