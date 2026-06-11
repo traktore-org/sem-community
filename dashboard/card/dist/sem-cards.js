@@ -4618,8 +4618,11 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                          battery_soc and battery_power have been
                          unavailable for >60 s (Huawei modbus hard
                          dropout). Brief flickers (<60 s) are absorbed
-                         by ``_readWithHold`` upstream so the user
-                         doesn't see a visual emergency. -->
+                         by '_readWithHold' upstream so the user
+                         doesn't see a visual emergency. (NEVER put
+                         backticks inside this lit template: they
+                         terminate the template literal and the whole
+                         card renders blank, #488.) -->
                     <g filter="url(#glowBattery)" class="clickable"
                        opacity="${g?.35:1}"
                        @click=${()=>this._showMoreInfo("battery_soc")}>
