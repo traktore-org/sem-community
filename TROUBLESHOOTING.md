@@ -275,6 +275,19 @@ read-only by design — SEM can't suppress it), but the cards will load.
 
 ---
 
+## Dynamic tariff: prices parse as empty / classification stuck on "normal"
+
+**Cause:** The configured price sensor doesn't expose a price array in a shape SEM recognises. SEM parses `prices_today`/`prices_tomorrow`, `today`/`tomorrow` (Tibber core), `prices`, `today_raw`/`tomorrow_raw` (Tibber Grid Reward), `raw_today`/`raw_tomorrow` (Nordpool), and `forecasts`/`rates` (Amber/Octopus).
+
+**Diagnose:** Run the `solar_energy_management.diagnose` action with `section: tariff`. `tariff_parsed_attribute` names the attribute that matched (or `null` if none), `tariff_parsed_count` the number of price points, and `tariff_parsed_interval_seconds` the detected granularity (3600 hourly / 900 for 15-min markets).
+
+**Fix:**
+1. Point **Dynamic tariff entity** at the provider's *native* sensor that carries the arrays — not a template/derivative sensor that only mirrors the current price
+2. **Tibber Pulse without a forecast sensor**: the core Tibber integration sometimes provisions no `electricity_price` sensor (upstream issue). Install the HACS *Tibber Grid Reward* integration and use its `sensor.current_price` (supported since v1.7.3-beta.10)
+3. If your provider's shape isn't listed, pass the array through a template sensor attribute named `prices_today`, or open an issue with the sensor's attribute dump
+
+---
+
 ## Two HA instances controlling the same hardware
 
 **Cause:** Running both a production and test HA instance with SEM against the same physical devices (KEBA, inverter, Shelly switches) causes conflicting commands.

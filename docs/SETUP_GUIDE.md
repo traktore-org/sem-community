@@ -1013,6 +1013,15 @@ HA sensor that reports the current electricity price (e.g. Tibber or Octopus
 Energy integrations). SEM uses this data to pick the cheapest hours for
 overnight EV and battery charging.
 
+**Tibber Pulse note:** some Tibber accounts never get the standard
+`electricity_price` forecast sensor from the core Tibber integration
+(upstream issue — the Pulse real-time sensor carries no price arrays). If
+that's you, install the HACS *Tibber Grid Reward* integration and set
+**Dynamic tariff entity** to its `sensor.current_price` — SEM parses its
+`today_raw`/`tomorrow_raw` arrays directly (v1.7.3-beta.10+). Verify with
+the `solar_energy_management.diagnose` action (section `tariff`):
+`tariff_parsed_attribute` should report `today_raw`.
+
 **My dashboard shows white tabs or "Custom element doesn't exist".**
 
 The `card-mod` HACS card is missing or not loaded, which causes white tabs

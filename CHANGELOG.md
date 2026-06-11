@@ -11,6 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.10] - 11.06.2026
+
+## 💶 Tibber Grid Reward price arrays (#491)
+
+Tibber Pulse accounts where the core Tibber integration provisions no `electricity_price` forecast sensor (upstream core#153312) get their only day-ahead curve from the HACS [tibber_grid_reward](https://github.com/JohNan/homeassistant-tibber_grid_rewards) `sensor.current_price`.
+
+- **`today_raw` / `tomorrow_raw` price arrays are now parsed** — the `{time, price}` item keys were already known; only the two attribute names were missing. Configure the sensor via *Tariff settings → Dynamic tariff entity*; its id is too generic to auto-detect (reported by @RienduPre in #491, fixed in #495)
+- The Grid Reward sensor's `today`/`tomorrow` attributes are comma-joined *strings* — skipped by the list guard, so the curve is never double-counted
+
+## 🔋 Battery scheduler crash with saved options (#493)
+
+- **Scheduler evaluation no longer dies on every cycle for users who ever saved the battery-scheduler options page** — the options-flow slider stores the trigger hour as a float (`21.0`) and `datetime.replace(hour=21.0)` raised `TypeError`, killing nightly planning entirely; trigger hour/minute are now coerced (`int(float(...))`, surviving string-shaped storage too). Untouched configs keep the int default, which is why soaks missed it (reported by @RienduPre on #487, fixed in #496)
+
+---
+
 # [1.7.3-beta.9] - 11.06.2026
 
 ## 🔌 Wallbox actuation: entity-range bounds + working stop path (#487)
