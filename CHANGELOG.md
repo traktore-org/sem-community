@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.3-beta.9] - 11.06.2026
 
+## 🔌 Wallbox actuation: entity-range bounds + working stop path (#487)
+
+RienduPre's error log exposed the real "keeps charging in off mode" mechanism: SEM wrote 0 A (stop) and >entity-max amps to the Wallbox max-current number entity — HA core rejects both with `out_of_range` **before anything reaches the charger** (167× per charger in the log).
+
+- **Current writes are bounded into the target entity's own min/max** — a charger whose entity allows 6–16 A gets 16 A when SEM wants 32, instead of a rejected command (by @traktore-org in #490)
+- **0 A stop intents skip the structurally impossible number write** — the stop goes through the adapter's pause-switch / stop_session path (Wallbox min=6 A, IEC 61851)
+- **`ev_start_stop_entity` is now actually honored** as the Wallbox pause/resume switch — the adapter's own WARNING recommended it as the workaround but never read the field (RienduPre's #462 finding)
+- **Health-check violation WARNINGs are rate-limited** — after 6 consecutive violating cycles they drop to debug until they clear (413 identical lines flooded the log + the diagnose ring buffer)
+
+## 🧭 Grid-sign restart hardening (live PROD flip, #487 follow-up)
+
+A restart locked `grid_sign_inverted=True` on a Huawei install whose convention needs NO correction — 3 sign votes cast while HA's recorder was still replaying counter states (#476 items 5/6 gap, observed live 2026-06-11).
+
+- **Sign votes are ignored for the first 12 cycles after startup** (~2 min) — baselines stay fresh, nothing locks
+- **The sign-lock log line now names the voting counter entities**, so a wrong lock is diagnosable after the fact
+
+## 🖼️ Diagram card blank on Home tab (#488)
+
+- **Backticks inside a lit-template HTML comment terminated the template literal** — the remainder re-parsed as a tagged-template chain: syntactically valid JS (rollup/CI green) that threw at render time, blanking the system diagram. Fixed + a lint test forbidding backticks in card-template comments (by @traktore-org in #489)
+
 ## 🔍 Pre-stable review batch (#485)
 
 A full 7-angle review of everything on develop since v1.7.2 surfaced 23 verified findings — two of them stable-release blockers in this release's headline features. All fixed in one batch.
