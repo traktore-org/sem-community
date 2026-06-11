@@ -86,6 +86,20 @@ class WallboxAdapter(GenericAdapter):
             return self._pause_switch_entity
         self._pause_switch_searched = True
 
+        # #487/#475: an explicitly configured switch wins — the WARNING
+        # below has been telling users to set ev_start_stop_entity as
+        # the workaround, but the adapter never actually read it
+        # (RienduPre's "#462: adapter ignores ev_start_stop_entity").
+        configured = getattr(self._device, "start_stop_entity", None) or ""
+        if str(configured).startswith("switch."):
+            self._pause_switch_entity = str(configured)
+            _LOGGER.info(
+                "Wallbox %s: using configured ev_start_stop_entity %s "
+                "as the pause/resume switch",
+                self._device.name, configured,
+            )
+            return self._pause_switch_entity
+
         hass = getattr(self._device, "hass", None)
         if hass is None:
             return None

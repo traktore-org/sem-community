@@ -129,6 +129,7 @@ class TestSensorReaderSlugAssignment:
         ed.has_ev = False
 
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         reader.set_energy_dashboard_config(ed)
 
         # Make the sensor reads return deterministic watts so the test
@@ -188,6 +189,7 @@ class TestSensorReaderSlugAssignment:
             if eid == "sensor.huawei_b1_power" else None
         )
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         reader.set_energy_dashboard_config(ed)
         readings = reader.read_power()
         # Fleet field populated; per-battery dict stays empty.

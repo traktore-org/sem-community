@@ -87,7 +87,9 @@ def _make_reader_with_states(mock_hass, states_dict, ed_config, extra_config=Non
         config.update(extra_config)
 
     reader = SensorReader(mock_hass, config)
+    reader._sign_vote_warmup = 0
     reader._energy_dashboard_config = ed_config
+    reader._sign_vote_warmup = 0  # unit tests exercise post-warmup voting (#487)
     return reader
 
 
@@ -1224,6 +1226,7 @@ class TestChargerControlPipeline:
         """Charger reporting power in W should not be converted."""
         hass = MagicMock()
         reader = SensorReader(hass, {"update_interval": 10})
+        reader._sign_vote_warmup = 0
 
         w_state = _state(4500, unit="W", device_class="power")
         hass.states.get = lambda eid: w_state
@@ -2178,6 +2181,7 @@ class TestSplitGridScanThrottle:
         }
         hass.states.get = lambda eid: states.get(eid)
         reader = SensorReader(hass, {"update_interval": 10})
+        reader._sign_vote_warmup = 0
         reader._split_grid_discovery.update(
             {"import": imp, "export": exp, "confidence": "any-device"},
         )

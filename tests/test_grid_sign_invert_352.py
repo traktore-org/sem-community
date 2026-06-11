@@ -63,6 +63,7 @@ class TestGridSignInvertOption:
         """With the flag off (default) auto-detect runs as before."""
         mock_hass.states.get = lambda eid: _state(2000) if eid == "sensor.grid_power" else None
         reader = SensorReader(mock_hass, {})  # no grid_sign_invert key
+        reader._sign_vote_warmup = 0
         reader.set_energy_dashboard_config(_ed_config())
 
         readings = reader.read_power()
@@ -76,6 +77,7 @@ class TestGridSignInvertOption:
         """``grid_sign_invert: True`` flips a positive read to negative."""
         mock_hass.states.get = lambda eid: _state(2000) if eid == "sensor.grid_power" else None
         reader = SensorReader(mock_hass, {"grid_sign_invert": True})
+        reader._sign_vote_warmup = 0
         reader.set_energy_dashboard_config(_ed_config())
 
         readings = reader.read_power()
@@ -88,6 +90,7 @@ class TestGridSignInvertOption:
         """A negative raw read flips to positive (export under SEM)."""
         mock_hass.states.get = lambda eid: _state(-1500) if eid == "sensor.grid_power" else None
         reader = SensorReader(mock_hass, {"grid_sign_invert": True})
+        reader._sign_vote_warmup = 0
         reader.set_energy_dashboard_config(_ed_config())
 
         readings = reader.read_power()
@@ -98,6 +101,7 @@ class TestGridSignInvertOption:
         """Auto-detect state is not touched when the manual override fires."""
         mock_hass.states.get = lambda eid: _state(2000) if eid == "sensor.grid_power" else None
         reader = SensorReader(mock_hass, {"grid_sign_invert": True})
+        reader._sign_vote_warmup = 0
         reader.set_energy_dashboard_config(_ed_config())
 
         # Pre-conditions: auto-detect state untouched.
@@ -119,6 +123,7 @@ class TestGridSignInvertOption:
         """0 → 0 under negation."""
         mock_hass.states.get = lambda eid: _state(0) if eid == "sensor.grid_power" else None
         reader = SensorReader(mock_hass, {"grid_sign_invert": True})
+        reader._sign_vote_warmup = 0
         reader.set_energy_dashboard_config(_ed_config())
 
         readings = reader.read_power()

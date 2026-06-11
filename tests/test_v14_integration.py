@@ -365,6 +365,7 @@ class TestMultiInverterSumming:
             "sensor.growatt_2_power": 2000,
         })
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         total = reader._read_sensors_sum(
             ["sensor.growatt_1_power", "sensor.growatt_2_power"], "solar"
         )
@@ -379,6 +380,7 @@ class TestMultiInverterSumming:
             "sensor.bat_3_power": -200,  # One discharging
         })
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         total = reader._read_sensors_sum(
             ["sensor.bat_1_power", "sensor.bat_2_power", "sensor.bat_3_power"], "battery"
         )
@@ -392,6 +394,7 @@ class TestMultiInverterSumming:
             # sensor.inv_2_power not in states (unavailable)
         })
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         total = reader._read_sensors_sum(
             ["sensor.inv_1_power", "sensor.inv_2_power"], "solar"
         )
@@ -402,6 +405,7 @@ class TestMultiInverterSumming:
         from custom_components.solar_energy_management.coordinator.sensor_reader import SensorReader
         hass = self._make_hass({"sensor.inverter_power": 4500})
         reader = SensorReader(hass, {})
+        reader._sign_vote_warmup = 0
         total = reader._read_sensors_sum(
             ["sensor.inverter_power"], "solar"
         )
