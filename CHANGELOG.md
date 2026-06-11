@@ -11,6 +11,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.9] - 11.06.2026
+
+## 🔍 Pre-stable review batch (#485)
+
+A full 7-angle review of everything on develop since v1.7.2 surfaced 23 verified findings — two of them stable-release blockers in this release's headline features. All fixed in one batch.
+
+### 🚨 Blockers
+
+- **Rolling-horizon scheduler no longer ratchets the charge target** — `evaluate()` re-anchored the target on the live SOC every 30-min re-plan, stacking the deficit on top of charging progress until the battery grid-charged to ~95% every profitable night. The target is now anchored on the SOC at the first evaluation of the night's window, and a mid-charge re-evaluation that lands on NOT_NEEDED/NOT_PROFITABLE stops the active forced charge (by @traktore-org in #485)
+- **`set_option` on construction-time keys reloads again** — keys like `tariff_mode` and the `battery_*` scheduler params persisted + mirrored into a config dict nothing re-reads, so the live Config-card select "succeeded" while the constructed provider/scheduler kept the old value until restart (the #462 silent-no-op class) (by @traktore-org in #485)
+
+### 🛠️ Fixes
+
+- **Re-plan trigger fires once per price update** — day-ahead prices publishing ~13:00 used to log two INFO lines every ~10 s cycle until the 21:00 window opened (thousands/day), evicting everything useful from the 300-line diagnose ring buffer built for #461/#462 triage
+- **15-min markets: slot length comes from the provider** — gap inference over *selected* slots booked 2–4× oversized slots for scattered selections, corrupting the night plan's energy accounting
+- **`battery_cycle_cost` runtime default back to 0.0** — the silent 0.0→0.02 flip tightened the break-even on upgrade and stopped thin-margin night charging with no config change; 0.02 stays as the *visible* form default for new configs
+- **Nord Pool fetch failure backoff** — an API outage used to trigger two blocking service calls every cycle (~17k/day); failures now back off 5 minutes
+- **`_merge_ev_chargers_by_id` preserves charger order** — a partial submit (or the setup heal) could reorder the fleet, silently swapping the index-0 primary and default surplus priorities
+- **set_option mixed payloads are atomic** — tunables route through entities first, then ONE direct write + ONE reload (the structural write used to fire a listener reload racing the still-running tunable calls, dropping values mid-payload)
+- **set_option switch routing coerces YAML strings** — `"off"`/`"false"`/`"0"` were truthy and turned the switch ON
+- **Split-grid: a late-loading export sensor now completes a one-sided pick** — including the same-device case that blocked re-discovery until restart; the held import side is never re-rolled
+- **Dual-tariff auto sign vote** — `_detect_grid_sign` sums the NL DSMR tarief-1/2 counter lists (beta.8 fixed only the manual-audit path)
+- **Deterministic split-grid discovery** — candidates scan sorted by entity_id, so import/export roles can't re-roll across restarts
+- **Stale actuation Repair clears after a reload** — the persistent ERROR Repair raised before a config fix stayed in the UI forever because the new device instance's flags started fresh
+- **Canonical primary-charger id** — the fleet-strategy gate's `"ev_charger"` fallback disagreed with registration's `"ev_charger_0"` for id-less chargers, freezing the strategy sensor on exactly the corrupted configs this release hardens against
+- **Entity-domain charger services generalized** — `input_number.set_value` / `select.select_option` configured as the charger service bounced off their schemas exactly like the beta.8 `number.set_value` case
+- **Configured 0.0 electricity rates are respected** — `config.get(...) or 0.30` treated a real zero rate as missing
+- **Reload-skip snapshots expire after 60 s** — a lingering snapshot could swallow a legitimate reload on a future data/title-only entry update
+
+### ⚡ Performance
+
+- **Price curve parse memoized** — the full parse (isoformat + classify + sort + dedupe) ran 3–5× per coordinator cycle; now keyed on entity-state identity + service-fetch timestamp + percentile slot epoch
+- **Split-grid sensor scan throttled** — with healthy two-sided picks held, the full `hass.states` scan runs every 30 cycles instead of per cycle with the result discarded; the per-cycle INFO log only fires when the result changes
+
+### 🧹 Cleanup
+
+- `persist_per_charger_option()` — single write path replaces the ~30-line copies in select/number/time (the time.py copy was the writer #469 missed); `_saveChargerField` dedups the config-card's nested editors; `semFormatTime` unifies the dashboard's two clashing time formats; tariff auto-detect shares the provider's candidate matcher (the flow missed Octopus/Amber); dead `_set_option_needs_reload` helper removed; shared `_counter_deltas` reset guard for the three sign voters
+
+### 🧪 Tests
+
+- ~60 new tests: target-SOC anchor + mid-charge stop, replan one-shot, slot-hours hint, fetch backoff, parse memo, falsy-zero rates, merge order contract, switch coercion, unrouted-key reload (real-hass), late-export adoption, scan throttle, dual-tariff vote, deterministic discovery, entity-domain service routing, stale-Repair clear, primary-charger id contract
+
+---
+
 # [1.7.3-beta.8] - 10.06.2026
 
 ## 🔌 Actuation hardening + triage surfaces (#462 follow-up batch)
