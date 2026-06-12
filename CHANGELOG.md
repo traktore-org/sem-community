@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🧭 Sign-detection locks survive restarts (#476)
+
+The grid/battery sign autodetect locks were RAM-only — every reload re-learned the sign from possibly ambiguous low-power samples, and three bad votes right after a reboot could lock the WRONG sign until the next reload (the 2026-06-11 PROD flip).
+
+- **Locked signs now persist** in SEM's storage and restore at setup — the warmup/vote machinery runs once per install, not once per restart; only LOCKED state persists (votes and half-learned guesses never do), and a restored lock survives the Energy Dashboard being reconfigured away (#476)
+- **Manual `grid_sign_invert` still wins** — it short-circuits before the autodetect, so a restored lock can never fight a manual override
+- **New `solar_energy_management.reset_sign_detection` service** — the escape hatch: forgets all sign locks (RAM + storage) and re-learns from scratch, since a wrong lock no longer clears itself on restart
+- Closes the last open item of the #476 robustness batch — items 1–4 and 6–9 already landed across the #485/#486/#487 review batches
+
+
 ## 🖼️ System diagram card: explicit `entities:` config (#455)
 
 - **`sem-system-diagram-card` now accepts the same `entities:` map as `sem-flow-card`** — point the illustrated diagram at any HA install's sensors (combined or split battery/grid sensors, `reverse`/`invert` flags, optional explicit home sensor instead of the derived balance). `entity_prefix` stays the default and wins when both are set, so existing dashboards are untouched (#455)

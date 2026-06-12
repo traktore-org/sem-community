@@ -1015,6 +1015,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             ev_intel_state = self._storage.get_ev_intelligence_state()
             self._ev_taper_detector.restore_state(ev_intel_state)
 
+            # Restore sign-detection locks (#476 item 5) — without this
+            # every restart re-learned grid/battery signs from possibly
+            # ambiguous low-power samples and could lock the wrong sign
+            # until the next reload.
+            self._sensor_reader.restore_sign_state(
+                self._storage.get_sign_state()
+            )
+
             # Restore per-charger daily EV energy. It was in-memory only, so it reset to
             # 0 on every restart while the global daily_ev persisted — desyncing the
             # per-charger daily sensor AND (worse) the per-charger night-charge remaining,
@@ -2058,6 +2066,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # users see broken Sankey totals for the rest of the day.
                 self._storage._daily_data["flow_accumulator"] = (
                     self._flow_calculator.get_flow_accumulator_state()
+                )
+                # Persist sign-detection locks (#476 item 5) so a learned
+                # grid/battery sign survives restarts.
+                self._storage.set_sign_state(
+                    self._sensor_reader.export_sign_state()
                 )
                 await self._storage.async_save_energy_delayed()
 

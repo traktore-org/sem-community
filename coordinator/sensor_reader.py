@@ -343,6 +343,86 @@ class SensorReader:
 
         return readings
 
+    # ── Sign-state persistence (#476 item 5) ─────────────────────────
+    #
+    # The autodetect locks (`_grid_sign_detected` / per-battery dicts)
+    # were RAM-only: every reload/restart re-learned the sign from
+    # possibly ambiguous low-power samples — three bad votes right
+    # after a reboot could lock the WRONG sign until the next reload
+    # (the 2026-06-11 PROD flip). The coordinator persists this state
+    # via SEMStorage and restores it at setup, so a lock survives
+    # restarts and the warmup/vote machinery only ever runs once per
+    # install (or after the user clears storage). A manual
+    # ``grid_sign_invert`` config still short-circuits before the
+    # autodetect, so restored state can never fight a manual override.
+
+    def export_sign_state(self) -> dict:
+        """Snapshot the LOCKED sign-detection state for persistence."""
+        return {
+            "grid_detected": self._grid_sign_detected,
+            "grid_inverted": self._grid_sign_inverted,
+            "battery_detected": dict(self._battery_sign_detected),
+            "battery_inverted": dict(self._battery_sign_inverted),
+        }
+
+    def restore_sign_state(self, state) -> None:
+        """Re-seed locked sign state from storage (setup time).
+
+        Only LOCKED entries restore (detected must be True with a bool
+        inversion) — votes, warmup counters and unlocked guesses never
+        persist, so a half-learned state can't be resurrected. Garbage
+        / legacy shapes are ignored wholesale.
+        """
+        if not isinstance(state, dict):
+            return
+        if state.get("grid_detected") is True and isinstance(
+            state.get("grid_inverted"), bool
+        ):
+            self._grid_sign_detected = True
+            self._grid_sign_inverted = state["grid_inverted"]
+            _LOGGER.info(
+                "Restored grid sign from storage: %s",
+                "negating (HA convention)" if self._grid_sign_inverted
+                else "no correction (SEM convention)",
+            )
+        bd = state.get("battery_detected")
+        bi = state.get("battery_inverted")
+        if isinstance(bd, dict) and isinstance(bi, dict):
+            for bid, det in bd.items():
+                if det is True and isinstance(bi.get(bid), bool):
+                    self._battery_sign_detected[bid] = True
+                    self._battery_sign_inverted[bid] = bi[bid]
+                    _LOGGER.info(
+                        "Restored battery '%s' sign from storage: %s",
+                        bid,
+                        "negating" if bi[bid] else "no correction",
+                    )
+
+    def reset_sign_state(self) -> None:
+        """Forget all sign-detection locks and re-learn from scratch.
+
+        #476 item 5 escape hatch: with persistence a WRONG lock would
+        otherwise survive restarts forever (pre-persistence, a restart
+        cleared it). Exposed via the ``reset_sign_detection`` service.
+        Re-arms the startup warmup so the re-learn doesn't vote on the
+        first ambiguous samples either.
+        """
+        self._grid_sign_inverted = False
+        self._grid_sign_detected = False
+        self._grid_sign_votes = 0
+        self._grid_import_baseline = None
+        self._grid_export_baseline = None
+        self._battery_sign_inverted.clear()
+        self._battery_sign_detected.clear()
+        self._battery_sign_votes.clear()
+        self._battery_charge_baseline.clear()
+        self._battery_discharge_baseline.clear()
+        self._sign_vote_warmup = 12
+        _LOGGER.info(
+            "Sign-detection state reset — grid and battery signs will be "
+            "re-learned from Energy Dashboard counters"
+        )
+
     def _detect_grid_sign(self, readings: PowerReadings) -> bool:
         """Detect if grid power needs negation using Energy Dashboard counters.
 
@@ -354,7 +434,10 @@ class SensorReader:
         """
         ed = self._energy_dashboard_config
         if not ed:
-            return False  # No Energy Dashboard → trust the sensor
+            # No Energy Dashboard → trust the sensor. #476 item 5: a
+            # restored/locked sign still applies (constructor default
+            # False keeps the no-lock behaviour unchanged).
+            return self._grid_sign_inverted
 
         # Sum across the counter LISTS when present (#485 H4): Dutch
         # dual-tariff DSMR meters split each direction into tarief 1 +
@@ -374,7 +457,11 @@ class SensorReader:
         )
 
         if not import_entities or not export_entities:
-            return False
+            # #476 item 5: a restored/locked sign must survive the
+            # counters disappearing (e.g. Energy Dashboard reconfigured
+            # after the lock was learned). Constructor default is False,
+            # so the no-lock behaviour is unchanged.
+            return self._grid_sign_inverted
 
         # Startup warm-up (#487 follow-up): no votes while HA's
         # recorder is still replaying counter states — keep baselines
@@ -401,7 +488,10 @@ class SensorReader:
         if self._grid_import_baseline is None:
             self._grid_import_baseline = import_val
             self._grid_export_baseline = export_val
-            return False
+            # #476 item 5: honour a restored lock even on the very
+            # first baseline call (counters can sit unknown for the
+            # whole warmup). Default False = pre-#476 behaviour.
+            return self._grid_sign_inverted
 
         deltas = self._counter_deltas(
             self._grid_import_baseline, self._grid_export_baseline,
@@ -478,7 +568,10 @@ class SensorReader:
         """
         ed = self._energy_dashboard_config
         if not ed:
-            return False
+            # #476 item 5: honour a restored fleet lock when the Energy
+            # Dashboard disappears after the lock was learned — mirrors
+            # the grid-path fix. Default False = pre-#476 behaviour.
+            return self._battery_sign_inverted.get(self._FLEET_BID, False)
 
         charge_entity = ed.battery_charge_energy
         discharge_entity = ed.battery_discharge_energy
@@ -543,11 +636,13 @@ class SensorReader:
         except (ValueError, TypeError):
             return self._battery_sign_inverted[bid]
 
-        # First call: store baselines, don't correct yet
+        # First call: store baselines, don't correct yet.
+        # #476 item 5: honour a restored lock even here (counters can
+        # sit unknown for the whole warmup). Default False unchanged.
         if self._battery_charge_baseline[bid] is None:
             self._battery_charge_baseline[bid] = charge_val
             self._battery_discharge_baseline[bid] = discharge_val
-            return False
+            return self._battery_sign_inverted[bid]
 
         deltas = self._counter_deltas(
             self._battery_charge_baseline[bid],

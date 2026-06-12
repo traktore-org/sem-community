@@ -3194,6 +3194,44 @@ async def _async_register_phase_services(
         supports_response=SupportsResponse.ONLY,
     )
 
+    # #476 item 5 escape hatch: sign-detection locks now PERSIST across
+    # restarts, so a wrongly-learned lock no longer clears itself on
+    # reboot. This service forgets grid + battery sign locks (RAM and
+    # storage) and re-arms the warmup so the signs re-learn cleanly.
+    async def async_reset_sign_detection(call):
+        """Reset persisted sign-detection state on the SEM entry."""
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return
+        target = sem_entries[0]
+        requested = call.data.get("entry_id") if call.data else None
+        if requested and len(sem_entries) > 1:
+            for e in sem_entries:
+                if e.entry_id == requested:
+                    target = e
+                    break
+        coordinator = getattr(target, "runtime_data", None)
+        if coordinator is None:
+            _LOGGER.warning("reset_sign_detection: no coordinator on entry %s", target.entry_id)
+            return
+        reader = getattr(coordinator, "_sensor_reader", None)
+        if reader is not None:
+            reader.reset_sign_state()
+        storage = getattr(coordinator, "_storage", None)
+        if storage is not None:
+            storage.set_sign_state({})
+            await storage.async_save_energy_delayed()
+        _LOGGER.info("reset_sign_detection: cleared sign locks on entry %s", target.entry_id)
+
+    hass.services.async_register(
+        DOMAIN,
+        "reset_sign_detection",
+        async_reset_sign_detection,
+        schema=vol.Schema({
+            vol.Optional("entry_id"): cv.string,
+        }),
+    )
+
     # #432: per-section Diagnose payload. The Configuration tab's
     # ``<sem-diagnose-button>`` Lit element calls this service with a
     # ``section`` name, gets back a focused JSON slice + recent log

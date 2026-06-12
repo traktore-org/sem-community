@@ -309,6 +309,17 @@ class SEMStorage:
         """Persist EV intelligence state."""
         self._energy_data["ev_intelligence"] = state
 
+    # Sign-detection persistence (#476 item 5) — locked grid/battery
+    # sign flags survive restarts so the autodetect can't re-learn a
+    # wrong sign from ambiguous post-reboot samples.
+    def get_sign_state(self) -> Dict[str, Any]:
+        """Get persisted sign-detection lock state."""
+        return self._energy_data.get("sign_state", {})
+
+    def set_sign_state(self, state: Dict[str, Any]) -> None:
+        """Persist sign-detection lock state."""
+        self._energy_data["sign_state"] = state
+
     def add_session_to_history(self, session: Dict[str, Any]) -> None:
         """Append a completed session to bounded history (max 90 entries)."""
         state = self.get_ev_intelligence_state()
