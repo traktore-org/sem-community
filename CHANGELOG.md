@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🔮 Forecast dampening: morning jitter smoothed + correct sun window (#416)
+
+Closes the two remaining sub-findings of the #416 forecast-correction audit (the other three — shrinkage naming, telemetry surface, write-time weather snapshot — shipped earlier and are soak-verified on PROD).
+
+- **The live dampening signal is EMA-smoothed (τ ≈ 5 min)** — at 7–9 AM the expected-production fraction is tiny, so the normalized live ratio amplified the actual-sensor noise floor (cloud transits, inverter sampling) into large cycle-to-cycle swings of `forecast_dampening_factor`. The blend now consumes a time-based EMA of the ratio; genuine weather trends still pass with little lag. Raw and smoothed values are both on the sensor's diagnostic attributes (`normalized_ratio` / `smoothed_ratio`) (#416)
+- **`_get_sun_hours` no longer mixes tomorrow's sunrise with today's sunset** — `next_rising`/`next_setting` are NEXT events; tomorrow-dated ones now roll back a day, fixing the skewed daylight window (~1 min average, worse near solstices/high latitudes) (#416)
+
 ## 🧭 Sign-detection locks survive restarts (#476)
 
 The grid/battery sign autodetect locks were RAM-only — every reload re-learned the sign from possibly ambiguous low-power samples, and three bad votes right after a reboot could lock the WRONG sign until the next reload (the 2026-06-11 PROD flip).

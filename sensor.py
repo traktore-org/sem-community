@@ -2296,6 +2296,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 "confidence": d.get("forecast_dampening_confidence"),
                 "live_ratio": d.get("forecast_dampening_live_ratio"),
                 "normalized_ratio": d.get("forecast_dampening_normalized_ratio"),
+                "smoothed_ratio": d.get("forecast_dampening_smoothed_ratio"),
                 "pre_clamp": d.get("forecast_dampening_pre_clamp"),
                 "correction_factor_historical": d.get("forecast_correction_factor"),
             })
