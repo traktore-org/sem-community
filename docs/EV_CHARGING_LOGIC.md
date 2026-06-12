@@ -13,7 +13,7 @@
 > |---|---|---|
 > | **Solar only** | Pure surplus, never grid | Solar maximalist |
 > | **Solar + cheapest hours** | Surplus by day, grid only in the cheapest tariff windows (hidden if no dynamic tariff configured) | Dynamic-tariff users |
-> | **Min + Solar** (default) | Guarantee Min from grid/night top-up, solar adds up to Max. Zone-adaptive during the day — Min comes from night charging, not forced grid pull at noon. | Daily commuter needing a baseline |
+> | **Min + Solar** (default) | Guarantee Min from grid/night top-up, solar adds up to Max. Zone-adaptive during the day — Min comes from night charging, not forced grid pull at noon. Since #501 the daytime path is self-consumption-maximizing: solar surplus first, battery assist only up to the charger minimum and within your *Battery assist floor SoC* / *max power* limits, and grid only when the remaining Min could no longer be delivered by tonight's window. | Daily commuter needing a baseline |
 > | **Always (max)** | Charge at maximum regardless of source | "Just charge the car" / strict legacy-``minpv`` behaviour |
 > | **Off** | No charging | Disabled |
 >

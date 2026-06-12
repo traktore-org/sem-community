@@ -1,0 +1,67 @@
+name: "2026-06-11 min_plus_solar cloudy day — no forced grid/battery pull (#501)"
+
+coverage:
+  - mode: min_plus_solar
+    regime: zone3_day_battery_assist
+    issue: "#501 — need-gated day floor, self-consumption-maximizing"
+
+description: |
+  The user report behind #501: on a cloudy afternoon with the home
+  battery in Zone 3 (70-90%), pre-#501 min_plus_solar commanded the
+  unconditional 6 A floor (#439 commit-then-measure) — grinding the
+  battery into the EV with sustained grid backfill, even though the
+  daily Min was comfortably deliverable by the night window.
+
+  Post-#501 the floor is need-gated: with a 7 kWh remaining Min and
+  a night window that can deliver ~26 kWh at max current, daytime
+  stays self-consumption-only. Zero surplus (home exceeds solar) +
+  the capped Zone-3 assist potential (0.625 × 4500 ≈ 2.8 kW) is
+  below the 6 A charger min → the EV idles. No grid import, no
+  battery drain.
+
+  HARNESS NOTE: the scenario runner mocks ``coord.time_manager``, so
+  ``_night_deliverable_kwh`` hits its except-guard and returns
+  ``inf`` — i.e. this scenario exercises the ``floor_needed = False``
+  path because ``remaining (7) > inf`` is always False, NOT because
+  of the 26 kWh figure above. To write a scenario that exercises the
+  floor-ENGAGES path (``night_deliverable < remaining``), give the
+  harness a real ``get_night_window`` stub first — otherwise the
+  floor never engages here regardless of ``daily_ev_target`` and the
+  assertion would pass vacuously.
+
+config:
+  battery_capacity_kwh: 15.0
+  battery_buffer_soc: 70
+  battery_auto_start_soc: 90
+  battery_priority_soc: 30
+  battery_assist_floor_soc: 60
+  battery_assist_max_power: 4500
+  ev_min_current: 6
+  ev_max_current: 16
+  ev_phases: 3
+  ev_voltage: 230
+  daily_ev_target: 7.0
+  ev_chargers:
+    - id: "ev_charger"
+      charge_mode: "min_plus_solar"
+      daily_ev_target: 7.0
+
+cycle_seconds: 30
+
+# Cloudy: 300 W solar, home drawing 800 W (the difference imports),
+# battery holding at 75% (Zone 3). EV plugged in, daily Min NOT yet
+# met — and it must still idle.
+timeline:
+  - t: 0
+    solar_power: 300
+    grid_power: -500         # -ve = import (home draws beyond solar)
+    battery_power: 0
+    battery_soc: 75
+    ev_power: 0
+    ev_connected: true
+
+  - t: 60
+  - t: 120
+
+expect:
+  strategy_substring: "idle"

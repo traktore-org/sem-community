@@ -47,6 +47,8 @@ def _view(
     tariff_level: str | None = None,
     target_kwh: float | None = None,
     deadline_amps: int = 0,
+    night_deliverable_kwh: float = float("inf"),
+    battery_assist_max_power_w: float = 4500.0,
     config: dict | None = None,
 ) -> ChargerView:
     return ChargerView(
@@ -64,9 +66,11 @@ def _view(
             battery_discharge_w=battery_discharge_w,
             battery_soc=battery_soc,
             is_night=is_night, tariff_level=tariff_level,
+            battery_assist_max_power_w=battery_assist_max_power_w,
         ),
         target_kwh=target_kwh,
         deadline_amps=deadline_amps,
+        night_deliverable_kwh=night_deliverable_kwh,
     )
 
 
@@ -229,8 +233,10 @@ class TestMinPlusSolarMode:
 
 class TestMinPlusSolarZoneAssist:
     """min_plus_solar day-path uses Zone-aware battery assist
-    (Zone 4 = drain battery; Zone 3 = use current discharge;
-    Zone 2 = pure solar; Zone 1 = idle).
+    (Zone 3/4 = surplus + capped SOC-based assist potential (#501);
+    Zone 2 = pure solar; Zone 1 = idle). The min-current floor is
+    need-gated: it engages only when the remaining Min exceeds what
+    tonight's window can deliver.
     """
 
     def test_zone_4_battery_assist_charges_from_battery(self):
@@ -275,6 +281,96 @@ class TestMinPlusSolarZoneAssist:
         ))
         assert d.intent is ChargerIntent.IDLE
         assert "Zone 1" in d.reason
+
+
+class TestMinPlusSolarSelfMax:
+    """#501 — daytime min_plus_solar is self-consumption-maximizing.
+
+    The Zone 3/4 min-current floor is need-gated (engages only when
+    the night window can't deliver the remaining Min) and the assist
+    budget is the capped SOC-based POTENTIAL — never the battery's
+    measured total discharge (which included the house's share and
+    ratcheted the commanded current on home-load spikes).
+    """
+
+    def test_cloudy_zone3_no_floor_idles(self):
+        """Cloudy day, Zone 3, Min comfortably covered by tonight's
+        window → NO forced 6 A; the charger idles (pre-#501 it pulled
+        ≥4.1 kW from battery+grid all afternoon)."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=300, home_w=800, battery_soc=75,
+            target_kwh=7.0, night_deliverable_kwh=26.0,
+        ))
+        # budget = surplus(0) + assist_potential(75) = 0.625*4500 = 2812 W < 6 A
+        assert d.intent is ChargerIntent.IDLE
+        assert "night window" in d.reason
+
+    def test_floor_engages_when_night_cannot_cover(self):
+        """Remaining Min exceeds the night window's deliverable —
+        the commit-then-measure floor (#439/ADR 0010) engages."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=300, home_w=800, battery_soc=75,
+            target_kwh=30.0, night_deliverable_kwh=12.0,
+        ))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 6
+        assert "floor engaged" in d.reason
+
+    def test_no_floor_after_min_met(self):
+        """Min already reached today → never force the floor, even if
+        night_deliverable is tiny ('Up to Full never forces grid')."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=300, home_w=800, battery_soc=75,
+            target_kwh=0.05, night_deliverable_kwh=0.0,
+        ))
+        assert d.intent is ChargerIntent.IDLE
+
+    def test_home_load_spike_does_not_ratchet_amps(self):
+        """Regression for the misattribution ratchet: the battery
+        covering a HOME load spike must not inflate the EV budget.
+        Same solar/SOC, discharge jumps 0 → 6 kW (house turned on the
+        oven) → commanded amps unchanged."""
+        base = decide(_view(
+            mode="min_plus_solar",
+            solar_w=6000, home_w=500, battery_soc=80,
+            battery_discharge_w=0.0,
+        ))
+        spike = decide(_view(
+            mode="min_plus_solar",
+            solar_w=6000, home_w=500, battery_soc=80,
+            battery_discharge_w=6000.0,
+        ))
+        assert base.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert spike.commanded_amps == base.commanded_amps
+
+    def test_assist_capped_at_configured_max(self):
+        """Zone 4, no solar: the assist budget is the configured
+        battery_assist_max_power, not the battery's nameplate."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=0, home_w=500, battery_soc=95,
+            battery_assist_max_power_w=3000.0,
+            target_kwh=30.0, night_deliverable_kwh=12.0,
+        ))
+        # potential = 3000 W → 4 A, floor raises to 6 A (floor engaged);
+        # budget itself must reflect the cap
+        assert d.budget_w == pytest.approx(3000.0, abs=1)
+
+    def test_zone4_assist_potential_charges_without_flowing_discharge(self):
+        """#439 stays fixed: battery NOT yet discharging, Zone 4 →
+        the POTENTIAL still funds the budget and charging starts
+        (no chicken-and-egg gate on measured discharge)."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=0, home_w=500, battery_soc=95,
+            battery_discharge_w=0.0,
+        ))
+        # potential = 4500 W → 6 A
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 6
 
 
 class TestSolarPlusCheapMode:

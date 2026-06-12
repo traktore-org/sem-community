@@ -241,6 +241,43 @@ class EVControlMixin:
 
         return plan
 
+    def _night_deliverable_kwh(self, charger_cfg: dict) -> float:
+        """Energy tonight's window can deliver to this charger (#501).
+
+        Hours from the night-window start to the charger's ``Charge by``
+        deadline (clamped to the window) × max current. Feeds the
+        daytime ``min_plus_solar`` floor gate in ``decide.py`` — the
+        floor only engages when the remaining Min exceeds this, i.e.
+        when deferring to the night top-up would risk the guarantee.
+
+        Uses max current (the rate a forcing deadline can ramp to),
+        not the peak-managed rate: the night planner's own reachability
+        check + "can't reach Min in time" notification remain the
+        backstop for peak-constrained nights. Errs toward
+        self-consumption (``inf`` on any parse failure = floor stays
+        off), matching the mode's documented daytime behaviour.
+        """
+        try:
+            night_start, night_end = self.time_manager.get_night_window()
+            window_h = self.time_manager.get_night_window_hours()
+            cfg = charger_cfg if isinstance(charger_cfg, dict) else {}
+            deadline = str(cfg.get("ev_target_time") or night_end)
+            sh, sm = night_start.split(":")[:2]
+            dh, dm = deadline.split(":")[:2]
+            start_min = int(sh) * 60 + int(sm)
+            deadline_min = int(dh) * 60 + int(dm)
+            hours = ((deadline_min - start_min) % (24 * 60)) / 60.0
+            hours = min(hours, window_h)
+            max_a = float(
+                cfg.get("ev_max_current")
+                or self.config.get("ev_max_current", 16)
+            )
+            phases = int(cfg.get("ev_phases") or self.config.get("ev_phases", 3))
+            voltage = float(cfg.get("ev_voltage") or self.config.get("ev_voltage", 230))
+            return hours * max_a * phases * voltage / 1000.0
+        except (ValueError, TypeError, AttributeError):
+            return float("inf")
+
     def _expected_night_home_w(self, energy: Any, window_hours: float = 8.0) -> float:
         """Expected average home consumption (W) over the upcoming night window.
 

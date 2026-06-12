@@ -1718,6 +1718,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             deadline_amps=int(charging_context.night_deadline_amps or 0),
                             tariff_wait=bool(charging_context.night_tariff_wait),
                             solar_committed_w=self._solar_committed_w_per_cycle,
+                            night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
                         )
                         decision = decide_v2(view)
                         # evcc-style stability layer (#461 flapping):
@@ -1850,6 +1851,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     target_kwh=getattr(charging_context, "night_target_kwh", None),
                     deadline_amps=int(getattr(charging_context, "night_deadline_amps", 0) or 0),
                     tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
+                    night_deliverable_kwh=self._night_deliverable_kwh(
+                        self._primary_charger_cfg()
+                    ),
                 )
                 decision = decide_v2(view)
                 # evcc-style stability layer (#461 flapping) — the
@@ -3901,6 +3905,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # multi-charger loop downstream gets.
             tariff_wait=tariff_wait,
             deadline_amps=deadline_amps,
+            night_deliverable_kwh=self._night_deliverable_kwh(_primary_cfg),
         )
         _primary_decision = _decide(_primary_view)
         strategy = _primary_decision.intent.value
@@ -3941,6 +3946,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         override_max_w = None
         if canonical_strategy == EVBudgetStrategy.MIN_PV:
             # 6 A * 3 phases * 230 V — KEBA / Wallbox EU minimum.
+            min_power_floor_w = self.config.get(
+                "ev_min_current", 6,
+            ) * 3 * 230
+        elif canonical_strategy == EVBudgetStrategy.BATTERY_ASSIST:
+            # #501: BATTERY_ASSIST consumes the floor as the assist
+            # top-up bound (assist fills surplus→min gap only), NOT
+            # as a net_w floor — see the strategy branch.
             min_power_floor_w = self.config.get(
                 "ev_min_current", 6,
             ) * 3 * 230

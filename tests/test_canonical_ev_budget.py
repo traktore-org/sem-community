@@ -180,11 +180,17 @@ class TestSolarOnly:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# BATTERY_ASSIST — Zone 4. Surplus + redirect + actual discharge.
+# BATTERY_ASSIST — Zone 3/4. Surplus + redirect + capped SOC potential
+# (#501: never the measured discharge).
 # ──────────────────────────────────────────────────────────────────────
 
 class TestBatteryAssist:
-    def test_uses_measured_discharge_when_battery_already_discharging(self):
+    def test_measured_discharge_is_ignored_501(self):
+        """#501: the assist is the SOC-based POTENTIAL, never the
+        measured total discharge. Pre-#501 this returned the raw
+        3000 W discharge — which included the house's share and
+        ratcheted the EV budget on home-load spikes, bypassing the
+        battery_assist_max_power cap."""
         fc = FlowCalculator()
         b = fc.calculate_canonical_ev_budget(
             _power(solar=1000, home=500, batt_discharge=3000, batt_soc=75),
@@ -193,11 +199,37 @@ class TestBatteryAssist:
         )
         # raw_surplus = max(0, 1000 - 500 - 0) = 500
         # redirect = 0 (battery not charging)
-        # assist = measured discharge = 3000
+        # assist = SOC potential: 4500 * (0.5 + 0.5*(75-70)/20) = 2812.5
+        # (no min_power_floor_w passed → full potential, legacy callers)
         assert b.solar_surplus == 500
         assert b.battery_redirect == 0
-        assert b.battery_assist == 3000
-        assert b.net_w == 3500
+        assert b.battery_assist == pytest.approx(2812.5, abs=1)
+        assert b.net_w == pytest.approx(3312.5, abs=1)
+
+    def test_assist_tops_up_to_min_power_floor_only_501(self):
+        """#501: with min_power_floor_w passed (the coordinator does
+        for BATTERY_ASSIST), the assist fills only the surplus→min
+        gap — it never boosts past surplus (battery cycling for no
+        self-consumption gain)."""
+        fc = FlowCalculator()
+        # Sunny: surplus 7500 already > floor → assist contributes 0
+        b = fc.calculate_canonical_ev_budget(
+            _power(solar=8000, home=500, batt_soc=95),
+            strategy=EVBudgetStrategy.BATTERY_ASSIST,
+            battery_soc=95,
+            min_power_floor_w=4140.0,
+        )
+        assert b.battery_assist == 0
+        assert b.net_w == 7500
+        # Cloudy: surplus 0 → assist fills exactly the floor gap
+        b2 = fc.calculate_canonical_ev_budget(
+            _power(solar=300, home=800, batt_soc=95),
+            strategy=EVBudgetStrategy.BATTERY_ASSIST,
+            battery_soc=95,
+            min_power_floor_w=4140.0,
+        )
+        assert b2.battery_assist == pytest.approx(4140, abs=1)
+        assert b2.net_w == pytest.approx(4140, abs=1)
 
     def test_estimates_assist_proportionally_in_zone3_band(self):
         """SOC = 80, buffer=70, auto_start=90.
