@@ -21,6 +21,7 @@ The v1.7 `decide() → actuate()` rewrite silently orphaned the v1.7.1-beta.14 s
 - **Stop semantics upgraded to evcc's deficit-persistence** ([evcc-io/evcc](https://github.com/evcc-io/evcc) `enable.delay`/`disable.delay`) — the legacy implementation measured from session start (a minimum-run-time), so a session older than the window still died on a single-cycle cloud dip. The deficit timer protects the contactor for the whole session
 - **Night floors, `always_max`, OFF/DISABLE and unplugs are never delayed** — safety and user-intent transitions bypass the filter; timers are independent per charger
 - **Both settings are now real entities** (`number.sem_ev_enable_delay_seconds` / `number.sem_ev_disable_delay_seconds`) on the Config tab's **Advanced** section with ?-help texts — previously they were raw config keys with no UI surface
+- **Mid-session setpoint smoothing restored too** — the same rewrite orphaned Layers 1-3 + the ramp limiter, so the commanded current bounced cycle-by-cycle until some cars declared the supply unreliable and ended the session themselves. The filter now median-smooths the target stream (`ev_surplus_smooth_window`, 3 cycles — a 1-cycle inverter flicker never reaches the car), moves at most `ev_ramp_rate_amps` (2 A) per change, suppresses sub-`ev_min_change_amps` changes, allows one change per `ev_min_change_interval_sec` (30 s), starts sessions gently at minimum current (the 2026-05-31 grid-overshoot fix), and ramps down to minimum instead of jumping during the disable hold
 
 ## 🗓️ Per-charger plan strip + help text (#464)
 

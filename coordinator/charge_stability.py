@@ -1,47 +1,57 @@
-"""Surplus charge stability — evcc-style enable/disable delays.
+"""Surplus charge stability — evcc-style delays + setpoint smoothing.
 
 The v1.7 ``decide() → actuate()`` pipeline replaced the legacy
 ``_execute_ev_control`` solar path and silently dropped its stability
-layer (v1.7.1-beta.14): the **enable delay** (surplus must persist
-before the contactor closes) and the **disable delay** (deficit must
-persist before it opens, holding minimum current meanwhile). The
-``ev_enable_delay_seconds`` / ``ev_disable_delay_seconds`` config keys
-kept existing but nothing read them on the new path — the only
-surviving guard was the 2-cycle IDLE debounce in ``actuate``.
+layer (v1.7.1-beta.14). The ``ev_*`` stability config keys kept
+existing but nothing read them on the new path — the only surviving
+guard was the 2-cycle IDLE debounce in ``actuate``.
 
-RienduPre's #461 beta.10 logs show the consequence: solar hovering
-around the 6 A minimum started the charger on every spike and stopped
-it seconds later (±4.5 kW demand swings within consecutive cycles,
-contactor cycling every ~20 s).
+RienduPre's #461 logs show both consequences: the contactor cycling
+every ~20 s as solar hovered around the 6 A minimum, and the commanded
+current bouncing until the car declared the supply unreliable and
+ended the session itself.
 
-This module reintroduces the two delays as a stateful filter between
-``decide()`` and ``actuate()``. Timing semantics follow evcc's pv
-enable/disable timers (https://github.com/evcc-io/evcc — loadpoint
-``enable.delay`` / ``disable.delay``):
+This module reintroduces the full layer as a stateful filter between
+``decide()`` and ``actuate()``:
 
-* **enable**: a CHARGE decision on a non-charging EV passes only after
-  it has held continuously for ``ev_enable_delay_seconds``.
-* **disable**: an IDLE decision against a charging EV holds the
-  charger at minimum current until the deficit has persisted for
-  ``ev_disable_delay_seconds``.
+* **Layer 1 — median smoothing** (``ev_surplus_smooth_window``,
+  default 3 cycles): the per-cycle target current stream is
+  median-filtered BEFORE any start/stop logic, so a single-cycle
+  inverter flicker (Huawei observed 8 kW → 0 W → 8 kW) never becomes
+  a decision at all.
+* **Layer 2 — delta guard** (``ev_min_change_amps``, default 1 A):
+  sub-threshold changes keep the previous setpoint.
+* **Layer 3 — time debounce** (``ev_min_change_interval_sec``,
+  default 30 s): at most one setpoint CHANGE per window. (Layer 5,
+  the heartbeat re-send, lives in ``devices.base._set_current`` #392.)
+* **Ramp limit** (``ev_ramp_rate_amps``, default 2 A): mid-session
+  adjustments move at most ±ramp per change; a session cold-starts at
+  minimum current (the 2026-05-31 PROD grid-overshoot fix) and climbs.
+* **Enable delay** (``ev_enable_delay_seconds``, default 60 s): a
+  start needs the (smoothed) surplus to hold continuously first.
+* **Disable delay** (``ev_disable_delay_seconds``, default 300 s): a
+  (smoothed) deficit must persist before the stop; meanwhile the
+  charger ramps down to and holds minimum current.
 
-The disable semantics deliberately *improve on* the legacy path, which
-measured from session START (a minimum-run-time): once a session was
-older than the window, a single-cycle cloud dip stopped it instantly.
-evcc measures **deficit persistence**, which protects the contactor
-for the whole session — that is the behaviour we adopt.
+Timing semantics follow evcc's pv enable/disable timers
+(https://github.com/evcc-io/evcc — loadpoint ``enable.delay`` /
+``disable.delay``). The disable semantics deliberately *improve on*
+the legacy path, which measured from session START (a minimum-run
+time): once a session was older than the window, a single-cycle cloud
+dip stopped it instantly. evcc measures **deficit persistence**,
+which protects the contactor for the whole session.
 
 Scope: daytime surplus modes only (``solar_only`` / ``min_plus_solar``
 / ``solar_plus_cheap``). Night floors, ``always_max``, OFF/DISABLE
 and disconnected EVs pass through untouched — stopping for safety or
-user intent must never be delayed.
+user intent must never be delayed or smoothed.
 """
 from __future__ import annotations
 
 import logging
 import time
 from dataclasses import replace
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Dict, List, Optional, TYPE_CHECKING
 
 from .charger_types import ChargerDecision, ChargerIntent, ChargerView
 from .decide import effective_min_amps
@@ -58,26 +68,58 @@ SURPLUS_DAY_MODES = frozenset({"solar_only", "min_plus_solar", "solar_plus_cheap
 
 DEFAULT_ENABLE_DELAY_S = 60
 DEFAULT_DISABLE_DELAY_S = 300
+DEFAULT_SMOOTH_WINDOW = 3
+DEFAULT_MIN_CHANGE_AMPS = 1
+DEFAULT_MIN_CHANGE_INTERVAL_S = 30
+DEFAULT_RAMP_AMPS = 2
 
 _CHARGE_INTENTS = (ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX)
 
 
 class ChargeStability:
-    """Per-charger enable/disable delay state.
+    """Per-charger smoothing + enable/disable delay state.
 
-    One instance lives on the coordinator; state is keyed by
-    charger id so multi-charger fleets get independent timers
-    (pinned by ``test_multi_charger_control`` for the legacy path —
-    same contract here).
+    One instance lives on the coordinator; all state is keyed by
+    charger id so multi-charger fleets get independent windows and
+    timers (pinned by ``test_multi_charger_control`` for the legacy
+    path — same contract here).
     """
 
     def __init__(self) -> None:
         self._surplus_since: Dict[str, float] = {}
         self._deficit_since: Dict[str, float] = {}
+        self._amps_history: Dict[str, List[int]] = {}
+        self._last_amps: Dict[str, int] = {}
+        self._last_change_ts: Dict[str, float] = {}
 
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
         self._deficit_since.pop(cid, None)
+        self._amps_history.pop(cid, None)
+        self._last_amps.pop(cid, None)
+        self._last_change_ts.pop(cid, None)
+
+    def _median_amps(self, cid: str, raw_amps: int, window: int) -> int:
+        """Layer 1 — rolling median of the raw target-amps stream.
+
+        Median, not mean: a single-cycle flicker is dropped entirely
+        rather than halved. For even-length windows the UPPER of the
+        two centre values is used — biases toward the recent/higher
+        sample, the safe direction for a charge controller (legacy
+        ``_smooth_solar_budget`` contract).
+        """
+        window = max(1, int(window))
+        hist = self._amps_history.setdefault(cid, [])
+        hist.append(int(raw_amps))
+        while len(hist) > window:
+            hist.pop(0)
+        ordered = sorted(hist)
+        return ordered[len(ordered) // 2]
+
+    def _commit_amps(self, cid: str, amps: int, now: float) -> None:
+        if self._last_amps.get(cid) != amps:
+            self._last_change_ts[cid] = now
+        self._last_amps[cid] = amps
 
     def filter(
         self,
@@ -87,21 +129,26 @@ class ChargeStability:
         *,
         enable_delay_s: float = DEFAULT_ENABLE_DELAY_S,
         disable_delay_s: float = DEFAULT_DISABLE_DELAY_S,
+        smooth_window: int = DEFAULT_SMOOTH_WINDOW,
+        min_change_amps: int = DEFAULT_MIN_CHANGE_AMPS,
+        min_change_interval_s: float = DEFAULT_MIN_CHANGE_INTERVAL_S,
+        ramp_amps: int = DEFAULT_RAMP_AMPS,
         now_ts: Optional[float] = None,
     ) -> ChargerDecision:
-        """Apply enable/disable delays to a surplus-mode day decision.
+        """Apply smoothing + enable/disable delays to a surplus-mode
+        day decision.
 
         Returns the decision unchanged when out of scope; otherwise a
         possibly-overridden decision whose reason names the active
-        delay so the strategy sensor explains the hold (the #461
+        guard so the strategy sensor explains the hold (the #461
         "state says idle but EV draws 4.5 kW" confusion class).
         """
         cid = decision.charger_id
         now = now_ts if now_ts is not None else time.monotonic()
 
         # Out of scope → transparent. DISABLE (user off / self-resume
-        # guard) and disconnects also clear the timers: the next
-        # session starts a fresh enable window.
+        # guard) and disconnects also clear all state: the next
+        # session starts a fresh window with a cold history.
         if (
             view.mode not in SURPLUS_DAY_MODES
             or view.fleet.is_night
@@ -111,6 +158,32 @@ class ChargeStability:
             self._reset(cid)
             return decision
 
+        cfg = view.config if isinstance(view.config, dict) else {}
+        min_amps = max(
+            effective_min_amps(cfg, 6),
+            int(getattr(adapter, "min_current_a", 6) or 6),
+        )
+        max_amps = int(cfg.get("ev_max_current", 0) or 0) or int(
+            getattr(adapter, "max_current_a", 32) or 32,
+        )
+
+        # Raw target this cycle: the decided amps for CHARGE, 0 for
+        # IDLE. CHARGE_MAX (not produced by surplus modes, defensive)
+        # maps to the ceiling.
+        if decision.intent is ChargerIntent.CHARGE_MAX:
+            raw_amps = max_amps
+        elif decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+            raw_amps = int(decision.commanded_amps)
+        else:
+            raw_amps = 0
+
+        # Layer 1 — the smoothed stream drives ALL start/stop logic,
+        # exactly like the legacy path smoothed budget_w before the
+        # threshold compare. A 1-cycle dip or spike never reaches the
+        # timers below.
+        med_amps = self._median_amps(cid, raw_amps, smooth_window)
+        charge_wanted = med_amps >= min_amps
+
         # "Charging" = the adapter last commanded a charge OR the EV is
         # measurably drawing (covers coordinator restarts mid-session,
         # where last_intent is None but power is real).
@@ -119,18 +192,35 @@ class ChargeStability:
             or adapter.actual_charging(view.power)
         )
 
-        if decision.intent in _CHARGE_INTENTS:
+        if charge_wanted:
             self._deficit_since.pop(cid, None)
+            target = max(min_amps, min(max_amps, med_amps))
             if charging:
-                # Mid-session current adjustments pass through — the
-                # delays gate start/stop transitions, not ramping.
                 self._surplus_since.pop(cid, None)
-                return decision
+                return self._adjust(
+                    decision, cid, target, now,
+                    min_change_amps=min_change_amps,
+                    min_change_interval_s=min_change_interval_s,
+                    ramp_amps=ramp_amps,
+                )
             since = self._surplus_since.setdefault(cid, now)
             held = now - since
             if held >= max(0.0, float(enable_delay_s)):
+                # Start gently at minimum current — KEBA's ~30 s
+                # actuator lag overshot a cold 14 A command into
+                # ~4.4 kW of grid import (PROD 2026-05-31); the ramp
+                # climbs from here on subsequent cycles.
                 self._surplus_since.pop(cid, None)
-                return decision
+                self._commit_amps(cid, min_amps, now)
+                return replace(
+                    decision,
+                    intent=ChargerIntent.CHARGE_AT_AMPS,
+                    commanded_amps=min_amps,
+                    reason=(
+                        f"stability: starting at {min_amps}A "
+                        f"(ramping toward {target}A) — {decision.reason}"
+                    ),
+                )
             return replace(
                 decision,
                 intent=ChargerIntent.IDLE,
@@ -141,30 +231,95 @@ class ChargeStability:
                 ),
             )
 
-        if decision.intent is ChargerIntent.IDLE:
-            self._surplus_since.pop(cid, None)
-            if not charging:
-                self._deficit_since.pop(cid, None)
+        # Smoothed deficit.
+        self._surplus_since.pop(cid, None)
+        if not charging:
+            self._deficit_since.pop(cid, None)
+            return decision
+        since = self._deficit_since.setdefault(cid, now)
+        held = now - since
+        if held >= max(0.0, float(disable_delay_s)):
+            self._deficit_since.pop(cid, None)
+            self._amps_history.pop(cid, None)
+            self._last_amps.pop(cid, None)
+            self._last_change_ts.pop(cid, None)
+            if decision.intent is ChargerIntent.IDLE:
                 return decision
-            since = self._deficit_since.setdefault(cid, now)
-            held = now - since
-            if held >= max(0.0, float(disable_delay_s)):
-                self._deficit_since.pop(cid, None)
-                return decision
-            min_amps = max(
-                effective_min_amps(
-                    view.config if isinstance(view.config, dict) else {}, 6,
-                ),
-                int(getattr(adapter, "min_current_a", 6) or 6),
-            )
             return replace(
-                decision,
-                intent=ChargerIntent.CHARGE_AT_AMPS,
-                commanded_amps=min_amps,
-                reason=(
-                    f"stability: deficit {held:.0f}s/{disable_delay_s:.0f}s — "
-                    f"holding {min_amps}A before stop — {decision.reason}"
-                ),
+                decision, intent=ChargerIntent.IDLE, commanded_amps=0,
+                reason=f"stability: deficit persisted — {decision.reason}",
+            )
+        # Hold the session: ramp down toward and hold minimum current
+        # until the deficit outlives the disable window.
+        last = self._last_amps.get(cid)
+        hold = min_amps if last is None else max(min_amps, last - max(1, int(ramp_amps)))
+        self._commit_amps(cid, hold, now)
+        return replace(
+            decision,
+            intent=ChargerIntent.CHARGE_AT_AMPS,
+            commanded_amps=hold,
+            reason=(
+                f"stability: deficit {held:.0f}s/{disable_delay_s:.0f}s — "
+                f"holding {hold}A before stop — {decision.reason}"
+            ),
+        )
+
+    def _adjust(
+        self,
+        decision: ChargerDecision,
+        cid: str,
+        target: int,
+        now: float,
+        *,
+        min_change_amps: int,
+        min_change_interval_s: float,
+        ramp_amps: int,
+    ) -> ChargerDecision:
+        """Mid-session setpoint adjustment: ramp limit + delta guard +
+        time debounce (Layers 2/3 + ramp). The returned decision is
+        always CHARGE_AT_AMPS — re-sending an unchanged value is free
+        (``_set_current`` dedups and heartbeats, #392)."""
+        last = self._last_amps.get(cid)
+        if last is None:
+            # First filtered cycle of an already-running session
+            # (restart / filter newly deployed): adopt the target.
+            self._commit_amps(cid, target, now)
+            if decision.intent is ChargerIntent.CHARGE_AT_AMPS \
+                    and decision.commanded_amps == target:
+                return decision
+            return replace(
+                decision, intent=ChargerIntent.CHARGE_AT_AMPS,
+                commanded_amps=target,
+                reason=f"stability: smoothed → {target}A — {decision.reason}",
             )
 
-        return decision
+        ramp = max(1, int(ramp_amps))
+        ramped = max(last - ramp, min(last + ramp, target))
+        suppressed = None
+        if abs(ramped - last) < max(0, int(min_change_amps)):
+            suppressed = "delta"
+        else:
+            last_change = self._last_change_ts.get(cid)
+            if (
+                last_change is not None
+                and (now - last_change) < max(0.0, float(min_change_interval_s))
+            ):
+                suppressed = "debounce"
+        amps = last if suppressed else ramped
+        self._commit_amps(cid, amps, now)
+
+        if amps == decision.commanded_amps \
+                and decision.intent is ChargerIntent.CHARGE_AT_AMPS:
+            return decision
+        if suppressed:
+            note = f"stability: {suppressed} guard — holding {amps}A"
+        elif amps != target:
+            note = f"stability: ramping {amps}A toward {target}A"
+        else:
+            note = f"stability: smoothed → {amps}A"
+        return replace(
+            decision,
+            intent=ChargerIntent.CHARGE_AT_AMPS,
+            commanded_amps=amps,
+            reason=f"{note} — {decision.reason}",
+        )

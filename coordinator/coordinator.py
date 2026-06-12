@@ -133,6 +133,36 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         first = chargers[0]
         return first if isinstance(first, dict) else {}
 
+    def _charge_stability_kwargs(self) -> Dict[str, Any]:
+        """Stability-layer tunables for ``ChargeStability.filter``.
+
+        All keys are the v1.7.1-beta.14 stability config keys — they
+        survived the arch rewrite even while the code that read them
+        was orphaned (#461), so existing installs keep their values.
+        """
+        from .charge_stability import (
+            DEFAULT_DISABLE_DELAY_S,
+            DEFAULT_ENABLE_DELAY_S,
+            DEFAULT_MIN_CHANGE_AMPS,
+            DEFAULT_MIN_CHANGE_INTERVAL_S,
+            DEFAULT_RAMP_AMPS,
+            DEFAULT_SMOOTH_WINDOW,
+        )
+        return {
+            "enable_delay_s": self.config.get(
+                "ev_enable_delay_seconds", DEFAULT_ENABLE_DELAY_S),
+            "disable_delay_s": self.config.get(
+                "ev_disable_delay_seconds", DEFAULT_DISABLE_DELAY_S),
+            "smooth_window": self.config.get(
+                "ev_surplus_smooth_window", DEFAULT_SMOOTH_WINDOW),
+            "min_change_amps": self.config.get(
+                "ev_min_change_amps", DEFAULT_MIN_CHANGE_AMPS),
+            "min_change_interval_s": self.config.get(
+                "ev_min_change_interval_sec", DEFAULT_MIN_CHANGE_INTERVAL_S),
+            "ramp_amps": self.config.get(
+                "ev_ramp_rate_amps", DEFAULT_RAMP_AMPS),
+        }
+
     def primary_charger_id(self) -> str:
         """Canonical id of the fleet-primary charger (#485 H1).
 
@@ -1690,16 +1720,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             solar_committed_w=self._solar_committed_w_per_cycle,
                         )
                         decision = decide_v2(view)
-                        # evcc-style enable/disable delays (#461 flapping).
-                        # Applied BEFORE state display + actuation so the
-                        # sensor state, strategy string and contactor all
-                        # agree on the held decision.
+                        # evcc-style stability layer (#461 flapping):
+                        # median smoothing + ramp limit + delta/debounce
+                        # guards + enable/disable delays. Applied BEFORE
+                        # state display + actuation so the sensor state,
+                        # strategy string and contactor all agree on the
+                        # held decision.
                         decision = self._charge_stability.filter(
                             decision, view, adapter,
-                            enable_delay_s=self.config.get(
-                                "ev_enable_delay_seconds", 60),
-                            disable_delay_s=self.config.get(
-                                "ev_disable_delay_seconds", 300),
+                            **self._charge_stability_kwargs(),
                         )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
@@ -1823,14 +1852,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
                 )
                 decision = decide_v2(view)
-                # evcc-style enable/disable delays (#461 flapping) — the
+                # evcc-style stability layer (#461 flapping) — the
                 # single-charger legacy branch needs the same protection.
                 decision = self._charge_stability.filter(
                     decision, view, adapter,
-                    enable_delay_s=self.config.get(
-                        "ev_enable_delay_seconds", 60),
-                    disable_delay_s=self.config.get(
-                        "ev_disable_delay_seconds", 300),
+                    **self._charge_stability_kwargs(),
                 )
                 try:
                     await actuate(decision, adapter, view.power)

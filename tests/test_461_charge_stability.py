@@ -89,26 +89,52 @@ class TestEnableDelay:
         assert d61.intent is ChargerIntent.CHARGE_AT_AMPS
         assert d61.commanded_amps == 6
 
-    def test_flicker_resets_enable_window(self):
+    def test_single_dip_does_not_reset_enable_window(self):
+        # Layer 1: the median absorbs a 1-cycle flicker BEFORE the
+        # timers see it — the qualification window keeps counting.
         st = ChargeStability()
         adapter = FakeAdapter()
         view = _view()
         st.filter(_charge(), view, adapter,
                   enable_delay_s=60, disable_delay_s=300, now_ts=0.0)
-        # Surplus dips at t=30 — IDLE passes (not charging) and resets.
         d = st.filter(_idle(), view, adapter,
-                      enable_delay_s=60, disable_delay_s=300, now_ts=30.0)
-        assert d.intent is ChargerIntent.IDLE
-        # Surplus back at t=40: a fresh 60 s window starts.
+                      enable_delay_s=60, disable_delay_s=300, now_ts=10.0)
+        assert d.intent is ChargerIntent.IDLE  # still waiting, not charging
         d = st.filter(_charge(), view, adapter,
-                      enable_delay_s=60, disable_delay_s=300, now_ts=40.0)
-        assert d.intent is ChargerIntent.IDLE
-        d = st.filter(_charge(), view, adapter,
-                      enable_delay_s=60, disable_delay_s=300, now_ts=99.0)
-        assert d.intent is ChargerIntent.IDLE
-        d = st.filter(_charge(), view, adapter,
-                      enable_delay_s=60, disable_delay_s=300, now_ts=101.0)
+                      enable_delay_s=60, disable_delay_s=300, now_ts=61.0)
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+
+    def test_sustained_dip_resets_enable_window(self):
+        # Two consecutive sub-threshold cycles flip the median — a
+        # real loss of surplus restarts the qualification window.
+        st = ChargeStability()
+        adapter = FakeAdapter()
+        view = _view()
+        st.filter(_charge(), view, adapter,
+                  enable_delay_s=60, disable_delay_s=300, now_ts=0.0)
+        st.filter(_idle(), view, adapter,
+                  enable_delay_s=60, disable_delay_s=300, now_ts=10.0)
+        st.filter(_idle(), view, adapter,
+                  enable_delay_s=60, disable_delay_s=300, now_ts=20.0)
+        # Surplus returns at t=30; median needs a warm window again and
+        # the enable window restarts — no start at t=61.
+        st.filter(_charge(), view, adapter,
+                  enable_delay_s=60, disable_delay_s=300, now_ts=30.0)
+        d = st.filter(_charge(), view, adapter,
+                      enable_delay_s=60, disable_delay_s=300, now_ts=61.0)
+        assert d.intent is ChargerIntent.IDLE
+
+    def test_start_is_gentle_at_min_current(self):
+        # Cold start commands min current first (PROD 2026-05-31 grid
+        # overshoot) and announces the ramp target.
+        st = ChargeStability()
+        d = None
+        for t in (0.0, 30.0, 61.0):
+            d = st.filter(_charge(amps=16), _view(), FakeAdapter(),
+                          enable_delay_s=60, disable_delay_s=300, now_ts=t)
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 6
+        assert "ramping toward 16A" in d.reason
 
     def test_zero_delay_starts_immediately(self):
         st = ChargeStability()
@@ -141,12 +167,12 @@ class TestDisableDelay:
         view = _view(power_w=4500.0)
         st.filter(_idle(), view, adapter,
                   enable_delay_s=60, disable_delay_s=300, now_ts=0.0)
-        # Cloud passes at t=120 — CHARGE while charging passes through
-        # untouched (mid-session ramping) and clears the deficit timer.
+        # Cloud passes at t=120 — CHARGE resumes and clears the deficit
+        # timer; the ramp limiter climbs from the held 6 A (+2 A).
         d = st.filter(_charge(amps=10), view, adapter,
                       enable_delay_s=60, disable_delay_s=300, now_ts=120.0)
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
-        assert d.commanded_amps == 10
+        assert d.commanded_amps == 8
         # New deficit at t=200 → fresh 300 s window (stop at 500+, not 300).
         d = st.filter(_idle(), view, adapter,
                       enable_delay_s=60, disable_delay_s=300, now_ts=200.0)
@@ -183,6 +209,62 @@ class TestDisableDelay:
         d = st.filter(_idle(), view, adapter,
                       enable_delay_s=60, disable_delay_s=300, now_ts=0.0)
         assert d.commanded_amps == 9
+
+
+@pytest.mark.unit
+class TestMidSessionSmoothing:
+    """The reporter's car ended sessions itself because the commanded
+    current bounced cycle-by-cycle. Layers 1-3 + ramp must keep the
+    setpoint calm while a session runs."""
+
+    def _charging_setup(self):
+        st = ChargeStability()
+        adapter = FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
+        view = _view(power_w=7000.0)
+        return st, adapter, view
+
+    def test_single_cycle_dip_never_reaches_the_car(self):
+        # 8 kW → 0 W → 8 kW inverter flicker: decide() says IDLE for one
+        # cycle, but the median erases it — the car keeps its setpoint
+        # and no deficit window even starts.
+        st, adapter, view = self._charging_setup()
+        st.filter(_charge(amps=10), view, adapter, now_ts=0.0)
+        st.filter(_charge(amps=10), view, adapter, now_ts=10.0)
+        d = st.filter(_idle(), view, adapter, now_ts=20.0)
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 10
+        assert not st._deficit_since
+
+    def test_ramp_limits_step_size(self):
+        # A surplus jump from 10 A to 16 A worth of sun moves the
+        # setpoint by at most ramp_amps per change.
+        st, adapter, view = self._charging_setup()
+        st.filter(_charge(amps=10), view, adapter, now_ts=0.0)
+        st.filter(_charge(amps=10), view, adapter, now_ts=10.0)
+        d = st.filter(_charge(amps=16), view, adapter, now_ts=40.0)
+        # median of [10, 10, 16] = 10 → still 10; feed another 16.
+        d = st.filter(_charge(amps=16), view, adapter, now_ts=80.0)
+        assert d.commanded_amps == 12  # 10 + ramp(2), not 16
+
+    def test_debounce_one_change_per_interval(self):
+        st, adapter, view = self._charging_setup()
+        st.filter(_charge(amps=10), view, adapter, now_ts=0.0)   # adopt 10
+        st.filter(_charge(amps=16), view, adapter, now_ts=10.0)
+        d = st.filter(_charge(amps=16), view, adapter, now_ts=20.0)
+        # Median has reached 16 by t=20, but the last change was at
+        # t=0 — within the 30 s debounce the setpoint must not move.
+        assert d.commanded_amps == 10
+        assert "debounce" in d.reason
+        d = st.filter(_charge(amps=16), view, adapter, now_ts=45.0)
+        assert d.commanded_amps == 12  # debounce expired → one ramp step
+
+    def test_steady_state_is_untouched(self):
+        st, adapter, view = self._charging_setup()
+        st.filter(_charge(amps=10), view, adapter, now_ts=0.0)
+        d = st.filter(_charge(amps=10), view, adapter, now_ts=40.0)
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 10
+        assert d.reason == "solar_only: surplus ok"  # pass-through
 
 
 @pytest.mark.unit
