@@ -2184,6 +2184,16 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 if k.startswith("charger_") and k.endswith("_charging_state"):
                     cid = k[len("charger_"):-len("_charging_state")]
                     _per_charger_states[cid] = v
+            # #464 — per-charger plan rows. Same shape as ``today_plan``
+            # below; the EV card's per-charger plan strip reads its own
+            # charger's plan here (falling back to the fleet plan), so two
+            # chargers with different targets/deadlines no longer show an
+            # identical strip.
+            _per_charger_plans = {}
+            for k, v in self.coordinator.data.items():
+                if k.startswith("charger_") and k.endswith("_today_plan"):
+                    cid = k[len("charger_"):-len("_today_plan")]
+                    _per_charger_plans[cid] = v or []
             attrs.update({
                 "battery_soc": self.coordinator.data.get("battery_soc"),
                 "calculated_current": self.coordinator.data.get("calculated_current"),
@@ -2204,6 +2214,8 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
                 # Today's plan rows (#282) — list of {when, kind, label, detail, values}.
                 # sem-today-plan-card consumes this directly.
                 "today_plan": self.coordinator.data.get("today_plan") or [],
+                # Per-charger plan rows (#464) — {cid: [rows…]}.
+                "per_charger_plans": _per_charger_plans,
             })
         elif self.entity_description.key == "charging_strategy":
             attrs.update({

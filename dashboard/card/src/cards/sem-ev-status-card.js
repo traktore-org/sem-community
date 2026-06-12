@@ -204,14 +204,23 @@ class SEMEVStatusCard extends SEMLitBase {
 
     /**
      * 12h EV plan strip (#282): a thin horizontal timeline rendered from the
-     * today_plan attribute on sem_charging_state. Walks the plan rows and
-     * paints a contiguous bar segment per EV state (idle / wait / charging /
-     * done) plus expensive-window tinting overlay. Self-renders nothing when
+     * plan rows on sem_charging_state. Walks the plan rows and paints a
+     * contiguous bar segment per EV state (idle / wait / charging / done)
+     * plus expensive-window tinting overlay. Self-renders nothing when
      * there's no plan to show (no charger configured, Min already met, etc.).
+     *
+     * #464: each charger section passes its id so the strip renders THIS
+     * charger's plan (``per_charger_plans[id]``) — two chargers with
+     * different targets/deadlines used to show an identical strip because
+     * only the fleet-level (primary charger) plan existed. Fleet plan kept
+     * as the fallback for coordinators that predate the attribute.
      */
-    _renderPlanStrip() {
+    _renderPlanStrip(chargerId) {
         const cs = this._hass?.states['sensor.sem_charging_state'];
-        const plan = cs?.attributes?.today_plan || [];
+        const perPlan = chargerId
+            ? cs?.attributes?.per_charger_plans?.[chargerId] : null;
+        const usingPerPlan = Array.isArray(perPlan) && perPlan.length > 0;
+        const plan = usingPerPlan ? perPlan : (cs?.attributes?.today_plan || []);
         if (!Array.isArray(plan) || plan.length < 2) return nothing;
         // Only show when there's at least one EV-specific row — otherwise the
         // info value is too thin to justify the row.
@@ -233,7 +242,15 @@ class SEMEVStatusCard extends SEMLitBase {
         const evRows = plan.filter(r => ['now','night_open','ev_charge_start',
             'ev_min_reached','ev_deadline'].includes(r.kind));
         evRows.sort((a,b) => new Date(a.when) - new Date(b.when));
-        const tariffWait = !!cs?.attributes?.ev_tariff_waiting;
+        // Waiting-for-cheap is a per-charger fact: a per-charger plan
+        // marks it on the ev_charge_start row itself (the composer sets
+        // detail=plan_ev_charge_tariff only on the wait path). The fleet
+        // attribute is primary-charger-scoped — only trust it when we're
+        // rendering the fleet fallback plan.
+        const tariffWait = usingPerPlan
+            ? plan.some(r => r.kind === 'ev_charge_start'
+                          && r.detail === 'plan_ev_charge_tariff')
+            : !!cs?.attributes?.ev_tariff_waiting;
         const segments = [];
         let cursor = now;
         let state = 'idle';
@@ -293,18 +310,20 @@ class SEMEVStatusCard extends SEMLitBase {
 
         return html`
             <div class="plan-strip" title="${this._t('today_plan_title')} (12h)">
-                <svg viewBox="0 0 ${w} 14" preserveAspectRatio="none" class="strip-svg">
+                <div class="strip-title">
+                    <ha-icon icon="mdi:chart-timeline" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
+                    <span>${this._t('plan_strip_title')}</span>
+                </div>
+                <svg viewBox="0 0 ${w} 16" preserveAspectRatio="none" class="strip-svg">
                     ${segments.map(s => svg`
-                        <rect x="${xOf(s.s)}" y="3" width="${xOf(s.e)-xOf(s.s)}"
-                              height="6" fill="${stateColor(s.state)}" />
+                        <rect x="${xOf(s.s)}" y="5" width="${xOf(s.e)-xOf(s.s)}"
+                              height="10" fill="${stateColor(s.state)}" />
                     `)}
                     ${overlays.map(o => svg`
                         <rect x="${xOf(o.s)}" y="0" width="${xOf(o.e)-xOf(o.s)}"
-                              height="2" fill="${overlayColor(o.kind)}"
+                              height="3" fill="${overlayColor(o.kind)}"
                               opacity="0.75" />
                     `)}
-                    <line x1="0" y1="9" x2="${w}" y2="9"
-                          stroke="rgba(255,255,255,0.08)" stroke-width="0.3" />
                 </svg>
                 <div class="strip-axis">
                     ${ticks.map(t => html`
@@ -317,6 +336,9 @@ class SEMEVStatusCard extends SEMLitBase {
                     <span><i style="background:#8DC892"></i>${this._t('plan_strip_charging')}</span>
                     <span><i style="background:#4db6ac"></i>${this._t('plan_strip_done')}</span>
                 </div>
+                ${this._showHelp ? html`
+                    <div class="setting-help strip-help">${this._t('plan_strip_help')}</div>
+                ` : nothing}
             </div>
         `;
     }
@@ -686,7 +708,7 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span>${this._t('ev_deadline_unreachable_short')}</span>
                         </div>
                     ` : nothing}
-                    ${this._renderPlanStrip()}
+                    ${this._renderPlanStrip(id)}
                 </div>
 
                 <div class="charger-settings ${this._showHelp ? 'help-mode' : ''}">
@@ -1276,34 +1298,42 @@ class SEMEVStatusCard extends SEMLitBase {
                 display: flex; align-items: center; gap: 6px;
                 font-size: 11.5px; color: #f06292; padding: 5px 0 2px;
             }
-            /* 12h EV plan strip (#282) */
+            /* 12h EV plan strip (#282, readability pass #464) */
             .plan-strip {
                 margin: 8px 0 2px; padding: 4px 0 2px;
                 border-top: 1px dashed rgba(255,255,255,0.06);
             }
+            .strip-title {
+                display: flex; align-items: center; gap: 5px;
+                font-size: 11px; font-weight: 600;
+                color: var(--secondary-text-color, #aaa);
+                letter-spacing: 0.3px; margin-bottom: 4px;
+            }
             .strip-svg {
-                width: 100%; height: 14px; display: block;
+                width: 100%; height: 16px; display: block;
+                border-radius: 3px; overflow: hidden;
             }
             .strip-axis {
-                position: relative; height: 12px; margin-top: 2px;
-                font-size: 9.5px; color: var(--secondary-text-color, #888);
+                position: relative; height: 13px; margin-top: 3px;
+                font-size: 10px; color: var(--secondary-text-color, #888);
             }
             .strip-axis .tick {
                 position: absolute; transform: translateX(-50%);
                 font-variant-numeric: tabular-nums; white-space: nowrap;
             }
             .strip-legend {
-                display: flex; gap: 8px; flex-wrap: wrap;
-                font-size: 9.5px; color: var(--secondary-text-color, #888);
+                display: flex; gap: 10px; flex-wrap: wrap;
+                font-size: 10px; color: var(--secondary-text-color, #888);
                 margin-top: 4px;
             }
             .strip-legend span {
-                display: inline-flex; align-items: center; gap: 3px;
+                display: inline-flex; align-items: center; gap: 4px;
             }
             .strip-legend i {
-                width: 8px; height: 8px; border-radius: 2px;
+                width: 9px; height: 9px; border-radius: 2px;
                 display: inline-block;
             }
+            .strip-help { margin-top: 6px; }
             /* #355 — split affordance shown only when the two range
                handles share a value. Sits on top of the stacked
                handles; tapping it drops Min by one step so the

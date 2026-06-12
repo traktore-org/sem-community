@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🗓️ Per-charger plan strip + help text (#464)
+
+RienduPre's follow-up: "why is this bar the same for both chargers, and what is it for?" The bar is the 12-hour plan strip (#282) — and it was identical because only one fleet-level plan existed, composed from the primary charger's night plan/target/deadline, then rendered inside every charger section.
+
+- **Each charger now gets its own plan** — `today_plan` is composed per charger from ITS night plan, target, deadline, charge mode and live-session ETA; surfaced as `per_charger_plans` on `sensor.sem_charging_state` (fleet `today_plan` stays the primary's plan for the Today-plan card and as the card-side fallback) (reported by @RienduPre in #464)
+- **Stale night plans can no longer leak into day plans** — the per-charger night-plan map was write-only and never cleared; it now resets every cycle
+- **The strip explains itself** — it has a title ("Today's plan · next 12 h") and, with the card's ?-help toggle on, a legend explanation (grey = idle, purple = waiting for a cheaper hour, green = charging, teal = target reached; the thin top line marks cheap/expensive tariff windows). Translated in all 15 languages; bar slightly taller and the legend more legible
+- **Waiting-for-cheap is read per charger** — the strip derives the wait state from its own charger's plan rows instead of the primary-scoped `ev_tariff_waiting` attribute
+
 ## 🧪 Health-check & strategy-label triage from the #461 beta.10 dump
 
 RienduPre's 2026-06-12 dump showed the flows finally coherent, but 69 "Energy balance" violations and a `charging_strategy` claiming `solar_only` on chargers configured `solar_plus_cheap`.

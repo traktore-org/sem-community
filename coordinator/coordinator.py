@@ -1355,6 +1355,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # TARIFF_WAITING_FOR_CHEAP is also a night state (#247) — compute
                 # the per-charger targets so a waiting charger can still re-plan.
                 self._night_target_per_charger_map = {}
+                # Per-charger night plans are rebuilt inside the loop each
+                # night cycle; clear first so day cycles (and chargers whose
+                # target was reached) don't serve yesterday's stale plan to
+                # the per-charger today_plan composer (#464).
+                self._night_plan_per_charger = {}
                 if num_chargers >= 1 and charging_state in (
                     ChargingState.NIGHT_CHARGING_ACTIVE,
                     ChargingState.TARIFF_WAITING_FOR_CHEAP,
@@ -2312,66 +2317,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         _night_end_dt = _night_end_dt + timedelta(days=1)
                 except (AttributeError, ValueError):
                     pass
-                _np = self._cycle_night_plan
-                _ev_remaining = _np.remaining_kwh if _np else None
-                _ev_deadline_dt = _np.deadline_dt if _np else None
-                _ev_rate_kw = None
-                if _np and _np.hours_to_deadline and _np.hours_to_deadline > 0 and _np.remaining_kwh:
-                    # The planner's reachable=True implies remaining/rate <= hours_left;
-                    # this is the rough effective rate (peak-managed unless forcing).
-                    _ev_rate_kw = _np.remaining_kwh / max(0.1, _np.hours_to_deadline)
-                # Daytime fallback (#282): the night planner only runs inside the
-                # night window, so during the day _np is None and the strip would
-                # have no EV rows. Estimate remaining_to_min from the daily target
-                # vs accumulated, and resolve deadline from the charger config so
-                # the EV card can show "tonight's plan" as a preview.
-                #
-                # Gate on the night_charging switch being ON: when the user has
-                # explicitly disabled overnight grid charging, surfacing a "EV
-                # will charge at 21:22" row is misleading — the charger will
-                # NOT actually charge. Respect their opt-out.
-                if _ev_remaining is None or _ev_remaining <= 0.1:
-                    try:
-                        _pcfg = _dl_pcfg or {}
-                        _cid = _pcfg.get("id")
-                        # #277 Phase B: gate on the charge mode permitting
-                        # night charging rather than the legacy
-                        # ``switch.sem_charger_<cid>_night_charging`` state.
-                        # Mode is the authoritative answer post-B; the legacy
-                        # switch is a deprecated read-only mirror.
-                        _night_on = _cid and self._mode_allows_night_charging(_pcfg)
-                        if not _night_on:
-                            raise ValueError("charge mode disables night charging — no EV preview")
-                        _target = (_pcfg.get("daily_ev_target")
-                                   or self.config.get("daily_ev_target", 10))
-                        if _cid and _cid in self._daily_ev_per_charger:
-                            _daily = self._daily_ev_per_charger[_cid]
-                        else:
-                            _daily = getattr(energy, "daily_ev", 0.0) or 0.0
-                        _remain = max(0.0, float(_target) - float(_daily))
-                        if _remain > 0.1:
-                            _ev_remaining = _remain
-                            # Resolve deadline from charger config — same path the
-                            # planner uses, just without the full plan computation.
-                            from .ev_tariff_planner import resolve_deadline
-                            _tt = self._charger_target_time(_pcfg)
-                            _ev_deadline_dt = resolve_deadline(_now, _tt)
-                            # Rate estimate at 3-phase peak floor; the strip is a
-                            # preview, not the truth — close enough for the visual.
-                            _ev_rate_kw = 4.1  # ~6A x 690 W/A
-                    except (ValueError, TypeError, AttributeError):
-                        pass
-                # #298 — live ETAs while a battery / EV session is in
-                # progress. Best-guess from the CURRENT power rate;
-                # steady-state at the present rate is a useful
-                # approximation for "when does this finish?" Suppress
-                # when SOC is already at the boundary or the rate is
-                # too small for a sensible estimate.
+                # #298 — battery ETAs are fleet-shared; computed once.
+                # Best-guess from the CURRENT power rate; steady-state at
+                # the present rate is a useful approximation for "when
+                # does this finish?" Suppress when SOC is already at the
+                # boundary or the rate is too small for a sensible estimate.
                 _MIN_USEFUL_RATE_KW = 0.2  # 200 W — below this an ETA is noise
                 _battery_full_eta = None
                 _battery_empty_eta = None
-                _ev_target_eta = None
-                _ev_target_kwh = None
                 try:
                     _bat_kw = (power.battery_power or 0.0) / 1000.0
                     _bat_cap = self.config.get("battery_capacity_kwh", 15.0)
@@ -2391,62 +2344,153 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 except (AttributeError, TypeError, ValueError, ZeroDivisionError):
                     pass
 
-                try:
-                    # FLEET-READ: cycle-level kW display for the cost
-                    # tracker — fleet total is the correct unit for the
-                    # whole-system view shown to the user.
-                    _ev_kw = (power.ev_power or 0.0) / 1000.0
-                    if _ev_kw > _MIN_USEFUL_RATE_KW:
-                        _pcfg_t = _dl_pcfg or {}
-                        # Target preference: explicit Max ceiling > daily
-                        # target. Matches the surplus-stop semantics
-                        # from #245 — Max is where solar charging stops,
-                        # the natural ETA for an active session. Falls
-                        # back to Min if Max isn't set so something is
-                        # still surfaced.
-                        _ev_target = (
-                            _pcfg_t.get("daily_ev_target_max")
-                            or _pcfg_t.get("daily_ev_target")
-                            or self.config.get("daily_ev_target_max")
-                            or self.config.get("daily_ev_target", 10)
-                        )
-                        _cid = _pcfg_t.get("id")
-                        _ev_daily = (
-                            self._daily_ev_per_charger.get(_cid)
-                            if _cid and _cid in self._daily_ev_per_charger
-                            else (getattr(energy, "daily_ev", 0.0) or 0.0)
-                        )
-                        _remaining_to_target = max(
-                            0.0, float(_ev_target) - float(_ev_daily),
-                        )
-                        if _remaining_to_target > 0.1:
-                            _ev_target_eta = _now + timedelta(
-                                hours=_remaining_to_target / _ev_kw,
-                            )
-                            _ev_target_kwh = float(_ev_target)
-                except (AttributeError, TypeError, ValueError, ZeroDivisionError):
-                    pass
-
-                result["today_plan"] = compose_today_plan(
+                # Per-charger plan composition (#464): night plan, target,
+                # deadline, mode and live-session ETA are all PER-CHARGER
+                # quantities, but the plan used to be composed once from the
+                # primary charger's values — the EV card then rendered that
+                # identical strip under every charger ("why is this bar the
+                # same for both chargers?"). Compose one plan per charger;
+                # the fleet ``today_plan`` stays the primary's plan for
+                # sem-today-plan-card and as the card-side legacy fallback.
+                _shared_plan_kwargs = dict(
                     now=_now,
                     upcoming_prices=result.get("tariff_upcoming"),
                     solar_peak_time=_peak_t,
                     solar_remaining_kwh=_solar_remaining,
                     night_start=_night_start,
                     night_end=_night_end_dt,
-                    ev_min_remaining_kwh=_ev_remaining,
-                    ev_deadline=_ev_deadline_dt,
-                    ev_tariff_optimized=result.get("ev_tariff_optimized", False),
-                    ev_tariff_waiting=result.get("ev_tariff_waiting", False),
-                    ev_next_cheap_window=(
-                        _np.next_cheap_start if _np and _np.next_cheap_start else None
-                    ),
-                    ev_effective_rate_kw=_ev_rate_kw,
-                    ev_target_eta=_ev_target_eta,
-                    ev_target_kwh=_ev_target_kwh,
                     battery_full_eta=_battery_full_eta,
                     battery_empty_eta=_battery_empty_eta,
                     currency=result.get("tariff_currency", ""),
+                )
+                _primary_cid = (_dl_pcfg or {}).get("id")
+                # Legacy flat-config installs have no ev_chargers list —
+                # keep one (possibly empty) primary entry so the night
+                # plan from the primary pipeline still yields EV rows.
+                _plan_cfgs = [
+                    c for c in (self.config.get("ev_chargers") or [])
+                    if isinstance(c, dict) and c.get("id")
+                ] or [_dl_pcfg if isinstance(_dl_pcfg, dict) else {}]
+                _fleet_plan = None
+                from .ev_tariff_planner import resolve_deadline
+                for _pcfg in _plan_cfgs:
+                    _cid = _pcfg.get("id")
+                    # Night plan: the per-charger one from the multi-charger
+                    # loop; the primary additionally falls back to the
+                    # primary-pipeline plan (single-charger installs never
+                    # populate the per-charger dict). Both dicts are rebuilt
+                    # each cycle, so day cycles see None here.
+                    _np_c = self._night_plan_per_charger.get(_cid)
+                    if _np_c is None and _cid == _primary_cid:
+                        _np_c = self._cycle_night_plan
+                    _ev_remaining = _np_c.remaining_kwh if _np_c else None
+                    _ev_deadline_dt = _np_c.deadline_dt if _np_c else None
+                    _ev_rate_kw = None
+                    if _np_c and _np_c.hours_to_deadline and _np_c.hours_to_deadline > 0 and _np_c.remaining_kwh:
+                        # The planner's reachable=True implies remaining/rate <= hours_left;
+                        # this is the rough effective rate (peak-managed unless forcing).
+                        _ev_rate_kw = _np_c.remaining_kwh / max(0.1, _np_c.hours_to_deadline)
+                    # Daytime fallback (#282): the night planner only runs inside the
+                    # night window, so during the day the plan is None and the strip
+                    # would have no EV rows. Estimate remaining_to_min from the daily
+                    # target vs accumulated, and resolve deadline from the charger
+                    # config so the EV card can show "tonight's plan" as a preview.
+                    #
+                    # Gate on the charge mode permitting night charging (#277
+                    # Phase B): when the user's mode never grid-charges
+                    # overnight, surfacing a "EV will charge at 21:22" row is
+                    # misleading — the charger will NOT actually charge.
+                    if _ev_remaining is None or _ev_remaining <= 0.1:
+                        try:
+                            _night_on = _cid and self._mode_allows_night_charging(_pcfg)
+                            if not _night_on:
+                                raise ValueError("charge mode disables night charging — no EV preview")
+                            _target = (_pcfg.get("daily_ev_target")
+                                       or self.config.get("daily_ev_target", 10))
+                            if _cid and _cid in self._daily_ev_per_charger:
+                                _daily = self._daily_ev_per_charger[_cid]
+                            else:
+                                _daily = getattr(energy, "daily_ev", 0.0) or 0.0
+                            _remain = max(0.0, float(_target) - float(_daily))
+                            if _remain > 0.1:
+                                _ev_remaining = _remain
+                                # Resolve deadline from charger config — same path the
+                                # planner uses, just without the full plan computation.
+                                _tt = self._charger_target_time(_pcfg)
+                                _ev_deadline_dt = resolve_deadline(_now, _tt)
+                                # Rate estimate at 3-phase peak floor; the strip is a
+                                # preview, not the truth — close enough for the visual.
+                                _ev_rate_kw = 4.1  # ~6A x 690 W/A
+                        except (ValueError, TypeError, AttributeError):
+                            pass
+                    # #298 — live target ETA while THIS charger's session is in
+                    # progress. Uses the charger's own power reading (already in
+                    # ``result`` from the per-charger block above); falls back
+                    # to the fleet total only when the per-charger key is
+                    # missing (legacy single-charger path).
+                    _ev_target_eta = None
+                    _ev_target_kwh = None
+                    try:
+                        _pwr_w = result.get(f"charger_{_cid}_power")
+                        if _pwr_w is None:
+                            # FLEET-READ: legacy single-charger fallback — no
+                            # per-charger power key exists, so the fleet
+                            # total IS this charger's power.
+                            _pwr_w = power.ev_power or 0.0
+                        _ev_kw = float(_pwr_w or 0.0) / 1000.0
+                        if _ev_kw > _MIN_USEFUL_RATE_KW:
+                            # Target preference: explicit Max ceiling > daily
+                            # target. Matches the surplus-stop semantics
+                            # from #245 — Max is where solar charging stops,
+                            # the natural ETA for an active session. Falls
+                            # back to Min if Max isn't set so something is
+                            # still surfaced.
+                            _ev_target = (
+                                _pcfg.get("daily_ev_target_max")
+                                or _pcfg.get("daily_ev_target")
+                                or self.config.get("daily_ev_target_max")
+                                or self.config.get("daily_ev_target", 10)
+                            )
+                            _ev_daily = (
+                                self._daily_ev_per_charger.get(_cid)
+                                if _cid and _cid in self._daily_ev_per_charger
+                                else (getattr(energy, "daily_ev", 0.0) or 0.0)
+                            )
+                            _remaining_to_target = max(
+                                0.0, float(_ev_target) - float(_ev_daily),
+                            )
+                            if _remaining_to_target > 0.1:
+                                _ev_target_eta = _now + timedelta(
+                                    hours=_remaining_to_target / _ev_kw,
+                                )
+                                _ev_target_kwh = float(_ev_target)
+                    except (AttributeError, TypeError, ValueError, ZeroDivisionError):
+                        pass
+
+                    _plan = compose_today_plan(
+                        **_shared_plan_kwargs,
+                        ev_min_remaining_kwh=_ev_remaining,
+                        ev_deadline=_ev_deadline_dt,
+                        ev_tariff_optimized=self._tariff_optimized_for(_pcfg),
+                        ev_tariff_waiting=bool(
+                            _np_c.should_wait_for_cheap if _np_c else False
+                        ),
+                        ev_next_cheap_window=(
+                            _np_c.next_cheap_start
+                            if _np_c and _np_c.next_cheap_start else None
+                        ),
+                        ev_effective_rate_kw=_ev_rate_kw,
+                        ev_target_eta=_ev_target_eta,
+                        ev_target_kwh=_ev_target_kwh,
+                    )
+                    if _cid:
+                        result[f"charger_{_cid}_today_plan"] = _plan
+                    if _fleet_plan is None or _cid == _primary_cid:
+                        _fleet_plan = _plan
+
+                result["today_plan"] = (
+                    _fleet_plan if _fleet_plan is not None
+                    else compose_today_plan(**_shared_plan_kwargs)
                 )
             except Exception as e:
                 _LOGGER.debug("today_plan compose failed (#282): %s", e)
