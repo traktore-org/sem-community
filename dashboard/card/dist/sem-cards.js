@@ -2794,7 +2794,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     ${null!=t?Math.round(t)+"%":"—"}
                 </text>
             </svg>
-        `}_renderPlanStrip(t){const e=this._hass?.states["sensor.sem_charging_state"],i=t?e?.attributes?.per_charger_plans?.[t]:null,s=Array.isArray(i)&&i.length>0,r=s?i:e?.attributes?.today_plan||[];if(!Array.isArray(r)||r.length<2)return K;const a=new Set(["ev_charge_start","ev_min_reached","ev_deadline"]);if(!r.some(t=>a.has(t.kind)))return K;const o=Date.now(),n=432e5,l=o+n,c=t=>Math.max(0,Math.min(100,(t-o)/n*100)),d=r.filter(t=>["now","night_open","ev_charge_start","ev_min_reached","ev_deadline"].includes(t.kind));d.sort((t,e)=>new Date(t.when)-new Date(e.when));const p=s?r.some(t=>"ev_charge_start"===t.kind&&"plan_ev_charge_tariff"===t.detail):!!e?.attributes?.ev_tariff_waiting,h=[];let _=o,g="idle";for(const t of d){const e=new Date(t.when).getTime();e>_&&e<=l&&h.push({s:_,e:e,state:g}),_=e,"night_open"===t.kind?g=p?"wait":"charging":"ev_charge_start"===t.kind?g="charging":("ev_min_reached"===t.kind||"ev_deadline"===t.kind)&&(g="done")}_<l&&h.push({s:_,e:l,state:g});const u=[];for(const t of r){const e=new Date(t.when).getTime();if("expensive_start"===t.kind&&e<l){const i=t.values?.end;if(i){const[t,s]=i.split(":").map(Number),r=new Date(e);r.setHours(t,s,0,0),r.getTime()<e&&r.setDate(r.getDate()+1),u.push({s:e,e:Math.min(r.getTime(),l),kind:"expensive"})}}else if("cheap_start"===t.kind&&e<l){const i=t.values?.end;if(i){const[t,s]=i.split(":").map(Number),r=new Date(e);r.setHours(t,s,0,0),r.getTime()<e&&r.setDate(r.getDate()+1),u.push({s:e,e:Math.min(r.getTime(),l),kind:"cheap"})}}}const f=[];for(let t=0;t<=12;t+=3){const e=o+3600*t*1e3,i=new Date(e).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});f.push({x:c(e),label:i})}return W`
+        `}_renderPlanStrip(t){const e=this._hass?.states["sensor.sem_charging_state"],i=t?e?.attributes?.per_charger_plans?.[t]:null,s=Array.isArray(i)&&i.length>0,r=s?i:e?.attributes?.today_plan||[];if(!Array.isArray(r)||r.length<2)return K;const a=new Set(["ev_charge_start","ev_min_reached","ev_deadline"]);if(!r.some(t=>a.has(t.kind)))return K;const o=Date.now(),n=432e5,l=o+n,c=t=>Math.max(0,Math.min(100,(t-o)/n*100)),d=r.filter(t=>["now","night_open","ev_charge_start","ev_min_reached","ev_deadline"].includes(t.kind));d.sort((t,e)=>new Date(t.when)-new Date(e.when));const p=s?r.some(t=>"ev_charge_start"===t.kind&&"plan_ev_charge_tariff"===t.detail):!!e?.attributes?.ev_tariff_waiting,h=[];let _=o,g="idle";for(const t of d){const e=new Date(t.when).getTime();e>_&&e<=l&&h.push({s:_,e:e,state:g}),_=e,"night_open"===t.kind?g=p?"wait":"charging":"ev_charge_start"===t.kind?g="charging":("ev_min_reached"===t.kind||"ev_deadline"===t.kind)&&(g="done")}_<l&&h.push({s:_,e:l,state:g});const u=[];for(const t of r){const e=new Date(t.when).getTime();if("expensive_start"===t.kind&&e<l){const i=t.values?.end;if(i){const[t,s]=i.split(":").map(Number),r=new Date(e);r.setHours(t,s,0,0),r.getTime()<e&&r.setDate(r.getDate()+1),u.push({s:e,e:Math.min(r.getTime(),l),kind:"expensive"})}}else if("cheap_start"===t.kind&&e<l){const i=t.values?.end;if(i){const[t,s]=i.split(":").map(Number),r=new Date(e);r.setHours(t,s,0,0),r.getTime()<e&&r.setDate(r.getDate()+1),u.push({s:e,e:Math.min(r.getTime(),l),kind:"cheap"})}}}const f=t=>({idle:"#566072",wait:"#8353d1",charging:"#8DC892",done:"#4db6ac"}[t]||"#566072"),m=t=>"cheap"===t?"#43a047":"#f06292",v=[];for(let t=0;t<=12;t+=3){const e=o+3600*t*1e3,i=new Date(e).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});v.push({x:c(e),label:i})}return W`
             <div class="plan-strip" title="${this._t("today_plan_title")} (12h)">
                 <div class="strip-title">
                     <ha-icon icon="mdi:chart-timeline" style="--mdc-icon-size:13px;color:#5BC8D8"></ha-icon>
@@ -2803,24 +2803,26 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 <svg viewBox="0 0 ${100} 16" preserveAspectRatio="none" class="strip-svg">
                     ${h.map(t=>j`
                         <rect x="${c(t.s)}" y="5" width="${c(t.e)-c(t.s)}"
-                              height="10" fill="${(t=>({idle:"#3a4252",wait:"#8353d1",charging:"#8DC892",done:"#4db6ac"}[t]||"#3a4252"))(t.state)}" />
+                              height="10" fill="${f(t.state)}" />
                     `)}
                     ${u.map(t=>j`
                         <rect x="${c(t.s)}" y="0" width="${c(t.e)-c(t.s)}"
-                              height="3" fill="${(t=>"cheap"===t?"#8DC892":"#f06292")(t.kind)}"
+                              height="3" fill="${m(t.kind)}"
                               opacity="0.75" />
                     `)}
                 </svg>
                 <div class="strip-axis">
-                    ${f.map(t=>W`
+                    ${v.map(t=>W`
                         <span class="tick" style="left: ${t.x}%">${t.label}</span>
                     `)}
                 </div>
                 <div class="strip-legend">
-                    <span><i style="background:#3a4252"></i>${this._t("plan_strip_idle")}</span>
-                    <span><i style="background:#8353d1"></i>${this._t("plan_strip_wait")}</span>
-                    <span><i style="background:#8DC892"></i>${this._t("plan_strip_charging")}</span>
-                    <span><i style="background:#4db6ac"></i>${this._t("plan_strip_done")}</span>
+                    <span><i style="background:${f("idle")}"></i>${this._t("plan_strip_idle")}</span>
+                    <span><i style="background:${f("wait")}"></i>${this._t("plan_strip_wait")}</span>
+                    <span><i style="background:${f("charging")}"></i>${this._t("plan_strip_charging")}</span>
+                    <span><i style="background:${f("done")}"></i>${this._t("plan_strip_done")}</span>
+                    <span><i class="line" style="background:${m("cheap")}"></i>${this._t("plan_strip_cheap")}</span>
+                    <span><i class="line" style="background:${m("expensive")}"></i>${this._t("plan_strip_expensive")}</span>
                 </div>
                 ${this._showHelp?W`
                     <div class="setting-help strip-help">${this._t("plan_strip_help")}</div>
@@ -3518,16 +3520,22 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 font-variant-numeric: tabular-nums; white-space: nowrap;
             }
             .strip-legend {
-                display: flex; gap: 8px; flex-wrap: wrap;
-                font-size: 10px; color: var(--secondary-text-color, #888);
-                margin-top: 4px;
+                display: flex; gap: 6px 11px; flex-wrap: wrap;
+                font-size: 10.5px; color: var(--primary-text-color, #ddd);
+                margin-top: 5px;
             }
             .strip-legend span {
-                display: inline-flex; align-items: center; gap: 4px;
+                display: inline-flex; align-items: center; gap: 5px;
             }
             .strip-legend i {
-                width: 9px; height: 9px; border-radius: 2px;
-                display: inline-block;
+                width: 11px; height: 11px; border-radius: 2px;
+                display: inline-block; flex: none;
+            }
+            /* Tariff overlays render as a thin top line on the strip — mirror
+               that shape in the legend so they read as the top line, not a
+               full segment (#464). */
+            .strip-legend i.line {
+                height: 4px; border-radius: 1px;
             }
             .strip-help { margin-top: 6px; }
             /* #355 — split affordance shown only when the two range

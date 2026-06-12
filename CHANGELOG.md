@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🎨 Plan-strip legend always-visible + tariff colours (#464 follow-up)
+
+- **The full plan-strip legend is now always shown** — no need to open the `?` help. The four bar states (idle / waiting / charging / done) plus the two tariff-window colours (cheap / peak), which previously were only explained behind `?`, are all labelled inline; swatches enlarged and text contrast raised (reported by @RienduPre in #464)
+- **Cheap-tariff colour split from the charging green** — the cheap-tariff overlay used the same `#8DC892` as the "charging" segment; it's now a distinct deeper green and the tariff entries render as thin lines, mirroring how they appear on the strip's top edge (reported by @RienduPre in #464)
+
 # [1.7.3-beta.11] - 12.06.2026
 
 ## ⚡ Surplus start/stop flapping: enable/disable delays reconnected (#461)

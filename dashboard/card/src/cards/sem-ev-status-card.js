@@ -292,12 +292,15 @@ class SEMEVStatusCard extends SEMLitBase {
         }
 
         const stateColor = (s) => ({
-            idle:     '#3a4252',
+            idle:     '#566072',
             wait:     '#8353d1',
             charging: '#8DC892',
             done:     '#4db6ac',
-        })[s] || '#3a4252';
-        const overlayColor = (k) => k === 'cheap' ? '#8DC892' : '#f06292';
+        })[s] || '#566072';
+        // Tariff overlay colours are deliberately distinct from the segment
+        // palette — cheap is a deeper leaf-green so it can't be mistaken for
+        // the 'charging' sea-green it used to share (#464 legend feedback).
+        const overlayColor = (k) => k === 'cheap' ? '#43a047' : '#f06292';
 
         // Hourly ticks for time labels (every 3h)
         const ticks = [];
@@ -331,10 +334,12 @@ class SEMEVStatusCard extends SEMLitBase {
                     `)}
                 </div>
                 <div class="strip-legend">
-                    <span><i style="background:#3a4252"></i>${this._t('plan_strip_idle')}</span>
-                    <span><i style="background:#8353d1"></i>${this._t('plan_strip_wait')}</span>
-                    <span><i style="background:#8DC892"></i>${this._t('plan_strip_charging')}</span>
-                    <span><i style="background:#4db6ac"></i>${this._t('plan_strip_done')}</span>
+                    <span><i style="background:${stateColor('idle')}"></i>${this._t('plan_strip_idle')}</span>
+                    <span><i style="background:${stateColor('wait')}"></i>${this._t('plan_strip_wait')}</span>
+                    <span><i style="background:${stateColor('charging')}"></i>${this._t('plan_strip_charging')}</span>
+                    <span><i style="background:${stateColor('done')}"></i>${this._t('plan_strip_done')}</span>
+                    <span><i class="line" style="background:${overlayColor('cheap')}"></i>${this._t('plan_strip_cheap')}</span>
+                    <span><i class="line" style="background:${overlayColor('expensive')}"></i>${this._t('plan_strip_expensive')}</span>
                 </div>
                 ${this._showHelp ? html`
                     <div class="setting-help strip-help">${this._t('plan_strip_help')}</div>
@@ -1322,16 +1327,22 @@ class SEMEVStatusCard extends SEMLitBase {
                 font-variant-numeric: tabular-nums; white-space: nowrap;
             }
             .strip-legend {
-                display: flex; gap: 8px; flex-wrap: wrap;
-                font-size: 10px; color: var(--secondary-text-color, #888);
-                margin-top: 4px;
+                display: flex; gap: 6px 11px; flex-wrap: wrap;
+                font-size: 10.5px; color: var(--primary-text-color, #ddd);
+                margin-top: 5px;
             }
             .strip-legend span {
-                display: inline-flex; align-items: center; gap: 4px;
+                display: inline-flex; align-items: center; gap: 5px;
             }
             .strip-legend i {
-                width: 9px; height: 9px; border-radius: 2px;
-                display: inline-block;
+                width: 11px; height: 11px; border-radius: 2px;
+                display: inline-block; flex: none;
+            }
+            /* Tariff overlays render as a thin top line on the strip — mirror
+               that shape in the legend so they read as the top line, not a
+               full segment (#464). */
+            .strip-legend i.line {
+                height: 4px; border-radius: 1px;
             }
             .strip-help { margin-top: 6px; }
             /* #355 — split affordance shown only when the two range
