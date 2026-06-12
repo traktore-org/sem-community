@@ -292,3 +292,20 @@ schedule_appliance:
           min: 1
           max: 10
           step: 1
+
+reset_sign_detection:
+  name: Reset sign detection
+  description: >
+    Forget the learned grid and battery sign-convention locks (RAM and
+    storage) and re-learn them from the Energy Dashboard counters. Use
+    this if grid import/export or battery charge/discharge are showing
+    flipped after the autodetect locked a wrong sign — the lock now
+    persists across restarts (#476), so a restart alone no longer
+    clears it.
+  fields:
+    entry_id:
+      name: Config entry
+      description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:
