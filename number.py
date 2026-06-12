@@ -188,6 +188,25 @@ NUMBER_TYPES = [
         native_step=10,
         mode=NumberMode.SLIDER,
     ),
+    # Surplus stability delays (#461) — evcc-style enable/disable timers
+    # enforced by coordinator/charge_stability.py. Global: contactor-wear
+    # protection policy, not a per-charger hardware property.
+    NumberEntityDescription(
+        key="ev_enable_delay_seconds",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=0,
+        native_max_value=600,
+        native_step=10,
+        mode=NumberMode.SLIDER,
+    ),
+    NumberEntityDescription(
+        key="ev_disable_delay_seconds",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        native_min_value=0,
+        native_max_value=1800,
+        native_step=30,
+        mode=NumberMode.SLIDER,
+    ),
     # ev_phases is PER-CHARGER only (#255) — it's a charger hardware property. Global
     # entity removed (seeded per-charger by the v3→v4 migration; stale entity auto-removed).
     # Tariff rates (previously only in OptionsFlow)
@@ -641,6 +660,8 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "initial_current": DEFAULT_EV_INITIAL_CURRENT,
             "ev_minimum_current": DEFAULT_EV_MIN_CURRENT,
             "ev_stall_cooldown": DEFAULT_EV_STALL_COOLDOWN,
+            "ev_enable_delay_seconds": 60,
+            "ev_disable_delay_seconds": 300,
             "ev_phases": 3,
             "ev_kwh_per_100km": 18,
             "public_charging_rate": 0.55,

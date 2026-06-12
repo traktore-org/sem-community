@@ -1085,6 +1085,12 @@
       "ev_stall_cooldown": {
         "name": "Enfriamiento Parada VE"
       },
+      "ev_enable_delay_seconds": {
+        "name": "Retardo de inicio VE (excedente)"
+      },
+      "ev_disable_delay_seconds": {
+        "name": "Retardo de parada VE (déficit)"
+      },
       "battery_buffer_soc": {
         "name": "SOC Buffer Batería"
       },

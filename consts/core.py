@@ -65,10 +65,13 @@ DEFAULT_EV_STALL_COOLDOWN: Final = 120  # Seconds between KEBA re-enable attempt
 #            re-send the current target so a lost command on a transient
 #            network blip can never strand the charger.
 #
-# Layer 4 (threshold-time-windows on enable/disable transitions) is the
-# pre-existing ev_enable_delay_seconds (60 s) and ev_disable_delay_seconds
-# (300 s) at ev_control.py:495-496 — kept as-is. Defaults below match evcc's
-# guardduration discipline.
+# Layer 4 (threshold-time-windows on enable/disable transitions) is
+# ev_enable_delay_seconds / ev_disable_delay_seconds. Post-v1.7 they are
+# enforced by coordinator/charge_stability.py between decide() and
+# actuate() (the arch rewrite had orphaned the ev_control.py:495 copy —
+# #461 flapping). Defaults below match evcc's guardduration discipline.
+DEFAULT_EV_ENABLE_DELAY_SEC: Final = 60   # Seconds surplus must persist before a charge starts
+DEFAULT_EV_DISABLE_DELAY_SEC: Final = 300  # Seconds deficit must persist before a charge stops
 DEFAULT_EV_MIN_CHANGE_AMPS: Final = 1  # Amps - suppress sub-1A noise (matches night-path L440)
 DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC: Final = 30  # Seconds between set_current calls
 DEFAULT_EV_SURPLUS_SMOOTH_WINDOW: Final = 3  # Cycles in the rolling median (~30 s)

@@ -1085,6 +1085,12 @@
       "ev_stall_cooldown": {
         "name": "EV Stall-Abkühlung"
       },
+      "ev_enable_delay_seconds": {
+        "name": "EV-Startverzögerung (Überschuss)"
+      },
+      "ev_disable_delay_seconds": {
+        "name": "EV-Stoppverzögerung (Defizit)"
+      },
       "battery_buffer_soc": {
         "name": "Batterie-Puffer-SOC"
       },

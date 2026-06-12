@@ -1085,6 +1085,12 @@
       "ev_stall_cooldown": {
         "name": "EV Stall Afkoeling"
       },
+      "ev_enable_delay_seconds": {
+        "name": "EV-startvertraging (overschot)"
+      },
+      "ev_disable_delay_seconds": {
+        "name": "EV-stopvertraging (tekort)"
+      },
       "battery_buffer_soc": {
         "name": "Batterij Buffer-SOC"
       },

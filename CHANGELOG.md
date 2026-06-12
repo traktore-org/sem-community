@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## ⚡ Surplus start/stop flapping: enable/disable delays reconnected (#461)
+
+The v1.7 `decide() → actuate()` rewrite silently orphaned the v1.7.1-beta.14 stability layer: `ev_enable_delay_seconds` / `ev_disable_delay_seconds` still existed as config keys but were only read by the legacy `_execute_ev_control` path the new pipeline no longer calls. Result in RienduPre's beta.10 logs: solar hovering around the 6 A minimum cycled the contactor every ~20 s (±4.5 kW demand swings between consecutive health-check lines).
+
+- **The delays are enforced again** — a new `charge_stability` filter sits between `decide()` and `actuate()` in both pipeline branches: a surplus charge only **starts** after the surplus has held for `ev_enable_delay_seconds` (default 60 s), and only **stops** after the deficit has persisted `ev_disable_delay_seconds` (default 300 s), holding minimum current meanwhile. Applied before state display, so the strategy sensor names the active hold instead of contradicting the measured power
+- **Stop semantics upgraded to evcc's deficit-persistence** ([evcc-io/evcc](https://github.com/evcc-io/evcc) `enable.delay`/`disable.delay`) — the legacy implementation measured from session start (a minimum-run-time), so a session older than the window still died on a single-cycle cloud dip. The deficit timer protects the contactor for the whole session
+- **Night floors, `always_max`, OFF/DISABLE and unplugs are never delayed** — safety and user-intent transitions bypass the filter; timers are independent per charger
+- **Both settings are now real entities** (`number.sem_ev_enable_delay_seconds` / `number.sem_ev_disable_delay_seconds`) on the Config tab's **Advanced** section with ?-help texts — previously they were raw config keys with no UI surface
+
 ## 🗓️ Per-charger plan strip + help text (#464)
 
 RienduPre's follow-up: "why is this bar the same for both chargers, and what is it for?" The bar is the 12-hour plan strip (#282) — and it was identical because only one fleet-level plan existed, composed from the primary charger's night plan/target/deadline, then rendered inside every charger section.

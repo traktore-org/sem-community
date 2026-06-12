@@ -349,6 +349,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Per-charger night plans for surfacing + the "unreachable deadline" notify
         # (notification dedup itself lives in NotificationManager._notified_flags)
         self._night_plan_per_charger = {}
+        # Surplus-mode enable/disable delay timers (#461 flapping) — the
+        # evcc-style stability filter between decide() and actuate().
+        from .charge_stability import ChargeStability
+        self._charge_stability = ChargeStability()
         # Shared night peak budget (#274/H1): watts committed to higher-priority
         # chargers so far this cycle. Reset before the per-charger loop; each
         # charger's peak-managed sizing subtracts it so the fleet stays under peak.
@@ -1686,6 +1690,17 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             solar_committed_w=self._solar_committed_w_per_cycle,
                         )
                         decision = decide_v2(view)
+                        # evcc-style enable/disable delays (#461 flapping).
+                        # Applied BEFORE state display + actuation so the
+                        # sensor state, strategy string and contactor all
+                        # agree on the held decision.
+                        decision = self._charge_stability.filter(
+                            decision, view, adapter,
+                            enable_delay_s=self.config.get(
+                                "ev_enable_delay_seconds", 60),
+                            disable_delay_s=self.config.get(
+                                "ev_disable_delay_seconds", 300),
+                        )
                         # Track the highest commanded current across the
                         # fleet so the stall-detection path (line ~3725)
                         # can distinguish "SEM idle, EV at 0W is correct"
@@ -1808,6 +1823,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
                 )
                 decision = decide_v2(view)
+                # evcc-style enable/disable delays (#461 flapping) — the
+                # single-charger legacy branch needs the same protection.
+                decision = self._charge_stability.filter(
+                    decision, view, adapter,
+                    enable_delay_s=self.config.get(
+                        "ev_enable_delay_seconds", 60),
+                    disable_delay_s=self.config.get(
+                        "ev_disable_delay_seconds", 300),
+                )
                 try:
                     await actuate(decision, adapter, view.power)
                     self._save_ev_session_state()

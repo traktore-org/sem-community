@@ -1085,6 +1085,12 @@
       "ev_stall_cooldown": {
         "name": "Temporisation Arrêt VE"
       },
+      "ev_enable_delay_seconds": {
+        "name": "Délai de démarrage VE (surplus)"
+      },
+      "ev_disable_delay_seconds": {
+        "name": "Délai d'arrêt VE (déficit)"
+      },
       "battery_buffer_soc": {
         "name": "SOC Tampon Batterie"
       },
