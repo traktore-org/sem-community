@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [Unreleased]
+
+## 🧪 Health-check & strategy-label triage from the #461 beta.10 dump
+
+RienduPre's 2026-06-12 dump showed the flows finally coherent, but 69 "Energy balance" violations and a `charging_strategy` claiming `solar_only` on chargers configured `solar_plus_cheap`.
+
+- **Energy-balance "violations" during the home-consumption hold are demoted to debug** — `home_consumption_power` is derived as the residual of the other readings, so supply≈demand is an identity; a gap can only appear when the residual went negative (one input sensor stale, e.g. a Growatt solar reading frozen for ~5 min) and the #237/#444 hold bridged it. Those cycles re-reported a known, already-handled inconsistency every 10 s and inflated `diag_health_violations`. A gap that *outlives* the hold window still warns, now naming the likely cause (stale power sensor) (reported by @RienduPre in #461)
+- **Delegated day strategies keep their configured mode label** — `solar_plus_cheap` (day, normal/cheap tariff) and `min_plus_solar` (day, Zone 2) delegate to the solar_only math but no longer report `mode="solar_only"`/`"solar_only: …"` verbatim; the strategy string now reads `solar_plus_cheap day: tariff=normal — solar_only: …`, so the Config card's mode and the live strategy can't appear to contradict each other (reported by @RienduPre in #461)
+
+---
+
 # [1.7.3-beta.10] - 11.06.2026
 
 ## 💶 Tibber Grid Reward price arrays (#491)

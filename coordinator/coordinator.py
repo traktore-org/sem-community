@@ -734,6 +734,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         Runs before energy integration so the held value also keeps the
         home-energy total from under-counting.
         """
+        # Whether THIS cycle's home value is a hold substitute. Read by
+        # the health check (#461): a substituted value breaks the
+        # supply≈demand identity by construction, so the balance check
+        # must not count those cycles as violations.
+        self._home_hold_active = False
         if power.home_consumption_power > 0:
             self._last_home_consumption = power.home_consumption_power
             self._home_hold_count = 0
@@ -765,6 +770,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
         if held < max_cycles:
             self._home_hold_count = held + 1
+            self._home_hold_active = True
             power.home_consumption_power = last
             _LOGGER.debug(
                 "Home consumption clamped to 0 — holding last %.0fW (%d/%d, raw_balance=%.0fW, %s)",
@@ -1956,6 +1962,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 autarky=performance.autarky_rate,
                 self_consumption=performance.self_consumption_rate,
                 costs=costs,
+                home_hold_active=getattr(self, "_home_hold_active", False),
             )
 
             # Step 12: Notifications (extracted for readability, #29)

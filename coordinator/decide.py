@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from typing import Dict, Optional, Type
 
 from .charger_types import (
@@ -120,6 +121,21 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     # the EV budget. (Don't speculate on future discharge; use what
     # the inverter is reporting right now.)
     return surplus + f.battery_discharge_w
+
+
+def _relabel(decision: ChargerDecision, mode: str, prefix: str) -> ChargerDecision:
+    """Re-stamp a decision delegated to another mode's strategy.
+
+    Modes that fall back to another strategy's ``decide()`` must
+    not leak the inner mode/reason verbatim: RienduPre's #461 dump
+    showed ``charging_strategy: "solar_only: …"`` on a charger
+    configured ``solar_plus_cheap``, reading like the configured
+    mode was ignored. The relabel keeps the inner detail but names
+    the configured mode and why it delegated.
+    """
+    return replace(
+        decision, mode=mode, reason=f"{prefix} — {decision.reason}",
+    )
 
 
 def amps_from_watts(watts: float, phases: int, voltage: int) -> int:
@@ -437,7 +453,10 @@ class MinPlusSolarMode(ModeStrategy):
             )
         # Zone 2: pure solar (same as solar_only).
         if zone == 2:
-            return _SOLAR_ONLY.decide(view)
+            return _relabel(
+                _SOLAR_ONLY.decide(view), "min_plus_solar",
+                f"min_plus_solar day Zone 2 (SOC={f.battery_soc:.0f}%)",
+            )
         # Zone 3 / 4: commit-then-measure (#439, ADR 0010). The mode
         # name promises "guarantee min from grid + solar up to max",
         # and in Zone 3/4 the home battery is available to supplement.
@@ -492,23 +511,19 @@ class SolarPlusCheapMode(ModeStrategy):
         # Day during expensive tariff window → fall back to pure
         # solar_only behaviour (the #247 daytime pause).
         if not f.is_night and f.tariff_level in self.EXPENSIVE_LEVELS:
-            decision = _SOLAR_ONLY.decide(view)
-            return ChargerDecision(
-                charger_id=decision.charger_id,
-                mode="solar_plus_cheap",
-                intent=decision.intent,
-                commanded_amps=decision.commanded_amps,
-                budget_w=decision.budget_w,
-                reason=(
-                    f"solar_plus_cheap day: tariff={f.tariff_level} "
-                    f"→ pausing grid imports — {decision.reason}"
-                ),
+            return _relabel(
+                _SOLAR_ONLY.decide(view), "solar_plus_cheap",
+                f"solar_plus_cheap day: tariff={f.tariff_level} "
+                f"→ pausing grid imports",
             )
 
         # Day, normal/cheap tariff: solar surplus only (same as
         # min_plus_solar day path).
         if not f.is_night:
-            return _SOLAR_ONLY.decide(view)
+            return _relabel(
+                _SOLAR_ONLY.decide(view), "solar_plus_cheap",
+                f"solar_plus_cheap day: tariff={f.tariff_level}",
+            )
 
         # Night → defers to the night planner's tariff_wait flag.
         # This is the only mode that consults ``tariff_wait``.
