@@ -29,6 +29,10 @@ def _freeze_dt(year=2026, month=4, day=18, hour=12, minute=0):
     mock.year = dt.year
     mock.hour = dt.hour
     mock.minute = dt.minute
+    # #416 sub#2/#3 — the EMA smoothing reads now().timestamp() and the
+    # sun-hours fix reads now().date(); bind the real datetime's methods.
+    mock.timestamp = dt.timestamp
+    mock.date = dt.date
     return mock
 
 

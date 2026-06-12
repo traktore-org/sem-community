@@ -13,9 +13,10 @@ The correction factor is a simple but effective approach:
 from __future__ import annotations
 
 import logging
+import math
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
@@ -31,6 +32,12 @@ MIN_FORECAST_KWH = 0.5
 
 # Real-time dampening: hours of solar production before fully trusting live data
 CONFIDENCE_RAMP_HOURS = 3.0
+# #416 sub#2 — time-constant (seconds) of the EMA applied to the live
+# normalized ratio before it enters the dampening blend. ~5 minutes:
+# cycle-to-cycle sensor noise (cloud transits, inverter sampling) is
+# damped away, while genuine weather trends (tens of minutes) pass
+# through with little lag.
+LIVE_RATIO_EMA_TAU_S = 300.0
 
 # Outlier detection: cap actual at this multiple of forecast
 MAX_ACTUAL_RATIO = 2.0  # Cap outlier days at 2× forecast (was 3.0)
@@ -90,6 +97,11 @@ class ForecastTracker:
         self._dampening_snapshot: Optional[float] = None
         self._snapshot_confidence: Optional[float] = None
         self._snapshot_live_ratio: Optional[float] = None
+        # #416 sub#2 — intraday EMA over the normalized live ratio.
+        # Reset at day rollover; not persisted (re-seeds within ~τ
+        # after a mid-day restart).
+        self._smoothed_normalized_ratio: Optional[float] = None
+        self._smoothed_ratio_ts: Optional[float] = None
         # #416 follow-up (2026-06-06): snapshot of ``_weather_today``
         # captured during the same confident mid-day cycle that updates
         # ``_dampening_snapshot``. The day-rollover write needs to
@@ -124,6 +136,21 @@ class ForecastTracker:
                         # Convert to local time hours
                         local_rise = rise.astimezone(dt_util.DEFAULT_TIME_ZONE)
                         local_sett = sett.astimezone(dt_util.DEFAULT_TIME_ZONE)
+                        # #416 sub#3 — ``next_rising``/``next_setting``
+                        # are the NEXT events: during the day
+                        # next_rising is tomorrow's sunrise, and after
+                        # sunset next_setting is tomorrow's too. Mixing
+                        # tomorrow-rise with today-set skews the
+                        # daylight window (~1 min average, worse near
+                        # solstices / high latitudes). Roll any
+                        # tomorrow-dated event back one day — the day-
+                        # over-day drift (≲2 min) is far below the
+                        # sine-curve model's own error.
+                        local_today = dt_util.now().date()
+                        if local_rise.date() > local_today:
+                            local_rise -= timedelta(days=1)
+                        if local_sett.date() > local_today:
+                            local_sett -= timedelta(days=1)
                         return (
                             local_rise.hour + local_rise.minute / 60.0,
                             local_sett.hour + local_sett.minute / 60.0,
@@ -154,6 +181,8 @@ class ForecastTracker:
             self._snapshot_confidence = None
             self._snapshot_live_ratio = None
             self._weather_snapshot = None
+            self._smoothed_normalized_ratio = None
+            self._smoothed_ratio_ts = None
 
         # Update today's values
         self._today_date = today
@@ -525,8 +554,32 @@ class ForecastTracker:
         live_ratio = self._today_actual / self._today_forecast
         normalized_ratio = live_ratio / expected_fraction if expected_fraction > 0.01 else 1.0
 
+        # #416 sub#2 — time-based EMA over the normalized ratio. At
+        # 7-9 AM ``expected_fraction`` is tiny, so the division above
+        # amplifies the actual-sensor noise floor (cloud transits,
+        # inverter sampling) into large cycle-to-cycle dampening
+        # swings. The EMA (τ = LIVE_RATIO_EMA_TAU_S) damps that jitter;
+        # genuine weather trends (tens of minutes) pass with little
+        # lag. Raw ``normalized_ratio`` stays on the diagnostics
+        # surface; only the blend consumes the smoothed value.
+        now_ts = now.timestamp()
+        if (
+            self._smoothed_normalized_ratio is None
+            or self._smoothed_ratio_ts is None
+            or now_ts < self._smoothed_ratio_ts
+        ):
+            self._smoothed_normalized_ratio = normalized_ratio
+        else:
+            dt_s = max(0.0, now_ts - self._smoothed_ratio_ts)
+            alpha = 1.0 - math.exp(-dt_s / LIVE_RATIO_EMA_TAU_S)
+            self._smoothed_normalized_ratio += alpha * (
+                normalized_ratio - self._smoothed_normalized_ratio
+            )
+        self._smoothed_ratio_ts = now_ts
+        smoothed_ratio = self._smoothed_normalized_ratio
+
         # Blend: historical correction × (1 - confidence) + live ratio × confidence
-        blended = (1 - confidence) * self._correction_factor + confidence * normalized_ratio
+        blended = (1 - confidence) * self._correction_factor + confidence * smoothed_ratio
         clamped = max(0.5, min(1.5, blended))
 
         if clamped != blended:
@@ -586,6 +639,13 @@ class ForecastTracker:
             "forecast_dampening_confidence": self._last_confidence,
             "forecast_dampening_live_ratio": self._last_live_ratio,
             "forecast_dampening_normalized_ratio": self._last_normalized_ratio,
+            # #416 sub#2 — the EMA-smoothed value that actually enters
+            # the blend (raw normalized_ratio above is the unsmoothed
+            # diagnostic). None until the first blended_live cycle.
+            "forecast_dampening_smoothed_ratio": (
+                round(self._smoothed_normalized_ratio, 4)
+                if self._smoothed_normalized_ratio is not None else None
+            ),
             "forecast_dampening_pre_clamp": self._last_blended_pre_clamp,
         }
 
