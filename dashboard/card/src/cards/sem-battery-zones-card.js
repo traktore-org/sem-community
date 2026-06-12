@@ -49,8 +49,11 @@ class SEMBatteryZonesCard extends SEMLitBase {
     _renderZoneMarkers(T) {
         return ZONES.map(z => {
             const val = this._state(z.entity);
+            // Clamp the marker position so an out-of-range sensor value
+            // (e.g. during startup) can't stretch the card horizontally.
+            const pos = Math.max(0, Math.min(100, val));
             return html`
-                <div class="zone-marker" style="left:${val}%">
+                <div class="zone-marker" style="left:${pos}%">
                     <div class="zone-dot" style="background:${z.color};border-color:${T.isDark ? '#1e232d' : '#fff'}"></div>
                     <span class="zone-marker-label">${val.toFixed(0)}%</span>
                 </div>
@@ -163,7 +166,7 @@ class SEMBatteryZonesCard extends SEMLitBase {
                     box-shadow: 0 0 4px rgba(0,0,0,0.3);
                 }
                 .zone-marker-label {
-                    font-size: 9px;
+                    font-size: 10px;
                     font-weight: 600;
                     margin-top: 2px;
                     color: var(--secondary-text-color, ${T.textSec});

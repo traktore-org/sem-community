@@ -773,7 +773,7 @@ class SEMSystemDiagramCard extends SEMLitBase {
                     ${unavailable.length > 0 ? html`
                         <foreignObject x="${c ? 8 : 10}" y="${L.statusY}" width="220" height="22">
                             <div xmlns="http://www.w3.org/1999/xhtml"
-                                 style="font-family:'Segoe UI','Roboto',sans-serif;font-size:10px;color:#ef5350;opacity:0.75;white-space:nowrap">⚠ ${unavailable.length} ${this._t('sensor_unavailable')}</div>
+                                 style="font-family:'Segoe UI','Roboto',sans-serif;font-size:11px;color:#ef5350;opacity:0.75;white-space:nowrap">⚠ ${unavailable.length} ${this._t('sensor_unavailable')}</div>
                         </foreignObject>
                     ` : nothing}
 

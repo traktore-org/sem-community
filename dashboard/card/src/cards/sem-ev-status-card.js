@@ -1046,7 +1046,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 display: flex;
                 justify-content: space-between;
                 align-items: baseline;
-                padding: 1.5px 0;
+                padding: 2px 0;
             }
             .metric-label {
                 font-size: 11px;
@@ -1075,7 +1075,7 @@ class SEMEVStatusCard extends SEMLitBase {
             .solar-share-value { color: #ff9800 !important; }
 
             .strategy-value {
-                font-size: 10px;
+                font-size: 11px;
                 color: #8DC892; opacity: 0.7;
                 font-weight: 500;
                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -1129,7 +1129,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 color: var(--primary-text-color, #e0e0e0);
             }
             .charger-status {
-                font-size: 0.75em; font-weight: 500;
+                font-size: 0.8em; font-weight: 500;
                 text-transform: uppercase; letter-spacing: 0.05em;
                 color: var(--secondary-text-color, #999);
             }
@@ -1141,7 +1141,7 @@ class SEMEVStatusCard extends SEMLitBase {
             }
             .soc-label {
                 display: block;
-                font-size: 9px; color: var(--secondary-text-color, #999);
+                font-size: 10px; color: var(--secondary-text-color, #999);
                 margin-top: 2px;
                 text-transform: uppercase; letter-spacing: 0.05em;
             }
@@ -1151,11 +1151,11 @@ class SEMEVStatusCard extends SEMLitBase {
             }
             .cm-row {
                 display: flex; justify-content: space-between; align-items: baseline;
-                padding: 1px 0;
+                padding: 2px 0;
             }
-            .cm-label { font-size: 10px; color: var(--secondary-text-color, #999); font-weight: 500; }
+            .cm-label { font-size: 11px; color: var(--secondary-text-color, #999); font-weight: 500; }
             .cm-value {
-                font-size: 11px; font-weight: 600;
+                font-size: 12px; font-weight: 600;
                 color: var(--primary-text-color, #e0e0e0);
                 font-variant-numeric: tabular-nums;
             }
@@ -1195,13 +1195,13 @@ class SEMEVStatusCard extends SEMLitBase {
             .charger-settings.help-mode .ev-help-toggle { align-self: flex-end; }
             .setting-item {
                 display: flex; align-items: center; gap: 3px;
-                font-size: 10px; color: var(--secondary-text-color, #999);
+                font-size: 11px; color: var(--secondary-text-color, #999);
             }
             .setting-item.clickable { cursor: pointer; }
-            .setting-label { font-size: 10px; color: var(--secondary-text-color, #999); }
-            .setting-value { font-size: 11px; font-weight: 600; color: var(--primary-text-color, #e0e0e0); }
+            .setting-label { font-size: 11px; color: var(--secondary-text-color, #999); }
+            .setting-value { font-size: 12px; font-weight: 600; color: var(--primary-text-color, #e0e0e0); }
             .setting-toggle {
-                font-size: 10px; font-weight: 700;
+                font-size: 11px; font-weight: 700;
                 padding: 1px 6px;
                 border-radius: 6px;
                 cursor: pointer;
@@ -1221,7 +1221,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 background: rgba(255,255,255,0.025);
             }
             .ct-title {
-                font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+                font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
                 color: var(--secondary-text-color, #999);
                 display: flex; align-items: center; gap: 5px;
                 margin-bottom: 4px;
@@ -1266,7 +1266,7 @@ class SEMEVStatusCard extends SEMLitBase {
             .ct-subhint {
                 padding: 4px 0 4px 16px; margin-left: 2px;
                 border-left: 2px solid rgba(141,200,146,0.18);
-                font-size: 10.5px; line-height: 1.35; color: var(--secondary-text-color, #999);
+                font-size: 11px; line-height: 1.35; color: var(--secondary-text-color, #999);
                 display: flex; flex-direction: column; gap: 2px;
             }
             .ct-hint-row { display: flex; gap: 6px; align-items: baseline; }
@@ -1296,7 +1296,7 @@ class SEMEVStatusCard extends SEMLitBase {
             }
             .ct-warn {
                 display: flex; align-items: center; gap: 6px;
-                font-size: 11.5px; color: #f06292; padding: 5px 0 2px;
+                font-size: 12px; color: #f06292; padding: 5px 0 2px;
             }
             /* 12h EV plan strip (#282, readability pass #464) */
             .plan-strip {
@@ -1314,7 +1314,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 border-radius: 3px; overflow: hidden;
             }
             .strip-axis {
-                position: relative; height: 13px; margin-top: 3px;
+                position: relative; height: 12px; margin-top: 2px;
                 font-size: 10px; color: var(--secondary-text-color, #888);
             }
             .strip-axis .tick {
@@ -1322,7 +1322,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 font-variant-numeric: tabular-nums; white-space: nowrap;
             }
             .strip-legend {
-                display: flex; gap: 10px; flex-wrap: wrap;
+                display: flex; gap: 8px; flex-wrap: wrap;
                 font-size: 10px; color: var(--secondary-text-color, #888);
                 margin-top: 4px;
             }

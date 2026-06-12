@@ -241,13 +241,13 @@ class SEMChargerStatusCard extends SEMLitBase {
                 color: var(--primary-text-color, #e0e0e0);
             }
             .metric-unit {
-                font-size: 0.75em;
+                font-size: 0.8em;
                 color: var(--secondary-text-color, #999);
                 margin-left: 1px;
             }
             .metric-label {
                 display: block;
-                font-size: 0.7em;
+                font-size: 0.8em;
                 color: var(--secondary-text-color, #999);
                 margin-top: 2px;
                 text-transform: uppercase;

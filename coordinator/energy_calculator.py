@@ -63,6 +63,7 @@ class EnergyCalculator:
 
         # Accumulated savings/costs (running totals for accurate ROI)
         self._accumulated_savings: float = 0.0
+        self._accumulated_battery_savings: float = 0.0
         self._accumulated_cost: float = 0.0
         self._accumulated_export_revenue: float = 0.0
         self._accumulated_grid_import_kwh: float = 0.0
@@ -673,7 +674,7 @@ class EnergyCalculator:
         costs.daily_export_revenue = self._get_daily_cost("cost_export", today)
         costs.daily_net_cost = round(costs.daily_costs - costs.daily_export_revenue, 2)
         costs.daily_savings = max(0, self._get_daily_cost("cost_savings", today))
-        costs.daily_battery_savings = self._get_daily_cost("cost_batt_savings", today)
+        costs.daily_battery_savings = max(0, self._get_daily_cost("cost_batt_savings", today))
         # #351 M2 — headline total spans both. Pre-fix users comparing
         # daily_savings to import costs saw battery_to_ev portion
         # missing.
@@ -686,7 +687,7 @@ class EnergyCalculator:
         costs.monthly_export_revenue = self._get_monthly_cost("cost_export", month_key)
         costs.monthly_net_cost = round(costs.monthly_costs - costs.monthly_export_revenue, 2)
         costs.monthly_savings = max(0, self._get_monthly_cost("cost_savings", month_key))
-        costs.monthly_battery_savings = self._get_monthly_cost("cost_batt_savings", month_key)
+        costs.monthly_battery_savings = max(0, self._get_monthly_cost("cost_batt_savings", month_key))
         costs.monthly_total_savings = round(
             costs.monthly_savings + costs.monthly_battery_savings, 2,
         )
@@ -696,7 +697,7 @@ class EnergyCalculator:
         costs.yearly_export_revenue = self._get_yearly_cost("cost_export", year_key)
         costs.yearly_net_cost = round(costs.yearly_costs - costs.yearly_export_revenue, 2)
         costs.yearly_savings = max(0, self._get_yearly_cost("cost_savings", year_key))
-        costs.yearly_battery_savings = self._get_yearly_cost("cost_batt_savings", year_key)
+        costs.yearly_battery_savings = max(0, self._get_yearly_cost("cost_batt_savings", year_key))
         costs.yearly_total_savings = round(
             costs.yearly_savings + costs.yearly_battery_savings, 2,
         )
@@ -721,13 +722,17 @@ class EnergyCalculator:
         # ROI calculation — hybrid: accumulated (accurate) + estimated past (avg rate)
         lifetime_grid_import = self._get_lifetime("grid_import")
         lifetime_grid_export = self._get_lifetime("grid_export")
-        lifetime_batt_discharge = self._get_lifetime("battery_discharge")
 
         # Use 7-day avg rate for the estimated (pre-accumulation) portion
         avg_import = self._get_avg_import_rate()
         avg_export = self._get_avg_export_rate()
 
-        # Pre-SEM portion: lifetime minus what we've already accurately accumulated
+        # Pre-SEM portion: lifetime minus what we've already accurately accumulated.
+        # Battery discharge is deliberately NOT estimated here (#499): the
+        # solar-charged share of pre-SEM discharge is already inside
+        # ``lifetime_self_consumed`` (solar − export includes solar that was
+        # routed through the battery), and the grid-charged share's net
+        # arbitrage benefit can't be reconstructed from lifetime counters.
         pre_sem_self_consumed = max(0, lifetime_self_consumed - self._accumulated_self_consumed_kwh)
         pre_sem_export = max(0, lifetime_grid_export - self._accumulated_export_kwh)
         pre_sem_grid_import = max(0, lifetime_grid_import - self._accumulated_grid_import_kwh)
@@ -736,12 +741,16 @@ class EnergyCalculator:
         estimated_past_savings = pre_sem_self_consumed * avg_import
         estimated_past_revenue = pre_sem_export * avg_export
 
-        # Total: accumulated real savings + estimated past
+        # Total: accumulated real savings + estimated past. Battery savings
+        # are included from the accumulated (flow-attributed) side only —
+        # ``cost_savings`` counts direct solar→home/EV, so battery discharge
+        # savings are additional, not a double count (#499).
         costs.lifetime_grid_cost = round(
             self._accumulated_cost + pre_sem_grid_import * avg_import, 2
         )
         costs.lifetime_total_savings = round(
-            self._accumulated_savings + self._accumulated_export_revenue
+            self._accumulated_savings + self._accumulated_battery_savings
+            + self._accumulated_export_revenue
             + estimated_past_savings + estimated_past_revenue, 2
         )
 
@@ -968,9 +977,11 @@ class EnergyCalculator:
         daily_cost = self._daily_cost_accumulators.get(f"cost_import_{today_str}", 0.0)
         daily_export_revenue = self._daily_cost_accumulators.get(f"cost_export_{today_str}", 0.0)
         daily_savings = self._daily_cost_accumulators.get(f"cost_savings_{today_str}", 0.0)
+        daily_battery_savings = self._daily_cost_accumulators.get(f"cost_batt_savings_{today_str}", 0.0)
 
         # Accumulate into running totals
         self._accumulated_savings += daily_savings
+        self._accumulated_battery_savings += daily_battery_savings
         self._accumulated_cost += daily_cost
         self._accumulated_export_revenue += daily_export_revenue
         self._accumulated_grid_import_kwh += daily_grid_import
@@ -978,11 +989,25 @@ class EnergyCalculator:
         self._accumulated_export_kwh += daily_grid_export
 
         # Store today's rate for averaging; also record whether snapshot had meaningful data
-        # (used by _check_rollover to detect trivial snapshots that should be retried)
+        # (used by _check_rollover to detect trivial snapshots that should be retried).
+        #
+        # #499: use the day's VOLUME-WEIGHTED average (cost ÷ kWh) instead of
+        # the rate in effect at midnight. For spot tariffs midnight is
+        # systematically among the cheapest hours, which biased the 7-day
+        # average — and with it the pre-SEM ROI estimate — low. Falls back to
+        # the current rate on days without (positive) cost data.
+        if daily_grid_import > 0.05 and daily_cost > 0:
+            day_import_rate = daily_cost / daily_grid_import
+        else:
+            day_import_rate = self._import_rate
+        if daily_grid_export > 0.05 and daily_export_revenue > 0:
+            day_export_rate = daily_export_revenue / daily_grid_export
+        else:
+            day_export_rate = self._export_rate
         self._rate_history.append({
             "date": today_str,
-            "import_rate": self._import_rate,
-            "export_rate": self._export_rate,
+            "import_rate": round(day_import_rate, 4),
+            "export_rate": round(day_export_rate, 4),
             "energy_kwh": round(daily_solar + daily_grid_import, 4),
         })
 
@@ -1082,6 +1107,7 @@ class EnergyCalculator:
             "yearly_seeded": self._yearly_seeded,
             "rate_history": list(self._rate_history),
             "accumulated_savings": self._accumulated_savings,
+            "accumulated_battery_savings": self._accumulated_battery_savings,
             "accumulated_cost": self._accumulated_cost,
             "accumulated_export_revenue": self._accumulated_export_revenue,
             "accumulated_grid_import_kwh": self._accumulated_grid_import_kwh,
@@ -1102,6 +1128,7 @@ class EnergyCalculator:
             self._yearly_seeded = state.get("yearly_seeded", False)
             self._rate_history = deque(state.get("rate_history", []), maxlen=30)
             self._accumulated_savings = state.get("accumulated_savings", 0.0)
+            self._accumulated_battery_savings = state.get("accumulated_battery_savings", 0.0)
             self._accumulated_cost = state.get("accumulated_cost", 0.0)
             self._accumulated_export_revenue = state.get("accumulated_export_revenue", 0.0)
             self._accumulated_grid_import_kwh = state.get("accumulated_grid_import_kwh", 0.0)
