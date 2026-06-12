@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🖼️ System diagram card: explicit `entities:` config (#455)
+
+- **`sem-system-diagram-card` now accepts the same `entities:` map as `sem-flow-card`** — point the illustrated diagram at any HA install's sensors (combined or split battery/grid sensors, `reverse`/`invert` flags, optional explicit home sensor instead of the derived balance). `entity_prefix` stays the default and wins when both are set, so existing dashboards are untouched (#455)
+- In entities mode, intentionally unmapped nodes (e.g. no EV) no longer count toward the "sensor unavailable" warning
+- Schema documented for both cards in `DASHBOARD_GUIDE.md`
+
 ## ☀️ `min_plus_solar` daytime is self-consumption-maximizing again (#501)
 
 Daytime `min_plus_solar` in battery Zone 3/4 was draining the home battery into the EV and importing from the grid when it should maximize self-consumption — a cloudy afternoon at 70–90% SOC got ground into the car.

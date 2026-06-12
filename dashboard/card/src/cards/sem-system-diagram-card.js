@@ -67,6 +67,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
     constructor() {
         super();
         this._prefix = DEFAULT_PREFIX;
+        this._mode = 'prefix';      // #455
+        this._entities = null;      // #455
         this._compact = false;
         this._visible = true;
         this._resizeObserver = null;
@@ -81,7 +83,106 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
     setConfig(config) {
         super.setConfig(config);
+        // #455 — parity with sem-flow-card: explicit ``entities:`` map
+        // points the diagram at arbitrary HA entities; ``entity_prefix``
+        // stays the default/fallback and wins when both are set (same
+        // precedence as sem-flow-card.setConfig).
+        if (config.entities && !config.entity_prefix) {
+            this._mode = 'entities';
+            this._entities = config.entities;
+        } else {
+            this._mode = 'prefix';
+            this._entities = null;
+        }
         this._prefix = config.entity_prefix || DEFAULT_PREFIX;
+    }
+
+    /** Resolve a logical suffix to an entity id (#455).
+     *
+     * Prefix mode: ``<entity_prefix><suffix>`` (pre-#455 behaviour).
+     * Entities mode: the sem-flow-card schema map — unmapped keys
+     * return null and read as 0 / empty so the matching diagram
+     * element degrades gracefully instead of pointing at a phantom
+     * ``sensor.sem_*`` id.
+     */
+    _eid(suffix) {
+        if (this._mode !== 'entities') return `${this._prefix}${suffix}`;
+        const e = this._entities;
+        if (!e) return null;
+        const map = {
+            solar_power: e.solar?.entity,
+            battery_power: e.battery?.entity,
+            battery_charge_power: e.battery?.charge,
+            battery_discharge_power: e.battery?.discharge,
+            grid_power: e.grid?.entity,
+            grid_import_power: e.grid?.consumption,
+            grid_export_power: e.grid?.production,
+            ev_power: e.ev?.entity || e.individual?.[0]?.entity,
+            battery_soc: e.battery?.state_of_charge,
+            battery_temperature: e.battery?.temperature,
+            home_consumption_power: e.home?.entity,
+            charging_state: e.inverter?.entity,
+            daily_solar_energy: e.solar?.daily_energy,
+            daily_ev_energy: e.ev?.daily_energy || e.individual?.[0]?.daily_energy,
+            daily_grid_import_energy: e.grid?.daily_import_energy,
+            daily_grid_export_energy: e.grid?.daily_export_energy,
+            daily_battery_charge_energy: e.battery?.daily_charge_energy,
+            daily_battery_discharge_energy: e.battery?.daily_discharge_energy,
+            daily_home_energy: e.home?.daily_energy,
+            autarky_rate: e.home?.autarky,
+            self_consumption_rate: e.home?.self_consumption,
+            forecast_corrected_today: e.solar?.forecast_remaining,
+            controllable_devices_count: e.devices?.count_entity,
+        };
+        return map[suffix] || null;
+    }
+
+    // ── #455 flow-value helpers — entities-mode semantics mirror
+    //    sem-flow-card (split battery, combined grid, reverse/invert
+    //    flags). Prefix mode passes through unchanged. ──
+    _flowSolar() {
+        const s = this._val('solar_power');
+        return this._entities?.solar?.reverse ? -s : s;
+    }
+
+    _flowBattery() {
+        const e = this._entities;
+        if (e?.battery?.charge || e?.battery?.discharge) {
+            return this._val('battery_charge_power') - this._val('battery_discharge_power');
+        }
+        const raw = this._val('battery_power');
+        return e?.battery?.reverse ? -raw : raw;
+    }
+
+    _flowGridPair() {
+        const e = this._entities;
+        if (this._mode === 'entities' && e?.grid?.entity) {
+            const gp = this._state(e.grid.entity, 0);
+            const rev = e.grid.reverse;
+            return {
+                gridImport: Math.max(0, rev ? -gp : gp),
+                gridExport: Math.max(0, rev ? gp : -gp),
+            };
+        }
+        return {
+            gridImport: this._val('grid_import_power'),
+            gridExport: this._val('grid_export_power'),
+        };
+    }
+
+    _flowEv() {
+        const v = this._val('ev_power');
+        return this._entities?.ev?.invert ? -v : v;
+    }
+
+    _flowHome(solar, gridImport, gridExport, battCharge, battDischarge, ev) {
+        const eid = this._eid('home_consumption_power');
+        if (this._mode === 'entities' && eid && this._hass?.states[eid]) {
+            let h = this._state(eid, 0);
+            if (this._entities?.home?.invert) h = -h;
+            return Math.max(0, h);
+        }
+        return Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
     }
 
     // ── hass setter: prefix-aware dirty check + target update + tick start ──
@@ -101,13 +202,19 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
         // Skip transient unavailable states caused by coordinator refresh —
         // matches sem-battery-card.js:89-92. ~600ms window after every cycle.
-        const solarState = hass?.states[`${this._prefix}solar_power`]?.state;
+        // #455: routed through _eid; in entities mode an unmapped solar key
+        // resolves to null and the skip never blocks updates.
+        const solarEid = this._eid('solar_power');
+        const solarState = solarEid ? hass?.states[solarEid]?.state : undefined;
         if ((solarState === 'unavailable' || solarState === 'unknown') && !localeChanged) {
             return;
         }
 
         // Build the dirty-check key across everything the diagram reads.
-        const stateOf = (suffix) => hass?.states[`${this._prefix}${suffix}`]?.state || '';
+        const stateOf = (suffix) => {
+            const eid = this._eid(suffix);
+            return eid ? (hass?.states[eid]?.state || '') : '';
+        };
         let key = WATCHED_SUFFIXES.map(stateOf).join(',') + '|' + lang;
         key += '|' + semPVStringStatesKey(hass, this._prefix);
         key += '|' + (hass?.states['binary_sensor.sem_ev_connected']?.state || '');
@@ -121,15 +228,16 @@ class SEMSystemDiagramCard extends SEMLitBase {
         this._lastDiagKey = key;
 
         // Compute counter targets — eased into the reactive properties
-        // by the rAF tick.
-        const solar = this._val('solar_power');
-        const battery = this._val('battery_power');
+        // by the rAF tick. #455: flow helpers apply entities-mode
+        // semantics (split battery / combined grid / reverse / invert);
+        // prefix mode is identical to pre-#455.
+        const solar = this._flowSolar();
+        const battery = this._flowBattery();
         const battCharge = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
-        const gridImport = this._val('grid_import_power');
-        const gridExport = this._val('grid_export_power');
-        const ev = this._val('ev_power');
-        const home = Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
+        const { gridImport, gridExport } = this._flowGridPair();
+        const ev = this._flowEv();
+        const home = this._flowHome(solar, gridImport, gridExport, battCharge, battDischarge, ev);
         this._targets = {
             solar,
             batt: Math.abs(battery),
@@ -145,13 +253,16 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
     get hass() { return this._hass; }
 
-    // ── Prefix-scoped state readers (matches sem-battery-card.js:116-122) ──
+    // ── Suffix-scoped state readers (matches sem-battery-card.js:116-122;
+    //    #455: routed through _eid so entities mode resolves too) ──
     _val(suffix, fallback = 0) {
-        return this._state(`${this._prefix}${suffix}`, fallback);
+        const eid = this._eid(suffix);
+        return eid ? this._state(eid, fallback) : fallback;
     }
 
     _valStr(suffix) {
-        return this._stateStr(`${this._prefix}${suffix}`);
+        const eid = this._eid(suffix);
+        return eid ? this._stateStr(eid) : '';
     }
 
     /**
@@ -171,7 +282,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
      * because instance fields survive Lit re-render cycles.
      */
     _readWithHold(suffix, cacheKey, maxStaleMs) {
-        const entity = this._hass?.states[`${this._prefix}${suffix}`];
+        const eid = this._eid(suffix);
+        const entity = eid ? this._hass?.states[eid] : undefined;
         const raw = entity?.state;
         const available = entity && raw !== 'unavailable' && raw !== 'unknown';
         const now = Date.now();
@@ -348,11 +460,11 @@ class SEMSystemDiagramCard extends SEMLitBase {
         const F = "'Segoe UI','Roboto',sans-serif";
         const fl = L.font.label, fv = L.font.value, fs = L.font.sub;
 
-        // State reads
-        const solar = this._val('solar_power');
-        const gridImport = this._val('grid_import_power');
-        const gridExport = this._val('grid_export_power');
-        const ev = this._val('ev_power');
+        // State reads (#455: flow helpers carry entities-mode semantics;
+        // prefix mode is identical to pre-#455)
+        const solar = this._flowSolar();
+        const { gridImport, gridExport } = this._flowGridPair();
+        const ev = this._flowEv();
 
         // Battery reads with last-known-good hold for Huawei modbus flicker.
         // Per CLAUDE.md the Huawei modbus over WiFi bounces every 10–30 s;
@@ -364,15 +476,25 @@ class SEMSystemDiagramCard extends SEMLitBase {
         // the most recent valid reading and uses it for up to 60 s of
         // continuous unavailability; past that, the card shows a stale
         // marker so a genuinely-broken sensor is still surfaced.
-        const { value: battery, stale: battStale } =
-            this._readWithHold('battery_power', 'this._lastBattPower', 60000);
+        // #455: with split charge/discharge entities the hold is bypassed —
+        // the flicker class is specific to the combined Huawei sensor.
+        const _battSplit = this._entities?.battery?.charge || this._entities?.battery?.discharge;
+        let battery, battStale;
+        if (_battSplit) {
+            battery = this._flowBattery();
+            battStale = false;
+        } else {
+            ({ value: battery, stale: battStale } =
+                this._readWithHold('battery_power', 'this._lastBattPower', 60000));
+            if (this._entities?.battery?.reverse) battery = -battery;
+        }
         const { value: soc, stale: socStale } =
             this._readWithHold('battery_soc', 'this._lastBattSoc', 60000);
         const battSensorStale = battStale || socStale;
         const battCharge = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
 
-        const home = Math.max(0, solar + gridImport + battDischarge - gridExport - battCharge - ev);
+        const home = this._flowHome(solar, gridImport, gridExport, battCharge, battDischarge, ev);
 
         // Sun pose (pure)
         const pose = this._computeSunPose();
@@ -435,10 +557,17 @@ class SEMSystemDiagramCard extends SEMLitBase {
             ? chargingState.substring(0, maxLen - 1) + '…'
             : chargingState;
 
-        // Unavailable entity status
+        // Unavailable entity status. #455: in entities mode only mapped
+        // keys count — an intentionally omitted node (no EV configured)
+        // must not show as a permanent "sensor unavailable" warning.
         const unavailable = [];
         for (const suffix of ['solar_power', 'battery_power', 'grid_import_power', 'grid_export_power', 'ev_power', 'battery_soc']) {
-            const entity = this._hass?.states[`${this._prefix}${suffix}`];
+            const eid = this._eid(suffix);
+            if (!eid) {
+                if (this._mode === 'prefix') unavailable.push(suffix);
+                continue;
+            }
+            const entity = this._hass?.states[eid];
             if (!entity || entity.state === 'unavailable' || entity.state === 'unknown') unavailable.push(suffix);
         }
 
@@ -1294,7 +1423,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
      * Returns an svg fragment positioned bottom-right of the diagram.
      */
     _renderDeviceStrip(H) {
-        const devicesEntity = this._hass?.states[`${this._prefix}controllable_devices_count`];
+        const devicesEid = this._eid('controllable_devices_count');
+        const devicesEntity = devicesEid ? this._hass?.states[devicesEid] : undefined;
         if (!devicesEntity?.attributes?.devices) return nothing;
 
         const devices = Object.entries(devicesEntity.attributes.devices)
@@ -1359,7 +1489,8 @@ class SEMSystemDiagramCard extends SEMLitBase {
     }
 
     _showMoreInfo(suffix) {
-        const entityId = `${this._prefix}${suffix}`;
+        const entityId = this._eid(suffix);
+        if (!entityId) return;  // #455: unmapped key in entities mode — no-op
         this.dispatchEvent(new CustomEvent('hass-more-info', {
             bubbles: true, composed: true,
             detail: { entityId },

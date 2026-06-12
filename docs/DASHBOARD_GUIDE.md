@@ -260,6 +260,44 @@ SEM includes a built-in illustrated system diagram on the Home tab. Users who pr
 
 To switch: Settings → Integrations → SEM → Configure → set `diagram_style` to `kflow`. The dashboard will regenerate with the K-Flow card on the Home tab.
 
+### Pointing the flow / diagram cards at non-SEM entities
+
+Both `sem-flow-card` and `sem-system-diagram-card` (#455) accept an explicit `entities:` map instead of the default `entity_prefix: sensor.sem_`, so they can visualize any Home Assistant install:
+
+```yaml
+type: custom:sem-system-diagram-card
+entities:
+  solar:
+    entity: sensor.inverter_pv_power        # W; reverse: true to flip sign
+    daily_energy: sensor.daily_yield
+    forecast_remaining: sensor.solcast_remaining_today   # diagram card only
+  battery:
+    entity: sensor.battery_power            # +charge / −discharge (SEM convention)
+    # OR split sensors instead of a combined one:
+    # charge: sensor.batt_charge_w
+    # discharge: sensor.batt_discharge_w
+    state_of_charge: sensor.battery_soc
+    daily_charge_energy: sensor.batt_in_today     # diagram card only
+    daily_discharge_energy: sensor.batt_out_today # diagram card only
+  grid:
+    consumption: sensor.grid_import_w       # split sensors…
+    production: sensor.grid_export_w
+    # …or a single signed sensor (+import / −export; reverse: true flips):
+    # entity: sensor.grid_power
+    daily_import_energy: sensor.grid_in_today
+    daily_export_energy: sensor.grid_out_today
+  ev:
+    entity: sensor.wallbox_charging_power   # invert: true to flip sign
+    daily_energy: sensor.ev_today
+  home:
+    entity: sensor.home_consumption         # optional — derived from the balance when omitted
+    daily_energy: sensor.home_today
+    autarky: sensor.autarky_rate
+    self_consumption: sensor.self_consumption_rate       # diagram card only
+```
+
+Keys you omit simply render as 0 / empty — an install without an EV just leaves `ev:` out (no "sensor unavailable" warning in entities mode). `entity_prefix` remains the default and takes precedence if both are set.
+
 ### Cards Removed in v1.2.0+ (replaced by SEM cards)
 
 These HACS cards are no longer required:
