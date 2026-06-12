@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.11] - 12.06.2026
+
 ## ⚡ Surplus start/stop flapping: enable/disable delays reconnected (#461)
 
 The v1.7 `decide() → actuate()` rewrite silently orphaned the v1.7.1-beta.14 stability layer: `ev_enable_delay_seconds` / `ev_disable_delay_seconds` still existed as config keys but were only read by the legacy `_execute_ev_control` path the new pipeline no longer calls. Result in RienduPre's beta.10 logs: solar hovering around the 6 A minimum cycled the contactor every ~20 s (±4.5 kW demand swings between consecutive health-check lines).
@@ -38,6 +40,18 @@ RienduPre's 2026-06-12 dump showed the flows finally coherent, but 69 "Energy ba
 
 - **Energy-balance "violations" during the home-consumption hold are demoted to debug** — `home_consumption_power` is derived as the residual of the other readings, so supply≈demand is an identity; a gap can only appear when the residual went negative (one input sensor stale, e.g. a Growatt solar reading frozen for ~5 min) and the #237/#444 hold bridged it. Those cycles re-reported a known, already-handled inconsistency every 10 s and inflated `diag_health_violations`. A gap that *outlives* the hold window still warns, now naming the likely cause (stale power sensor) (reported by @RienduPre in #461)
 - **Delegated day strategies keep their configured mode label** — `solar_plus_cheap` (day, normal/cheap tariff) and `min_plus_solar` (day, Zone 2) delegate to the solar_only math but no longer report `mode="solar_only"`/`"solar_only: …"` verbatim; the strategy string now reads `solar_plus_cheap day: tariff=normal — solar_only: …`, so the Config card's mode and the live strategy can't appear to contradict each other (reported by @RienduPre in #461)
+
+## 🎨 Dashboard typography, spacing & mobile fixes (#498)
+
+- **Minimum text size raised across all cards** — 11px floor for regular text, 10px for uppercase micro-labels (was down to 9px); fractional sizes normalized; em-based charger labels 0.7/0.75em → 0.8em, hierarchy preserved (by @traktore-org in #500)
+- **Hero card padding aligned** — system, home-status and solar-summary now share the same `16px 20px` container padding as the other hero cards; cramped metric-row paddings normalized (by @traktore-org in #500)
+- **Mobile fixes from viewport testing** — `sem-tab-header` wraps instead of crushing the title to zero width on phones; `sem-battery-zones-card` clamps zone markers to 0–100% so an out-of-range sensor can't stretch the card; `sem-schedule-card` SVG labels bumped for legibility (by @traktore-org in #500)
+
+## 💶 Cost/ROI: battery savings + volume-weighted tariff history (#499)
+
+- **Battery discharge savings now count toward lifetime ROI** — the midnight snapshot accumulates `cost_batt_savings` into a persisted `_accumulated_battery_savings` folded into `lifetime_total_savings`; the pre-SEM solar-through-battery share already inside `lifetime_self_consumed` is deliberately not re-estimated (no double-count, pinned by a regression test) (by @traktore-org in #500)
+- **Dynamic-tariff rate history is volume-weighted** — snapshots store the day's `cost ÷ kWh` instead of the midnight rate (systematically among the cheapest spot hours), removing the low bias in the 7-day average used for the pre-SEM ROI estimate; falls back to the current rate on days without positive cost data (by @traktore-org in #500)
+- **Negative-price consistency** — battery savings clamped `max(0, …)` at daily/monthly/yearly read, matching solar savings (by @traktore-org in #500)
 
 ---
 
