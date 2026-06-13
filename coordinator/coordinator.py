@@ -1023,6 +1023,26 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._storage.get_sign_state()
             )
 
+            # Restore the legionella timestamp (#508 I2). With the cycle
+            # now driven every coordinator tick (#508 C1), a None
+            # timestamp reads as "overdue" and would force a disinfection
+            # run on every restart. Restore the persisted time; on a
+            # fresh install (no stored time) seed to NOW so the first
+            # cycle is ~interval_hours away, not immediate.
+            hw_dev = self._surplus_controller._devices.get("hot_water") \
+                if hasattr(self, "_surplus_controller") else None
+            if hw_dev is not None and hasattr(hw_dev, "record_legionella_cycle"):
+                stored_leg = self._storage.get_legionella_time()
+                if stored_leg:
+                    try:
+                        hw_dev.record_legionella_cycle(
+                            dt_util.parse_datetime(stored_leg)
+                        )
+                    except (ValueError, TypeError):
+                        hw_dev.record_legionella_cycle(dt_util.now())
+                else:
+                    hw_dev.record_legionella_cycle(dt_util.now())
+
             # Restore per-charger daily EV energy. It was in-memory only, so it reset to
             # 0 on every restart while the global daily_ev persisted — desyncing the
             # per-charger daily sensor AND (worse) the per-charger night-charge remaining,
@@ -2072,6 +2092,15 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 self._storage.set_sign_state(
                     self._sensor_reader.export_sign_state()
                 )
+                # Persist the legionella timestamp (#508 I2).
+                _hw = self._surplus_controller._devices.get("hot_water") \
+                    if hasattr(self, "_surplus_controller") else None
+                _leg_t = getattr(_hw, "_last_legionella_time", None) if _hw else None
+                if _leg_t is not None:
+                    try:
+                        self._storage.set_legionella_time(_leg_t.isoformat())
+                    except (AttributeError, ValueError):
+                        pass
                 await self._storage.async_save_energy_delayed()
 
             self._initial_update_done = True
@@ -2918,6 +2947,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         hw_hours_since_leg: Optional[float] = None
         hw_leg_active: bool = False
         if hw_controller is not None:
+            # #508 C1 — drive the legionella state machine every cycle.
+            # check_legionella_cycle() had no production caller, so the
+            # disinfection cycle never ran and hours_since_legionella was
+            # pinned at the 999 sentinel forever. Running it each cycle
+            # advances the hold-timer and fires completion correctly.
+            if hasattr(hw_controller, "check_legionella_cycle"):
+                try:
+                    await hw_controller.check_legionella_cycle()
+                except Exception as e:  # noqa: BLE001 — never break the cycle
+                    _LOGGER.debug("Legionella cycle check failed: %s", e)
             try:
                 t = hw_controller.get_current_temperature() if hasattr(hw_controller, "get_current_temperature") else None
                 hw_current_temp = float(t) if t is not None else None

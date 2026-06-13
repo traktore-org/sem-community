@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🔥 Heat pump / hot water: surplus activation actually fires + relay-failure safety (#508)
+
+First phase of wiring the dedicated heat-pump and hot-water controllers into the surplus pipeline they were bypassing.
+
+- **They actually activate on solar surplus now** — both controllers defaulted to `PEAK_ONLY`, and the surplus controller never proactively turns on a non-`SURPLUS` device, so surplus boosting was silently inert. Both now default to `SURPLUS` (still overridable via `set_device_control_mapping`) (#508)
+- **A failed SG-Ready relay write no longer credits phantom power** — the heat pump used to mark itself `ACTIVE` and deduct `rated_power` from the surplus pool even when the relay call failed, starving the EV/battery of watts that weren't being drawn. It now returns 0 W and reports `ERROR`; a partial (relay2) failure restores relay1 to its prior state instead of leaving a stray curtail signal (#508)
+- **Legionella prevention runs** — `check_legionella_cycle()` had no production caller (the disinfection cycle never ran, `hours_since_legionella` was pinned at 999). It's now driven every cycle, and the last-cycle timestamp persists across restarts so a reboot doesn't force a disinfection run (#508)
+- **Heat-pump compressor anti-cycling** — `min_on`/`min_off` guards (10 min run / 5 min rest) so a 10 s coordinator cycle can't short-cycle the compressor (#508)
+- Follow-up phase (tracked in #508): route them through the load-manager dual-sync for peak shedding, and feed the true house surplus rather than the EV budget
+
+
 # [1.7.3-beta.14] - 13.06.2026
 
 ## 🏠 System-diagram Home no longer flickers to 0 W while the EV charges (#506)
