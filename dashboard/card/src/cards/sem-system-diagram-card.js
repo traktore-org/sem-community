@@ -36,6 +36,7 @@ const DEFAULT_PREFIX = 'sensor.sem_';
 const WATCHED_SUFFIXES = [
     'solar_power', 'battery_power', 'grid_import_power', 'grid_export_power',
     'ev_power', 'battery_soc', 'battery_temperature', 'charging_state',
+    'home_consumption_power',  // card reads the held sensor, not a residual
     'daily_solar_energy', 'daily_battery_charge_energy', 'daily_battery_discharge_energy',
     'daily_ev_energy', 'daily_home_energy', 'daily_grid_import_energy', 'daily_grid_export_energy',
     'forecast_corrected_today', 'controllable_devices_count',
@@ -176,8 +177,21 @@ class SEMSystemDiagramCard extends SEMLitBase {
     }
 
     _flowHome(solar, gridImport, gridExport, battCharge, battDischarge, ev) {
+        // Prefer the PUBLISHED home sensor over a client-side residual.
+        // The coordinator already bridges the input-update skew — the
+        // Huawei inverter refreshes on a ~17-30 s modbus cadence while
+        // the KEBA EV meter updates every ~2 s, so a client-side
+        // ``solar − ev − …`` recompute pairs a stale solar reading with
+        // a fresh EV reading and the residual briefly goes negative →
+        // clamps Home to 0 (the on-and-off "Home 0 W" flicker while the
+        // EV charges). ``sensor.sem_home_consumption_power`` carries the
+        // #237/#444 hold that rides out that window, so it does NOT
+        // flicker. Read it directly (both prefix and entities mode) and
+        // only fall back to the residual when it's genuinely
+        // unavailable.
         const eid = this._eid('home_consumption_power');
-        if (this._mode === 'entities' && eid && this._hass?.states[eid]) {
+        const st = eid ? this._hass?.states[eid] : null;
+        if (st && st.state !== 'unavailable' && st.state !== 'unknown') {
             let h = this._state(eid, 0);
             if (this._entities?.home?.invert) h = -h;
             return Math.max(0, h);

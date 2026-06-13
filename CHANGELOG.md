@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🏠 System-diagram Home no longer flickers to 0 W while the EV charges (#506)
+
+- **The diagram card reads the published `home_consumption_power` sensor instead of re-deriving it client-side** — Home was recomputed from the raw source sensors, which update on wildly different cadences (Huawei inverter ~17–30 s modbus vs KEBA EV ~2 s). With the EV charging hard, a fresh EV reading paired with a stale solar reading drove the residual briefly negative → clamped Home to 0, on and off. The coordinator's #237/#444 hold already rides out that skew (the sensor itself never flickers); the card now uses it, with the residual kept only as a fallback when the sensor is unavailable (#506)
+
+
 # [1.7.3-beta.13] - 13.06.2026
 
 ## 🔮 Forecast dampening: morning jitter smoothed + correct sun window (#416)
