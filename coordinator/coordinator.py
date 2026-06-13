@@ -2762,8 +2762,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Surplus controller (Phase 0.2)
         surplus_data = SurplusControlData()
         try:
+            # #508 W7 — feed the TRUE house surplus, not the EV budget.
+            # ``grid_export_power`` is what the house is exporting after the
+            # EV and battery take their share; add back this controller's
+            # own active device draw so the signal is feedback-free (a
+            # device it turned on doesn't shrink the surplus it reads next
+            # cycle and oscillate). Heat pump / hot water now boost on real
+            # spare solar instead of competing for the EV's allocation.
+            true_surplus_w = (
+                float(getattr(power, "grid_export_power", 0.0) or 0.0)
+                + self._surplus_controller.active_surplus_draw_w()
+            )
+            # #508 W2 — hand the load-manager's peak posture to the surplus
+            # controller so it stops adding discretionary load (and backs
+            # its own devices off) when grid import is at risk, instead of
+            # re-activating next cycle whatever the load manager just shed.
+            peak_state = (
+                self._load_manager.get_state() if self._load_manager else None
+            )
             allocation = await self._surplus_controller.update(
-                available_power, price_level=tariff_data.tariff_price_level,
+                true_surplus_w,
+                price_level=tariff_data.tariff_price_level,
+                peak_state=peak_state,
             )
             surplus_data.surplus_total_w = allocation.total_surplus_w
             surplus_data.surplus_distributable_w = allocation.distributable_surplus_w
