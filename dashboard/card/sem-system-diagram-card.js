@@ -249,9 +249,17 @@ class SEMSystemDiagramCard extends SEMBaseCard {
 
         const battCharge = Math.max(0, battery);
         const battDischarge = Math.max(0, -battery);
+        // Prefer the published, hold-protected home sensor over a
+        // client-side residual (both modes): the coordinator's #237/#444
+        // hold rides out the Huawei-modbus (~17-30s) vs KEBA (~2s)
+        // update-cadence skew so the sensor doesn't flicker to 0 while
+        // the EV charges; a raw recompute here did. Fall back to the
+        // residual only when the sensor is unavailable.
         const homeEid = this._entityId('home_consumption_power');
+        const homeSt = homeEid ? this._hass?.states[homeEid] : null;
         let home;
-        if (this._mode === 'entities' && homeEid && this._hass?.states[homeEid]) {
+        if (homeSt && homeSt.state !== 'unavailable' && homeSt.state !== 'unknown'
+            && !isNaN(parseFloat(homeSt.state))) {
             home = this._getState('home_consumption_power');
             if (this._entities?.home?.invert) home = -home;
             home = Math.max(0, home);
