@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The disable hold now distinguishes a transient dip from genuine darkness** — the 300 s disable delay exists to BRIDGE a passing cloud (solar drops 8 kW → 3 kW for a minute while the car wants 4) by holding minimum current instead of cycling the contactor. But when solar is genuinely ~0 W — dusk, heavy overcast, or the `is_night` flag not yet flipped — there is nothing to bridge *to*: that held minimum current is pulled entirely from the home battery and the grid. RienduPre's PROD logs caught it live: solar = 0 W, the hold commanding 9 A, the car flapping 4.35 kW ↔ 0.12 kW while the battery drained at 5 kW and the grid imported 1.7 kW — every 300 s window. A deficit while solar is below `min_solar_w` (the same "no meaningful solar" threshold `solar_only` idles on) is now a **deep deficit** and stops after a short grace (`ev_deep_deficit_grace_sec`, default 45 s) instead of the full window. A genuine transient dip — solar still meaningful — keeps the full bridge unchanged. The grace rides out a single-cycle inverter flicker to 0 W so a momentary zero never ends a real daytime session (#461)
 
+## 🔥 Heat pump / hot water: surplus activation actually fires + relay-failure safety (#508)
+
+First phase of wiring the dedicated heat-pump and hot-water controllers into the surplus pipeline they were bypassing.
+
+- **They actually activate on solar surplus now** — both controllers defaulted to `PEAK_ONLY`, and the surplus controller never proactively turns on a non-`SURPLUS` device, so surplus boosting was silently inert. Both now default to `SURPLUS` (still overridable via `set_device_control_mapping`) (#508)
+- **A failed SG-Ready relay write no longer credits phantom power** — the heat pump used to mark itself `ACTIVE` and deduct `rated_power` from the surplus pool even when the relay call failed, starving the EV/battery of watts that weren't being drawn. It now returns 0 W and reports `ERROR`; a partial (relay2) failure restores relay1 to its prior state instead of leaving a stray curtail signal (#508)
+- **Legionella prevention runs** — `check_legionella_cycle()` had no production caller (the disinfection cycle never ran, `hours_since_legionella` was pinned at 999). It's now driven every cycle, and the last-cycle timestamp persists across restarts so a reboot doesn't force a disinfection run (#508)
+- **Heat-pump compressor anti-cycling** — `min_on`/`min_off` guards (10 min run / 5 min rest) so a 10 s coordinator cycle can't short-cycle the compressor (#508)
+- Follow-up phase (tracked in #508): route them through the load-manager dual-sync for peak shedding, and feed the true house surplus rather than the EV budget
+
 # [1.7.3-beta.14] - 13.06.2026
 
 ## 🏠 System-diagram Home no longer flickers to 0 W while the EV charges (#506)

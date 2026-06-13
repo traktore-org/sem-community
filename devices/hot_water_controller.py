@@ -108,6 +108,14 @@ class HotWaterController(SwitchDevice):
         self._last_deactivation_path: str = "uninitialized"
         self._last_temperature_reading: Optional[float] = None
 
+        # #508 — hot water exists to soak up solar surplus, so it must be
+        # a SURPLUS-mode device. The base default is PEAK_ONLY, and
+        # SurplusController.update() never proactively activates a
+        # non-SURPLUS device — so without this the controller registered
+        # but never turned on. Overridable via set_device_control_mapping.
+        from .base import DeviceControlMode
+        self.control_mode = DeviceControlMode.SURPLUS
+
     @property
     def entity_domain(self) -> Optional[str]:
         """Return the entity domain (water_heater, climate, or switch)."""

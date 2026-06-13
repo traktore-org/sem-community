@@ -320,6 +320,18 @@ class SEMStorage:
         """Persist sign-detection lock state."""
         self._energy_data["sign_state"] = state
 
+    # Legionella timestamp persistence (#508 I2) — without this, driving
+    # the legionella cycle (#508 C1) would force a disinfection run on
+    # every restart, since a None timestamp reads as "overdue".
+    def get_legionella_time(self) -> Optional[str]:
+        """Get the persisted last-legionella ISO timestamp, or None."""
+        return self._energy_data.get("legionella_last_time")
+
+    def set_legionella_time(self, iso_ts: Optional[str]) -> None:
+        """Persist the last-legionella ISO timestamp."""
+        if iso_ts:
+            self._energy_data["legionella_last_time"] = iso_ts
+
     def add_session_to_history(self, session: Dict[str, Any]) -> None:
         """Append a completed session to bounded history (max 90 entries)."""
         state = self.get_ev_intelligence_state()
