@@ -934,6 +934,55 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 13:
+        # v12 → v13 (#470): split the conflated ``ev_surplus_priority`` into
+        # a surplus-allocation order and a load-shed order. Seed each
+        # charger's ``ev_shed_priority`` from its current
+        # ``ev_surplus_priority`` (legacy alias ``ev_load_priority``) so the
+        # decoupling is behaviour-neutral until the user deliberately
+        # diverges them. Writing the value explicitly (rather than relying
+        # on the runtime fallback) means a later flip of one field is an
+        # obvious, isolated change in the config.
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            full = {**new_data, **new_options}
+            seeded = 0
+            for bag in (new_data, new_options):
+                chargers = bag.get("ev_chargers")
+                if not isinstance(chargers, list):
+                    continue
+                rebuilt = []
+                for c in chargers:
+                    if isinstance(c, dict) and c.get("ev_shed_priority") is None:
+                        c = dict(c)
+                        src = c.get("ev_surplus_priority")
+                        if src is None:
+                            src = c.get("ev_load_priority")
+                        if src is None:
+                            src = full.get("ev_surplus_priority")
+                        if src is not None:
+                            c["ev_shed_priority"] = int(src)
+                            seeded += 1
+                    rebuilt.append(c)
+                bag["ev_chargers"] = rebuilt
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=13, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if seeded:
+                _LOGGER.info(
+                    "#470: seeded ev_shed_priority from ev_surplus_priority "
+                    "for %d charger(s)", seeded,
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v13 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
@@ -1329,6 +1378,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             ev_service_entity = _cfg("ev_charger_service_entity_id")
             ev_current_entity = _cfg("ev_current_control_entity")
             ev_priority = int(_cfg("ev_surplus_priority", _cfg("ev_load_priority", 3 + idx)))
+            # #470: shed priority is independent of surplus priority. A
+            # mixed fleet wants e.g. the long-range EV to charge FIRST on
+            # surplus (big battery soaks watts) yet shed FIRST under peak
+            # (range cushion absorbs a throttle). ``ev_shed_priority``
+            # carries the load-manager order; it falls back to the surplus
+            # priority so single-charger / homogeneous installs are
+            # behaviour-identical (the v12→v13 migration seeds it
+            # explicitly per charger so flips are deliberate).
+            ev_shed_priority = int(_cfg("ev_shed_priority", ev_priority))
 
             # Also auto-fill sensor reader config from first charger
             if idx == 0:
@@ -1446,7 +1504,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 await coordinator._load_manager.register_ev_charger(
                     current_control_entity=ev_current_entity,
                     power_entity=ev_power_entity,
-                    priority=ev_priority,
+                    priority=ev_shed_priority,  # #470: shed order, not surplus order
                     is_critical=False,
                     charger_service=ev_charger_service,
                     charger_id=charger_id,

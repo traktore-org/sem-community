@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## ☀️ Heat pump / hot water boost on the TRUE house surplus, and stand down under peak (#508 phase 2)
+
+- **They now see real spare solar, not the EV's budget (W7)** — the surplus controller was fed the EV charging *budget*, so heat pump / hot water effectively competed for the EV's allocation. It now receives the true house surplus: `grid_export + its own active device draw`. The add-back is what makes it stable — without it, every device the controller switches on shrinks the grid export it reads next cycle, so the signal would chase its own tail and the device would flap. With it, the input is the surplus that *would* exist if its devices were off — the right quantity to allocate from. Net effect: discretionary loads boost only on genuine spare solar, after the EV and battery have taken their share (#508)
+- **They back off when the grid-import peak is at risk (W2)** — the load manager and the surplus controller used to fight: the load manager would shed a heat pump to protect the 15-minute peak, then the surplus controller (running later in the same cycle) would see surplus and switch it straight back on. The surplus controller now receives the load manager's peak posture — on `WARNING` it stops *adding* discretionary load; on `SHEDDING` it backs its own devices off one per cycle (gentlest first by reverse priority); on `EMERGENCY` it sheds them all at once. The EV stays owned by the load manager's shed path (#508)
+
+## 🔀 Independent surplus vs shed priority per EV charger (#470)
+
+- **`ev_shed_priority` splits off from `ev_surplus_priority`** — a single number used to drive two unrelated decisions: who gets solar surplus first (cooperative, every cycle) and who gets throttled first when grid import nears the peak limit (emergency). A mixed fleet can't express both — e.g. a long-range EV should charge *first* on surplus (big battery soaks watts) yet shed *first* under peak (range cushion absorbs a throttle). Surplus order stays on `ev_surplus_priority`; shed order moves to the new per-charger `ev_shed_priority`, exposed in the options flow, the setup flow, and as a per-charger number entity. A v12→v13 migration seeds `ev_shed_priority = ev_surplus_priority` for every existing charger, so the decoupling is behaviour-neutral until you deliberately diverge them (#470)
+
 ## 🔥 Heat pump / hot water: surplus activation actually fires + relay-failure safety (#508)
 
 First phase of wiring the dedicated heat-pump and hot-water controllers into the surplus pipeline they were bypassing.
