@@ -73,6 +73,26 @@ DEFAULT_MIN_CHANGE_AMPS = 1
 DEFAULT_MIN_CHANGE_INTERVAL_S = 30
 DEFAULT_RAMP_AMPS = 2
 
+# #461 part 2 — deep-deficit escape from the disable hold. The 300 s
+# disable delay is designed to BRIDGE a transient dip — a passing cloud
+# that drops solar from 8 kW to 3 kW for a minute while the EV wants 4 —
+# by holding minimum current rather than cycling the contactor. But when
+# solar is genuinely ~0 (dusk, heavy overcast, the is_night flag not yet
+# flipped), there is nothing to bridge TO: that held minimum current is
+# pulled entirely from the home battery and the grid. RienduPre's PROD
+# logs caught exactly this — solar=0 W, the hold commanding 9 A, the car
+# flapping 4.35 kW↔0.12 kW while the battery drained at 5 kW and the grid
+# imported 1.7 kW, for the full five-minute window, every window.
+#
+# So we split the deficit: a TRANSIENT deficit (solar still meaningful,
+# >= min_solar_w) keeps the full bridge; a DEEP deficit (solar below
+# min_solar_w — the same "no meaningful solar" threshold solar_only's
+# decide() idles on) gets only a short grace before a hard stop. The
+# grace (not an instant stop) absorbs a single-cycle inverter flicker to
+# 0 W (Huawei observed 8 kW → 0 W → 8 kW) so a momentary zero doesn't
+# end a real daytime session — it must persist past the grace first.
+DEFAULT_DEEP_DEFICIT_GRACE_S = 45
+
 _CHARGE_INTENTS = (ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX)
 
 
@@ -88,6 +108,7 @@ class ChargeStability:
     def __init__(self) -> None:
         self._surplus_since: Dict[str, float] = {}
         self._deficit_since: Dict[str, float] = {}
+        self._deep_deficit_since: Dict[str, float] = {}
         self._amps_history: Dict[str, List[int]] = {}
         self._last_amps: Dict[str, int] = {}
         self._last_change_ts: Dict[str, float] = {}
@@ -95,6 +116,7 @@ class ChargeStability:
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
         self._deficit_since.pop(cid, None)
+        self._deep_deficit_since.pop(cid, None)
         self._amps_history.pop(cid, None)
         self._last_amps.pop(cid, None)
         self._last_change_ts.pop(cid, None)
@@ -133,6 +155,7 @@ class ChargeStability:
         min_change_amps: int = DEFAULT_MIN_CHANGE_AMPS,
         min_change_interval_s: float = DEFAULT_MIN_CHANGE_INTERVAL_S,
         ramp_amps: int = DEFAULT_RAMP_AMPS,
+        deep_deficit_grace_s: float = DEFAULT_DEEP_DEFICIT_GRACE_S,
         now_ts: Optional[float] = None,
     ) -> ChargerDecision:
         """Apply smoothing + enable/disable delays to a surplus-mode
@@ -194,6 +217,7 @@ class ChargeStability:
 
         if charge_wanted:
             self._deficit_since.pop(cid, None)
+            self._deep_deficit_since.pop(cid, None)
             target = max(min_amps, min(max_amps, med_amps))
             if charging:
                 self._surplus_since.pop(cid, None)
@@ -235,14 +259,53 @@ class ChargeStability:
         self._surplus_since.pop(cid, None)
         if not charging:
             self._deficit_since.pop(cid, None)
+            self._deep_deficit_since.pop(cid, None)
             return decision
         since = self._deficit_since.setdefault(cid, now)
         held = now - since
-        if held >= max(0.0, float(disable_delay_s)):
+
+        # #461 part 2 — deep-deficit escape. A deficit while solar is
+        # below ``min_solar_w`` is not a cloud to bridge; it is genuine
+        # darkness, and the hold's minimum current would come entirely
+        # from the battery + grid. Once the deep deficit outlives the
+        # short grace (long enough to ride out a single-cycle inverter
+        # flicker to 0 W, far shorter than the 300 s transient bridge),
+        # stop now instead of holding for the full disable window. A
+        # transient deficit (solar still >= min_solar_w) clears the
+        # timer and keeps the full bridge below.
+        deep_deficit = view.fleet.solar_w < view.fleet.min_solar_w
+        if deep_deficit:
+            deep_since = self._deep_deficit_since.setdefault(cid, now)
+            deep_held = now - deep_since
+        else:
+            self._deep_deficit_since.pop(cid, None)
+            deep_held = 0.0
+
+        stop_for_deep = deep_deficit and deep_held >= max(
+            0.0, float(deep_deficit_grace_s),
+        )
+        if held >= max(0.0, float(disable_delay_s)) or stop_for_deep:
             self._deficit_since.pop(cid, None)
+            self._deep_deficit_since.pop(cid, None)
             self._amps_history.pop(cid, None)
             self._last_amps.pop(cid, None)
             self._last_change_ts.pop(cid, None)
+            # Deep-deficit stops always re-stamp the reason — even when
+            # decide() already idled — so the strategy sensor shows SEM
+            # CHOSE to stop (no surplus) rather than silently holding the
+            # contactor on battery/grid. The transient-persisted stop
+            # keeps the legacy pass-through when already IDLE.
+            if stop_for_deep:
+                return replace(
+                    decision, intent=ChargerIntent.IDLE, commanded_amps=0,
+                    reason=(
+                        f"stability: deep deficit "
+                        f"{deep_held:.0f}s/{deep_deficit_grace_s:.0f}s "
+                        f"(solar {view.fleet.solar_w:.0f}W < "
+                        f"{view.fleet.min_solar_w:.0f}W) — no surplus to "
+                        f"bridge — {decision.reason}"
+                    ),
+                )
             if decision.intent is ChargerIntent.IDLE:
                 return decision
             return replace(
@@ -250,7 +313,8 @@ class ChargeStability:
                 reason=f"stability: deficit persisted — {decision.reason}",
             )
         # Hold the session: ramp down toward and hold minimum current
-        # until the deficit outlives the disable window.
+        # until the deficit outlives the disable window. (Transient dip,
+        # or a deep deficit still inside its short grace.)
         last = self._last_amps.get(cid)
         hold = min_amps if last is None else max(min_amps, last - max(1, int(ramp_amps)))
         self._commit_amps(cid, hold, now)

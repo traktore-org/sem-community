@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🔌 EV no longer drains the battery to hold a dead solar session (#461)
+
+- **The disable hold now distinguishes a transient dip from genuine darkness** — the 300 s disable delay exists to BRIDGE a passing cloud (solar drops 8 kW → 3 kW for a minute while the car wants 4) by holding minimum current instead of cycling the contactor. But when solar is genuinely ~0 W — dusk, heavy overcast, or the `is_night` flag not yet flipped — there is nothing to bridge *to*: that held minimum current is pulled entirely from the home battery and the grid. RienduPre's PROD logs caught it live: solar = 0 W, the hold commanding 9 A, the car flapping 4.35 kW ↔ 0.12 kW while the battery drained at 5 kW and the grid imported 1.7 kW — every 300 s window. A deficit while solar is below `min_solar_w` (the same "no meaningful solar" threshold `solar_only` idles on) is now a **deep deficit** and stops after a short grace (`ev_deep_deficit_grace_sec`, default 45 s) instead of the full window. A genuine transient dip — solar still meaningful — keeps the full bridge unchanged. The grace rides out a single-cycle inverter flicker to 0 W so a momentary zero never ends a real daytime session (#461)
+
 # [1.7.3-beta.14] - 13.06.2026
 
 ## 🏠 System-diagram Home no longer flickers to 0 W while the EV charges (#506)

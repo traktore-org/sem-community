@@ -141,6 +141,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         was orphaned (#461), so existing installs keep their values.
         """
         from .charge_stability import (
+            DEFAULT_DEEP_DEFICIT_GRACE_S,
             DEFAULT_DISABLE_DELAY_S,
             DEFAULT_ENABLE_DELAY_S,
             DEFAULT_MIN_CHANGE_AMPS,
@@ -161,6 +162,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 "ev_min_change_interval_sec", DEFAULT_MIN_CHANGE_INTERVAL_S),
             "ramp_amps": self.config.get(
                 "ev_ramp_rate_amps", DEFAULT_RAMP_AMPS),
+            "deep_deficit_grace_s": self.config.get(
+                "ev_deep_deficit_grace_sec", DEFAULT_DEEP_DEFICIT_GRACE_S),
         }
 
     def primary_charger_id(self) -> str:
