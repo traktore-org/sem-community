@@ -561,12 +561,16 @@ class SEMConfigCard extends SEMLitBase {
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
                     <div class="stepper-pair">
-                        ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'minimum_soc', T, 'tile_help_min_amps')}
+                        ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'min_amps', T, 'tile_help_min_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_vehicle_min_current`, 'vehicle_min_current', T, 'tile_help_vehicle_min_amps')}
                     </div>
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_initial_current`, 'initial_current', T, 'tile_help_start_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
+                    </div>
+                    <div class="stepper-pair">
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_surplus_priority`, 'surplus_priority', T, 'tile_help_surplus_priority')}
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_shed_priority`, 'shed_priority', T, 'tile_help_shed_priority')}
                     </div>
                 </div>
             `;})}

@@ -5822,12 +5822,16 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     ${this._renderPickerNested(r,a,"vehicle_soc_entity","config_ev_vehicle_soc","sensor",null,e,"config_help_ev_vehicle_soc")}
                     ${this._renderTargetTypeSelectNested(r,a,i,e)}
                     <div class="stepper-pair">
-                        ${this._renderStepper(`number.sem_charger_${a}_minimum_current`,"minimum_soc",t,"tile_help_min_amps")}
+                        ${this._renderStepper(`number.sem_charger_${a}_minimum_current`,"min_amps",t,"tile_help_min_amps")}
                         ${this._renderStepper(`number.sem_charger_${a}_vehicle_min_current`,"vehicle_min_current",t,"tile_help_vehicle_min_amps")}
                     </div>
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${a}_initial_current`,"initial_current",t,"tile_help_start_amps")}
                         ${this._renderStepper(`number.sem_charger_${a}_ev_battery_capacity_kwh`,"capacity_kwh",t,"tile_help_capacity")}
+                    </div>
+                    <div class="stepper-pair">
+                        ${this._renderStepper(`number.sem_charger_${a}_ev_surplus_priority`,"surplus_priority",t,"tile_help_surplus_priority")}
+                        ${this._renderStepper(`number.sem_charger_${a}_ev_shed_priority`,"shed_priority",t,"tile_help_shed_priority")}
                     </div>
                 </div>
             `:K})}
