@@ -210,6 +210,26 @@ class TestDynamicTariffProvider:
         provider = DynamicTariffProvider(mock_hass)  # no price_entity
         assert provider.detect_provider() == "nordpool_official"
 
+    def test_provider_name_custom_from_init(self, mock_hass):
+        """#518: a user-configured price entity makes _provider_name 'custom'
+        from construction, so the Nord Pool service fetch (which only
+        relabels when name=='unknown') can't override it."""
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.my_tibber")
+        assert provider._provider_name == "custom"
+        provider2 = DynamicTariffProvider(mock_hass)  # auto-detect path
+        assert provider2._provider_name == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_service_fetch_skipped_when_user_configured(self, mock_hass):
+        """#518: don't pull the Nord Pool day-ahead curve when the user
+        configured their own price entity, even if Nord Pool is installed —
+        that mixed sources and relabelled the provider."""
+        mock_hass.services = MagicMock()
+        mock_hass.services.has_service = MagicMock(return_value=True)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.my_tibber")
+        assert await provider.async_refresh_service_prices() is False
+        mock_hass.services.has_service.assert_not_called()  # returned before the nordpool check
+
     def test_classify_price_negative(self, mock_hass):
         provider = DynamicTariffProvider(mock_hass)
         assert provider._classify_price(-0.05) == PriceLevel.NEGATIVE
