@@ -118,13 +118,8 @@ class SEMHomeStatusCard extends SEMLitBase {
         // showing the raw id with an underscore. Falls back to the raw
         // string for any future source we haven't mapped yet.
         const rawProvider = this._valStr('forecast_source');
-        const PROVIDER_LABELS = {
-            'solcast': 'Solcast',
-            'forecast_solar': 'Forecast.Solar',
-            'custom': this._t('custom') || 'Custom',
-        };
         const provider = rawProvider
-            ? (PROVIDER_LABELS[rawProvider] || rawProvider)
+            ? this._forecastProviderLabel(rawProvider)
             : '—';
 
         const co2Today = this._val('daily_co2_avoided').toFixed(2);

@@ -385,8 +385,8 @@ class SEMConfigCard extends SEMLitBase {
         return this._val('load_management_status') || '';
     }
     _forecastSubtitle() {
-        const src = this._val('forecast_source') || '';
-        return src ? src : this._t('not_configured');
+        const label = this._forecastProviderLabel(this._val('forecast_source'));
+        return label ? label : this._t('not_configured');
     }
 
     // ── Helpers ──
@@ -1046,13 +1046,14 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderForecast(T) {
-        const src = this._val('forecast_source') || 'none';
+        const raw = this._val('forecast_source') || 'none';
+        const label = raw === 'none' ? this._t('none') : this._forecastProviderLabel(raw);
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('forecast_source')}</span>
-                <span class="readonly-value">${src}</span>
+                <span class="readonly-value">${label}</span>
             </div>
-            ${src === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
+            ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
         `;
     }
 
