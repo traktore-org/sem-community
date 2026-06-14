@@ -290,7 +290,16 @@ class DynamicTariffProvider(TariffProvider):
         )
         self.currency = currency
         self._price_entity = price_entity
-        self._provider_name = "unknown"
+        # #518: was the price entity EXPLICITLY configured by the user
+        # (``dynamic_tariff_entity``), or will it be auto-discovered? A
+        # user-configured entity is authoritative — its provider must stay
+        # "custom" even on a momentary unavailability, never silently
+        # switching to an auto-detected integration with different prices.
+        self._user_configured_price = bool(price_entity)
+        # Start "custom" when the user configured a price entity: the label
+        # must not depend on whether detect_provider() / the Nord Pool
+        # service fetch happens to run first (#518).
+        self._provider_name = "custom" if self._user_configured_price else "unknown"
         self._forecast_entity: Optional[str] = forecast_entity
         self._feedin_entity: Optional[str] = feedin_entity
         self._prices_cache: List[PricePoint] = []
@@ -355,6 +364,19 @@ class DynamicTariffProvider(TariffProvider):
 
         Returns True when fresh prices were stored.
         """
+        # #518: when the user configured their own price entity that ISN'T a
+        # Nord Pool sensor (e.g. a Tibber sensor with VAT/fees), do NOT pull
+        # the Nord Pool day-ahead curve even if that integration is
+        # installed. Mixing a custom current price with a Nord Pool curve
+        # gave different prices AND percentile levels, and relabelled the
+        # provider "nordpool_official" (RienduPre). The custom entity (+ its
+        # forecast attribute / dynamic_forecast_entity) is the single source.
+        # A user who configured the official Nord Pool ``nord_pool_*`` sensor
+        # DOES need this fetch (that sensor exposes no curve), so it's kept.
+        if self._user_configured_price and not (
+            self._price_entity and "nord_pool" in self._price_entity
+        ):
+            return False
         services = getattr(self.hass, "services", None)
         if services is None or not services.has_service(
             "nordpool", "get_prices_for_date",
@@ -470,6 +492,18 @@ class DynamicTariffProvider(TariffProvider):
 
     def detect_provider(self) -> Optional[str]:
         """Auto-detect available price integration."""
+        # #518: a user-configured price entity (``dynamic_tariff_entity``) is
+        # authoritative — keep "custom" even when it momentarily reads
+        # unavailable/unknown. The previous code fell THROUGH to the
+        # auto-detect scan below on a transient blip, so a brief Tibber
+        # outage silently swapped the provider to "nordpool_official" (a
+        # different source with different prices/levels) — RienduPre's
+        # "schemas/prices/levels are very different" symptom. The cached
+        # curve / fallback price covers the gap; the source must not change.
+        if self._user_configured_price:
+            self._provider_name = "custom"
+            return "custom"
+
         if self._price_entity:
             state = self.hass.states.get(self._price_entity)
             if state and state.state not in ("unknown", "unavailable"):

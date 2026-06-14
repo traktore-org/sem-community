@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 💶 A configured dynamic price sensor no longer silently flips to Nord Pool (#518)
+
+- **Your chosen price entity stays the source, even on a momentary blip** — when a user configures a dynamic price sensor (`dynamic_tariff_entity`, e.g. a Tibber sensor with VAT/fees), SEM used to *fall through* to auto-detecting another integration whenever that sensor read `unavailable`/`unknown` for a cycle. With the Nord Pool integration also installed, the provider silently switched to `nordpool_official` — a different source with different (tax-free spot) prices and percentile levels, so the schedules/price-levels appeared to flip back and forth (RienduPre, #518). A user-configured price entity is now authoritative: the provider stays `custom` and the cached curve / fallback price covers a transient gap. Auto-detection only runs when no price entity is configured (#518)
+
 ## 🌤️ Weather tile no longer shows "?" / "—°C" when the picked entity has no data (#516)
 
 - **The weather tile now finds a weather entity that actually has current data** — RienduPre's tile showed a "?" condition and "—°C / — % / — km/h" because the dashboard generator picked a `weather.*` entity that carried no `temperature` (a `weather.forecast_*` subentity, or one that was unavailable when the dashboard was generated). The generator now prefers a non-forecast entity that actually has a current temperature, and the card falls back at render time to any usable `weather.*` entity if its configured one is missing / unavailable / data-less — so the tile self-heals without regenerating the dashboard (#516)
