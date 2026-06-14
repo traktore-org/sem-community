@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🏷️ Deterministic grid-sign by meter brand (#461)
+
+- **Known meter integrations now seed the grid sign instantly** — for well-tested brands (Huawei, SMA, Fronius, Enphase, SolarEdge, Kostal, Powerwall, GoodWe, SolaX) SEM reads the grid-power sensor's own integration and applies that brand's known import/export convention immediately, so a fresh install is correct from the first cycle without waiting for solar swings or counter deltas. A separate P1/CT meter (unknown integration) simply falls through to the solar/counter detectors, and the solar co-movement signal can still override a brand seed if it ever disagrees (#461)
+
 # [1.7.3-beta.17] - 14.06.2026
 
 ## 🧭 Robust grid-sign autodetection + one-tap fix (#461)

@@ -1198,6 +1198,7 @@ class SEMConfigCard extends SEMLitBase {
             'grid_sign_user_flip is now ' + code(flip) + '.',
             '',
             '- Meter sensor: ' + code(j(d.grid_power_sensor)) + ' = ' + j(d.grid_power_raw_state) + ' (raw)',
+            '- Meter integration: ' + j(d.grid_platform) + ' (brand-seeded: ' + j(d.brand_seeded) + ')',
             '- Auto-detect: detected=' + j(d.auto_detected) + ', inverted=' + j(d.auto_inverted),
             '- Manual grid_sign_invert: ' + j(d.manual_grid_sign_invert),
             '- Counter correlation: confidence=' + j(d.confidence) + ', evidence=' + j(d.evidence) + ', samples=' + j(d.samples),

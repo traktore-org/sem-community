@@ -31,6 +31,35 @@ EXPORT_PATTERNS: tuple[str, ...] = (
 )
 GRID_TRIGGER_HINTS: tuple[str, ...] = tuple(set(IMPORT_PATTERNS + EXPORT_PATTERNS))
 
+# #461 brand-lookup tier: deterministic grid-sign convention per
+# integration. The grid-power sensor's own ``platform`` (HA integration
+# domain) tells us the sign convention with certainty for well-tested
+# brands — far stronger than inferring it. Value = ``needs_negate``:
+#   False → meter reports +=export already (SEM convention, no negation)
+#   True  → meter reports +=import (HA convention, negate to SEM)
+# Mirrors the pipeline patterns in tests/test_split_grid_integration.py
+# and the CLAUDE.md sign table. Only HIGH-CONFIDENCE entries belong here:
+# an unknown/mismatched platform simply falls through to the solar /
+# counter detectors, but a WRONG entry here would mis-seed a real user
+# (the 00e449c lesson) — so when in doubt, leave a brand out. The seed is
+# still overridable by the solar detector (ground truth) and the manual
+# flip, so it is a strong default, not an immutable verdict.
+PLATFORM_GRID_SIGN_INVERT: dict[str, bool] = {
+    # Pattern A — grid +=export (SEM), no negation
+    "huawei_solar": False,
+    "sma": False,
+    # Pattern B — grid +=import (HA), negate
+    "fronius": True,
+    "enphase_envoy": True,
+    "powerwall": True,
+    "solaredge": True,
+    "kostal_plenticore": True,
+    # Pattern C — grid +=export, no negation
+    "goodwe": False,
+    # Pattern D — grid +=import, negate
+    "solax": True,
+}
+
 
 @dataclass
 class SensorConfig:
@@ -126,6 +155,9 @@ class SensorReader:
         # Overriding an EXISTING lock is gated harder than an initial lock.
         self._SOLAR_OVERRIDE_MIN_SAMPLES: int = 20
         self._SOLAR_OVERRIDE_MIN_CONFIDENCE: float = 0.90
+        # #461 brand-lookup tier — attempt the deterministic platform seed
+        # exactly once (the grid sensor / registry is stable for a session).
+        self._brand_seed_done: bool = False
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
         # #487 follow-up (live PROD flip 2026-06-11): during HA's
@@ -443,10 +475,17 @@ class SensorReader:
 
         grid_entity = self.config.grid_power_sensor
         raw_state = None
+        grid_platform = None
         if grid_entity and self.hass is not None:
             st = self.hass.states.get(grid_entity)
             if st is not None:
                 raw_state = st.state
+            try:
+                entry = er.async_get(self.hass).async_get(grid_entity)
+                pf = entry.platform if entry else None
+                grid_platform = pf if isinstance(pf, str) else None
+            except Exception:  # noqa: BLE001 — diagnostics must never raise
+                grid_platform = None
 
         confidence = (
             abs(self._grid_sign_evidence) / self._grid_sign_total_mag
@@ -455,6 +494,9 @@ class SensorReader:
         return {
             "grid_power_sensor": grid_entity,
             "grid_power_raw_state": raw_state,
+            "grid_platform": grid_platform,
+            "brand_seeded": grid_platform in PLATFORM_GRID_SIGN_INVERT
+            if grid_platform else False,
             "manual_grid_sign_invert": bool(
                 self._raw_config.get("grid_sign_invert", False)
             ),
@@ -545,6 +587,9 @@ class SensorReader:
         self._prev_solar_w = None
         self._prev_grid_raw_w = None
         self._prev_batt_w = None
+        # Re-arm the brand seed so a known-brand install re-locks its
+        # deterministic sign on the next cycle after a reset.
+        self._brand_seed_done = False
         self._grid_import_baseline = None
         self._grid_export_baseline = None
         self._battery_sign_inverted.clear()
@@ -556,6 +601,55 @@ class SensorReader:
         _LOGGER.info(
             "Sign-detection state reset — grid and battery signs will be "
             "re-learned from Energy Dashboard counters"
+        )
+
+    def _seed_grid_sign_from_platform(self) -> None:
+        """Deterministic grid-sign seed from the meter's integration (#461).
+
+        The grid-power sensor's own ``platform`` (HA integration domain)
+        tells us the sign convention with certainty for well-tested brands
+        — no inference needed. Runs once: if the platform is a known brand
+        AND nothing has locked the sign yet (no restored lock, no manual
+        override), it seeds + locks the sign immediately, so a fresh
+        install of a known brand is correct from the first cycle instead of
+        waiting for solar swings or counter deltas.
+
+        Precedence: this seed is still OVERRIDABLE by the solar detector
+        (physical ground truth) and the manual flip, so a wrong brand
+        mapping self-heals rather than sticking. An unknown platform (e.g.
+        a separate P1/CT meter) simply falls through to the statistical
+        detectors.
+        """
+        if self._brand_seed_done or self._grid_sign_detected:
+            self._brand_seed_done = True
+            return
+        self._brand_seed_done = True
+
+        entity_id = self.config.grid_power_sensor
+        if not entity_id:
+            # Split-grid install: try the discovered import sensor's brand.
+            entity_id = (self._split_grid_discovery or {}).get("import")
+        if not entity_id:
+            return
+        try:
+            registry = er.async_get(self.hass)
+            entry = registry.async_get(entity_id)
+            platform = entry.platform if entry else None
+        except Exception as e:  # noqa: BLE001 — registry hiccup must not block reads
+            _LOGGER.debug("Grid-sign brand lookup failed for %s: %s", entity_id, e)
+            return
+        if not isinstance(platform, str) or platform not in PLATFORM_GRID_SIGN_INVERT:
+            return
+
+        self._grid_sign_inverted = PLATFORM_GRID_SIGN_INVERT[platform]
+        self._grid_sign_detected = True
+        _LOGGER.info(
+            "Grid sign seeded from integration '%s' (%s): %s — "
+            "deterministic brand lookup; solar co-movement can still "
+            "override if it disagrees",
+            platform, entity_id,
+            "negating (HA convention)" if self._grid_sign_inverted
+            else "no correction (SEM convention)",
         )
 
     def _accumulate_solar_sign(self, readings: PowerReadings) -> None:
@@ -672,10 +766,14 @@ class SensorReader:
 
         Returns True if grid_power should be negated.
         """
-        # Solar-anchored detection runs FIRST and independently of the
+        # Deterministic brand seed first (#461): a known meter integration
+        # locks the sign immediately. Solar can still override it below.
+        self._seed_grid_sign_from_platform()
+
+        # Solar-anchored detection runs next and independently of the
         # Energy-Dashboard counters (#461). It is authoritative for solar
-        # installs — it can set the lock here, and the counter path below
-        # is gated on ``not self._grid_sign_detected`` so it won't relock.
+        # installs — it can set/override the lock here, and the counter
+        # path below is gated on ``not self._grid_sign_detected``.
         self._accumulate_solar_sign(readings)
 
         ed = self._energy_dashboard_config

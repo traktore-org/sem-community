@@ -22,11 +22,27 @@ Pinned here:
 """
 from __future__ import annotations
 
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 
+from custom_components.solar_energy_management.coordinator import sensor_reader as sr
 from custom_components.solar_energy_management.coordinator.sensor_reader import (
     SensorReader,
 )
+
+_ER_PATCH = "custom_components.solar_energy_management.coordinator.sensor_reader.er.async_get"
+
+
+def _reader_with_grid(platform, entity="sensor.grid_power"):
+    """Reader whose grid sensor resolves to a given integration platform."""
+    hass = MagicMock()
+    r = SensorReader(hass, {"grid_power_sensor": entity})
+    r._sign_vote_warmup = 0
+    r._energy_dashboard_config = None  # isolate from the counter path
+    fake_entry = Mock()
+    fake_entry.platform = platform
+    fake_reg = Mock()
+    fake_reg.async_get = Mock(return_value=fake_entry)
+    return r, fake_reg
 
 
 def _state(value):
@@ -136,6 +152,65 @@ def test_single_direction_install_locks():
     assert r._grid_sign_inverted is True
     assert r._grid_sign_seen_import is True
     assert r._grid_sign_seen_export is False
+
+
+def test_brand_seed_huawei_no_negate():
+    """Pattern A brand (huawei_solar) seeds no-negation immediately."""
+    r, reg = _reader_with_grid("huawei_solar")
+    with patch(_ER_PATCH, return_value=reg):
+        readings = MagicMock()
+        readings.grid_power = 2000.0
+        readings.solar_power = None
+        r._detect_grid_sign(readings)
+    assert r._grid_sign_detected is True
+    assert r._grid_sign_inverted is False
+
+
+def test_brand_seed_solaredge_negate():
+    """Pattern B brand (solaredge) seeds negation immediately."""
+    r, reg = _reader_with_grid("solaredge")
+    with patch(_ER_PATCH, return_value=reg):
+        readings = MagicMock()
+        readings.grid_power = 2000.0
+        readings.solar_power = None
+        r._detect_grid_sign(readings)
+    assert r._grid_sign_detected is True
+    assert r._grid_sign_inverted is True
+
+
+def test_unknown_platform_does_not_seed():
+    """A separate P1/CT meter (unknown platform) falls through to stats."""
+    r, reg = _reader_with_grid("sessy")
+    with patch(_ER_PATCH, return_value=reg):
+        readings = MagicMock()
+        readings.grid_power = 2000.0
+        readings.solar_power = None
+        r._detect_grid_sign(readings)
+    assert r._grid_sign_detected is False
+
+
+def test_brand_seed_overridden_by_solar():
+    """A wrong brand seed self-heals once solar disagrees with confidence."""
+    r, reg = _reader_with_grid("huawei_solar")  # seeds no-negate (False)
+    with patch(_ER_PATCH, return_value=reg):
+        seed = MagicMock()
+        seed.grid_power = 2000.0
+        seed.solar_power = None
+        seed.battery_power = None
+        r._detect_grid_sign(seed)
+        assert r._grid_sign_inverted is False  # brand-seeded
+        # Feed sustained solar swings where grid moves AGAINST solar → HA.
+        samples = [(1000.0, 500.0)]
+        for _ in range(22):
+            samples.append((4000.0, -2500.0))
+            samples.append((1000.0, 500.0))
+        for solar, grid in samples:
+            rd = MagicMock()
+            rd.solar_power = solar
+            rd.grid_power = grid
+            rd.battery_power = None
+            r._detect_grid_sign(rd)
+    assert r._grid_sign_inverted is True  # solar overrode the brand seed
 
 
 def _reader_solar():
