@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.15] - 14.06.2026
+
+## 🏷️ Config-tab label audit + clearer forecast/EV-priority controls (#514)
+
+- **The EV charger "Min Amps" stepper was mislabelled "Minimum SOC"** — the Config tab's per-charger minimum-current control (in Amps) showed the battery-SOC label. Fixed to "Min Amps". The battery section's legitimate "Minimum SOC" is untouched (#514)
+- **Surplus Priority + Shed Priority steppers now appear on each EV charger** in the Config tab, alongside Min Amps / Start current / Capacity (matching how Hot water and Heat pump show "Priority"). The #470 entities existed but weren't surfaced on the card (#514)
+- **Raw translation keys no longer leak onto the dashboard** — Hot water's "Max temperature" row and the Max-Grid-Import help text rendered their raw keys (`hot_water_max_temperature`, `tile_help_max_grid_import`); both now show proper labels (#514)
+- **Forecast source shows its brand name** — the Config tab showed the raw id (`forecast_solar` / `FORECAST_SOLAR`) while the Home hero already showed "Forecast.Solar". Both now share one base helper so they agree and can't drift (#514)
+
 ## 📊 EV "Today's plan" strip no longer renders empty when the next charge is >12h away (#512)
 
 - **The 12h plan strip now shows a full "nothing scheduled" idle bar instead of blanking** — when the next EV charging event was beyond the strip's 12h window (e.g. a morning view with night charging set for 21:35), the segment builder advanced its cursor past the window end and skipped the idle-fill, producing zero segments and an empty strip (title/axis/legend showed, but no timeline). Each transition is now clamped to the horizon so the visible time is always painted. Not mobile-specific — desktop blanked in the same state too (#512)
