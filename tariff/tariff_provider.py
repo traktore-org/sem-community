@@ -364,14 +364,18 @@ class DynamicTariffProvider(TariffProvider):
 
         Returns True when fresh prices were stored.
         """
-        # #518: when the user configured their own price entity (e.g. a
-        # Tibber sensor with VAT/fees), do NOT pull the Nord Pool day-ahead
-        # curve even if that integration is installed. Mixing a custom
-        # current price with a Nord Pool curve gave different prices AND
-        # different percentile levels, and relabelled the provider
-        # "nordpool_official" (RienduPre). The custom entity (+ its forecast
-        # attribute / dynamic_forecast_entity) is the single source.
-        if self._user_configured_price:
+        # #518: when the user configured their own price entity that ISN'T a
+        # Nord Pool sensor (e.g. a Tibber sensor with VAT/fees), do NOT pull
+        # the Nord Pool day-ahead curve even if that integration is
+        # installed. Mixing a custom current price with a Nord Pool curve
+        # gave different prices AND percentile levels, and relabelled the
+        # provider "nordpool_official" (RienduPre). The custom entity (+ its
+        # forecast attribute / dynamic_forecast_entity) is the single source.
+        # A user who configured the official Nord Pool ``nord_pool_*`` sensor
+        # DOES need this fetch (that sensor exposes no curve), so it's kept.
+        if self._user_configured_price and not (
+            self._price_entity and "nord_pool" in self._price_entity
+        ):
             return False
         services = getattr(self.hass, "services", None)
         if services is None or not services.has_service(
