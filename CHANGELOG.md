@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 📊 EV "Today's plan" strip no longer renders empty when the next charge is >12h away (#512)
+
+- **The 12h plan strip now shows a full "nothing scheduled" idle bar instead of blanking** — when the next EV charging event was beyond the strip's 12h window (e.g. a morning view with night charging set for 21:35), the segment builder advanced its cursor past the window end and skipped the idle-fill, producing zero segments and an empty strip (title/axis/legend showed, but no timeline). Each transition is now clamped to the horizon so the visible time is always painted. Not mobile-specific — desktop blanked in the same state too (#512)
+
 ## ☀️ Heat pump / hot water boost on the TRUE house surplus, and stand down under peak (#508 phase 2)
 
 - **They now see real spare solar, not the EV's budget (W7)** — the surplus controller was fed the EV charging *budget*, so heat pump / hot water effectively competed for the EV's allocation. It now receives the true house surplus: `grid_export + its own active device draw`. The add-back is what makes it stable — without it, every device the controller switches on shrinks the grid export it reads next cycle, so the signal would chase its own tail and the device would flap. With it, the input is the surplus that *would* exist if its devices were off — the right quantity to allocate from. Net effect: discretionary loads boost only on genuine spare solar, after the EV and battery have taken their share (#508)
