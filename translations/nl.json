@@ -978,7 +978,7 @@
         "name": "Energiedashboard-configuratie"
       },
       "heat_pump_registration_status": {
-        "name": "Heat Pump Registration Status"
+        "name": "Warmtepomp Registratie Status"
       }
     },
     "binary_sensor": {
@@ -1168,7 +1168,7 @@
         "state": {
           "solar_only": "Alleen zon",
           "solar_plus_cheap": "Zon + goedkoopste uren",
-          "min_plus_solar": "Min + Zon",
+          "min_plus_solar": "Mininmaal + Zon",
           "always_max": "Altijd (max)",
           "off": "Uit"
         }
