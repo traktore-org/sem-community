@@ -134,12 +134,44 @@ class SEMWeatherCard extends SEMLitBase {
         });
     }
 
+    // #516: find a weather.* entity that actually carries usable current
+    // data (a numeric ``temperature``, not unavailable/unknown). Prefer
+    // real entities over the auto-generated ``weather.forecast_*`` subentity.
+    _findUsableWeatherEntity() {
+        const states = this._hass?.states;
+        if (!states) return null;
+        const usable = Object.keys(states).filter((id) => {
+            if (!id.startsWith('weather.')) return false;
+            const s = states[id];
+            return s && s.state !== 'unavailable' && s.state !== 'unknown'
+                && s.attributes && s.attributes.temperature != null;
+        });
+        const nonForecast = usable.filter((id) => !id.startsWith('weather.forecast_'));
+        return nonForecast[0] || usable[0] || null;
+    }
+
     render() {
         if (!this._config) return nothing;
 
-        const entityId = this._config.entity;
+        let entityId = this._config.entity;
         const forecastRows = this._config.forecast_rows || 5;
-        const entity = this._hass?.states[entityId];
+        let entity = this._hass?.states[entityId];
+
+        // #516: the configured entity can be missing, ``unavailable``, or a
+        // ``weather.forecast_*`` subentity that carries no ``temperature``
+        // (RienduPre saw a "?" + "—°C" tile). The dashboard generator picks
+        // one weather entity at build time; if it was reloading then, or the
+        // user only has forecast subentities, that pick is useless. Fall back
+        // at render time to any weather.* entity that actually has a
+        // temperature — preferring non-forecast — so the tile self-heals.
+        if (!entity || entity.state === 'unavailable'
+                || entity.attributes?.temperature == null) {
+            const fallbackId = this._findUsableWeatherEntity();
+            if (fallbackId) {
+                entityId = fallbackId;
+                entity = this._hass.states[fallbackId];
+            }
+        }
 
         if (!entity) {
             return html`

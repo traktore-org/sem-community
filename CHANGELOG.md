@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🌤️ Weather tile no longer shows "?" / "—°C" when the picked entity has no data (#516)
+
+- **The weather tile now finds a weather entity that actually has current data** — RienduPre's tile showed a "?" condition and "—°C / — % / — km/h" because the dashboard generator picked a `weather.*` entity that carried no `temperature` (a `weather.forecast_*` subentity, or one that was unavailable when the dashboard was generated). The generator now prefers a non-forecast entity that actually has a current temperature, and the card falls back at render time to any usable `weather.*` entity if its configured one is missing / unavailable / data-less — so the tile self-heals without regenerating the dashboard (#516)
+
 # [1.7.3-beta.15] - 14.06.2026
 
 ## 🏷️ Config-tab label audit + clearer forecast/EV-priority controls (#514)
