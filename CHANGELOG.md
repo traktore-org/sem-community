@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.16] - 14.06.2026
+
+## 🌍 More Dutch translations on the diagnostic dashboard (#515)
+
+- Expanded `nl` coverage across the diagnostic dashboard (by @RienduPre in #515)
+
 ## 💶 A configured dynamic price sensor no longer silently flips to Nord Pool (#518)
 
 - **Your chosen price entity stays the source, even on a momentary blip** — when a user configures a dynamic price sensor (`dynamic_tariff_entity`, e.g. a Tibber sensor with VAT/fees), SEM used to *fall through* to auto-detecting another integration whenever that sensor read `unavailable`/`unknown` for a cycle. With the Nord Pool integration also installed, the provider silently switched to `nordpool_official` — a different source with different (tax-free spot) prices and percentile levels, so the schedules/price-levels appeared to flip back and forth (RienduPre, #518). A user-configured price entity is now authoritative: the provider stays `custom` and the cached curve / fallback price covers a transient gap. Auto-detection only runs when no price entity is configured (#518)
