@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.17] - 14.06.2026
+
 ## 🧭 Robust grid-sign autodetection + one-tap fix (#461)
 
 - **Solar-anchored detection is now the authoritative primary** — solar production has no sign ambiguity, so SEM now learns the grid import/export convention from how the raw grid reading *co-moves with solar* (grid rises with solar → `+export` meter; grid falls as solar rises → `+import` meter). This is completely independent of the Energy-Dashboard import/export counters, so a mis-mapped or swapped counter (the root cause of the Sessy-P1 wrong lock) can no longer corrupt the result. It can also self-heal a wrong existing lock once it is highly confident and sustained — and because a correctly-signed install computes the *same* sign it already has, a working install is never disturbed (#461)
