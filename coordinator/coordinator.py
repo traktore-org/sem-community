@@ -4452,20 +4452,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # counter only rolls over once today's commitment is closed.
                 # Solar charging between sunrise and the deadline accumulates
                 # into yesterday's bucket — harmless, since Min was already hit.
+                # Per-charger daily rollover — MUST run every cycle, even when
+                # the charger draws no power. #517: nesting the reset inside
+                # ``if charger_power > 0`` meant an unplugged/idle charger never
+                # rolled over, so its "today" counter carried yesterday's value
+                # forward indefinitely and grew across idle days (RienduPre saw
+                # 81.5 kWh "Vandaag" on a charger that wasn't even connected,
+                # while the correctly-resetting fleet total showed 0). Only the
+                # INCREMENT is gated on power; the date check / reset is not.
+                cfg_for_cid = (
+                    next((c for c in (self.config.get("ev_chargers") or [])
+                          if c.get("id") == cid), {})
+                ) or {}
+                target_time = self._charger_target_time(cfg_for_cid)
+                ev_day = self.time_manager.get_current_meter_day_offset_based(
+                    target_time
+                ).isoformat()
+                if self._daily_ev_per_charger_date.get(cid) != ev_day:
+                    # Per-charger reset (Car A at 07:00, Car B at 08:00 don't
+                    # disturb each other) — only this cid's bucket rolls over.
+                    self._daily_ev_per_charger[cid] = 0.0
+                    self._daily_ev_per_charger_date[cid] = ev_day
                 if charger_power > 0:
-                    cfg_for_cid = (
-                        next((c for c in (self.config.get("ev_chargers") or [])
-                              if c.get("id") == cid), {})
-                    ) or {}
-                    target_time = self._charger_target_time(cfg_for_cid)
-                    ev_day = self.time_manager.get_current_meter_day_offset_based(
-                        target_time
-                    ).isoformat()
-                    if self._daily_ev_per_charger_date.get(cid) != ev_day:
-                        # Per-charger reset (Car A at 07:00, Car B at 08:00 don't
-                        # disturb each other) — only this cid's bucket rolls over.
-                        self._daily_ev_per_charger[cid] = 0.0
-                        self._daily_ev_per_charger_date[cid] = ev_day
                     increment = charger_power * interval_hours / 1000  # W → kWh
                     self._daily_ev_per_charger[cid] = (
                         self._daily_ev_per_charger.get(cid, 0.0) + increment

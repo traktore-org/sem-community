@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🔢 Per-charger "today" energy now resets at midnight even when idle (#517)
+
+- **A charger that didn't draw power all day no longer carries yesterday's energy forward** — RienduPre (dual Wallbox) saw "Vandaag" (today) = 81.5 kWh on a charger that wasn't even connected, while the fleet total correctly showed 0. The per-charger daily *rollover/reset* was nested inside the `if charger_power > 0` accumulation guard, so an idle/unplugged charger never executed it and its counter grew across idle days. The reset now runs every cycle for every charger (only the increment stays gated on power); a stored stale value self-heals on the next cycle after update. Single-charger installs were unaffected (they report the correctly-resetting fleet total) (#517)
+
 # [1.7.3-beta.15] - 14.06.2026
 
 ## 🏷️ Config-tab label audit + clearer forecast/EV-priority controls (#514)
