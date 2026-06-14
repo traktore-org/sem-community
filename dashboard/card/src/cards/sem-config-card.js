@@ -385,8 +385,8 @@ class SEMConfigCard extends SEMLitBase {
         return this._val('load_management_status') || '';
     }
     _forecastSubtitle() {
-        const src = this._val('forecast_source') || '';
-        return src ? src : this._t('not_configured');
+        const label = this._forecastProviderLabel(this._val('forecast_source'));
+        return label ? label : this._t('not_configured');
     }
 
     // ── Helpers ──
@@ -561,12 +561,16 @@ class SEMConfigCard extends SEMLitBase {
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
                     <div class="stepper-pair">
-                        ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'minimum_soc', T, 'tile_help_min_amps')}
+                        ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'min_amps', T, 'tile_help_min_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_vehicle_min_current`, 'vehicle_min_current', T, 'tile_help_vehicle_min_amps')}
                     </div>
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_initial_current`, 'initial_current', T, 'tile_help_start_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
+                    </div>
+                    <div class="stepper-pair">
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_surplus_priority`, 'surplus_priority', T, 'tile_help_surplus_priority')}
+                        ${this._renderStepper(`number.sem_charger_${cid}_ev_shed_priority`, 'shed_priority', T, 'tile_help_shed_priority')}
                     </div>
                 </div>
             `;})}
@@ -1042,13 +1046,14 @@ class SEMConfigCard extends SEMLitBase {
     }
 
     _renderForecast(T) {
-        const src = this._val('forecast_source') || 'none';
+        const raw = this._val('forecast_source') || 'none';
+        const label = raw === 'none' ? this._t('none') : this._forecastProviderLabel(raw);
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('forecast_source')}</span>
-                <span class="readonly-value">${src}</span>
+                <span class="readonly-value">${label}</span>
             </div>
-            ${src === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
+            ${raw === 'none' ? html`<div class="overview-help">${this._t('config_forecast_install_hint')}</div>` : nothing}
         `;
     }
 

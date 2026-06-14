@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-12T13:45:32.670525+00:00
+// Generated: 2026-06-14T07:32:36.196895+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1054,7 +1054,13 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "hot_water_max_temperature": "Max temperature",
+      "tile_help_max_grid_import": "Maximum power SEM may import from the grid to run surplus devices.",
+      "surplus_priority": "Surplus Priority",
+      "shed_priority": "Shed Priority",
+      "tile_help_surplus_priority": "Order this charger gets solar surplus across the fleet (lower = charges first).",
+      "tile_help_shed_priority": "Order this charger is throttled when grid import nears the peak limit (higher = shed first)."
     },
     "de": {
       "charging": "Laden",
@@ -2105,7 +2111,13 @@
       "hot_water_legionella_never_run": "Noch nie gelaufen",
       "hot_water_temperature_reading_path": "Temperaturmess-Pfad",
       "hot_water_temperature_safety_path": "Temperatur-Sicherheits-Pfad",
-      "hot_water_activation_path": "Aktivierungspfad"
+      "hot_water_activation_path": "Aktivierungspfad",
+      "hot_water_max_temperature": "Max. Temperatur",
+      "tile_help_max_grid_import": "Maximale Netzleistung, die SEM zum Betrieb von Überschuss-Geräten beziehen darf.",
+      "surplus_priority": "Überschuss-Priorität",
+      "shed_priority": "Abwurf-Priorität",
+      "tile_help_surplus_priority": "Reihenfolge bei der Solarüberschuss-Verteilung in der Flotte (niedriger = lädt zuerst).",
+      "tile_help_shed_priority": "Reihenfolge beim Drosseln bei Netzspitze (höher = zuerst abgeworfen)."
     },
     "fr": {
       "charging": "En charge",

@@ -256,8 +256,16 @@ class SEMEVStatusCard extends SEMLitBase {
         let state = 'idle';
         for (const r of evRows) {
             const t = new Date(r.when).getTime();
-            if (t > cursor && t <= end) segments.push({s: cursor, e: t, state});
-            cursor = t;
+            // Clamp each transition to the 12h horizon. Without the clamp a
+            // plan whose first EV event is beyond the window (morning view,
+            // night charge scheduled for e.g. 21:35 when now+12h is 19:56)
+            // advanced cursor PAST end, so the idle-fill below was skipped
+            // and the strip rendered EMPTY instead of a full "nothing
+            // scheduled in the next 12h" idle bar. Clamping keeps cursor
+            // inside the window so the fill always covers the visible time.
+            const segEnd = Math.min(t, end);
+            if (segEnd > cursor) segments.push({s: cursor, e: segEnd, state});
+            cursor = Math.max(cursor, segEnd);
             if (r.kind === 'night_open') state = tariffWait ? 'wait' : 'charging';
             else if (r.kind === 'ev_charge_start') state = 'charging';
             else if (r.kind === 'ev_min_reached') state = 'done';
