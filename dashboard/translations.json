@@ -1054,7 +1054,15 @@
     "surplus_priority": "Surplus Priority",
     "shed_priority": "Shed Priority",
     "tile_help_surplus_priority": "Order this charger gets solar surplus across the fleet (lower = charges first).",
-    "tile_help_shed_priority": "Order this charger is throttled when grid import nears the peak limit (higher = shed first)."
+    "tile_help_shed_priority": "Order this charger is throttled when grid import nears the peak limit (higher = shed first).",
+    "grid_sign": "Grid sign (auto)",
+    "reset_sign_detection": "Reset sign detection",
+    "reset_sign_detection_help": "Clears the learned grid/battery power sign and re-learns it. Use if import/export (or charge/discharge) appears inverted. Trigger it while the system is clearly exporting/importing for a clean re-learn.",
+    "fix_grid_sign": "Fix grid sign",
+    "fix_grid_sign_help": "Flips grid import/export if it looks inverted and copies a ready-to-paste report to your clipboard. Paste it into a GitHub issue so we can improve auto-detection for your meter.",
+    "sign_flipped_copied": "Sign flipped — report copied to clipboard",
+    "sign_flipped": "Sign flipped — clipboard blocked, copy the report from the logs",
+    "sign_relearn_started": "Re-learning grid/battery sign…"
   },
   "de": {
     "charging": "Laden",
@@ -2111,7 +2119,15 @@
     "surplus_priority": "Überschuss-Priorität",
     "shed_priority": "Abwurf-Priorität",
     "tile_help_surplus_priority": "Reihenfolge bei der Solarüberschuss-Verteilung in der Flotte (niedriger = lädt zuerst).",
-    "tile_help_shed_priority": "Reihenfolge beim Drosseln bei Netzspitze (höher = zuerst abgeworfen)."
+    "tile_help_shed_priority": "Reihenfolge beim Drosseln bei Netzspitze (höher = zuerst abgeworfen).",
+    "grid_sign": "Netz-Vorzeichen (auto)",
+    "reset_sign_detection": "Vorzeichen-Erkennung zurücksetzen",
+    "reset_sign_detection_help": "Setzt das gelernte Netz-/Batterie-Vorzeichen zurück und lernt es neu. Nutzen, wenn Bezug/Einspeisung (oder Laden/Entladen) vertauscht erscheint. Bei klarer Einspeisung/Bezug auslösen für sauberes Neulernen.",
+    "fix_grid_sign": "Netz-Vorzeichen korrigieren",
+    "fix_grid_sign_help": "Kehrt Netz-Import/Export um, falls vertauscht, und kopiert einen fertigen Bericht in die Zwischenablage. Füge ihn in ein GitHub-Issue ein, damit wir die automatische Erkennung für deinen Zähler verbessern können.",
+    "sign_flipped_copied": "Vorzeichen umgekehrt – Bericht in Zwischenablage kopiert",
+    "sign_flipped": "Vorzeichen umgekehrt – Zwischenablage blockiert, Bericht aus dem Log kopieren",
+    "sign_relearn_started": "Vorzeichen wird neu erlernt…"
   },
   "fr": {
     "charging": "En charge",

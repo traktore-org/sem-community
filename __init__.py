@@ -3279,6 +3279,16 @@ async def _async_register_phase_services(
         if storage is not None:
             storage.set_sign_state({})
             await storage.async_save_energy_delayed()
+        # A re-learn must start clean: drop any prior one-tap user flip
+        # (#461) so the freshly-learned sign isn't silently re-inverted on
+        # top. Only touches the entry — and reloads — when a flip was
+        # actually set, so the common reset path stays reload-free.
+        if bool((target.options or {}).get("grid_sign_user_flip", False)):
+            cleared = {**(target.options or {}), "grid_sign_user_flip": False}
+            if coordinator is not None:
+                coordinator._skip_options_reload = dict(cleared)
+            hass.config_entries.async_update_entry(target, options=cleared)
+            await hass.config_entries.async_reload(target.entry_id)
         _LOGGER.info("reset_sign_detection: cleared sign locks on entry %s", target.entry_id)
 
     hass.services.async_register(
@@ -3288,6 +3298,64 @@ async def _async_register_phase_services(
         schema=vol.Schema({
             vol.Optional("entry_id"): cv.string,
         }),
+    )
+
+    # #461 one-tap sign flip + support payload. When the auto-detect or a
+    # genuinely undecidable meter (swapped / net-only counters) lands the
+    # wrong import/export convention, the user taps the Control-tab button:
+    # this toggles the persisted ``grid_sign_user_flip`` option (which sits
+    # on TOP of the auto/manual decision in sensor_reader), reloads so the
+    # corrected sign takes effect immediately, and returns a diagnostics
+    # dict the button copies into a pre-filled GitHub issue. The captured
+    # payload is what lets us improve the autodetect for that meter class.
+    async def async_flip_grid_sign(call):
+        """Flip the grid-power sign and return a #461 support payload."""
+        sem_entries = hass.config_entries.async_entries(DOMAIN)
+        if not sem_entries:
+            return {"ok": False, "error": "no_entry"}
+        target = sem_entries[0]
+        requested = call.data.get("entry_id") if call.data else None
+        if requested and len(sem_entries) > 1:
+            for e in sem_entries:
+                if e.entry_id == requested:
+                    target = e
+                    break
+        coordinator = getattr(target, "runtime_data", None)
+        # Snapshot diagnostics BEFORE the flip — captures the state the
+        # user is reporting as wrong (raw meter value, counters, evidence).
+        diag = {}
+        reader = getattr(coordinator, "_sensor_reader", None) if coordinator else None
+        if reader is not None:
+            try:
+                diag = reader.grid_sign_diagnostics()
+            except Exception:  # noqa: BLE001 — diag must never block the flip
+                _LOGGER.debug("flip_grid_sign: diagnostics snapshot failed", exc_info=True)
+
+        current = bool((target.options or {}).get("grid_sign_user_flip", False))
+        new_flip = not current
+        new_options = {**(target.options or {}), "grid_sign_user_flip": new_flip}
+        # Suppress the update-listener reload; we issue one explicit reload
+        # so the new sign is live without a double tear-down (set_option
+        # pattern).
+        if coordinator is not None:
+            coordinator._skip_options_reload = dict(new_options)
+        hass.config_entries.async_update_entry(target, options=new_options)
+        await hass.config_entries.async_reload(target.entry_id)
+        _LOGGER.info(
+            "flip_grid_sign: user_flip %s -> %s on entry %s",
+            current, new_flip, target.entry_id,
+        )
+        diag["user_flip_now"] = new_flip
+        return {"ok": True, "user_flip": new_flip, "diagnostics": diag}
+
+    hass.services.async_register(
+        DOMAIN,
+        "flip_grid_sign",
+        async_flip_grid_sign,
+        schema=vol.Schema({
+            vol.Optional("entry_id"): cv.string,
+        }),
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     # #432: per-section Diagnose payload. The Configuration tab's

@@ -96,8 +96,9 @@ def test_restored_lock_short_circuits_detection():
     # No energy-dashboard config → early-return path; the lock value is
     # what must come back.
     assert r._detect_grid_sign(readings) is True
-    # And no votes were cast.
-    assert r._grid_sign_votes == 0
+    # And no evidence was accumulated.
+    assert r._grid_sign_total_mag == 0.0
+    assert r._grid_sign_evidence == 0.0
 
 
 # ── 5. manual override precedence ────────────────────────────────────

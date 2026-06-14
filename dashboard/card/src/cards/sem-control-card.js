@@ -266,11 +266,19 @@ class SEMControlCard extends SEMLitBase {
     _renderBatterySection(T) {
         const capacity = this._valNum('diag_battery_capacity');
         const capStr = capacity > 0 ? capacity.toFixed(1) + ' kWh' : '—';
+        // #461: grid-sign read-out only. The fix / re-learn buttons moved
+        // to the Configuration tab's Advanced section (the settings home);
+        // this card stays live-ops/monitoring.
+        const gridSign = this._val('diag_grid_sign') || '—';
 
         return html`
             <div class="readonly-row">
                 <span class="ctrl-label">${this._t('capacity_kwh')}</span>
                 <span class="readonly-value">${capStr}</span>
+            </div>
+            <div class="readonly-row">
+                <span class="ctrl-label">${this._t('grid_sign')}</span>
+                <span class="readonly-value">${gridSign}</span>
             </div>
         `;
     }

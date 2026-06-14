@@ -799,7 +799,7 @@ class TestCounterResetGuard:
 
         assert result is False
         assert sensor_reader._grid_sign_detected is False
-        assert sensor_reader._grid_sign_votes == 0
+        assert sensor_reader._grid_sign_samples == 0
         # Baselines were reset to the post-reset values.
         assert sensor_reader._grid_import_baseline == 0.0
         assert sensor_reader._grid_export_baseline == 80.1

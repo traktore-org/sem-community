@@ -191,7 +191,8 @@ class TestSignVoteWarmup:
             set_counters(100.0 + step * 0.1, 50.0)
             result = reader._detect_grid_sign(PowerReadings(grid_power=800.0))
         assert result is False
-        assert reader._grid_sign_votes == 0
+        assert reader._grid_sign_samples == 0
+        assert reader._grid_sign_evidence == 0.0
         assert reader._grid_sign_detected is False
 
     def test_votes_resume_after_warmup(self):

@@ -105,17 +105,18 @@ class TestGridSignInvertOption:
         reader.set_energy_dashboard_config(_ed_config())
 
         # Pre-conditions: auto-detect state untouched.
-        assert reader._grid_sign_votes == 0
+        assert reader._grid_sign_total_mag == 0.0
         assert reader._grid_sign_detected is False
 
         # Run several cycles.
         for _ in range(5):
             reader.read_power()
 
-        # Post-conditions: auto-detect votes and the "detected" flag are
+        # Post-conditions: auto-detect evidence and the "detected" flag are
         # still at their initial values because the manual override
         # bypassed _detect_grid_sign() entirely.
-        assert reader._grid_sign_votes == 0
+        assert reader._grid_sign_total_mag == 0.0
+        assert reader._grid_sign_evidence == 0.0
         assert reader._grid_sign_detected is False
         assert reader._grid_sign_inverted is False
 

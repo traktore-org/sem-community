@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🧭 Robust grid-sign autodetection + one-tap fix (#461)
+
+- **Solar-anchored detection is now the authoritative primary** — solar production has no sign ambiguity, so SEM now learns the grid import/export convention from how the raw grid reading *co-moves with solar* (grid rises with solar → `+export` meter; grid falls as solar rises → `+import` meter). This is completely independent of the Energy-Dashboard import/export counters, so a mis-mapped or swapped counter (the root cause of the Sessy-P1 wrong lock) can no longer corrupt the result. It can also self-heal a wrong existing lock once it is highly confident and sustained — and because a correctly-signed install computes the *same* sign it already has, a working install is never disturbed (#461)
+- **Counter-correlation hardened** — the fallback path (grid-only installs, no solar) replaced the old "3 consecutive votes" lock, which a mixed/transient counter burst could slip through, with magnitude-weighted evidence scored by *confidence*: it only locks when the dominant direction holds ≥75% of all accumulated evidence, so an inconsistent meter stays in passthrough instead of locking the wrong sign (#461)
+- **One-tap "Fix grid sign" button in Configuration → Advanced** — flips the convention instantly (via the new `flip_grid_sign` service) and copies a ready-to-paste diagnostics report (raw meter value, configured counters, both correlation streams) to the clipboard for a GitHub issue. The neighbouring "Reset sign detection" re-learns from scratch and now also clears a prior manual flip so the re-learn starts clean (#461)
+
 # [1.7.3-beta.16] - 14.06.2026
 
 ## 🌍 More Dutch translations on the diagnostic dashboard (#515)

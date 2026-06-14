@@ -128,6 +128,8 @@ const WATCHED = [
     // is the single settings home; Control is live-ops only).
     'number.sem_regulation_offset',
     'switch.sem_observer_mode',
+    // #461: grid-sign fix lives in the Advanced section now.
+    'sensor.sem_diag_grid_sign',
 ];
 
 class SEMConfigCard extends SEMLitBase {
@@ -139,6 +141,9 @@ class SEMConfigCard extends SEMLitBase {
             _showHelp: { state: true },
             _entryId: { state: true },
             _saveStatus: { state: true },
+            // #461 grid-sign fix button transient UI state.
+            _signBusy: { state: true },
+            _signMsg: { state: true },
         };
     }
 
@@ -156,6 +161,8 @@ class SEMConfigCard extends SEMLitBase {
         this._entryId = '';
         this._saveStatus = {};  // { fieldKey: 'saving' | 'ok' | error-msg }
         this._statusTimers = new Set();  // pending ✓-clear timeouts (#476)
+        this._signBusy = false;
+        this._signMsg = '';
     }
 
     disconnectedCallback() {
@@ -1098,7 +1105,110 @@ class SEMConfigCard extends SEMLitBase {
                 ${this._renderStepper('number.sem_ev_enable_delay_seconds', 'ev_enable_delay', T, 'config_help_ev_enable_delay')}
                 ${this._renderStepper('number.sem_ev_disable_delay_seconds', 'ev_disable_delay', T, 'config_help_ev_disable_delay')}
             </div>
+            ${this._renderGridSignFix(T)}
         `;
+    }
+
+    // #461: grid import/export sign — one-tap fix + re-learn. Lives in the
+    // Advanced section: most users never need it, but a meter with a
+    // swapped/mis-mapped convention shows inverted import/export and the
+    // user can correct it here without Developer Tools → Actions.
+    _renderGridSignFix(T) {
+        const gridSign = this._val('diag_grid_sign') || '—';
+        return html`
+            <div class="grid-sign-block">
+                <div class="readonly-row">
+                    <span class="ctrl-label">${this._t('grid_sign')}</span>
+                    <span class="readonly-value">${gridSign}</span>
+                </div>
+                <div class="action-row">
+                    <button class="action-btn" ?disabled=${this._signBusy}
+                            @click=${() => this._flipGridSign()}>
+                        <ha-icon icon="mdi:swap-vertical-bold" style="--mdc-icon-size:16px"></ha-icon>
+                        ${this._t('fix_grid_sign')}
+                    </button>
+                    <button class="action-btn action-btn-ghost"
+                            @click=${() => this._resetSignDetection()}>
+                        ${this._t('reset_sign_detection')}
+                    </button>
+                </div>
+                ${this._signMsg
+                    ? html`<div class="sign-feedback">${this._signMsg}</div>`
+                    : nothing}
+                ${this._showHelp
+                    ? html`<div class="setting-help-text">${this._t('fix_grid_sign_help')}</div>`
+                    : nothing}
+            </div>
+        `;
+    }
+
+    _resetSignDetection() {
+        if (!this._hass) return;
+        this._hass.callService('solar_energy_management', 'reset_sign_detection', {});
+        this._signMsg = this._t('sign_relearn_started');
+        this.requestUpdate();
+        setTimeout(() => { this._signMsg = ''; this.requestUpdate(); }, 4000);
+    }
+
+    async _flipGridSign() {
+        if (!this._hass || this._signBusy) return;
+        this._signBusy = true;
+        this._signMsg = '';
+        this.requestUpdate();
+        let payload = null;
+        try {
+            const res = await this._hass.callService(
+                'solar_energy_management', 'flip_grid_sign', {},
+                undefined, false, true,
+            );
+            payload = (res && res.response) ? res.response : res;
+        } catch (e) {
+            payload = null;
+        }
+        const report = this._buildSignReport(payload);
+        let copied = false;
+        try {
+            await navigator.clipboard.writeText(report);
+            copied = true;
+        } catch (e) {
+            copied = false;
+        }
+        this._signBusy = false;
+        this._signMsg = copied
+            ? this._t('sign_flipped_copied')
+            : this._t('sign_flipped');
+        this.requestUpdate();
+        setTimeout(() => { this._signMsg = ''; this.requestUpdate(); }, 6000);
+    }
+
+    // Build the markdown support report copied on flip. Plain string
+    // concatenation only (no html template) — safe for backticks.
+    _buildSignReport(payload) {
+        const d = (payload && payload.diagnostics) || {};
+        const flip = (payload && typeof payload.user_flip === 'boolean')
+            ? String(payload.user_flip) : '?';
+        const j = (v) => (v === undefined || v === null) ? '?' : String(v);
+        const arr = (v) => (Array.isArray(v) && v.length) ? v.join(', ') : '(none)';
+        const bt = String.fromCharCode(96); // backtick, kept out of source
+        const code = (s) => bt + s + bt;
+        return [
+            '### SEM grid-sign report (#461)',
+            '',
+            'I tapped **Fix grid sign** in the Configuration tab.',
+            'grid_sign_user_flip is now ' + code(flip) + '.',
+            '',
+            '- Meter sensor: ' + code(j(d.grid_power_sensor)) + ' = ' + j(d.grid_power_raw_state) + ' (raw)',
+            '- Auto-detect: detected=' + j(d.auto_detected) + ', inverted=' + j(d.auto_inverted),
+            '- Manual grid_sign_invert: ' + j(d.manual_grid_sign_invert),
+            '- Counter correlation: confidence=' + j(d.confidence) + ', evidence=' + j(d.evidence) + ', samples=' + j(d.samples),
+            '- Solar correlation: confidence=' + j(d.solar_confidence) + ', evidence=' + j(d.solar_evidence) + ', samples=' + j(d.solar_samples),
+            '- Seen import=' + j(d.seen_import) + ', export=' + j(d.seen_export),
+            '- Import counters: ' + arr(d.import_counters),
+            '- Export counters: ' + arr(d.export_counters),
+            '',
+            'My hardware (please fill in): inverter / grid meter / battery brand.',
+            'After the flip, do the Home-tab import vs export arrows now point the right way?',
+        ].join('\n');
     }
 
     // ── Section header ──
@@ -1314,6 +1424,28 @@ class SEMConfigCard extends SEMLitBase {
                 .readonly-value {
                     font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
                     color: var(--primary-text-color, ${T.text});
+                }
+                /* #461 grid-sign fix block */
+                .grid-sign-block { margin-top: 6px; padding-top: 8px; border-top: 1px solid ${T.surfaceBorder}; }
+                .grid-sign-block .action-row { display: flex; justify-content: flex-end; gap: 8px; padding: 6px 0 2px; }
+                .grid-sign-block .action-btn {
+                    display: inline-flex; align-items: center; gap: 6px;
+                    padding: 7px 14px; border-radius: 9px; cursor: pointer;
+                    font-size: 13px; font-weight: 600;
+                    color: var(--primary-text-color, ${T.text});
+                    background: var(--secondary-background-color, rgba(255,255,255,0.07));
+                    border: 1px solid var(--divider-color, ${T.surfaceBorder});
+                    transition: background 0.15s;
+                }
+                .grid-sign-block .action-btn:hover { background: rgba(255,255,255,0.13); }
+                .grid-sign-block .action-btn[disabled] { opacity: 0.5; cursor: default; }
+                .grid-sign-block .action-btn-ghost {
+                    background: transparent; font-weight: 500;
+                    color: var(--secondary-text-color, ${T.textSec});
+                }
+                .grid-sign-block .sign-feedback {
+                    text-align: right; font-size: 12px; padding: 4px 0 2px;
+                    color: var(--secondary-text-color, ${T.textSec});
                 }
                 .tariff-rate-row { gap: 8px; border-bottom: 1px solid ${T.surfaceBorder}; margin-bottom: 8px; padding-bottom: 10px; }
                 .tariff-rate-value { font-size: 15px; font-weight: 700; color: ${T.text}; }

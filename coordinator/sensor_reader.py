@@ -69,7 +69,63 @@ class SensorReader:
         self._pv_strings: Dict[str, str] = {}
         self._grid_sign_inverted = False
         self._grid_sign_detected = False  # True once sign is reliably determined
-        self._grid_sign_votes: int = 0  # Consecutive same-sign detections needed
+        # #461: accumulated sign-of-correlation evidence. The old ±1 vote
+        # locked after three *consecutive* instantaneous matches — and a
+        # contradicting sample only reset the run counter to ±1, never the
+        # body of evidence. So a meter that was 55/45 inconsistent (come-up
+        # counter replay, battery-flip transients) could still lock the
+        # WRONG sign on any 3-in-a-row run. Replaced with a magnitude-
+        # weighted accumulator scored by CONFIDENCE over ALL samples:
+        #   +weight → SEM convention (no negate),  −weight → HA (negate),
+        #   weight = |grid_power|.
+        # Lock only when (a) at least MIN_SAMPLES directional cycles have
+        # contributed AND (b) the dominant direction holds >= MIN_CONFIDENCE
+        # of all accumulated magnitude. A consistent install (every sample
+        # agrees → confidence 1.0) still locks in 3 cycles exactly as
+        # before; an inconsistent one stays in passthrough indefinitely and
+        # surfaces via diag rather than locking a wrong sign. (A genuinely
+        # swapped/net-only meter reads consistently wrong and is undecidable
+        # from software — that is what the one-tap flip override is for.)
+        self._grid_sign_evidence: float = 0.0
+        self._grid_sign_total_mag: float = 0.0
+        self._grid_sign_samples: int = 0
+        # Direction witnesses — diagnostics only (NOT a lock gate; a single-
+        # direction install, e.g. import-only overnight, must still lock).
+        self._grid_sign_seen_import: bool = False
+        self._grid_sign_seen_export: bool = False
+        self._GRID_SIGN_MIN_SAMPLES: int = 3
+        self._GRID_SIGN_MIN_CONFIDENCE: float = 0.75
+        # #461: solar-anchored grid-sign detection — the AUTHORITATIVE
+        # primary for solar installs. Solar production has no sign
+        # ambiguity, so the co-movement of the RAW grid reading with solar
+        # reveals the grid convention directly and INDEPENDENTLY of the
+        # Energy-Dashboard counters (which can be mis-mapped — the root
+        # cause of RienduPre's #461 Sessy-P1 wrong lock):
+        #   grid rises with solar      → +export meter (SEM) → no negate
+        #   grid falls as solar rises  → +import meter (HA)  → negate
+        # Only large solar swings vote, so home-load jitter can't flip the
+        # correlation. This locks BEFORE the counter path for solar
+        # installs and can OVERRIDE a wrong counter-derived lock once it is
+        # highly confident and sustained (hard-gated self-heal). A
+        # correctly-signed install computes the SAME sign as its current
+        # lock → agreement → never flipped (the 00e449c safety lesson).
+        self._grid_sign_solar_evidence: float = 0.0
+        self._grid_sign_solar_mag: float = 0.0
+        self._grid_sign_solar_samples: int = 0
+        self._prev_solar_w: Optional[float] = None
+        self._prev_grid_raw_w: Optional[float] = None
+        self._SOLAR_SWING_MIN_W: float = 500.0
+        self._SOLAR_SIGN_MIN_SAMPLES: int = 4
+        self._SOLAR_SIGN_MIN_CONFIDENCE: float = 0.80
+        # Battery-quiet filter: a charging/discharging battery intercepts
+        # the solar swing before it reaches the grid, so only cycles where
+        # the battery is near-idle (both ends of the delta) cast a vote.
+        # ``None`` battery (no battery install) is treated as quiet.
+        self._SOLAR_BATTERY_QUIET_W: float = 400.0
+        self._prev_batt_w: Optional[float] = None
+        # Overriding an EXISTING lock is gated harder than an initial lock.
+        self._SOLAR_OVERRIDE_MIN_SAMPLES: int = 20
+        self._SOLAR_OVERRIDE_MIN_CONFIDENCE: float = 0.90
         self._grid_import_baseline: Optional[float] = None
         self._grid_export_baseline: Optional[float] = None
         # #487 follow-up (live PROD flip 2026-06-11): during HA's
@@ -290,6 +346,16 @@ class SensorReader:
                 readings.grid_power = -readings.grid_power
                 readings.calculate_derived()
 
+        # #461: one-tap user sign flip from the Control-tab button. Sits on
+        # TOP of whatever the manual-override / auto-detect path decided, so
+        # a wrongly-locked sign (import/export inverted) can be corrected in
+        # one tap regardless of how it was derived — without touching the
+        # ``grid_sign_invert`` semantics that Enphase/Powerwall installs rely
+        # on. Persisted as a config option, so it survives restart.
+        if bool(self._raw_config.get("grid_sign_user_flip", False)):
+            readings.grid_power = -readings.grid_power
+            readings.calculate_derived()
+
         # Auto-detect battery sign convention using Energy Dashboard counters.
         # SEM convention: positive = charge, negative = discharge.
         #
@@ -356,6 +422,65 @@ class SensorReader:
     # ``grid_sign_invert`` config still short-circuits before the
     # autodetect, so restored state can never fight a manual override.
 
+    def grid_sign_diagnostics(self) -> dict:
+        """Build a #461 grid-sign support payload.
+
+        Returns everything a maintainer needs to judge a wrong-sign
+        report without a 5 MB diagnostics dump: the raw meter reading,
+        the configured Energy-Dashboard import/export counters, the
+        manual/auto/user-flip override state, and the live correlation
+        evidence. Surfaced by the ``flip_grid_sign`` service so the
+        Control-tab button can copy it straight into a GitHub issue.
+        """
+        ed = self._energy_dashboard_config
+
+        def _entities(singular, list_name):
+            lst = getattr(ed, list_name, None) if ed else None
+            if isinstance(lst, (list, tuple)) and lst:
+                return list(lst)
+            single = getattr(ed, singular, None) if ed else None
+            return [single] if single else []
+
+        grid_entity = self.config.grid_power_sensor
+        raw_state = None
+        if grid_entity and self.hass is not None:
+            st = self.hass.states.get(grid_entity)
+            if st is not None:
+                raw_state = st.state
+
+        confidence = (
+            abs(self._grid_sign_evidence) / self._grid_sign_total_mag
+            if self._grid_sign_total_mag > 0 else 0.0
+        )
+        return {
+            "grid_power_sensor": grid_entity,
+            "grid_power_raw_state": raw_state,
+            "manual_grid_sign_invert": bool(
+                self._raw_config.get("grid_sign_invert", False)
+            ),
+            "user_flip": bool(self._raw_config.get("grid_sign_user_flip", False)),
+            "auto_detected": self._grid_sign_detected,
+            "auto_inverted": self._grid_sign_inverted,
+            "evidence": round(self._grid_sign_evidence, 1),
+            "total_magnitude": round(self._grid_sign_total_mag, 1),
+            "samples": self._grid_sign_samples,
+            "confidence": round(confidence, 3),
+            "solar_evidence": round(self._grid_sign_solar_evidence, 1),
+            "solar_samples": self._grid_sign_solar_samples,
+            "solar_confidence": round(
+                abs(self._grid_sign_solar_evidence) / self._grid_sign_solar_mag
+                if self._grid_sign_solar_mag > 0 else 0.0, 3
+            ),
+            "seen_import": self._grid_sign_seen_import,
+            "seen_export": self._grid_sign_seen_export,
+            "import_counters": _entities(
+                "grid_import_energy", "grid_import_energy_list"
+            ),
+            "export_counters": _entities(
+                "grid_export_energy", "grid_export_energy_list"
+            ),
+        }
+
     def export_sign_state(self) -> dict:
         """Snapshot the LOCKED sign-detection state for persistence."""
         return {
@@ -409,7 +534,17 @@ class SensorReader:
         """
         self._grid_sign_inverted = False
         self._grid_sign_detected = False
-        self._grid_sign_votes = 0
+        self._grid_sign_evidence = 0.0
+        self._grid_sign_total_mag = 0.0
+        self._grid_sign_samples = 0
+        self._grid_sign_seen_import = False
+        self._grid_sign_seen_export = False
+        self._grid_sign_solar_evidence = 0.0
+        self._grid_sign_solar_mag = 0.0
+        self._grid_sign_solar_samples = 0
+        self._prev_solar_w = None
+        self._prev_grid_raw_w = None
+        self._prev_batt_w = None
         self._grid_import_baseline = None
         self._grid_export_baseline = None
         self._battery_sign_inverted.clear()
@@ -423,6 +558,111 @@ class SensorReader:
             "re-learned from Energy Dashboard counters"
         )
 
+    def _accumulate_solar_sign(self, readings: PowerReadings) -> None:
+        """Solar-anchored grid-sign detection (#461, authoritative primary).
+
+        Solar production has no sign ambiguity, so the co-movement of the
+        RAW grid reading with solar reveals the grid convention directly
+        and independently of the (possibly mis-mapped) Energy-Dashboard
+        counters:
+
+          * grid rises with solar      → +export meter (SEM) → no negate
+          * grid falls as solar rises  → +import meter (HA)  → negate
+
+        Only large solar swings (``_SOLAR_SWING_MIN_W``) vote, so the
+        solar-driven component of Δgrid dominates home-load jitter. Locks
+        the sign before the counter path for solar installs, and can
+        OVERRIDE a wrong counter-derived lock once it is highly confident
+        and sustained — a correctly-signed install computes the same sign
+        as its current lock, so agreement means it is never flipped.
+
+        No-op for non-solar installs (no usable ``solar_power``), which
+        fall through to the counter-correlation path.
+        """
+        solar = getattr(readings, "solar_power", None)
+        grid_raw = getattr(readings, "grid_power", None)
+        if not isinstance(solar, (int, float)) or isinstance(solar, bool):
+            return
+        if not isinstance(grid_raw, (int, float)) or isinstance(grid_raw, bool):
+            return
+
+        batt = getattr(readings, "battery_power", None)
+        batt_q = (
+            abs(float(batt))
+            if isinstance(batt, (int, float)) and not isinstance(batt, bool)
+            else 0.0  # no battery / unreadable → treat as quiet
+        )
+        prev_solar = self._prev_solar_w
+        prev_grid = self._prev_grid_raw_w
+        prev_batt_q = self._prev_batt_w
+        self._prev_solar_w = float(solar)
+        self._prev_grid_raw_w = float(grid_raw)
+        self._prev_batt_w = batt_q
+        if prev_solar is None or prev_grid is None:
+            return
+
+        d_solar = float(solar) - prev_solar
+        d_grid = float(grid_raw) - prev_grid
+        if abs(d_solar) < self._SOLAR_SWING_MIN_W:
+            return  # swing too small to dominate load jitter
+        # Both ends of the delta must be battery-quiet, else the swing was
+        # (partly) absorbed by the battery rather than passed to the grid,
+        # and Δgrid no longer tracks Δsolar (the battery-install confound).
+        if batt_q >= self._SOLAR_BATTERY_QUIET_W or (
+            prev_batt_q is not None and prev_batt_q >= self._SOLAR_BATTERY_QUIET_W
+        ):
+            return
+
+        # product > 0 → grid co-moves with solar → SEM (no negate);
+        # product < 0 → grid moves against solar → HA (negate).
+        detected_negate = (d_grid * d_solar) < 0
+        weight = abs(d_solar)
+        self._grid_sign_solar_evidence += -weight if detected_negate else weight
+        self._grid_sign_solar_mag += weight
+        self._grid_sign_solar_samples += 1
+
+        confidence = (
+            abs(self._grid_sign_solar_evidence) / self._grid_sign_solar_mag
+            if self._grid_sign_solar_mag > 0 else 0.0
+        )
+        implied_inverted = self._grid_sign_solar_evidence < 0
+
+        if not self._grid_sign_detected:
+            if (
+                self._grid_sign_solar_samples >= self._SOLAR_SIGN_MIN_SAMPLES
+                and confidence >= self._SOLAR_SIGN_MIN_CONFIDENCE
+            ):
+                self._grid_sign_inverted = implied_inverted
+                self._grid_sign_detected = True
+                _LOGGER.info(
+                    "Grid sign locked from SOLAR co-movement: %s "
+                    "(confidence=%.2f, samples=%d, evidence=%.0f) — "
+                    "counter-independent, immune to mis-mapped Energy "
+                    "Dashboard counters",
+                    "negating (HA convention)" if implied_inverted
+                    else "no correction (SEM convention)",
+                    confidence, self._grid_sign_solar_samples,
+                    self._grid_sign_solar_evidence,
+                )
+        elif (
+            implied_inverted != self._grid_sign_inverted
+            and self._grid_sign_solar_samples >= self._SOLAR_OVERRIDE_MIN_SAMPLES
+            and confidence >= self._SOLAR_OVERRIDE_MIN_CONFIDENCE
+        ):
+            # Hard-gated self-heal: a sustained, high-confidence solar
+            # verdict that DISAGREES with the current lock flips it. Only
+            # ever triggers on a wrongly-signed install (a correct one
+            # agrees), so it cannot disturb a working install (#461).
+            _LOGGER.warning(
+                "Grid sign OVERRIDDEN by solar co-movement: %s -> %s "
+                "(confidence=%.2f, samples=%d) — the prior lock disagreed "
+                "with the unambiguous solar signal, auto-healing",
+                "negating" if self._grid_sign_inverted else "no correction",
+                "negating" if implied_inverted else "no correction",
+                confidence, self._grid_sign_solar_samples,
+            )
+            self._grid_sign_inverted = implied_inverted
+
     def _detect_grid_sign(self, readings: PowerReadings) -> bool:
         """Detect if grid power needs negation using Energy Dashboard counters.
 
@@ -432,6 +672,12 @@ class SensorReader:
 
         Returns True if grid_power should be negated.
         """
+        # Solar-anchored detection runs FIRST and independently of the
+        # Energy-Dashboard counters (#461). It is authoritative for solar
+        # installs — it can set the lock here, and the counter path below
+        # is gated on ``not self._grid_sign_detected`` so it won't relock.
+        self._accumulate_solar_sign(readings)
+
         ed = self._energy_dashboard_config
         if not ed:
             # No Energy Dashboard → trust the sensor. #476 item 5: a
@@ -527,17 +773,32 @@ class SensorReader:
         if detected is None:
             return self._grid_sign_inverted
 
-        # Require 3 consecutive consistent detections before locking in.
-        # Prevents false sign flips from transient energy counter jitter
-        # after reboots.
+        # Accumulate magnitude-weighted sign-of-correlation evidence
+        # (#461). Each clear single-direction cycle adds |power| toward
+        # SEM (+) or HA (−). Lock only when enough directional cycles have
+        # contributed AND the dominant direction holds a strong majority of
+        # ALL accumulated magnitude (confidence) — so a mixed/transient
+        # burst that the old 3-consecutive vote could lock through now
+        # stays diluted and never locks.
         if not self._grid_sign_detected:
-            if detected == (self._grid_sign_votes > 0):
-                self._grid_sign_votes += 1 if detected else -1
-            else:
-                self._grid_sign_votes = 1 if detected else -1
+            weight = abs(power)
+            self._grid_sign_evidence += -weight if detected else weight
+            self._grid_sign_total_mag += weight
+            self._grid_sign_samples += 1
+            if import_delta > 0.001:
+                self._grid_sign_seen_import = True
+            if export_delta > 0.001:
+                self._grid_sign_seen_export = True
 
-            if abs(self._grid_sign_votes) >= 3:
-                self._grid_sign_inverted = detected
+            confidence = (
+                abs(self._grid_sign_evidence) / self._grid_sign_total_mag
+                if self._grid_sign_total_mag > 0 else 0.0
+            )
+            if (
+                self._grid_sign_samples >= self._GRID_SIGN_MIN_SAMPLES
+                and confidence >= self._GRID_SIGN_MIN_CONFIDENCE
+            ):
+                self._grid_sign_inverted = self._grid_sign_evidence < 0
                 self._grid_sign_detected = True
                 # Name the evidence (#487 follow-up): a wrong lock is
                 # otherwise undiagnosable after the fact — the 2026-06-11
@@ -545,9 +806,15 @@ class SensorReader:
                 # trail of WHICH counters voted.
                 _LOGGER.info(
                     "Grid sign detected from Energy Dashboard counters: %s "
-                    "(power=%.0fW, import_delta=%.3f, export_delta=%.3f, "
+                    "(confidence=%.2f, evidence=%.0f, total_mag=%.0f, "
+                    "samples=%d, seen_import=%s, seen_export=%s, "
+                    "last power=%.0fW, import_delta=%.3f, export_delta=%.3f, "
                     "import_counters=%s, export_counters=%s)",
-                    "negating (HA convention)" if detected else "no correction (SEM convention)",
+                    "negating (HA convention)" if self._grid_sign_inverted
+                    else "no correction (SEM convention)",
+                    confidence, self._grid_sign_evidence,
+                    self._grid_sign_total_mag, self._grid_sign_samples,
+                    self._grid_sign_seen_import, self._grid_sign_seen_export,
                     power, import_delta, export_delta,
                     import_entities, export_entities,
                 )

@@ -309,3 +309,22 @@ reset_sign_detection:
       required: false
       selector:
         text:
+
+flip_grid_sign:
+  name: Flip grid sign
+  description: >
+    Flip the grid import/export convention by one tap and return a
+    support report. Toggles the persisted grid_sign_user_flip override
+    (sits on top of the auto/manual decision), reloads so the corrected
+    sign takes effect immediately, and returns a diagnostics payload
+    (raw meter value, configured counters, correlation evidence) that the
+    Control-tab button copies for a GitHub issue. Use when import/export
+    appears inverted and a re-learn can't fix it (e.g. a swapped or
+    net-only meter). Calling it again flips back.
+  fields:
+    entry_id:
+      name: Config entry
+      description: "SEM config entry id (only needed with multiple SEM entries)"
+      required: false
+      selector:
+        text:
