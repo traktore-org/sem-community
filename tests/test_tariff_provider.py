@@ -176,6 +176,40 @@ class TestDynamicTariffProvider:
         result = provider.detect_provider()
         assert result == "nordpool"
 
+    def test_user_price_stays_custom_when_unavailable(self, mock_hass):
+        """#518: a user-configured price entity must keep provider='custom'
+        even when it momentarily reads unavailable — it must NOT fall through
+        to auto-detect a different integration. RienduPre's Tibber sensor
+        intermittently flipped to 'nordpool_official' (different prices) on a
+        transient blip."""
+        unavail = MagicMock()
+        unavail.state = "unavailable"
+        mock_hass.states.get = MagicMock(return_value=unavail)
+        # A Nord Pool entity IS present — the tempting (wrong) fallback.
+        nordpool = MagicMock()
+        nordpool.entity_id = "sensor.nord_pool_nl_current_price"
+        nordpool.attributes = {}
+        mock_hass.states.async_all = MagicMock(return_value=[nordpool])
+
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.my_tibber")
+        assert provider.detect_provider() == "custom"
+        assert provider._provider_name == "custom"
+
+    def test_no_user_price_autodetects_nordpool_official(self, mock_hass):
+        """The #518 fix must NOT break auto-detection — without a configured
+        price entity, the official Nord Pool core integration is still
+        detected as 'nordpool_official'."""
+        nordpool = MagicMock()
+        nordpool.entity_id = "sensor.nord_pool_nl_current_price"
+        nordpool.attributes = {}
+        other = MagicMock(); other.entity_id = "sensor.x"; other.attributes = {}
+        mock_hass.states.get = MagicMock(return_value=None)
+        mock_hass.states.async_all = MagicMock(
+            side_effect=lambda d: {"sensor": [other, nordpool]}.get(d, []))
+
+        provider = DynamicTariffProvider(mock_hass)  # no price_entity
+        assert provider.detect_provider() == "nordpool_official"
+
     def test_classify_price_negative(self, mock_hass):
         provider = DynamicTariffProvider(mock_hass)
         assert provider._classify_price(-0.05) == PriceLevel.NEGATIVE

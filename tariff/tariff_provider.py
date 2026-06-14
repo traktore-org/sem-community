@@ -290,6 +290,12 @@ class DynamicTariffProvider(TariffProvider):
         )
         self.currency = currency
         self._price_entity = price_entity
+        # #518: was the price entity EXPLICITLY configured by the user
+        # (``dynamic_tariff_entity``), or will it be auto-discovered? A
+        # user-configured entity is authoritative — its provider must stay
+        # "custom" even on a momentary unavailability, never silently
+        # switching to an auto-detected integration with different prices.
+        self._user_configured_price = bool(price_entity)
         self._provider_name = "unknown"
         self._forecast_entity: Optional[str] = forecast_entity
         self._feedin_entity: Optional[str] = feedin_entity
@@ -470,6 +476,18 @@ class DynamicTariffProvider(TariffProvider):
 
     def detect_provider(self) -> Optional[str]:
         """Auto-detect available price integration."""
+        # #518: a user-configured price entity (``dynamic_tariff_entity``) is
+        # authoritative — keep "custom" even when it momentarily reads
+        # unavailable/unknown. The previous code fell THROUGH to the
+        # auto-detect scan below on a transient blip, so a brief Tibber
+        # outage silently swapped the provider to "nordpool_official" (a
+        # different source with different prices/levels) — RienduPre's
+        # "schemas/prices/levels are very different" symptom. The cached
+        # curve / fallback price covers the gap; the source must not change.
+        if self._user_configured_price:
+            self._provider_name = "custom"
+            return "custom"
+
         if self._price_entity:
             state = self.hass.states.get(self._price_entity)
             if state and state.state not in ("unknown", "unavailable"):
