@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.19] - 15.06.2026
+
 ## 🔧 Control-tab heat-pump card + Home 7-day chart fixes (#523)
 
 - **Heat pump no longer shows "not configured" while clearly configured** — the Control-tab Heat Pump section read the `heat_pump_registered` *binary* sensor through a helper that only resolves `sensor.sem_*` entities, so it always evaluated false and showed the "not configured" notice, while the section header still rendered "normal · 2" (sg-ready state defaults to 2). Both the body and the header now read the binary sensor correctly, so the card is consistent (by @RienduPre in #523)
