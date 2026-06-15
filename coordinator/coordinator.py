@@ -3831,12 +3831,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         except Exception:
             pass
 
-        # Tariff price level.
+        # Tariff price level (#524). The provider exposes ``get_price_level()``
+        # (a PriceLevel enum) — there is NO ``current_level`` attribute, so the
+        # old read of that non-existent attribute ALWAYS returned None. That
+        # left FleetView.tariff_level dead for the whole EV decision layer:
+        # solar_plus_cheap / min_plus_solar never saw their expensive windows,
+        # so the daytime tariff pause never engaged. Read the canonical API and
+        # take the enum's string value (same value the ``tariff_price_level``
+        # sensor publishes via to_data()).
         tariff_level: Optional[str] = None
         try:
             provider = getattr(self, "_tariff_provider", None)
             if provider is not None and getattr(provider, "available", True):
-                level = getattr(provider, "current_level", None)
+                level = provider.get_price_level()
+                level = getattr(level, "value", level)  # PriceLevel enum → str
                 if isinstance(level, str):
                     tariff_level = level
         except Exception:

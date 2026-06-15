@@ -95,6 +95,13 @@ DEFAULT_DEEP_DEFICIT_GRACE_S = 45
 
 _CHARGE_INTENTS = (ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX)
 
+# #524: tariff levels where bridging a solar deficit by holding minimum
+# current would import EXPENSIVE grid. In these windows the transient
+# bridge is cut short to the deep-deficit grace instead of the full
+# disable delay. ``cheap`` / ``very_cheap`` (and unknown/static → None)
+# keep the full bridge — there grid is cheap or price-agnostic.
+_NOT_CHEAP_LEVELS = frozenset({"normal", "expensive", "very_expensive"})
+
 
 class ChargeStability:
     """Per-charger smoothing + enable/disable delay state.
@@ -274,37 +281,53 @@ class ChargeStability:
         # transient deficit (solar still >= min_solar_w) clears the
         # timer and keeps the full bridge below.
         deep_deficit = view.fleet.solar_w < view.fleet.min_solar_w
-        if deep_deficit:
+        # #524: in a NOT-cheap tariff window, holding minimum current to
+        # bridge a deficit imports EXPENSIVE grid — exactly what
+        # solar_plus_cheap / min_plus_solar exist to avoid. Treat it like a
+        # deep deficit (short grace, not the full 300 s bridge). cheap /
+        # very_cheap and unknown/static (tariff_level None) keep the bridge.
+        expensive_deficit = view.fleet.tariff_level in _NOT_CHEAP_LEVELS
+        short_grace = deep_deficit or expensive_deficit
+        if short_grace:
             deep_since = self._deep_deficit_since.setdefault(cid, now)
             deep_held = now - deep_since
         else:
             self._deep_deficit_since.pop(cid, None)
             deep_held = 0.0
 
-        stop_for_deep = deep_deficit and deep_held >= max(
+        stop_for_short = short_grace and deep_held >= max(
             0.0, float(deep_deficit_grace_s),
         )
-        if held >= max(0.0, float(disable_delay_s)) or stop_for_deep:
+        if held >= max(0.0, float(disable_delay_s)) or stop_for_short:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
             self._amps_history.pop(cid, None)
             self._last_amps.pop(cid, None)
             self._last_change_ts.pop(cid, None)
-            # Deep-deficit stops always re-stamp the reason — even when
+            # Short-grace stops always re-stamp the reason — even when
             # decide() already idled — so the strategy sensor shows SEM
-            # CHOSE to stop (no surplus) rather than silently holding the
-            # contactor on battery/grid. The transient-persisted stop
+            # CHOSE to stop (no cheap surplus) rather than silently holding
+            # the contactor on battery/grid. The transient-persisted stop
             # keeps the legacy pass-through when already IDLE.
-            if stop_for_deep:
-                return replace(
-                    decision, intent=ChargerIntent.IDLE, commanded_amps=0,
-                    reason=(
+            if stop_for_short:
+                if deep_deficit:
+                    reason = (
                         f"stability: deep deficit "
                         f"{deep_held:.0f}s/{deep_deficit_grace_s:.0f}s "
                         f"(solar {view.fleet.solar_w:.0f}W < "
                         f"{view.fleet.min_solar_w:.0f}W) — no surplus to "
                         f"bridge — {decision.reason}"
-                    ),
+                    )
+                else:
+                    reason = (
+                        f"stability: not-cheap tariff "
+                        f"({view.fleet.tariff_level}) "
+                        f"{deep_held:.0f}s/{deep_deficit_grace_s:.0f}s — "
+                        f"not bridging expensive grid — {decision.reason}"
+                    )
+                return replace(
+                    decision, intent=ChargerIntent.IDLE, commanded_amps=0,
+                    reason=reason,
                 )
             if decision.intent is ChargerIntent.IDLE:
                 return decision

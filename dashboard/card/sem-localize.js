@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-14T18:11:42.504270+00:00
+// Generated: 2026-06-15T19:18:37.874304+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -958,11 +958,11 @@
       "config_help_tariff_mode": "Static = one fixed price. Dynamic = pulls hourly prices from your tariff sensor. Calendar = scheduled HT/NT windows.",
       "config_help_dynamic_tariff_entity": "The price sensor (Tibber, Nordpool, aWATTar, Amber, Octopus). SEM reads its forecast attribute.",
       "config_help_dynamic_forecast_entity": "Separate forecast sensor if your provider exposes it (Nordpool tomorrow, Octopus Agile next 24h).",
-      "config_help_dynamic_feedin_entity": "Feed-in price sensor — paid to you when exporting. Optional.",
+      "config_help_dynamic_feedin_entity": "Optional sensor holding your live export (feed-in) price — e.g. your Tibber export-price sensor or a template like spot minus margin. When set, it overrides the flat Export rate so export revenue follows the market hour by hour.",
       "config_help_tariff_class_mode": "Percentile adapts to your tariff's actual range; static uses your cheap/expensive thresholds verbatim.",
       "config_help_import_rate": "Per-kWh price you pay when importing on the high-tariff side.",
       "config_help_off_peak_rate": "Per-kWh price during the off-peak window (NT).",
-      "config_help_export_rate": "Per-kWh credit you receive when exporting to the grid.",
+      "config_help_export_rate": "Per-kWh credit you receive when exporting to the grid. For a dynamic/spot contract (e.g. Tibber) this is the spot price minus your provider margin — set a flat average here, or use the Feed-in entity below for live tracking. Leave it set so export revenue and ROI are calculated.",
       "config_help_demand_charge_rate": "Monthly per-kW demand charge from your DSO (the 15-min peak penalty).",
       "config_help_grid_import_entity": "Optional override if SEM can't auto-pick the grid import sensor from your Energy Dashboard.",
       "config_help_grid_export_entity": "Optional override if SEM can't auto-pick the grid export sensor from your Energy Dashboard.",
@@ -2023,11 +2023,11 @@
       "config_help_tariff_mode": "Static = one fixed price. Dynamic = pulls hourly prices from your tariff sensor. Calendar = scheduled HT/NT windows.",
       "config_help_dynamic_tariff_entity": "The price sensor (Tibber, Nordpool, aWATTar, Amber, Octopus). SEM reads its forecast attribute.",
       "config_help_dynamic_forecast_entity": "Separate forecast sensor if your provider exposes it (Nordpool tomorrow, Octopus Agile next 24h).",
-      "config_help_dynamic_feedin_entity": "Feed-in price sensor — paid to you when exporting. Optional.",
+      "config_help_dynamic_feedin_entity": "Optionaler Sensor mit deinem aktuellen Einspeisepreis — z. B. dein Tibber-Einspeisesensor oder ein Template wie Spot minus Marge. Wenn gesetzt, überschreibt er die feste Einspeisevergütung, sodass der Erlös dem Markt stündlich folgt.",
       "config_help_tariff_class_mode": "Percentile adapts to your tariff's actual range; static uses your cheap/expensive thresholds verbatim.",
       "config_help_import_rate": "Per-kWh price you pay when importing on the high-tariff side.",
       "config_help_off_peak_rate": "Per-kWh price during the off-peak window (NT).",
-      "config_help_export_rate": "Per-kWh credit you receive when exporting to the grid.",
+      "config_help_export_rate": "Vergütung pro kWh bei Einspeisung ins Netz. Bei einem dynamischen/Spot-Tarif (z. B. Tibber) ist das der Spotpreis abzüglich Anbietermarge — hier einen festen Durchschnitt eintragen oder unten die Einspeise-Entität für Live-Tracking nutzen. Gesetzt lassen, damit Einspeiseerlös und ROI berechnet werden.",
       "config_help_demand_charge_rate": "Monthly per-kW demand charge from your DSO (the 15-min peak penalty).",
       "config_help_grid_import_entity": "Optional override if SEM can't auto-pick the grid import sensor from your Energy Dashboard.",
       "config_help_grid_export_entity": "Optional override if SEM can't auto-pick the grid export sensor from your Energy Dashboard.",

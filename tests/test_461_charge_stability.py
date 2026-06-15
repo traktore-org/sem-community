@@ -42,7 +42,7 @@ class FakeAdapter:
 
 
 def _view(mode="solar_only", *, connected=True, power_w=0.0, is_night=False,
-          cid="wb", solar_w=3000.0, min_solar_w=200.0):
+          cid="wb", solar_w=3000.0, min_solar_w=200.0, tariff_level=None):
     # ``solar_w`` defaults to a MEANINGFUL value (3 kW > the 200 W
     # min_solar_w) so a deficit on this view reads as TRANSIENT — a
     # passing cloud, the case the disable hold is meant to bridge.
@@ -55,7 +55,7 @@ def _view(mode="solar_only", *, connected=True, power_w=0.0, is_night=False,
         config={"ev_min_current": 6, "ev_phases": 3, "ev_voltage": 230,
                 "ev_max_current": 16},
         fleet=FleetContext(is_night=is_night, solar_w=solar_w,
-                           min_solar_w=min_solar_w),
+                           min_solar_w=min_solar_w, tariff_level=tariff_level),
     )
 
 
@@ -458,3 +458,80 @@ class TestWiring:
         assert "number.sem_ev_enable_delay_seconds" in body
         assert "number.sem_ev_disable_delay_seconds" in body
 
+    def test_fleet_tariff_level_uses_get_price_level(self) -> None:
+        # #524 — the fleet cycle state must read the tariff level via the
+        # provider's ``get_price_level()`` API. The old
+        # ``getattr(provider, "current_level", None)`` referenced a
+        # non-existent attribute and silently left tariff_level None,
+        # killing every tariff-aware EV decision.
+        body = (Path(__file__).parent.parent / "coordinator"
+                / "coordinator.py").read_text()
+        assert "provider.get_price_level()" in body, (
+            "#524 anchor — fleet tariff_level must come from "
+            "provider.get_price_level()."
+        )
+        assert 'getattr(provider, "current_level"' not in body, (
+            "#524 — the dead current_level read must not return."
+        )
+
+
+
+@pytest.mark.unit
+class TestNotCheapTariffDeficit:
+    """#524 — RienduPre: in ``solar_plus_cheap`` mode the car kept
+    charging from expensive grid after the price left the cheap window.
+
+    Root: with the (now-fixed) tariff_level wired in, the transient bridge
+    still holds minimum current for the full 300 s while solar production
+    stays above ``min_solar_w`` — importing expensive grid to cover the
+    shortfall. In a NOT-cheap window the bridge is cut to the short grace,
+    so the contactor opens in ~45 s instead of 5 minutes. cheap /
+    very_cheap (and static / None) keep the full bridge.
+    """
+
+    def _charging(self):
+        return FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)
+
+    def test_not_cheap_deficit_stops_after_short_grace(self):
+        # solar 3 kW > 200 W min (NOT a deep deficit), tariff "normal":
+        # holding would import expensive grid → stop on the short grace.
+        st = ChargeStability()
+        adapter = self._charging()
+        view = _view(power_w=4500.0, solar_w=3000.0, tariff_level="normal")
+        d0 = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                       disable_delay_s=300, deep_deficit_grace_s=45, now_ts=0.0)
+        assert d0.intent is ChargerIntent.CHARGE_AT_AMPS  # grace not elapsed
+        d50 = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                        disable_delay_s=300, deep_deficit_grace_s=45, now_ts=50.0)
+        assert d50.intent is ChargerIntent.IDLE  # stopped well before 300 s
+        assert "not-cheap tariff" in d50.reason
+        assert "not bridging expensive grid" in d50.reason
+
+    def test_expensive_deficit_also_short_grace(self):
+        st = ChargeStability()
+        adapter = self._charging()
+        view = _view(power_w=4500.0, solar_w=3000.0, tariff_level="very_expensive")
+        st.filter(_idle(), view, adapter, deep_deficit_grace_s=45, now_ts=0.0)
+        d = st.filter(_idle(), view, adapter, deep_deficit_grace_s=45, now_ts=50.0)
+        assert d.intent is ChargerIntent.IDLE
+
+    def test_cheap_tariff_keeps_full_bridge(self):
+        # cheap window: grid is cheap, so the cloud-bridge hold survives
+        # past the short grace — unchanged 300 s behaviour.
+        st = ChargeStability()
+        adapter = self._charging()
+        view = _view(power_w=4500.0, solar_w=3000.0, tariff_level="cheap")
+        for t in (0.0, 50.0, 150.0, 290.0):
+            d = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                          disable_delay_s=300, deep_deficit_grace_s=45, now_ts=t)
+            assert d.intent is ChargerIntent.CHARGE_AT_AMPS, f"stopped early at {t}"
+
+    def test_no_tariff_keeps_full_bridge(self):
+        # Static / unknown tariff (level None): behaviour unchanged.
+        st = ChargeStability()
+        adapter = self._charging()
+        view = _view(power_w=4500.0, solar_w=3000.0, tariff_level=None)
+        for t in (0.0, 150.0, 290.0):
+            d = st.filter(_idle(), view, adapter, enable_delay_s=60,
+                          disable_delay_s=300, deep_deficit_grace_s=45, now_ts=t)
+            assert d.intent is ChargerIntent.CHARGE_AT_AMPS, f"stopped early at {t}"
