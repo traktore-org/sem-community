@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.20] - 15.06.2026
+
 ## 🔌 EV no longer keeps charging from expensive grid after the cheap window (#524)
 
 - **Tariff awareness restored to the EV decision layer** — the fleet cycle read a non-existent `provider.current_level` attribute, so `tariff_level` was *always* `None`. Every tariff-aware EV decision was silently dead: `solar_plus_cheap` / `min_plus_solar` never saw their expensive windows, so the daytime "pause on expensive tariff" never engaged. Now read via `provider.get_price_level()` (by @RienduPre in #524)
