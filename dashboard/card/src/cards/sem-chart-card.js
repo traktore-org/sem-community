@@ -71,7 +71,10 @@ const PRESETS = {
         ],
     },
     energy: {
-        title: 'energy_balance', y_label: 'kWh', stacked: false,
+        // #523: rolling last-7-days, not "this week" (Mon→now). On Mondays
+        // "this week" collapses to a single day-bucket, which renders as
+        // one stray bar and contradicts the "Last 7 days" card title.
+        title: 'energy_balance', y_label: 'kWh', stacked: false, defaultPeriod: '7d',
         daily:   [
             { suffix: 'daily_solar_energy',        name: 'solar',       color: C.solar,      type: 'bar' },
             { suffix: 'daily_home_energy',         name: 'home',        color: C.home,       type: 'bar' },
@@ -250,10 +253,12 @@ class SEMChartCard extends SEMLitBase {
     _setDefaultPeriod() {
         const now = new Date();
         const p = this._preset;
+        // A per-card ``default_period`` config wins over the preset's own.
+        const defaultPeriod = this._config?.default_period || (p && p.defaultPeriod);
         // Presets with defaultPeriod 'today' (since-midnight) or '24h'
         // (rolling) or hourly-only presets default to an hourly view.
-        const wantToday = p && p.defaultPeriod === 'today';
-        const isHourly = p && (wantToday || p.defaultPeriod === '24h' || (p.hourly && !p.daily));
+        const wantToday = defaultPeriod === 'today';
+        const isHourly = p && (wantToday || defaultPeriod === '24h' || (p.hourly && !p.daily));
         if (isHourly) {
             const start = wantToday
                 ? this._startOfDayInHaTz(now)
@@ -261,6 +266,12 @@ class SEMChartCard extends SEMLitBase {
             const labelKey = wantToday ? 'period_today' : 'last_24h';
             const key = wantToday ? 'today' : '24h';
             this._onPeriodChange({ start, end: now, granularity: 'hour', labelKey, key });
+        } else if (defaultPeriod === '7d') {
+            // Rolling last-7-days (#523): always 7 day-buckets, no Monday
+            // single-bar collapse, matching the "Last 7 days" title.
+            const start = this._startOfDayInHaTz(now);
+            start.setDate(start.getDate() - 6);
+            this._onPeriodChange({ start, end: now, granularity: 'day', labelKey: 'last_7_days', key: '7d' });
         } else {
             const dow = now.getDay() || 7;
             const mon = this._startOfDayInHaTz(now);
@@ -274,7 +285,7 @@ class SEMChartCard extends SEMLitBase {
         const KEY_TO_LABEL = {
             today: 'period_today', yesterday: 'period_yesterday',
             week: 'period_this_week', month: 'period_this_month',
-            year: 'period_this_year', '24h': 'last_24h',
+            year: 'period_this_year', '24h': 'last_24h', '7d': 'last_7_days',
         };
         this._period = { ...detail, labelKey: detail.labelKey || KEY_TO_LABEL[detail.key] };
         this.requestUpdate();

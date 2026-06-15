@@ -54,6 +54,11 @@ const SECTIONS = [
         // pump in either mode.
         id: 'heatpump', icon: 'mdi:heat-pump', color: '#4db6ac', titleKey: 'heat_pump_title',
         subtitleFn: (c) => {
+            // #523: gate on the registered BINARY sensor. sg_ready_state
+            // defaults to 2 even with no heat pump, so the old check made
+            // the header show "normal · 2" while the body said "not
+            // configured" — the contradiction RienduPre reported.
+            if (!c._bin('heat_pump_registered')) return '';
             const state = c._val('heat_pump_sg_ready_state');
             const mode = c._val('heat_pump_mode');
             if (!state) return '';
@@ -158,6 +163,15 @@ class SEMControlCard extends SEMLitBase {
     /** Boolean: is switch.sem_<suffix> on? */
     _switchOn(suffix) {
         return this._hass?.states[`switch.sem_${suffix}`]?.state === 'on';
+    }
+
+    /** Boolean: is binary_sensor.sem_<suffix> on? (#523)
+     * ``_val()`` prepends ``sensor.sem_`` so it silently returns '' for
+     * binary_sensor entities — reading ``heat_pump_registered`` (a
+     * BINARY sensor) through it always looked "not configured" while the
+     * section subtitle (a real sensor) showed it WAS configured. */
+    _bin(suffix) {
+        return this._hass?.states[`binary_sensor.sem_${suffix}`]?.state === 'on';
     }
 
     // ── Section toggle ──
@@ -290,9 +304,10 @@ class SEMControlCard extends SEMLitBase {
         // (reviewer-flagged). Use the explicit ``heat_pump_registered``
         // presence flag (coordinator/types.py:597 + populated in
         // coordinator.py:_run_phase_pipeline from the surplus
-        // controller's device list).
-        const registered = this._val('heat_pump_registered');
-        const isRegistered = (registered === true || registered === 'True' || registered === 'on');
+        // controller's device list). #523: it's a BINARY sensor — read it
+        // via _bin(), not _val() (which prepends sensor.sem_ and always
+        // returned '' → false → spurious "not configured").
+        const isRegistered = this._bin('heat_pump_registered');
         if (!isRegistered) {
             return html`<div class="info-box-text" style="opacity:0.6">
                 ${this._t('heat_pump_not_configured')}

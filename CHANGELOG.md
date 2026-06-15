@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🔧 Control-tab heat-pump card + Home 7-day chart fixes (#523)
+
+- **Heat pump no longer shows "not configured" while clearly configured** — the Control-tab Heat Pump section read the `heat_pump_registered` *binary* sensor through a helper that only resolves `sensor.sem_*` entities, so it always evaluated false and showed the "not configured" notice, while the section header still rendered "normal · 2" (sg-ready state defaults to 2). Both the body and the header now read the binary sensor correctly, so the card is consistent (by @RienduPre in #523)
+- **Home "Last 7 days" chart no longer collapses to a single bar on Mondays** — the energy summary used a "this week" (Monday→now) window, which on Mondays is a single day and rendered as one stray bar, contradicting the card's "Last 7 days" title. It now uses a rolling 7-day window (always 7 day-buckets) (by @RienduPre in #523)
+
 # [1.7.3-beta.18] - 14.06.2026
 
 ## 🏷️ Deterministic grid-sign by meter brand (#461)
