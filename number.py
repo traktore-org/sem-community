@@ -511,10 +511,41 @@ async def async_setup_entry(
             len(per_charger_descriptions), len(ev_chargers),
         )
 
+    # Per-battery reserve-SOC numbers (#523). Multi-battery installs get
+    # one ``number.sem_battery_<bid>_reserve_soc`` each — the floor the
+    # battery never sells below in force/allow arbitrage discharge.
+    from .consts.battery_modes import DEFAULT_BATTERY_RESERVE_SOC
+    from .select import _battery_slugs  # shared battery-list discovery
+    batt_slugs = _battery_slugs(coordinator)
+    reserve_cfg = full_config.get("battery_reserve_socs") or []
+    per_battery_descriptions = []
+    for idx, bid in enumerate(batt_slugs):
+        key = f"battery_{bid}_reserve_soc"
+        cur = (
+            reserve_cfg[idx]
+            if idx < len(reserve_cfg) and reserve_cfg[idx] not in (None, "")
+            else DEFAULT_BATTERY_RESERVE_SOC
+        )
+        desc = NumberEntityDescription(
+            key=key,
+            native_min_value=0,
+            native_max_value=100,
+            native_step=5,
+            native_unit_of_measurement=PERCENTAGE,
+            entity_category=EntityCategory.CONFIG,
+            mode=NumberMode.SLIDER,
+        )
+        per_battery_descriptions.append(desc)
+        entities.append(SEMPerBatteryNumber(
+            coordinator, desc, entry, idx, len(batt_slugs), float(cur),
+        ))
+
     async_add_entities(entities)
 
-    # Fix entity_ids from pre-translation installs and clean up stale entities
-    all_descriptions = list(NUMBER_TYPES) + per_charger_descriptions
+    # Fix entity_ids from pre-translation installs and clean up stale entities.
+    # per_battery_descriptions MUST be included so the stale-key sweep doesn't
+    # immediately remove the reserve-SOC numbers it just created (#523).
+    all_descriptions = list(NUMBER_TYPES) + per_charger_descriptions + per_battery_descriptions
     _fix_entity_ids(hass, entry, all_descriptions, "number")
     _cleanup_stale_entities(hass, entry, all_descriptions, "number")
 
@@ -803,3 +834,56 @@ class SEMPerChargerNumber(CoordinatorEntity, NumberEntity):
             "Updated per-charger %s.%s to %s",
             self._charger_id, self._config_key, value,
         )
+
+
+class SEMPerBatteryNumber(CoordinatorEntity, NumberEntity):
+    """Per-battery reserve-SOC NUMBER (#523), persisted positionally into
+    the ``battery_reserve_socs`` list key (idx-aligned to
+    ``battery_power_list``).
+
+    The battery-side mirror of :class:`SEMPerChargerNumber`, but positional
+    — writes through :func:`persist_per_battery_option` (no reload).
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: SEMCoordinator,
+        description: NumberEntityDescription,
+        entry: ConfigEntry,
+        idx: int,
+        count: int,
+        initial_value: float,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        self._attr_translation_key = "battery_reserve_soc"
+        self._attr_name = "Reserve SOC"
+        self._attr_suggested_object_id = f"sem_{description.key}"
+        self.entity_id = f"number.sem_{description.key}"
+        self._entry = entry
+        self._idx = idx
+        self._count = count
+        self._attr_native_value = initial_value
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    @property
+    def device_info(self):
+        return self.coordinator.device_info
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Persist the per-battery reserve SOC (no reload)."""
+        self._attr_native_value = value
+        from . import persist_per_battery_option
+        persist_per_battery_option(
+            self.hass, self._entry, self.coordinator,
+            self._idx, "battery_reserve_socs", value, self._count,
+        )
+        self.async_write_ha_state()
+        _LOGGER.info("Updated battery %d reserve SOC to %s", self._idx, value)

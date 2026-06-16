@@ -347,6 +347,36 @@ def persist_per_charger_option(
     hass.config_entries.async_update_entry(entry, options=new_options)
 
 
+def persist_per_battery_option(
+    hass, entry, coordinator, idx: int, list_key: str, value, count: int,
+) -> None:
+    """Persist ONE per-battery option without an integration reload (#523).
+
+    The battery-side mirror of :func:`persist_per_charger_option`, but
+    POSITIONAL — per-battery control lives in idx-aligned list keys
+    (``battery_modes`` / ``battery_reserve_socs``) parallel to the Energy
+    Dashboard ``battery_power_list`` order, not an id-keyed dict list. The
+    list is padded to ``count`` so a write to battery 2 never drops
+    battery 1, and the no-reload contract (copy options, mirror into
+    ``coordinator.config``, arm the reload-skip snapshot) matches the
+    charger path so a live mode flip doesn't bounce the integration.
+    """
+    new_options = {**(entry.options or {})}
+    src = new_options.get(list_key)
+    if not isinstance(src, list):
+        src = (entry.data or {}).get(list_key)
+    lst = list(src) if isinstance(src, list) else []
+    while len(lst) < count:
+        lst.append(None)
+    if 0 <= idx < len(lst):
+        lst[idx] = value
+    new_options[list_key] = lst
+    if isinstance(getattr(coordinator, "config", None), dict):
+        coordinator.config.update({**(entry.data or {}), **new_options})
+    coordinator._skip_options_reload = new_options
+    hass.config_entries.async_update_entry(entry, options=new_options)
+
+
 def _heal_ev_chargers_options(
     data_chargers: list | None, opts_chargers: list | None,
 ) -> list | None:

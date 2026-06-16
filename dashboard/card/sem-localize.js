@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-16T13:24:35.051630+00:00
+// Generated: 2026-06-16T14:12:07.034912+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1082,7 +1082,13 @@
       "selling": "Selling",
       "stored": "Stored",
       "until_full": "Until full",
-      "until_empty": "Until empty"
+      "until_empty": "Until empty",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "de": {
       "charging": "Laden",
@@ -2161,7 +2167,13 @@
       "selling": "Verkauf",
       "stored": "Gespeichert",
       "until_full": "Bis voll",
-      "until_empty": "Bis leer"
+      "until_empty": "Bis leer",
+      "reserve_soc": "Reserve-SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Nur Eigenverbrauch",
+      "battery_mode_allow_arbitrage": "Arbitrage erlauben",
+      "battery_mode_force_charge": "Zwangsladung",
+      "battery_mode_force_discharge": "Zwangsentladung"
     },
     "fr": {
       "charging": "En charge",
@@ -3215,7 +3227,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Stocké",
       "until_full": "Jusqu'à plein",
-      "until_empty": "Jusqu'à vide"
+      "until_empty": "Jusqu'à vide",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "es": {
       "charging": "Cargando",
@@ -3267,7 +3285,7 @@
       "self_use": "Autoconsumo",
       "forecast": "Previsión",
       "loading": "Cargando…",
-      "mode": "Modo",
+      "mode": "Mode",
       "revenue": "Ingresos",
       "savings": "Ahorros",
       "allocation": "Distribución",
@@ -4269,7 +4287,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Almacenado",
       "until_full": "Hasta lleno",
-      "until_empty": "Hasta vacío"
+      "until_empty": "Hasta vacío",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "it": {
       "charging": "In carica",
@@ -4321,7 +4345,7 @@
       "self_use": "Autoconsumo",
       "forecast": "Previsione",
       "loading": "Caricamento…",
-      "mode": "Modalità",
+      "mode": "Mode",
       "revenue": "Ricavi",
       "savings": "Risparmi",
       "allocation": "Distribuzione",
@@ -5323,7 +5347,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Immagazzinato",
       "until_full": "Alla carica",
-      "until_empty": "Allo scarico"
+      "until_empty": "Allo scarico",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "nl": {
       "charging": "Laden",
@@ -6363,7 +6393,13 @@
       "selling": "Verkoop",
       "stored": "Opgeslagen",
       "until_full": "Tot vol",
-      "until_empty": "Tot leeg"
+      "until_empty": "Tot leeg",
+      "reserve_soc": "Reserve-SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Alleen zelfverbruik",
+      "battery_mode_allow_arbitrage": "Arbitrage toestaan",
+      "battery_mode_force_charge": "Geforceerd laden",
+      "battery_mode_force_discharge": "Geforceerd ontladen"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -6415,7 +6451,7 @@
       "self_use": "Vlastní spotřeba",
       "forecast": "Předpověď",
       "loading": "Načítání…",
-      "mode": "Režim",
+      "mode": "Mode",
       "revenue": "Příjmy",
       "savings": "Úspory",
       "allocation": "Přidělení",
@@ -7417,7 +7453,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Uloženo",
       "until_full": "Do plného",
-      "until_empty": "Do prázdného"
+      "until_empty": "Do prázdného",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "da": {
       "charging": "Oplader",
@@ -7469,7 +7511,7 @@
       "self_use": "Egetforbrug",
       "forecast": "Prognose",
       "loading": "Indlæser…",
-      "mode": "Tilstand",
+      "mode": "Mode",
       "revenue": "Indtægt",
       "savings": "Besparelser",
       "allocation": "Fordeling",
@@ -8471,7 +8513,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Lagret",
       "until_full": "Til fuld",
-      "until_empty": "Til tom"
+      "until_empty": "Til tom",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "fi": {
       "charging": "Lataus",
@@ -8523,7 +8571,7 @@
       "self_use": "Omakäyttö",
       "forecast": "Ennuste",
       "loading": "Ladataan…",
-      "mode": "Tila",
+      "mode": "Mode",
       "revenue": "Tuotto",
       "savings": "Säästöt",
       "allocation": "Jako",
@@ -9525,7 +9573,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Varastoitu",
       "until_full": "Täyteen",
-      "until_empty": "Tyhjäksi"
+      "until_empty": "Tyhjäksi",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "hu": {
       "charging": "Töltés",
@@ -9577,7 +9631,7 @@
       "self_use": "Saját felhasználás",
       "forecast": "Előrejelzés",
       "loading": "Betöltés…",
-      "mode": "Mód",
+      "mode": "Mode",
       "revenue": "Bevétel",
       "savings": "Megtakarítás",
       "allocation": "Elosztás",
@@ -10579,7 +10633,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Tárolt",
       "until_full": "Feltöltésig",
-      "until_empty": "Lemerülésig"
+      "until_empty": "Lemerülésig",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "no": {
       "charging": "Lader",
@@ -10631,7 +10691,7 @@
       "self_use": "Egetforbruk",
       "forecast": "Prognose",
       "loading": "Laster…",
-      "mode": "Modus",
+      "mode": "Mode",
       "revenue": "Inntekt",
       "savings": "Besparelser",
       "allocation": "Fordeling",
@@ -11633,7 +11693,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Lagret",
       "until_full": "Til fullt",
-      "until_empty": "Til tomt"
+      "until_empty": "Til tomt",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -11685,7 +11751,7 @@
       "self_use": "Zużycie własne",
       "forecast": "Prognoza",
       "loading": "Ładowanie…",
-      "mode": "Tryb",
+      "mode": "Mode",
       "revenue": "Przychód",
       "savings": "Oszczędności",
       "allocation": "Alokacja",
@@ -12687,7 +12753,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Zmagazynowane",
       "until_full": "Do pełna",
-      "until_empty": "Do pusta"
+      "until_empty": "Do pusta",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "pt": {
       "charging": "A carregar",
@@ -12739,7 +12811,7 @@
       "self_use": "Autoconsumo",
       "forecast": "Previsão",
       "loading": "Carregando…",
-      "mode": "Modo",
+      "mode": "Mode",
       "revenue": "Receita",
       "savings": "Poupanças",
       "allocation": "Alocação",
@@ -13741,7 +13813,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Armazenado",
       "until_full": "Até cheio",
-      "until_empty": "Até vazio"
+      "until_empty": "Até vazio",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "ro": {
       "charging": "Încărcare",
@@ -13793,7 +13871,7 @@
       "self_use": "Autoconsum",
       "forecast": "Prognoză",
       "loading": "Se încarcă…",
-      "mode": "Mod",
+      "mode": "Mode",
       "revenue": "Venit",
       "savings": "Economii",
       "allocation": "Alocare",
@@ -14795,7 +14873,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Stocat",
       "until_full": "Până la plin",
-      "until_empty": "Până la gol"
+      "until_empty": "Până la gol",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     },
     "sv": {
       "charging": "Laddar",
@@ -14847,7 +14931,7 @@
       "self_use": "Egenförbrukning",
       "forecast": "Prognos",
       "loading": "Laddar…",
-      "mode": "Läge",
+      "mode": "Mode",
       "revenue": "Intäkt",
       "savings": "Besparingar",
       "allocation": "Fördelning",
@@ -15849,7 +15933,13 @@
       "hot_water_activation_path": "Activation path",
       "stored": "Lagrat",
       "until_full": "Tills fullt",
-      "until_empty": "Tills tomt"
+      "until_empty": "Tills tomt",
+      "reserve_soc": "Reserve SOC",
+      "battery_mode_auto": "Auto",
+      "battery_mode_self_consumption": "Self-consumption only",
+      "battery_mode_allow_arbitrage": "Allow arbitrage",
+      "battery_mode_force_charge": "Force charge",
+      "battery_mode_force_discharge": "Force discharge"
     }
   };
 

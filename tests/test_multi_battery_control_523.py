@@ -76,3 +76,22 @@ def test_global_config_not_mutated():
     _per(cfg, 0)
     # The overlay must be a copy — the shared global config is untouched.
     assert cfg["battery_force_discharge_control_entity"] == "number.global_sell"
+
+
+def test_per_battery_mode_and_reserve_overlay():
+    # #523 Increment 2: mode + reserve lists overlay to single keys.
+    cfg = {
+        "battery_modes": ["self_consumption", "allow_arbitrage"],
+        "battery_reserve_socs": [30, 45],
+    }
+    assert _per(cfg, 0)["battery_mode"] == "self_consumption"
+    assert _per(cfg, 0)["battery_reserve_soc"] == 30
+    assert _per(cfg, 1)["battery_mode"] == "allow_arbitrage"
+    assert _per(cfg, 1)["battery_reserve_soc"] == 45
+
+
+def test_per_battery_mode_absent_falls_back():
+    cfg = {"battery_modes": ["force_charge"]}  # only b1 set
+    assert _per(cfg, 0)["battery_mode"] == "force_charge"
+    # b2 beyond the list → no battery_mode key (decide_battery defaults to auto)
+    assert "battery_mode" not in _per(cfg, 1)

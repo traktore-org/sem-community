@@ -23,6 +23,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from .charger_types import BatteryDecision, BatteryIntent
+from ..consts.battery_modes import arbitrage_allowed_for_mode
 
 if TYPE_CHECKING:  # pragma: no cover
     from .charger_types import BatteryView
@@ -44,6 +45,33 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     """
     rt = view.runtime
     cfg = view.config
+
+    # ─── Per-battery MODE override (#523) ───
+    # Highest precedence: a user-chosen manual mode wins over the
+    # scheduler / protection logic for THIS battery. ``auto`` (the
+    # default, and the value for every single-battery install that never
+    # sets a mode) falls straight through to today's behaviour.
+    mode = str(cfg.get("battery_mode", "auto") or "auto").lower()
+    reserve = cfg.get("battery_reserve_soc")
+    reserve = float(reserve) if reserve is not None else 0.0
+
+    if mode == "force_discharge":
+        return BatteryDecision(
+            battery_id=rt.battery_id,
+            intent=BatteryIntent.FORCE_DISCHARGE,
+            discharge_power_w=float(cfg.get("battery_max_discharge_power", 5000.0) or 0.0),
+            floor_soc=reserve,
+            reason="mode=force_discharge (manual sell to grid)",
+        )
+    if mode == "force_charge":
+        return BatteryDecision(
+            battery_id=rt.battery_id,
+            intent=BatteryIntent.FORCE_CHARGE,
+            target_soc=100.0,
+            charge_power_w=float(cfg.get("battery_max_charge_power_w", 5000.0) or 0.0),
+            duration_min=240,
+            reason="mode=force_charge (manual charge to full)",
+        )
 
     # ─── FORCE_CHARGE / STOP_FORCE_CHARGE branch ───
     # The pre-computed scheduler_decision tells us whether to be in
@@ -68,15 +96,27 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
 
         # Export arbitrage — the scheduler decided to SELL to the grid
         # this cycle (#523). Pure actuation of the scheduler's verdict, the
-        # mirror of the SCHEDULED → FORCE_CHARGE path above.
+        # mirror of the SCHEDULED → FORCE_CHARGE path above. Gated PER
+        # BATTERY by its mode (self_consumption never sells; allow_arbitrage
+        # always may; auto follows the global toggle) and its OWN reserve
+        # SOC — so a self-consumption battery keeps its charge while its
+        # sibling sells, on the same shared verdict.
         if state_value == "discharging_arbitrage":
-            return BatteryDecision(
-                battery_id=rt.battery_id,
-                intent=BatteryIntent.FORCE_DISCHARGE,
-                discharge_power_w=getattr(sched, "discharge_power_w", 0.0),
-                floor_soc=getattr(sched, "floor_soc", 0.0),
-                reason=getattr(sched, "reason", "export arbitrage"),
-            )
+            global_arb = bool(cfg.get("battery_grid_arbitrage_enabled", False))
+            if arbitrage_allowed_for_mode(mode, global_arb):
+                floor = reserve if reserve > 0 else getattr(sched, "floor_soc", 0.0)
+                soc = rt.last_known_soc
+                if soc is None or soc > floor:
+                    return BatteryDecision(
+                        battery_id=rt.battery_id,
+                        intent=BatteryIntent.FORCE_DISCHARGE,
+                        discharge_power_w=getattr(sched, "discharge_power_w", 0.0),
+                        floor_soc=floor,
+                        reason=getattr(sched, "reason", "export arbitrage"),
+                    )
+            # Not allowed for this battery (self_consumption / auto-with-
+            # global-off) or already at/under its reserve → fall through to
+            # the normal decision (don't sell this unit).
 
         # Target reached or no longer needed — stop a running charge.
         if state_value in ("target_reached", "not_needed", "idle", "not_profitable"):

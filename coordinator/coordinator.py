@@ -3199,12 +3199,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """
         cfg = self.config
         overrides: dict = {}
+        # Control-entity overlays (force-discharge / discharge-limit).
         for list_key, single_key in (
             ("battery_force_discharge_entities", "battery_force_discharge_control_entity"),
             ("battery_discharge_control_entities", "battery_discharge_control_entity"),
         ):
             lst = cfg.get(list_key)
             if isinstance(lst, list) and idx < len(lst) and lst[idx]:
+                overrides[single_key] = lst[idx]
+        # Per-battery mode + reserve SOC (#523). Absent / empty → the
+        # single-key ``battery_mode`` default (``auto``) applies, so
+        # single-battery installs and untouched batteries are unchanged.
+        for list_key, single_key in (
+            ("battery_modes", "battery_mode"),
+            ("battery_reserve_socs", "battery_reserve_soc"),
+        ):
+            lst = cfg.get(list_key)
+            if isinstance(lst, list) and idx < len(lst) and lst[idx] not in (None, ""):
                 overrides[single_key] = lst[idx]
         return {**cfg, **overrides} if overrides else cfg
 
@@ -3278,7 +3289,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         _charge_active = (
             scheduler_decision is not None and scheduler_decision.should_charge
         )
-        if self._battery_scheduler_config.arbitrage_enabled and not _charge_active:
+        # Evaluate arbitrage when it's globally enabled OR any battery is in
+        # per-battery ``allow_arbitrage`` mode (#523) — that mode opts a unit
+        # in even with the global toggle off. decide_battery then gates the
+        # shared verdict per battery (self_consumption never sells).
+        _any_allow_arb = "allow_arbitrage" in (self.config.get("battery_modes") or [])
+        if (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb) and not _charge_active:
             export_rate_per_kwh = 0.0
             import_forecast_min = None
             _provider = getattr(self, "_tariff_provider", None)
@@ -3304,6 +3320,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     current_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
                     export_rate=export_rate_per_kwh,
                     import_forecast_min=import_forecast_min,
+                    # Run the economic check when globally enabled OR any
+                    # battery is in allow_arbitrage mode (#523); decide_battery
+                    # gates per battery which units actually sell.
+                    enabled_override=(
+                        self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb
+                    ),
                 )
                 if _arb.state.value == "discharging_arbitrage":
                     scheduler_decision = _arb
@@ -3366,7 +3388,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             view = BatteryView(
                 runtime=runtime,
-                config=self.config,
+                config=self._per_battery_config(batt_idx),
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),

@@ -99,10 +99,19 @@ class SEMBatteryCard extends SEMLitBase {
         // sensor value changes. No-op on single-battery installs
         // (``_batteries`` is empty).
         if (this._batteries.length) {
-            key += '|' + this._batteries.map(bid => [
-                `battery_${bid}_power`, `battery_${bid}_soc`,
-                `battery_${bid}_status`, `battery_${bid}_capacity_kwh`,
-            ].map(s => hass?.states[`${this._prefix}${s}`]?.state || '').join(':')).join('|');
+            key += '|' + this._batteries.map(bid => {
+                const sensors = [
+                    `battery_${bid}_power`, `battery_${bid}_soc`,
+                    `battery_${bid}_status`, `battery_${bid}_capacity_kwh`,
+                ].map(s => hass?.states[`${this._prefix}${s}`]?.state || '').join(':');
+                // Per-battery control entities (#523) — re-render when the
+                // mode / reserve change so the dropdown + stepper stay live.
+                const ctrl = [
+                    `select.sem_battery_${bid}_mode`,
+                    `number.sem_battery_${bid}_reserve_soc`,
+                ].map(e => hass?.states[e]?.state || '').join(':');
+                return sensors + ':' + ctrl;
+            }).join('|');
         }
 
         if (key === this._lastBattKey && !localeChanged) return;
@@ -249,6 +258,17 @@ class SEMBatteryCard extends SEMLitBase {
         const stored = (soc != null && capacity > 0) ? (soc / 100) * capacity : null;
         const eta = this._batteryEta(soc, capacity, power);
 
+        // Per-battery controls (#523) — the mode select + reserve stepper,
+        // mirroring the EV card's mode dropdown + target. Rendered only when
+        // the backend entities exist (multi-battery installs).
+        const modeEntityId = `select.sem_battery_${bid}_mode`;
+        const modeState = this._hass?.states[modeEntityId];
+        const reserveEntityId = `number.sem_battery_${bid}_reserve_soc`;
+        const reserveState = this._hass?.states[reserveEntityId];
+        const modeVal = modeState?.state;
+        const showReserve = reserveState
+            && (modeVal === 'allow_arbitrage' || modeVal === 'force_discharge');
+
         return html`
             <div class="battery-section">
                 <div class="battery-section-header">
@@ -292,6 +312,33 @@ class SEMBatteryCard extends SEMLitBase {
                         ` : nothing}
                     </div>
                 </div>
+                ${modeState ? html`
+                    <div class="battery-section-controls">
+                        <div class="bsc-row">
+                            <span class="bsc-label">${this._t('mode')}</span>
+                            <select class="bsc-select" .value=${modeVal}
+                                    @click=${(e) => e.stopPropagation()}
+                                    @change=${(e) => this._selectOption(modeEntityId, e.target.value)}>
+                                ${(modeState.attributes.options || []).map(o => html`
+                                    <option value=${o} ?selected=${o === modeVal}>
+                                        ${this._t('battery_mode_' + o) || o}
+                                    </option>`)}
+                            </select>
+                        </div>
+                        ${showReserve ? html`
+                            <div class="bsc-row">
+                                <span class="bsc-label">${this._t('reserve_soc')}</span>
+                                <span class="bsc-stepper">
+                                    <button class="bsc-btn"
+                                        @click=${() => this._stepNumber(reserveEntityId, -1)}>−</button>
+                                    <span class="bsc-stepval">${Math.round(parseFloat(reserveState.state) || 0)}%</span>
+                                    <button class="bsc-btn"
+                                        @click=${() => this._stepNumber(reserveEntityId, 1)}>+</button>
+                                </span>
+                            </div>
+                        ` : nothing}
+                    </div>
+                ` : nothing}
             </div>
         `;
     }
@@ -518,6 +565,39 @@ class SEMBatteryCard extends SEMLitBase {
                     font-size: 12px; font-weight: 600;
                     color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                     font-variant-numeric: tabular-nums;
+                }
+                /* Per-battery controls (#523) — mode select + reserve stepper */
+                .battery-section-controls {
+                    margin-top: 10px; padding-top: 10px;
+                    border-top: 1px solid ${surfBorder};
+                    display: flex; flex-direction: column; gap: 8px;
+                }
+                .bsc-row {
+                    display: flex; align-items: center; justify-content: space-between;
+                    gap: 8px;
+                }
+                .bsc-label {
+                    font-size: 12px; color: ${textSecCol}; font-weight: 500;
+                }
+                .bsc-select {
+                    background: ${surfaceCol};
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
+                    border: 1px solid ${surfBorder};
+                    border-radius: 8px; padding: 5px 8px; font-size: 12px;
+                    font-weight: 600; cursor: pointer; min-width: 150px;
+                }
+                .bsc-stepper { display: flex; align-items: center; gap: 8px; }
+                .bsc-btn {
+                    width: 24px; height: 24px; border-radius: 6px;
+                    background: ${surfaceCol}; border: 1px solid ${surfBorder};
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
+                    font-size: 15px; font-weight: 700; cursor: pointer; line-height: 1;
+                }
+                .bsc-btn:hover { border-color: ${surfHover}; }
+                .bsc-stepval {
+                    min-width: 38px; text-align: center; font-size: 13px;
+                    font-weight: 700; font-variant-numeric: tabular-nums;
+                    color: var(--primary-text-color, ${T.text || '#e0e0e0'});
                 }
                 /* Phase B mobile breakpoint — single column from the
                    ring + metrics layout collapses to stacked at

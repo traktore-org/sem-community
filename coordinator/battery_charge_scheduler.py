@@ -594,6 +594,7 @@ class BatteryChargeScheduler:
         current_soc: float,
         export_rate: float,
         import_forecast_min: Optional[float],
+        enabled_override: Optional[bool] = None,
     ) -> SchedulerDecision:
         """Per-cycle export-arbitrage check (#523) — the discharge mirror
         of ``evaluate()``'s charge planning, using the SAME economic model
@@ -609,7 +610,12 @@ class BatteryChargeScheduler:
         """
         now = dt_util.now()
         cfg = self._config
-        if not cfg.arbitrage_enabled:
+        # ``enabled_override`` lets the coordinator run the economic check
+        # even when the GLOBAL toggle is off — needed for per-battery
+        # ``allow_arbitrage`` mode (#523). decide_battery then gates WHICH
+        # battery acts on the verdict, so producing it here is safe.
+        enabled = cfg.arbitrage_enabled if enabled_override is None else enabled_override
+        if not enabled:
             return SchedulerDecision(
                 state=SchedulerState.IDLE,
                 reason="export arbitrage disabled", evaluated_at=now,

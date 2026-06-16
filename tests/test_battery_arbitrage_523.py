@@ -67,6 +67,16 @@ def test_fires_on_high_export_above_reserve():
     assert d.floor_soc == 50.0
 
 
+def test_enabled_override_runs_when_global_off():
+    # #523 per-battery allow_arbitrage: global toggle off, but the override
+    # lets the economic check run + fire (decide_battery then gates per unit).
+    s = _scheduler(arbitrage_enabled=False)
+    assert s.evaluate_arbitrage(80.0, 0.45, None).state is not SchedulerState.DISCHARGING_ARBITRAGE
+    assert s.evaluate_arbitrage(
+        80.0, 0.45, None, enabled_override=True,
+    ).state is SchedulerState.DISCHARGING_ARBITRAGE
+
+
 def test_export_below_floor_no_fire():
     s = _scheduler()
     assert s.evaluate_arbitrage(80.0, 0.10, None).state is SchedulerState.NOT_PROFITABLE
@@ -99,9 +109,12 @@ def test_cycle_cost_raises_breakeven():
 # ── decide_battery is a pure actuator of the scheduler verdict ──────
 
 def _view(sched):
+    # #523 per-battery gating: an ``auto`` battery actuates the shared
+    # arbitrage verdict only when the global toggle is on — which the real
+    # coordinator config always carries when it produced the verdict.
     return BatteryView(
-        runtime=BatteryRuntime(battery_id="luna"),
-        config={},
+        runtime=BatteryRuntime(battery_id="luna", last_known_soc=80.0),
+        config={"battery_grid_arbitrage_enabled": True},
         fleet=FleetContext(),
         charging_state="idle",
         ev_charging=False,
