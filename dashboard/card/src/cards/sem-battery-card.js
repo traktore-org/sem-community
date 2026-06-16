@@ -242,7 +242,9 @@ class SEMBatteryCard extends SEMLitBase {
         const power = this._val('battery_power', 0);
         const chargePower = this._val('battery_charge_power', 0);
         const dischargePower = this._val('battery_discharge_power', 0);
-        const statusRaw = this._valStr('battery_status');
+        // Lowercase — the sensor publishes title-cased values ("Selling",
+        // "Charging"); the string comparisons below expect lowercase.
+        const statusRaw = (this._valStr('battery_status') || '').toLowerCase();
         const health = this._val('battery_health_score', 0);
         const cycles = this._val('battery_cycles_estimated', 0);
         const dailyCharge = this._val('daily_battery_charge_energy', 0);
