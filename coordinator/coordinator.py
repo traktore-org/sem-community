@@ -3185,6 +3185,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             hot_water_data,
         )
 
+    def _per_battery_config(self, idx: int) -> dict:
+        """Config for the battery at position ``idx`` with per-battery
+        control entities overlaid (#523 multi-battery).
+
+        SEM senses each battery separately but historically controlled
+        them with single global entities, so only one battery could be
+        force-discharged / limited. The ``battery_*_entities`` LIST keys
+        (parallel to the Energy-Dashboard ``battery_power_list`` order)
+        give each unit its own control entity. Empty / missing → the
+        global single-entity keys apply (single-battery installs and
+        existing configs are unchanged).
+        """
+        cfg = self.config
+        overrides: dict = {}
+        for list_key, single_key in (
+            ("battery_force_discharge_entities", "battery_force_discharge_control_entity"),
+            ("battery_discharge_control_entities", "battery_discharge_control_entity"),
+        ):
+            lst = cfg.get(list_key)
+            if isinstance(lst, list) and idx < len(lst) and lst[idx]:
+                overrides[single_key] = lst[idx]
+        return {**cfg, **overrides} if overrides else cfg
+
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:
         """Per-cycle battery control via decide_battery + actuate_battery.
 
@@ -3331,11 +3354,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # if any battery is commanded to FORCE_DISCHARGE this cycle.
         self._battery_arbitrage_active = False
 
-        for battery_id, runtime in battery_items:
-            # Per-battery adapter cache.
+        for batt_idx, (battery_id, runtime) in enumerate(battery_items):
+            # Per-battery adapter cache. Each battery gets its OWN control
+            # entities when configured (#523 multi-battery — RienduPre's
+            # 2-battery setup), so both units can sell to grid / be limited
+            # independently. Falls back to the global single-entity keys.
             adapter = self._battery_adapters.get(battery_id)
             if adapter is None:
-                adapter = adapter_for(self.hass, self.config)
+                adapter = adapter_for(self.hass, self._per_battery_config(batt_idx))
                 self._battery_adapters[battery_id] = adapter
 
             view = BatteryView(

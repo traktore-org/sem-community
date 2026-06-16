@@ -199,6 +199,10 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # #523 Tier 3: the forced-discharge entity is read at battery-adapter
     # construction, so changing it must reload to rebuild the adapter.
     "battery_force_discharge_control_entity",
+    # #523 multi-battery: per-battery control-entity lists are read at
+    # adapter construction too, so a change must reload.
+    "battery_force_discharge_entities",
+    "battery_discharge_control_entities",
 })
 
 

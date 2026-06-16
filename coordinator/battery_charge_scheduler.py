@@ -28,12 +28,7 @@ from typing import List, Optional
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
-from .battery_charge_adapter import (
-    BatteryChargeAdapter,
-    ChargeCommand,
-    ChargeCommandStatus,
-    ChargeStatus,
-)
+from .battery_charge_adapter import BatteryChargeAdapter
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -278,8 +273,10 @@ class BatteryChargeScheduler:
 
     Lifecycle:
     - Created once when coordinator initializes
-    - `evaluate()` called at trigger time (21:00) to make daily decision
-    - `update()` called every coordinator cycle (~10s) to execute decision
+    - `evaluate()` called at trigger time (21:00) to make the daily
+      charge decision; `evaluate_arbitrage()` mirrors it for discharge
+    - The verdict is actuated through ``decide_battery`` /
+      ``actuate_battery`` every coordinator cycle (~10s)
     - `reset()` called when night ends or manually
     """
 
@@ -943,186 +940,6 @@ class BatteryChargeScheduler:
                 if gap <= 3600:
                     return gap / 3600
         return 1.0
-
-    async def update(
-        self,
-        current_soc: float,
-        ev_charging_power_w: float = 0.0,
-    ) -> SchedulerState:
-        """Called every coordinator cycle to execute the scheduled decision.
-
-        Handles:
-        - Waiting for the right time slot
-        - Starting forced charge
-        - Monitoring SOC and stopping when target reached
-        - Peak limit coordination with EV
-
-        Args:
-            current_soc: Current battery SOC
-            ev_charging_power_w: Current EV charging power (for peak coordination)
-
-        Returns:
-            Current scheduler state
-        """
-        if self._decision.state == SchedulerState.IDLE:
-            return SchedulerState.IDLE
-
-        if self._decision.state in (
-            SchedulerState.NOT_NEEDED,
-            SchedulerState.NOT_PROFITABLE,
-            SchedulerState.FAILED,
-        ):
-            # A mid-charge re-evaluation (rolling horizon) can land on
-            # NOT_NEEDED / NOT_PROFITABLE while the adapter is still
-            # force-charging from the previous plan — stop it instead
-            # of leaving the inverter charging unsupervised (#485 F1).
-            if self._adapter.is_active:
-                _LOGGER.info(
-                    "Battery scheduler: stopping active charge — "
-                    "re-evaluation decided %s",
-                    self._decision.state.value,
-                )
-                await self._adapter.stop_forced_charge()
-            return self._decision.state
-
-        # Check if target reached
-        if current_soc >= self._decision.target_soc - 0.5:
-            if self._adapter.is_active:
-                await self._adapter.stop_forced_charge()
-            self._decision.state = SchedulerState.TARGET_REACHED
-            _LOGGER.info(
-                "Battery charge target reached: SOC %.1f%% >= target %.1f%%",
-                current_soc,
-                self._decision.target_soc,
-            )
-            return SchedulerState.TARGET_REACHED
-
-        # Determine if we should be charging right now
-        now = dt_util.now()
-
-        # Update active slot tracking in the schedule
-        active_slot = self._get_active_slot(now)
-
-        if active_slot and not self._adapter.is_active:
-            # Use planned power from schedule, or fall back to dynamic calculation
-            charge_power = active_slot.battery_power_w
-            if charge_power <= 0:
-                # Schedule says no battery power in this slot (EV-only slot)
-                self._decision.state = SchedulerState.WAITING_FOR_SLOT
-                return SchedulerState.WAITING_FOR_SLOT
-
-            # Always apply real-time constraints (grid import cap, peak limit)
-            if self._config.max_grid_import_w > 0 or (
-                self._config.peak_limit_w > 0 and ev_charging_power_w != active_slot.ev_power_w
-            ):
-                charge_power = self._calculate_available_charge_power(ev_charging_power_w)
-                if charge_power <= 0:
-                    self._decision.state = SchedulerState.WAITING_FOR_SLOT
-                    return SchedulerState.WAITING_FOR_SLOT
-
-            command = ChargeCommand(
-                target_soc=self._decision.target_soc,
-                max_power_w=charge_power,
-                duration_minutes=self._decision.hours_needed * 60 + 30,  # +30min safety
-            )
-            status = await self._adapter.start_forced_charge(command)
-
-            if status.status == ChargeCommandStatus.CHARGING:
-                self._decision.state = SchedulerState.CHARGING
-                self._charge_started_at = now
-            else:
-                self._decision.state = SchedulerState.FAILED
-                self._decision.reason = status.message
-                _LOGGER.error("Battery charge start failed: %s", status.message)
-
-        elif not active_slot and self._adapter.is_active:
-            # Outside charge window but still charging — stop
-            await self._adapter.stop_forced_charge()
-            self._decision.state = SchedulerState.WAITING_FOR_SLOT
-
-        elif active_slot and self._adapter.is_active:
-            self._decision.state = SchedulerState.CHARGING
-            # Adjust power if constraints changed since plan was made
-            if self._config.max_grid_import_w > 0 or (
-                self._config.peak_limit_w > 0 and ev_charging_power_w != active_slot.ev_power_w
-            ):
-                new_power = self._calculate_available_charge_power(ev_charging_power_w)
-                if new_power > 0:
-                    command = ChargeCommand(
-                        target_soc=self._decision.target_soc,
-                        max_power_w=new_power,
-                    )
-                    await self._adapter.start_forced_charge(command)
-
-        else:
-            self._decision.state = SchedulerState.WAITING_FOR_SLOT
-
-        return self._decision.state
-
-    def _get_active_slot(self, now: datetime) -> Optional[TimeSlot]:
-        """Find and mark the currently active time slot from the schedule."""
-        schedule = self._decision.schedule
-        if not schedule:
-            # No schedule — fall back to charge window check
-            if self._is_in_charge_window(now):
-                return TimeSlot(
-                    start=now,
-                    end=now + timedelta(hours=1),
-                    battery_power_w=self._config.battery_max_charge_power_w,
-                )
-            return None
-
-        # Clear previous active flags and find current slot
-        active = None
-        for slot in schedule.slots:
-            slot.is_active = False
-            if slot.start <= now < slot.end:
-                slot.is_active = True
-                active = slot
-
-        return active
-
-    def _is_in_charge_window(self, now: datetime) -> bool:
-        """Check if current time is within a scheduled charge window."""
-        if not self._decision.charge_windows:
-            # No specific windows = charge during entire NT period (assume we're in NT)
-            return True
-
-        for window_start in self._decision.charge_windows:
-            window_end = window_start + timedelta(hours=1)
-            if window_start <= now < window_end:
-                return True
-
-        return False
-
-    def _calculate_available_charge_power(self, ev_power_w: float) -> float:
-        """Calculate available battery charge power respecting peak + grid import limits.
-
-        Constraints applied in order:
-        1. Battery max charge rate (inverter limit)
-        2. Peak limit - EV consumption (house connection limit)
-        3. Max grid import limit (utility connection limit)
-        """
-        max_power = self._config.battery_max_charge_power_w
-
-        # Apply grid import cap if configured
-        if self._config.max_grid_import_w > 0:
-            # Total grid import = battery charge + EV + home load (~300W estimate)
-            grid_available = self._config.max_grid_import_w - ev_power_w - 300
-            max_power = min(max_power, max(0, grid_available))
-
-        if self._config.peak_limit_w <= 0:
-            return max_power
-
-        # Available = peak limit - EV consumption - safety margin
-        available = self._config.peak_limit_w - ev_power_w - 200  # 200W safety
-
-        if self._config.ev_priority:
-            # EV takes what it needs, battery gets the rest
-            return max(0, min(max_power, available))
-        else:
-            # Proportional: battery gets half of available
-            return max(0, min(max_power, available * 0.5))
 
     def reset(self) -> None:
         """Reset scheduler to idle state (call when night ends)."""

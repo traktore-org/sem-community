@@ -271,6 +271,8 @@ class TestStructuralKeysVisibility:
             "hot_water_temperature_sensor",
             "ev_chargers",
             "battery_force_discharge_control_entity",
+            "battery_force_discharge_entities",
+            "battery_discharge_control_entities",
         }
         assert _SET_OPTION_STRUCTURAL_KEYS == expected
 

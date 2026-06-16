@@ -819,29 +819,6 @@ class TestTargetSocAnchor:
         assert scheduler._window_anchor_soc is None
         assert scheduler._window_anchor_at is None
 
-    async def test_update_stops_active_charge_on_not_needed(self, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
-        adapter.is_active = True
-        adapter.stop_forced_charge = AsyncMock()
-        scheduler = _make_scheduler(scheduler_config, adapter=adapter)
-        scheduler._decision = SchedulerDecision(state=SchedulerState.NOT_NEEDED)
-
-        state = await scheduler.update(current_soc=70.0)
-
-        assert state == SchedulerState.NOT_NEEDED
-        adapter.stop_forced_charge.assert_awaited_once()
-
-    async def test_update_leaves_inactive_adapter_alone(self, scheduler_config):
-        adapter = MagicMock(spec=BatteryChargeAdapter)
-        adapter.is_active = False
-        adapter.stop_forced_charge = AsyncMock()
-        scheduler = _make_scheduler(scheduler_config, adapter=adapter)
-        scheduler._decision = SchedulerDecision(state=SchedulerState.NOT_PROFITABLE)
-
-        await scheduler.update(current_soc=70.0)
-
-        adapter.stop_forced_charge.assert_not_awaited()
-
 
 class TestReplanTriggerOneShot:
     """#485 F2: price-update replan fires once per series change."""
