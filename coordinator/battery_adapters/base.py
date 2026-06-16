@@ -18,11 +18,13 @@ register in ``adapter_for()``.
 """
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
-if TYPE_CHECKING:  # pragma: no cover — type-only
-    from ..charger_types import BatteryIntent
+from ..charger_types import BatteryIntent
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class BatteryControlAdapter(ABC):
@@ -48,6 +50,16 @@ class BatteryControlAdapter(ABC):
         to de-dup consecutive same-value writes. Mirrors today's
         100 W hysteresis in BatteryProtectionMixin
         (battery_protection.py:106-109)."""
+        # #523 export arbitrage — the number entity that sets the battery's
+        # forcible discharge-to-grid power. Brand-agnostic: any battery whose
+        # integration exposes such a number (Huawei LUNA "Forcible discharge
+        # power", a Sessy/Growatt setpoint, a template/script-backed number)
+        # can sell to grid. Empty → ``supports_forced_discharge`` is False
+        # and the actuator drops FORCE_DISCHARGE.
+        self._force_discharge_entity: str = config.get(
+            "battery_force_discharge_control_entity", "",
+        )
+        self._last_force_discharge_w: float = -1.0  # de-dup writes
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -69,11 +81,10 @@ class BatteryControlAdapter(ABC):
 
     @property
     def supports_forced_discharge(self) -> bool:
-        """True if this brand can be commanded to discharge to the
-        grid for arbitrage (#523). Default False — only brands that
-        override (Huawei LUNA) actuate ``FORCE_DISCHARGE``; everyone
-        else has the decision dropped by the actuator."""
-        return False
+        """True when a forcible-discharge control entity is configured
+        (#523) — brand-agnostic battery→grid arbitrage. No entity → the
+        actuator drops FORCE_DISCHARGE."""
+        return bool(self._force_discharge_entity)
 
     @property
     def last_intent(self) -> "Optional[BatteryIntent]":
@@ -107,15 +118,46 @@ class BatteryControlAdapter(ABC):
     async def command_force_discharge(
         self, power_w: float, floor_soc: float,
     ) -> None:
-        """Start a forced battery → grid discharge for arbitrage (#523).
-
-        Default no-op: brands without forced-discharge support never
-        reach here (the actuator gates on ``supports_forced_discharge``).
-        Huawei overrides this.
-        """
-        return None
+        """Sell to grid: set the configured forcible-discharge power
+        (#523), clamped to the brand's max discharge. Brand-agnostic —
+        any battery with a discharge-power number entity can use it."""
+        watts = max(0.0, min(float(power_w), self.max_discharge_power_w))
+        await self._write_force_discharge(watts)
+        self._last_intent = BatteryIntent.FORCE_DISCHARGE
 
     async def command_stop_force_discharge(self) -> None:
-        """End a forced discharge, restoring the brand default.
-        Default delegates to ``command_normal``."""
+        """Stop selling — zero the forcible-discharge power and restore
+        the brand default discharge limit."""
+        await self._write_force_discharge(0.0)
         await self.command_normal()
+        self._last_intent = BatteryIntent.STOP_FORCE_DISCHARGE
+
+    async def _write_force_discharge(self, watts: float) -> None:
+        """De-dup'd write of the forcible-discharge power. Mutual
+        exclusion is the callers' job: ``command_normal`` /
+        ``command_limit_discharge`` / ``command_force_charge`` /
+        ``command_stop_force_charge`` zero this so the battery can't keep
+        selling once SEM moves to any other mode."""
+        if not self._force_discharge_entity:
+            return
+        # Skip when within 100 W of the last applied value — the 0→0 case
+        # (the common NORMAL cycle) must not spam the bus.
+        if (self._last_force_discharge_w >= 0
+                and abs(watts - self._last_force_discharge_w) < 100.0):
+            return
+        try:
+            await self._hass.services.async_call(
+                "number", "set_value",
+                {"entity_id": self._force_discharge_entity, "value": watts},
+                blocking=True,
+            )
+            self._last_force_discharge_w = watts
+            if watts > 0:
+                _LOGGER.info(
+                    "Battery: forcible-discharge %.0f W → %s (arbitrage)",
+                    watts, self._force_discharge_entity,
+                )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "Battery: failed to set forcible discharge: %s", e,
+            )

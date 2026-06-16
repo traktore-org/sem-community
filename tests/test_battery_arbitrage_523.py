@@ -167,7 +167,8 @@ async def test_huawei_normal_zeroes_force_discharge():
 
 
 @pytest.mark.asyncio
-async def test_actuator_drops_when_unsupported():
+async def test_actuator_drops_when_no_entity():
+    # No forcible-discharge entity → unsupported → dropped, no call.
     hass = _hass()
     gen = GenericBatteryAdapter(hass, {})
     assert gen.supports_forced_discharge is False
@@ -176,3 +177,40 @@ async def test_actuator_drops_when_unsupported():
         discharge_power_w=3000, floor_soc=50.0,
     ), gen)
     hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_generic_adapter_actuates_with_entity():
+    # #523: NON-Huawei batteries (Growatt/Sessy via the generic adapter)
+    # can sell to grid too, as long as a discharge-power entity is wired.
+    hass = _hass()
+    gen = GenericBatteryAdapter(hass, {
+        "battery_force_discharge_control_entity": "number.sessy_setpoint",
+        "battery_max_discharge_power": 3000,
+    })
+    assert gen.supports_forced_discharge is True
+    await actuate_battery(BatteryDecision(
+        battery_id="b", intent=BatteryIntent.FORCE_DISCHARGE,
+        discharge_power_w=5000, floor_soc=50.0,  # clamps to 3000 max
+    ), gen)
+    args = hass.services.async_call.await_args.args
+    assert args[0] == "number" and args[2]["entity_id"] == "number.sessy_setpoint"
+    assert args[2]["value"] == 3000  # clamped to max discharge
+
+
+@pytest.mark.asyncio
+async def test_generic_normal_zeroes_force_discharge():
+    hass = _hass()
+    gen = GenericBatteryAdapter(hass, {
+        "battery_force_discharge_control_entity": "number.sessy_setpoint",
+        "battery_max_discharge_power": 3000,
+    })
+    await gen.command_force_discharge(2000, 50.0)
+    hass.services.async_call.reset_mock()
+    await gen.command_normal()
+    wrote_zero = any(
+        c.args[2].get("entity_id") == "number.sessy_setpoint"
+        and c.args[2].get("value") == 0.0
+        for c in hass.services.async_call.await_args_list
+    )
+    assert wrote_zero

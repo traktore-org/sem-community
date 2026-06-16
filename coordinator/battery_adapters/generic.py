@@ -51,10 +51,12 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         return bool(self._force_charge_switch and self._target_soc_entity)
 
     async def command_normal(self) -> None:
+        await self._write_force_discharge(0.0)  # #523 mutual exclusion
         await self._apply_discharge_limit(self._max_discharge_w)
         self._last_intent = BatteryIntent.NORMAL
 
     async def command_limit_discharge(self, watts: float) -> None:
+        await self._write_force_discharge(0.0)  # #523 mutual exclusion
         watts = max(0.0, min(watts, self._max_discharge_w))
         if (self._last_discharge_limit_w >= 0
                 and abs(watts - self._last_discharge_limit_w) < 100.0):
@@ -66,6 +68,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
     async def command_force_charge(
         self, target_soc: float, charge_power_w: float, duration_min: int,
     ) -> None:
+        await self._write_force_discharge(0.0)  # #523 mutual exclusion
         if self._charge_adapter is None:
             _LOGGER.warning(
                 "GenericBatteryAdapter: no forced-charge backend — "
@@ -82,6 +85,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
+        await self._write_force_discharge(0.0)  # #523 mutual exclusion
         if self._charge_adapter is not None:
             await self._charge_adapter.stop_forced_charge()
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
