@@ -1059,6 +1059,9 @@ class SEMEVStatusCard extends SEMLitBase {
                 display: flex;
                 justify-content: space-between;
                 align-items: baseline;
+                gap: 8px;            /* #523/#524 follow-up: keep label + value
+                                        apart when the column shrink-wraps in
+                                        the centered hero ("StatusDisconnected") */
                 padding: 2px 0;
             }
             .metric-label {

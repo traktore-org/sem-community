@@ -485,11 +485,22 @@ class SEMBatteryCard extends SEMLitBase {
                                     style="stroke-dashoffset:${arcOffset};stroke:${arcColor};animation:${arcAnim}"/>
                             </svg>
                             <div class="ring-center">
-                                <svg class="battery-icon" width="16" height="22" viewBox="0 0 20 30"
-                                    fill="none" stroke="#4db6ac" stroke-width="1.8" opacity="0.7">
-                                    <rect x="2" y="4" width="16" height="26" rx="3"/>
-                                    <rect x="6" y="0" width="8" height="5" rx="2"
-                                        fill="#4db6ac" opacity="0.5" stroke="none"/>
+                                <!-- #523/#524 follow-up: filled SOC-level
+                                     battery glyph matching the system card
+                                     (was a flat outline). Fills bottom-up to
+                                     SOC, tints with the arc colour, and shows a
+                                     charging bolt. -->
+                                <svg class="battery-icon" width="18" height="26" viewBox="0 0 20 30">
+                                    <rect x="6" y="0" width="8" height="4" rx="1.5"
+                                        fill="${arcColor}" opacity="0.7"/>
+                                    <rect x="2" y="4" width="16" height="26" rx="3"
+                                        fill="rgba(0,0,0,0.30)" stroke="${arcColor}"
+                                        stroke-width="1.6" opacity="0.9"/>
+                                    <rect x="4" y="${(28 - 22 * pct).toFixed(1)}" width="12"
+                                        height="${(22 * pct).toFixed(1)}" rx="1.5"
+                                        fill="${arcColor}" opacity="0.55"/>
+                                    <path d="M11,9.5 L6.5,18.5 L9.5,18.5 L8.5,24.5 L13.5,15 L10.5,15 Z"
+                                        fill="#FCD170" opacity="${isCharging ? 0.95 : 0}"/>
                                 </svg>
                                 <div class="soc-value" style="color:${arcColor}">
                                     ${soc.toFixed(0)}%

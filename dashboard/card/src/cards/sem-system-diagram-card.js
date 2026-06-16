@@ -1076,16 +1076,16 @@ class SEMSystemDiagramCard extends SEMLitBase {
                       stroke="rgba(0,0,0,0.35)" stroke-width="${1.2*s}"/>
             `)}
 
-            <text x="${cx}" y="${cy + 4*s}"
+            <text x="${cx}" y="${showBolt ? cy + 15*s : cy + 4*s}"
                   text-anchor="middle" font-family="'Segoe UI','Roboto',sans-serif"
                   font-size="${14*s}" font-weight="900" fill="#fff"
                   stroke="rgba(0,0,0,0.6)" stroke-width="${1.5*s}" paint-order="stroke">${socPct.toFixed(0)}%</text>
 
             ${showBolt ? svg`
                 <g>
-                    <path d="M${cx - 4*s},${cy - 8*s} L${cx - 7*s},${cy + 2*s} L${cx - 1*s},${cy + 2*s}
-                             L${cx - 1*s},${cy + 10*s} L${cx + 6*s},${cy - 2*s} L${cx + 1*s},${cy - 2*s} Z"
-                          fill="#FCD170" opacity="0.9"/>
+                    <path d="M${cx - 4*s},${(cy - 9*s) - 8*s} L${cx - 7*s},${(cy - 9*s) + 2*s} L${cx - 1*s},${(cy - 9*s) + 2*s}
+                             L${cx - 1*s},${(cy - 9*s) + 10*s} L${cx + 6*s},${(cy - 9*s) - 2*s} L${cx + 1*s},${(cy - 9*s) - 2*s} Z"
+                          fill="#FCD170" opacity="0.95"/>
                 </g>
             ` : nothing}
 

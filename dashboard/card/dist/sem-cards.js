@@ -1393,7 +1393,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     </div>
                 </div>
             </div>
-        `}render(){if(!this._hass||!this._config)return K;const t=this._theme(),e=2*Math.PI*42,i=e.toFixed(1),s=this._val("battery_soc",0),r=this._val("battery_power",0),a=this._val("battery_charge_power",0),o=this._val("battery_discharge_power",0),n=this._valStr("battery_status"),l=this._val("battery_health_score",0),c=this._val("battery_cycles_estimated",0),d=this._val("daily_battery_charge_energy",0),p=this._val("daily_battery_discharge_energy",0),h=this._val("daily_battery_savings",0),_=this._val("monthly_battery_charge_energy",0),g=this._val("monthly_battery_discharge_energy",0),u=this._val("flow_solar_to_battery_energy",0),f=ut(this._hass),m=this._hass?.states[`${this._prefix}battery_temperature`],v=m&&"unavailable"!==m.state&&"unknown"!==m.state?parseFloat(m.state):null,y="charging"===n||a>10,x="discharging"===n||o>10,b=y?this._t("charging"):x?this._t("discharging"):this._t("idle"),$=y?"#f06292":"#4db6ac",w=y?"#f06292":x?"#4db6ac":t.textSec||"#888",k=y||x?"0.5":"0.2",S=y||x?"socPulse 2s ease-in-out infinite":"none",C=(e*(1-Math.min(Math.max(s/100,0),1))).toFixed(1),E=d>0?Math.round(u/d*100):0,z=this._valStr("battery_session_type"),M="charge"===z||"discharge"===z,D="charge"===z,F=M?this._val("battery_session_energy",0):0,I=M?this._val("battery_session_duration",0):0,T=M?this._val("battery_session_avg_power",0):0,A=M?this._val("battery_session_solar_share",0):0,N=M?this._val("battery_session_cost",0):0,R=M?this._val("battery_session_savings",0):0,O=D?"#f06292":"#4db6ac";t.dotColor;const P=t.surface||"rgba(255,255,255,0.06)",B=t.surfaceBorder||"rgba(255,255,255,0.05)",L=t.surfaceHover||"rgba(255,255,255,0.12)",H=t.textSec||"#999",U=t.textTertiary||"#888";return W`
+        `}render(){if(!this._hass||!this._config)return K;const t=this._theme(),e=2*Math.PI*42,i=e.toFixed(1),s=this._val("battery_soc",0),r=this._val("battery_power",0),a=this._val("battery_charge_power",0),o=this._val("battery_discharge_power",0),n=this._valStr("battery_status"),l=this._val("battery_health_score",0),c=this._val("battery_cycles_estimated",0),d=this._val("daily_battery_charge_energy",0),p=this._val("daily_battery_discharge_energy",0),h=this._val("daily_battery_savings",0),_=this._val("monthly_battery_charge_energy",0),g=this._val("monthly_battery_discharge_energy",0),u=this._val("flow_solar_to_battery_energy",0),f=ut(this._hass),m=this._hass?.states[`${this._prefix}battery_temperature`],v=m&&"unavailable"!==m.state&&"unknown"!==m.state?parseFloat(m.state):null,y="charging"===n||a>10,x="discharging"===n||o>10,b=y?this._t("charging"):x?this._t("discharging"):this._t("idle"),$=y?"#f06292":"#4db6ac",w=y?"#f06292":x?"#4db6ac":t.textSec||"#888",k=y||x?"0.5":"0.2",S=y||x?"socPulse 2s ease-in-out infinite":"none",C=Math.min(Math.max(s/100,0),1),E=(e*(1-C)).toFixed(1),z=d>0?Math.round(u/d*100):0,M=this._valStr("battery_session_type"),D="charge"===M||"discharge"===M,F="charge"===M,I=D?this._val("battery_session_energy",0):0,T=D?this._val("battery_session_duration",0):0,A=D?this._val("battery_session_avg_power",0):0,N=D?this._val("battery_session_solar_share",0):0,R=D?this._val("battery_session_cost",0):0,O=D?this._val("battery_session_savings",0):0,P=F?"#f06292":"#4db6ac";t.dotColor;const B=t.surface||"rgba(255,255,255,0.06)",L=t.surfaceBorder||"rgba(255,255,255,0.05)",H=t.surfaceHover||"rgba(255,255,255,0.12)",U=t.textSec||"#999",j=t.textTertiary||"#888";return W`
             <style>
                 :host { display: block; contain: layout style paint; }
                 .wrap {
@@ -1437,30 +1437,30 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 .metric-row {
                     display: flex; justify-content: space-between; align-items: baseline; padding: 2px 0; gap: 8px;
                 }
-                .metric-label { font-size: 12px; color: var(--secondary-text-color, ${H}); font-weight: 500; }
+                .metric-label { font-size: 12px; color: var(--secondary-text-color, ${U}); font-weight: 500; }
                 .metric-val { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #4db6ac; }
                 .chips { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
                 .chip {
                     flex: 1; min-width: 80px;
-                    background: var(--secondary-background-color, ${P});
-                    border: 1px solid var(--divider-color, ${B});
+                    background: var(--secondary-background-color, ${B});
+                    border: 1px solid var(--divider-color, ${L});
                     border-radius: 10px; padding: 8px 10px; text-align: center;
                     transition: border-color 0.3s cubic-bezier(0.4,0,0.2,1);
                 }
-                .chip:hover { border-color: var(--divider-color, ${L}); }
+                .chip:hover { border-color: var(--divider-color, ${H}); }
                 .chip-label {
-                    font-size: 11px; color: var(--secondary-text-color, ${U});
+                    font-size: 11px; color: var(--secondary-text-color, ${j});
                     font-weight: 500; letter-spacing: 0.3px; margin-bottom: 3px;
                 }
                 .chip-value { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
                 .c-charge { color: #f06292; }
                 .c-discharge { color: #4db6ac; }
                 .c-savings { color: #8DC892; }
-                .chip-src { font-size: 10px; color: var(--secondary-text-color, ${U}); margin-top: 1px; }
+                .chip-src { font-size: 10px; color: var(--secondary-text-color, ${j}); margin-top: 1px; }
                 .session-section {
                     margin-top: 14px; padding: 10px 12px;
-                    background: var(--secondary-background-color, ${P});
-                    border: 1px solid var(--divider-color, ${B});
+                    background: var(--secondary-background-color, ${B});
+                    border: 1px solid var(--divider-color, ${L});
                     border-radius: 10px;
                 }
                 .sess-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -1469,7 +1469,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     text-transform: uppercase; letter-spacing: 0.5px;
                 }
                 .sess-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
-                .sess-item-label { font-size: 11px; color: var(--secondary-text-color, ${U}); }
+                .sess-item-label { font-size: 11px; color: var(--secondary-text-color, ${j}); }
                 .sess-item-value {
                     font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
                     color: var(--primary-text-color, ${t.text||"#e0e0e0"});
@@ -1486,8 +1486,8 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     gap: 12px;
                 }
                 .battery-section {
-                    background: ${P};
-                    border: 1px solid ${B};
+                    background: ${B};
+                    border: 1px solid ${L};
                     border-radius: 12px;
                     padding: 12px 14px;
                 }
@@ -1516,7 +1516,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
                 .battery-section-soc-label {
                     display: block;
-                    font-size: 10px; color: ${H};
+                    font-size: 10px; color: ${U};
                     margin-top: 2px;
                     text-transform: uppercase; letter-spacing: 0.05em;
                 }
@@ -1529,7 +1529,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     padding: 2px 0;
                 }
                 .bs-label {
-                    font-size: 11px; color: ${H};
+                    font-size: 11px; color: ${U};
                     font-weight: 500;
                 }
                 .bs-val {
@@ -1549,8 +1549,8 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 }
                 .month-chip {
                     flex: 1; text-align: center; padding: 6px 8px;
-                    background: var(--secondary-background-color, ${P});
-                    border: 1px solid var(--divider-color, ${B});
+                    background: var(--secondary-background-color, ${B});
+                    border: 1px solid var(--divider-color, ${L});
                     border-radius: 8px;
                 }
             </style>
@@ -1580,14 +1580,25 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                                 <circle class="ring-bg" cx="50" cy="50" r="42"/>
                                 <circle class="soc-arc" cx="50" cy="50" r="42"
                                     stroke-dasharray="${i}"
-                                    style="stroke-dashoffset:${C};stroke:${$};animation:${S}"/>
+                                    style="stroke-dashoffset:${E};stroke:${$};animation:${S}"/>
                             </svg>
                             <div class="ring-center">
-                                <svg class="battery-icon" width="16" height="22" viewBox="0 0 20 30"
-                                    fill="none" stroke="#4db6ac" stroke-width="1.8" opacity="0.7">
-                                    <rect x="2" y="4" width="16" height="26" rx="3"/>
-                                    <rect x="6" y="0" width="8" height="5" rx="2"
-                                        fill="#4db6ac" opacity="0.5" stroke="none"/>
+                                <!-- #523/#524 follow-up: filled SOC-level
+                                     battery glyph matching the system card
+                                     (was a flat outline). Fills bottom-up to
+                                     SOC, tints with the arc colour, and shows a
+                                     charging bolt. -->
+                                <svg class="battery-icon" width="18" height="26" viewBox="0 0 20 30">
+                                    <rect x="6" y="0" width="8" height="4" rx="1.5"
+                                        fill="${$}" opacity="0.7"/>
+                                    <rect x="2" y="4" width="16" height="26" rx="3"
+                                        fill="rgba(0,0,0,0.30)" stroke="${$}"
+                                        stroke-width="1.6" opacity="0.9"/>
+                                    <rect x="4" y="${(28-22*C).toFixed(1)}" width="12"
+                                        height="${(22*C).toFixed(1)}" rx="1.5"
+                                        fill="${$}" opacity="0.55"/>
+                                    <path d="M11,9.5 L6.5,18.5 L9.5,18.5 L8.5,24.5 L13.5,15 L10.5,15 Z"
+                                        fill="#FCD170" opacity="${y?.95:0}"/>
                                 </svg>
                                 <div class="soc-value" style="color:${$}">
                                     ${s.toFixed(0)}%
@@ -1642,36 +1653,36 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     <div class="session-section">
                         <div class="sess-header">
                             <ha-icon icon="mdi:battery-sync"
-                                style="--mdc-icon-size:14px;color:${M?O:t.textSec}">
+                                style="--mdc-icon-size:14px;color:${D?P:t.textSec}">
                             </ha-icon>
-                            <span class="sess-title" style="color:${M?O:t.textSec}">
+                            <span class="sess-title" style="color:${D?P:t.textSec}">
                                 ${this._t("current_session")}
                             </span>
                         </div>
-                        ${M?W`
+                        ${D?W`
                         <div class="sess-grid">
                             <div>
                                 <div class="sess-item-label">${this._t("energy")}</div>
-                                <div class="sess-item-value">${this._fmt(F,2)} kWh</div>
+                                <div class="sess-item-value">${this._fmt(I,2)} kWh</div>
                             </div>
                             <div>
                                 <div class="sess-item-label">${this._t("duration")}</div>
-                                <div class="sess-item-value">${this._fmtDuration(I)}</div>
+                                <div class="sess-item-value">${this._fmtDuration(T)}</div>
                             </div>
                             <div>
                                 <div class="sess-item-label">${this._t("avg_power")}</div>
-                                <div class="sess-item-value">${ht(T)}</div>
+                                <div class="sess-item-value">${ht(A)}</div>
                             </div>
                             <div>
                                 <div class="sess-item-label">${this._t("source")}</div>
                                 <div class="sess-item-value">
-                                    ${D?`${this._t("solar")}: ${this._fmt(A,0)}%`:""}
+                                    ${F?`${this._t("solar")}: ${this._fmt(N,0)}%`:""}
                                 </div>
                             </div>
                             <div>
                                 <div class="sess-item-label">${this._t("cost")}</div>
                                 <div class="sess-item-value">
-                                    ${D?`${this._fmt(N,2)} ${f}`:`${this._t("saved")} ${this._fmt(R,2)} ${f}`}
+                                    ${F?`${this._fmt(R,2)} ${f}`:`${this._t("saved")} ${this._fmt(O,2)} ${f}`}
                                 </div>
                             </div>
                         </div>
@@ -1683,7 +1694,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                             <div class="chip-label">${this._t("charge_today")}</div>
                             <div class="chip-value c-charge">${this._fmt(d,2)} kWh</div>
                             <div class="chip-src">
-                                ${E>0?`${E}% ${this._t("solar")}`:""}
+                                ${z>0?`${z}% ${this._t("solar")}`:""}
                             </div>
                         </div>
                         <div class="chip">
@@ -3244,6 +3255,9 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 display: flex;
                 justify-content: space-between;
                 align-items: baseline;
+                gap: 8px;            /* #523/#524 follow-up: keep label + value
+                                        apart when the column shrink-wraps in
+                                        the centered hero ("StatusDisconnected") */
                 padding: 2px 0;
             }
             .metric-label {
@@ -4833,16 +4847,16 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                       stroke="rgba(0,0,0,0.35)" stroke-width="${1.2*l}"/>
             `)}
 
-            <text x="${t}" y="${e+4*l}"
+            <text x="${t}" y="${o?e+15*l:e+4*l}"
                   text-anchor="middle" font-family="'Segoe UI','Roboto',sans-serif"
                   font-size="${14*l}" font-weight="900" fill="#fff"
                   stroke="rgba(0,0,0,0.6)" stroke-width="${1.5*l}" paint-order="stroke">${n.toFixed(0)}%</text>
 
             ${o?j`
                 <g>
-                    <path d="M${t-4*l},${e-8*l} L${t-7*l},${e+2*l} L${t-1*l},${e+2*l}
-                             L${t-1*l},${e+10*l} L${t+6*l},${e-2*l} L${t+1*l},${e-2*l} Z"
-                          fill="#FCD170" opacity="0.9"/>
+                    <path d="M${t-4*l},${e-9*l-8*l} L${t-7*l},${e-9*l+2*l} L${t-1*l},${e-9*l+2*l}
+                             L${t-1*l},${e-9*l+10*l} L${t+6*l},${e-9*l-2*l} L${t+1*l},${e-9*l-2*l} Z"
+                          fill="#FCD170" opacity="0.95"/>
                 </g>
             `:K}
 
