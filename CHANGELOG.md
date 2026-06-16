@@ -13,11 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.21] - 16.06.2026
+
 ## 🎨 Dashboard polish — battery glyph + EV status spacing
 
-- **System diagram: the charging bolt no longer sits on top of the SOC number** — when the battery was charging, the ⚡ was drawn centred over the "58%", making it hard to read. The bolt now sits in the upper part of the battery and the percentage drops just below it, so both are clearly legible (by @RienduPre)
-- **Battery card now shows the filled battery glyph** — the small icon in the SOC ring was a flat outline; it is now a filled, SOC-level battery (tinted with the charge/discharge colour, with a charging bolt) matching the system diagram (by @RienduPre)
-- **EV card: "Status" label and value no longer touch** — in the centred hero the row shrink-wrapped so it read "StatusDisconnected"; a minimum gap keeps the label and value apart (by @RienduPre)
+- **System diagram: the charging bolt no longer sits on top of the SOC number** — when the battery was charging, the ⚡ was drawn centred over the "58%", making it hard to read. The bolt now sits in the upper part of the battery and the percentage drops just below it, so both are clearly legible.
+- **Battery card now shows the filled battery glyph** — the small icon in the SOC ring was a flat outline; it is now a filled, SOC-level battery (tinted with the charge/discharge colour, with a charging bolt) matching the system diagram.
+- **EV card: "Status" label and value no longer touch** — in the centred hero the row shrink-wrapped so it read "StatusDisconnected"; a minimum gap keeps the label and value apart.
 
 # [1.7.3-beta.20] - 15.06.2026
 
