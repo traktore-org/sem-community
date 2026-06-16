@@ -1183,13 +1183,27 @@ class DynamicTariffProvider(TariffProvider):
         return self._read_current_price()
 
     def get_current_export_rate(self) -> float:
-        """Read export rate from feed-in entity if available, else static."""
+        """Read export rate from feed-in entity if available, else static.
+
+        The value is SIGNED (#523): on a dynamic/spot feed-in tariff the
+        export price follows EPEX and is regularly NEGATIVE — meaning you
+        *pay* to export. The old ``abs()`` turned that cost into a credit,
+        which both mis-stated revenue and hid the signal SEM needs to stop
+        exporting (curtail / self-consume) when export is negative. The
+        configured static ``export_rate`` is a credit and stays as-is.
+        """
         if self._feedin_entity:
             state = self.hass.states.get(self._feedin_entity)
             if state and state.state not in ("unknown", "unavailable"):
                 try:
-                    # Feed-in prices may be negative (= earning), take abs
-                    return abs(float(state.state))
+                    val = float(state.state)
+                    # Amber's feed-in channel is sign-inverted (a NEGATIVE
+                    # value means you EARN); preserve the legacy abs() for
+                    # auto-detected Amber so those installs don't regress.
+                    # Every other dynamic provider (EPEX / Tibber / Nord
+                    # Pool) reports the signed spot price directly, where
+                    # negative means you PAY to export — SEM must see that.
+                    return abs(val) if self._provider_name == "amber" else val
                 except (ValueError, TypeError):
                     pass
         return self.export_rate

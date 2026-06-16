@@ -428,8 +428,8 @@ class TestAmberElectricProvider:
 
     # ── Dynamic export rate from feed-in sensor ──
 
-    def test_dynamic_export_rate_from_feedin(self, mock_hass):
-        """Export rate read from feed-in entity (abs of negative value)."""
+    def test_dynamic_export_rate_amber_abs(self, mock_hass):
+        """Auto-detected Amber keeps its sign-inverted abs() (#523)."""
         def mock_get(entity_id):
             if entity_id == "sensor.amber_general_price":
                 return self._amber_price_state(0.28)
@@ -440,7 +440,22 @@ class TestAmberElectricProvider:
         mock_hass.states.get = MagicMock(side_effect=mock_get)
         provider = DynamicTariffProvider(mock_hass, price_entity="sensor.amber_general_price")
         provider._feedin_entity = "sensor.amber_feed_in_price"
+        provider._provider_name = "amber"  # auto-detected Amber
         assert provider.get_current_export_rate() == pytest.approx(0.08)
+
+    def test_dynamic_export_rate_signed_for_spot(self, mock_hass):
+        """#523: a non-Amber (Tibber/EPEX) feed-in price stays SIGNED — a
+        negative spot export price is a cost, not abs()'d into a credit."""
+        def mock_get(entity_id):
+            if "feed_in" in entity_id:
+                return _make_price_state(-0.15)
+            return self._amber_price_state(0.28)
+
+        mock_hass.states.get = MagicMock(side_effect=mock_get)
+        provider = DynamicTariffProvider(mock_hass, price_entity="sensor.tibber_price")
+        provider._feedin_entity = "sensor.tibber_feed_in_price"
+        # configured price entity → provider stays "custom" (not amber)
+        assert provider.get_current_export_rate() == pytest.approx(-0.15)
 
     def test_dynamic_export_rate_positive_feedin(self, mock_hass):
         """Feed-in price that's already positive."""
