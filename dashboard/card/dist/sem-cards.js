@@ -1361,33 +1361,59 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     ${null!=t?Math.round(i)+"%":"—"}
                 </text>
             </svg>
-        `}_renderBatterySection(t,e){const i=Wt[e%Wt.length],s=this._val(`battery_${t}_power`,0),r=this._val(`battery_${t}_soc`,null),a=this._valStr(`battery_${t}_status`)||"idle",o=this._val(`battery_${t}_capacity_kwh`,0),n=this._batteryName(t),l="charging"===a?"charging":"discharging"===a?"discharging":"idle";return W`
+        `}_renderBatteryGlyph(t,e,i){const s=null!=t?Math.max(0,Math.min(100,t)):0,r=Math.max(2,s/100*52),a=i?"socPulse 2s ease-in-out infinite":"none";return W`
+            <svg viewBox="0 0 44 76" width="40" height="69">
+                <rect x="14" y="0" width="16" height="5" rx="2" fill="rgba(255,255,255,0.15)"/>
+                <rect x="6" y="4" width="32" height="60" rx="4"
+                    fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2"/>
+                <rect x="9" y="${(52-r+7).toFixed(1)}" width="26"
+                    height="${r.toFixed(1)}" rx="2"
+                    fill="${e}" opacity="0.78" style="animation:${a}"/>
+                <text x="22" y="40" text-anchor="middle"
+                    fill="white" font-size="13" font-weight="700"
+                    font-family="'Segoe UI','Roboto',sans-serif" opacity="0.95">
+                    ${null!=t?Math.round(s)+"%":"—"}
+                </text>
+            </svg>
+        `}_fmtHours(t){if(null==t||!isFinite(t)||t<=0)return"—";if(t<1)return`${Math.round(60*t)} min`;const e=Math.floor(t),i=Math.round(60*(t-e));return 0===i?`${e} h`:`${e} h ${i} min`}_batteryEta(t,e,i){if(null==t||e<=0||Math.abs(i)<50)return null;if(i>50){const s=(100-t)/100*e;return{key:"until_full",text:this._fmtHours(s/(i/1e3))}}const s=t/100*e;return{key:"until_empty",text:this._fmtHours(s/(Math.abs(i)/1e3))}}_renderBatterySection(t,e){const i=Wt[e%Wt.length],s=this._val(`battery_${t}_power`,0),r=this._val(`battery_${t}_soc`,null),a=(this._valStr(`battery_${t}_status`)||"idle").toLowerCase(),o=this._val(`battery_${t}_capacity_kwh`,0),n=this._batteryName(t),l="selling"===a,c=!l&&("charging"===a||s>50),d=!l&&("discharging"===a||s<-50),p=c||d||l,h=l?"selling_to_grid":c?"charging":d?"discharging":"idle",_=l?"#FCD170":c?"#f06292":d?"#4db6ac":"#999",g=null!=r&&o>0?r/100*o:null,u=this._batteryEta(r,o,s);return W`
             <div class="battery-section">
                 <div class="battery-section-header">
                     <div class="battery-dot" style="background:${i}"></div>
                     <span class="battery-section-name">${n}</span>
                     <span class="battery-section-status"
-                          style="color:${"charging"===a?"#f06292":"discharging"===a?"#4db6ac":"#999"}">
-                        ${this._t(l)}
+                          style="color:${_}">
+                        ${this._t(h)}
                     </span>
                 </div>
                 <div class="battery-section-body">
-                    <div class="battery-section-ring">
-                        ${this._renderMiniSocRing(r,i)}
+                    <div class="battery-section-glyph">
+                        ${this._renderBatteryGlyph(r,_,p)}
                         <span class="battery-section-soc-label">SOC</span>
                     </div>
                     <div class="battery-section-metrics">
                         <div class="bs-row">
                             <span class="bs-label">${this._t("power")}</span>
                             <span class="bs-val"
-                                  style="color:${s>50||s<-50?i:""}">
+                                  style="color:${s>50||s<-50?_:""}">
                                 ${ht(s)}
                             </span>
                         </div>
+                        ${null!=g?W`
+                            <div class="bs-row">
+                                <span class="bs-label">${this._t("stored")}</span>
+                                <span class="bs-val">${this._fmt(g,1)} kWh</span>
+                            </div>
+                        `:K}
                         ${o>0?W`
                             <div class="bs-row">
                                 <span class="bs-label">${this._t("capacity")}</span>
                                 <span class="bs-val">${this._fmt(o,1)} kWh</span>
+                            </div>
+                        `:K}
+                        ${u?W`
+                            <div class="bs-row">
+                                <span class="bs-label">${this._t(u.key)}</span>
+                                <span class="bs-val">${u.text}</span>
                             </div>
                         `:K}
                     </div>
@@ -1514,6 +1540,9 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 .battery-section-ring {
                     flex-shrink: 0; width: 56px; text-align: center;
                 }
+                .battery-section-glyph {
+                    flex-shrink: 0; width: 44px; text-align: center;
+                }
                 .battery-section-soc-label {
                     display: block;
                     font-size: 10px; color: ${Y};
@@ -1546,6 +1575,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         align-items: stretch;
                     }
                     .battery-section-ring { margin: 0 auto; }
+                    .battery-section-glyph { margin: 0 auto; }
                 }
                 .month-chip {
                     flex: 1; text-align: center; padding: 6px 8px;

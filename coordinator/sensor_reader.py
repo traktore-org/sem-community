@@ -2019,12 +2019,19 @@ class SensorReader:
 
         soc_keywords = ["soc", "state_of_charge", "batterieladung", "battery_level", "charge_level"]
 
-        # Strategy 1: Prefix-based matching (fast path)
+        # Strategy 1: Prefix-based matching (fast path). Try progressively
+        # SHORTER stems, longest first, so an indexed device like
+        # ``test_battery_2_power`` matches ``sensor.test_battery_2_soc``
+        # (stem ``test_battery_2``) before falling back to the 2-part
+        # ``battery_1`` prefix that finds Huawei's
+        # ``sensor.battery_1_batterieladung``. The 2-part-only heuristic
+        # missed any ``<vendor>_<name>_<index>_power`` battery (#523 —
+        # per-battery tiles showed 0% SOC on multi-battery installs).
         entity_name = battery_power_entity.split(".", 1)[1]
         parts = entity_name.split("_")
 
-        if len(parts) >= 2:
-            prefix = "_".join(parts[:2])
+        for k in range(len(parts), 1, -1):
+            prefix = "_".join(parts[:k])
             result = self._try_soc_candidates(prefix, soc_keywords)
             if result:
                 return result

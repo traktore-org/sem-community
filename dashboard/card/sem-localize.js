@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-16T10:04:17.052378+00:00
+// Generated: 2026-06-16T13:24:35.051630+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1079,7 +1079,10 @@
       "config_force_discharge_entity": "Forcible-discharge power entity",
       "config_help_force_discharge_entity": "The number entity that sets your inverter’s forcible battery-to-grid discharge power (e.g. the Huawei “Forcible discharge power”). Required for arbitrage to actuate.",
       "selling_to_grid": "Selling to grid",
-      "selling": "Selling"
+      "selling": "Selling",
+      "stored": "Stored",
+      "until_full": "Until full",
+      "until_empty": "Until empty"
     },
     "de": {
       "charging": "Laden",
@@ -2155,7 +2158,10 @@
       "config_force_discharge_entity": "Entität für erzwungene Entladeleistung",
       "config_help_force_discharge_entity": "Die Number-Entität, die die erzwungene Batterie-ins-Netz-Entladeleistung deines Wechselrichters setzt (z. B. Huawei „Erzwungene Entladeleistung“). Für die Arbitrage erforderlich.",
       "selling_to_grid": "Verkauf ans Netz",
-      "selling": "Verkauf"
+      "selling": "Verkauf",
+      "stored": "Gespeichert",
+      "until_full": "Bis voll",
+      "until_empty": "Bis leer"
     },
     "fr": {
       "charging": "En charge",
@@ -3206,7 +3212,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Stocké",
+      "until_full": "Jusqu'à plein",
+      "until_empty": "Jusqu'à vide"
     },
     "es": {
       "charging": "Cargando",
@@ -4257,7 +4266,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Almacenado",
+      "until_full": "Hasta lleno",
+      "until_empty": "Hasta vacío"
     },
     "it": {
       "charging": "In carica",
@@ -5308,7 +5320,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Immagazzinato",
+      "until_full": "Alla carica",
+      "until_empty": "Allo scarico"
     },
     "nl": {
       "charging": "Laden",
@@ -6345,7 +6360,10 @@
       "hot_water_temperature_safety_path": "Temperatuurveiligheidspad",
       "hot_water_activation_path": "Activeringspad",
       "selling_to_grid": "Verkoop aan net",
-      "selling": "Verkoop"
+      "selling": "Verkoop",
+      "stored": "Opgeslagen",
+      "until_full": "Tot vol",
+      "until_empty": "Tot leeg"
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7396,7 +7414,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Uloženo",
+      "until_full": "Do plného",
+      "until_empty": "Do prázdného"
     },
     "da": {
       "charging": "Oplader",
@@ -8447,7 +8468,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Lagret",
+      "until_full": "Til fuld",
+      "until_empty": "Til tom"
     },
     "fi": {
       "charging": "Lataus",
@@ -9498,7 +9522,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Varastoitu",
+      "until_full": "Täyteen",
+      "until_empty": "Tyhjäksi"
     },
     "hu": {
       "charging": "Töltés",
@@ -10549,7 +10576,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Tárolt",
+      "until_full": "Feltöltésig",
+      "until_empty": "Lemerülésig"
     },
     "no": {
       "charging": "Lader",
@@ -11600,7 +11630,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Lagret",
+      "until_full": "Til fullt",
+      "until_empty": "Til tomt"
     },
     "pl": {
       "charging": "Ładowanie",
@@ -12651,7 +12684,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Zmagazynowane",
+      "until_full": "Do pełna",
+      "until_empty": "Do pusta"
     },
     "pt": {
       "charging": "A carregar",
@@ -13702,7 +13738,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Armazenado",
+      "until_full": "Até cheio",
+      "until_empty": "Até vazio"
     },
     "ro": {
       "charging": "Încărcare",
@@ -14753,7 +14792,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Stocat",
+      "until_full": "Până la plin",
+      "until_empty": "Până la gol"
     },
     "sv": {
       "charging": "Laddar",
@@ -15804,7 +15846,10 @@
       "hot_water_legionella_never_run": "Never run",
       "hot_water_temperature_reading_path": "Temperature reading path",
       "hot_water_temperature_safety_path": "Temperature safety path",
-      "hot_water_activation_path": "Activation path"
+      "hot_water_activation_path": "Activation path",
+      "stored": "Lagrat",
+      "until_full": "Tills fullt",
+      "until_empty": "Tills tomt"
     }
   };
 
