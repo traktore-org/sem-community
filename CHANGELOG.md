@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.22] - 16.06.2026
+
 ## 🔋💶 Dynamic export-price optimisation — sell the battery when export is high (#523)
 
 - **Signed export price.** On an EPEX/Tibber/Nord Pool dynamic contract the export price *is* the spot price and is regularly negative (you pay to export). SEM no longer `abs()`-es the feed-in price, so a negative export is correctly a cost — fixing export revenue/ROI and unlocking export-aware decisions. (Auto-detected Amber keeps its sign-inverted convention.)
