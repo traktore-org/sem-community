@@ -37,15 +37,37 @@ def adapter_for(hass, config: dict) -> BatteryControlAdapter:
     if platform == "generic":
         return GenericBatteryAdapter(hass, config)
 
-    # Auto-detect
+    # Auto-detect. Check BOTH legacy ``hass.data`` and loaded config
+    # entries — modern integrations (incl. recent huawei_solar) store
+    # state in ``entry.runtime_data`` and never populate ``hass.data``,
+    # so the old ``"huawei_solar" in hass.data`` check silently failed and
+    # a real Huawei battery fell back to the Generic adapter (no forcible-
+    # discharge service path → #523 force-discharge dropped).
     try:
-        if hass and "huawei_solar" in getattr(hass, "data", {}):
+        if _integration_loaded(hass, "huawei_solar"):
             return HuaweiBatteryAdapter(hass, config)
-        if hass and "goodwe" in getattr(hass, "data", {}):
+        if _integration_loaded(hass, "goodwe"):
             return GoodWeBatteryAdapter(hass, config)
     except (AttributeError, TypeError):
         pass
     return GenericBatteryAdapter(hass, config)
+
+
+def _integration_loaded(hass, domain: str) -> bool:
+    """True if ``domain`` is set up — robust to hass.data vs runtime_data."""
+    if not hass:
+        return False
+    if domain in getattr(hass, "data", {}):
+        return True
+    try:
+        entries = hass.config_entries.async_entries(domain)
+    except (AttributeError, TypeError):
+        return False
+    return any(
+        getattr(getattr(e, "state", None), "value", None) == "loaded"
+        or str(getattr(e, "state", "")) == "ConfigEntryState.LOADED"
+        for e in entries
+    )
 
 
 __all__ = [

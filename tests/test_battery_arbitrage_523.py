@@ -161,6 +161,90 @@ async def test_huawei_force_discharge_writes_entity():
     assert a.last_intent is BatteryIntent.FORCE_DISCHARGE
 
 
+def test_adapter_for_detects_huawei_via_config_entries():
+    # Modern huawei_solar uses runtime_data, not hass.data — adapter_for
+    # must still detect it through loaded config entries (#523 real-hardware).
+    from custom_components.solar_energy_management.coordinator.battery_adapters import (
+        adapter_for, HuaweiBatteryAdapter,
+    )
+    hass = MagicMock()
+    hass.data = {}  # legacy hass.data check must fail
+    entry = MagicMock()
+    entry.state = MagicMock()
+    entry.state.value = "loaded"
+    hass.config_entries.async_entries.return_value = [entry]
+    assert isinstance(adapter_for(hass, {}), HuaweiBatteryAdapter)
+
+
+@pytest.mark.asyncio
+async def test_huawei_service_force_discharge_no_number_entity():
+    # Real Huawei has NO forcible-discharge number entity — it uses the
+    # huawei_solar.forcible_discharge_soc SERVICE (#523 hardware path).
+    hass = _hass()
+    a = HuaweiBatteryAdapter(hass, {
+        "inverter_device_id": "dev123",
+        "battery_max_discharge_power": 4000,
+    })
+    assert a.supports_forced_discharge is True  # device_id, no number entity
+    await a.command_force_discharge(3000, 30.0)  # power 3000, reserve 30%
+    call = hass.services.async_call.await_args
+    assert call.args[0] == "huawei_solar"
+    assert call.args[1] == "forcible_discharge_soc"
+    assert call.args[2]["device_id"] == "dev123"
+    assert call.args[2]["power"] == 3000
+    assert call.args[2]["target_soc"] == 30
+
+
+@pytest.mark.asyncio
+async def test_huawei_normal_after_forcible_stops_only_no_limit_write():
+    # Anti-block (RienduPre's LUNA2000 locks on back-to-back Modbus writes):
+    # exiting a forcible discharge must issue ONLY stop_forcible_charge and
+    # NOT also write the discharge-limit register in the same cycle.
+    hass = _hass()
+    a = HuaweiBatteryAdapter(hass, {
+        "inverter_device_id": "dev123", "battery_max_discharge_power": 4000,
+    })
+    await a.command_force_discharge(3000, 30.0)
+    hass.services.async_call.reset_mock()
+    await a.command_normal()
+    calls = hass.services.async_call.await_args_list
+    services = [(c.args[0], c.args[1]) for c in calls]
+    assert ("huawei_solar", "stop_forcible_charge") in services
+    # No number.set_value (discharge-limit register) in the SAME cycle.
+    assert ("number", "set_value") not in services
+
+
+@pytest.mark.asyncio
+async def test_huawei_force_discharge_issued_once_not_rehammered():
+    # Re-issuing forcible_discharge_soc every cycle blocks the inverter;
+    # while already discharging at ~the same power it must be a no-op.
+    hass = _hass()
+    a = HuaweiBatteryAdapter(hass, {
+        "inverter_device_id": "dev123", "battery_max_discharge_power": 4000,
+    })
+    await a.command_force_discharge(3000, 30.0)
+    hass.services.async_call.reset_mock()
+    await a.command_force_discharge(3000, 30.0)  # same power, next cycle
+    hass.services.async_call.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_huawei_service_normal_stops_forcible():
+    hass = _hass()
+    a = HuaweiBatteryAdapter(hass, {
+        "inverter_device_id": "dev123", "battery_max_discharge_power": 4000,
+    })
+    await a.command_force_discharge(3000, 30.0)
+    hass.services.async_call.reset_mock()
+    await a.command_normal()  # mutual exclusion → must stop the forced discharge
+    stopped = any(
+        c.args[0] == "huawei_solar" and c.args[1] == "stop_forcible_charge"
+        and c.args[2].get("device_id") == "dev123"
+        for c in hass.services.async_call.await_args_list
+    )
+    assert stopped
+
+
 @pytest.mark.asyncio
 async def test_huawei_normal_zeroes_force_discharge():
     hass = _hass()

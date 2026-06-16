@@ -3383,8 +3383,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # independently. Falls back to the global single-entity keys.
             adapter = self._battery_adapters.get(battery_id)
             if adapter is None:
-                adapter = adapter_for(self.hass, self._per_battery_config(batt_idx))
+                _pbc = self._per_battery_config(batt_idx)
+                adapter = adapter_for(self.hass, _pbc)
                 self._battery_adapters[battery_id] = adapter
+                _LOGGER.info(
+                    "Battery %s: %s (forced-discharge support=%s)",
+                    battery_id, type(adapter).__name__,
+                    getattr(adapter, "supports_forced_discharge", "n/a"),
+                )
 
             view = BatteryView(
                 runtime=runtime,
