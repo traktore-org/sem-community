@@ -99,7 +99,7 @@ Battery state and configuration.
 
 | Card | Description |
 |------|-------------|
-| **SOC Gauge** | Radial gauge showing current battery state of charge |
+| **SOC Gauge** | Radial gauge showing current battery state of charge. Turns **gold with a "Selling to grid" status + live export price** when SEM is exporting the battery for arbitrage (see [Battery export arbitrage](BATTERY_EXPORT_ARBITRAGE.md)) |
 | **Power Status** | Current charge/discharge power and daily energy totals |
 | **24h Battery Chart** | Charge/discharge power + SOC line over 24 hours |
 | **SOC Zone Config** | Sliders for priority, buffer, auto-start, and assist floor SOC levels |
