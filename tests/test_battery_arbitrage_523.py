@@ -198,6 +198,42 @@ async def test_generic_adapter_actuates_with_entity():
     assert args[2]["value"] == 3000  # clamped to max discharge
 
 
+_ALL_ADAPTERS = [
+    ("huawei", "coordinator.battery_adapters.huawei", "HuaweiBatteryAdapter"),
+    ("goodwe", "coordinator.battery_adapters.goodwe", "GoodWeBatteryAdapter"),
+    ("generic", "coordinator.battery_adapters.generic", "GenericBatteryAdapter"),
+]
+
+
+@pytest.mark.parametrize("name,mod,cls", _ALL_ADAPTERS)
+@pytest.mark.asyncio
+async def test_all_brand_adapters_can_sell_to_grid(name, mod, cls):
+    """#523: EVERY supported battery adapter sells to grid when a
+    forcible-discharge entity is wired, and stops cleanly on NORMAL."""
+    import importlib
+    Adapter = getattr(importlib.import_module(
+        f"custom_components.solar_energy_management.{mod}"), cls)
+    hass = _hass()
+    a = Adapter(hass, {
+        "battery_force_discharge_control_entity": "number.sell_power",
+        "battery_max_discharge_power": 4000,
+    })
+    assert a.supports_forced_discharge is True, f"{name} must support it"
+    await a.command_force_discharge(3000, 50.0)
+    assert any(
+        c.args[2].get("entity_id") == "number.sell_power"
+        and c.args[2].get("value") == 3000
+        for c in hass.services.async_call.await_args_list
+    ), f"{name} did not write the sell power"
+    hass.services.async_call.reset_mock()
+    await a.command_normal()  # any other mode must stop the sale
+    assert any(
+        c.args[2].get("entity_id") == "number.sell_power"
+        and c.args[2].get("value") == 0.0
+        for c in hass.services.async_call.await_args_list
+    ), f"{name} did not zero the sell power on NORMAL"
+
+
 @pytest.mark.asyncio
 async def test_generic_normal_zeroes_force_discharge():
     hass = _hass()
