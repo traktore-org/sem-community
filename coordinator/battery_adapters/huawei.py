@@ -41,6 +41,14 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         self._max_discharge_w = float(
             config.get("battery_max_discharge_power", 5000),
         )
+        # #523 Tier 3 — forced battery→grid discharge (arbitrage). The
+        # number entity that sets the LUNA forcible-discharge power
+        # (huawei_solar "Forcible discharge power"). Writing > 0 starts
+        # the sale; 0 stops it.
+        self._force_discharge_entity = config.get(
+            "battery_force_discharge_control_entity", "",
+        )
+        self._last_force_discharge_w: float = -1.0  # de-dup writes
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -56,17 +64,28 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
     def supports_forced_charge(self) -> bool:
         return True
 
+    @property
+    def supports_forced_discharge(self) -> bool:
+        # Only when the user has wired the forcible-discharge number;
+        # without it SEM has no way to command battery→grid (#523).
+        return bool(self._force_discharge_entity)
+
     # ─── Commands ──────────────────────────────────────────────
 
     async def command_normal(self) -> None:
         """Restore discharge to max — undoes any LIMIT_DISCHARGE
-        in effect. Idempotent: only writes if the limit differs."""
+        in effect. Idempotent: only writes if the limit differs.
+        Also zeroes any active forced discharge (#523) so NORMAL is a
+        true default state, not a silent continued battery→grid sale."""
+        await self._write_force_discharge(0.0)
         await self._apply_discharge_limit(self._max_discharge_w)
         self._last_intent = BatteryIntent.NORMAL
 
     async def command_limit_discharge(self, watts: float) -> None:
         """Apply the 1:1 home-consumption protection limit.
         Honours 100 W hysteresis to avoid log spam."""
+        # Forced discharge is mutually exclusive with limiting it (#523).
+        await self._write_force_discharge(0.0)
         # Clamp to [0, max]
         watts = max(0.0, min(watts, self._max_discharge_w))
         # Hysteresis (matches battery_protection.py:106-109)
@@ -81,6 +100,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         self, target_soc: float, charge_power_w: float, duration_min: int,
     ) -> None:
         """Delegate to HuaweiChargeAdapter.start_forced_charge."""
+        # Can't force-charge and force-discharge at once (#523).
+        await self._write_force_discharge(0.0)
         from ..battery_charge_adapter import ChargeCommand
         cmd = ChargeCommand(
             target_soc=target_soc,
@@ -91,10 +112,55 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         self._last_intent = BatteryIntent.FORCE_CHARGE
 
     async def command_stop_force_charge(self) -> None:
+        # STOP any forced op — also clears an arbitrage discharge (#523),
+        # so the scheduler's idle/target-reached verdict can't leave the
+        # battery silently selling to grid.
+        await self._write_force_discharge(0.0)
         await self._charge_adapter.stop_forced_charge()
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
 
+    async def command_force_discharge(
+        self, power_w: float, floor_soc: float,
+    ) -> None:
+        """Sell to the grid: set the LUNA forcible-discharge power
+        (#523). Clamped to the configured max discharge."""
+        watts = max(0.0, min(float(power_w), self._max_discharge_w))
+        await self._write_force_discharge(watts)
+        self._last_intent = BatteryIntent.FORCE_DISCHARGE
+
+    async def command_stop_force_discharge(self) -> None:
+        """Stop selling — zero the forcible-discharge power and return
+        the discharge limit to normal."""
+        await self._write_force_discharge(0.0)
+        await self._apply_discharge_limit(self._max_discharge_w)
+        self._last_intent = BatteryIntent.STOP_FORCE_DISCHARGE
+
     # ─── Helpers ───────────────────────────────────────────────
+
+    async def _write_force_discharge(self, watts: float) -> None:
+        if not self._force_discharge_entity:
+            return
+        # De-dup: skip when within 100 W of the last applied value
+        # (mirrors the discharge-limit hysteresis). The 0→0 case is the
+        # common one (NORMAL every cycle) and must not spam the bus.
+        if (self._last_force_discharge_w >= 0
+                and abs(watts - self._last_force_discharge_w) < 100.0):
+            return
+        try:
+            await self._hass.services.async_call(
+                "number", "set_value",
+                {"entity_id": self._force_discharge_entity, "value": watts},
+                blocking=True,
+            )
+            self._last_force_discharge_w = watts
+            _LOGGER.info(
+                "Huawei battery: forcible-discharge %.0f W → %s (arbitrage)",
+                watts, self._force_discharge_entity,
+            )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.warning(
+                "Huawei battery: failed to set forcible discharge: %s", e,
+            )
 
     async def _apply_discharge_limit(self, watts: float) -> None:
         if not self._discharge_control_entity:

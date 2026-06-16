@@ -196,6 +196,9 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     "hot_water_entity", "hot_water_power_sensor",
     "hot_water_temperature_sensor",
     "ev_chargers",
+    # #523 Tier 3: the forced-discharge entity is read at battery-adapter
+    # construction, so changing it must reload to rebuild the adapter.
+    "battery_force_discharge_control_entity",
 })
 
 

@@ -3242,6 +3242,49 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             scheduler._decision if scheduler.enabled else None
         )
 
+        # #523 export arbitrage — the scheduler's discharge mirror. Runs
+        # whenever arbitrage is enabled (independent of the night-charge
+        # scheduler), but NEVER while a charge is planned/active — the
+        # battery can't sell and charge at once. When it fires, its
+        # decision replaces the charge decision for this cycle and
+        # decide_battery actuates it as FORCE_DISCHARGE. The signed export
+        # price + cheapest upcoming import price (recharge cost basis) are
+        # only looked up when arbitrage is on.
+        _charge_active = (
+            scheduler_decision is not None and scheduler_decision.should_charge
+        )
+        if self._battery_scheduler_config.arbitrage_enabled and not _charge_active:
+            export_rate_per_kwh = 0.0
+            import_forecast_min = None
+            _provider = getattr(self, "_tariff_provider", None)
+            if _provider is not None:
+                try:
+                    export_rate_per_kwh = float(_provider.get_current_export_rate())
+                except Exception:  # noqa: BLE001
+                    export_rate_per_kwh = 0.0
+                try:
+                    _ups = getattr(
+                        _provider.get_tariff_data(), "upcoming_prices", None
+                    ) or []
+                    _prices = [
+                        float(p.price) for p in _ups
+                        if getattr(p, "price", None) is not None
+                    ]
+                    if _prices:
+                        import_forecast_min = min(_prices)
+                except Exception:  # noqa: BLE001
+                    import_forecast_min = None
+            try:
+                _arb = scheduler.evaluate_arbitrage(
+                    current_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
+                    export_rate=export_rate_per_kwh,
+                    import_forecast_min=import_forecast_min,
+                )
+                if _arb.state.value == "discharging_arbitrage":
+                    scheduler_decision = _arb
+            except Exception as e:  # noqa: BLE001
+                _LOGGER.warning("Export arbitrage evaluate failed: %s", e)
+
         # Shared fleet context — same for every battery this cycle.
         fleet = FleetContext(
             solar_w=float(getattr(power, "solar_power", 0.0) or 0.0),

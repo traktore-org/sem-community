@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-15T19:18:37.874304+00:00
+// Generated: 2026-06-16T09:09:04.986208+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1068,7 +1068,16 @@
       "fix_grid_sign_help": "Flips grid import/export if it looks inverted and copies a ready-to-paste report to your clipboard. Paste it into a GitHub issue so we can improve auto-detection for your meter.",
       "sign_flipped_copied": "Sign flipped — report copied to clipboard",
       "sign_flipped": "Sign flipped — clipboard blocked, copy the report from the logs",
-      "sign_relearn_started": "Re-learning grid/battery sign…"
+      "sign_relearn_started": "Re-learning grid/battery sign…",
+      "config_battery_arbitrage": "Battery export arbitrage",
+      "config_battery_arbitrage_enable": "Sell battery to grid on high export",
+      "config_help_battery_arbitrage": "When the dynamic export price is high enough to beat the cost of recharging later, discharge the battery to the grid to sell stored energy. Opt-in; never discharges below the reserve SOC.",
+      "config_arbitrage_min_export": "Min export price to sell",
+      "config_help_arbitrage_min_export": "Only sell battery energy to the grid when the export price is at least this much per kWh.",
+      "config_arbitrage_reserve_soc": "Arbitrage reserve SOC",
+      "config_help_arbitrage_reserve_soc": "Never discharge the battery to the grid below this SOC — your backup reserve.",
+      "config_force_discharge_entity": "Forcible-discharge power entity",
+      "config_help_force_discharge_entity": "The number entity that sets your inverter’s forcible battery-to-grid discharge power (e.g. the Huawei “Forcible discharge power”). Required for arbitrage to actuate."
     },
     "de": {
       "charging": "Laden",
@@ -2133,7 +2142,16 @@
       "fix_grid_sign_help": "Kehrt Netz-Import/Export um, falls vertauscht, und kopiert einen fertigen Bericht in die Zwischenablage. Füge ihn in ein GitHub-Issue ein, damit wir die automatische Erkennung für deinen Zähler verbessern können.",
       "sign_flipped_copied": "Vorzeichen umgekehrt – Bericht in Zwischenablage kopiert",
       "sign_flipped": "Vorzeichen umgekehrt – Zwischenablage blockiert, Bericht aus dem Log kopieren",
-      "sign_relearn_started": "Vorzeichen wird neu erlernt…"
+      "sign_relearn_started": "Vorzeichen wird neu erlernt…",
+      "config_battery_arbitrage": "Batterie-Export-Arbitrage",
+      "config_battery_arbitrage_enable": "Batterie bei hohem Export ins Netz verkaufen",
+      "config_help_battery_arbitrage": "Wenn der dynamische Einspeisepreis hoch genug ist, um die spätere Nachladekosten zu übertreffen, wird die Batterie zum Verkauf ins Netz entladen. Optional; entlädt nie unter den Reserve-SOC.",
+      "config_arbitrage_min_export": "Min. Einspeisepreis zum Verkauf",
+      "config_help_arbitrage_min_export": "Batterie nur ins Netz verkaufen, wenn der Einspeisepreis mindestens so hoch pro kWh ist.",
+      "config_arbitrage_reserve_soc": "Arbitrage-Reserve-SOC",
+      "config_help_arbitrage_reserve_soc": "Batterie nie unter diesen SOC ins Netz entladen — deine Notreserve.",
+      "config_force_discharge_entity": "Entität für erzwungene Entladeleistung",
+      "config_help_force_discharge_entity": "Die Number-Entität, die die erzwungene Batterie-ins-Netz-Entladeleistung deines Wechselrichters setzt (z. B. Huawei „Erzwungene Entladeleistung“). Für die Arbitrage erforderlich."
     },
     "fr": {
       "charging": "En charge",

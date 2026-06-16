@@ -5892,6 +5892,17 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             ${this._renderOptionNumberInput("demand_charge_rate","config_demand_charge_rate",{min:0,max:20,step:.01,unit:`${a}/kW/Mt`,default:4.32},e,"config_help_demand_charge_rate")}
             ${this._renderPicker("grid_import_power_entity","config_grid_import_entity","sensor","power",e,"config_help_grid_import_entity")}
             ${this._renderPicker("grid_export_power_entity","config_grid_export_entity","sensor","power",e,"config_help_grid_export_entity")}
+            ${"dynamic"===l?W`
+                <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${t.surfaceBorder};padding-top:8px">
+                    <span class="ctrl-label" style="font-weight:600">${this._t("config_battery_arbitrage")}</span>
+                </div>
+                ${this._renderOptionToggle("battery_grid_arbitrage_enabled","config_battery_arbitrage_enable",e,"config_help_battery_arbitrage",!1)}
+                ${e.battery_grid_arbitrage_enabled?W`
+                    ${this._renderOptionNumberInput("battery_arbitrage_min_export_price","config_arbitrage_min_export",{min:0,max:2,step:.01,unit:`${a}/kWh`,default:.2},e,"config_help_arbitrage_min_export")}
+                    ${this._renderOptionNumberInput("battery_arbitrage_reserve_soc","config_arbitrage_reserve_soc",{min:0,max:100,step:5,unit:"%",default:50},e,"config_help_arbitrage_reserve_soc")}
+                    ${this._renderPicker("battery_force_discharge_control_entity","config_force_discharge_entity","number",null,e,"config_help_force_discharge_entity")}
+                `:K}
+            `:K}
         `}_renderHeatPump(t){const e=this._bin("heat_pump_registered"),i=this._options||{},s=e?W`
             <div class="hp-status">
                 <div class="readonly-row">
@@ -6047,6 +6058,18 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${"saving"===n?W`<div class="save-status">${this._t("config_saving")}…</div>`:K}
                 ${"ok"===n?W`<div class="save-status ok">✓</div>`:K}
                 ${this._showHelp&&r?W`<div class="setting-help-text">${this._t(r)}</div>`:K}
+            </div>
+        `}_renderOptionToggle(t,e,i,s,r){const a=null!=i[t]?!!i[t]:!!r,o=this._saveStatus[t];return W`
+            <div class="stepper-cell">
+                <div class="toggle-row">
+                    <span class="toggle-label">${this._t(e)}</span>
+                    <div class="toggle-track ${a?"on":""}"
+                         @click=${()=>this._saveOption(t,!a,t)}>
+                        <div class="toggle-thumb"></div>
+                    </div>
+                </div>
+                ${"ok"===o?W`<div class="save-status ok">✓</div>`:K}
+                ${this._showHelp&&s?W`<div class="setting-help-text">${this._t(s)}</div>`:K}
             </div>
         `}_renderOptionNumberInput(t,e,i,s,r){const a=null!=s[t]?s[t]:i.default,o=this._saveStatus[t],n=e=>{const s=parseFloat(e);if(Number.isNaN(s))return;const r=Math.max(i.min,Math.min(i.max,s));this._saveOption(t,r,t)};return W`
             <div class="stepper-cell">

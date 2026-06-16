@@ -68,6 +68,14 @@ class BatteryControlAdapter(ABC):
         ``Sonnen`` would return False — protection-only adapter."""
 
     @property
+    def supports_forced_discharge(self) -> bool:
+        """True if this brand can be commanded to discharge to the
+        grid for arbitrage (#523). Default False — only brands that
+        override (Huawei LUNA) actuate ``FORCE_DISCHARGE``; everyone
+        else has the decision dropped by the actuator."""
+        return False
+
+    @property
     def last_intent(self) -> "Optional[BatteryIntent]":
         return self._last_intent
 
@@ -95,3 +103,19 @@ class BatteryControlAdapter(ABC):
     @abstractmethod
     async def command_stop_force_charge(self) -> None:
         """Cancel an active forced charge."""
+
+    async def command_force_discharge(
+        self, power_w: float, floor_soc: float,
+    ) -> None:
+        """Start a forced battery → grid discharge for arbitrage (#523).
+
+        Default no-op: brands without forced-discharge support never
+        reach here (the actuator gates on ``supports_forced_discharge``).
+        Huawei overrides this.
+        """
+        return None
+
+    async def command_stop_force_discharge(self) -> None:
+        """End a forced discharge, restoring the brand default.
+        Default delegates to ``command_normal``."""
+        await self.command_normal()

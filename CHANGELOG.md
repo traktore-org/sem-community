@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🔋💶 Dynamic export-price optimisation — sell the battery when export is high (#523)
+
+- **Signed export price.** On an EPEX/Tibber/Nord Pool dynamic contract the export price *is* the spot price and is regularly negative (you pay to export). SEM no longer `abs()`-es the feed-in price, so a negative export is correctly a cost — fixing export revenue/ROI and unlocking export-aware decisions. (Auto-detected Amber keeps its sign-inverted convention.)
+- **Battery → grid arbitrage, built into the charge scheduler.** Discharge-to-grid is the mirror of the scheduler's charge-on-cheap logic, so it lives **inside `BatteryChargeScheduler`** and reuses the same economics (round-trip efficiency + cycle cost): SEM sells stored energy to the grid only when the export price beats the cost of recharging it later (cheapest upcoming import ÷ efficiency + degradation). Opt-in (default off), never sells below a configurable reserve SOC, and never runs while a charge is planned. Actuated on Huawei LUNA via a configurable forcible-discharge entity; other brands have the decision safely dropped.
+- **New Configuration → Tariff settings** (dynamic mode): *Sell battery to grid on high export*, *Min export price to sell*, *Arbitrage reserve SOC*, and the *Forcible-discharge power entity*.
+
 # [1.7.3-beta.21] - 16.06.2026
 
 ## 🎨 Dashboard polish — battery glyph + EV status spacing

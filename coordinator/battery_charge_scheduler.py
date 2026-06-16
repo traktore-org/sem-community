@@ -50,6 +50,10 @@ class SchedulerState(Enum):
     NOT_NEEDED = "not_needed"
     NOT_PROFITABLE = "not_profitable"
     FAILED = "failed"
+    DISCHARGING_ARBITRAGE = "discharging_arbitrage"
+    """#523 — the scheduler decided to SELL stored energy to the grid
+    this cycle (export price beats the recharge cost). The mirror of
+    SCHEDULED: same price economics, opposite direction."""
 
 
 @dataclass
@@ -145,6 +149,10 @@ class SchedulerDecision:
     hours_needed: int = 0
     charge_windows: List[datetime] = field(default_factory=list)
     schedule: Optional[NightChargeSchedule] = None
+    discharge_power_w: float = 0.0
+    """Used iff state == DISCHARGING_ARBITRAGE (#523) — battery→grid power."""
+    floor_soc: float = 0.0
+    """Used iff state == DISCHARGING_ARBITRAGE (#523) — reserve floor."""
     reason: str = ""
     evaluated_at: Optional[datetime] = None
 
@@ -214,6 +222,15 @@ class SchedulerConfig:
     # Negative tariff handling
     force_charge_on_negative_price: bool = True  # Always charge during negative prices
 
+    # #523 — export arbitrage (battery → grid). The mirror of charge-on-
+    # cheap: sell stored energy when the dynamic export price beats the
+    # cost of recharging it later (reusing roundtrip_efficiency +
+    # battery_cycle_cost). Opt-in; never sells below the reserve floor.
+    arbitrage_enabled: bool = False
+    arbitrage_min_export_price: float = 0.20  # /kWh floor worth cycling for
+    arbitrage_reserve_soc: float = 50.0       # never sell below this SOC
+    max_discharge_power_w: float = 5000.0     # battery→grid power when selling
+
     @classmethod
     def from_config(cls, config: dict) -> "SchedulerConfig":
         """Create from HA config entry options."""
@@ -249,6 +266,10 @@ class SchedulerConfig:
             max_grid_import_w=config.get("battery_max_grid_import_w", 0.0),
             ev_priority=config.get("ev_priority_over_battery", True),
             force_charge_on_negative_price=config.get("battery_force_charge_negative_price", True),
+            arbitrage_enabled=config.get("battery_grid_arbitrage_enabled", False),
+            arbitrage_min_export_price=config.get("battery_arbitrage_min_export_price", 0.20),
+            arbitrage_reserve_soc=config.get("battery_arbitrage_reserve_soc", 50.0),
+            max_discharge_power_w=config.get("battery_max_discharge_power", 5000.0),
         )
 
 
@@ -570,6 +591,81 @@ class BatteryChargeScheduler:
             [w.strftime("%H:%M") for w in charge_windows] if charge_windows else "full NT",
         )
         return self._decision
+
+    def evaluate_arbitrage(
+        self,
+        current_soc: float,
+        export_rate: float,
+        import_forecast_min: Optional[float],
+    ) -> SchedulerDecision:
+        """Per-cycle export-arbitrage check (#523) — the discharge mirror
+        of ``evaluate()``'s charge planning, using the SAME economic model
+        (``roundtrip_efficiency`` + ``battery_cycle_cost``).
+
+        Sell stored energy to the grid when the dynamic export price beats
+        the cost of recharging it later. Returns a DISCHARGING_ARBITRAGE
+        decision when worthwhile, else a non-firing state.
+
+        Stateless and cheap — the coordinator calls it every cycle (unlike
+        ``evaluate()``, which plans the night at the trigger). It never
+        runs while a charge is planned/active; the coordinator gates that.
+        """
+        now = dt_util.now()
+        cfg = self._config
+        if not cfg.arbitrage_enabled:
+            return SchedulerDecision(
+                state=SchedulerState.IDLE,
+                reason="export arbitrage disabled", evaluated_at=now,
+            )
+        # Reserve floor — never sell the backup reserve.
+        if current_soc <= cfg.arbitrage_reserve_soc:
+            return SchedulerDecision(
+                state=SchedulerState.NOT_NEEDED,
+                reason=(
+                    f"SOC {current_soc:.0f}% at/below reserve "
+                    f"{cfg.arbitrage_reserve_soc:.0f}%"
+                ),
+                evaluated_at=now,
+            )
+        # Export must clear the configured floor to bother cycling.
+        if export_rate < cfg.arbitrage_min_export_price:
+            return SchedulerDecision(
+                state=SchedulerState.NOT_PROFITABLE,
+                reason=(
+                    f"export {export_rate:.3f} < floor "
+                    f"{cfg.arbitrage_min_export_price:.3f}/kWh"
+                ),
+                evaluated_at=now,
+            )
+        # Profitability — the symmetric break-even to charge-on-cheap:
+        # selling now must beat buying back later (cheapest upcoming import
+        # ÷ round-trip efficiency) plus the battery degradation cost.
+        if import_forecast_min is not None:
+            recharge_cost = (
+                float(import_forecast_min) / cfg.roundtrip_efficiency
+                + cfg.battery_cycle_cost * 2
+            )
+            if export_rate <= recharge_cost:
+                return SchedulerDecision(
+                    state=SchedulerState.NOT_PROFITABLE,
+                    reason=(
+                        f"export {export_rate:.3f} ≤ recharge break-even "
+                        f"{recharge_cost:.3f}/kWh"
+                    ),
+                    evaluated_at=now,
+                )
+        return SchedulerDecision(
+            state=SchedulerState.DISCHARGING_ARBITRAGE,
+            discharge_power_w=cfg.max_discharge_power_w,
+            floor_soc=cfg.arbitrage_reserve_soc,
+            reason=(
+                f"export arbitrage: {export_rate:.3f}/kWh ≥ floor "
+                f"{cfg.arbitrage_min_export_price:.3f}, SOC {current_soc:.0f}% > "
+                f"reserve {cfg.arbitrage_reserve_soc:.0f}% → sell "
+                f"{cfg.max_discharge_power_w:.0f} W to grid"
+            ),
+            evaluated_at=now,
+        )
 
     def _resolve_forecast(
         self,

@@ -317,6 +317,16 @@ class BatteryIntent(Enum):
     (``huawei_solar.stop_forcible_charge``) instead of just
     setting back to default."""
 
+    FORCE_DISCHARGE = "force_discharge"
+    """#523 Tier 3 — proactive battery → GRID discharge (arbitrage).
+    Sell stored energy when the dynamic export price is high and the
+    sale beats the cost of recharging later. Hardware-gated: only
+    adapters with ``supports_forced_discharge`` actuate it."""
+
+    STOP_FORCE_DISCHARGE = "stop_force_discharge"
+    """End a forced discharge — export no longer profitable or SOC
+    hit the reserve floor. Restores the brand default."""
+
 
 @dataclass(frozen=True)
 class BatteryDecision:
@@ -332,6 +342,11 @@ class BatteryDecision:
     """Used iff intent == FORCE_CHARGE."""
     charge_power_w: float = 0.0
     duration_min: int = 0
+    discharge_power_w: float = 0.0
+    """Used iff intent == FORCE_DISCHARGE (#523) — battery→grid power."""
+    floor_soc: float = 0.0
+    """Used iff intent == FORCE_DISCHARGE (#523) — stop discharging at
+    this reserve SOC."""
     reason: str = ""
 
 

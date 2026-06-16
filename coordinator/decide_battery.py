@@ -66,6 +66,18 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                     reason=f"scheduler SCHEDULED → force charge in window",
                 )
 
+        # Export arbitrage — the scheduler decided to SELL to the grid
+        # this cycle (#523). Pure actuation of the scheduler's verdict, the
+        # mirror of the SCHEDULED → FORCE_CHARGE path above.
+        if state_value == "discharging_arbitrage":
+            return BatteryDecision(
+                battery_id=rt.battery_id,
+                intent=BatteryIntent.FORCE_DISCHARGE,
+                discharge_power_w=getattr(sched, "discharge_power_w", 0.0),
+                floor_soc=getattr(sched, "floor_soc", 0.0),
+                reason=getattr(sched, "reason", "export arbitrage"),
+            )
+
         # Target reached or no longer needed — stop a running charge.
         if state_value in ("target_reached", "not_needed", "idle", "not_profitable"):
             # Only emit STOP if we actually started; otherwise NORMAL is fine.

@@ -659,6 +659,21 @@ class SEMConfigCard extends SEMLitBase {
                 'sensor', 'power', opts, 'config_help_grid_import_entity')}
             ${this._renderPicker('grid_export_power_entity', 'config_grid_export_entity',
                 'sensor', 'power', opts, 'config_help_grid_export_entity')}
+            ${mode === 'dynamic' ? html`
+                <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:8px">
+                    <span class="ctrl-label" style="font-weight:600">${this._t('config_battery_arbitrage')}</span>
+                </div>
+                ${this._renderOptionToggle('battery_grid_arbitrage_enabled',
+                    'config_battery_arbitrage_enable', opts, 'config_help_battery_arbitrage', false)}
+                ${opts.battery_grid_arbitrage_enabled ? html`
+                    ${this._renderOptionNumberInput('battery_arbitrage_min_export_price', 'config_arbitrage_min_export',
+                        { min: 0, max: 2, step: 0.01, unit: `${currency}/kWh`, default: 0.20 }, opts, 'config_help_arbitrage_min_export')}
+                    ${this._renderOptionNumberInput('battery_arbitrage_reserve_soc', 'config_arbitrage_reserve_soc',
+                        { min: 0, max: 100, step: 5, unit: '%', default: 50 }, opts, 'config_help_arbitrage_reserve_soc')}
+                    ${this._renderPicker('battery_force_discharge_control_entity', 'config_force_discharge_entity',
+                        'number', null, opts, 'config_help_force_discharge_entity')}
+                ` : nothing}
+            ` : nothing}
         `;
     }
 
@@ -930,6 +945,26 @@ class SEMConfigCard extends SEMLitBase {
                     </select>
                 </div>
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
+                ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // Boolean toggle backed by an entry OPTION (not a switch entity) —
+    // saves a real boolean via set_option (#523 arbitrage opt-in).
+    _renderOptionToggle(optionKey, labelKey, opts, helpKey, defaultVal) {
+        const cur = opts[optionKey] != null ? !!opts[optionKey] : !!defaultVal;
+        const status = this._saveStatus[optionKey];
+        return html`
+            <div class="stepper-cell">
+                <div class="toggle-row">
+                    <span class="toggle-label">${this._t(labelKey)}</span>
+                    <div class="toggle-track ${cur ? 'on' : ''}"
+                         @click=${() => this._saveOption(optionKey, !cur, optionKey)}>
+                        <div class="toggle-thumb"></div>
+                    </div>
+                </div>
                 ${status === 'ok' ? html`<div class="save-status ok">✓</div>` : nothing}
                 ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
             </div>
