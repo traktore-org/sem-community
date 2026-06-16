@@ -13,6 +13,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.23] - 16.06.2026
+
+## 🔋🎛️ Per-battery control + Huawei forcible-discharge fix (#523)
+
+Multi-battery installs (e.g. Growatt + Sessy, or two LUNA2000s) can now be
+controlled **per battery**, and battery → grid arbitrage actually works on a
+real Huawei battery — verified live on a Huawei SUN2000 + LUNA2000.
+
+- **Per-battery Mode selector on the Battery card** — each battery gets its
+  own mode: **Auto** (today's behaviour), **Self-consumption only** (never
+  sells to grid), **Allow arbitrage** (sell when export beats recharge cost,
+  even with the global toggle off), **Force charge**, **Force discharge**
+  (manual sell to grid). Plus a per-battery **Reserve SOC** floor — a battery
+  never discharges below it, on every mode. One battery can sell while its
+  sibling holds, gated purely by mode. (`select.sem_battery_<id>_mode` +
+  `number.sem_battery_<id>_reserve_soc`, live — no reload.)
+- **EV-card-style battery tiles** — each battery now shows the filled battery
+  glyph with SOC %, a flow-coloured status badge, power, and (when capacity is
+  known) stored energy + time-to-full/empty, matching the EV charger card.
+- **Per-battery force-discharge entity pickers** in Configuration → Tariff, so
+  each battery's sell setpoint is wired from the dashboard, not YAML.
+- **Huawei forcible discharge now actually works.** Huawei has no
+  forcible-discharge *number* entity — it's the `huawei_solar.forcible_discharge_soc`
+  *service*. SEM previously wrote to a non-existent number, so battery → grid
+  selling silently did nothing on every real Huawei (including the beta.22
+  arbitrage feature). It now drives the service (discharge to the reserve SOC,
+  which self-terminates there as a safety floor). Force-discharge writes are
+  also domain-aware (real `number.*` setpoints **and** `input_number.*` helpers).
+- **Anti-block hardening.** The LUNA2000 locks up if it gets `stop_forcible_charge`
+  plus another Modbus write back-to-back in one cycle. The Huawei adapter is now
+  a clean state machine — exactly one command per transition, the rest deferred
+  to the next cycle — and a dropped stop self-heals by re-issuing on the next
+  cycles. Battery-brand detection also no longer misses a modern `huawei_solar`
+  install (config-entry check, not just `hass.data`).
+- **Per-battery SOC fix** — on multi-battery installs the per-battery tiles
+  could read 0 % because SOC auto-detect only matched 2-part sensor names; it
+  now matches indexed devices (e.g. `…battery_2_soc`).
+- Removed the dead legacy `BatteryChargeScheduler.update()` path.
+
 # [1.7.3-beta.22] - 16.06.2026
 
 ## 🔋💶 Dynamic export-price optimisation — sell the battery when export is high (#523)

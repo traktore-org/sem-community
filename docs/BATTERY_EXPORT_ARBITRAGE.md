@@ -74,17 +74,43 @@ Configuration tab → **Tariff & pricing** (visible only on a *dynamic* tariff):
 
 ### Battery brand support
 
-The forced-discharge command is **brand-agnostic** — SEM writes the discharge
-power to the **number entity you configure**. It works with any battery whose
-integration exposes such an entity:
+- **Huawei SUN2000 + LUNA2000** — SEM uses the *huawei_solar*
+  **`forcible_discharge_soc` service** (Huawei has **no** forcible-discharge
+  *number* entity). It discharges to your **reserve SOC**, which the inverter
+  self-terminates at — so the reserve is a true floor even if a stop is delayed.
+  Requires the *huawei_solar* integration; SEM auto-detects it and uses the
+  battery device. Verified live on a real LUNA2000.
+- **GoodWe, Victron, SolaX, Growatt, Sessy, Powerwall, …** — the **generic**
+  path writes the discharge power to a **number entity you configure** (the
+  integration's discharge-power setpoint, or a small `template`/`script`-backed
+  `number` / `input_number` — SEM drives whichever domain you point it at).
 
-- **Huawei LUNA2000** — the *huawei_solar* “Forcible discharge power” number.
-- **GoodWe**, and the **generic** path that covers **Victron, SolaX, Growatt,
-  Sessy, Powerwall, …** — point it at that integration's discharge-power
-  setpoint number (or a small `template`/`script`-backed `number`).
+If no forcible-discharge path is available (no Huawei service and no number
+entity), the decision is **safely dropped** — SEM logs that it *would* sell but
+takes no action.
 
-If no forcible-discharge entity is configured, the decision is **safely
-dropped** — SEM logs that it *would* sell but takes no action.
+> **Huawei note (anti-block):** the LUNA2000 locks up if it gets a stop plus a
+> second Modbus write in the same ~10 s cycle. SEM issues **one** command per
+> transition and defers the rest to the next cycle, and re-issues a dropped stop
+> automatically. Because mode decisions are stable (a mode stays until you change
+> it), normal operation never toggles faster than the inverter can keep up.
+
+### Per-battery control (multi-battery installs)
+
+On installs with **two or more batteries** (e.g. Growatt + Sessy, or two
+LUNA2000s) each battery is controlled independently from the **Battery card**:
+
+| Mode | What it does |
+|---|---|
+| **Auto** | Today's behaviour — scheduler / arbitrage / protection decide. |
+| **Self-consumption only** | Charge + power the house, but **never** sell to grid. |
+| **Allow arbitrage** | Sell to grid when profitable, even with the global toggle off. |
+| **Force charge** | Charge to full now. |
+| **Force discharge** | Sell to grid now, down to the **Reserve SOC**. |
+
+Each battery also has its own **Reserve SOC** floor (never discharged below it),
+and — for multi-battery installs — its own **forcible-discharge entity picker**
+in Configuration → Tariff. One battery can sell while a sibling holds.
 
 ## Turning it off
 
