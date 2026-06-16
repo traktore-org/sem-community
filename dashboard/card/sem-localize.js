@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-16T09:09:04.986208+00:00
+// Generated: 2026-06-16T10:04:17.052378+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1077,7 +1077,9 @@
       "config_arbitrage_reserve_soc": "Arbitrage reserve SOC",
       "config_help_arbitrage_reserve_soc": "Never discharge the battery to the grid below this SOC — your backup reserve.",
       "config_force_discharge_entity": "Forcible-discharge power entity",
-      "config_help_force_discharge_entity": "The number entity that sets your inverter’s forcible battery-to-grid discharge power (e.g. the Huawei “Forcible discharge power”). Required for arbitrage to actuate."
+      "config_help_force_discharge_entity": "The number entity that sets your inverter’s forcible battery-to-grid discharge power (e.g. the Huawei “Forcible discharge power”). Required for arbitrage to actuate.",
+      "selling_to_grid": "Selling to grid",
+      "selling": "Selling"
     },
     "de": {
       "charging": "Laden",
@@ -2151,7 +2153,9 @@
       "config_arbitrage_reserve_soc": "Arbitrage-Reserve-SOC",
       "config_help_arbitrage_reserve_soc": "Batterie nie unter diesen SOC ins Netz entladen — deine Notreserve.",
       "config_force_discharge_entity": "Entität für erzwungene Entladeleistung",
-      "config_help_force_discharge_entity": "Die Number-Entität, die die erzwungene Batterie-ins-Netz-Entladeleistung deines Wechselrichters setzt (z. B. Huawei „Erzwungene Entladeleistung“). Für die Arbitrage erforderlich."
+      "config_help_force_discharge_entity": "Die Number-Entität, die die erzwungene Batterie-ins-Netz-Entladeleistung deines Wechselrichters setzt (z. B. Huawei „Erzwungene Entladeleistung“). Für die Arbitrage erforderlich.",
+      "selling_to_grid": "Verkauf ans Netz",
+      "selling": "Verkauf"
     },
     "fr": {
       "charging": "En charge",
@@ -6339,7 +6343,9 @@
       "hot_water_legionella_never_run": "Nooit uitgevoerd",
       "hot_water_temperature_reading_path": "Temperatuurleespad",
       "hot_water_temperature_safety_path": "Temperatuurveiligheidspad",
-      "hot_water_activation_path": "Activeringspad"
+      "hot_water_activation_path": "Activeringspad",
+      "selling_to_grid": "Verkoop aan net",
+      "selling": "Verkoop"
     },
     "cs": {
       "charging": "Nabíjení",

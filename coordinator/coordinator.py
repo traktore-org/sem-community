@@ -3218,7 +3218,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         """
         from .actuate_battery import actuate_battery
         from .battery_adapters import adapter_for
-        from .charger_types import BatteryRuntime, BatteryView, FleetContext
+        from .charger_types import (
+            BatteryIntent, BatteryRuntime, BatteryView, FleetContext,
+        )
         from .decide_battery import decide_battery
 
         # Per-battery adapter cache (#375 — was a single
@@ -3325,6 +3327,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 ),
             )))
 
+        # #523: reset the per-cycle "selling to grid" flag; set it below
+        # if any battery is commanded to FORCE_DISCHARGE this cycle.
+        self._battery_arbitrage_active = False
+
         for battery_id, runtime in battery_items:
             # Per-battery adapter cache.
             adapter = self._battery_adapters.get(battery_id)
@@ -3350,6 +3356,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 "decide_battery(%s) → intent=%s :: %s",
                 battery_id, decision.intent.value, decision.reason,
             )
+            if decision.intent is BatteryIntent.FORCE_DISCHARGE:
+                self._battery_arbitrage_active = True
 
             # 4. Actuate
             await actuate_battery(decision, adapter)
@@ -4878,8 +4886,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         else:
             status.grid_status = "idle"
 
-        # Battery status
-        if power.battery_charge_power > 50:
+        # Battery status. #523: when the scheduler is actively selling to
+        # the grid (FORCE_DISCHARGE this cycle), surface a distinct
+        # "selling" state so the Battery card can show it instead of a
+        # generic "discharging".
+        if getattr(self, "_battery_arbitrage_active", False) and power.battery_discharge_power > 50:
+            status.battery_status = "selling"
+        elif power.battery_charge_power > 50:
             status.battery_status = "charging"
         elif power.battery_discharge_power > 50:
             status.battery_status = "discharging"

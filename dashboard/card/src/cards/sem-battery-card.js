@@ -258,16 +258,24 @@ class SEMBatteryCard extends SEMLitBase {
         const temp = (tempEntity && tempEntity.state !== 'unavailable' && tempEntity.state !== 'unknown')
             ? parseFloat(tempEntity.state) : null;
 
-        // Charge state
-        const isCharging = statusRaw === 'charging' || chargePower > 10;
-        const isDischarging = statusRaw === 'discharging' || dischargePower > 10;
-        const statusText = isCharging ? this._t('charging')
+        // Charge state. #523: "selling" = the scheduler is exporting the
+        // battery to the grid for arbitrage — a distinct gold state.
+        const isSelling = statusRaw === 'selling';
+        const isCharging = !isSelling && (statusRaw === 'charging' || chargePower > 10);
+        const isDischarging = !isSelling && (statusRaw === 'discharging' || dischargePower > 10);
+        const exportEnt = this._hass?.states['sensor.sem_tariff_current_export_rate'];
+        const exportRate = (exportEnt && exportEnt.state !== 'unavailable' && exportEnt.state !== 'unknown')
+            ? parseFloat(exportEnt.state) : null;
+        const SELL = '#FCD170';
+        const statusText = isSelling ? this._t('selling_to_grid')
+            : isCharging ? this._t('charging')
             : isDischarging ? this._t('discharging')
             : this._t('idle');
-        const arcColor = isCharging ? '#f06292' : '#4db6ac';
-        const statusColor = isCharging ? '#f06292' : isDischarging ? '#4db6ac' : (T.textSec || '#888');
-        const glowOpacity = (isCharging || isDischarging) ? '0.5' : '0.2';
-        const arcAnim = (isCharging || isDischarging) ? 'socPulse 2s ease-in-out infinite' : 'none';
+        const arcColor = isSelling ? SELL : (isCharging ? '#f06292' : '#4db6ac');
+        const statusColor = isSelling ? SELL
+            : isCharging ? '#f06292' : isDischarging ? '#4db6ac' : (T.textSec || '#888');
+        const glowOpacity = (isCharging || isDischarging || isSelling) ? '0.5' : '0.2';
+        const arcAnim = (isCharging || isDischarging || isSelling) ? 'socPulse 2s ease-in-out infinite' : 'none';
 
         // SOC arc
         const pct = Math.min(Math.max(soc / 100, 0), 1);
@@ -521,6 +529,12 @@ class SEMBatteryCard extends SEMLitBase {
                                 <span class="metric-label">${this._t('status')}</span>
                                 <span class="metric-val" style="color:${statusColor}">${statusText}</span>
                             </div>
+                            ${isSelling && exportRate != null ? html`
+                            <div class="metric-row">
+                                <span class="metric-label">${this._t('export_rate')}</span>
+                                <span class="metric-val" style="color:${SELL}">${this._fmt(exportRate, 3)} ${currency}/kWh</span>
+                            </div>
+                            ` : nothing}
                             <div class="metric-row">
                                 <span class="metric-label">${this._t('health')}</span>
                                 <span class="metric-val">${this._fmt(health, 1)}%</span>
