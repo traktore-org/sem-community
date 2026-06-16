@@ -146,8 +146,15 @@ class BatteryControlAdapter(ABC):
                 and abs(watts - self._last_force_discharge_w) < 100.0):
             return
         try:
+            # Domain-aware: real-hardware setpoints are ``number.*`` (Huawei
+            # forcible-discharge, Growatt/Sessy power numbers), but a user may
+            # also wire an ``input_number.*`` helper. Both expose ``set_value``;
+            # route to the control entity's own domain so either works.
+            domain = self._force_discharge_entity.split(".", 1)[0]
+            if domain not in ("number", "input_number"):
+                domain = "number"
             await self._hass.services.async_call(
-                "number", "set_value",
+                domain, "set_value",
                 {"entity_id": self._force_discharge_entity, "value": watts},
                 blocking=True,
             )

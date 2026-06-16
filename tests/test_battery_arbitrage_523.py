@@ -248,6 +248,22 @@ async def test_all_brand_adapters_can_sell_to_grid(name, mod, cls):
 
 
 @pytest.mark.asyncio
+async def test_force_discharge_write_is_domain_aware():
+    # A user may wire an input_number helper instead of a number entity;
+    # the write must route to that entity's own domain (#523 hardware test).
+    hass = _hass()
+    a = GenericBatteryAdapter(hass, {
+        "battery_force_discharge_control_entity": "input_number.sim_force_discharge_power",
+        "battery_max_discharge_power": 4000,
+    })
+    await a.command_force_discharge(3000, 50.0)
+    args = hass.services.async_call.await_args.args
+    assert args[0] == "input_number" and args[1] == "set_value"
+    assert args[2]["entity_id"] == "input_number.sim_force_discharge_power"
+    assert args[2]["value"] == 3000
+
+
+@pytest.mark.asyncio
 async def test_generic_normal_zeroes_force_discharge():
     hass = _hass()
     gen = GenericBatteryAdapter(hass, {

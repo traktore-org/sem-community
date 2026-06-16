@@ -670,8 +670,19 @@ class SEMConfigCard extends SEMLitBase {
                         { min: 0, max: 2, step: 0.01, unit: `${currency}/kWh`, default: 0.20 }, opts, 'config_help_arbitrage_min_export')}
                     ${this._renderOptionNumberInput('battery_arbitrage_reserve_soc', 'config_arbitrage_reserve_soc',
                         { min: 0, max: 100, step: 5, unit: '%', default: 50 }, opts, 'config_help_arbitrage_reserve_soc')}
-                    ${this._renderPicker('battery_force_discharge_control_entity', 'config_force_discharge_entity',
-                        'number', null, opts, 'config_help_force_discharge_entity')}
+                    ${(() => {
+                        // Per-battery force-discharge control entities (#523):
+                        // multi-battery installs get one picker per battery so
+                        // each unit sells independently; single-battery keeps
+                        // the global picker.
+                        const n = this._batteryCount();
+                        return n > 1
+                            ? html`${Array.from({ length: n }, (_, i) =>
+                                this._renderBatteryDischargePicker(i, n, opts))}`
+                            : this._renderPicker('battery_force_discharge_control_entity',
+                                'config_force_discharge_entity', 'number', null, opts,
+                                'config_help_force_discharge_entity');
+                    })()}
                 ` : nothing}
             ` : nothing}
         `;
@@ -877,6 +888,55 @@ class SEMConfigCard extends SEMLitBase {
                 ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
                 ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
                 ${(this._showHelp && helpKey) ? html`<div class="setting-help-text">${this._t(helpKey)}</div>` : nothing}
+            </div>
+        `;
+    }
+
+    // Number of batteries SEM senses (multi-battery installs expose
+    // ``sensor.sem_battery_b<N>_power``). Drives per-battery control rows.
+    _batteryCount() {
+        if (!this._hass) return 0;
+        const s = new Set();
+        for (const e of Object.keys(this._hass.states)) {
+            const m = e.match(/^sensor\.sem_battery_(b\d+)_power$/);
+            if (m) s.add(m[1]);
+        }
+        return s.size;
+    }
+
+    // Write one entry of an idx-aligned list option (#523 per-battery
+    // control entities), padding to ``count`` so a sibling is never dropped.
+    async _saveListField(listKey, idx, value, count) {
+        const cur = Array.isArray(this._options[listKey])
+            ? [...this._options[listKey]] : [];
+        while (cur.length < count) cur.push(null);
+        cur[idx] = value || null;
+        await this._saveOption(listKey, cur, `${listKey}.${idx}`);
+    }
+
+    // Per-battery force-discharge control-entity picker (#523). Writes
+    // ``battery_force_discharge_entities[idx]`` so each battery can be sold
+    // to grid independently (number.* hardware setpoint or input_number.*).
+    _renderBatteryDischargePicker(idx, count, opts) {
+        const listKey = 'battery_force_discharge_entities';
+        const lst = Array.isArray(opts[listKey]) ? opts[listKey] : [];
+        const cur = lst[idx] || '';
+        const fieldKey = `${listKey}.${idx}`;
+        const status = this._saveStatus[fieldKey];
+        return html`
+            <div class="picker-cell">
+                <div class="picker-row">
+                    <span class="picker-label">${this._t('config_force_discharge_entity')} — B${idx + 1}</span>
+                    <ha-entity-picker
+                        .hass=${this._hass}
+                        .value=${cur}
+                        .includeDomains=${['number', 'input_number']}
+                        .allowCustomEntity=${false}
+                        @value-changed=${(e) => this._saveListField(listKey, idx, e.detail?.value || '', count)}>
+                    </ha-entity-picker>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
             </div>
         `;
     }

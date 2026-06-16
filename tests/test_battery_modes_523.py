@@ -61,6 +61,15 @@ def test_force_discharge_mode():
     assert d.floor_soc == 30
 
 
+def test_force_discharge_respects_reserve_floor():
+    # SOC at/under reserve → manual force_discharge must HOLD (NORMAL),
+    # never drain below the backup reserve.
+    below = decide_battery(_view(mode="force_discharge", soc=65.0, reserve=90))
+    assert below.intent is BatteryIntent.NORMAL
+    above = decide_battery(_view(mode="force_discharge", soc=65.0, reserve=40))
+    assert above.intent is BatteryIntent.FORCE_DISCHARGE
+
+
 def test_force_charge_mode():
     d = decide_battery(_view(mode="force_charge"))
     assert d.intent is BatteryIntent.FORCE_CHARGE

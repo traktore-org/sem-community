@@ -56,12 +56,22 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     reserve = float(reserve) if reserve is not None else 0.0
 
     if mode == "force_discharge":
+        # Respect the reserve floor even for a manual sell — never drain the
+        # battery below its backup reserve. At/under the floor we fall through
+        # to NORMAL so command_normal() zeroes the forcible-discharge setpoint.
+        soc = rt.last_known_soc
+        if soc is None or soc > reserve:
+            return BatteryDecision(
+                battery_id=rt.battery_id,
+                intent=BatteryIntent.FORCE_DISCHARGE,
+                discharge_power_w=float(cfg.get("battery_max_discharge_power", 5000.0) or 0.0),
+                floor_soc=reserve,
+                reason="mode=force_discharge (manual sell to grid)",
+            )
         return BatteryDecision(
             battery_id=rt.battery_id,
-            intent=BatteryIntent.FORCE_DISCHARGE,
-            discharge_power_w=float(cfg.get("battery_max_discharge_power", 5000.0) or 0.0),
-            floor_soc=reserve,
-            reason="mode=force_discharge (manual sell to grid)",
+            intent=BatteryIntent.NORMAL,
+            reason=f"mode=force_discharge but SOC {soc:.0f}% ≤ reserve {reserve:.0f}% — hold",
         )
     if mode == "force_charge":
         return BatteryDecision(
