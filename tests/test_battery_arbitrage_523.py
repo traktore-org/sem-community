@@ -215,6 +215,26 @@ async def test_huawei_normal_after_forcible_stops_only_no_limit_write():
 
 
 @pytest.mark.asyncio
+async def test_huawei_stop_retried_on_following_cycles():
+    # Flaky Modbus can drop a single stop — the stop must be re-issued on the
+    # next couple of NORMAL cycles so it self-heals (#523 real-hardware).
+    hass = _hass()
+    a = HuaweiBatteryAdapter(hass, {
+        "inverter_device_id": "dev123", "battery_max_discharge_power": 4000,
+    })
+    await a.command_force_discharge(3000, 30.0)
+    await a.command_normal()  # first stop (clears _forcible_discharging)
+    hass.services.async_call.reset_mock()
+    await a.command_normal()  # retry 1
+    await a.command_normal()  # retry 2
+    stops = [
+        c for c in hass.services.async_call.await_args_list
+        if c.args[1] == "stop_forcible_charge"
+    ]
+    assert len(stops) >= 2  # re-issued on the following cycles
+
+
+@pytest.mark.asyncio
 async def test_huawei_force_discharge_issued_once_not_rehammered():
     # Re-issuing forcible_discharge_soc every cycle blocks the inverter;
     # while already discharging at ~the same power it must be a no-op.

@@ -58,6 +58,14 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # every transition issues exactly ONE command and defers the rest to
         # the next cycle. This flag is the state that makes that possible.
         self._forcible_discharging = False
+        # Stop-retry budget. Huawei Modbus writes are queued and can be
+        # dropped / reordered under a flaky connection — a single
+        # stop_forcible_charge sometimes doesn't land, leaving the battery
+        # discharging. After exiting forcible we re-issue the (idempotent)
+        # stop for a few extra cycles so it self-heals. forcible_discharge_soc
+        # also self-terminates at target_soc=reserve, so this is belt-and-
+        # braces over an already-bounded action.
+        self._stop_retries = 0
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -130,6 +138,18 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         currently forcing, so it's safe to call from every command."""
         if not self._forcible_discharging:
             return False
+        ok = await self._issue_stop()
+        if not ok and self._inverter_device_id:
+            return False  # service raised — keep forcing, retry next cycle
+        self._forcible_discharging = False
+        self._last_force_discharge_w = 0.0
+        # Re-issue the stop on the next couple of NORMAL cycles — a single
+        # Modbus stop can be dropped/reordered on a flaky link.
+        self._stop_retries = 2
+        return True
+
+    async def _issue_stop(self) -> bool:
+        """Raw stop (service or number-entity). True on success."""
         if self._inverter_device_id:
             try:
                 await self._hass.services.async_call(
@@ -137,15 +157,13 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
                     {"device_id": self._inverter_device_id}, blocking=True,
                 )
                 _LOGGER.info("Huawei battery: stopped forcible discharge")
+                return True
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning(
                     "Huawei battery: stop_forcible_charge failed: %s", e,
                 )
-                return False  # not confirmed stopped — retry next cycle
-        else:
-            await super()._write_force_discharge(0.0)
-        self._forcible_discharging = False
-        self._last_force_discharge_w = 0.0
+                return False
+        await super()._write_force_discharge(0.0)
         return True
 
     # ─── Commands ──────────────────────────────────────────────
@@ -156,6 +174,12 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         discharge-limit write is deferred to the next cycle — back-to-back
         Modbus writes after stop_forcible_charge block the LUNA2000)."""
         if await self._stop_forcible():
+            self._last_intent = BatteryIntent.NORMAL
+            return
+        # Self-healing stop retries (flaky Modbus can drop a single stop).
+        if self._stop_retries > 0:
+            self._stop_retries -= 1
+            await self._issue_stop()
             self._last_intent = BatteryIntent.NORMAL
             return
         await self._apply_discharge_limit(self._max_discharge_w)
