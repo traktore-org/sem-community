@@ -13,7 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-# [1.7.3-beta.27] - 17.06.2026
+# [1.7.3-beta.28] - 17.06.2026
+
+## 🔋 AC-coupled batteries (Sessy) honour the power setpoint (#523)
+
+- **A generic AC-coupled battery (e.g. Sessy) now actually force-discharges and
+  sells.** These batteries ignore their power setpoint unless their *power
+  strategy* select (`select.sessy_*_power_strategy`) is in the API/active mode —
+  in eco/NOM they just self-consume. SEM now **switches the strategy to the
+  active value before writing a force/arbitrage setpoint** and **back to the idle
+  (self-consumption) value** when returning to NORMAL / limit / stop. Configure
+  it per battery via the new `battery_strategy_entities` (or the single-battery
+  `battery_strategy_control_entity`); active/idle values default to `api`/`eco`
+  and are overridable. Inert on batteries without a strategy select (Huawei,
+  GoodWe) — no behaviour change there.
 
 ## 🔌 Huawei battery: zero-config forcible discharge (#523)
 

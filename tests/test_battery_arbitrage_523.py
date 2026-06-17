@@ -425,3 +425,41 @@ async def test_generic_normal_zeroes_force_discharge():
         for c in hass.services.async_call.await_args_list
     )
     assert wrote_zero
+
+
+@pytest.mark.asyncio
+async def test_generic_sessy_strategy_gates_setpoint():
+    # AC-coupled (Sessy): force_discharge must switch the power-strategy
+    # select to the active value BEFORE writing the setpoint, and normal
+    # must hand control back to the idle/self-consumption value (#523).
+    hass = _hass()
+    gen = GenericBatteryAdapter(hass, {
+        "battery_force_discharge_control_entity": "number.sessy_1_power_setpoint",
+        "battery_strategy_control_entity": "select.sessy_1_power_strategy",
+        "battery_strategy_active_value": "api",
+        "battery_strategy_idle_value": "eco",
+        "battery_max_discharge_power": 1700,
+    })
+    await gen.command_force_discharge(1700, 20.0)
+    calls = [(c.args[0], c.args[1], c.args[2]) for c in hass.services.async_call.await_args_list]
+    # strategy → api (select) then setpoint (number)
+    assert ("select", "select_option", {"entity_id": "select.sessy_1_power_strategy", "option": "api"}) in calls
+    assert any(c[0] == "number" and c[2].get("value") == 1700 for c in calls)
+
+    hass.services.async_call.reset_mock()
+    await gen.command_normal()
+    calls = [(c.args[0], c.args[1], c.args[2].get("option")) for c in hass.services.async_call.await_args_list if c.args[0] == "select"]
+    assert ("select", "select_option", "eco") in calls   # back to self-consumption
+
+
+@pytest.mark.asyncio
+async def test_generic_strategy_optional_no_entity():
+    # No strategy entity → plain setpoint write, no select call (other generic
+    # batteries without a mode select still work).
+    hass = _hass()
+    gen = GenericBatteryAdapter(hass, {
+        "battery_force_discharge_control_entity": "number.batt_setpoint",
+        "battery_max_discharge_power": 3000,
+    })
+    await gen.command_force_discharge(3000, 20.0)
+    assert not any(c.args[0] == "select" for c in hass.services.async_call.await_args_list)

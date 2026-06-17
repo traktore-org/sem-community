@@ -203,6 +203,10 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # adapter construction too, so a change must reload.
     "battery_force_discharge_entities",
     "battery_discharge_control_entities",
+    # #523 Sessy / AC-coupled: per-battery power-strategy selects, also read
+    # at adapter construction.
+    "battery_strategy_entities",
+    "battery_strategy_control_entity",
 })
 
 

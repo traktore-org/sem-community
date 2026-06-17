@@ -3203,6 +3203,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         for list_key, single_key in (
             ("battery_force_discharge_entities", "battery_force_discharge_control_entity"),
             ("battery_discharge_control_entities", "battery_discharge_control_entity"),
+            ("battery_strategy_entities", "battery_strategy_control_entity"),
         ):
             lst = cfg.get(list_key)
             if isinstance(lst, list) and idx < len(lst) and lst[idx]:
