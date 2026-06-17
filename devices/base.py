@@ -506,6 +506,24 @@ class CurrentControlDevice(ControllableDevice):
         self.phases = phases
         self.voltage = voltage
         self.current_entity_id = current_entity_id
+        # #523 (RienduPre): a valid HA service is always ``domain.service``.
+        # A junk value with no dot (his Wallbox config carried a stray
+        # ``charger_service='0'`` — a leftover that even propagated to a
+        # sibling whose own config was None) used to reach the service
+        # branch and crash ``domain, service = charger_service.split('.', 1)``
+        # with "not enough values to unpack" on EVERY 10 s cycle, blocking
+        # current control even though a perfectly good ``current_entity_id``
+        # number was configured. Treat a dot-less service as absent so
+        # control correctly falls through to the number entity. Guards all
+        # three split sites (set_current / start / stop) at once.
+        if isinstance(charger_service, str) and "." not in charger_service:
+            if charger_service.strip():
+                _LOGGER.warning(
+                    "%s: ignoring invalid charger_service %r (not a "
+                    "'domain.service') — using entity control instead",
+                    name, charger_service,
+                )
+            charger_service = None
         self.charger_service = charger_service
         self.charger_service_entity_id = charger_service_entity_id
         self.service_param_name: str = "current"  # Overridden per integration (#82)

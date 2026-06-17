@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.29] - 17.06.2026
+
+## 🩹 Wallbox: a junk `charger_service` no longer blocks current control (#523)
+
+- **Fixes "Failed to set current … not enough values to unpack" spamming
+  every 10 s on both Wallboxes (RienduPre).** A leftover `charger_service='0'`
+  (no `domain.service` shape — and it even propagated to a sibling charger whose
+  own config was empty) hit the service branch and crashed the
+  `charger_service.split(".", 1)` unpack, so SEM could never set the charge
+  current — even though both chargers had a valid
+  `number.wallbox_*_max_charging_current` control entity. SEM now **treats any
+  `charger_service` that isn't a real `domain.service` as absent** and falls
+  through to the number entity. Guards all three actuation paths (set-current /
+  start / stop) at once.
+
 # [1.7.3-beta.28] - 17.06.2026
 
 ## 🔋 AC-coupled batteries (Sessy) honour the power setpoint (#523)
