@@ -8,7 +8,7 @@ actuator of the scheduler's verdict; the Huawei adapter sells to grid.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -198,6 +198,24 @@ def test_adapter_for_detects_huawei_via_config_entries():
     entry.state.value = "loaded"
     hass.config_entries.async_entries.return_value = [entry]
     assert isinstance(adapter_for(hass, {}), HuaweiBatteryAdapter)
+
+
+def test_huawei_autodetects_battery_device_zero_config():
+    # #523: with no inverter_device_id configured, the Huawei adapter
+    # auto-detects the battery device (connected_energy_storage) from the
+    # device registry, so forcible discharge works with zero manual config.
+    hass = _hass()
+    dev = MagicMock()
+    dev.id = "batterydev123"
+    dev.identifiers = {("huawei_solar", "BT2470369058/connected_energy_storage")}
+    reg = MagicMock()
+    reg.devices.values.return_value = [dev]
+    with patch(
+        "homeassistant.helpers.device_registry.async_get", return_value=reg,
+    ):
+        a = HuaweiBatteryAdapter(hass, {"battery_max_discharge_power": 4000})
+    assert a._inverter_device_id == "batterydev123"
+    assert a.supports_forced_discharge is True
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.27] - 17.06.2026
+
+## 🔌 Huawei battery: zero-config forcible discharge (#523)
+
+- **A Huawei battery's force / arbitrage modes now work with no manual
+  config.** The `huawei_solar.forcible_discharge_soc` service targets the
+  battery *device*; previously you had to set `inverter_device_id` by hand or
+  the command was dropped. SEM now **auto-detects the Huawei battery device**
+  from the device registry (the `connected_energy_storage` device), so
+  `supports_forced_discharge` is true out of the box. A manually-set
+  `inverter_device_id` still wins.
+
 # [1.7.3-beta.26] - 17.06.2026
 
 ## 🔧 Battery adapter self-heals a startup race (#523)

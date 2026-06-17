@@ -50,6 +50,13 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # configured; if instead a number entity is wired
         # (``battery_force_discharge_control_entity``) the base path is used.
         self._inverter_device_id = config.get("inverter_device_id", "")
+        # Auto-detect the Huawei battery device when it isn't configured, so
+        # forcible charge/discharge works with ZERO manual config (#523). The
+        # huawei_solar services target the BATTERY device (identifier
+        # ``.../connected_energy_storage`` or ``.../battery_<n>``), not the
+        # inverter device.
+        if not self._inverter_device_id:
+            self._inverter_device_id = self._autodetect_battery_device() or ""
         # Target SOC (reserve floor) for the in-flight forced discharge.
         self._fd_floor_soc = 0.0
         # Whether a forcible discharge is currently active. The LUNA2000
@@ -259,3 +266,35 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             _LOGGER.warning(
                 "Huawei battery: failed to set discharge limit: %s", e,
             )
+
+    def _autodetect_battery_device(self) -> str | None:
+        """Find the huawei_solar BATTERY device id that the
+        ``forcible_*_soc`` services target — the combined
+        ``connected_energy_storage`` device (preferred), else a per-battery
+        device. Lets forcible charge/discharge work with zero manual config."""
+        try:
+            from homeassistant.helpers import device_registry as dr
+            reg = dr.async_get(self._hass)
+            fallback = None
+            for dev in reg.devices.values():
+                for ident in getattr(dev, "identifiers", ()) or ():
+                    try:
+                        domain, value = ident
+                    except (ValueError, TypeError):
+                        continue
+                    if domain != "huawei_solar":
+                        continue
+                    v = str(value).lower()
+                    if "connected_energy_storage" in v:
+                        _LOGGER.info(
+                            "Huawei battery device auto-detected: %s (%s)",
+                            dev.id, value,
+                        )
+                        return dev.id
+                    if "/battery" in v:
+                        fallback = fallback or dev.id
+            if fallback:
+                _LOGGER.info("Huawei battery device auto-detected: %s", fallback)
+            return fallback
+        except Exception:  # noqa: BLE001 — detection must never break setup
+            return None
