@@ -59,8 +59,11 @@ class TestPlatformEntityCounts:
         add_entities = MagicMock()
         await number_setup(mock_hass, config_entry, add_entities)
         numbers = add_entities.call_args[0][0]
-        # Verify all NUMBER_TYPES are created
-        assert len(numbers) == len(NUMBER_TYPES)
+        # All NUMBER_TYPES + the single-battery global reserve-SOC number
+        # (#523): the test config has a battery (battery_power_sensor /
+        # battery_soc_sensor), so a global number.sem_battery_reserve_soc is
+        # created. Multi-battery installs create one per battery instead.
+        assert len(numbers) == len(NUMBER_TYPES) + 1
 
     @pytest.mark.asyncio
     async def test_sensor_count(self, mock_hass, config_entry, mock_coordinator):

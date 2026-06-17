@@ -112,6 +112,13 @@ class SEMBatteryCard extends SEMLitBase {
                 ].map(e => hass?.states[e]?.state || '').join(':');
                 return sensors + ':' + ctrl;
             }).join('|');
+        } else {
+            // Single-battery (#523): track the global mode + reserve so the
+            // hero control stays live.
+            key += '|' + [
+                'select.sem_battery_mode',
+                'number.sem_battery_reserve_soc',
+            ].map(e => hass?.states[e]?.state || '').join(':');
         }
 
         if (key === this._lastBattKey && !localeChanged) return;
@@ -234,6 +241,45 @@ class SEMBatteryCard extends SEMLitBase {
         return { key: 'until_empty', text: this._fmtHours(kwhToEmpty / (Math.abs(power) / 1000)) };
     }
 
+    // Mode dropdown + reserve stepper for a battery (#523). Shared by the
+    // per-battery sections (multi-battery) and the fleet hero (single battery).
+    // Renders nothing when the backend mode entity doesn't exist.
+    _renderModeControls(modeEntityId, reserveEntityId) {
+        const modeState = this._hass?.states[modeEntityId];
+        if (!modeState) return nothing;
+        const reserveState = this._hass?.states[reserveEntityId];
+        const modeVal = modeState.state;
+        const showReserve = reserveState
+            && (modeVal === 'allow_arbitrage' || modeVal === 'force_discharge');
+        return html`
+            <div class="battery-section-controls">
+                <div class="bsc-row">
+                    <span class="bsc-label">${this._t('mode')}</span>
+                    <select class="bsc-select" .value=${modeVal}
+                            @click=${(e) => e.stopPropagation()}
+                            @change=${(e) => this._selectOption(modeEntityId, e.target.value)}>
+                        ${(modeState.attributes.options || []).map(o => html`
+                            <option value=${o} ?selected=${o === modeVal}>
+                                ${this._t('battery_mode_' + o) || o}
+                            </option>`)}
+                    </select>
+                </div>
+                ${showReserve ? html`
+                    <div class="bsc-row">
+                        <span class="bsc-label">${this._t('reserve_soc')}</span>
+                        <span class="bsc-stepper">
+                            <button class="bsc-btn"
+                                @click=${() => this._stepNumber(reserveEntityId, -1)}>−</button>
+                            <span class="bsc-stepval">${Math.round(parseFloat(reserveState.state) || 0)}%</span>
+                            <button class="bsc-btn"
+                                @click=${() => this._stepNumber(reserveEntityId, 1)}>+</button>
+                        </span>
+                    </div>
+                ` : nothing}
+            </div>
+        `;
+    }
+
     _renderBatterySection(bid, idx) {
         const color = BATTERY_COLORS[idx % BATTERY_COLORS.length];
         const power = this._val(`battery_${bid}_power`, 0);
@@ -257,17 +303,6 @@ class SEMBatteryCard extends SEMLitBase {
         // Derived metrics (no extra backend sensors): stored energy and ETA.
         const stored = (soc != null && capacity > 0) ? (soc / 100) * capacity : null;
         const eta = this._batteryEta(soc, capacity, power);
-
-        // Per-battery controls (#523) — the mode select + reserve stepper,
-        // mirroring the EV card's mode dropdown + target. Rendered only when
-        // the backend entities exist (multi-battery installs).
-        const modeEntityId = `select.sem_battery_${bid}_mode`;
-        const modeState = this._hass?.states[modeEntityId];
-        const reserveEntityId = `number.sem_battery_${bid}_reserve_soc`;
-        const reserveState = this._hass?.states[reserveEntityId];
-        const modeVal = modeState?.state;
-        const showReserve = reserveState
-            && (modeVal === 'allow_arbitrage' || modeVal === 'force_discharge');
 
         return html`
             <div class="battery-section">
@@ -312,33 +347,10 @@ class SEMBatteryCard extends SEMLitBase {
                         ` : nothing}
                     </div>
                 </div>
-                ${modeState ? html`
-                    <div class="battery-section-controls">
-                        <div class="bsc-row">
-                            <span class="bsc-label">${this._t('mode')}</span>
-                            <select class="bsc-select" .value=${modeVal}
-                                    @click=${(e) => e.stopPropagation()}
-                                    @change=${(e) => this._selectOption(modeEntityId, e.target.value)}>
-                                ${(modeState.attributes.options || []).map(o => html`
-                                    <option value=${o} ?selected=${o === modeVal}>
-                                        ${this._t('battery_mode_' + o) || o}
-                                    </option>`)}
-                            </select>
-                        </div>
-                        ${showReserve ? html`
-                            <div class="bsc-row">
-                                <span class="bsc-label">${this._t('reserve_soc')}</span>
-                                <span class="bsc-stepper">
-                                    <button class="bsc-btn"
-                                        @click=${() => this._stepNumber(reserveEntityId, -1)}>−</button>
-                                    <span class="bsc-stepval">${Math.round(parseFloat(reserveState.state) || 0)}%</span>
-                                    <button class="bsc-btn"
-                                        @click=${() => this._stepNumber(reserveEntityId, 1)}>+</button>
-                                </span>
-                            </div>
-                        ` : nothing}
-                    </div>
-                ` : nothing}
+                ${this._renderModeControls(
+                    `select.sem_battery_${bid}_mode`,
+                    `number.sem_battery_${bid}_reserve_soc`,
+                )}
             </div>
         `;
     }
@@ -719,7 +731,14 @@ class SEMBatteryCard extends SEMLitBase {
                                 (bid, idx) => this._renderBatterySection(bid, idx),
                             )}
                         </div>
-                    ` : nothing}
+                    ` : html`
+                        <!-- Single-battery install (#523): global mode control
+                             on the hero, no per-battery section. -->
+                        ${this._renderModeControls(
+                            'select.sem_battery_mode',
+                            'number.sem_battery_reserve_soc',
+                        )}
+                    `}
 
                     <div class="session-section">
                         <div class="sess-header">

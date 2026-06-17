@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.24] - 17.06.2026
+
+## 🔋 Battery mode selector on single-battery installs (#523)
+
+- **The Battery card mode selector now appears on single-battery installs too.**
+  beta.23 only created the per-battery Mode + Reserve-SOC controls for
+  multi-battery setups, so a single-battery install (the common case) had no way
+  to pick **Auto / Self-consumption / Allow arbitrage / Force charge / Force
+  discharge**. There's now a global `select.sem_battery_mode` +
+  `number.sem_battery_reserve_soc`, shown on the battery hero card.
+
 # [1.7.3-beta.23] - 16.06.2026
 
 ## 🔋🎛️ Per-battery control + Huawei forcible-discharge fix (#523)

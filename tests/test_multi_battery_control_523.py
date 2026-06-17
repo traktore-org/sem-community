@@ -95,3 +95,26 @@ def test_per_battery_mode_absent_falls_back():
     assert _per(cfg, 0)["battery_mode"] == "force_charge"
     # b2 beyond the list → no battery_mode key (decide_battery defaults to auto)
     assert "battery_mode" not in _per(cfg, 1)
+
+
+def test_persist_global_option_writes_scalar_no_reload():
+    # #523 single-battery: the global mode/reserve entities write the SCALAR
+    # battery_mode / battery_reserve_soc keys (no per-battery list) without a
+    # reload — mirrored into coordinator.config + reload-skip armed.
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from custom_components.solar_energy_management import persist_global_option
+
+    entry = SimpleNamespace(data={"a": 1}, options={"battery_mode": "auto"})
+    coordinator = SimpleNamespace(config={"a": 1, "battery_mode": "auto"})
+    hass = MagicMock()
+    captured = {}
+    hass.config_entries.async_update_entry = (
+        lambda e, **kw: captured.update(kw)
+    )
+    persist_global_option(hass, entry, coordinator, "battery_mode", "force_discharge")
+    assert captured["options"]["battery_mode"] == "force_discharge"
+    assert coordinator.config["battery_mode"] == "force_discharge"   # mirrored
+    assert coordinator._skip_options_reload["battery_mode"] == "force_discharge"
+    # the single battery's decide reads it via _per_battery_config(0)
+    assert _per(coordinator.config, 0)["battery_mode"] == "force_discharge"

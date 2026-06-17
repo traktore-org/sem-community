@@ -347,6 +347,22 @@ def persist_per_charger_option(
     hass.config_entries.async_update_entry(entry, options=new_options)
 
 
+def persist_global_option(hass, entry, coordinator, key: str, value) -> None:
+    """Persist ONE scalar option key without an integration reload (#523).
+
+    Used by the SINGLE-battery mode/reserve entities (``select.sem_battery_mode``
+    / ``number.sem_battery_reserve_soc``), which write the global
+    ``battery_mode`` / ``battery_reserve_soc`` keys rather than the per-battery
+    list. Same no-reload contract as the per-charger / per-battery paths.
+    """
+    new_options = {**(entry.options or {})}
+    new_options[key] = value
+    if isinstance(getattr(coordinator, "config", None), dict):
+        coordinator.config.update({**(entry.data or {}), **new_options})
+    coordinator._skip_options_reload = new_options
+    hass.config_entries.async_update_entry(entry, options=new_options)
+
+
 def persist_per_battery_option(
     hass, entry, coordinator, idx: int, list_key: str, value, count: int,
 ) -> None:

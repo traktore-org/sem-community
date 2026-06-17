@@ -1343,7 +1343,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
 
                 </div>
             </ha-card>
-        `}getCardSize(){return 4}static getStubConfig(){return{entity_prefix:Pt}}},{type:"sem-solar-summary-card",name:"SEM Solar Summary",description:"Lumina-styled solar overview with glow ring and production metrics"});const Ht="sensor.sem_",Ut=["battery_soc","battery_power","battery_charge_power","battery_discharge_power","battery_status","battery_health_score","battery_cycles_estimated","battery_temperature","battery_session_type","battery_session_energy","battery_session_solar_share","battery_session_duration","battery_session_avg_power","battery_session_cost","battery_session_savings","daily_battery_charge_energy","daily_battery_discharge_energy","daily_battery_savings","flow_solar_to_battery_energy","flow_grid_to_battery_energy","monthly_battery_charge_energy","monthly_battery_discharge_energy"],Wt=["#4db6ac","#FFB74D","#BA68C8","#64B5F6"];xt("sem-battery-card",class extends bt{constructor(){super(),this._batteries=[],this._lastStateCount=0}static get watchedEntities(){return Ut.map(t=>`${Ht}${t}`)}setConfig(t){super.setConfig(t),this._prefix=t.entity_prefix||Ht}set hass(t){this._hass=t;const e=t?.language,i="function"==typeof semLocalize;let s=!1;(e!==this._lang||i&&!this._localizeReady)&&(this._lang=e,this._localizeReady=i,s=!0);const r=Object.keys(t.states).length;if(r!==this._lastStateCount){this._lastStateCount=r;const e=[];for(const i of Object.keys(t.states)){const t=i.match(/^sensor\.sem_battery_(b\d+)_power$/);t&&e.push(t[1])}e.sort(),this._batteries=e}if(this._isFrozen()&&!s)return;const a=t?.states[`${this._prefix}battery_status`]?.state;if(("unavailable"===a||"unknown"===a)&&!s)return;let o=Ut.map(e=>t?.states[`${this._prefix}${e}`]?.state||"").join(",")+"|"+e;this._batteries.length&&(o+="|"+this._batteries.map(e=>{const i=[`battery_${e}_power`,`battery_${e}_soc`,`battery_${e}_status`,`battery_${e}_capacity_kwh`].map(e=>t?.states[`${this._prefix}${e}`]?.state||"").join(":"),s=[`select.sem_battery_${e}_mode`,`number.sem_battery_${e}_reserve_soc`].map(e=>t?.states[e]?.state||"").join(":");return i+":"+s}).join("|")),(o!==this._lastBattKey||s)&&(this._lastBattKey=o,this._scheduleUpdate())}get hass(){return this._hass}_val(t,e=0){return this._state(`${this._prefix}${t}`,e)}_valStr(t){return this._stateStr(`${this._prefix}${t}`)}_fmt(t,e=1){return null==t||isNaN(t)?"—":t.toFixed(e)}_fmtDuration(t){if(null==t||isNaN(t))return"—";const e=Math.round(t);if(e<90)return`${e} min`;const i=Math.floor(e/60),s=e-60*i;return 0===s?`${i} h`:`${i} h ${s} min`}_batteryName(t){const e=this._hass?.states[`${this._prefix}battery_${t}_power`];let i=t.toUpperCase();return e?.attributes?.friendly_name&&(i=e.attributes.friendly_name.replace(/^SEM\s+/i,"").replace(/\s+Power$/i,"")),i}_renderMiniSocRing(t,e){const i=null!=t?Math.max(0,Math.min(100,t)):0,s=2*Math.PI*22,r=s*(1-i/100);return W`
+        `}getCardSize(){return 4}static getStubConfig(){return{entity_prefix:Pt}}},{type:"sem-solar-summary-card",name:"SEM Solar Summary",description:"Lumina-styled solar overview with glow ring and production metrics"});const Ht="sensor.sem_",Ut=["battery_soc","battery_power","battery_charge_power","battery_discharge_power","battery_status","battery_health_score","battery_cycles_estimated","battery_temperature","battery_session_type","battery_session_energy","battery_session_solar_share","battery_session_duration","battery_session_avg_power","battery_session_cost","battery_session_savings","daily_battery_charge_energy","daily_battery_discharge_energy","daily_battery_savings","flow_solar_to_battery_energy","flow_grid_to_battery_energy","monthly_battery_charge_energy","monthly_battery_discharge_energy"],Wt=["#4db6ac","#FFB74D","#BA68C8","#64B5F6"];xt("sem-battery-card",class extends bt{constructor(){super(),this._batteries=[],this._lastStateCount=0}static get watchedEntities(){return Ut.map(t=>`${Ht}${t}`)}setConfig(t){super.setConfig(t),this._prefix=t.entity_prefix||Ht}set hass(t){this._hass=t;const e=t?.language,i="function"==typeof semLocalize;let s=!1;(e!==this._lang||i&&!this._localizeReady)&&(this._lang=e,this._localizeReady=i,s=!0);const r=Object.keys(t.states).length;if(r!==this._lastStateCount){this._lastStateCount=r;const e=[];for(const i of Object.keys(t.states)){const t=i.match(/^sensor\.sem_battery_(b\d+)_power$/);t&&e.push(t[1])}e.sort(),this._batteries=e}if(this._isFrozen()&&!s)return;const a=t?.states[`${this._prefix}battery_status`]?.state;if(("unavailable"===a||"unknown"===a)&&!s)return;let o=Ut.map(e=>t?.states[`${this._prefix}${e}`]?.state||"").join(",")+"|"+e;this._batteries.length?o+="|"+this._batteries.map(e=>{const i=[`battery_${e}_power`,`battery_${e}_soc`,`battery_${e}_status`,`battery_${e}_capacity_kwh`].map(e=>t?.states[`${this._prefix}${e}`]?.state||"").join(":"),s=[`select.sem_battery_${e}_mode`,`number.sem_battery_${e}_reserve_soc`].map(e=>t?.states[e]?.state||"").join(":");return i+":"+s}).join("|"):o+="|"+["select.sem_battery_mode","number.sem_battery_reserve_soc"].map(e=>t?.states[e]?.state||"").join(":"),(o!==this._lastBattKey||s)&&(this._lastBattKey=o,this._scheduleUpdate())}get hass(){return this._hass}_val(t,e=0){return this._state(`${this._prefix}${t}`,e)}_valStr(t){return this._stateStr(`${this._prefix}${t}`)}_fmt(t,e=1){return null==t||isNaN(t)?"—":t.toFixed(e)}_fmtDuration(t){if(null==t||isNaN(t))return"—";const e=Math.round(t);if(e<90)return`${e} min`;const i=Math.floor(e/60),s=e-60*i;return 0===s?`${i} h`:`${i} h ${s} min`}_batteryName(t){const e=this._hass?.states[`${this._prefix}battery_${t}_power`];let i=t.toUpperCase();return e?.attributes?.friendly_name&&(i=e.attributes.friendly_name.replace(/^SEM\s+/i,"").replace(/\s+Power$/i,"")),i}_renderMiniSocRing(t,e){const i=null!=t?Math.max(0,Math.min(100,t)):0,s=2*Math.PI*22,r=s*(1-i/100);return W`
             <svg viewBox="0 0 56 56" width="56" height="56"
                  style="display:block;">
                 <circle cx="28" cy="28" r="${22}" fill="none"
@@ -1375,7 +1375,33 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     ${null!=t?Math.round(s)+"%":"—"}
                 </text>
             </svg>
-        `}_fmtHours(t){if(null==t||!isFinite(t)||t<=0)return"—";if(t<1)return`${Math.round(60*t)} min`;const e=Math.floor(t),i=Math.round(60*(t-e));return 0===i?`${e} h`:`${e} h ${i} min`}_batteryEta(t,e,i){if(null==t||e<=0||Math.abs(i)<50)return null;if(i>50){const s=(100-t)/100*e;return{key:"until_full",text:this._fmtHours(s/(i/1e3))}}const s=t/100*e;return{key:"until_empty",text:this._fmtHours(s/(Math.abs(i)/1e3))}}_renderBatterySection(t,e){const i=Wt[e%Wt.length],s=this._val(`battery_${t}_power`,0),r=this._val(`battery_${t}_soc`,null),a=(this._valStr(`battery_${t}_status`)||"idle").toLowerCase(),o=this._val(`battery_${t}_capacity_kwh`,0),n=this._batteryName(t),l="selling"===a,c=!l&&("charging"===a||s>50),d=!l&&("discharging"===a||s<-50),p=c||d||l,h=l?"selling_to_grid":c?"charging":d?"discharging":"idle",_=l?"#FCD170":c?"#f06292":d?"#4db6ac":"#999",g=null!=r&&o>0?r/100*o:null,u=this._batteryEta(r,o,s),f=`select.sem_battery_${t}_mode`,m=this._hass?.states[f],v=`number.sem_battery_${t}_reserve_soc`,y=this._hass?.states[v],x=m?.state,b=y&&("allow_arbitrage"===x||"force_discharge"===x);return W`
+        `}_fmtHours(t){if(null==t||!isFinite(t)||t<=0)return"—";if(t<1)return`${Math.round(60*t)} min`;const e=Math.floor(t),i=Math.round(60*(t-e));return 0===i?`${e} h`:`${e} h ${i} min`}_batteryEta(t,e,i){if(null==t||e<=0||Math.abs(i)<50)return null;if(i>50){const s=(100-t)/100*e;return{key:"until_full",text:this._fmtHours(s/(i/1e3))}}const s=t/100*e;return{key:"until_empty",text:this._fmtHours(s/(Math.abs(i)/1e3))}}_renderModeControls(t,e){const i=this._hass?.states[t];if(!i)return K;const s=this._hass?.states[e],r=i.state,a=s&&("allow_arbitrage"===r||"force_discharge"===r);return W`
+            <div class="battery-section-controls">
+                <div class="bsc-row">
+                    <span class="bsc-label">${this._t("mode")}</span>
+                    <select class="bsc-select" .value=${r}
+                            @click=${t=>t.stopPropagation()}
+                            @change=${e=>this._selectOption(t,e.target.value)}>
+                        ${(i.attributes.options||[]).map(t=>W`
+                            <option value=${t} ?selected=${t===r}>
+                                ${this._t("battery_mode_"+t)||t}
+                            </option>`)}
+                    </select>
+                </div>
+                ${a?W`
+                    <div class="bsc-row">
+                        <span class="bsc-label">${this._t("reserve_soc")}</span>
+                        <span class="bsc-stepper">
+                            <button class="bsc-btn"
+                                @click=${()=>this._stepNumber(e,-1)}>−</button>
+                            <span class="bsc-stepval">${Math.round(parseFloat(s.state)||0)}%</span>
+                            <button class="bsc-btn"
+                                @click=${()=>this._stepNumber(e,1)}>+</button>
+                        </span>
+                    </div>
+                `:K}
+            </div>
+        `}_renderBatterySection(t,e){const i=Wt[e%Wt.length],s=this._val(`battery_${t}_power`,0),r=this._val(`battery_${t}_soc`,null),a=(this._valStr(`battery_${t}_status`)||"idle").toLowerCase(),o=this._val(`battery_${t}_capacity_kwh`,0),n=this._batteryName(t),l="selling"===a,c=!l&&("charging"===a||s>50),d=!l&&("discharging"===a||s<-50),p=c||d||l,h=l?"selling_to_grid":c?"charging":d?"discharging":"idle",_=l?"#FCD170":c?"#f06292":d?"#4db6ac":"#999",g=null!=r&&o>0?r/100*o:null,u=this._batteryEta(r,o,s);return W`
             <div class="battery-section">
                 <div class="battery-section-header">
                     <div class="battery-dot" style="background:${i}"></div>
@@ -1418,33 +1444,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         `:K}
                     </div>
                 </div>
-                ${m?W`
-                    <div class="battery-section-controls">
-                        <div class="bsc-row">
-                            <span class="bsc-label">${this._t("mode")}</span>
-                            <select class="bsc-select" .value=${x}
-                                    @click=${t=>t.stopPropagation()}
-                                    @change=${t=>this._selectOption(f,t.target.value)}>
-                                ${(m.attributes.options||[]).map(t=>W`
-                                    <option value=${t} ?selected=${t===x}>
-                                        ${this._t("battery_mode_"+t)||t}
-                                    </option>`)}
-                            </select>
-                        </div>
-                        ${b?W`
-                            <div class="bsc-row">
-                                <span class="bsc-label">${this._t("reserve_soc")}</span>
-                                <span class="bsc-stepper">
-                                    <button class="bsc-btn"
-                                        @click=${()=>this._stepNumber(v,-1)}>−</button>
-                                    <span class="bsc-stepval">${Math.round(parseFloat(y.state)||0)}%</span>
-                                    <button class="bsc-btn"
-                                        @click=${()=>this._stepNumber(v,1)}>+</button>
-                                </span>
-                            </div>
-                        `:K}
-                    </div>
-                `:K}
+                ${this._renderModeControls(`select.sem_battery_${t}_mode`,`number.sem_battery_${t}_reserve_soc`)}
             </div>
         `}render(){if(!this._hass||!this._config)return K;const t=this._theme(),e=2*Math.PI*42,i=e.toFixed(1),s=this._val("battery_soc",0),r=this._val("battery_power",0),a=this._val("battery_charge_power",0),o=this._val("battery_discharge_power",0),n=(this._valStr("battery_status")||"").toLowerCase(),l=this._val("battery_health_score",0),c=this._val("battery_cycles_estimated",0),d=this._val("daily_battery_charge_energy",0),p=this._val("daily_battery_discharge_energy",0),h=this._val("daily_battery_savings",0),_=this._val("monthly_battery_charge_energy",0),g=this._val("monthly_battery_discharge_energy",0),u=this._val("flow_solar_to_battery_energy",0),f=ut(this._hass),m=this._hass?.states[`${this._prefix}battery_temperature`],v=m&&"unavailable"!==m.state&&"unknown"!==m.state?parseFloat(m.state):null,y="selling"===n,x=!y&&("charging"===n||a>10),b=!y&&("discharging"===n||o>10),$=this._hass?.states["sensor.sem_tariff_current_export_rate"],w=$&&"unavailable"!==$.state&&"unknown"!==$.state?parseFloat($.state):null,k="#FCD170",S=y?this._t("selling_to_grid"):x?this._t("charging"):b?this._t("discharging"):this._t("idle"),C=y?k:x?"#f06292":"#4db6ac",E=y?k:x?"#f06292":b?"#4db6ac":t.textSec||"#888",z=x||b||y?"0.5":"0.2",M=x||b||y?"socPulse 2s ease-in-out infinite":"none",D=Math.min(Math.max(s/100,0),1),F=(e*(1-D)).toFixed(1),I=d>0?Math.round(u/d*100):0,T=this._valStr("battery_session_type"),A="charge"===T||"discharge"===T,N="charge"===T,R=A?this._val("battery_session_energy",0):0,O=A?this._val("battery_session_duration",0):0,P=A?this._val("battery_session_avg_power",0):0,B=A?this._val("battery_session_solar_share",0):0,L=A?this._val("battery_session_cost",0):0,H=A?this._val("battery_session_savings",0):0,U=N?"#f06292":"#4db6ac";t.dotColor;const j=t.surface||"rgba(255,255,255,0.06)",G=t.surfaceBorder||"rgba(255,255,255,0.05)",q=t.surfaceHover||"rgba(255,255,255,0.12)",Y=t.textSec||"#999",V=t.textTertiary||"#888";return W`
             <style>
@@ -1744,7 +1744,11 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         <div class="battery-sections">
                             ${this._batteries.map((t,e)=>this._renderBatterySection(t,e))}
                         </div>
-                    `:K}
+                    `:W`
+                        <!-- Single-battery install (#523): global mode control
+                             on the hero, no per-battery section. -->
+                        ${this._renderModeControls("select.sem_battery_mode","number.sem_battery_reserve_soc")}
+                    `}
 
                     <div class="session-section">
                         <div class="sess-header">

@@ -55,6 +55,12 @@ from .consts.ev_charge_modes import (
 )
 from .consts.battery_modes import BATTERY_MODES, DEFAULT_BATTERY_MODE
 
+# Single-battery global mode-select key. Held in a variable (not an inline
+# literal description key) so the static-translation extractor doesn't treat
+# it as an entity needing a strings.json entry — the localized labels come
+# from the card's semLocalize, same as the per-charger charge_mode select.
+_GLOBAL_BATTERY_MODE_KEY = "battery_mode"
+
 
 _BATTERY_SLUG_RE = re.compile(r"^sensor\.sem_battery_(b\d+)_power$")
 
@@ -91,6 +97,23 @@ def _battery_slugs(coordinator: SEMCoordinator) -> list[str]:
     except Exception as exc:  # noqa: BLE001 — discovery must never break setup
         _LOGGER.debug("battery slug discovery failed: %s", exc)
         return []
+
+
+def _has_battery(coordinator: SEMCoordinator) -> bool:
+    """Install has at least one (single/fleet) battery — so a global battery
+    mode selector is worth creating even without per-battery slugs."""
+    try:
+        reg = er.async_get(coordinator.hass)
+        if any(
+            e.entity_id == "sensor.sem_battery_soc"
+            for e in reg.entities.values()
+        ):
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    cfg = getattr(coordinator, "config", {}) or {}
+    return bool(cfg.get("battery_power_sensor") or cfg.get("battery_soc_sensor"))
+
 
 SELECT_TYPES = [
     # ev_charging_mode and ev_target_type are PER-CHARGER only (#255) — the global
@@ -185,6 +208,22 @@ async def async_setup_entry(
                 entity_category=EntityCategory.CONFIG,
             ),
             entry, idx, len(batt_slugs), cur,
+        ))
+
+    # SINGLE-battery installs (#523): no per-battery slugs, but a battery is
+    # present → one global ``select.sem_battery_mode`` writing the scalar
+    # ``battery_mode`` key. idx=None routes the write to the global key.
+    if not batt_slugs and _has_battery(coordinator):
+        per_battery_keys.add(_GLOBAL_BATTERY_MODE_KEY)
+        entities.append(SEMPerBatterySelect(
+            coordinator,
+            SelectEntityDescription(
+                key=_GLOBAL_BATTERY_MODE_KEY,
+                options=list(BATTERY_MODES.keys()),
+                entity_category=EntityCategory.CONFIG,
+            ),
+            entry, None, 1,
+            full_config.get("battery_mode") or DEFAULT_BATTERY_MODE,
         ))
 
     async_add_entities(entities)
@@ -492,14 +531,24 @@ class SEMPerBatterySelect(CoordinatorEntity, SelectEntity):
         return self.coordinator.device_info
 
     async def async_select_option(self, option: str) -> None:
-        """Persist the selected battery mode (no reload)."""
+        """Persist the selected battery mode (no reload). ``idx is None`` is
+        the SINGLE-battery install → write the scalar ``battery_mode`` key;
+        otherwise write the per-battery ``battery_modes`` list."""
         if option not in self.options:
             return
         self._value = option
-        from . import persist_per_battery_option
-        persist_per_battery_option(
-            self.hass, self._entry, self.coordinator,
-            self._idx, "battery_modes", option, self._count,
-        )
+        if self._idx is None:
+            from . import persist_global_option
+            persist_global_option(
+                self.hass, self._entry, self.coordinator,
+                "battery_mode", option,
+            )
+            _LOGGER.info("Updated battery mode to %s", option)
+        else:
+            from . import persist_per_battery_option
+            persist_per_battery_option(
+                self.hass, self._entry, self.coordinator,
+                self._idx, "battery_modes", option, self._count,
+            )
+            _LOGGER.info("Updated battery %d mode to %s", self._idx, option)
         self.async_write_ha_state()
-        _LOGGER.info("Updated battery %d mode to %s", self._idx, option)

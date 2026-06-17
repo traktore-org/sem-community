@@ -515,18 +515,13 @@ async def async_setup_entry(
     # one ``number.sem_battery_<bid>_reserve_soc`` each — the floor the
     # battery never sells below in force/allow arbitrage discharge.
     from .consts.battery_modes import DEFAULT_BATTERY_RESERVE_SOC
-    from .select import _battery_slugs  # shared battery-list discovery
+    from .select import _battery_slugs, _has_battery  # shared discovery
     batt_slugs = _battery_slugs(coordinator)
     reserve_cfg = full_config.get("battery_reserve_socs") or []
     per_battery_descriptions = []
-    for idx, bid in enumerate(batt_slugs):
-        key = f"battery_{bid}_reserve_soc"
-        cur = (
-            reserve_cfg[idx]
-            if idx < len(reserve_cfg) and reserve_cfg[idx] not in (None, "")
-            else DEFAULT_BATTERY_RESERVE_SOC
-        )
-        desc = NumberEntityDescription(
+
+    def _reserve_desc(key):
+        return NumberEntityDescription(
             key=key,
             native_min_value=0,
             native_max_value=100,
@@ -535,9 +530,27 @@ async def async_setup_entry(
             entity_category=EntityCategory.CONFIG,
             mode=NumberMode.SLIDER,
         )
+
+    for idx, bid in enumerate(batt_slugs):
+        cur = (
+            reserve_cfg[idx]
+            if idx < len(reserve_cfg) and reserve_cfg[idx] not in (None, "")
+            else DEFAULT_BATTERY_RESERVE_SOC
+        )
+        desc = _reserve_desc(f"battery_{bid}_reserve_soc")
         per_battery_descriptions.append(desc)
         entities.append(SEMPerBatteryNumber(
             coordinator, desc, entry, idx, len(batt_slugs), float(cur),
+        ))
+
+    # SINGLE-battery install (#523): global ``number.sem_battery_reserve_soc``.
+    if not batt_slugs and _has_battery(coordinator):
+        desc = _reserve_desc("battery_reserve_soc")
+        per_battery_descriptions.append(desc)
+        cur = full_config.get("battery_reserve_soc")
+        entities.append(SEMPerBatteryNumber(
+            coordinator, desc, entry, None, 1,
+            float(cur if cur not in (None, "") else DEFAULT_BATTERY_RESERVE_SOC),
         ))
 
     async_add_entities(entities)
@@ -878,12 +891,21 @@ class SEMPerBatteryNumber(CoordinatorEntity, NumberEntity):
         return self.coordinator.device_info
 
     async def async_set_native_value(self, value: float) -> None:
-        """Persist the per-battery reserve SOC (no reload)."""
+        """Persist the reserve SOC (no reload). ``idx is None`` is the
+        SINGLE-battery install → scalar ``battery_reserve_soc`` key."""
         self._attr_native_value = value
-        from . import persist_per_battery_option
-        persist_per_battery_option(
-            self.hass, self._entry, self.coordinator,
-            self._idx, "battery_reserve_socs", value, self._count,
-        )
+        if self._idx is None:
+            from . import persist_global_option
+            persist_global_option(
+                self.hass, self._entry, self.coordinator,
+                "battery_reserve_soc", value,
+            )
+            _LOGGER.info("Updated battery reserve SOC to %s", value)
+        else:
+            from . import persist_per_battery_option
+            persist_per_battery_option(
+                self.hass, self._entry, self.coordinator,
+                self._idx, "battery_reserve_socs", value, self._count,
+            )
+            _LOGGER.info("Updated battery %d reserve SOC to %s", self._idx, value)
         self.async_write_ha_state()
-        _LOGGER.info("Updated battery %d reserve SOC to %s", self._idx, value)
