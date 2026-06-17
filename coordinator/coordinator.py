@@ -3251,7 +3251,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         keyed by ``"primary"``.
         """
         from .actuate_battery import actuate_battery
-        from .battery_adapters import adapter_for
+        from .battery_adapters import adapter_for, _integration_loaded
         from .charger_types import (
             BatteryIntent, BatteryRuntime, BatteryView, FleetContext,
         )
@@ -3391,6 +3391,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     battery_id, type(adapter).__name__,
                     getattr(adapter, "supports_forced_discharge", "n/a"),
                 )
+            elif type(adapter).__name__ == "GenericBatteryAdapter":
+                # Self-heal a startup race: the brand integration (e.g.
+                # huawei_solar) can finish loading AFTER SEM's first battery
+                # cycle, so the cached adapter is a Generic fallback for a
+                # battery that's really a Huawei/GoodWe. Re-detect once a
+                # brand integration is actually loaded and upgrade in place
+                # (cheap: only while still Generic + a brand entry exists).
+                if _integration_loaded(self.hass, "huawei_solar") or \
+                        _integration_loaded(self.hass, "goodwe"):
+                    _rebuilt = adapter_for(self.hass, self._per_battery_config(batt_idx))
+                    if type(_rebuilt).__name__ != "GenericBatteryAdapter":
+                        adapter = _rebuilt
+                        self._battery_adapters[battery_id] = adapter
+                        _LOGGER.info(
+                            "Battery %s: upgraded GenericBatteryAdapter → %s "
+                            "(brand integration finished loading)",
+                            battery_id, type(adapter).__name__,
+                        )
 
             view = BatteryView(
                 runtime=runtime,

@@ -161,6 +161,30 @@ async def test_huawei_force_discharge_writes_entity():
     assert a.last_intent is BatteryIntent.FORCE_DISCHARGE
 
 
+def test_integration_loaded_only_when_state_loaded():
+    # The self-heal trigger: a brand integration counts as present only when
+    # an entry is actually LOADED (not while it's still setting up after a
+    # restart — that race left PROD on the Generic adapter).
+    from custom_components.solar_energy_management.coordinator.battery_adapters import (
+        _integration_loaded,
+    )
+    hass = MagicMock()
+    hass.data = {}
+
+    def _entry(state_value):
+        e = MagicMock()
+        e.state = MagicMock()
+        e.state.value = state_value
+        return e
+
+    hass.config_entries.async_entries.return_value = [_entry("setup_in_progress")]
+    assert _integration_loaded(hass, "huawei_solar") is False   # still loading
+    hass.config_entries.async_entries.return_value = [_entry("loaded")]
+    assert _integration_loaded(hass, "huawei_solar") is True     # ready
+    hass.config_entries.async_entries.return_value = []
+    assert _integration_loaded(hass, "huawei_solar") is False    # not installed
+
+
 def test_adapter_for_detects_huawei_via_config_entries():
     # Modern huawei_solar uses runtime_data, not hass.data — adapter_for
     # must still detect it through loaded config entries (#523 real-hardware).

@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.26] - 17.06.2026
+
+## 🔧 Battery adapter self-heals a startup race (#523)
+
+- **A Huawei/GoodWe battery no longer gets stuck on the Generic adapter.** If
+  the brand integration (e.g. `huawei_solar`) finishes loading *after* SEM's
+  first battery cycle on boot, SEM used to cache a Generic fallback for the
+  whole session — so brand-specific control (Huawei forcible discharge) silently
+  never engaged. SEM now **re-detects once the brand integration is loaded** and
+  upgrades the adapter in place. Surfaced by the new beta.25 `battery_control`
+  diagnostics, which showed a real Huawei battery reporting `GenericBatteryAdapter`.
+
 # [1.7.3-beta.25] - 17.06.2026
 
 ## 🩺 Battery + surplus observability in diagnostics (#523)
