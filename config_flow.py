@@ -1782,10 +1782,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.EntitySelectorConfig(domain="switch")
                 ),
                 vol.Optional(
-                    "heat_pump_invert_sg_ready",
-                    default=_c("heat_pump_invert_sg_ready", False),
-                ): selector.BooleanSelector(),
-                vol.Optional(
                     "heat_pump_climate_entity",
                     description={"suggested_value": _opt("heat_pump_climate_entity")},
                 ): selector.EntitySelector(

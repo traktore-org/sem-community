@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.31] - 17.06.2026
+
+## 🔥 Heat pump: drop the speculative invert toggle (#523)
+
+- The SG-Ready truth table is **universal across EMS vendors** (verified against
+  alpha innotec / gridX / SMA / SolarEdge), so the corrected map from beta.30 is
+  right for everyone. The opt-in "Invert SG-Ready contacts" toggle was a
+  speculative knob for a normally-closed-wiring case no one has actually
+  reported — removed to keep the config surface lean. It can come back later if
+  a real inverted-wiring install turns up. The corrected standard map stays.
+
 # [1.7.3-beta.30] - 17.06.2026
 
 ## 🔥 Heat pump: SG-Ready relay map corrected to the standard (#523)
