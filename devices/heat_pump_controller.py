@@ -30,12 +30,27 @@ class SGReadyState(IntEnum):
     FORCE_ON = 4     # 11 - Forced maximum consumption
 
 
-# Relay mapping: (relay1, relay2) for each SG-Ready state
+# Relay mapping: (relay1, relay2) for each SG-Ready state.
+#
+# This is the SG-Ready standard truth table (BWP "SG Ready" label, also what
+# Nibe/most heat pumps expect), where ``True`` = contact closed/active and the
+# pair is (input1 : input2):
+#   1 EVU-Sperre (blocked):        1:0
+#   2 Normalbetrieb (normal):      0:0
+#   3 verstärkter Betrieb (boost): 0:1
+#   4 Anlaufbefehl (forced on):    1:1
+#
+# #523 (RienduPre, Nibe SG-Ready): the previous map was a plain 2-bit count
+# (00/01/10/11) that did NOT match this standard — so SEM's BOOST drove
+# (1,0), which a standard pump reads as EVU-block, turning the pump OFF on
+# surplus instead of on ("the heat pump never got turned on"). Corrected to
+# the standard below. Installs with inverted contact wiring (NC instead of
+# NO) use the per-pump ``invert_sg_ready`` toggle, which flips both contacts.
 SG_READY_RELAY_MAP = {
-    SGReadyState.BLOCKED:  (False, False),  # 00
-    SGReadyState.NORMAL:   (False, True),   # 01
-    SGReadyState.BOOST:    (True, False),    # 10
-    SGReadyState.FORCE_ON: (True, True),     # 11
+    SGReadyState.BLOCKED:  (True,  False),  # 1:0
+    SGReadyState.NORMAL:   (False, False),  # 0:0
+    SGReadyState.BOOST:    (False, True),   # 0:1
+    SGReadyState.FORCE_ON: (True,  True),   # 1:1
 }
 
 
@@ -79,6 +94,7 @@ class HeatPumpController(SetpointDevice):
         force_on_threshold: float = 5000.0,
         min_power_change_interval: float = 300.0,
         daily_min_runtime_sec: int = 0,
+        invert_sg_ready: bool = False,
     ):
         super().__init__(
             hass=hass,
@@ -97,6 +113,11 @@ class HeatPumpController(SetpointDevice):
         self.daily_min_runtime_sec = daily_min_runtime_sec
         self.relay1_entity_id = relay1_entity_id
         self.relay2_entity_id = relay2_entity_id
+        # #523: opt-in for installs whose SG-Ready contacts are wired
+        # normally-closed (NC) instead of normally-open — flips both relays
+        # so the SG-Ready standard map drives the physical contacts the right
+        # way. Default off (NO wiring, the common case).
+        self.invert_sg_ready = bool(invert_sg_ready)
         self.temperature_entity_id = temperature_entity_id
         self.force_on_threshold = force_on_threshold
         self._hp_status = HeatPumpStatus()
@@ -242,6 +263,14 @@ class HeatPumpController(SetpointDevice):
         self._last_deactivation_path = "unblocked"
         _LOGGER.info("Heat pump unblocked")
 
+    def _relays_for(self, state: SGReadyState) -> tuple[bool, bool]:
+        """(relay1_on, relay2_on) for an SG-Ready state, applying the
+        per-pump NC-wiring inversion (#523) when configured."""
+        r1, r2 = SG_READY_RELAY_MAP[state]
+        if self.invert_sg_ready:
+            return (not r1, not r2)
+        return (r1, r2)
+
     async def _set_sg_ready_state(self, state: SGReadyState) -> bool:
         """Set SG-Ready state via relay entities.
 
@@ -257,9 +286,9 @@ class HeatPumpController(SetpointDevice):
         ``no_relays_configured`` is the climate-only path (#437) — a
         valid success, the climate setpoint is the actuation.
         """
-        relay1_on, relay2_on = SG_READY_RELAY_MAP[state]
+        relay1_on, relay2_on = self._relays_for(state)
         # Prior relay1 value (for restore on a partial relay2 failure, I3).
-        prev_relay1_on, _ = SG_READY_RELAY_MAP[self._hp_status.sg_ready_state]
+        prev_relay1_on, _ = self._relays_for(self._hp_status.sg_ready_state)
         relay1_called = False
 
         if self.relay1_entity_id:

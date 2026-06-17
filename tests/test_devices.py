@@ -495,18 +495,18 @@ async def test_heat_pump_block_unblock(heat_pump):
 @pytest.mark.asyncio
 async def test_heat_pump_relay_control(heat_pump):
     """Test relay service calls match SG-Ready mapping."""
-    await heat_pump.activate(3000.0)  # Should be BOOST (relay1=on, relay2=off)
+    await heat_pump.activate(3000.0)  # Should be BOOST
     calls = heat_pump.hass.services.async_call.call_args_list
 
     # Find the relay calls (first two before climate call)
     relay_calls = [c for c in calls if c[0][1] in ("turn_on", "turn_off")]
-    # BOOST = (True, False) -> relay1=turn_on, relay2=turn_off
+    # #523: BOOST is the SG-Ready standard 0:1 -> relay1=turn_off, relay2=turn_on
     relay1_call = [c for c in relay_calls if "sg_relay1" in str(c)]
     relay2_call = [c for c in relay_calls if "sg_relay2" in str(c)]
     assert len(relay1_call) >= 1
     assert len(relay2_call) >= 1
-    assert relay1_call[0][0][1] == "turn_on"
-    assert relay2_call[0][0][1] == "turn_off"
+    assert relay1_call[0][0][1] == "turn_off"
+    assert relay2_call[0][0][1] == "turn_on"
 
 
 def test_heat_pump_get_current_temperature(heat_pump):

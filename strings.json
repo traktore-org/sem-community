@@ -144,6 +144,7 @@
         "data": {
           "heat_pump_relay1_entity": "SG-Ready Relay 1 (optional switch entity)",
           "heat_pump_relay2_entity": "SG-Ready Relay 2 (optional switch entity)",
+          "heat_pump_invert_sg_ready": "Invert SG-Ready contacts (for NC wiring)",
           "heat_pump_climate_entity": "Climate entity for setpoint boost (optional)",
           "heat_pump_power_sensor": "Power sensor (optional)",
           "heat_pump_boost_offset": "Temperature boost offset (°C)",
@@ -153,6 +154,7 @@
         "data_description": {
           "heat_pump_relay1_entity": "Switch entity for SG-Ready relay 1 (normal operation signal). Set together with relay 2 for SG-Ready protocol.",
           "heat_pump_relay2_entity": "Switch entity for SG-Ready relay 2 (surplus boost signal). Set together with relay 1 for SG-Ready protocol.",
+          "heat_pump_invert_sg_ready": "Enable only if your heat pump's SG-Ready contacts are wired normally-closed (NC). SEM drives the standard SG-Ready truth table; if boost blocks the pump (and vice-versa), turn this on to flip both relays.",
           "heat_pump_climate_entity": "Climate entity used to raise the setpoint during solar surplus. Sufficient on its own for climate-only mode (no relays needed).",
           "heat_pump_power_sensor": "Optional sensor (W) reporting the heat pump's current power consumption.",
           "heat_pump_boost_offset": "Degrees Celsius added to the normal setpoint during a solar surplus boost.",

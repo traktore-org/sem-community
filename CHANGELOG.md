@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.30] - 17.06.2026
+
+## 🔥 Heat pump: SG-Ready relay map corrected to the standard (#523)
+
+- **Fixes "the heat pump never got turned on" on SG-Ready pumps (RienduPre,
+  Nibe).** SEM's `SG_READY_RELAY_MAP` was a plain 2-bit count, not the SG-Ready
+  standard truth table — so when SEM wanted to **boost** the pump on surplus it
+  drove `(relay1=on, relay2=off)`, which a standard pump (Nibe et al.) reads as
+  **EVU-block** and turns *off* instead of on. Corrected to the SG-Ready
+  standard: BLOCKED `1:0`, NORMAL `0:0`, BOOST `0:1`, FORCE_ON `1:1`.
+- **New opt-in "Invert SG-Ready contacts" toggle** (Configuration → Heat Pump)
+  for installs whose contacts are wired **normally-closed (NC)** — it flips both
+  relays so the standard map still drives the right physical state. Default off
+  (NO wiring, the common case).
+- The Control-tab "not configured" label for a correctly-registered heat pump
+  was already fixed in beta.19 — update past beta.19 to clear it.
+
 # [1.7.3-beta.29] - 17.06.2026
 
 ## 🩹 Wallbox: a junk `charger_service` no longer blocks current control (#523)

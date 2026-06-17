@@ -267,6 +267,7 @@ class TestStructuralKeysVisibility:
             "heat_pump_relay1_entity", "heat_pump_relay2_entity",
             "heat_pump_climate_entity", "heat_pump_power_sensor",
             "heat_pump_temperature_sensor",
+            "heat_pump_invert_sg_ready",
             "hot_water_entity", "hot_water_power_sensor",
             "hot_water_temperature_sensor",
             "ev_chargers",

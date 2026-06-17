@@ -193,6 +193,9 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     "heat_pump_relay1_entity", "heat_pump_relay2_entity",
     "heat_pump_climate_entity", "heat_pump_power_sensor",
     "heat_pump_temperature_sensor",
+    # #523: read at HeatPumpController construction, so a change must reload
+    # to rebuild the controller with the new relay polarity.
+    "heat_pump_invert_sg_ready",
     "hot_water_entity", "hot_water_power_sensor",
     "hot_water_temperature_sensor",
     "ev_chargers",
@@ -1609,6 +1612,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 boost_offset=float(full_config.get("heat_pump_boost_offset", 2.0)),
                 max_setpoint=float(full_config.get("heat_pump_max_setpoint", 55.0)),
                 force_on_threshold=float(full_config.get("heat_pump_force_on_threshold", 5000)),
+                invert_sg_ready=bool(full_config.get("heat_pump_invert_sg_ready", False)),
             )
             coordinator._surplus_controller.register_device(hp_device)
             mode_label = (
