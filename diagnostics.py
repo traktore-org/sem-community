@@ -282,6 +282,69 @@ async def async_get_config_entry_diagnostics(
                 }
             charger_adapter_info[cid] = entry_info
 
+    # Battery control observability (#523) — the battery-side mirror of
+    # ``charger_adapters``. Answers, in one payload: is the battery
+    # controllable at ALL (the Sessy / AC-coupled question), what mode +
+    # reserve it's in, and the last per-battery decision + reason — so
+    # "is the EV draining the battery?" is a single readable line
+    # (``LIMIT_DISCHARGE — ev_charging → 1200W``).
+    battery_info: dict[str, Any] = {}
+    try:
+        full_cfg = {**(entry.data or {}), **(entry.options or {})}
+        sched = getattr(coordinator, "_battery_charge_scheduler", None)
+        _adapters = getattr(coordinator, "_battery_adapters", None)
+        _adapters = _adapters if isinstance(_adapters, dict) else {}
+        _decisions = getattr(coordinator, "_last_battery_decisions", None)
+        _decisions = _decisions if isinstance(_decisions, dict) else {}
+        battery_info = {
+            "adapters": {
+                bid: {
+                    "class": type(ad).__name__,
+                    "supports_forced_charge": getattr(ad, "supports_forced_charge", None),
+                    "supports_forced_discharge": getattr(ad, "supports_forced_discharge", None),
+                    "force_discharge_entity": getattr(ad, "_force_discharge_entity", None) or None,
+                    "discharge_control_entity": getattr(ad, "_discharge_control_entity", None) or None,
+                    "inverter_device_id_set": bool(getattr(ad, "_inverter_device_id", "")),
+                }
+                for bid, ad in _adapters.items()
+            },
+            "last_decisions": _decisions,
+            "config": {
+                "battery_mode": full_cfg.get("battery_mode"),
+                "battery_reserve_soc": full_cfg.get("battery_reserve_soc"),
+                "battery_modes": full_cfg.get("battery_modes"),
+                "battery_reserve_socs": full_cfg.get("battery_reserve_socs"),
+                "battery_discharge_protection_enabled": full_cfg.get(
+                    "battery_discharge_protection_enabled", True),
+                "battery_grid_arbitrage_enabled": full_cfg.get(
+                    "battery_grid_arbitrage_enabled", False),
+                "inverter_device_id_set": bool(full_cfg.get("inverter_device_id")),
+                "battery_charge_platform": full_cfg.get("battery_charge_platform"),
+                "battery_force_discharge_control_entity": full_cfg.get(
+                    "battery_force_discharge_control_entity") or None,
+                "battery_force_discharge_entities": full_cfg.get(
+                    "battery_force_discharge_entities"),
+            },
+            "scheduler": {
+                "enabled": getattr(sched, "enabled", None),
+                "state": str(getattr(getattr(sched, "state", None), "value", "")) or None,
+            },
+        }
+    except Exception as exc:  # noqa: BLE001 — diagnostics must never raise
+        battery_info = {"error": str(exc)}
+
+    # Surplus allocation snapshot — answers "why didn't the heat pump /
+    # hot water turn on?" (distributable surplus + who won it). Combined
+    # with heat_pump.registered + sg_ready_state below, it's the gate
+    # reason: not enough surplus, lost priority to the EV, or not wired.
+    surplus_info = {
+        k: data.get(k) for k in (
+            "surplus_total_w", "surplus_distributable_w", "surplus_allocated_w",
+            "surplus_unallocated_w", "surplus_active_devices",
+            "surplus_total_devices", "surplus_allocations",
+        )
+    }
+
     # v1.6.11: bundle the last ~80 SEM-related log lines into the
     # diagnostics dump so bug reports come pre-loaded with the
     # surrounding log context. See ``_get_recent_sem_logs`` for the
@@ -353,6 +416,8 @@ async def async_get_config_entry_diagnostics(
             "percentage": data.get("current_vs_peak_percentage"),
             "status": data.get("load_management_status"),
         },
+        "battery_control": battery_info,
+        "surplus": surplus_info,
         "load_management": load_info,
         "energy_dashboard": ed_info,
         "split_grid_discovery": split_grid_info,

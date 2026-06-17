@@ -3410,6 +3410,19 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 "decide_battery(%s) → intent=%s :: %s",
                 battery_id, decision.intent.value, decision.reason,
             )
+            # Capture the last decision per battery for diagnostics (#523) —
+            # "is the EV draining the battery?" is answerable in one line.
+            if not hasattr(self, "_last_battery_decisions"):
+                self._last_battery_decisions = {}
+            self._last_battery_decisions[battery_id] = {
+                "intent": decision.intent.value,
+                "reason": decision.reason,
+                "mode": (view.config or {}).get("battery_mode", "auto"),
+                "soc": getattr(runtime, "last_known_soc", None),
+                "adapter": type(adapter).__name__,
+                "supports_forced_discharge": getattr(
+                    adapter, "supports_forced_discharge", None),
+            }
             if decision.intent is BatteryIntent.FORCE_DISCHARGE:
                 self._battery_arbitrage_active = True
 

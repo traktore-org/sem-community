@@ -13,6 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.25] - 17.06.2026
+
+## 🩺 Battery + surplus observability in diagnostics (#523)
+
+The one-click **Download Diagnostics** now answers the two questions that
+previously needed a back-and-forth (or a DB dump):
+
+- **`battery_control`** — is the battery controllable at all (adapter class,
+  `supports_forced_charge` / `supports_forced_discharge`, the wired control
+  entities + whether an inverter device is set), what **mode + reserve** it's
+  in, and the **last per-battery decision + reason** — so *"is the EV draining
+  the battery?"* is a single readable line (`LIMIT_DISCHARGE — ev_charging →
+  1200 W`).
+- **`surplus`** — the live surplus allocation snapshot (distributable surplus,
+  who won it, active vs total devices) — which, with the existing `heat_pump`
+  block, explains *"why didn't the heat pump turn on?"* (not enough surplus,
+  lost priority, or not wired).
+
+No new data collection or DB dump needed — it's all in the existing
+diagnostics payload.
+
 # [1.7.3-beta.24] - 17.06.2026
 
 ## 🔋 Battery mode selector on single-battery installs (#523)
