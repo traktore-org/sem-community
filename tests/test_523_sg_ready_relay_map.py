@@ -71,3 +71,32 @@ class TestStandardTruthTable:
                      for c in hp.hass.services.async_call.await_args_list}
         assert by_entity["switch.sg_ready_a"] == "turn_on"
         assert by_entity["switch.sg_ready_b"] == "turn_on"
+
+
+@pytest.mark.unit
+class TestInvertToggle:
+    """Opt-in NC-wiring safety net — flips both contacts (#523)."""
+
+    def test_default_is_no_invert(self):
+        assert _hp().invert_sg_ready is False
+
+    def test_relays_for_inverts_both(self):
+        hp = _hp(invert_sg_ready=True)
+        # BOOST standard (False, True) → inverted (True, False)
+        assert hp._relays_for(SGReadyState.BOOST) == (True, False)
+        assert hp._relays_for(SGReadyState.NORMAL) == (True, True)
+
+    @pytest.mark.asyncio
+    async def test_inverted_boost_flips_contacts(self):
+        hp = _hp(invert_sg_ready=True)
+        await hp._set_sg_ready_state(SGReadyState.BOOST)
+        by_entity = {c.args[2]["entity_id"]: c.args[1]
+                     for c in hp.hass.services.async_call.await_args_list}
+        # inverted BOOST = (A on, B off)
+        assert by_entity["switch.sg_ready_a"] == "turn_on"
+        assert by_entity["switch.sg_ready_b"] == "turn_off"
+
+    def test_no_invert_passthrough(self):
+        hp = _hp(invert_sg_ready=False)
+        assert hp._relays_for(SGReadyState.FORCE_ON) == (True, True)
+        assert hp._relays_for(SGReadyState.BLOCKED) == (True, False)

@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.32] - 18.06.2026
+
+## 🔥 Heat pump: restore the SG-Ready invert toggle (#523)
+
+- **Brought back the opt-in "Invert SG-Ready contacts" toggle** (Configuration →
+  Heat Pump) that beta.31 removed. It's inert by default and costs nothing, but
+  it's the one-click safety net for an install wired normally-closed (NC) — so a
+  pump that boosts-as-block can be corrected without a second release round-trip.
+  The corrected standard map remains the default.
+
 # [1.7.3-beta.31] - 17.06.2026
 
 ## 🔥 Heat pump: drop the speculative invert toggle (#523)
