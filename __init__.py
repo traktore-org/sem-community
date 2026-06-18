@@ -190,6 +190,10 @@ PLATFORMS: list[Platform] = [
 _SKIP_RELOAD_SNAPSHOT_TTL_S = 60.0
 
 _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
+    # #529: manual override for the battery SOC sensor when autodetect can't
+    # reach it (SOC on a different device than the power sensor, or a generic
+    # template helper). Read at SensorReader construction → must reload.
+    "battery_soc_sensor",
     "heat_pump_relay1_entity", "heat_pump_relay2_entity",
     "heat_pump_climate_entity", "heat_pump_power_sensor",
     "heat_pump_temperature_sensor",

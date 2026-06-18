@@ -79,3 +79,62 @@ def test_no_soc_sensor_returns_none():
     except Exception:
         result = None
     assert result is None
+
+
+# ── #529: guarded global last-resort scan ────────────────────────────
+
+def _state(eid, value, unit="%", device_class="battery"):
+    s = Mock()
+    s.entity_id = eid
+    s.state = value
+    s.attributes = {"unit_of_measurement": unit, "device_class": device_class}
+    return s
+
+
+def _reader_with_scan(sensor_states, get_dict=None):
+    """Reader whose async_all('sensor') returns the given state objects and
+    whose states.get resolves from get_dict (default empty → Strategy 1/2 miss)."""
+    hass = Mock()
+    hass.states = Mock()
+    gd = get_dict or {}
+    hass.states.get = lambda eid: gd.get(eid)
+    hass.states.async_all = lambda domain=None: sensor_states
+    return SensorReader(hass, {})
+
+
+def test_global_scan_finds_lone_soc_on_other_device():
+    # #529: Huawei user with a generic sensor.battery_state_of_charge that
+    # neither the name-prefix nor the same-device scan reaches.
+    r = _reader_with_scan([_state("sensor.battery_state_of_charge", "73")])
+    assert (
+        r._auto_detect_battery_soc("sensor.inverter_x_power")
+        == "sensor.battery_state_of_charge"
+    )
+
+
+def test_global_scan_ambiguous_returns_none():
+    r = _reader_with_scan([
+        _state("sensor.battery_state_of_charge", "73"),
+        _state("sensor.home_battery_soc", "55"),
+    ])
+    assert r._auto_detect_battery_soc("sensor.inverter_x_power") is None
+
+
+def test_global_scan_excludes_ev_battery():
+    # The EV SOC is excluded, leaving exactly one home-battery candidate.
+    r = _reader_with_scan([
+        _state("sensor.ev_battery_soc", "40"),
+        _state("sensor.battery_state_of_charge", "73"),
+    ])
+    assert (
+        r._auto_detect_battery_soc("sensor.inverter_x_power")
+        == "sensor.battery_state_of_charge"
+    )
+
+
+def test_global_scan_requires_percent_unit():
+    # A SOC-named sensor without a % unit (e.g. kWh capacity) is not a SOC.
+    r = _reader_with_scan([
+        _state("sensor.battery_state_of_charge", "10.2", unit="kWh"),
+    ])
+    assert r._auto_detect_battery_soc("sensor.inverter_x_power") is None

@@ -264,6 +264,7 @@ class TestStructuralKeysVisibility:
         Removing one is too. Both should be deliberate.
         """
         expected = {
+            "battery_soc_sensor",
             "heat_pump_relay1_entity", "heat_pump_relay2_entity",
             "heat_pump_climate_entity", "heat_pump_power_sensor",
             "heat_pump_temperature_sensor",

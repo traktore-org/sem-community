@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.34] - 18.06.2026
+
+## 🔋 Battery SOC: reachable when it lives off the power sensor's device (#529)
+
+- **A battery SOC sensor that autodetect couldn't reach is now found.** Some
+  installs (e.g. a Huawei Luna with a generic `sensor.battery_state_of_charge`,
+  or a template helper) expose the SOC on a *different* device than the battery
+  power sensor — so neither the name-prefix nor the same-device scan could find
+  it, and SEM showed no SOC even though the HA Energy Dashboard read it fine. A
+  **guarded global last-resort scan** now finds the lone home-battery SOC sensor
+  (a SOC-keyword name + `%` unit, excluding EV/phone batteries) — only when
+  **exactly one** unambiguous candidate exists, never a guess (#529).
+- **Manual override:** `battery_soc_sensor` is now a settable option (structural
+  → reloads), so when autodetect still can't decide, you can point SEM at the
+  right sensor explicitly via the `set_option` service.
+
 # [1.7.3-beta.33] - 18.06.2026
 
 ## 🔋 AC-coupled batteries (Sessy) can now force-CHARGE (#523)

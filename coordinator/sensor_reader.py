@@ -2081,6 +2081,54 @@ class SensorReader:
         except Exception as e:
             _LOGGER.debug("Device registry SOC lookup failed: %s", e)
 
+        # Strategy 3: guarded global last-resort scan (#529). Some installs
+        # expose the battery SOC on a DIFFERENT device than the power sensor
+        # (or as a standalone template helper) — e.g. Huawei users with a
+        # generic ``sensor.battery_state_of_charge`` that the HA Energy
+        # Dashboard reads fine but neither the name-prefix nor the same-device
+        # scan above can reach. Fall back to a whole-system scan, but only
+        # commit when EXACTLY ONE sensor is an unambiguous HOME-battery SOC —
+        # a name SOC-keyword AND a ``%`` unit, excluding EV/vehicle/phone
+        # batteries. Zero or multiple matches → return None (never guess).
+        try:
+            _EXCLUDE = ("ev", "car", "vehicle", "phone", "iphone", "laptop",
+                        "tablet", "watch", "device_tracker")
+            candidates: list[str] = []
+            for state in self.hass.states.async_all("sensor"):
+                eid = state.entity_id
+                eid_lower = eid.lower()
+                if any(x in eid_lower for x in _EXCLUDE):
+                    continue
+                if not any(kw in eid_lower for kw in soc_keywords):
+                    continue
+                unit = (state.attributes.get("unit_of_measurement") or "").strip()
+                if unit != "%":
+                    continue
+                if state.state in ("unknown", "unavailable", None):
+                    continue
+                try:
+                    val = float(state.state)
+                except (ValueError, TypeError):
+                    continue
+                if 0 <= val <= 100:
+                    candidates.append(eid)
+            if len(candidates) == 1:
+                if not getattr(self, "_battery_soc_logged", False):
+                    _LOGGER.info(
+                        "Auto-detected battery SOC via global scan (#529): %s",
+                        candidates[0],
+                    )
+                    self._battery_soc_logged = True
+                return candidates[0]
+            if len(candidates) > 1:
+                _LOGGER.debug(
+                    "Battery SOC global scan ambiguous (%d candidates: %s) — "
+                    "set battery_soc_sensor explicitly (#529)",
+                    len(candidates), candidates,
+                )
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.debug("Battery SOC global scan failed: %s", e)
+
         return None
 
     def _try_soc_candidates(self, prefix: str, soc_keywords: list) -> Optional[str]:
