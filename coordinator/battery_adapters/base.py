@@ -59,7 +59,10 @@ class BatteryControlAdapter(ABC):
         self._force_discharge_entity: str = config.get(
             "battery_force_discharge_control_entity", "",
         )
-        self._last_force_discharge_w: float = -1.0  # de-dup writes
+        # de-dup writes. None = never written (so the first write of any sign
+        # always goes through; a plain -1.0 sentinel would alias a real
+        # negative charge setpoint on a bidirectional entity, #523).
+        self._last_force_discharge_w: Optional[float] = None
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -133,8 +136,11 @@ class BatteryControlAdapter(ABC):
         self._last_intent = BatteryIntent.STOP_FORCE_DISCHARGE
 
     async def _write_force_discharge(self, watts: float) -> None:
-        """De-dup'd write of the forcible-discharge power. Mutual
-        exclusion is the callers' job: ``command_normal`` /
+        """De-dup'd write of the battery power setpoint. ``watts`` is a
+        SIGNED setpoint on a bidirectional control entity: ``> 0`` =
+        discharge to grid (the #523 arbitrage path), ``< 0`` = charge from
+        grid (AC-coupled Sessy-style bidirectional setpoint), ``0`` = idle.
+        Mutual exclusion is the callers' job: ``command_normal`` /
         ``command_limit_discharge`` / ``command_force_charge`` /
         ``command_stop_force_charge`` zero this so the battery can't keep
         selling once SEM moves to any other mode."""
@@ -142,7 +148,7 @@ class BatteryControlAdapter(ABC):
             return
         # Skip when within 100 W of the last applied value — the 0→0 case
         # (the common NORMAL cycle) must not spam the bus.
-        if (self._last_force_discharge_w >= 0
+        if (self._last_force_discharge_w is not None
                 and abs(watts - self._last_force_discharge_w) < 100.0):
             return
         try:
@@ -163,6 +169,12 @@ class BatteryControlAdapter(ABC):
                 _LOGGER.info(
                     "Battery: forcible-discharge %.0f W → %s (arbitrage)",
                     watts, self._force_discharge_entity,
+                )
+            elif watts < 0:
+                _LOGGER.info(
+                    "Battery: forcible-charge %.0f W → %s "
+                    "(bidirectional setpoint)",
+                    -watts, self._force_discharge_entity,
                 )
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning(

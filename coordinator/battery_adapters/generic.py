@@ -40,6 +40,21 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         self._strategy_active = config.get("battery_strategy_active_value", "api")
         self._strategy_idle = config.get("battery_strategy_idle_value", "eco")
         self._last_strategy = None
+        # #523: AC-coupled batteries (Sessy, …) expose ONE bidirectional power
+        # setpoint — the same ``battery_force_discharge_control_entity`` that
+        # SEM writes a positive value to for discharge takes a NEGATIVE value
+        # to charge. There is no separate force-charge switch, so the
+        # switch-based GenericChargeAdapter can't drive them. When this flag is
+        # set, force-charge writes ``-power`` to that same setpoint (gated by
+        # strategy → active), mirroring force-discharge's ``+power``.
+        self._setpoint_bidirectional = bool(
+            config.get("battery_setpoint_bidirectional", False),
+        )
+        # #523: the user's own strategy before SEM took control (e.g. a Sessy
+        # running ``nom``/``roi`` for self-consumption). Captured when SEM
+        # switches to the active value and restored when SEM releases — so we
+        # don't clobber their normal mode with the ``eco`` fallback.
+        self._restore_strategy: "Optional[str]" = None
         # Lazy import for delegate
         try:
             from ..battery_charge_adapter import GenericChargeAdapter
@@ -72,12 +87,33 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("Generic battery: failed to set strategy: %s", e)
 
+    async def _enter_active_strategy(self) -> None:
+        """Capture the user's current strategy (once), then switch to the
+        active (API) value so the setpoint takes effect."""
+        if self._strategy_entity and self._restore_strategy is None:
+            st = self._hass.states.get(self._strategy_entity)
+            cur = getattr(st, "state", None)
+            # Only remember a real, restorable option — never the active value
+            # itself, and not a MagicMock/unknown/unavailable.
+            if (isinstance(cur, str)
+                    and cur not in (self._strategy_active, "unknown",
+                                    "unavailable", "")):
+                self._restore_strategy = cur
+        await self._set_strategy(self._strategy_active)
+
+    async def _release_strategy(self) -> None:
+        """Restore the user's prior strategy (so we don't clobber their
+        self-consumption mode); fall back to the configured idle value only
+        if we never captured one."""
+        await self._set_strategy(self._restore_strategy or self._strategy_idle)
+        self._restore_strategy = None
+
     async def command_force_discharge(
         self, power_w: float, floor_soc: float,
     ) -> None:
         # Switch to the active (API) strategy BEFORE writing the setpoint —
         # an AC-coupled battery ignores the setpoint in eco/self-consumption.
-        await self._set_strategy(self._strategy_active)
+        await self._enter_active_strategy()
         await super().command_force_discharge(power_w, floor_soc)
 
     @property
@@ -90,19 +126,24 @@ class GenericBatteryAdapter(BatteryControlAdapter):
 
     @property
     def supports_forced_charge(self) -> bool:
+        # A bidirectional setpoint can charge via a negative value on the
+        # same entity — no charge switch needed (#523, Sessy).
+        if self._setpoint_bidirectional and self._force_discharge_entity:
+            return True
         return bool(self._force_charge_switch and self._target_soc_entity)
 
     async def command_normal(self) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        # Hand control back to the battery's own self-consumption (eco) — for
-        # an AC-coupled battery this is what makes "Self-consumption only" work.
-        await self._set_strategy(self._strategy_idle)
+        # Hand control back to the battery's own self-consumption — restore the
+        # user's prior strategy (nom/roi/eco). For an AC-coupled battery this is
+        # what makes "Self-consumption only" actually work.
+        await self._release_strategy()
         await self._apply_discharge_limit(self._max_discharge_w)
         self._last_intent = BatteryIntent.NORMAL
 
     async def command_limit_discharge(self, watts: float) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        await self._set_strategy(self._strategy_idle)
+        await self._release_strategy()
         watts = max(0.0, min(watts, self._max_discharge_w))
         if (self._last_discharge_limit_w >= 0
                 and abs(watts - self._last_discharge_limit_w) < 100.0):
@@ -114,6 +155,16 @@ class GenericBatteryAdapter(BatteryControlAdapter):
     async def command_force_charge(
         self, target_soc: float, charge_power_w: float, duration_min: int,
     ) -> None:
+        # #523 AC-coupled bidirectional setpoint (Sessy): charge = NEGATIVE
+        # power on the same setpoint entity. Set the active strategy first
+        # (the setpoint is ignored in self-consumption mode) then write the
+        # negative value — the mirror of command_force_discharge.
+        if self._setpoint_bidirectional and self._force_discharge_entity:
+            await self._enter_active_strategy()
+            watts = max(0.0, min(float(charge_power_w), self.max_charge_power_w))
+            await self._write_force_discharge(-watts)
+            self._last_intent = BatteryIntent.FORCE_CHARGE
+            return
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
         if self._charge_adapter is None:
             _LOGGER.warning(
@@ -132,7 +183,7 @@ class GenericBatteryAdapter(BatteryControlAdapter):
 
     async def command_stop_force_charge(self) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        await self._set_strategy(self._strategy_idle)
+        await self._release_strategy()
         if self._charge_adapter is not None:
             await self._charge_adapter.stop_forced_charge()
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE

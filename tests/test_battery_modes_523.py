@@ -77,6 +77,26 @@ def test_force_charge_mode():
     assert d.charge_power_w == 5000
 
 
+def test_force_charge_power_falls_back_when_w_key_is_none():
+    # #523: battery_max_charge_power_w present-as-None used to yield 0 W
+    # (a .get(key, default) returns None when the key exists), so the
+    # bidirectional setpoint charged at 0 W. Must fall through to
+    # battery_max_charge_power, then the 5000 default.
+    d = decide_battery(_view(mode="force_charge", cfg_extra={
+        "battery_max_charge_power_w": None,
+        "battery_max_charge_power": 2200,
+    }))
+    assert d.charge_power_w == 2200
+
+
+def test_force_charge_power_defaults_when_both_keys_absent():
+    d = decide_battery(_view(mode="force_charge", cfg_extra={
+        "battery_max_charge_power_w": None,
+        "battery_max_charge_power": None,
+    }))
+    assert d.charge_power_w == 5000.0
+
+
 def test_force_discharge_overrides_scheduler_charge():
     # Even if the scheduler wants to charge, manual force_discharge wins.
     sched = SimpleNamespace(

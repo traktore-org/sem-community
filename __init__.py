@@ -210,6 +210,9 @@ _SET_OPTION_STRUCTURAL_KEYS: frozenset[str] = frozenset({
     # at adapter construction.
     "battery_strategy_entities",
     "battery_strategy_control_entity",
+    # #523 AC-coupled bidirectional setpoint (charge = negative on the
+    # force-discharge entity) — read at adapter construction.
+    "battery_setpoint_bidirectional",
 })
 
 

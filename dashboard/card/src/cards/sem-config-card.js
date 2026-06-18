@@ -683,6 +683,9 @@ class SEMConfigCard extends SEMLitBase {
                                 'config_force_discharge_entity', 'number', null, opts,
                                 'config_help_force_discharge_entity');
                     })()}
+                    ${this._renderOptionToggle('battery_setpoint_bidirectional',
+                        'config_battery_bidirectional', opts,
+                        'config_help_battery_bidirectional', false)}
                 ` : nothing}
             ` : nothing}
         `;

@@ -276,6 +276,7 @@ class TestStructuralKeysVisibility:
             "battery_discharge_control_entities",
             "battery_strategy_entities",
             "battery_strategy_control_entity",
+            "battery_setpoint_bidirectional",
         }
         assert _SET_OPTION_STRUCTURAL_KEYS == expected
 

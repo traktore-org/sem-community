@@ -13,6 +13,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.33] - 18.06.2026
+
+## 🔋 AC-coupled batteries (Sessy) can now force-CHARGE (#523)
+
+- **SEM can now force-charge a Sessy-style battery.** These batteries have no
+  charge *switch* — they charge by writing a **negative** value to the same
+  bidirectional power setpoint that discharge writes a positive value to. SEM's
+  switch-based charge path couldn't drive them, so `force_charge` (and scheduled
+  night charging) silently did nothing. New opt-in **"Bidirectional setpoint"**
+  toggle (Configuration → Battery, next to the forcible-discharge entity): when
+  on, force-charge writes `-power` to the setpoint, gated by the power-strategy
+  → API switch. Verified live on HA-TEST (force_charge → −2200 W setpoint +
+  strategy `api`; release → 0 W).
+- **SEM restores the battery's prior power-strategy instead of forcing `eco`.**
+  Researching the ha-sessy integration showed the real strategy options are
+  lowercase `api`/`nom`/`roi`/`idle`/`eco`. SEM now **captures** the user's
+  strategy (e.g. `nom`/`roi` self-consumption) before taking control and
+  **restores** it on release — so it no longer clobbers their normal mode.
+- **Fixed force-charge commanding 0 W** when `battery_max_charge_power_w` is
+  present-as-`None` (a `.get(key, default)` returns `None`, not the default).
+  The charge power now falls through `battery_max_charge_power_w` →
+  `battery_max_charge_power` → 5000 W. Harmless before (the charge switch
+  ignored power); surfaced by the new bidirectional setpoint path.
+
 # [1.7.3-beta.32] - 18.06.2026
 
 ## 🔥 Heat pump: restore the SG-Ready invert toggle (#523)

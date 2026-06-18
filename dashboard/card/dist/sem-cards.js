@@ -6001,6 +6001,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     ${this._renderOptionNumberInput("battery_arbitrage_min_export_price","config_arbitrage_min_export",{min:0,max:2,step:.01,unit:`${a}/kWh`,default:.2},e,"config_help_arbitrage_min_export")}
                     ${this._renderOptionNumberInput("battery_arbitrage_reserve_soc","config_arbitrage_reserve_soc",{min:0,max:100,step:5,unit:"%",default:50},e,"config_help_arbitrage_reserve_soc")}
                     ${(()=>{const t=this._batteryCount();return t>1?W`${Array.from({length:t},(i,s)=>this._renderBatteryDischargePicker(s,t,e))}`:this._renderPicker("battery_force_discharge_control_entity","config_force_discharge_entity","number",null,e,"config_help_force_discharge_entity")})()}
+                    ${this._renderOptionToggle("battery_setpoint_bidirectional","config_battery_bidirectional",e,"config_help_battery_bidirectional",!1)}
                 `:K}
             `:K}
         `}_renderHeatPump(t){const e=this._bin("heat_pump_registered"),i=this._options||{},s=e?W`

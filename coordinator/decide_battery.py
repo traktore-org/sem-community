@@ -78,7 +78,16 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             battery_id=rt.battery_id,
             intent=BatteryIntent.FORCE_CHARGE,
             target_soc=100.0,
-            charge_power_w=float(cfg.get("battery_max_charge_power_w", 5000.0) or 0.0),
+            # #523: fall through the two charge-power keys before the 5000 W
+            # default. ``battery_max_charge_power_w`` is often present-as-None
+            # (so a ``.get(key, 5000)`` returns None, not the default) — with the
+            # bidirectional-setpoint charge path that yielded a 0 W setpoint and
+            # the battery never charged. ``or`` chains past None/0 to a real value.
+            charge_power_w=float(
+                cfg.get("battery_max_charge_power_w")
+                or cfg.get("battery_max_charge_power")
+                or 5000.0
+            ),
             duration_min=240,
             reason="mode=force_charge (manual charge to full)",
         )

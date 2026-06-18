@@ -357,6 +357,126 @@ async def test_generic_adapter_actuates_with_entity():
     assert args[2]["value"] == 3000  # clamped to max discharge
 
 
+# ── #523: AC-coupled bidirectional setpoint (Sessy) force-CHARGE ──────────
+
+
+def _bidir(hass, **over):
+    cfg = {
+        "battery_force_discharge_control_entity": "number.sessy_1_power_setpoint",
+        "battery_strategy_control_entity": "select.sessy_1_power_strategy",
+        "battery_setpoint_bidirectional": True,
+        "battery_max_charge_power": 2200,
+        "battery_max_discharge_power": 1700,
+    }
+    cfg.update(over)
+    return GenericBatteryAdapter(hass, cfg)
+
+
+@pytest.mark.asyncio
+async def test_bidirectional_supports_forced_charge_without_switch():
+    # A Sessy has no charge switch — the bidirectional setpoint is enough.
+    gen = _bidir(_hass())
+    assert gen.supports_forced_charge is True
+
+
+@pytest.mark.asyncio
+async def test_bidirectional_force_charge_writes_negative_setpoint():
+    hass = _hass()
+    gen = _bidir(hass)
+    await gen.command_force_charge(target_soc=100.0, charge_power_w=1500, duration_min=60)
+    calls = {}
+    for c in hass.services.async_call.await_args_list:
+        calls[(c.args[0], c.args[1])] = c.args[2]
+    # strategy → active (api) BEFORE the setpoint
+    assert calls[("select", "select_option")]["option"] == "api"
+    # charge = NEGATIVE power on the same setpoint entity
+    sp = calls[("number", "set_value")]
+    assert sp["entity_id"] == "number.sessy_1_power_setpoint"
+    assert sp["value"] == -1500
+
+
+@pytest.mark.asyncio
+async def test_bidirectional_force_charge_clamps_to_max_charge():
+    hass = _hass()
+    gen = _bidir(hass)
+    await gen.command_force_charge(target_soc=100.0, charge_power_w=9000, duration_min=60)
+    sp = [c.args[2] for c in hass.services.async_call.await_args_list
+          if c.args[0] == "number"][-1]
+    assert sp["value"] == -2200  # clamped to max charge
+
+
+@pytest.mark.asyncio
+async def test_bidirectional_normal_zeroes_setpoint_and_releases_strategy():
+    hass = _hass()
+    gen = _bidir(hass)
+    await gen.command_force_charge(target_soc=100.0, charge_power_w=1500, duration_min=60)
+    hass.services.async_call.reset_mock()
+    await gen.command_normal()
+    calls = {}
+    for c in hass.services.async_call.await_args_list:
+        calls[(c.args[0], c.args[1])] = c.args[2]
+    assert calls[("number", "set_value")]["value"] == 0.0   # idle
+    assert calls[("select", "select_option")]["option"] == "eco"  # self-consume
+
+
+@pytest.mark.asyncio
+async def test_force_charge_via_actuator_fires_for_bidirectional():
+    hass = _hass()
+    gen = _bidir(hass)
+    await actuate_battery(BatteryDecision(
+        battery_id="b1", intent=BatteryIntent.FORCE_CHARGE,
+        target_soc=100.0, charge_power_w=1200,
+    ), gen)
+    sp = [c.args[2] for c in hass.services.async_call.await_args_list
+          if c.args[0] == "number"][-1]
+    assert sp["value"] == -1200  # charge actuated, not dropped
+
+
+@pytest.mark.asyncio
+async def test_non_bidirectional_force_charge_still_needs_switch():
+    # Without the flag, a setpoint-only battery can't force-charge (no switch).
+    hass = _hass()
+    gen = GenericBatteryAdapter(hass, {
+        "battery_force_discharge_control_entity": "number.sessy_1_power_setpoint",
+    })
+    assert gen.supports_forced_charge is False
+
+
+@pytest.mark.asyncio
+async def test_strategy_restores_user_mode_not_eco():
+    # #523: the user runs ``nom`` (zero-on-meter). When SEM force-charges
+    # (→ api) and then returns to NORMAL, it must restore ``nom`` — NOT clobber
+    # it with the ``eco`` fallback (real Sessy options are lowercase).
+    hass = _hass()
+    state = MagicMock()
+    state.state = "nom"
+    hass.states.get = MagicMock(return_value=state)
+    gen = _bidir(hass)
+    await gen.command_force_charge(target_soc=100.0, charge_power_w=1000, duration_min=60)
+    # captured the prior mode and switched to api
+    assert gen._restore_strategy == "nom"
+    hass.services.async_call.reset_mock()
+    await gen.command_normal()
+    opt = [c.args[2]["option"] for c in hass.services.async_call.await_args_list
+           if c.args[0] == "select"][-1]
+    assert opt == "nom"          # restored, not "eco"
+    assert gen._restore_strategy is None
+
+
+@pytest.mark.asyncio
+async def test_strategy_falls_back_to_eco_when_nothing_captured():
+    # No readable prior strategy → release uses the configured idle fallback.
+    hass = _hass()
+    hass.states.get = MagicMock(return_value=None)
+    gen = _bidir(hass)
+    await gen.command_force_charge(target_soc=100.0, charge_power_w=1000, duration_min=60)
+    assert gen._restore_strategy is None
+    await gen.command_normal()
+    opt = [c.args[2]["option"] for c in hass.services.async_call.await_args_list
+           if c.args[0] == "select"][-1]
+    assert opt == "eco"
+
+
 _ALL_ADAPTERS = [
     ("huawei", "coordinator.battery_adapters.huawei", "HuaweiBatteryAdapter"),
     ("goodwe", "coordinator.battery_adapters.goodwe", "GoodWeBatteryAdapter"),
