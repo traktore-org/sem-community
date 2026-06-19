@@ -33,6 +33,14 @@ async def actuate_battery(
         decision: The output of ``decide_battery(view)`` this cycle.
         adapter: The brand-specific adapter wrapping this battery.
     """
+    if decision.intent is BatteryIntent.OFF:
+        await adapter.command_off()
+        _LOGGER.debug(
+            "actuate_battery(%s): OFF (hands-off) — %s",
+            decision.battery_id, decision.reason,
+        )
+        return
+
     if decision.intent is BatteryIntent.NORMAL:
         await adapter.command_normal()
         _LOGGER.debug(

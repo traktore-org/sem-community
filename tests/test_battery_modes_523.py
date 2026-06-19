@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from custom_components.solar_energy_management.coordinator.charger_types import (
     BatteryIntent,
     BatteryRuntime,
@@ -181,3 +183,46 @@ def test_arbitrage_allowed_helper():
     assert arbitrage_allowed_for_mode("auto", True) is True
     assert arbitrage_allowed_for_mode("auto", False) is False
     assert arbitrage_allowed_for_mode(None, True) is True
+    assert arbitrage_allowed_for_mode("off", True) is False  # off never sells
+
+
+# ── off mode: SEM hands-off (RienduPre request) ─────────────────────
+
+def test_off_mode_returns_off_intent():
+    d = decide_battery(_view(mode="off"))
+    assert d.intent is BatteryIntent.OFF
+    assert "hands-off" in d.reason
+
+
+def test_off_mode_beats_scheduler_arbitrage_and_protection():
+    # Highest precedence — even with an active arbitrage verdict AND the EV-night
+    # protection conditions, off short-circuits to OFF (no command issued).
+    d = decide_battery(_view(
+        mode="off", sched=_arb_verdict(),
+        ev_charging=True, charging_state="night_charging_active",
+    ))
+    assert d.intent is BatteryIntent.OFF
+
+
+@pytest.mark.asyncio
+async def test_command_off_one_time_handoff_then_silent():
+    # First off cycle after SEM was controlling → one clean command_normal
+    # (clear force, release strategy, un-limit). Subsequent cycles: silent.
+    from unittest.mock import AsyncMock, MagicMock
+    from custom_components.solar_energy_management.coordinator.battery_adapters.generic import (
+        GenericBatteryAdapter,
+    )
+    hass = MagicMock(); hass.services.async_call = AsyncMock()
+    hass.states.get = MagicMock(return_value=None)
+    gen = GenericBatteryAdapter(hass, {
+        "battery_discharge_control_entity": "number.batt_limit",
+        "battery_max_discharge_power": 4000,
+    })
+    gen._last_intent = BatteryIntent.FORCE_DISCHARGE  # was controlling
+    await gen.command_off()
+    assert gen.last_intent is BatteryIntent.OFF
+    first = hass.services.async_call.await_count
+    assert first > 0  # one-time handoff issued service calls
+    hass.services.async_call.reset_mock()
+    await gen.command_off()  # already off → silent
+    assert hass.services.async_call.await_count == 0

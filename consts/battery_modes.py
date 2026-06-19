@@ -18,6 +18,10 @@ adapter commands):
 * ``force_charge``     — manual FORCE_CHARGE to full now.
 * ``force_discharge``  — manual FORCE_DISCHARGE (sell to grid) down to the
   battery's reserve SOC now.
+* ``off``              — SEM is fully hands-off this battery (RienduPre
+  request). One-time clean handoff on entry (clear force, release strategy,
+  un-limit), then SEM issues NOTHING — no protection, no scheduler, no
+  arbitrage. The inverter manages the battery on its own.
 """
 from __future__ import annotations
 
@@ -28,6 +32,7 @@ BATTERY_MODES: dict[str, str] = {
     "allow_arbitrage": "Allow arbitrage",
     "force_charge": "Force charge",
     "force_discharge": "Force discharge",
+    "off": "Off (SEM hands-off)",
 }
 
 DEFAULT_BATTERY_MODE: str = "auto"
@@ -42,12 +47,12 @@ def arbitrage_allowed_for_mode(mode: str, global_enabled: bool) -> bool:
     """Whether a battery in ``mode`` may act on a DISCHARGING_ARBITRAGE
     verdict this cycle.
 
-    * ``self_consumption`` → never.
+    * ``self_consumption`` / ``off`` → never.
     * ``allow_arbitrage``  → always (per-battery opt-in).
     * ``auto`` / unknown   → follow the global arbitrage toggle.
     """
     m = (mode or "auto").lower()
-    if m == "self_consumption":
+    if m in ("self_consumption", "off"):
         return False
     if m == "allow_arbitrage":
         return True

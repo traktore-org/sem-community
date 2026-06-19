@@ -327,6 +327,15 @@ class BatteryIntent(Enum):
     """End a forced discharge — export no longer profitable or SOC
     hit the reserve floor. Restores the brand default."""
 
+    OFF = "off"
+    """#523 (RienduPre) — SEM is fully hands-off this battery. On the
+    transition INTO off the adapter does a one-time clean handoff (clear
+    any SEM force command, release the strategy, un-limit the discharge)
+    so the battery isn't stranded in a SEM-imposed state, then stays
+    completely silent — no protection, no scheduler, no arbitrage. The
+    inverter runs the battery on its own. Bypasses every other branch in
+    ``decide_battery`` (highest precedence)."""
+
 
 @dataclass(frozen=True)
 class BatteryDecision:

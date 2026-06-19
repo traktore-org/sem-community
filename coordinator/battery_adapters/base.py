@@ -135,6 +135,21 @@ class BatteryControlAdapter(ABC):
         await self.command_normal()
         self._last_intent = BatteryIntent.STOP_FORCE_DISCHARGE
 
+    async def command_off(self) -> None:
+        """#523 (RienduPre): SEM hands-off this battery.
+
+        On the transition INTO off — from any SEM-controlled state — do a
+        one-time clean handoff via ``command_normal`` (clears a force
+        command, releases the power strategy SEM took, un-limits the
+        discharge) so the battery isn't stranded in a SEM-imposed mode.
+        After that, every subsequent off cycle is a true no-op: SEM issues
+        nothing and the inverter manages the battery on its own. Brand-
+        agnostic — relies only on each adapter's ``command_normal``."""
+        if self._last_intent is BatteryIntent.OFF:
+            return  # already handed off — stay completely silent
+        await self.command_normal()
+        self._last_intent = BatteryIntent.OFF
+
     async def _write_force_discharge(self, watts: float) -> None:
         """De-dup'd write of the battery power setpoint. ``watts`` is a
         SIGNED setpoint on a bidirectional control entity: ``> 0`` =

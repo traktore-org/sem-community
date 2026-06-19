@@ -55,6 +55,18 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     reserve = cfg.get("battery_reserve_soc")
     reserve = float(reserve) if reserve is not None else 0.0
 
+    if mode == "off":
+        # #523 (RienduPre): SEM is fully hands-off this battery. Highest
+        # precedence — short-circuit BEFORE the scheduler / arbitrage /
+        # protection branches so none of them can issue a command. The
+        # adapter's command_off() does a one-time clean handoff on entry
+        # then stays silent; the inverter runs the battery on its own.
+        return BatteryDecision(
+            battery_id=rt.battery_id,
+            intent=BatteryIntent.OFF,
+            reason="mode=off (SEM hands-off — inverter self-manages)",
+        )
+
     if mode == "force_discharge":
         # Respect the reserve floor even for a manual sell — never drain the
         # battery below its backup reserve. At/under the floor we fall through

@@ -13,6 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.39] - 19.06.2026
+
+## 🔋 New battery mode: "Off (SEM hands-off)" (#523)
+
+- **A sixth per-battery mode, `Off`, that tells SEM to leave a battery completely
+  alone.** Requested by @RienduPre. On the transition into `Off`, SEM does a
+  one-time clean handoff (clears any force command, releases the power strategy
+  it took, un-limits the discharge) so the battery isn't stranded in a
+  SEM-imposed state — then issues **nothing** further: no protection, no
+  scheduler, no arbitrage. The inverter runs the battery on its own. Highest
+  precedence, so it overrides every other decision branch. Available in the
+  per-battery mode selector and translated in all 15 languages.
+
 # [1.7.3-beta.38] - 19.06.2026
 
 ## 🔋 Battery arbitrage / per-battery review batch (#531)
