@@ -583,3 +583,47 @@ async def test_generic_strategy_optional_no_entity():
     })
     await gen.command_force_discharge(3000, 20.0)
     assert not any(c.args[0] == "select" for c in hass.services.async_call.await_args_list)
+
+
+# ── #523: setpoint write clamped to the control entity's range ───────────
+
+def _hass_with_range(entity, lo, hi):
+    """hass whose states.get returns a number state with min/max attrs."""
+    h = _hass()
+    st = MagicMock()
+    st.attributes = {"min": lo, "max": hi}
+    h.states.get = MagicMock(return_value=st)
+    return h
+
+
+@pytest.mark.asyncio
+async def test_charge_setpoint_clamped_to_entity_min():
+    # RienduPre: fleet battery_max_charge_power_w=4400 → -4400 written to a
+    # single Sessy whose setpoint min is -2200; HA rejects out-of-range, so it
+    # must be clamped to -2200 (charge at the unit max), not left at 0.
+    hass = _hass_with_range("number.sessy_1_power_setpoint", -2200, 1700)
+    gen = _bidir(hass, battery_max_charge_power=5000)
+    await gen.command_force_charge(target_soc=100.0, charge_power_w=4400, duration_min=60)
+    sp = [c.args[2] for c in hass.services.async_call.await_args_list
+          if c.args[0] == "number"][-1]
+    assert sp["value"] == -2200
+
+
+@pytest.mark.asyncio
+async def test_discharge_setpoint_clamped_to_entity_max():
+    hass = _hass_with_range("number.sessy_1_power_setpoint", -2200, 1700)
+    gen = _bidir(hass, battery_max_discharge_power=5000)
+    await gen.command_force_discharge(5000, 50.0)
+    sp = [c.args[2] for c in hass.services.async_call.await_args_list
+          if c.args[0] == "number"][-1]
+    assert sp["value"] == 1700
+
+
+@pytest.mark.asyncio
+async def test_setpoint_within_range_not_clamped():
+    hass = _hass_with_range("number.sessy_1_power_setpoint", -2200, 1700)
+    gen = _bidir(hass, battery_max_charge_power=1500)
+    await gen.command_force_charge(target_soc=100.0, charge_power_w=1500, duration_min=60)
+    sp = [c.args[2] for c in hass.services.async_call.await_args_list
+          if c.args[0] == "number"][-1]
+    assert sp["value"] == -1500

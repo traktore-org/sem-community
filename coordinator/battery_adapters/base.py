@@ -146,6 +146,22 @@ class BatteryControlAdapter(ABC):
         selling once SEM moves to any other mode."""
         if not self._force_discharge_entity:
             return
+        # Clamp to the control entity's actual min/max (#523, mirrors the EV
+        # #487 fix). A Sessy setpoint maxes at roughly ±2200 W, but the
+        # computed charge/discharge power can exceed that (e.g. a fleet
+        # battery_max_charge_power_w of 4400 written to a single 2200 W unit).
+        # HA REJECTS an out-of-range number write, so the setpoint stays at its
+        # last value (0) and the battery never charges — exactly the symptom
+        # RienduPre saw (strategy → API, setpoint stuck at 0).
+        st = self._hass.states.get(self._force_discharge_entity)
+        attrs = getattr(st, "attributes", None) if st is not None else None
+        if isinstance(attrs, dict):
+            lo = attrs.get("min")
+            if isinstance(lo, (int, float)):
+                watts = max(float(lo), watts)
+            hi = attrs.get("max")
+            if isinstance(hi, (int, float)):
+                watts = min(float(hi), watts)
         # Skip when within 100 W of the last applied value — the 0→0 case
         # (the common NORMAL cycle) must not spam the bus.
         if (self._last_force_discharge_w is not None

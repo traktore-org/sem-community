@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.36] - 19.06.2026
+
+## 🔋 Battery setpoint is clamped to the control entity's range (#523)
+
+- **Force-charge / force-discharge no longer get rejected for being
+  out-of-range.** SEM wrote the raw charge/discharge power to the setpoint
+  number — but a Sessy unit's setpoint maxes at ~±2200 W, so a fleet
+  `battery_max_charge_power_w` of 4400 W written to a single 2200 W unit was
+  **−4400 W**, which Home Assistant rejects as out of range. The write failed
+  silently and the setpoint stayed at **0**, so the battery never charged
+  (RienduPre: strategy flipped to API, setpoint stuck at 0). SEM now **clamps
+  the setpoint to the entity's `min`/`max`** before writing (mirrors the EV
+  #487 fix) — −4400 → −2200, and it charges.
+
 # [1.7.3-beta.35] - 19.06.2026
 
 ## 🔋 Battery control config is reachable without enabling arbitrage (#523)
