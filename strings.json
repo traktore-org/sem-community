@@ -1250,6 +1250,10 @@
     "hot_water_temperature_sensor_unavailable": {
       "title": "Hot water temperature sensor unavailable",
       "description": "The configured hot-water temperature sensor `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM fails safe when this sensor is broken — the boiler is NOT activated on surplus until a real temperature reading returns, to avoid running the heater past its target without feedback. Check the sensor's upstream integration. The issue clears automatically when the sensor recovers."
+    },
+    "soc_cap_unenforceable": {
+      "title": "Can't enforce the {target}% charge limit: {name}",
+      "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop at **{target}%** — it will keep charging until the car itself tapers (near full).\n\nIf your dashboard shows a battery %, that's SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). To enforce the cap, wire a **real vehicle SOC sensor** for this charger (Configuration → EV → Vehicle SOC entity). This repair clears automatically as soon as a real SOC reading is available again."
     }
   }
 }

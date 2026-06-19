@@ -147,6 +147,53 @@ def clear_charger_actuation_failed(hass: HomeAssistant, device_id: str) -> None:
         _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
 
 
+def _soc_cap_issue_id(device_id: str) -> str:
+    return f"soc_cap_unenforceable_{device_id}"
+
+
+def raise_soc_cap_unenforceable(
+    hass: HomeAssistant,
+    device_id: str,
+    *,
+    name: str,
+    target_soc: float,
+) -> None:
+    """File a repair when an SOC-% charge target can't be enforced (#526).
+
+    A charger set to a ``%`` target needs a readable vehicle SOC to stop at
+    the cap. When the car isn't reporting SOC (asleep / no real sensor — the
+    dashboard may still show an *estimated* SOC, which SEM deliberately
+    ignores for the cap), SEM keeps charging until the car tapers. That
+    surprised RienduPre ("car charged past 80%"). Surface it as a persistent,
+    actionable repair instead of silently overshooting. Cleared the moment a
+    real SOC reading returns (or the target is no longer SOC-based).
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id=_soc_cap_issue_id(device_id),
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="soc_cap_unenforceable",
+            translation_placeholders={
+                "name": name,
+                "target": f"{target_soc:.0f}",
+            },
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create failed for %s: %s", device_id, e)
+
+
+def clear_soc_cap_unenforceable(hass: HomeAssistant, device_id: str) -> None:
+    """Clear the SOC-cap repair once a real SOC reading is back."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, _soc_cap_issue_id(device_id))
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete failed for %s: %s", device_id, e)
+
+
 # ---------------------------------------------------------------------------
 # Setup-time integration checks (once per setup)
 # ---------------------------------------------------------------------------

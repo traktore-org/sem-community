@@ -1686,6 +1686,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 )
                                 await self._maybe_warn_unreachable_deadline(cid, charger_cfg, plan)
 
+                        # #526: surface (as a repair) when an SOC-% cap can't be
+                        # enforced because no real vehicle SOC is readable.
+                        self._maybe_warn_soc_cap(cid, charger_cfg, cycle_soc_local, effective_state)
+
                         # v1.6.14: write the effective state to ``pcc``;
                         # ``__exit__`` persists it into
                         # ``self._effective_states_per_charger`` so the
@@ -3845,6 +3849,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         if max_val is None:
             return full
         return max(max_val, min_val)
+
+    def _maybe_warn_soc_cap(self, cid, charger_cfg, real_soc, charging_state) -> None:
+        """#526: raise/clear a repair when a SOC-% charge cap can't be enforced.
+
+        A ``%`` target needs a readable vehicle SOC to stop at the cap. When the
+        car isn't reporting SOC (``real_soc is None``) but the charger is
+        actively solar-charging, SEM keeps charging to taper (RienduPre: "car
+        went past 80%"). Surface it as a persistent repair instead of silently
+        overshooting; clear it the moment a real SOC returns or the charger
+        stops / isn't on a SOC target.
+        """
+        cfg = charger_cfg or {}
+        ttype = (cfg.get("ev_target_type") or cfg.get("ev_target_mode")
+                 or self.config.get("ev_target_type") or "kwh")
+        charging = charging_state in self.SOLAR_CHARGING_STATES
+        from . import repair_issues as _ri
+        if ttype == "soc" and real_soc is None and charging:
+            target = self._resolve_target(cfg, "ev_target_soc", "max", 80, 100)
+            _ri.raise_soc_cap_unenforceable(
+                self.hass, cid, name=cfg.get("name") or "EV", target_soc=target,
+            )
+        else:
+            _ri.clear_soc_cap_unenforceable(self.hass, cid)
 
     def _resolve_charger_soc(self, cid: str, cfg: dict) -> float | None:
         """Per-charger vehicle SOC: real sensor, else anchored virtual SOC, else None."""

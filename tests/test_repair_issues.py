@@ -234,3 +234,26 @@ def test_forecast_reader_raises_repair_after_threshold(mock_ri_module):
     reader._mono_time = lambda: 7200.0
     reader.detect_source()
     mock_ri_module.raise_no_forecast_integration.assert_called_once()
+
+# ──────────────────────────────────────────────
+# #526 — SOC-cap-unenforceable repair
+# ──────────────────────────────────────────────
+
+
+def test_raise_soc_cap_unenforceable_creates_issue():
+    hass = MagicMock()
+    with patch.object(ri.ir, "async_create_issue") as create:
+        ri.raise_soc_cap_unenforceable(hass, "ev_charger", name="Laadpaal Links", target_soc=80.0)
+    assert create.called
+    kwargs = create.call_args.kwargs
+    assert kwargs["issue_id"] == "soc_cap_unenforceable_ev_charger"
+    assert kwargs["translation_key"] == "soc_cap_unenforceable"
+    assert kwargs["translation_placeholders"] == {"name": "Laadpaal Links", "target": "80"}
+    assert kwargs["severity"] is ri.ir.IssueSeverity.WARNING
+
+
+def test_clear_soc_cap_unenforceable_deletes_issue():
+    hass = MagicMock()
+    with patch.object(ri.ir, "async_delete_issue") as delete:
+        ri.clear_soc_cap_unenforceable(hass, "ev_charger")
+    delete.assert_called_once_with(hass, ri.DOMAIN, "soc_cap_unenforceable_ev_charger")

@@ -34,6 +34,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   later, so it **no longer fires** (the break-even check was previously skipped,
   making it sell too eagerly). Conservative default; pairs with the export floor.
 
+## 🔧 A repair when a %-SOC charge cap can't be enforced (#526)
+
+- **No more silent overshoot past the SOC limit.** A `%` charge target needs a
+  readable vehicle SOC to stop at the cap; when the car isn't reporting SOC
+  (asleep / no real sensor), SEM keeps charging until the car tapers — which
+  surprised users ("car went past 80 %"). SEM now files a **repair**
+  (Settings → Repairs) explaining the cap can't be enforced and how to fix it
+  (wire a real vehicle SOC sensor); the dashboard's *estimated* SOC is
+  deliberately ignored for the hard limit. Clears automatically when a real SOC
+  reading returns.
+
 # [1.7.3-beta.36] - 19.06.2026
 
 ## 🔋 Battery setpoint is clamped to the control entity's range (#523)
