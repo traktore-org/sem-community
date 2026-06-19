@@ -138,3 +138,34 @@ def test_global_scan_requires_percent_unit():
         _state("sensor.battery_state_of_charge", "10.2", unit="kWh"),
     ])
     assert r._auto_detect_battery_soc("sensor.inverter_x_power") is None
+
+
+def test_global_scan_finds_localized_soc_by_signature():
+    # #529 (DavidVM1982): Dutch sensor.*_batterijpercentage has no English SOC
+    # keyword, but device_class=battery + % is the canonical SOC signature.
+    r = _reader_with_scan([
+        _state("sensor.nutsvoorzieningen_batterijen_batterijpercentage", "73",
+               device_class="battery"),
+    ])
+    assert (
+        r._auto_detect_battery_soc("sensor.x_power")
+        == "sensor.nutsvoorzieningen_batterijen_batterijpercentage"
+    )
+
+
+def test_global_scan_signature_still_excludes_ev():
+    # An EV % with device_class=battery is excluded by name, leaving one.
+    r = _reader_with_scan([
+        _state("sensor.ev_charger_battery", "40", device_class="battery"),
+        _state("sensor.batterijpercentage", "73", device_class="battery"),
+    ])
+    assert r._auto_detect_battery_soc("sensor.x_power") == "sensor.batterijpercentage"
+
+
+def test_global_scan_no_signature_no_keyword_skipped():
+    # A % sensor that is neither SOC-named nor device_class=battery (e.g. a
+    # humidity %) must not be taken as SOC.
+    r = _reader_with_scan([
+        _state("sensor.bathroom_humidity", "55", device_class="humidity"),
+    ])
+    assert r._auto_detect_battery_soc("sensor.x_power") is None

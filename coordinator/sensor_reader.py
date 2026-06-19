@@ -2099,10 +2099,16 @@ class SensorReader:
                 eid_lower = eid.lower()
                 if any(x in eid_lower for x in _EXCLUDE):
                     continue
-                if not any(kw in eid_lower for kw in soc_keywords):
-                    continue
                 unit = (state.attributes.get("unit_of_measurement") or "").strip()
                 if unit != "%":
+                    continue
+                # Accept by SOC-keyword name OR by the canonical battery SOC
+                # signature (device_class=battery + %). The signature path is
+                # what catches a localized name with no English keyword — e.g.
+                # the Dutch ``sensor.*_batterijpercentage`` (#529, DavidVM1982).
+                by_keyword = any(kw in eid_lower for kw in soc_keywords)
+                by_signature = state.attributes.get("device_class") == "battery"
+                if not (by_keyword or by_signature):
                     continue
                 if state.state in ("unknown", "unavailable", None):
                     continue
