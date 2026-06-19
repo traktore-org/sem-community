@@ -643,20 +643,30 @@ class BatteryChargeScheduler:
         # Profitability — the symmetric break-even to charge-on-cheap:
         # selling now must beat buying back later (cheapest upcoming import
         # ÷ round-trip efficiency) plus the battery degradation cost.
-        if import_forecast_min is not None:
-            recharge_cost = (
-                float(import_forecast_min) / cfg.roundtrip_efficiency
-                + cfg.battery_cycle_cost * 2
+        #
+        # #523: with NO import forecast we can't prove selling beats buying
+        # back, so don't fire — without this the check was skipped and
+        # arbitrage sold on the export floor alone (too eager; e.g. NL export
+        # spot−margin is well below import all-in). Conservative default.
+        if import_forecast_min is None:
+            return SchedulerDecision(
+                state=SchedulerState.NOT_PROFITABLE,
+                reason="no import-price forecast — can't prove profitable, holding",
+                evaluated_at=now,
             )
-            if export_rate <= recharge_cost:
-                return SchedulerDecision(
-                    state=SchedulerState.NOT_PROFITABLE,
-                    reason=(
-                        f"export {export_rate:.3f} ≤ recharge break-even "
-                        f"{recharge_cost:.3f}/kWh"
-                    ),
-                    evaluated_at=now,
-                )
+        recharge_cost = (
+            float(import_forecast_min) / cfg.roundtrip_efficiency
+            + cfg.battery_cycle_cost * 2
+        )
+        if export_rate <= recharge_cost:
+            return SchedulerDecision(
+                state=SchedulerState.NOT_PROFITABLE,
+                reason=(
+                    f"export {export_rate:.3f} ≤ recharge break-even "
+                    f"{recharge_cost:.3f}/kWh"
+                ),
+                evaluated_at=now,
+            )
         return SchedulerDecision(
             state=SchedulerState.DISCHARGING_ARBITRAGE,
             discharge_power_w=cfg.max_discharge_power_w,

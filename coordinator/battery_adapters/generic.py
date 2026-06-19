@@ -55,6 +55,10 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         # switches to the active value and restored when SEM releases — so we
         # don't clobber their normal mode with the ``eco`` fallback.
         self._restore_strategy: "Optional[str]" = None
+        # True once SEM has switched the strategy to the active/API value this
+        # episode. Distinguishes "SEM took control → must hand it back" from
+        # "SEM never touched it → leave the user's mode alone" (#523).
+        self._took_control: bool = False
         # Lazy import for delegate
         try:
             from ..battery_charge_adapter import GenericChargeAdapter
@@ -88,9 +92,10 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             _LOGGER.warning("Generic battery: failed to set strategy: %s", e)
 
     async def _enter_active_strategy(self) -> None:
-        """Capture the user's current strategy (once), then switch to the
-        active (API) value so the setpoint takes effect."""
-        if self._strategy_entity and self._restore_strategy is None:
+        """Capture the user's current strategy (once), mark that SEM has taken
+        control, then switch to the active (API) value so the setpoint takes
+        effect."""
+        if self._strategy_entity and not self._took_control:
             st = self._hass.states.get(self._strategy_entity)
             cur = getattr(st, "state", None)
             # Only remember a real, restorable option — never the active value
@@ -99,14 +104,26 @@ class GenericBatteryAdapter(BatteryControlAdapter):
                     and cur not in (self._strategy_active, "unknown",
                                     "unavailable", "")):
                 self._restore_strategy = cur
+            self._took_control = True
         await self._set_strategy(self._strategy_active)
 
     async def _release_strategy(self) -> None:
-        """Restore the user's prior strategy (so we don't clobber their
-        self-consumption mode); fall back to the configured idle value only
-        if we never captured one."""
+        """Hand strategy control back. Only restore a strategy SEM actually
+        CHANGED (captured the user's prior value when it switched to the
+        active/API value). If SEM never took control, leave the user's
+        strategy alone — forcing the configured idle default (e.g. ``eco``)
+        would clobber their self-consumption mode (e.g. Sessy ``nom`` =
+        zero-on-meter), which stops the battery charging from solar surplus
+        (#523: battery sat idle at 20 % SOC while 1 kW of surplus exported).
+
+        When SEM DID take control, hand it back to the captured prior mode —
+        or the configured idle fallback if the prior was unreadable (never
+        leave the battery stranded in API)."""
+        if not self._took_control:
+            return
         await self._set_strategy(self._restore_strategy or self._strategy_idle)
         self._restore_strategy = None
+        self._took_control = False
 
     async def command_force_discharge(
         self, power_w: float, floor_soc: float,

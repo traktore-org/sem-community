@@ -13,6 +13,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.37] - 19.06.2026
+
+## 🔋 Battery charges from surplus again — SEM stops clobbering the power strategy (#523)
+
+- **The battery no longer sits idle while solar surplus is exported.** SEM's
+  strategy-release path forced the configured idle value (`eco`) onto the
+  battery's power-strategy select **even when SEM had never taken control** —
+  clobbering the user's self-consumption mode (e.g. Sessy `nom` = zero-on-meter)
+  and stopping the battery charging from surplus (RienduPre: battery idle at
+  20 % SOC while ~1 kW of surplus exported to grid). SEM now **only restores a
+  strategy it actually changed**; if it never switched to API it leaves the
+  user's mode alone. When it *did* take control it restores the captured prior
+  mode (or the idle fallback if unreadable — never stranded in API).
+
+## 💶 Battery arbitrage holds without an import-price forecast (#523)
+
+- **No more selling on the export floor alone.** When there's no upcoming
+  import-price forecast, SEM can't prove that selling now beats buying back
+  later, so it **no longer fires** (the break-even check was previously skipped,
+  making it sell too eagerly). Conservative default; pairs with the export floor.
+
 # [1.7.3-beta.36] - 19.06.2026
 
 ## 🔋 Battery setpoint is clamped to the control entity's range (#523)

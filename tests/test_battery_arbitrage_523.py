@@ -61,7 +61,7 @@ def test_disabled_no_fire():
 
 def test_fires_on_high_export_above_reserve():
     s = _scheduler()
-    d = s.evaluate_arbitrage(80.0, 0.45, None)
+    d = s.evaluate_arbitrage(80.0, 0.45, 0.20)
     assert d.state is SchedulerState.DISCHARGING_ARBITRAGE
     assert d.discharge_power_w == 4000.0
     assert d.floor_soc == 50.0
@@ -71,10 +71,17 @@ def test_enabled_override_runs_when_global_off():
     # #523 per-battery allow_arbitrage: global toggle off, but the override
     # lets the economic check run + fire (decide_battery then gates per unit).
     s = _scheduler(arbitrage_enabled=False)
-    assert s.evaluate_arbitrage(80.0, 0.45, None).state is not SchedulerState.DISCHARGING_ARBITRAGE
+    assert s.evaluate_arbitrage(80.0, 0.45, 0.20).state is not SchedulerState.DISCHARGING_ARBITRAGE
     assert s.evaluate_arbitrage(
-        80.0, 0.45, None, enabled_override=True,
+        80.0, 0.45, 0.20, enabled_override=True,
     ).state is SchedulerState.DISCHARGING_ARBITRAGE
+
+
+def test_no_import_forecast_does_not_fire():
+    # #523: with no upcoming-import forecast we can't prove profitability, so
+    # arbitrage must NOT sell on the export floor alone (was too eager).
+    s = _scheduler()
+    assert s.evaluate_arbitrage(80.0, 0.45, None).state is SchedulerState.NOT_PROFITABLE
 
 
 def test_export_below_floor_no_fire():
@@ -125,7 +132,7 @@ def _view(sched):
 
 def test_decide_battery_actuates_arbitrage_verdict():
     s = _scheduler()
-    arb = s.evaluate_arbitrage(80.0, 0.45, None)
+    arb = s.evaluate_arbitrage(80.0, 0.45, 0.20)
     d = decide_battery(_view(arb))
     assert d.intent is BatteryIntent.FORCE_DISCHARGE
     assert d.discharge_power_w == 4000.0
@@ -627,3 +634,37 @@ async def test_setpoint_within_range_not_clamped():
     sp = [c.args[2] for c in hass.services.async_call.await_args_list
           if c.args[0] == "number"][-1]
     assert sp["value"] == -1500
+
+
+@pytest.mark.asyncio
+async def test_normal_without_taking_control_leaves_strategy_alone():
+    # #523 (video): in self-consumption SEM never switches to API, so it must
+    # NOT touch the power strategy — forcing the `eco` idle default clobbered
+    # the user's `nom` (zero-on-meter) and left the battery idle at 20% SOC
+    # while solar surplus exported.
+    hass = _hass()
+    state = MagicMock(); state.state = "nom"
+    hass.states.get = MagicMock(return_value=state)
+    gen = _bidir(hass)
+    await gen.command_normal()  # no prior force_charge → never took control
+    selects = [c for c in hass.services.async_call.await_args_list
+               if c.args[0] == "select"]
+    assert selects == [], "strategy must be left alone when SEM never took control"
+    assert gen._took_control is False
+
+
+@pytest.mark.asyncio
+async def test_force_charge_then_release_restores_then_idle_leaves_alone():
+    # After a force_charge→release cycle, a subsequent self-consumption cycle
+    # must not re-touch the strategy (control was already handed back).
+    hass = _hass()
+    state = MagicMock(); state.state = "nom"
+    hass.states.get = MagicMock(return_value=state)
+    gen = _bidir(hass)
+    await gen.command_force_charge(target_soc=100.0, charge_power_w=1000, duration_min=60)
+    await gen.command_normal()              # restores nom, took_control → False
+    hass.services.async_call.reset_mock()
+    await gen.command_normal()              # second idle cycle — leave alone
+    selects = [c for c in hass.services.async_call.await_args_list
+               if c.args[0] == "select"]
+    assert selects == []
