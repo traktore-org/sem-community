@@ -488,6 +488,12 @@ class FleetContext:
     surplus-only chargers; above ``auto_start_soc`` enables
     battery-assist."""
 
+    battery_count: int = 1
+    """How many batteries SEM controls. #531: a per-battery
+    LIMIT_DISCHARGE must split the home-consumption budget across the
+    fleet — otherwise each of N batteries is told to inject the FULL
+    home load (N× over-injection, defeating EV-night protection)."""
+
     grid_import_w: float = 0.0
     grid_export_w: float = 0.0
 

@@ -97,6 +97,35 @@ def test_per_battery_mode_absent_falls_back():
     assert "battery_mode" not in _per(cfg, 1)
 
 
+def test_global_mode_does_not_bleed_into_multi_fleet():
+    # #531: a single→multi upgrade left a stale global battery_mode. In a
+    # multi-battery fleet (count>1) the per-battery selectors own
+    # battery_modes[]; an unset slot must default to 'auto' in the UI, so the
+    # global key must NOT bleed in as the driving mode.
+    cfg = {"battery_mode": "force_discharge"}  # stale single-battery global
+    fake = SimpleNamespace(config=cfg)
+    # single-battery (count=1): global still applies (its own selector).
+    assert SEMCoordinator._per_battery_config(fake, 0, 1)["battery_mode"] == "force_discharge"
+    # multi-battery (count=2): both unset slots default to auto, NOT the global.
+    assert SEMCoordinator._per_battery_config(fake, 0, 2)["battery_mode"] == "auto"
+    assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_mode"] == "auto"
+
+
+def test_multi_fleet_explicit_mode_still_wins():
+    # An explicitly-set per-battery mode overrides the auto default even in
+    # multi mode; only UNSET slots fall to auto.
+    cfg = {"battery_mode": "force_discharge", "battery_modes": ["allow_arbitrage", None]}
+    fake = SimpleNamespace(config=cfg)
+    assert SEMCoordinator._per_battery_config(fake, 0, 2)["battery_mode"] == "allow_arbitrage"
+    assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_mode"] == "auto"
+
+
+def test_multi_fleet_reserve_defaults_to_zero():
+    cfg = {"battery_reserve_soc": 40}  # stale single-battery global
+    fake = SimpleNamespace(config=cfg)
+    assert SEMCoordinator._per_battery_config(fake, 1, 2)["battery_reserve_soc"] == 0
+
+
 def test_persist_global_option_writes_scalar_no_reload():
     # #523 single-battery: the global mode/reserve entities write the SCALAR
     # battery_mode / battery_reserve_soc keys (no per-battery list) without a

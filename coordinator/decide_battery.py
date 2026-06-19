@@ -59,8 +59,13 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # Respect the reserve floor even for a manual sell — never drain the
         # battery below its backup reserve. At/under the floor we fall through
         # to NORMAL so command_normal() zeroes the forcible-discharge setpoint.
+        #
+        # #531: when the SOC is UNAVAILABLE, do NOT sell. A setpoint battery
+        # (Sessy) has no hardware reserve-stop — only the live SOC gates it —
+        # so discharging "blind" could drain it past the backup reserve. When
+        # in doubt, hold (the live SOC self-heals next cycle).
         soc = rt.last_known_soc
-        if soc is None or soc > reserve:
+        if soc is not None and soc > reserve:
             return BatteryDecision(
                 battery_id=rt.battery_id,
                 intent=BatteryIntent.FORCE_DISCHARGE,
@@ -68,10 +73,11 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                 floor_soc=reserve,
                 reason="mode=force_discharge (manual sell to grid)",
             )
+        _soc_txt = f"{soc:.0f}%" if soc is not None else "unavailable"
         return BatteryDecision(
             battery_id=rt.battery_id,
             intent=BatteryIntent.NORMAL,
-            reason=f"mode=force_discharge but SOC {soc:.0f}% ≤ reserve {reserve:.0f}% — hold",
+            reason=f"mode=force_discharge but SOC {_soc_txt} ≤ reserve {reserve:.0f}% — hold",
         )
     if mode == "force_charge":
         return BatteryDecision(
@@ -125,7 +131,9 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
             if arbitrage_allowed_for_mode(mode, global_arb):
                 floor = reserve if reserve > 0 else getattr(sched, "floor_soc", 0.0)
                 soc = rt.last_known_soc
-                if soc is None or soc > floor:
+                # #531: don't sell blind — a setpoint battery has no hardware
+                # reserve-stop, so an unavailable SOC must hold, not discharge.
+                if soc is not None and soc > floor:
                     return BatteryDecision(
                         battery_id=rt.battery_id,
                         intent=BatteryIntent.FORCE_DISCHARGE,
@@ -165,14 +173,18 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         is_night_active = state == _NIGHT_CHARGING_ACTIVE
         is_solar_active = state == _SOLAR_CHARGING_ACTIVE
         if is_night_active or (hold_solar and is_solar_active):
-            home_w = max(0.0, view.home_consumption_w)
+            # #531: split the home budget across the fleet — N batteries each
+            # told to inject the FULL home load over-injects N× and leaks the
+            # surplus to the EV, defeating the protection. Each gets home/N.
+            n = max(1, int(getattr(view.fleet, "battery_count", 1) or 1))
+            home_w = max(0.0, view.home_consumption_w) / n
             return BatteryDecision(
                 battery_id=rt.battery_id,
                 intent=BatteryIntent.LIMIT_DISCHARGE,
                 discharge_limit_w=home_w,
                 reason=(
                     f"{state} + ev_charging → discharge limit "
-                    f"{home_w:.0f} W (home consumption 1:1)"
+                    f"{home_w:.0f} W (home/{n} across fleet)"
                 ),
             )
 

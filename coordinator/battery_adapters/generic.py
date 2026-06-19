@@ -65,6 +65,36 @@ class GenericBatteryAdapter(BatteryControlAdapter):
             self._charge_adapter = GenericChargeAdapter(hass, config)
         except Exception:  # noqa: BLE001
             self._charge_adapter = None
+        # #531: adopt a stranded API strategy left by a prior instance.
+        self._detect_stranded_strategy()
+
+    def _detect_stranded_strategy(self) -> None:
+        """Detect a strategy left in the active/API value across a reload.
+
+        If SEM is reloaded mid-discharge/arbitrage episode, a fresh adapter
+        starts ``_took_control=False`` and would never hand the strategy
+        back — stranding an AC-coupled battery in API (setpoint-controlled)
+        instead of self-consumption. If the strategy entity is already at the
+        active value at construction, the previous instance left it there:
+        adopt control so the next NORMAL/STOP restores cleanly. The user's
+        true prior mode is unrecoverable across the reload, so release falls
+        to the idle default (the documented unreadable-prior fallback).
+        """
+        if not self._strategy_entity:
+            return
+        try:
+            st = self._hass.states.get(self._strategy_entity)
+        except Exception:  # noqa: BLE001
+            return
+        cur = getattr(st, "state", None)
+        if isinstance(cur, str) and cur == self._strategy_active:
+            self._took_control = True
+            self._last_strategy = cur
+            _LOGGER.info(
+                "Generic battery: adopting stranded '%s' strategy on %s "
+                "(reload mid-episode) — will restore idle on release",
+                cur, self._strategy_entity,
+            )
 
     async def _set_strategy(self, value: str) -> None:
         """Switch the battery's power-strategy mode (no-op without a strategy
@@ -209,9 +239,16 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         if not self._discharge_control_entity:
             self._last_discharge_limit_w = watts
             return
+        # #531: domain-aware like _write_force_discharge — a user may point the
+        # discharge-limit at an ``input_number.*`` helper (common on HA-TEST
+        # rigs / DIY setups), which would 404 on the hardcoded ``number``
+        # domain. Both expose ``set_value``.
+        domain = self._discharge_control_entity.split(".", 1)[0]
+        if domain not in ("number", "input_number"):
+            domain = "number"
         try:
             await self._hass.services.async_call(
-                "number", "set_value",
+                domain, "set_value",
                 {"entity_id": self._discharge_control_entity, "value": watts},
                 blocking=True,
             )

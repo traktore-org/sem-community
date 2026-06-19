@@ -3189,7 +3189,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             hot_water_data,
         )
 
-    def _per_battery_config(self, idx: int) -> dict:
+    def _per_battery_config(self, idx: int, count: int = 1) -> dict:
         """Config for the battery at position ``idx`` with per-battery
         control entities overlaid (#523 multi-battery).
 
@@ -3200,6 +3200,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         give each unit its own control entity. Empty / missing → the
         global single-entity keys apply (single-battery installs and
         existing configs are unchanged).
+
+        ``count`` is the live battery count this cycle. It gates the
+        global ``battery_mode`` / ``battery_reserve_soc`` fall-through:
+        those keys are the SINGLE-battery selector's storage
+        (``select.sem_battery_mode`` → global key). In a multi-battery
+        fleet the per-battery selectors own ``battery_modes[]`` and the
+        UI shows ``auto`` for any unset slot — so the global key must NOT
+        bleed in as the fallback (#531: single→multi upgrade showed
+        ``auto`` in the UI while a stale global ``force_discharge`` drove
+        every battery). With >1 battery an unset slot defaults to ``auto``.
         """
         cfg = self.config
         overrides: dict = {}
@@ -3215,14 +3225,53 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # Per-battery mode + reserve SOC (#523). Absent / empty → the
         # single-key ``battery_mode`` default (``auto``) applies, so
         # single-battery installs and untouched batteries are unchanged.
-        for list_key, single_key in (
-            ("battery_modes", "battery_mode"),
-            ("battery_reserve_socs", "battery_reserve_soc"),
+        multi = count > 1
+        for list_key, single_key, multi_default in (
+            ("battery_modes", "battery_mode", "auto"),
+            ("battery_reserve_socs", "battery_reserve_soc", 0),
         ):
             lst = cfg.get(list_key)
             if isinstance(lst, list) and idx < len(lst) and lst[idx] not in (None, ""):
                 overrides[single_key] = lst[idx]
+            elif multi:
+                # #531: multi-battery + no per-battery value → force the UI
+                # default, never inherit the single-battery global key.
+                overrides[single_key] = multi_default
         return {**cfg, **overrides} if overrides else cfg
+
+    def _warn_battery_entity_collision(self, battery_id: str, pbc: dict) -> None:
+        """Warn (once per entity) when two batteries share a control entity.
+
+        #531: per-battery control assumes each unit drives its OWN
+        force-discharge / strategy / discharge-limit entity. If a multi-
+        battery config accidentally points two batteries at the same
+        entity (e.g. a mis-pasted ``battery_force_discharge_entities``
+        list), SEM would have them fight over one setpoint — the second
+        write clobbers the first. We can't auto-resolve it, but a loud,
+        de-duplicated warning makes the mis-config visible.
+        """
+        seen = getattr(self, "_battery_control_entity_owner", None)
+        if seen is None:
+            seen = {}
+            self._battery_control_entity_owner = seen
+        for key in (
+            "battery_force_discharge_control_entity",
+            "battery_strategy_control_entity",
+            "battery_discharge_control_entity",
+        ):
+            ent = pbc.get(key)
+            if not ent:
+                continue
+            owner = seen.get(ent)
+            if owner is not None and owner != battery_id:
+                _LOGGER.warning(
+                    "Battery control-entity collision: %s is configured for "
+                    "BOTH battery %s and battery %s (%s) — they will fight "
+                    "over one setpoint. Give each battery its own entity.",
+                    ent, owner, battery_id, key,
+                )
+            else:
+                seen[ent] = battery_id
 
     async def _run_battery_pipeline(self, power, energy, charging_state) -> None:
         """Per-cycle battery control via decide_battery + actuate_battery.
@@ -3299,7 +3348,22 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # in even with the global toggle off. decide_battery then gates the
         # shared verdict per battery (self_consumption never sells).
         _any_allow_arb = "allow_arbitrage" in (self.config.get("battery_modes") or [])
-        if (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb) and not _charge_active:
+        # #531 charge-first: never sell while there's storable solar surplus the
+        # battery could absorb. Storing free solar avoids a future import (~full
+        # retail price) which is worth far more than the export price — so we
+        # only arbitrage from stored energy when there's no surplus to soak OR
+        # the battery is effectively full. (Surplus = solar above home load.)
+        _solar_w = float(getattr(power, "solar_power", 0.0) or 0.0)
+        _home_w = float(getattr(power, "home_consumption_power", 0.0) or 0.0)
+        _soc_now = float(getattr(power, "battery_soc", 0.0) or 0.0)
+        _storable_surplus = (_solar_w - _home_w) > 200.0 and _soc_now < 98.0
+        if _storable_surplus and (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb):
+            _LOGGER.debug(
+                "Arbitrage held: %0.0f W storable solar surplus, SOC %.0f%% — "
+                "charge-first (#531)", _solar_w - _home_w, _soc_now,
+            )
+        if (self._battery_scheduler_config.arbitrage_enabled or _any_allow_arb) \
+                and not _charge_active and not _storable_surplus:
             export_rate_per_kwh = 0.0
             import_forecast_min = None
             _provider = getattr(self, "_tariff_provider", None)
@@ -3317,7 +3381,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         if getattr(p, "price", None) is not None
                     ]
                     if _prices:
-                        import_forecast_min = min(_prices)
+                        # #531: the curve may be raw spot (Nord Pool/ENTSO-E)
+                        # while the user pays all-in to recharge — correct the
+                        # break-even basis up to the live all-in import rate so
+                        # arbitrage doesn't sell at a loss. No-op for all-in
+                        # providers (Tibber) where the factor is ≈1.0.
+                        _raw_min = min(_prices)
+                        _floor = getattr(_provider, "effective_import_floor", None)
+                        import_forecast_min = (
+                            _floor(_raw_min) if callable(_floor) else _raw_min
+                        )
                 except Exception:  # noqa: BLE001
                     import_forecast_min = None
             try:
@@ -3334,6 +3407,25 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 )
                 if _arb.state.value == "discharging_arbitrage":
                     scheduler_decision = _arb
+                else:
+                    # #531: arbitrage evaluated but isn't selling this cycle.
+                    # Propagate its non-firing verdict so decide_battery emits
+                    # an explicit STOP rather than falling back to a possibly
+                    # stale night decision — BUT never override an active or
+                    # planned night charge (scheduled / should_charge), which
+                    # owns this channel while it's running.
+                    _night = scheduler_decision
+                    _night_state = getattr(
+                        getattr(_night, "state", None), "value", None
+                    )
+                    _night_charging = _night is not None and (
+                        bool(getattr(_night, "should_charge", False))
+                        or _night_state == "scheduled"
+                    )
+                    if not _night_charging and _arb.state.value in (
+                        "not_profitable", "not_needed",
+                    ):
+                        scheduler_decision = _arb
             except Exception as e:  # noqa: BLE001
                 _LOGGER.warning("Export arbitrage evaluate failed: %s", e)
 
@@ -3343,6 +3435,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             home_w=float(getattr(power, "home_consumption_power", 0.0) or 0.0),
             battery_soc=float(getattr(power, "battery_soc", 0.0) or 0.0),
             is_night=self.time_manager.is_night_mode(),
+            # #531: split per-battery LIMIT_DISCHARGE across the real fleet.
+            battery_count=max(1, len(getattr(power, "batteries", {}) or {})),
         )
 
         # 2. Source per-battery iteration. Multi-battery installs
@@ -3381,6 +3475,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # if any battery is commanded to FORCE_DISCHARGE this cycle.
         self._battery_arbitrage_active = False
 
+        # #531: live battery count gates the global-mode fall-through in
+        # _per_battery_config (single→multi bleed fix).
+        _bat_count = len(battery_items)
+
         for batt_idx, (battery_id, runtime) in enumerate(battery_items):
             # Per-battery adapter cache. Each battery gets its OWN control
             # entities when configured (#523 multi-battery — RienduPre's
@@ -3388,7 +3486,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # independently. Falls back to the global single-entity keys.
             adapter = self._battery_adapters.get(battery_id)
             if adapter is None:
-                _pbc = self._per_battery_config(batt_idx)
+                _pbc = self._per_battery_config(batt_idx, _bat_count)
+                self._warn_battery_entity_collision(battery_id, _pbc)
                 adapter = adapter_for(self.hass, _pbc)
                 self._battery_adapters[battery_id] = adapter
                 _LOGGER.info(
@@ -3403,9 +3502,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 # battery that's really a Huawei/GoodWe. Re-detect once a
                 # brand integration is actually loaded and upgrade in place
                 # (cheap: only while still Generic + a brand entry exists).
-                if _integration_loaded(self.hass, "huawei_solar") or \
-                        _integration_loaded(self.hass, "goodwe"):
-                    _rebuilt = adapter_for(self.hass, self._per_battery_config(batt_idx))
+                # #531: never self-heal a battery that has its OWN AC-coupled
+                # control surface (strategy select / bidirectional setpoint —
+                # e.g. a Sessy b2 in a Huawei fleet). adapter_for() now keeps
+                # those Generic, but skip the per-cycle rebuild entirely so a
+                # mixed-brand fleet doesn't churn an adapter that can't change.
+                _heal_cfg = self._per_battery_config(batt_idx, _bat_count)
+                _ac_coupled = bool(
+                    _heal_cfg.get("battery_strategy_control_entity")
+                    or _heal_cfg.get("battery_setpoint_bidirectional")
+                )
+                if not _ac_coupled and (
+                    _integration_loaded(self.hass, "huawei_solar")
+                    or _integration_loaded(self.hass, "goodwe")
+                ):
+                    _rebuilt = adapter_for(self.hass, _heal_cfg)
                     if type(_rebuilt).__name__ != "GenericBatteryAdapter":
                         adapter = _rebuilt
                         self._battery_adapters[battery_id] = adapter
@@ -3417,7 +3528,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
 
             view = BatteryView(
                 runtime=runtime,
-                config=self._per_battery_config(batt_idx),
+                config=self._per_battery_config(batt_idx, _bat_count),
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),

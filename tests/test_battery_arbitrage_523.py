@@ -668,3 +668,179 @@ async def test_force_charge_then_release_restores_then_idle_leaves_alone():
     selects = [c for c in hass.services.async_call.await_args_list
                if c.args[0] == "select"]
     assert selects == []
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# #531 — holistic review batch (charge-first, break-even, reserve safety,
+# mode-bleed, fleet-split, stranded strategy, mixed-brand, robustness).
+# ═══════════════════════════════════════════════════════════════════════
+
+# ── #3: SOC unavailable → never sell blind (reserve safety) ──────────────
+
+def _mode_view(mode, soc, *, sched=None, reserve=None):
+    cfg = {"battery_mode": mode, "battery_grid_arbitrage_enabled": True}
+    if reserve is not None:
+        cfg["battery_reserve_soc"] = reserve
+    return BatteryView(
+        runtime=BatteryRuntime(battery_id="b", last_known_soc=soc),
+        config=cfg,
+        fleet=FleetContext(),
+        charging_state="idle",
+        ev_charging=False,
+        home_consumption_w=400.0,
+        scheduler_decision=sched,
+    )
+
+
+def test_force_discharge_holds_when_soc_unavailable():
+    # #531: a setpoint battery (Sessy) has no hardware reserve-stop, so an
+    # unavailable SOC must HOLD, not drain blind past the backup reserve.
+    d = decide_battery(_mode_view("force_discharge", None, reserve=20.0))
+    assert d.intent is BatteryIntent.NORMAL
+    assert "unavailable" in d.reason
+
+
+def test_force_discharge_sells_when_soc_above_reserve():
+    d = decide_battery(_mode_view("force_discharge", 80.0, reserve=20.0))
+    assert d.intent is BatteryIntent.FORCE_DISCHARGE
+
+
+def test_arbitrage_holds_when_soc_unavailable():
+    # #531: same guard on the scheduler-driven arbitrage verdict path.
+    s = _scheduler()
+    arb = s.evaluate_arbitrage(80.0, 0.45, 0.20)
+    v = _mode_view("auto", None, sched=arb)
+    d = decide_battery(v)
+    assert d.intent is not BatteryIntent.FORCE_DISCHARGE
+
+
+# ── #5: LIMIT_DISCHARGE splits the home budget across the fleet ──────────
+
+def _limit_view(battery_count, home_w):
+    return BatteryView(
+        runtime=BatteryRuntime(battery_id="b", last_known_soc=80.0),
+        config={"battery_discharge_protection_enabled": True},
+        fleet=FleetContext(battery_count=battery_count),
+        charging_state="night_charging_active",
+        ev_charging=True,
+        home_consumption_w=home_w,
+    )
+
+
+def test_limit_discharge_single_battery_full_home():
+    d = decide_battery(_limit_view(1, 1000.0))
+    assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+    assert d.discharge_limit_w == 1000.0
+
+
+def test_limit_discharge_two_batteries_split_home():
+    # #531: two batteries each told the FULL home load over-inject 2× and
+    # leak the surplus to the EV — each must get home / N.
+    d = decide_battery(_limit_view(2, 1000.0))
+    assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+    assert d.discharge_limit_w == 500.0
+    assert "home/2" in d.reason
+
+
+# ── #2: effective import floor (raw-spot → all-in) ──────────────────────
+
+def test_effective_import_floor_scales_raw_up_to_all_in():
+    from custom_components.solar_energy_management.tariff.tariff_provider import (
+        DynamicTariffProvider,
+    )
+    p = DynamicTariffProvider.__new__(DynamicTariffProvider)
+    # state all-in (0.30) vs current raw curve slot (0.10) → factor 3.0.
+    p.get_current_import_rate = lambda: 0.30
+    p._cached_price_for = lambda when: 0.10
+    assert p.effective_import_floor(0.05) == pytest.approx(0.15)  # 0.05 * 3.0
+
+
+def test_effective_import_floor_noop_when_curve_matches_state():
+    from custom_components.solar_energy_management.tariff.tariff_provider import (
+        DynamicTariffProvider,
+    )
+    p = DynamicTariffProvider.__new__(DynamicTariffProvider)
+    p.get_current_import_rate = lambda: 0.20
+    p._cached_price_for = lambda when: 0.20   # all-in provider (Tibber): equal
+    assert p.effective_import_floor(0.12) == pytest.approx(0.12)
+
+
+def test_effective_import_floor_never_scales_down():
+    from custom_components.solar_energy_management.tariff.tariff_provider import (
+        DynamicTariffProvider,
+    )
+    p = DynamicTariffProvider.__new__(DynamicTariffProvider)
+    p.get_current_import_rate = lambda: 0.10
+    p._cached_price_for = lambda when: 0.20   # factor 0.5 → keep raw min
+    assert p.effective_import_floor(0.12) == pytest.approx(0.12)
+
+
+# ── #6: adopt a stranded API strategy across a reload ────────────────────
+
+@pytest.mark.asyncio
+async def test_adopts_stranded_api_strategy_at_construction():
+    # SEM reloaded mid-episode: the strategy is already 'api'. A fresh adapter
+    # must adopt control so the next NORMAL hands it back to idle (eco) — not
+    # leave the battery stranded in API forever.
+    hass = _hass()
+    state = MagicMock(); state.state = "api"
+    hass.states.get = MagicMock(return_value=state)
+    gen = _bidir(hass)
+    assert gen._took_control is True
+    await gen.command_normal()
+    opt = [c.args[2]["option"] for c in hass.services.async_call.await_args_list
+           if c.args[0] == "select"][-1]
+    assert opt == "eco"          # restored to idle, not stranded in api
+
+
+@pytest.mark.asyncio
+async def test_no_adoption_when_strategy_is_user_mode():
+    hass = _hass()
+    state = MagicMock(); state.state = "nom"
+    hass.states.get = MagicMock(return_value=state)
+    gen = _bidir(hass)
+    assert gen._took_control is False
+
+
+# ── #7: mixed-brand — AC-coupled battery stays Generic ──────────────────
+
+def test_adapter_for_keeps_sessy_generic_in_huawei_fleet():
+    # A Sessy b2 (strategy select) in a Huawei fleet must NOT be promoted to
+    # the Huawei adapter just because huawei_solar is loaded for b1.
+    from custom_components.solar_energy_management.coordinator.battery_adapters import (
+        adapter_for, GenericBatteryAdapter,
+    )
+    hass = _hass()
+    entry = MagicMock(); entry.state = MagicMock(); entry.state.value = "loaded"
+    hass.data = {}
+    hass.config_entries.async_entries.return_value = [entry]  # huawei loaded
+    cfg = {
+        "battery_strategy_control_entity": "select.sessy_2_power_strategy",
+        "battery_force_discharge_control_entity": "number.sessy_2_power_setpoint",
+        "battery_setpoint_bidirectional": True,
+    }
+    assert isinstance(adapter_for(hass, cfg), GenericBatteryAdapter)
+
+
+# ── robustness: domain-aware discharge limit + clamp warning ────────────
+
+@pytest.mark.asyncio
+async def test_discharge_limit_uses_input_number_domain():
+    hass = _hass()
+    gen = GenericBatteryAdapter(hass, {
+        "battery_discharge_control_entity": "input_number.batt_limit",
+        "battery_max_discharge_power": 3000,
+    })
+    await gen._apply_discharge_limit(1500.0)
+    call = hass.services.async_call.await_args
+    assert call.args[0] == "input_number" and call.args[1] == "set_value"
+
+
+@pytest.mark.asyncio
+async def test_setpoint_clamp_emits_warning(caplog):
+    import logging
+    hass = _hass_with_range("number.sessy_1_power_setpoint", -2200, 1700)
+    gen = _bidir(hass, battery_max_discharge_power=5000)
+    with caplog.at_level(logging.WARNING):
+        await gen.command_force_discharge(5000, 50.0)
+    assert any("clamped" in r.message for r in caplog.records)

@@ -13,6 +13,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.38] - 19.06.2026
+
+## 🔋 Battery arbitrage / per-battery review batch (#531)
+
+A holistic review of the arbitrage / per-battery / AC-coupled (Sessy) subsystem
+after a string of reactive #523 fixes. Three independent reviewers, every finding
+confirmed from code, fixed and tested as **one batch**.
+
+- **Charge-first: never sell stored energy while free solar surplus could charge
+  the battery.** Storing surplus avoids a future import (~full retail price),
+  worth far more than the export price — SEM now suppresses the sell verdict
+  while storable surplus exists and the battery isn't full. (#531)
+- **Arbitrage break-even now uses the all-in import rate, not raw spot.** The
+  upcoming-price curve is raw spot for Nord Pool / ENTSO-E but all-in for Tibber;
+  selling against raw spot lost money for spot-tariff users. SEM scales the
+  forecast minimum up to the live all-in rate (no-op for all-in providers). (#531)
+- **SOC unavailable → SEM holds instead of selling blind.** A setpoint battery
+  (Sessy) has no hardware reserve-stop, so an unavailable SOC could drain it past
+  the backup reserve. When in doubt, hold — the live SOC self-heals next cycle. (#531)
+- **A stale global battery mode no longer bleeds into a multi-battery fleet.**
+  After a single→multi upgrade the UI showed `auto` while a leftover global
+  `force_discharge` drove every battery; multi-battery slots now default to
+  `auto` and only the single-battery selector reads the global key. (#531)
+- **EV-night protection splits the home budget across the fleet.** Two batteries
+  each told to inject the *full* home load over-injected 2× and leaked surplus to
+  the EV — each now gets `home / N`. (#531)
+- **Strategy no longer stranded in API after a reload.** If SEM restarts
+  mid-episode with the strategy already in API, the fresh adapter adopts control
+  so the next idle cycle hands it back instead of leaving the battery
+  setpoint-controlled forever. (#531)
+- **Mixed-brand fleets: an AC-coupled battery stays on the generic adapter.** A
+  Sessy in a Huawei fleet is no longer promoted to the Huawei adapter (whose
+  service calls would never reach it) just because the Huawei integration is
+  loaded for a sibling. (#531)
+- **Arbitrage exit is explicit.** A non-firing arbitrage verdict now propagates a
+  clean STOP rather than falling back to a possibly-stale night-charge decision —
+  without ever overriding an active or planned charge. (#531)
+
+## 🛟 Robustness (#531)
+
+- The discharge-limit write is domain-aware (`input_number` helpers work, not
+  just `number`), matching the force-discharge path.
+- A setpoint clamped to the control entity's range now logs a WARNING instead of
+  silently capping — surfacing a fleet-power-vs-unit-rating mismatch.
+- Two batteries accidentally sharing one control entity now log a collision
+  warning instead of silently fighting over the setpoint.
+
 # [1.7.3-beta.37] - 19.06.2026
 
 ## 🔋 Battery charges from surplus again — SEM stops clobbering the power strategy (#523)

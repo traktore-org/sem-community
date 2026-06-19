@@ -155,6 +155,7 @@ class BatteryControlAdapter(ABC):
         # RienduPre saw (strategy → API, setpoint stuck at 0).
         st = self._hass.states.get(self._force_discharge_entity)
         attrs = getattr(st, "attributes", None) if st is not None else None
+        _requested = watts
         if isinstance(attrs, dict):
             lo = attrs.get("min")
             if isinstance(lo, (int, float)):
@@ -162,6 +163,17 @@ class BatteryControlAdapter(ABC):
             hi = attrs.get("max")
             if isinstance(hi, (int, float)):
                 watts = min(float(hi), watts)
+        # #531: a silent clamp hides a real mismatch (fleet power > a single
+        # unit's setpoint range). Surface it once per clamped write so the
+        # cause is visible in the log instead of a mysteriously-capped battery.
+        if abs(watts - _requested) >= 1.0:
+            _LOGGER.warning(
+                "Battery: setpoint %.0f W clamped to %.0f W by %s entity range "
+                "[%s, %s] — check battery_max_charge/discharge_power vs the "
+                "unit's rating",
+                _requested, watts, self._force_discharge_entity,
+                attrs.get("min"), attrs.get("max"),
+            )
         # Skip when within 100 W of the last applied value — the 0→0 case
         # (the common NORMAL cycle) must not spam the bus.
         if (self._last_force_discharge_w is not None

@@ -37,6 +37,19 @@ def adapter_for(hass, config: dict) -> BatteryControlAdapter:
     if platform == "generic":
         return GenericBatteryAdapter(hass, config)
 
+    # #531: a battery with its OWN AC-coupled control surface (a power-strategy
+    # select, or a bidirectional power setpoint — e.g. Sessy) is not a brand DC
+    # battery, even when a Huawei/GoodWe integration is loaded for a SIBLING in
+    # a mixed fleet. Without this gate the global auto-detect below promotes it
+    # to a Huawei/GoodWe adapter whose service calls never reach it (the
+    # mixed-brand self-heal bug). These per-battery keys come from
+    # ``_per_battery_config`` overlays, so single-brand installs are unaffected.
+    if (
+        config.get("battery_strategy_control_entity")
+        or config.get("battery_setpoint_bidirectional")
+    ):
+        return GenericBatteryAdapter(hass, config)
+
     # Auto-detect. Check BOTH legacy ``hass.data`` and loaded config
     # entries — modern integrations (incl. recent huawei_solar) store
     # state in ``entry.runtime_data`` and never populate ``hass.data``,

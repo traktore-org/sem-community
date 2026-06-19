@@ -157,6 +157,15 @@ class TariffProvider(ABC):
     def get_price_at(self, when: datetime) -> Optional[float]:
         """Get price at a specific time (for planning)."""
 
+    def effective_import_floor(self, raw_min: float) -> float:
+        """All-in equivalent of a raw forecast minimum (#531).
+
+        Default identity — static/flat tariffs already report all-in
+        rates. :class:`DynamicTariffProvider` overrides this to correct a
+        raw-spot forecast curve up to the live all-in import rate.
+        """
+        return raw_min
+
 
 class StaticTariffProvider(TariffProvider):
     """Static HT/NT tariff rates.
@@ -1181,6 +1190,34 @@ class DynamicTariffProvider(TariffProvider):
 
     def get_current_import_rate(self) -> float:
         return self._read_current_price()
+
+    def effective_import_floor(self, raw_min: float) -> float:
+        """Scale a raw forecast minimum to the all-in import rate (#531).
+
+        ``upcoming_prices`` carry whatever the price entity reports: raw
+        spot (no fees/tax) for some Nord Pool / ENTSO-E shapes, all-in for
+        Tibber. The arbitrage break-even must compare export against what
+        the user actually *pays* to recharge — so scale the raw forecast by
+        the ratio of the live all-in import rate to the current curve slot.
+
+        When the curve and the entity state agree (all-in providers) the
+        factor is ≈1.0 and the value passes through unchanged. Only a real
+        raw-vs-all-in mismatch (state all-in, curve raw spot) lifts it, and
+        only ever *upward* — raw spot understates real cost, so correcting
+        down would make arbitrage over-eager (the bug we're fixing). Below
+        1.0 means the cheapest slot is genuinely cheaper than now, which we
+        keep.
+        """
+        try:
+            all_in = float(self.get_current_import_rate())
+            curve_now = self._cached_price_for(dt_util.now())
+            if curve_now is not None and curve_now > 0.0 and all_in > 0.0:
+                factor = all_in / float(curve_now)
+                if factor > 1.0:
+                    return float(raw_min) * factor
+        except Exception:  # noqa: BLE001
+            pass
+        return raw_min
 
     def get_current_export_rate(self) -> float:
         """Read export rate from feed-in entity if available, else static.
