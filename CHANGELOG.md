@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.35] - 19.06.2026
+
+## 🔋 Battery control config is reachable without enabling arbitrage (#523)
+
+- **The force-discharge entity, power-strategy entity, and "Bidirectional
+  setpoint" toggle now appear in a "Battery control" section whenever a battery
+  exists** — previously they were hidden behind the *battery arbitrage* toggle
+  (itself only on a dynamic tariff). A user who wants `force_charge` or
+  per-battery modes (not arbitrage) couldn't find them, so `supports_forced_charge`
+  stayed False and the decision was dropped every cycle (RienduPre). Now they're
+  always available, and a **new power-strategy entity picker** lets you wire the
+  Sessy `select.*_power_strategy` from the UI (was config-only before).
+- **Battery SOC autodetect also matches by signature** (`device_class: battery`
+  + `%`), so a localized name like the Dutch `sensor.*_batterijpercentage` is
+  found even without an English SOC keyword (#529, DavidVM1982).
+
 # [1.7.3-beta.34] - 18.06.2026
 
 ## 🔋 Battery SOC: reachable when it lives off the power sensor's device (#529)

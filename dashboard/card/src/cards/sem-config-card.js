@@ -659,6 +659,34 @@ class SEMConfigCard extends SEMLitBase {
                 'sensor', 'power', opts, 'config_help_grid_import_entity')}
             ${this._renderPicker('grid_export_power_entity', 'config_grid_export_entity',
                 'sensor', 'power', opts, 'config_help_grid_export_entity')}
+            ${this._hasBattery() ? html`
+                <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:8px">
+                    <span class="ctrl-label" style="font-weight:600">${this._t('config_battery_control')}</span>
+                </div>
+                ${(() => {
+                    // #523 battery control entities — needed for force_charge /
+                    // per-battery modes AND arbitrage, so they live here (not
+                    // gated behind the arbitrage toggle). Multi-battery installs
+                    // get one picker per battery; single-battery keeps the
+                    // global picker.
+                    const n = this._batteryCount();
+                    if (n > 1) {
+                        return html`${Array.from({ length: n }, (_, i) => html`
+                            ${this._renderBatteryDischargePicker(i, n, opts)}
+                            ${this._renderBatteryStrategyPicker(i, n, opts)}`)}`;
+                    }
+                    return html`
+                        ${this._renderPicker('battery_force_discharge_control_entity',
+                            'config_force_discharge_entity', 'number', null, opts,
+                            'config_help_force_discharge_entity')}
+                        ${this._renderPicker('battery_strategy_control_entity',
+                            'config_strategy_entity', 'select', null, opts,
+                            'config_help_strategy_entity')}`;
+                })()}
+                ${this._renderOptionToggle('battery_setpoint_bidirectional',
+                    'config_battery_bidirectional', opts,
+                    'config_help_battery_bidirectional', false)}
+            ` : nothing}
             ${mode === 'dynamic' ? html`
                 <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:8px">
                     <span class="ctrl-label" style="font-weight:600">${this._t('config_battery_arbitrage')}</span>
@@ -670,22 +698,6 @@ class SEMConfigCard extends SEMLitBase {
                         { min: 0, max: 2, step: 0.01, unit: `${currency}/kWh`, default: 0.20 }, opts, 'config_help_arbitrage_min_export')}
                     ${this._renderOptionNumberInput('battery_arbitrage_reserve_soc', 'config_arbitrage_reserve_soc',
                         { min: 0, max: 100, step: 5, unit: '%', default: 50 }, opts, 'config_help_arbitrage_reserve_soc')}
-                    ${(() => {
-                        // Per-battery force-discharge control entities (#523):
-                        // multi-battery installs get one picker per battery so
-                        // each unit sells independently; single-battery keeps
-                        // the global picker.
-                        const n = this._batteryCount();
-                        return n > 1
-                            ? html`${Array.from({ length: n }, (_, i) =>
-                                this._renderBatteryDischargePicker(i, n, opts))}`
-                            : this._renderPicker('battery_force_discharge_control_entity',
-                                'config_force_discharge_entity', 'number', null, opts,
-                                'config_help_force_discharge_entity');
-                    })()}
-                    ${this._renderOptionToggle('battery_setpoint_bidirectional',
-                        'config_battery_bidirectional', opts,
-                        'config_help_battery_bidirectional', false)}
                 ` : nothing}
             ` : nothing}
         `;
@@ -905,6 +917,47 @@ class SEMConfigCard extends SEMLitBase {
             if (m) s.add(m[1]);
         }
         return s.size;
+    }
+
+    // Has a battery at all (single OR multi). ``_batteryCount`` is 0 on a
+    // single-battery install (no per-battery sensors), so gate the battery-
+    // control section on the single-battery SOC/power sensor too — otherwise
+    // single-battery users (Sessy combined, etc.) couldn't reach the
+    // force-discharge / strategy / bidirectional config (#523).
+    _hasBattery() {
+        if (!this._hass) return false;
+        if (this._batteryCount() > 0) return true;
+        return (
+            'sensor.sem_battery_soc' in this._hass.states ||
+            'sensor.sem_battery_power' in this._hass.states
+        );
+    }
+
+    // Per-battery power-strategy select picker (#523). Writes
+    // ``battery_strategy_entities[idx]`` — the select.* (Sessy power_strategy)
+    // SEM switches to the API value while it drives the setpoint.
+    _renderBatteryStrategyPicker(idx, count, opts) {
+        const listKey = 'battery_strategy_entities';
+        const lst = Array.isArray(opts[listKey]) ? opts[listKey] : [];
+        const cur = lst[idx] || '';
+        const fieldKey = `${listKey}.${idx}`;
+        const status = this._saveStatus[fieldKey];
+        return html`
+            <div class="picker-cell">
+                <div class="picker-row">
+                    <span class="picker-label">${this._t('config_strategy_entity')} — B${idx + 1}</span>
+                    <ha-entity-picker
+                        .hass=${this._hass}
+                        .value=${cur}
+                        .includeDomains=${['select', 'input_select']}
+                        .allowCustomEntity=${false}
+                        @value-changed=${(e) => this._saveListField(listKey, idx, e.detail?.value || '', count)}>
+                    </ha-entity-picker>
+                </div>
+                ${status === 'saving' ? html`<div class="save-status">${this._t('config_saving')}…</div>` : nothing}
+                ${status === 'ok' ? html`<div class="save-status ok">✓ ${this._t('config_saved')}</div>` : nothing}
+            </div>
+        `;
     }
 
     // Write one entry of an idx-aligned list option (#523 per-battery

@@ -1,5 +1,5 @@
 // Auto-generated from translations.json — do not edit manually
-// Generated: 2026-06-18T17:34:51.698207+00:00
+// Generated: 2026-06-19T09:34:01.437761+00:00
 // IIFE-scoped translations; publishes ``window.semLocalize`` and
 // dispatches ``sem-localize-ready`` on document for late-loading cards.
 (function() {
@@ -1090,7 +1090,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "de": {
       "charging": "Laden",
@@ -2177,7 +2180,10 @@
       "battery_mode_force_charge": "Zwangsladung",
       "battery_mode_force_discharge": "Zwangsentladung",
       "config_battery_bidirectional": "Bidirektionaler Sollwert (Laden = negativ)",
-      "config_help_battery_bidirectional": "Aktivieren, wenn die Entladeleistungs-Entität dieser Batterie ein bidirektionaler Sollwert ist – eine Number-Entität für Laden und Entladen, z. B. Sessy. SEM lädt dann durch Schreiben eines negativen Werts. Für eine einseitige Zwangsentlade-Entität (z. B. Huawei) aus lassen."
+      "config_help_battery_bidirectional": "Aktivieren, wenn die Entladeleistungs-Entität dieser Batterie ein bidirektionaler Sollwert ist – eine Number-Entität für Laden und Entladen, z. B. Sessy. SEM lädt dann durch Schreiben eines negativen Werts. Für eine einseitige Zwangsentlade-Entität (z. B. Huawei) aus lassen.",
+      "config_battery_control": "Batteriesteuerung",
+      "config_strategy_entity": "Leistungsstrategie-Entität (Sessy usw.)",
+      "config_help_strategy_entity": "Die Select-Entität, die die Leistungsstrategie der Batterie setzt (z. B. select.sessy_*_power_strategy). SEM schaltet sie auf den API-/Aktiv-Wert, während es den Sollwert steuert, und stellt danach Ihren Normalmodus (nom/roi/eco) wieder her. Für AC-gekoppelte Batterien wie Sessy; sonst leer lassen."
     },
     "fr": {
       "charging": "En charge",
@@ -3239,7 +3245,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "es": {
       "charging": "Cargando",
@@ -4301,7 +4310,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "it": {
       "charging": "In carica",
@@ -5363,7 +5375,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "nl": {
       "charging": "Laden",
@@ -6411,7 +6426,10 @@
       "battery_mode_force_charge": "Geforceerd laden",
       "battery_mode_force_discharge": "Geforceerd ontladen",
       "config_battery_bidirectional": "Bidirectionele instelwaarde (laden = negatief)",
-      "config_help_battery_bidirectional": "Inschakelen als de ontlaadvermogen-entiteit van deze batterij een bidirectionele instelwaarde is — één number-entiteit voor zowel laden als ontladen, bijv. een Sessy. SEM laadt dan door er een negatieve waarde naar te schrijven. Uit laten voor een eenrichtings geforceerde-ontlaadentiteit (bijv. Huawei)."
+      "config_help_battery_bidirectional": "Inschakelen als de ontlaadvermogen-entiteit van deze batterij een bidirectionele instelwaarde is — één number-entiteit voor zowel laden als ontladen, bijv. een Sessy. SEM laadt dan door er een negatieve waarde naar te schrijven. Uit laten voor een eenrichtings geforceerde-ontlaadentiteit (bijv. Huawei).",
+      "config_battery_control": "Batterijbesturing",
+      "config_strategy_entity": "Vermogensstrategie-entiteit (Sessy enz.)",
+      "config_help_strategy_entity": "De select-entiteit die de vermogensstrategie van de batterij instelt (bijv. select.sessy_*_power_strategy). SEM zet deze op de API/actieve waarde terwijl het de instelwaarde aanstuurt en herstelt daarna je normale modus (nom/roi/eco). Nodig voor AC-gekoppelde batterijen zoals Sessy; laat anders leeg."
     },
     "cs": {
       "charging": "Nabíjení",
@@ -7473,7 +7491,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "da": {
       "charging": "Oplader",
@@ -8535,7 +8556,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "fi": {
       "charging": "Lataus",
@@ -9597,7 +9621,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "hu": {
       "charging": "Töltés",
@@ -10659,7 +10686,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "no": {
       "charging": "Lader",
@@ -11721,7 +11751,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "pl": {
       "charging": "Ładowanie",
@@ -12783,7 +12816,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "pt": {
       "charging": "A carregar",
@@ -13845,7 +13881,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "ro": {
       "charging": "Încărcare",
@@ -14907,7 +14946,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     },
     "sv": {
       "charging": "Laddar",
@@ -15969,7 +16011,10 @@
       "battery_mode_force_charge": "Force charge",
       "battery_mode_force_discharge": "Force discharge",
       "config_battery_bidirectional": "Bidirectional setpoint (charge = negative)",
-      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei)."
+      "config_help_battery_bidirectional": "Enable if this battery's discharge-power entity is a bidirectional setpoint — one number entity for both charge and discharge, e.g. a Sessy. SEM then charges by writing a negative value to it. Leave off for a one-way forcible-discharge entity (e.g. Huawei).",
+      "config_battery_control": "Battery control",
+      "config_strategy_entity": "Power-strategy entity (Sessy etc.)",
+      "config_help_strategy_entity": "The select entity that sets the battery's power strategy (e.g. select.sessy_*_power_strategy). SEM switches it to the API/active value while it drives the setpoint and restores your normal mode (nom/roi/eco) afterward. Needed for AC-coupled batteries like Sessy; leave empty otherwise."
     }
   };
 

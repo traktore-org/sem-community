@@ -5992,6 +5992,17 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             ${this._renderOptionNumberInput("demand_charge_rate","config_demand_charge_rate",{min:0,max:20,step:.01,unit:`${a}/kW/Mt`,default:4.32},e,"config_help_demand_charge_rate")}
             ${this._renderPicker("grid_import_power_entity","config_grid_import_entity","sensor","power",e,"config_help_grid_import_entity")}
             ${this._renderPicker("grid_export_power_entity","config_grid_export_entity","sensor","power",e,"config_help_grid_export_entity")}
+            ${this._hasBattery()?W`
+                <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${t.surfaceBorder};padding-top:8px">
+                    <span class="ctrl-label" style="font-weight:600">${this._t("config_battery_control")}</span>
+                </div>
+                ${(()=>{const t=this._batteryCount();return t>1?W`${Array.from({length:t},(i,s)=>W`
+                            ${this._renderBatteryDischargePicker(s,t,e)}
+                            ${this._renderBatteryStrategyPicker(s,t,e)}`)}`:W`
+                        ${this._renderPicker("battery_force_discharge_control_entity","config_force_discharge_entity","number",null,e,"config_help_force_discharge_entity")}
+                        ${this._renderPicker("battery_strategy_control_entity","config_strategy_entity","select",null,e,"config_help_strategy_entity")}`})()}
+                ${this._renderOptionToggle("battery_setpoint_bidirectional","config_battery_bidirectional",e,"config_help_battery_bidirectional",!1)}
+            `:K}
             ${"dynamic"===l?W`
                 <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${t.surfaceBorder};padding-top:8px">
                     <span class="ctrl-label" style="font-weight:600">${this._t("config_battery_arbitrage")}</span>
@@ -6000,8 +6011,6 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${e.battery_grid_arbitrage_enabled?W`
                     ${this._renderOptionNumberInput("battery_arbitrage_min_export_price","config_arbitrage_min_export",{min:0,max:2,step:.01,unit:`${a}/kWh`,default:.2},e,"config_help_arbitrage_min_export")}
                     ${this._renderOptionNumberInput("battery_arbitrage_reserve_soc","config_arbitrage_reserve_soc",{min:0,max:100,step:5,unit:"%",default:50},e,"config_help_arbitrage_reserve_soc")}
-                    ${(()=>{const t=this._batteryCount();return t>1?W`${Array.from({length:t},(i,s)=>this._renderBatteryDischargePicker(s,t,e))}`:this._renderPicker("battery_force_discharge_control_entity","config_force_discharge_entity","number",null,e,"config_help_force_discharge_entity")})()}
-                    ${this._renderOptionToggle("battery_setpoint_bidirectional","config_battery_bidirectional",e,"config_help_battery_bidirectional",!1)}
                 `:K}
             `:K}
         `}_renderHeatPump(t){const e=this._bin("heat_pump_registered"),i=this._options||{},s=e?W`
@@ -6113,7 +6122,22 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 ${"ok"===p?W`<div class="save-status ok">✓ ${this._t("config_saved")}</div>`:K}
                 ${this._showHelp&&n?W`<div class="setting-help-text">${this._t(n)}</div>`:K}
             </div>
-        `}_batteryCount(){if(!this._hass)return 0;const t=new Set;for(const e of Object.keys(this._hass.states)){const i=e.match(/^sensor\.sem_battery_(b\d+)_power$/);i&&t.add(i[1])}return t.size}async _saveListField(t,e,i,s){const r=Array.isArray(this._options[t])?[...this._options[t]]:[];for(;r.length<s;)r.push(null);r[e]=i||null,await this._saveOption(t,r,`${t}.${e}`)}_renderBatteryDischargePicker(t,e,i){const s="battery_force_discharge_entities",r=(Array.isArray(i[s])?i[s]:[])[t]||"",a=`${s}.${t}`,o=this._saveStatus[a];return W`
+        `}_batteryCount(){if(!this._hass)return 0;const t=new Set;for(const e of Object.keys(this._hass.states)){const i=e.match(/^sensor\.sem_battery_(b\d+)_power$/);i&&t.add(i[1])}return t.size}_hasBattery(){return!!this._hass&&(this._batteryCount()>0||("sensor.sem_battery_soc"in this._hass.states||"sensor.sem_battery_power"in this._hass.states))}_renderBatteryStrategyPicker(t,e,i){const s="battery_strategy_entities",r=(Array.isArray(i[s])?i[s]:[])[t]||"",a=`${s}.${t}`,o=this._saveStatus[a];return W`
+            <div class="picker-cell">
+                <div class="picker-row">
+                    <span class="picker-label">${this._t("config_strategy_entity")} — B${t+1}</span>
+                    <ha-entity-picker
+                        .hass=${this._hass}
+                        .value=${r}
+                        .includeDomains=${["select","input_select"]}
+                        .allowCustomEntity=${!1}
+                        @value-changed=${i=>this._saveListField(s,t,i.detail?.value||"",e)}>
+                    </ha-entity-picker>
+                </div>
+                ${"saving"===o?W`<div class="save-status">${this._t("config_saving")}…</div>`:K}
+                ${"ok"===o?W`<div class="save-status ok">✓ ${this._t("config_saved")}</div>`:K}
+            </div>
+        `}async _saveListField(t,e,i,s){const r=Array.isArray(this._options[t])?[...this._options[t]]:[];for(;r.length<s;)r.push(null);r[e]=i||null,await this._saveOption(t,r,`${t}.${e}`)}_renderBatteryDischargePicker(t,e,i){const s="battery_force_discharge_entities",r=(Array.isArray(i[s])?i[s]:[])[t]||"",a=`${s}.${t}`,o=this._saveStatus[a];return W`
             <div class="picker-cell">
                 <div class="picker-row">
                     <span class="picker-label">${this._t("config_force_discharge_entity")} — B${t+1}</span>
