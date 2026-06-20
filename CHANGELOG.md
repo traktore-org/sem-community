@@ -13,6 +13,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.42] - 20.06.2026
+
+## 🐛 Pre-stable review fixes — forced charge restored (#535)
+
+A full ruflo-core review of the battery subsystem ahead of stable 1.7.3 found a
+blocker and three high-severity issues, all confirmed from code and now fixed:
+
+- **Forced charging was silently broken on every brand.** The battery adapters
+  built the internal charge command with the wrong field names
+  (`charge_power_w`/`duration_min` vs the dataclass's
+  `max_power_w`/`duration_minutes`), which raised a `TypeError` that the outer
+  handler swallowed — so the **`Force charge` mode and the night-charge
+  scheduler did nothing**. Fixed on Huawei, GoodWe, and the generic adapter, and
+  the scheduler now carries a real charge power (it would otherwise have charged
+  at 0 W). **(BLOCKER)**
+- **Scheduled charging no longer fires at the wrong time.** A planned night
+  charge used to start at *evaluation* time (e.g. 21:00) instead of inside the
+  cheapest slot, because the schedule had no "is it active now?" check. It now
+  respects the real slot boundaries.
+- **Restart orphan-stop hardening (#532):** if the cancel command doesn't land
+  (flaky Modbus) SEM now retries instead of giving up, and a multi-battery
+  fleet sharing one inverter issues a single stop per device instead of two
+  back-to-back (which the inverter would block).
+
 # [1.7.3-beta.41] - 20.06.2026
 
 ## ⏸️ "Allow arbitrage" mode removed from the selector for stable 1.7.3 (#533)

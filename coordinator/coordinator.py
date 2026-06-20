@@ -3494,6 +3494,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 _pbc = self._per_battery_config(batt_idx, _bat_count)
                 self._warn_battery_entity_collision(battery_id, _pbc)
                 adapter = adapter_for(self.hass, _pbc)
+                # H2 (review): share one orphan-stop guard across the fleet so a
+                # multi-battery setup behind one inverter issues a single
+                # stop_forcible_charge per device on restart (#532).
+                if hasattr(adapter, "_orphan_guard"):
+                    if not hasattr(self, "_battery_orphan_guard"):
+                        self._battery_orphan_guard = {}
+                    adapter._orphan_guard = self._battery_orphan_guard
                 self._battery_adapters[battery_id] = adapter
                 _LOGGER.info(
                     "Battery %s: %s (forced-discharge support=%s)",
@@ -3524,6 +3531,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     _rebuilt = adapter_for(self.hass, _heal_cfg)
                     if type(_rebuilt).__name__ != "GenericBatteryAdapter":
                         adapter = _rebuilt
+                        if hasattr(adapter, "_orphan_guard"):
+                            if not hasattr(self, "_battery_orphan_guard"):
+                                self._battery_orphan_guard = {}
+                            adapter._orphan_guard = self._battery_orphan_guard
                         self._battery_adapters[battery_id] = adapter
                         _LOGGER.info(
                             "Battery %s: upgraded GenericBatteryAdapter → %s "

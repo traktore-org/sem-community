@@ -83,6 +83,11 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # forcible op THIS adapter didn't start. One-shot; only consumed once
         # huawei_solar is actually loaded (so the status sensor is readable).
         self._startup_orphan_checked = False
+        # H2 (review): shared across a fleet's adapters by the coordinator so a
+        # multi-battery setup behind ONE inverter issues exactly one orphan
+        # stop per device per startup (back-to-back stops block the LUNA2000).
+        # Defaults to a private dict so a standalone adapter / unit test works.
+        self._orphan_guard: dict = {}
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -256,12 +261,21 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             # Sensor exists but hasn't polled a real value yet — wait one more
             # cycle so we don't miss an in-flight op to sensor lag.
             return False
-        self._startup_orphan_checked = True
         if self._forcible_discharging:
             # We started it this lifetime — the normal _stop_forcible path
             # owns it; nothing orphaned.
+            self._startup_orphan_checked = True
             return False
         if status != "active":
+            self._startup_orphan_checked = True
+            return False
+        # H2 (review): in a multi-battery fleet sharing ONE inverter, a sibling
+        # adapter may have already issued the stop for this device THIS cycle.
+        # Firing a second back-to-back stop_forcible_charge blocks the LUNA2000
+        # (the very failure the fix guards against) — defer to the sibling.
+        dev = self._inverter_device_id
+        if dev and self._orphan_guard.get(dev):
+            self._startup_orphan_checked = True
             return False
         _LOGGER.warning(
             "Huawei battery: a forcible charge/discharge is active that SEM "
@@ -269,7 +283,16 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             "inverter doesn't drain the battery to the floor unsupervised "
             "(#532)",
         )
-        await self._issue_stop()
+        ok = await self._issue_stop()
+        if not ok:
+            # H1 (review): the stop didn't land (flaky Modbus). Do NOT consume
+            # the one-shot — re-detect and retry next cycle — but still defer
+            # other writes this cycle (no back-to-back Modbus after a stop).
+            self._stop_retries = 2
+            return True
+        if dev:
+            self._orphan_guard[dev] = True
+        self._startup_orphan_checked = True
         self._forcible_discharging = False
         self._last_force_discharge_w = 0.0
         # Belt-and-braces re-issue on the next couple of cycles (flaky Modbus).
@@ -338,8 +361,8 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         from ..battery_charge_adapter import ChargeCommand
         cmd = ChargeCommand(
             target_soc=target_soc,
-            charge_power_w=charge_power_w,
-            duration_min=duration_min,
+            max_power_w=charge_power_w,
+            duration_minutes=duration_min,
         )
         await self._charge_adapter.start_forced_charge(cmd)
         self._last_intent = BatteryIntent.FORCE_CHARGE

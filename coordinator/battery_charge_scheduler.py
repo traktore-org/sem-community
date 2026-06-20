@@ -111,6 +111,33 @@ class NightChargeSchedule:
         """Currently active time slot."""
         return next((s for s in self.slots if s.is_active), None)
 
+    def is_active_now(self, now: Optional[datetime] = None) -> bool:
+        """True iff ``now`` falls inside a planned charge slot.
+
+        #532 review (H3): ``decide_battery._now_in_window`` looks for this
+        method on the schedule; before it existed the fallback returned True
+        whenever ANY slot was planned, so a SCHEDULED decision force-charged
+        the battery immediately at evaluation time (e.g. 21:00) even when the
+        cheapest slot started hours later — charging through an expensive
+        window. This checks the real slot boundaries instead.
+
+        No slots → ``True`` (a plan with no per-slot detail keeps the legacy
+        "charge whenever scheduled" behaviour). ``TimeSlot`` times that are
+        naive/aware-mismatched with ``now`` are skipped rather than raising.
+        """
+        if not self.slots:
+            return True
+        if now is None:
+            now = dt_util.now()
+        for s in self.slots:
+            try:
+                if s.start <= now < s.end:
+                    return True
+            except TypeError:
+                # naive vs aware datetime — can't compare; skip this slot
+                continue
+        return False
+
     def as_dict(self) -> dict:
         """Serialize for HA sensor attributes."""
         return {
@@ -148,6 +175,12 @@ class SchedulerDecision:
     """Used iff state == DISCHARGING_ARBITRAGE (#523) — battery→grid power."""
     floor_soc: float = 0.0
     """Used iff state == DISCHARGING_ARBITRAGE (#523) — reserve floor."""
+    charge_power_w: float = 0.0
+    """Used iff state == SCHEDULED — grid→battery charge power. decide_battery
+    reads this to actuate FORCE_CHARGE; without it the scheduled charge would
+    issue 0 W (B1). Populated from ``SchedulerConfig.battery_max_charge_power_w``."""
+    duration_min: int = 60
+    """Used iff state == SCHEDULED — force-charge safety timeout (minutes)."""
     reason: str = ""
     evaluated_at: Optional[datetime] = None
 
@@ -417,6 +450,7 @@ class BatteryChargeScheduler:
                 deficit_kwh=actual_charge_kwh,
                 hours_needed=hours_needed,
                 schedule=schedule,
+                charge_power_w=self._config.battery_max_charge_power_w,
                 reason=f"Negative price ({current_price:.3f}/kWh) — charging to {target_soc:.0f}%",
                 evaluated_at=now,
             )
@@ -575,6 +609,7 @@ class BatteryChargeScheduler:
             hours_needed=hours_needed,
             charge_windows=charge_windows,
             schedule=schedule,
+            charge_power_w=self._config.battery_max_charge_power_w,
             reason=(
                 f"Charge {actual_charge_kwh:.1f} kWh "
                 f"({current_soc:.0f}% → {target_soc:.0f}%) "

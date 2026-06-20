@@ -61,8 +61,8 @@ class GoodWeBatteryAdapter(BatteryControlAdapter):
         from ..battery_charge_adapter import ChargeCommand
         cmd = ChargeCommand(
             target_soc=target_soc,
-            charge_power_w=charge_power_w,
-            duration_min=duration_min,
+            max_power_w=charge_power_w,
+            duration_minutes=duration_min,
         )
         await self._charge_adapter.start_forced_charge(cmd)
         self._last_intent = BatteryIntent.FORCE_CHARGE
