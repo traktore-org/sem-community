@@ -1,5 +1,15 @@
 # Battery export arbitrage — selling stored energy when export is high
 
+> ## ⏸️ Deactivated in v1.7.3 — returns in v1.7.4
+>
+> Automatic battery→grid arbitrage is **turned off in the stable 1.7.3
+> release** while it gets more review and soak time. The global toggle is
+> forced off, its config section is hidden, and the **`Allow arbitrage`
+> battery mode is removed from the selector**. All other battery control
+> (Auto, Self-consumption, Force charge, Force discharge, Off) is unaffected.
+> Arbitrage returns in **v1.7.4** — tracking issue **#533**. The rest of this
+> page describes the feature as it works once re-enabled.
+
 On a dynamic / spot tariff (EPEX, Tibber, Nord Pool, aWATTar, …) the price you
 are paid to export swings hard — often **negative** (you pay to export) and
 sometimes **far above** the cost of charging. SEM's battery charge scheduler
