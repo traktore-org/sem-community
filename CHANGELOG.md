@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.41] - 20.06.2026
+
+## ⏸️ "Allow arbitrage" mode removed from the selector for stable 1.7.3 (#533)
+
+- Automatic battery→grid arbitrage is fully deactivated for the stable release.
+  On top of the global toggle being off (beta.40), the **`Allow arbitrage`
+  per-battery mode is removed from the mode selector**, and the coordinator no
+  longer evaluates arbitrage for a per-battery `allow_arbitrage` opt-in — a
+  stale config goes dormant (behaves like `Auto`, no selling) instead of
+  quietly selling to grid.
+- **Kept** (tested, safe): `Auto`, `Self-consumption only`, `Force charge`,
+  `Force discharge`, `Off`. Automatic arbitrage returns in **v1.7.4** after
+  review + soak (#533).
+
 # [1.7.3-beta.40] - 20.06.2026
 
 ## ⏸️ Battery→grid arbitrage deactivated for the stable release (#533)

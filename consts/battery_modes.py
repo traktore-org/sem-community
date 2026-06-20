@@ -14,7 +14,11 @@ adapter commands):
   normal, but NEVER sell to grid (suppresses the arbitrage verdict for
   this battery even when arbitrage is globally on).
 * ``allow_arbitrage``  — permit THIS battery to sell to grid when export
-  beats recharge cost, even if the global arbitrage toggle is off.
+  beats recharge cost. **Removed from the selector in v1.7.3** (automatic
+  battery→grid arbitrage is deactivated for the stable release — #533;
+  returns in v1.7.4). The value + its handling stay so an existing config
+  doesn't error, but it's no longer offered and the coordinator never
+  evaluates arbitrage for it.
 * ``force_charge``     — manual FORCE_CHARGE to full now.
 * ``force_discharge``  — manual FORCE_DISCHARGE (sell to grid) down to the
   battery's reserve SOC now.
@@ -26,10 +30,13 @@ adapter commands):
 from __future__ import annotations
 
 # Order matters: it's the order shown in the HA select UI.
+# NOTE: ``allow_arbitrage`` is intentionally absent in v1.7.3 — automatic
+# battery→grid arbitrage is deactivated for the stable release (#533, returns
+# in v1.7.4). ``arbitrage_allowed_for_mode`` still recognises the value so an
+# existing/stale config is handled gracefully, but it isn't offered here.
 BATTERY_MODES: dict[str, str] = {
     "auto": "Auto",
     "self_consumption": "Self-consumption only",
-    "allow_arbitrage": "Allow arbitrage",
     "force_charge": "Force charge",
     "force_discharge": "Force discharge",
     "off": "Off (SEM hands-off)",

@@ -186,6 +186,21 @@ def test_arbitrage_allowed_helper():
     assert arbitrage_allowed_for_mode("off", True) is False  # off never sells
 
 
+def test_allow_arbitrage_removed_from_selector_v173():
+    # #533: automatic battery→grid arbitrage is deactivated for stable 1.7.3,
+    # so the allow_arbitrage mode is no longer OFFERED — but its value is still
+    # recognised so a stale config doesn't error (returns in 1.7.4).
+    from custom_components.solar_energy_management.consts.battery_modes import (
+        BATTERY_MODES,
+    )
+    assert "allow_arbitrage" not in BATTERY_MODES, "must not be selectable in 1.7.3"
+    # the safe + manual modes stay
+    for m in ("auto", "self_consumption", "force_charge", "force_discharge", "off"):
+        assert m in BATTERY_MODES
+    # value still classified (graceful handling + 1.7.4 restore)
+    assert arbitrage_allowed_for_mode("allow_arbitrage", True) is True
+
+
 # ── off mode: SEM hands-off (RienduPre request) ─────────────────────
 
 def test_off_mode_returns_off_intent():

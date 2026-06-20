@@ -3343,11 +3343,16 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         _charge_active = (
             scheduler_decision is not None and scheduler_decision.should_charge
         )
-        # Evaluate arbitrage when it's globally enabled OR any battery is in
-        # per-battery ``allow_arbitrage`` mode (#523) — that mode opts a unit
-        # in even with the global toggle off. decide_battery then gates the
-        # shared verdict per battery (self_consumption never sells).
-        _any_allow_arb = "allow_arbitrage" in (self.config.get("battery_modes") or [])
+        # Evaluate arbitrage ONLY when globally enabled. In v1.7.3 the global
+        # toggle is forced off (#533) so this whole block is dormant — automatic
+        # battery→grid arbitrage is deactivated for the stable release.
+        #
+        # The per-battery ``allow_arbitrage`` opt-in (which used to run the
+        # economic check even with the global toggle off) is intentionally NOT
+        # honoured here for v1.7.3: it's removed from the selector and a stale
+        # ``allow_arbitrage`` config goes dormant (behaves like ``auto`` — no
+        # selling) rather than quietly selling to grid. Restored in v1.7.4.
+        _any_allow_arb = False  # v1.7.3: per-battery arbitrage opt-in disabled (#533)
         # #531 charge-first: never sell while there's storable solar surplus the
         # battery could absorb. Storing free solar avoids a future import (~full
         # retail price) which is worth far more than the export price — so we
