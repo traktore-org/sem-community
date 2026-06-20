@@ -687,19 +687,13 @@ class SEMConfigCard extends SEMLitBase {
                     'config_battery_bidirectional', opts,
                     'config_help_battery_bidirectional', false)}
             ` : nothing}
-            ${mode === 'dynamic' ? html`
-                <div class="readonly-row" style="margin-top:6px;border-top:1px solid ${T.surfaceBorder};padding-top:8px">
-                    <span class="ctrl-label" style="font-weight:600">${this._t('config_battery_arbitrage')}</span>
-                </div>
-                ${this._renderOptionToggle('battery_grid_arbitrage_enabled',
-                    'config_battery_arbitrage_enable', opts, 'config_help_battery_arbitrage', false)}
-                ${opts.battery_grid_arbitrage_enabled ? html`
-                    ${this._renderOptionNumberInput('battery_arbitrage_min_export_price', 'config_arbitrage_min_export',
-                        { min: 0, max: 2, step: 0.01, unit: `${currency}/kWh`, default: 0.20 }, opts, 'config_help_arbitrage_min_export')}
-                    ${this._renderOptionNumberInput('battery_arbitrage_reserve_soc', 'config_arbitrage_reserve_soc',
-                        { min: 0, max: 100, step: 5, unit: '%', default: 50 }, opts, 'config_help_arbitrage_reserve_soc')}
-                ` : nothing}
-            ` : nothing}
+            ${''/* Battery→grid arbitrage UI is deactivated for the stable
+               release (drained a real battery to its reserve floor when a
+               restart stranded an in-flight discharge — see #532). The toggle
+               is forced off on upgrade and its config section is hidden so the
+               selling path can't be enabled from the dashboard. The decision
+               code + per-battery modes stay intact; arbitrage ships again in a
+               later release once it has soaked. */}
         `;
     }
 

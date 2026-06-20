@@ -13,6 +13,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.40] - 20.06.2026
+
+## ⏸️ Battery→grid arbitrage deactivated for the stable release (#533)
+
+- After the incident below, the **selling-to-grid feature is held back** for a
+  stable release. The global arbitrage toggle is **forced off on upgrade**
+  (config migration v13→v14) and its **section is hidden from the dashboard
+  config card**, so it can't be enabled from the UI. The decision code and the
+  per-battery modes stay intact — arbitrage returns in a later release once it
+  has been reviewed and soaked (tracked in #533).
+
+## 🛡️ A SEM restart no longer strands a Huawei battery force-discharge (#532)
+
+- **Critical fix.** Huawei battery→grid arbitrage uses the
+  `huawei_solar.forcible_discharge_soc` service, which the inverter then runs
+  **autonomously until its target SOC**. A SEM restart or config reload while a
+  discharge was in flight gave the fresh adapter no record of it, so SEM never
+  sent the stop — the inverter kept discharging the battery to the reserve floor
+  **unsupervised** (a dev/observer test drained a real LUNA2000 from 80% to 20%,
+  exporting to the grid for ~1h40m before it self-terminated at the floor).
+- SEM now detects an active forcible op via the integration's status sensor on
+  the first cycle after startup and issues one `stop_forcible_charge` to cancel
+  anything it didn't start — waiting for the integration to load and for the
+  sensor to report a real value (no false stops, no missed ops). Resuming
+  arbitrage after a restart re-asserts the sell instead of stopping it.
+
 # [1.7.3-beta.39] - 19.06.2026
 
 ## 🔋 New battery mode: "Off (SEM hands-off)" (#523)

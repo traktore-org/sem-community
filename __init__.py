@@ -1050,6 +1050,41 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             )
             return False
 
+    if entry.version < 14:
+        # v13 → v14 (#533): deactivate battery→grid arbitrage for the stable
+        # release. A restart that stranded an in-flight Huawei forcible
+        # discharge drained a real battery to its reserve floor (#532), so the
+        # selling path is being held back until it has soaked. Force the global
+        # toggle OFF on upgrade; the dashboard arbitrage section is hidden too,
+        # so it can't be re-enabled from the UI. The decision code + per-battery
+        # modes stay intact — arbitrage returns in a later release (#533).
+        try:
+            new_data = {**accumulated_data}
+            new_options = {**accumulated_options}
+            was_on = bool(
+                new_options.get("battery_grid_arbitrage_enabled")
+                or new_data.get("battery_grid_arbitrage_enabled")
+            )
+            new_data["battery_grid_arbitrage_enabled"] = False
+            new_options["battery_grid_arbitrage_enabled"] = False
+            hass.config_entries.async_update_entry(
+                entry, data=new_data, options=new_options,
+                version=14, minor_version=1,
+            )
+            accumulated_data, accumulated_options = new_data, new_options
+            if was_on:
+                _LOGGER.warning(
+                    "#533: battery→grid arbitrage was enabled — forced OFF for "
+                    "the stable release (re-enabled in a later version after "
+                    "review/soak).",
+                )
+        except Exception as e:
+            _LOGGER.error(
+                "Migration from v%s to v14 failed — keeping original config: %s",
+                entry.version, e,
+            )
+            return False
+
     _LOGGER.info("Migration to version %s.%s done", entry.version, entry.minor_version)
     return True
 
