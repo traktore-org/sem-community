@@ -251,6 +251,10 @@ class SEMBatteryCard extends SEMLitBase {
         const modeVal = modeState.state;
         const showReserve = reserveState
             && (modeVal === 'allow_arbitrage' || modeVal === 'force_discharge');
+        // Decision-explanation line — what this mode makes SEM do (mirrors the
+        // EV charger card's charge-mode hints). Translated per mode; falls back
+        // to empty so an unknown/stale mode just hides the hint.
+        const modeHint = this._t('battery_mode_hint_' + modeVal) || '';
         return html`
             <div class="battery-section-controls">
                 <div class="bsc-row">
@@ -264,6 +268,12 @@ class SEMBatteryCard extends SEMLitBase {
                             </option>`)}
                     </select>
                 </div>
+                ${modeHint ? html`
+                    <div class="bsc-hint">
+                        <ha-icon icon="mdi:information-outline"></ha-icon>
+                        <span>${modeHint}</span>
+                    </div>
+                ` : nothing}
                 ${showReserve ? html`
                     <div class="bsc-row">
                         <span class="bsc-label">${this._t('reserve_soc')}</span>
@@ -587,6 +597,17 @@ class SEMBatteryCard extends SEMLitBase {
                 .bsc-row {
                     display: flex; align-items: center; justify-content: space-between;
                     gap: 8px;
+                }
+                .bsc-hint {
+                    display: flex; align-items: flex-start; gap: 5px;
+                    font-size: 11px; line-height: 1.35;
+                    color: ${textSecCol};
+                    margin: -2px 0 1px 0;
+                    opacity: 0.92;
+                }
+                .bsc-hint ha-icon {
+                    --mdc-icon-size: 13px;
+                    flex: 0 0 auto; margin-top: 1px; opacity: 0.8;
                 }
                 .bsc-label {
                     font-size: 12px; color: ${textSecCol}; font-weight: 500;

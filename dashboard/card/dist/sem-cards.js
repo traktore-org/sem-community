@@ -1375,7 +1375,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                     ${null!=t?Math.round(s)+"%":"—"}
                 </text>
             </svg>
-        `}_fmtHours(t){if(null==t||!isFinite(t)||t<=0)return"—";if(t<1)return`${Math.round(60*t)} min`;const e=Math.floor(t),i=Math.round(60*(t-e));return 0===i?`${e} h`:`${e} h ${i} min`}_batteryEta(t,e,i){if(null==t||e<=0||Math.abs(i)<50)return null;if(i>50){const s=(100-t)/100*e;return{key:"until_full",text:this._fmtHours(s/(i/1e3))}}const s=t/100*e;return{key:"until_empty",text:this._fmtHours(s/(Math.abs(i)/1e3))}}_renderModeControls(t,e){const i=this._hass?.states[t];if(!i)return K;const s=this._hass?.states[e],r=i.state,a=s&&("allow_arbitrage"===r||"force_discharge"===r);return W`
+        `}_fmtHours(t){if(null==t||!isFinite(t)||t<=0)return"—";if(t<1)return`${Math.round(60*t)} min`;const e=Math.floor(t),i=Math.round(60*(t-e));return 0===i?`${e} h`:`${e} h ${i} min`}_batteryEta(t,e,i){if(null==t||e<=0||Math.abs(i)<50)return null;if(i>50){const s=(100-t)/100*e;return{key:"until_full",text:this._fmtHours(s/(i/1e3))}}const s=t/100*e;return{key:"until_empty",text:this._fmtHours(s/(Math.abs(i)/1e3))}}_renderModeControls(t,e){const i=this._hass?.states[t];if(!i)return K;const s=this._hass?.states[e],r=i.state,a=s&&("allow_arbitrage"===r||"force_discharge"===r),o=this._t("battery_mode_hint_"+r)||"";return W`
             <div class="battery-section-controls">
                 <div class="bsc-row">
                     <span class="bsc-label">${this._t("mode")}</span>
@@ -1388,6 +1388,12 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                             </option>`)}
                     </select>
                 </div>
+                ${o?W`
+                    <div class="bsc-hint">
+                        <ha-icon icon="mdi:information-outline"></ha-icon>
+                        <span>${o}</span>
+                    </div>
+                `:K}
                 ${a?W`
                     <div class="bsc-row">
                         <span class="bsc-label">${this._t("reserve_soc")}</span>
@@ -1602,6 +1608,17 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                 .bsc-row {
                     display: flex; align-items: center; justify-content: space-between;
                     gap: 8px;
+                }
+                .bsc-hint {
+                    display: flex; align-items: flex-start; gap: 5px;
+                    font-size: 11px; line-height: 1.35;
+                    color: ${Y};
+                    margin: -2px 0 1px 0;
+                    opacity: 0.92;
+                }
+                .bsc-hint ha-icon {
+                    --mdc-icon-size: 13px;
+                    flex: 0 0 auto; margin-top: 1px; opacity: 0.8;
                 }
                 .bsc-label {
                     font-size: 12px; color: ${Y}; font-weight: 500;
