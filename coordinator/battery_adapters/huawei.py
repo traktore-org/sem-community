@@ -73,6 +73,16 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # also self-terminates at target_soc=reserve, so this is belt-and-
         # braces over an already-bounded action.
         self._stop_retries = 0
+        # #532 (PROD incident 2026-06-19): forcible_discharge_soc runs
+        # AUTONOMOUSLY on the inverter until target_soc. A SEM restart / config
+        # reload mid-discharge gives a fresh adapter ``_forcible_discharging =
+        # False``, so ``_stop_forcible()`` returns early and never cancels the
+        # in-flight op — the inverter drains the battery to the reserve floor
+        # unsupervised (drained a PROD LUNA2000 80%→20% to grid). On the first
+        # non-force-discharge cycle after startup we detect and cancel any
+        # forcible op THIS adapter didn't start. One-shot; only consumed once
+        # huawei_solar is actually loaded (so the status sensor is readable).
+        self._startup_orphan_checked = False
 
     # ─── Capability ────────────────────────────────────────────
 
@@ -102,6 +112,10 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         discharge at ``power_w`` until SOC falls to ``floor_soc`` (the
         reserve). Issued ONCE; while already discharging at ~this power the
         call is a no-op (re-hammering the inverter blocks the LUNA2000)."""
+        # #532: we are (re)asserting the forcible op ourselves — opt out of the
+        # startup orphan-stop so a restart that resumes arbitrage continues
+        # selling instead of stopping then restarting.
+        self._startup_orphan_checked = True
         self._fd_floor_soc = floor_soc
         watts = max(0.0, min(float(power_w), self._max_discharge_w))
         if not self._inverter_device_id:
@@ -134,7 +148,10 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         self._last_intent = BatteryIntent.FORCE_DISCHARGE
 
     async def command_stop_force_discharge(self) -> None:
-        await self._stop_forcible()
+        # #532: also catch an orphan op from a prior instance (the flag-gated
+        # _stop_forcible alone misses it on a fresh adapter).
+        if not await self._maybe_clear_startup_orphan():
+            await self._stop_forcible()
         self._last_intent = BatteryIntent.STOP_FORCE_DISCHARGE
 
     async def _stop_forcible(self) -> bool:
@@ -173,6 +190,92 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         await super()._write_force_discharge(0.0)
         return True
 
+    def _forcible_status_reading(self) -> str:
+        """Classify the ``huawei_solar`` "Forcible charge/discharge" status
+        sensor (#532). Returns one of:
+
+        * ``"active"``  — an op is running (charge or discharge).
+        * ``"stopped"`` — a forcible sensor is readable and says stopped/idle.
+        * ``"pending"`` — a forcible sensor exists but is still
+          unknown/unavailable (just after the integration loads — don't act
+          yet, the next cycle will have a real reading).
+        * ``"absent"``  — no forcible sensor at all (e.g. a number-entity
+          Huawei, or a non-storage inverter).
+
+        Brand-agnostic on the entity id (installs name it
+        ``sensor.batteries_forcible_charge`` / ``battery_<n>_forcible_*`` /
+        …): scan the ``sensor`` domain for any ``forcible`` entity.
+        """
+        try:
+            states = self._hass.states.async_all("sensor")
+        except Exception:  # noqa: BLE001
+            return "absent"
+        found = False
+        any_readable = False
+        try:
+            for st in states:
+                eid = getattr(st, "entity_id", "") or ""
+                if "forcible" not in eid:
+                    continue
+                found = True
+                val = str(getattr(st, "state", "") or "").strip().lower()
+                if val in ("", "unknown", "unavailable", "none"):
+                    continue  # this one not ready — keep scanning
+                any_readable = True
+                if "stop" not in val and val != "idle":
+                    return "active"
+        except TypeError:
+            # states wasn't iterable (MagicMock in a unit test) — can't tell.
+            return "absent"
+        if not found:
+            return "absent"
+        return "stopped" if any_readable else "pending"
+
+    def _forcible_status_active(self) -> bool:
+        """True iff a forcible op is actively running (#532)."""
+        return self._forcible_status_reading() == "active"
+
+    async def _maybe_clear_startup_orphan(self) -> bool:
+        """Cancel a forcible op left running by a prior SEM instance (#532).
+
+        One-shot, consumed only once ``huawei_solar`` is loaded so the status
+        sensor is readable (the same startup race the adapter self-heal guards
+        against). Issues exactly ONE ``stop_forcible_charge`` if an op is
+        active that THIS adapter didn't start. Returns True when it issued the
+        stop so the caller defers other Modbus writes this cycle (back-to-back
+        writes after a stop block the LUNA2000)."""
+        if self._startup_orphan_checked:
+            return False
+        from . import _integration_loaded
+        if not _integration_loaded(self._hass, "huawei_solar"):
+            # Integration still coming up — re-check next cycle, don't burn
+            # the one-shot on an unreadable sensor.
+            return False
+        status = self._forcible_status_reading()
+        if status == "pending":
+            # Sensor exists but hasn't polled a real value yet — wait one more
+            # cycle so we don't miss an in-flight op to sensor lag.
+            return False
+        self._startup_orphan_checked = True
+        if self._forcible_discharging:
+            # We started it this lifetime — the normal _stop_forcible path
+            # owns it; nothing orphaned.
+            return False
+        if status != "active":
+            return False
+        _LOGGER.warning(
+            "Huawei battery: a forcible charge/discharge is active that SEM "
+            "did not start (restart/reload mid-op?) — issuing stop so the "
+            "inverter doesn't drain the battery to the floor unsupervised "
+            "(#532)",
+        )
+        await self._issue_stop()
+        self._forcible_discharging = False
+        self._last_force_discharge_w = 0.0
+        # Belt-and-braces re-issue on the next couple of cycles (flaky Modbus).
+        self._stop_retries = 2
+        return True
+
     # ─── Commands ──────────────────────────────────────────────
 
     async def command_normal(self) -> None:
@@ -180,6 +283,9 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         If exiting a forcible discharge, issue ONLY the stop this cycle (the
         discharge-limit write is deferred to the next cycle — back-to-back
         Modbus writes after stop_forcible_charge block the LUNA2000)."""
+        if await self._maybe_clear_startup_orphan():
+            self._last_intent = BatteryIntent.NORMAL
+            return
         if await self._stop_forcible():
             self._last_intent = BatteryIntent.NORMAL
             return
@@ -195,6 +301,10 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
     async def command_limit_discharge(self, watts: float) -> None:
         """Apply the 1:1 home-consumption protection limit.
         Honours 100 W hysteresis to avoid log spam."""
+        # Cancel any orphan forcible op left by a prior instance first (#532).
+        if await self._maybe_clear_startup_orphan():
+            self._last_intent = BatteryIntent.LIMIT_DISCHARGE
+            return
         # Forced discharge is mutually exclusive with limiting it (#523).
         # If forcing, stop cleanly this cycle and apply the limit next cycle.
         if await self._stop_forcible():
@@ -214,6 +324,11 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         self, target_soc: float, charge_power_w: float, duration_min: int,
     ) -> None:
         """Delegate to HuaweiChargeAdapter.start_forced_charge."""
+        # Cancel an orphan forcible op from a prior instance first (#532) —
+        # never start a charge on top of an in-flight discharge.
+        if await self._maybe_clear_startup_orphan():
+            self._last_intent = BatteryIntent.FORCE_CHARGE
+            return
         # Can't force-charge and force-discharge at once (#523). If a forcible
         # discharge is active, STOP it this cycle and start the charge next
         # cycle — never discharge-stop + charge-start back-to-back.
@@ -235,6 +350,9 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # battery silently selling to grid. Forcible discharge and forced
         # charge share the same huawei stop service, so one clean stop covers
         # both; only fall through to the charge adapter when not forcing.
+        if await self._maybe_clear_startup_orphan():
+            self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
+            return
         if await self._stop_forcible():
             self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
             return
