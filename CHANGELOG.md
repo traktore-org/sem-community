@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.43] - 20.06.2026
+
+## 🔋 Battery modes now map to the right Sessy strategy (#523)
+
+RienduPre's beta.42 testing showed that on a Sessy (AC-coupled) every non-force
+mode left the battery in `eco` — which isn't self-consumption — so `Auto` /
+`Self-consumption` "didn't charge or discharge" and `Off` sat in `eco` too.
+Each per-battery mode now drives the correct power strategy:
+
+- **Auto / Self-consumption** → `nom` (zero-on-meter self-consumption), so the
+  battery actually charges from surplus and powers the house — not `eco`.
+- **Off** → `idle` (battery does nothing), with the setpoint zeroed.
+- **Force charge / Force discharge** → `api` (SEM setpoint control) — unchanged.
+
+After a force op ends (or the battery hits its reserve), it returns to `nom`
+self-consumption instead of `eco`. The strategy values are configurable for
+other AC-coupled brands (`battery_strategy_self_consume_value` /
+`battery_strategy_off_value`). Huawei/DC batteries are unaffected (no strategy
+select).
+
 # [1.7.3-beta.42] - 20.06.2026
 
 ## 🐛 Pre-stable review fixes — forced charge restored (#535)

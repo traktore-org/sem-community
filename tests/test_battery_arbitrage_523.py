@@ -413,7 +413,7 @@ async def test_bidirectional_force_charge_clamps_to_max_charge():
 
 
 @pytest.mark.asyncio
-async def test_bidirectional_normal_zeroes_setpoint_and_releases_strategy():
+async def test_bidirectional_normal_zeroes_setpoint_and_self_consumes():
     hass = _hass()
     gen = _bidir(hass)
     await gen.command_force_charge(target_soc=100.0, charge_power_w=1500, duration_min=60)
@@ -422,8 +422,9 @@ async def test_bidirectional_normal_zeroes_setpoint_and_releases_strategy():
     calls = {}
     for c in hass.services.async_call.await_args_list:
         calls[(c.args[0], c.args[1])] = c.args[2]
-    assert calls[("number", "set_value")]["value"] == 0.0   # idle
-    assert calls[("select", "select_option")]["option"] == "eco"  # self-consume
+    assert calls[("number", "set_value")]["value"] == 0.0   # setpoint idle
+    # #523 (Rien beta.42): NORMAL = self-consumption strategy ``nom``, not ``eco``.
+    assert calls[("select", "select_option")]["option"] == "nom"
 
 
 @pytest.mark.asyncio
@@ -450,38 +451,35 @@ async def test_non_bidirectional_force_charge_still_needs_switch():
 
 
 @pytest.mark.asyncio
-async def test_strategy_restores_user_mode_not_eco():
-    # #523: the user runs ``nom`` (zero-on-meter). When SEM force-charges
-    # (→ api) and then returns to NORMAL, it must restore ``nom`` — NOT clobber
-    # it with the ``eco`` fallback (real Sessy options are lowercase).
+async def test_normal_sets_self_consume_after_force_charge():
+    # #523 (Rien beta.42): after a force-charge (→ api), NORMAL returns the
+    # Sessy to self-consumption ``nom`` — never the old ``eco`` (which doesn't
+    # self-consume), and regardless of what the prior strategy was.
     hass = _hass()
     state = MagicMock()
     state.state = "nom"
     hass.states.get = MagicMock(return_value=state)
     gen = _bidir(hass)
     await gen.command_force_charge(target_soc=100.0, charge_power_w=1000, duration_min=60)
-    # captured the prior mode and switched to api
-    assert gen._restore_strategy == "nom"
     hass.services.async_call.reset_mock()
     await gen.command_normal()
     opt = [c.args[2]["option"] for c in hass.services.async_call.await_args_list
            if c.args[0] == "select"][-1]
-    assert opt == "nom"          # restored, not "eco"
-    assert gen._restore_strategy is None
+    assert opt == "nom"
 
 
 @pytest.mark.asyncio
-async def test_strategy_falls_back_to_eco_when_nothing_captured():
-    # No readable prior strategy → release uses the configured idle fallback.
+async def test_normal_always_sets_nom_not_eco():
+    # NORMAL deterministically sets the self-consume strategy ``nom`` — there
+    # is no ``eco`` fallback any more (#523 Rien: eco left the battery idle).
     hass = _hass()
     hass.states.get = MagicMock(return_value=None)
     gen = _bidir(hass)
     await gen.command_force_charge(target_soc=100.0, charge_power_w=1000, duration_min=60)
-    assert gen._restore_strategy is None
     await gen.command_normal()
     opt = [c.args[2]["option"] for c in hass.services.async_call.await_args_list
            if c.args[0] == "select"][-1]
-    assert opt == "eco"
+    assert opt == "nom"
 
 
 _ALL_ADAPTERS = [
@@ -576,7 +574,7 @@ async def test_generic_sessy_strategy_gates_setpoint():
     hass.services.async_call.reset_mock()
     await gen.command_normal()
     calls = [(c.args[0], c.args[1], c.args[2].get("option")) for c in hass.services.async_call.await_args_list if c.args[0] == "select"]
-    assert ("select", "select_option", "eco") in calls   # back to self-consumption
+    assert ("select", "select_option", "nom") in calls   # back to self-consumption
 
 
 @pytest.mark.asyncio
@@ -637,20 +635,16 @@ async def test_setpoint_within_range_not_clamped():
 
 
 @pytest.mark.asyncio
-async def test_normal_without_taking_control_leaves_strategy_alone():
-    # #523 (video): in self-consumption SEM never switches to API, so it must
-    # NOT touch the power strategy — forcing the `eco` idle default clobbered
-    # the user's `nom` (zero-on-meter) and left the battery idle at 20% SOC
-    # while solar surplus exported.
+async def test_normal_sets_self_consume_strategy():
+    # #523 (Rien beta.42): Self-consumption / Auto must put the Sessy in the
+    # self-consume strategy ``nom`` (zero-on-meter) — the old behaviour left it
+    # in ``eco`` (Rien: "doesn't charge or discharge"), so NORMAL now sets nom.
     hass = _hass()
-    state = MagicMock(); state.state = "nom"
-    hass.states.get = MagicMock(return_value=state)
     gen = _bidir(hass)
-    await gen.command_normal()  # no prior force_charge → never took control
-    selects = [c for c in hass.services.async_call.await_args_list
-               if c.args[0] == "select"]
-    assert selects == [], "strategy must be left alone when SEM never took control"
-    assert gen._took_control is False
+    await gen.command_normal()
+    opt = [c.args[2]["option"] for c in hass.services.async_call.await_args_list
+           if c.args[0] == "select"][-1]
+    assert opt == "nom"
 
 
 @pytest.mark.asyncio
@@ -779,9 +773,9 @@ def test_effective_import_floor_never_scales_down():
 
 @pytest.mark.asyncio
 async def test_adopts_stranded_api_strategy_at_construction():
-    # SEM reloaded mid-episode: the strategy is already 'api'. A fresh adapter
-    # must adopt control so the next NORMAL hands it back to idle (eco) — not
-    # leave the battery stranded in API forever.
+    # SEM reloaded mid-episode: the strategy is already 'api'. The next NORMAL
+    # must move it OFF api to the self-consume strategy ``nom`` — not leave the
+    # battery stranded in API forever.
     hass = _hass()
     state = MagicMock(); state.state = "api"
     hass.states.get = MagicMock(return_value=state)
@@ -790,7 +784,7 @@ async def test_adopts_stranded_api_strategy_at_construction():
     await gen.command_normal()
     opt = [c.args[2]["option"] for c in hass.services.async_call.await_args_list
            if c.args[0] == "select"][-1]
-    assert opt == "eco"          # restored to idle, not stranded in api
+    assert opt == "nom"          # self-consume, not stranded in api
 
 
 @pytest.mark.asyncio
@@ -800,6 +794,36 @@ async def test_no_adoption_when_strategy_is_user_mode():
     hass.states.get = MagicMock(return_value=state)
     gen = _bidir(hass)
     assert gen._took_control is False
+
+
+@pytest.mark.asyncio
+async def test_off_mode_idles_sessy_strategy():
+    # #523 (Rien beta.42): Off must IDLE the Sessy (idle power strategy +
+    # setpoint 0) — not leave it self-consuming or stuck in eco.
+    hass = _hass()
+    gen = _bidir(hass)
+    await gen.command_off()
+    calls = {(c.args[0], c.args[1]): c.args[2]
+             for c in hass.services.async_call.await_args_list}
+    assert calls[("select", "select_option")]["option"] == "idle"
+    assert calls[("number", "set_value")]["value"] == 0.0
+    assert gen.last_intent is BatteryIntent.OFF
+
+
+@pytest.mark.asyncio
+async def test_off_mode_without_strategy_entity_defers_to_base():
+    # A non-AC-coupled generic battery (no strategy select) has no native idle
+    # → base one-time hands-off (no select call, no crash).
+    hass = _hass()
+    gen = GenericBatteryAdapter(hass, {
+        "battery_discharge_control_entity": "number.lim",
+        "battery_max_discharge_power": 3000,
+    })
+    gen._last_intent = BatteryIntent.NORMAL
+    await gen.command_off()
+    assert gen.last_intent is BatteryIntent.OFF
+    assert not [c for c in hass.services.async_call.await_args_list
+                if c.args[0] == "select"]
 
 
 # ── #7: mixed-brand — AC-coupled battery stays Generic ──────────────────

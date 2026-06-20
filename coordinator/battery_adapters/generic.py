@@ -39,6 +39,15 @@ class GenericBatteryAdapter(BatteryControlAdapter):
         self._strategy_entity = config.get("battery_strategy_control_entity", "")
         self._strategy_active = config.get("battery_strategy_active_value", "api")
         self._strategy_idle = config.get("battery_strategy_idle_value", "eco")
+        # #523 (Rien, beta.42): map each per-battery MODE to the right Sessy
+        # power strategy. ``eco`` is NOT self-consumption — ``nom`` (zero-on-
+        # meter) is — so Auto / Self-consumption must set ``nom``, and ``Off``
+        # must idle the battery, not leave it in ``eco``. Force charge/discharge
+        # keep using ``_strategy_active`` (api). All configurable for other
+        # AC-coupled brands.
+        self._strategy_self_consume = config.get(
+            "battery_strategy_self_consume_value", "nom")
+        self._strategy_off = config.get("battery_strategy_off_value", "idle")
         self._last_strategy = None
         # #523: AC-coupled batteries (Sessy, …) expose ONE bidirectional power
         # setpoint — the same ``battery_force_discharge_control_entity`` that
@@ -181,16 +190,34 @@ class GenericBatteryAdapter(BatteryControlAdapter):
 
     async def command_normal(self) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        # Hand control back to the battery's own self-consumption — restore the
-        # user's prior strategy (nom/roi/eco). For an AC-coupled battery this is
-        # what makes "Self-consumption only" actually work.
-        await self._release_strategy()
+        # AC-coupled (Sessy): self-consumption is its OWN power strategy
+        # (``nom`` = zero-on-meter), NOT the setpoint. Actively set it so a
+        # battery left in eco/api/idle by a prior mode returns to self-
+        # consuming — #523 (Rien): Auto / Self-consumption used to leave the
+        # Sessy stuck in ``eco`` (which doesn't self-consume). De-dup'd, so a
+        # battery already in ``nom`` isn't re-written.
+        await self._set_strategy(self._strategy_self_consume)
         await self._apply_discharge_limit(self._max_discharge_w)
         self._last_intent = BatteryIntent.NORMAL
 
+    async def command_off(self) -> None:
+        """#523 (Rien): a Sessy in 'Off' should sit IDLE (no charge/discharge),
+        not self-consume and not stay in ``eco``. Set the idle power strategy
+        and zero the setpoint, then stay silent (one-shot like the base). A
+        non-AC-coupled battery (no strategy entity) has no native idle — defer
+        to the base hands-off behaviour."""
+        if self._last_intent is BatteryIntent.OFF:
+            return
+        if not self._strategy_entity:
+            await super().command_off()
+            return
+        await self._write_force_discharge(0.0)
+        await self._set_strategy(self._strategy_off)
+        self._last_intent = BatteryIntent.OFF
+
     async def command_limit_discharge(self, watts: float) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        await self._release_strategy()
+        await self._set_strategy(self._strategy_self_consume)
         watts = max(0.0, min(watts, self._max_discharge_w))
         if (self._last_discharge_limit_w >= 0
                 and abs(watts - self._last_discharge_limit_w) < 100.0):
@@ -230,7 +257,8 @@ class GenericBatteryAdapter(BatteryControlAdapter):
 
     async def command_stop_force_charge(self) -> None:
         await self._write_force_discharge(0.0)  # #523 mutual exclusion
-        await self._release_strategy()
+        # Back to self-consumption (nom), not the old eco/idle release.
+        await self._set_strategy(self._strategy_self_consume)
         if self._charge_adapter is not None:
             await self._charge_adapter.stop_forced_charge()
         self._last_intent = BatteryIntent.STOP_FORCE_CHARGE
