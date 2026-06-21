@@ -976,16 +976,37 @@ class CurrentControlDevice(ControllableDevice):
                 # 2. KEBA-style fallback: probe for enable/disable services
                 domain = self.charger_service.split(".", 1)[0]
 
-                # KEBA-specific: disable failsafe mode
+                # KEBA failsafe: make it BENIGN, don't try to "disable" it.
+                # The HA keba.set_failsafe service has failsafe_timeout min=1
+                # (no 0/disable) and failsafe_fallback min=6 — so the old
+                # ``timeout=0`` raised a validation error, the call failed, and
+                # the box was LEFT with its existing failsafe (a 6 A fallback
+                # that tripped mid-charge and paused the car to ~120 W, the
+                # 6↔9 A oscillation the user saw). Instead set a real failsafe
+                # that can't bite: a generous timeout the per-cycle ``curr``
+                # writes (#392) keep resetting so it never trips in normal
+                # operation, and a fallback at the CHARGING FLOOR (the
+                # configured min, not 6 A) so a trip on genuine controller-death
+                # keeps the car charging at the floor instead of pausing.
                 if self.hass.services.has_service(domain, "set_failsafe"):
                     try:
+                        fallback_a = max(6, int(round(self.min_current)))
                         await self.hass.services.async_call(
                             domain, "set_failsafe",
-                            {"failsafe_timeout": 0, "failsafe_fallback": 6, "failsafe_persist": False},
+                            {
+                                "failsafe_timeout": 30,
+                                "failsafe_fallback": fallback_a,
+                                "failsafe_persist": 0,
+                            },
                             blocking=True,
                         )
+                        _LOGGER.info(
+                            "%s: KEBA failsafe set benign (timeout=30s, "
+                            "fallback=%dA) — kept fed by per-cycle writes",
+                            self.name, fallback_a,
+                        )
                     except Exception as e:
-                        _LOGGER.warning("Failed to disable charger failsafe: %s", e)
+                        _LOGGER.warning("Failed to set charger failsafe: %s", e)
 
                 # Set energy target if supported (KEBA)
                 if energy_target_kwh > 0 and self.hass.services.has_service(domain, "set_energy"):

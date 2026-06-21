@@ -13,6 +13,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.46] - 21.06.2026
+
+## ⚡ The real fix: KEBA stops reverting to 6 A (failsafe was misconfigured by SEM)
+
+Root cause of the 6 A drops (car pausing to ~120 W mid-charge): on session start
+SEM called `keba.set_failsafe(timeout=0, fallback=6)` to "disable" the failsafe —
+but the HA service rejects `timeout=0` (its minimum is 1), so the call **failed
+silently** and the box kept an active failsafe with a **6 A fallback** that
+tripped during charging. SEM was, in effect, arming the gun it thought it had
+unloaded (confirmed against evcc's KEBA handling — evcc never sets a 6 A
+fallback).
+
+SEM now sets a **benign** failsafe instead: a valid 30 s timeout that the
+per-cycle `curr` writes keep resetting (so it never trips in normal operation),
+and a fallback at the **charging floor** (your configured min, not 6 A) — so even
+a genuine controller-death trip keeps the car charging at the floor instead of
+pausing. Combined with the per-cycle refresh (beta.45), the offered current now
+holds at the commanded value.
+
+
 # [1.7.3-beta.45] - 21.06.2026
 
 ## ⚡ KEBA watchdog refresh — now per-cycle (beta.44 follow-up)

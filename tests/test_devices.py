@@ -281,6 +281,19 @@ async def test_current_control_start_stop_session(current_device):
     # ``actuate.py`` / ``ChargerAdapter.attempt_idle``.
     assert current_device.hass.services.async_call.call_count == 3
 
+    # The KEBA failsafe must be set BENIGN, not "disabled" with an invalid
+    # timeout=0 (the HA service rejects 0 → the old call failed and the box
+    # kept a 6 A failsafe that paused the car). Valid timeout + fallback at the
+    # charging floor (≥6 A).
+    fs_calls = [
+        c for c in current_device.hass.services.async_call.await_args_list
+        if len(c.args) >= 2 and c.args[1] == "set_failsafe"
+    ]
+    assert fs_calls, "start_session must set the KEBA failsafe"
+    fs = fs_calls[0].args[2]
+    assert fs["failsafe_timeout"] >= 1, "timeout must be valid (service min=1)"
+    assert fs["failsafe_fallback"] >= 6, "fallback at/above the IEC floor"
+
     current_device.hass.services.async_call.reset_mock()
     await current_device.stop_session()
     assert current_device._session_active is False
