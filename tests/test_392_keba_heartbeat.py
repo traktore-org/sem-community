@@ -61,26 +61,49 @@ def _set_clock(monkeypatch, t: float) -> None:
 
 @pytest.mark.asyncio
 async def test_heartbeat_window_constant_is_sane():
-    """The interval must be safely below KEBA's default 300 s failsafe
-    timeout — half is the recommended margin per the evcc thread."""
+    """The generic default must be safely below a typical failsafe timeout."""
     assert 30.0 <= WRITE_HEARTBEAT_INTERVAL_S <= 150.0
+
+
+def test_keba_uses_short_brand_watchdog_interval(device):
+    """The fix: a KEBA's refresh interval is brand-resolved BELOW the generic
+    default, so a steady-state command can't race its ~60 s failsafe (the
+    6↔12 A oscillation observed on PROD)."""
+    assert device.watchdog_refresh_interval_s == 30.0
+    assert device.watchdog_refresh_interval_s < WRITE_HEARTBEAT_INTERVAL_S
+
+
+def test_non_keba_uses_generic_default(mock_hass):
+    """A charger with no known short failsafe keeps the generic default."""
+    wb = CurrentControlDevice(
+        hass=mock_hass, device_id="wb", name="Wallbox", priority=5,
+        min_current=6.0, max_current=32.0, phases=3, voltage=230.0,
+        current_entity_id="number.wallbox_current", charger_service=None,
+        charger_service_entity_id=None,
+    )
+    assert wb.watchdog_refresh_interval_s == WRITE_HEARTBEAT_INTERVAL_S
+
+
+def test_watchdog_override_wins(device):
+    """An explicit per-device override beats the brand default."""
+    device._watchdog_refresh_override_s = 22.0
+    assert device.watchdog_refresh_interval_s == 22.0
 
 
 @pytest.mark.asyncio
 async def test_same_value_within_window_skips_write(device, monkeypatch):
-    """First write goes through; second same-value write within
-    WRITE_HEARTBEAT_INTERVAL_S is suppressed (pre-#392 behaviour, still
-    correct for rapid same-value calls)."""
+    """First write goes through; a second same-value write within the
+    charger's refresh interval is suppressed (rapid same-value calls)."""
     _set_clock(monkeypatch, 0.0)
     await device._set_current(16)
     assert device.hass.services.async_call.call_count == 1
     assert device.is_active
 
-    # Re-request the same value 30 s later — still inside the window.
-    _set_clock(monkeypatch, 30.0)
+    # Re-request the same value comfortably inside the (KEBA = 30 s) window.
+    _set_clock(monkeypatch, device.watchdog_refresh_interval_s / 2.0)
     await device._set_current(16)
     assert device.hass.services.async_call.call_count == 1, (
-        "second same-value write inside the heartbeat window must be skipped"
+        "second same-value write inside the refresh window must be skipped"
     )
 
 
@@ -94,7 +117,7 @@ async def test_same_value_past_window_writes_heartbeat(device, monkeypatch):
     assert device.hass.services.async_call.call_count == 1
 
     # Jump past the heartbeat window.
-    _set_clock(monkeypatch, WRITE_HEARTBEAT_INTERVAL_S + 1.0)
+    _set_clock(monkeypatch, device.watchdog_refresh_interval_s + 1.0)
     await device._set_current(16)
     assert device.hass.services.async_call.call_count == 2, (
         "#392: heartbeat must fire once the window elapses"
@@ -111,7 +134,7 @@ async def test_repeated_heartbeats_at_window_boundaries(device, monkeypatch):
 
     # Advance ~5 heartbeat windows. We expect 5 additional writes total.
     for i in range(1, 6):
-        _set_clock(monkeypatch, i * (WRITE_HEARTBEAT_INTERVAL_S + 1.0))
+        _set_clock(monkeypatch, i * (device.watchdog_refresh_interval_s + 1.0))
         await device._set_current(16)
     assert device.hass.services.async_call.call_count == 6, (
         "#392: one heartbeat write per elapsed window — no flood, no skip"
@@ -161,7 +184,7 @@ async def test_stale_setpoint_resyncs_after_window(device, monkeypatch):
 
     # KEBA silently dropped to 6 A (failsafe trip). SEM doesn't know.
     # Time passes past the heartbeat window.
-    _set_clock(monkeypatch, WRITE_HEARTBEAT_INTERVAL_S + 1.0)
+    _set_clock(monkeypatch, device.watchdog_refresh_interval_s + 1.0)
     await device._set_current(16)
     # The heartbeat write goes through with value 16 — KEBA accepts it
     # and the device-side state re-converges. Without #392 this would

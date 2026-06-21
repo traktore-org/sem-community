@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.44] - 21.06.2026
+
+## ⚡ KEBA stops dropping to 6 A mid-solar-charge (watchdog refresh)
+
+On a steady solar surplus a KEBA could oscillate its offered current between
+~6 A and the commanded value about once a minute — charging at ~3.5 kW while
+several kW exported to the grid. Cause: SEM holds a steady command and refreshes
+the charger every **60 s**, but a KEBA's failsafe watchdog can trip near 60 s, so
+the refresh *raced* the watchdog — the box kept falling back to its failsafe
+current between refreshes.
+
+The refresh interval is now a **per-charger device capability** instead of a
+single global constant: a KEBA refreshes every **30 s** (comfortably under its
+failsafe), while chargers without a short failsafe keep the 60 s default. An
+explicit `_watchdog_refresh_override_s` wins for unusual failsafe settings. SEM's
+command logic is unchanged — only the keep-alive cadence — so a steady command
+now actually holds and the full surplus goes to the car.
+
 # [1.7.3-beta.43] - 20.06.2026
 
 ## 🔋 Battery modes now map to the right Sessy strategy (#523)

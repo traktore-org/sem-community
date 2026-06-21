@@ -23,9 +23,24 @@ from typing import Any, Dict, Optional
 # count. SEM's _set_current dedup used to suppress writes when the
 # commanded value hadn't changed, which silently starved the watchdog
 # during steady-state charging until the device dropped to fallback and
-# charging halted. Heartbeat at half KEBA's default 300 s timeout.
-# Confirmed by KEBA Energy Automation support in evcc-io/evcc#21093.
-WRITE_HEARTBEAT_INTERVAL_S = 60.0
+# charging halted. A same-value re-write at the refresh interval keeps it fed.
+#
+# The interval is a DEVICE capability, not a global constant: the failsafe
+# timeout varies per brand and per user config. The generic default below
+# assumed a 300 s KEBA failsafe (heartbeat at 1/5 of it). PROD showed a KEBA
+# P30 whose failsafe trips near ~60 s — so a 60 s heartbeat RACES it
+# (max_current oscillating 6↔12 A every ~60 s while SEM held 12 A, exporting
+# the unused surplus). ``watchdog_refresh_interval_s`` resolves the real
+# interval per charger, set comfortably under the shortest common failsafe.
+DEFAULT_WRITE_HEARTBEAT_INTERVAL_S = 60.0
+# Back-compat alias (older imports / tests reference this name).
+WRITE_HEARTBEAT_INTERVAL_S = DEFAULT_WRITE_HEARTBEAT_INTERVAL_S
+# Brands whose device-side failsafe can trip under the generic 60 s heartbeat.
+# Refresh well below the shortest common failsafe timeout so a steady-state
+# command can't starve it. (#<watchdog>: PROD KEBA P30 failsafe ~60 s.)
+_BRAND_WATCHDOG_REFRESH_S = {
+    "keba": 30.0,
+}
 
 from homeassistant.core import HomeAssistant
 
@@ -149,6 +164,48 @@ class ControllableDevice(ABC):
     def is_active(self) -> bool:
         """Return True if device is currently consuming power."""
         return self._status.state == DeviceState.ACTIVE
+
+    def _brand_key(self) -> str:
+        """Best-effort charger brand token from the configured service /
+        entities (e.g. ``keba`` from ``keba.set_current``). Empty when
+        unknown."""
+        svc = (getattr(self, "charger_service", "") or "").strip().lower()
+        if "." in svc:
+            brand = svc.split(".", 1)[0]
+            if brand:
+                return brand
+        # Fallback: sniff entity ids / device name for a known brand token.
+        blob = " ".join(
+            x for x in (
+                (getattr(self, "current_entity_id", "") or "").lower(),
+                (getattr(self, "charger_service_entity_id", "") or "").lower(),
+                (getattr(self, "name", "") or "").lower(),
+            ) if x
+        )
+        for token in _BRAND_WATCHDOG_REFRESH_S:
+            if token in blob:
+                return token
+        return ""
+
+    @property
+    def watchdog_refresh_interval_s(self) -> float:
+        """Max seconds between identical writes before the charger's
+        device-side failsafe watchdog may trip. ``_set_current`` re-writes the
+        same value at this cadence to keep the watchdog fed (#392). Brand-aware:
+        KEBA's failsafe needs a faster refresh than the generic default.
+        ``_watchdog_refresh_override_s`` (set from config when present) wins, for
+        unusual failsafe settings."""
+        override = getattr(self, "_watchdog_refresh_override_s", None)
+        if override:
+            try:
+                val = float(override)
+                if val > 0:
+                    return val
+            except (TypeError, ValueError):
+                pass
+        return _BRAND_WATCHDOG_REFRESH_S.get(
+            self._brand_key(), DEFAULT_WRITE_HEARTBEAT_INTERVAL_S,
+        )
 
     @property
     def is_enabled(self) -> bool:
@@ -710,7 +767,7 @@ class CurrentControlDevice(ControllableDevice):
         if (
             abs(current - self._current_setpoint) < 1.0
             and self.is_active
-            and (now - self._last_write_at) < WRITE_HEARTBEAT_INTERVAL_S
+            and (now - self._last_write_at) < self.watchdog_refresh_interval_s
         ):
             return self._status.current_consumption_w
 
