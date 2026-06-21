@@ -66,10 +66,12 @@ async def test_heartbeat_window_constant_is_sane():
 
 
 def test_keba_uses_short_brand_watchdog_interval(device):
-    """The fix: a KEBA's refresh interval is brand-resolved BELOW the generic
-    default, so a steady-state command can't race its ~60 s failsafe (the
-    6↔12 A oscillation observed on PROD)."""
-    assert device.watchdog_refresh_interval_s == 30.0
+    """The fix: a KEBA's refresh interval is brand-resolved BELOW the ~10 s
+    coordinator cycle, so a steady command is re-asserted EVERY cycle and the
+    box can't revert to its 6 A failsafe between writes (the 6↔9/12 A
+    oscillation observed on PROD, which 30 s still raced)."""
+    assert device.watchdog_refresh_interval_s == 5.0
+    assert device.watchdog_refresh_interval_s < 10.0  # below the coordinator cycle
     assert device.watchdog_refresh_interval_s < WRITE_HEARTBEAT_INTERVAL_S
 
 

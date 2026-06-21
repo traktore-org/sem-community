@@ -36,10 +36,15 @@ DEFAULT_WRITE_HEARTBEAT_INTERVAL_S = 60.0
 # Back-compat alias (older imports / tests reference this name).
 WRITE_HEARTBEAT_INTERVAL_S = DEFAULT_WRITE_HEARTBEAT_INTERVAL_S
 # Brands whose device-side failsafe can trip under the generic 60 s heartbeat.
-# Refresh well below the shortest common failsafe timeout so a steady-state
-# command can't starve it. (#<watchdog>: PROD KEBA P30 failsafe ~60 s.)
+# Refresh below the shortest common failsafe timeout so a steady-state command
+# can't starve it. KEBA is set BELOW the ~10 s coordinator cycle so a steady
+# command is re-asserted EVERY cycle — PROD showed a KEBA P30 reverting to its
+# 6 A failsafe current in well under 30 s (offered current oscillating 6↔9/12 A,
+# pausing the car to ~120 W), so 30 s still raced it. Per-cycle re-writes outrun
+# any failsafe with a timeout ≥ ~1 cycle; a box that reverts sub-cycle is a
+# device-side failsafe-config problem SEM cannot out-write.
 _BRAND_WATCHDOG_REFRESH_S = {
-    "keba": 30.0,
+    "keba": 5.0,
 }
 
 from homeassistant.core import HomeAssistant

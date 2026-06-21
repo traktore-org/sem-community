@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.45] - 21.06.2026
+
+## ⚡ KEBA watchdog refresh — now per-cycle (beta.44 follow-up)
+
+beta.44 cut the KEBA refresh to 30 s, but a PROD box still reverted to its 6 A
+failsafe in under 30 s (offered current oscillating 6↔9 A, pausing the car to
+~120 W). The KEBA refresh interval is now set **below the ~10 s coordinator
+cycle**, so a steady command is re-asserted **every cycle** — outrunning any
+failsafe with a timeout of at least one cycle. A box that reverts sub-cycle is a
+device-side failsafe-config problem (disable failsafe or lengthen its timeout in
+the KEBA app) that no write rate can out-run.
+
 # [1.7.3-beta.44] - 21.06.2026
 
 ## ⚡ KEBA stops dropping to 6 A mid-solar-charge (watchdog refresh)
