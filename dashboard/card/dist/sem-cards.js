@@ -3111,7 +3111,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                         </div>
                         ${this._showHelp?W`<div class="setting-help">${this._t("tile_help_min_amps")}</div>`:K}
                     </div>
-                    ${Math.round(v)!==Math.round(m)||this._showHelp?W`
+                    ${""}
                     <div class="setting-cell">
                         <div
                             class="setting-item clickable"
@@ -3121,7 +3121,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
                             <span class="setting-value">${this._fmt(v,0)}A</span>
                         </div>
                         ${this._showHelp?W`<div class="setting-help">${this._t("tile_help_vehicle_min_amps")}</div>`:K}
-                    </div>`:K}
+                    </div>
                     <div class="setting-cell">
                         <div
                             class="setting-item clickable"

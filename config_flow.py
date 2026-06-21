@@ -487,7 +487,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
             "battery_resume_soc": DEFAULT_BATTERY_RESUME_SOC,
             # Solar / power gates
-            "min_solar_power": DEFAULT_MIN_SOLAR_POWER,
+            "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
             "max_grid_import": DEFAULT_MAX_GRID_IMPORT,
             # Daily target & battery assist
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
@@ -1486,8 +1486,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.NumberSelectorConfig(min=0, max=100, step=0.5, unit_of_measurement="kWh", mode="slider")
                 ),
                 vol.Optional(
-                    "min_solar_power",
-                    default=_c("min_solar_power", DEFAULT_MIN_SOLAR_POWER),
+                    "minimum_solar_power",
+                    default=_c("minimum_solar_power", DEFAULT_MIN_SOLAR_POWER),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0, max=5000, step=100, unit_of_measurement="W", mode="slider")
                 ),

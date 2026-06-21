@@ -742,7 +742,12 @@ class SEMEVStatusCard extends SEMLitBase {
                         </div>
                         ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_min_amps')}</div>` : nothing}
                     </div>
-                    ${(Math.round(vehicleMinAmps) !== Math.round(minAmps) || this._showHelp) ? html`
+                    ${''/* Two distinct minimums, both kept (a charger legitimately
+                       has both): "Min Amps" is YOUR floor (the lowest current SEM
+                       bothers charging at); "Vehicle Min Amps" is YOUR CAR's floor
+                       (some cars won't charge below ~8-9A). Effective floor =
+                       max(min, vehicle_min). Only the genuinely-dead "Start Amps"
+                       tile is hidden. */}
                     <div class="setting-cell">
                         <div
                             class="setting-item clickable"
@@ -755,7 +760,7 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span class="setting-value">${this._fmt(vehicleMinAmps, 0)}A</span>
                         </div>
                         ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_vehicle_min_amps')}</div>` : nothing}
-                    </div>` : nothing}
+                    </div>
                     <div class="setting-cell">
                         <div
                             class="setting-item clickable"

@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.48] - 21.06.2026
+
+## 🔧 Restore the second EV minimum + fix the solar-power config key
+
+- **"Vehicle Min Amps" is back as a tile** (beta.47 hid it when equal to "Min
+  Amps"). A charger legitimately has TWO minimums and both should be visible:
+  **Min Amps** is your own floor (lowest current SEM bothers charging at);
+  **Vehicle Min Amps** is your car's floor (some cars won't charge below ~8–9 A).
+  The effective floor is the higher of the two. Only the genuinely-dead "Vehicle
+  Start Amps" tile stays hidden.
+- **Solar-power config key aligned.** The setup/options flow wrote `min_solar_power`
+  while the runtime slider and the decision read `minimum_solar_power` — so a value
+  set during setup never reached the runtime. The flow now writes the same key;
+  existing `min_solar_power` values are still honoured.
+
+
 # [1.7.3-beta.47] - 21.06.2026
 
 ## 🧹 EV current knobs cleaned up + two correctness fixes
