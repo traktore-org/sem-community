@@ -13,6 +13,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.47] - 21.06.2026
+
+## 🧹 EV current knobs cleaned up + two correctness fixes
+
+Following the KEBA failsafe fix, a review of the EV current path (the user's
+"three values, such a mess") and two confirmed bugs:
+
+- **Removed the dead "Vehicle Start Amps" tile.** `initial_current` (10 A) is
+  not read by the live charging path — the start ramp uses the Min Amps floor —
+  so it was a settable tile that did nothing but confuse. Hidden from the card.
+- **"Vehicle Min Amps" only shows when it differs from "Min Amps."** It defaults
+  equal to the min, so it was a redundant second 9 A; now it only appears once
+  you actually raise it to override a car that ignores the min (or in help mode).
+- **The "Minimum Solar Power" slider now works.** Its value (`minimum_solar_power`)
+  was never wired into the decision — the solar floor / deep-deficit guard always
+  saw the 200 W default regardless of the slider. Now honoured (200 W fallback
+  when unset).
+- **1-phase chargers: amps↔watts floor fixed.** The MIN_PV / BATTERY_ASSIST / NOW
+  power floors hardcoded 3 phases × 230 V, so a 1-phase charger's floor was 3× too
+  high. Now uses the configured `ev_phases` / `ev_voltage` (3-phase unchanged).
+
+Plus a recorded `min_plus_solar` steady-hold scenario pinning that the commanded
+current doesn't flicker on steady surplus.
+
+
 # [1.7.3-beta.46] - 21.06.2026
 
 ## ⚡ The real fix: KEBA stops reverting to 6 A (failsafe was misconfigured by SEM)

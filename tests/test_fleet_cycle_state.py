@@ -199,3 +199,31 @@ def test_two_views_built_from_same_fleet_state_share_fleet_context() -> None:
     # Only solar_committed_w differs — that's per-view by design.
     assert p.solar_committed_w == 0.0
     assert s.solar_committed_w == 2000.0
+
+
+def test_min_solar_w_wired_from_config():
+    """The 'Minimum Solar Power' slider (config key ``minimum_solar_power``)
+    must reach FleetContext.min_solar_w — it was hardcoded to the 200 W
+    default before, so the slider did nothing. Fallback stays 200 W when the
+    key is absent (configs without it are unchanged)."""
+    from custom_components.solar_energy_management.coordinator.build_view import (
+        build_charger_view,
+    )
+
+    def _view(cfg_extra):
+        state = FleetCycleState(
+            power=_power(solar=5000, home=800, batt=1000, soc=72),
+            config={"battery_capacity_kwh": 15, **cfg_extra},
+            is_night=False, tariff_level="normal", forecast_remaining_kwh=18.0,
+        )
+        return build_charger_view(
+            state, charger_id="c", charger_cfg={"id": "c"},
+            mode="solar_only", daily_ev_kwh=0.0,
+        )
+
+    # Configured value is honoured.
+    assert _view({"minimum_solar_power": 1500}).fleet.min_solar_w == 1500.0
+    # Legacy config-flow key also honoured.
+    assert _view({"min_solar_power": 800}).fleet.min_solar_w == 800.0
+    # Absent → 200 W fallback (unchanged behaviour).
+    assert _view({}).fleet.min_solar_w == 200.0

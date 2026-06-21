@@ -137,6 +137,16 @@ def build_charger_view(
         )),
         solar_committed_w=float(solar_committed_w),
         forecast_remaining_kwh=fleet_state.forecast_remaining_kwh,
+        # The user's "Minimum Solar Power" slider (number entity key
+        # ``minimum_solar_power``) — the floor below which solar_only won't
+        # charge and the deep-deficit guard treats solar as "none". Was never
+        # wired in, so decide()/charge_stability always saw the 200 W default
+        # regardless of the slider. Honour the configured value; keep the 200 W
+        # fallback so a config without the key is unchanged.
+        min_solar_w=float(
+            config.get("minimum_solar_power",
+                       config.get("min_solar_power", 200))
+        ),
     )
 
     # Merge per-charger config with the tariff_wait flag so

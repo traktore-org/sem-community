@@ -4318,22 +4318,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # see ev_control._cycle_ev_budget consumer in Phase B/C).
         min_power_floor_w = 0.0
         override_max_w = None
+        # Use the configured phases × voltage, not a hardcoded 3×230 — a
+        # 1-phase charger's amps→watts floor was 3× too high (it would refuse
+        # to MIN_PV / over-cap NOW). Defaults (3, 230) keep 3-phase unchanged.
+        _phase_v = (
+            int(self.config.get("ev_phases", 3))
+            * int(self.config.get("ev_voltage", 230))
+        )
         if canonical_strategy == EVBudgetStrategy.MIN_PV:
-            # 6 A * 3 phases * 230 V — KEBA / Wallbox EU minimum.
-            min_power_floor_w = self.config.get(
-                "ev_min_current", 6,
-            ) * 3 * 230
+            # min current × phases × voltage — KEBA / Wallbox EU minimum.
+            min_power_floor_w = self.config.get("ev_min_current", 6) * _phase_v
         elif canonical_strategy == EVBudgetStrategy.BATTERY_ASSIST:
             # #501: BATTERY_ASSIST consumes the floor as the assist
             # top-up bound (assist fills surplus→min gap only), NOT
             # as a net_w floor — see the strategy branch.
-            min_power_floor_w = self.config.get(
-                "ev_min_current", 6,
-            ) * 3 * 230
+            min_power_floor_w = self.config.get("ev_min_current", 6) * _phase_v
         elif canonical_strategy == EVBudgetStrategy.NOW:
-            override_max_w = self.config.get(
-                "ev_max_current", 16,
-            ) * 3 * 230
+            override_max_w = self.config.get("ev_max_current", 16) * _phase_v
 
         ev_budget_obj = self._flow_calculator.calculate_canonical_ev_budget(
             power,
