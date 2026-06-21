@@ -231,3 +231,21 @@ async def test_start_arms_failsafe_once():
     await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 10),
                                   adapter, _power(7000.0), now=1.0)
     adapter.arm_failsafe.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_rearms_failsafe_after_box_reset_midcharge():
+    rec = _rec()
+    adapter = _mock_adapter()
+    adapter.is_self_charging = MagicMock(return_value=False)
+    adapter._device = MagicMock(_current_setpoint=10)
+    adapter.arm_failsafe = AsyncMock()
+    # charging
+    adapter.actual_charging = MagicMock(return_value=True)
+    await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 10),
+                                  adapter, _power(7000.0), now=0.0)
+    # box reset: stopped while we still want CHARGE → START again, re-arm
+    adapter.actual_charging = MagicMock(return_value=False)
+    await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 10),
+                                  adapter, _power(0.0), now=1.0)
+    assert adapter.arm_failsafe.await_count == 1  # the re-START arms it
