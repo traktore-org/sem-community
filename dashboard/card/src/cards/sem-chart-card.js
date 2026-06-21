@@ -399,10 +399,23 @@ class SEMChartCard extends SEMLitBase {
                 statistic_ids: statIds, period,
             });
         }
+        // On a STACKED power chart (e.g. EV charging power = solar+battery+grid
+        // → EV) the series are COMPONENTS that must sum to a total. Plotting the
+        // per-bucket MAX and stacking triple-counts: each component's max occurs
+        // at a different instant (when solar peaks, grid is 0), so the stacked
+        // maxes far exceed the real instantaneous total — a KEBA charging at
+        // 4.4 kW showed an 11 kW "grid" peak that never happened. Use the MEAN
+        // for stacked power charts so the parts sum correctly (mean of the sum =
+        // sum of the means) and the area integrates to real energy. Non-stacked
+        // charts keep MAX so peaks stay visible.
+        const stacked = this._config?.stacked ?? this._preset?.stacked ?? false;
+        const stackedPower = stacked && period === 'hour';
         return series.map(s => ({
             data: (stats[s.entity] || []).map(p => ({
                 x: new Date(p.start),
-                y: p.max ?? p.state ?? p.mean ?? 0,
+                y: stackedPower
+                    ? (p.mean ?? p.state ?? 0)
+                    : (p.max ?? p.state ?? p.mean ?? 0),
             })),
         }));
     }

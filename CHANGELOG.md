@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.49] - 21.06.2026
+
+## 📊 EV charging-power chart: no more phantom 11 kW peaks
+
+The "EV Charging Power" chart (solar + battery + grid → EV, stacked) showed
+impossible peaks — an ~11 kW "grid" spike while the EV only ever drew ~4.4 kW.
+Cause: the chart plotted each source's per-hour **maximum** and then stacked
+them. The three sources are complementary (when solar peaks, grid is 0), so
+their maxes occur at different moments and stacking them triple-counts — the
+stacked maxes far exceed the real instantaneous total. (There was never a real
+11 kW; the grid genuinely peaked at ~4.9 kW, so peak management was unaffected.)
+
+Stacked power charts now plot the per-bucket **mean**, so the components sum to
+the real total and the area integrates to real energy. Non-stacked charts keep
+the max so peaks stay visible.
+
+
 # [1.7.3-beta.48] - 21.06.2026
 
 ## 🔧 Restore the second EV minimum + fix the solar-power config key
