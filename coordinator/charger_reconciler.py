@@ -124,3 +124,43 @@ class ChargerReconciler:
             return [Action(ActionKind.WRITE_CURRENT, amps)]
         # Row 8 — converged and fresh.
         return [Action(ActionKind.NONE)]
+
+    async def reconcile_and_apply(self, decision, adapter, power, now) -> None:
+        """Compute desired+observed, reconcile, execute the actions."""
+        desired, amps = desired_from_decision(decision)
+        if desired is DesiredState.CHARGE and amps == 0:
+            # Resolve the CHARGE_MAX sentinel to the hardware max so the
+            # adapter writes a real value and drift detection works.
+            amps = int(getattr(adapter, "max_current_a", 0)) or amps
+        observed = observe(adapter, power)
+        actions = self.reconcile(desired, amps, observed, now)
+
+        for action in actions:
+            if action.kind is ActionKind.NONE:
+                continue
+            if action.kind is ActionKind.DISABLE:
+                await adapter.command_disable()
+                _LOGGER.info("reconcile(%s): DISABLE — %s",
+                             self.charger_id, decision.reason)
+            elif action.kind in (ActionKind.WRITE_CURRENT, ActionKind.START_AND_WRITE):
+                # START_AND_WRITE failsafe arming is wired in Increment 2;
+                # for now command_current opens the session itself (the
+                # adapter's existing start_session-on-write behaviour).
+                await adapter.command_current(action.amps)
+                _LOGGER.debug("reconcile(%s): %s %dA — %s", self.charger_id,
+                              action.kind.name, action.amps, decision.reason)
+
+
+# ─────────────────────────────────────────────────────────────────
+# Task 3 — effectful layer
+# ─────────────────────────────────────────────────────────────────
+
+def observe(adapter, power) -> ObservedState:
+    """Read the observed state from the adapter (brand-agnostic)."""
+    setpoint = int(getattr(getattr(adapter, "_device", None), "_current_setpoint", 0) or 0)
+    return ObservedState(
+        charging=adapter.actual_charging(power),
+        setpoint_a=setpoint,
+        self_charging=adapter.is_self_charging(power),
+        power_w=float(getattr(power, "power_w", 0.0) or 0.0),
+    )

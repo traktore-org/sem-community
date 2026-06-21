@@ -129,3 +129,50 @@ def test_charge_drift_rewrites():
     rec.reconcile(DesiredState.CHARGE, 10, _obs(charging=False), now=0.0)
     actions = rec.reconcile(DesiredState.CHARGE, 10, _obs(charging=True, setpoint=6), now=1.0)
     assert actions == [Action(ActionKind.WRITE_CURRENT, 10)]
+
+
+# ─────────────────────────────────────────────────────────────────
+# Task 3 — effectful layer: observe() + reconcile_and_apply()
+# ─────────────────────────────────────────────────────────────────
+
+from unittest.mock import AsyncMock, MagicMock
+from custom_components.solar_energy_management.coordinator.charger_types import ChargerPower
+
+
+def _mock_adapter(max_a=32):
+    a = MagicMock()
+    a.command_disable = AsyncMock()
+    a.command_current = AsyncMock()
+    a.command_max = AsyncMock()
+    a.max_current_a = max_a
+    return a
+
+
+def _power(power_w=0.0):
+    return ChargerPower(charger_id="ev_charger", power_w=power_w)
+
+
+@pytest.mark.asyncio
+async def test_apply_idle_idempotent_no_calls_when_open():
+    rec = _rec()
+    adapter = _mock_adapter()
+    adapter.actual_charging = MagicMock(return_value=False)
+    adapter.is_self_charging = MagicMock(return_value=False)
+    for cycle in range(50):
+        await rec.reconcile_and_apply(
+            _decision(ChargerIntent.IDLE), adapter, _power(0.0), now=cycle * 10.0)
+    adapter.command_disable.assert_not_called()
+    adapter.command_current.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apply_charge_max_resolves_hardware_max():
+    rec = _rec()
+    adapter = _mock_adapter(max_a=32)
+    adapter.actual_charging = MagicMock(return_value=True)
+    adapter.is_self_charging = MagicMock(return_value=False)
+    adapter._device = MagicMock(_current_setpoint=32)
+    await rec.reconcile_and_apply(
+        _decision(ChargerIntent.CHARGE_MAX), adapter, _power(22000.0), now=100.0)
+    # heartbeat due (last_write_at=0) → a refresh write at max
+    adapter.command_current.assert_called_once_with(32)
