@@ -70,3 +70,57 @@ def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]
     # Defensive: unknown intent → safest is IDLE (no draw, no spam).
     _LOGGER.error("desired_from_decision: unknown intent %r → IDLE", intent)
     return DesiredState.IDLE, 0
+
+
+class ChargerReconciler:
+    """Per-charger convergence engine. One instance per charger, cached
+    for the charger's lifetime (it holds transition state). Pure
+    ``reconcile`` for decisions; effectful ``reconcile_and_apply`` (Task 3)
+    executes them via the adapter.
+    """
+
+    def __init__(self, charger_id: str, heartbeat_s: float,
+                 idle_disable_threshold: int = 4) -> None:
+        self.charger_id = charger_id
+        self._heartbeat_s = float(heartbeat_s)
+        self._idle_disable_threshold = int(idle_disable_threshold)
+        self._last_write_at: float = 0.0
+        self._consecutive_idle_count: int = 0
+
+    def reconcile(self, desired: DesiredState, amps: int,
+                  observed: ObservedState, now: float) -> List[Action]:
+        """Pure decision table (spec rows 1-8, first match wins)."""
+
+        # OFF / IDLE share the convergence target (contactor open). The
+        # only difference is the flicker grace, which OFF never gets.
+        if desired in (DesiredState.OFF, DesiredState.IDLE):
+            drawing = observed.charging or observed.self_charging
+            if not drawing:
+                # Row 2 — already converged. THE spam fix: issue nothing.
+                self._consecutive_idle_count = 0
+                return [Action(ActionKind.NONE)]
+            if desired is DesiredState.OFF:
+                # Row 1 — user-explicit OFF: open immediately, no grace.
+                return [Action(ActionKind.DISABLE)]
+            # IDLE + drawing — flicker hold then confirm (rows 3-4).
+            self._consecutive_idle_count += 1
+            if self._consecutive_idle_count < self._idle_disable_threshold:
+                return [Action(ActionKind.NONE)]
+            return [Action(ActionKind.DISABLE)]
+
+        # desired is CHARGE — reset idle grace.
+        self._consecutive_idle_count = 0
+        if not observed.charging:
+            # Row 5 — open a session, arm failsafe, write.
+            self._last_write_at = now
+            return [Action(ActionKind.START_AND_WRITE, amps)]
+        if amps and observed.setpoint_a != amps:
+            # Row 6 — target change or drift (failsafe revert) correction.
+            self._last_write_at = now
+            return [Action(ActionKind.WRITE_CURRENT, amps)]
+        if (now - self._last_write_at) >= self._heartbeat_s:
+            # Row 7 — refresh to feed the device failsafe watchdog.
+            self._last_write_at = now
+            return [Action(ActionKind.WRITE_CURRENT, amps)]
+        # Row 8 — converged and fresh.
+        return [Action(ActionKind.NONE)]
