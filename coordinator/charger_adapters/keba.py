@@ -125,6 +125,9 @@ class KebaAdapter(ChargerAdapter):
 
     # ─── Commands ──────────────────────────────────────────────
 
+    async def arm_failsafe(self) -> None:
+        await self._device.arm_failsafe()
+
     async def command_current(self, amps: int) -> None:
         """Set charging current. Translates below-min requests to
         ``command_idle()`` since KEBA would silently retain the

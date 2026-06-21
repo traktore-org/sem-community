@@ -148,13 +148,15 @@ class ChargerReconciler:
                 await adapter.command_disable()
                 _LOGGER.info("reconcile(%s): DISABLE — %s",
                              self.charger_id, decision.reason)
-            elif action.kind in (ActionKind.WRITE_CURRENT, ActionKind.START_AND_WRITE):
-                # START_AND_WRITE failsafe arming is wired in Increment 2;
-                # for now command_current opens the session itself (the
-                # adapter's existing start_session-on-write behaviour).
+            elif action.kind is ActionKind.START_AND_WRITE:
+                await adapter.arm_failsafe()
                 await adapter.command_current(action.amps)
-                _LOGGER.debug("reconcile(%s): %s %dA — %s", self.charger_id,
-                              action.kind.name, action.amps, decision.reason)
+                _LOGGER.info("reconcile(%s): START %dA (failsafe armed) — %s",
+                             self.charger_id, action.amps, decision.reason)
+            elif action.kind is ActionKind.WRITE_CURRENT:
+                await adapter.command_current(action.amps)
+                _LOGGER.debug("reconcile(%s): WRITE %dA — %s",
+                              self.charger_id, action.amps, decision.reason)
 
 
 # ─────────────────────────────────────────────────────────────────

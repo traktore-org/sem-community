@@ -213,3 +213,21 @@ def test_off_not_drawing_emits_nothing():
     for cycle in range(10):
         actions = rec.reconcile(DesiredState.OFF, 0, _obs(charging=False), now=cycle * 10.0)
         assert actions == [Action(ActionKind.NONE)], f"cycle {cycle} spammed: {actions}"
+
+
+@pytest.mark.asyncio
+async def test_start_arms_failsafe_once():
+    rec = _rec()
+    adapter = _mock_adapter()
+    adapter.actual_charging = MagicMock(side_effect=[False, True, True])
+    adapter.is_self_charging = MagicMock(return_value=False)
+    adapter._device = MagicMock(_current_setpoint=10)
+    adapter.arm_failsafe = AsyncMock()
+    # cycle 1: not charging → START arms failsafe
+    await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 10),
+                                  adapter, _power(0.0), now=0.0)
+    adapter.arm_failsafe.assert_awaited_once()
+    # cycle 2: charging steady → no re-arm
+    await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 10),
+                                  adapter, _power(7000.0), now=1.0)
+    adapter.arm_failsafe.assert_awaited_once()
