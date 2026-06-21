@@ -13,6 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.50] - 21.06.2026
+
+## ⚡ EV charging is now rock-solid in every mode — charger state reconciler
+
+The KEBA kept dropping to 6 A / pausing, and we'd shipped five separate patches
+chasing it. They all treated symptoms of one root cause: **SEM re-issued a
+hardware command to the charger every ~10 s cycle**, whether or not anything had
+changed. PROD logs caught it doing `keba.disable` **391 times in a row** on an
+already-open contactor.
+
+This replaces the per-cycle imperative actuator with a **desired-vs-observed
+reconciler** that issues the *minimum* commands needed to converge, then leaves
+the charger alone:
+
+- **Idle / off issue zero redundant commands** — the contactor is opened once,
+  not re-disabled every cycle (the 391× spam is gone).
+- **Holds your commanded current** like a fixed-current charge, but solar-aware.
+- **Drift correction** — if the box silently reverts to its 6 A failsafe floor,
+  SEM re-asserts your target on the next cycle.
+- **Failsafe armed once per charge episode** (not re-armed every cycle), kept fed
+  by the per-cycle write heartbeat.
+- **Same convergence path for all modes** (off / always_max / min_plus_solar /
+  solar / solar_plus_cheap) — no mode-specific surprises.
+
+Live-verified on HA-TEST across charge and off; full suite 3791 green. (#392)
+
+> Note: a fixed-3-phase KEBA P30 still can't physically charge below ~4.1 kW, so
+> in solar modes it will still *pause* when surplus is genuinely below the
+> 3-phase floor — but now it pauses cleanly and predictably instead of bouncing.
+
 # [1.7.3-beta.49] - 21.06.2026
 
 ## 📊 EV charging-power chart: no more phantom 11 kW peaks
