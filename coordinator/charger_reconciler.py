@@ -15,9 +15,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List, Tuple
+from typing import TYPE_CHECKING, List, Tuple
 
-from .charger_types import ChargerDecision, ChargerIntent
+from .charger_types import ChargerDecision, ChargerIntent, ChargerPower
+
+if TYPE_CHECKING:
+    from .charger_adapters.base import ChargerAdapter
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -104,6 +107,7 @@ class ChargerReconciler:
                 return [Action(ActionKind.DISABLE)]
             # IDLE + drawing — flicker hold then confirm (rows 3-4).
             self._consecutive_idle_count += 1
+            self._consecutive_idle_count = min(self._consecutive_idle_count, self._idle_disable_threshold)
             if self._consecutive_idle_count < self._idle_disable_threshold:
                 return [Action(ActionKind.NONE)]
             return [Action(ActionKind.DISABLE)]
@@ -125,7 +129,9 @@ class ChargerReconciler:
         # Row 8 — converged and fresh.
         return [Action(ActionKind.NONE)]
 
-    async def reconcile_and_apply(self, decision, adapter, power, now) -> None:
+    async def reconcile_and_apply(self, decision: ChargerDecision,
+                                 adapter: "ChargerAdapter",
+                                 power: ChargerPower, now: float) -> None:
         """Compute desired+observed, reconcile, execute the actions."""
         desired, amps = desired_from_decision(decision)
         if desired is DesiredState.CHARGE and amps == 0:
@@ -157,7 +163,7 @@ class ChargerReconciler:
 
 def observe(adapter, power) -> ObservedState:
     """Read the observed state from the adapter (brand-agnostic)."""
-    setpoint = int(getattr(getattr(adapter, "_device", None), "_current_setpoint", 0) or 0)
+    setpoint = int(round(float(getattr(getattr(adapter, "_device", None), "_current_setpoint", 0) or 0)))
     return ObservedState(
         charging=adapter.actual_charging(power),
         setpoint_a=setpoint,

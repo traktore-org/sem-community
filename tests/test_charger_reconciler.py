@@ -204,3 +204,12 @@ async def test_actuate_legacy_path_unchanged_without_reconciler():
     # CHARGE_MAX with no reconciler → legacy dispatch calls command_max
     await actuate(_decision(ChargerIntent.CHARGE_MAX), adapter, _power(0.0))
     adapter.command_max.assert_awaited_once()
+
+
+def test_off_not_drawing_emits_nothing():
+    """mode=off + EV unplugged/contactor open → zero service calls (the
+    primary production scenario; must not fall through to DISABLE)."""
+    rec = _rec()
+    for cycle in range(10):
+        actions = rec.reconcile(DesiredState.OFF, 0, _obs(charging=False), now=cycle * 10.0)
+        assert actions == [Action(ActionKind.NONE)], f"cycle {cycle} spammed: {actions}"

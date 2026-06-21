@@ -1737,7 +1737,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             rec_cache = {}
                             self._charger_reconcilers = rec_cache
                         reconciler = rec_cache.get(cid)
-                        if reconciler is None or reconciler.charger_id != cid:
+                        if reconciler is None:
                             from .charger_reconciler import ChargerReconciler
                             reconciler = ChargerReconciler(
                                 charger_id=cid,
@@ -1896,7 +1896,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     rec_cache = {}
                     self._charger_reconcilers = rec_cache
                 reconciler = rec_cache.get(cid)
-                if reconciler is None or reconciler.charger_id != cid:
+                if reconciler is None:
                     from .charger_reconciler import ChargerReconciler
                     reconciler = ChargerReconciler(
                         charger_id=cid,
