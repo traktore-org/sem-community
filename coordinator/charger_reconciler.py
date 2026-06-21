@@ -89,6 +89,14 @@ class ChargerReconciler:
         self._idle_disable_threshold = int(idle_disable_threshold)
         self._last_write_at: float = 0.0
         self._consecutive_idle_count: int = 0
+        self._charging_intent_active: bool = False
+        """True once we've issued the START for the current charge episode.
+        Gates the START_AND_WRITE action on the *desired-state transition*
+        into CHARGE, NOT on ``observed.charging`` — otherwise a charger
+        that isn't drawing yet (ramp lag, a full-but-plugged car held in a
+        deadline mode, a mock charger) would re-START + re-arm the failsafe
+        every single cycle (the exact spam this whole change removes; caught
+        live on HA-TEST 2026-06-21). Reset whenever desired leaves CHARGE."""
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
@@ -97,6 +105,8 @@ class ChargerReconciler:
         # OFF / IDLE share the convergence target (contactor open). The
         # only difference is the flicker grace, which OFF never gets.
         if desired in (DesiredState.OFF, DesiredState.IDLE):
+            # Leaving CHARGE — the next CHARGE episode must START + re-arm.
+            self._charging_intent_active = False
             drawing = observed.charging or observed.self_charging
             if not drawing:
                 # Row 2 — already converged. THE spam fix: issue nothing.
@@ -114,8 +124,15 @@ class ChargerReconciler:
 
         # desired is CHARGE — reset idle grace.
         self._consecutive_idle_count = 0
-        if not observed.charging:
-            # Row 5 — open a session, arm failsafe, write.
+        if not self._charging_intent_active:
+            # Row 5 — TRANSITION into charging: open a session, arm the
+            # failsafe, write. Gated on the desired transition (not on
+            # observed.charging) so a not-yet-drawing charger doesn't
+            # re-START every cycle. Recovery from a mid-charge device reset
+            # is handled by the heartbeat WRITE below (command_current
+            # re-opens a dropped KEBA session and keeps the already-armed
+            # failsafe fed) — no re-arm spam needed.
+            self._charging_intent_active = True
             self._last_write_at = now
             return [Action(ActionKind.START_AND_WRITE, amps)]
         if amps and observed.setpoint_a != amps:

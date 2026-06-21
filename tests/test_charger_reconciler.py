@@ -144,6 +144,7 @@ def _mock_adapter(max_a=32):
     a.command_disable = AsyncMock()
     a.command_current = AsyncMock()
     a.command_max = AsyncMock()
+    a.arm_failsafe = AsyncMock()
     a.max_current_a = max_a
     return a
 
@@ -234,21 +235,56 @@ async def test_start_arms_failsafe_once():
 
 
 @pytest.mark.asyncio
-async def test_rearms_failsafe_after_box_reset_midcharge():
+async def test_failsafe_armed_once_per_charge_episode_not_on_transient_drop():
+    """A transient observed-drop while desired stays CHARGE must NOT
+    re-START / re-arm the failsafe. The failsafe is armed once on the
+    idle→charge transition; recovery from a mid-charge drop rides the
+    heartbeat WRITE (command_current re-opens a dropped session and keeps
+    the already-armed failsafe fed). Re-arming every drop would be the
+    keba.set_failsafe spam this design removes."""
     rec = _rec()
     adapter = _mock_adapter()
     adapter.is_self_charging = MagicMock(return_value=False)
     adapter._device = MagicMock(_current_setpoint=10)
     adapter.arm_failsafe = AsyncMock()
-    # charging
+    # transition into charge → START + arm once
     adapter.actual_charging = MagicMock(return_value=True)
     await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 10),
                                   adapter, _power(7000.0), now=0.0)
-    # box reset: stopped while we still want CHARGE → START again, re-arm
+    assert adapter.arm_failsafe.await_count == 1
+    # box drops out while we still want CHARGE → NO re-arm (rides heartbeat)
     adapter.actual_charging = MagicMock(return_value=False)
+    for cycle in range(1, 6):
+        await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 10),
+                                      adapter, _power(0.0), now=float(cycle))
+    assert adapter.arm_failsafe.await_count == 1  # still 1 — no re-arm spam
+    # only a real idle→charge transition re-arms
+    await rec.reconcile_and_apply(_decision(ChargerIntent.IDLE), adapter,
+                                  _power(0.0), now=10.0)
     await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 10),
-                                  adapter, _power(0.0), now=1.0)
-    assert adapter.arm_failsafe.await_count == 1  # the re-START arms it
+                                  adapter, _power(0.0), now=11.0)
+    assert adapter.arm_failsafe.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_charge_never_drawing_starts_once_then_heartbeat_no_respam():
+    """REGRESSION (HA-TEST 2026-06-21): a charger that never reports
+    drawing (mock, ramp lag, or a full-but-plugged car held in a deadline
+    mode) must START exactly once, then only heartbeat-WRITE — NOT re-START
+    + re-arm-failsafe every cycle. 100 cycles, START gated on transition."""
+    rec = _rec()
+    adapter = _mock_adapter()
+    adapter.is_self_charging = MagicMock(return_value=False)
+    adapter.actual_charging = MagicMock(return_value=False)  # never draws
+    adapter._device = MagicMock(_current_setpoint=6)
+    adapter.arm_failsafe = AsyncMock()
+    for cycle in range(100):
+        await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 6),
+                                      adapter, _power(0.0), now=cycle * 10.0)
+    assert adapter.arm_failsafe.await_count == 1, "failsafe re-armed every cycle (spam)"
+    # writes are heartbeat-paced (5s heartbeat, 10s cycles → ~1/cycle), not 0,
+    # so the device watchdog stays fed — but no START/arm storm.
+    assert adapter.command_current.call_count >= 1
 
 
 @pytest.mark.asyncio
@@ -258,7 +294,13 @@ async def test_charge_max_drift_corrects():
     adapter.is_self_charging = MagicMock(return_value=False)
     adapter.actual_charging = MagicMock(return_value=True)
     adapter.arm_failsafe = AsyncMock()
-    adapter._device = MagicMock(_current_setpoint=6)  # reverted to failsafe floor
+    adapter._device = MagicMock(_current_setpoint=32)
+    # establish the charge episode (START) so the next cycle exercises drift
+    await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_MAX),
+                                  adapter, _power(22000.0), now=0.0)
+    adapter.command_current.reset_mock()
+    # box reverted to 6 A failsafe floor while we still want max → re-assert 32
+    adapter._device._current_setpoint = 6
     await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_MAX),
                                   adapter, _power(4000.0), now=1.0)
     adapter.command_current.assert_called_once_with(32)
