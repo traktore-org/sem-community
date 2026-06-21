@@ -176,3 +176,31 @@ async def test_apply_charge_max_resolves_hardware_max():
         _decision(ChargerIntent.CHARGE_MAX), adapter, _power(22000.0), now=100.0)
     # heartbeat due (last_write_at=0) → a refresh write at max
     adapter.command_current.assert_called_once_with(32)
+
+
+# ─────────────────────────────────────────────────────────────────
+# Task 4 — wire reconciler into actuate() as optional parameter
+# ─────────────────────────────────────────────────────────────────
+
+from custom_components.solar_energy_management.coordinator.actuate import actuate
+
+
+@pytest.mark.asyncio
+async def test_actuate_delegates_to_reconciler_when_provided():
+    rec = _rec()
+    adapter = _mock_adapter()
+    adapter.actual_charging = MagicMock(return_value=False)
+    adapter.is_self_charging = MagicMock(return_value=False)
+    # IDLE + open contactor → reconciler issues nothing
+    await actuate(_decision(ChargerIntent.IDLE), adapter, _power(0.0), reconciler=rec)
+    adapter.command_disable.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_actuate_legacy_path_unchanged_without_reconciler():
+    adapter = _mock_adapter()
+    adapter.is_self_charging = MagicMock(return_value=False)
+    adapter.reset_idle_debounce = MagicMock()
+    # CHARGE_MAX with no reconciler → legacy dispatch calls command_max
+    await actuate(_decision(ChargerIntent.CHARGE_MAX), adapter, _power(0.0))
+    adapter.command_max.assert_awaited_once()
