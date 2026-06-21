@@ -200,6 +200,11 @@ class ChargerAdapter(ABC):
 
     # ─── Helpers ───────────────────────────────────────────────
 
+    async def arm_failsafe(self) -> None:
+        """Arm the device-side failsafe benignly. Default: no-op (most
+        brands have no failsafe). KEBA overrides."""
+        return None
+
     def watts_for_amps(self, amps: int) -> float:
         """How much power ``amps`` corresponds to at this charger's
         phases × voltage."""

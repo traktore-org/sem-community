@@ -1729,6 +1729,23 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             adapter = adapter_for(ev_dev)
                             adapter_cache[cid] = adapter
 
+                        # Per-charger reconciler (#392): owns convergence (idempotent idle/off,
+                        # drift correction, failsafe heartbeat). Cached for the charger's life
+                        # like the adapter — it holds transition state.
+                        rec_cache = getattr(self, "_charger_reconcilers", None)
+                        if rec_cache is None:
+                            rec_cache = {}
+                            self._charger_reconcilers = rec_cache
+                        reconciler = rec_cache.get(cid)
+                        if reconciler is None:
+                            from .charger_reconciler import ChargerReconciler
+                            reconciler = ChargerReconciler(
+                                charger_id=cid,
+                                heartbeat_s=float(getattr(ev_dev, "watchdog_refresh_interval_s", 5.0)),
+                                idle_disable_threshold=int(getattr(adapter, "IDLE_DEBOUNCE_THRESHOLD", 4)),
+                            )
+                            rec_cache[cid] = reconciler
+
                         # PR A — pass the same resolved per-charger target that
                         # the legacy state machine path above used
                         # (charging_context.night_target_kwh, lines 1287, 1323).
@@ -1825,7 +1842,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                         pcc.effective_state = effective_state
 
                         try:
-                            await actuate(decision, adapter, view.power)
+                            await actuate(decision, adapter, view.power, reconciler=reconciler)
                             # Add this charger's just-committed draw to the shared night
                             # peak budget so lower-priority chargers size against the
                             # remaining headroom (#274/H1). Estimate from the setpoint
@@ -1873,6 +1890,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     adapter = adapter_for(self._ev_device)
                     adapter_cache[cid] = adapter
 
+                # Per-charger reconciler (#392): same cache as the multi-charger path.
+                rec_cache = getattr(self, "_charger_reconcilers", None)
+                if rec_cache is None:
+                    rec_cache = {}
+                    self._charger_reconcilers = rec_cache
+                reconciler = rec_cache.get(cid)
+                if reconciler is None:
+                    from .charger_reconciler import ChargerReconciler
+                    reconciler = ChargerReconciler(
+                        charger_id=cid,
+                        heartbeat_s=float(getattr(self._ev_device, "watchdog_refresh_interval_s", 5.0)),
+                        idle_disable_threshold=int(getattr(adapter, "IDLE_DEBOUNCE_THRESHOLD", 4)),
+                    )
+                    rec_cache[cid] = reconciler
+
                 # Resolve mode from global config (no per-charger cfg in this branch).
                 per_mode = self._effective_charge_mode_for(
                     self._primary_charger_cfg()
@@ -1898,7 +1930,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     **self._charge_stability_kwargs(),
                 )
                 try:
-                    await actuate(decision, adapter, view.power)
+                    await actuate(decision, adapter, view.power, reconciler=reconciler)
                     self._save_ev_session_state()
                 except (HomeAssistantError, ServiceValidationError) as e:
                     _LOGGER.error("EV control service failed: %s", e)

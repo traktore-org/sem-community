@@ -21,6 +21,7 @@ on its own to decide whether self-resume guard fires.
 from __future__ import annotations
 
 import logging
+import time
 
 from .charger_adapters.base import ChargerAdapter
 from .charger_types import ChargerDecision, ChargerIntent, ChargerPower
@@ -32,6 +33,7 @@ async def actuate(
     decision: ChargerDecision,
     adapter: ChargerAdapter,
     power: ChargerPower,
+    reconciler=None,
 ) -> None:
     """Apply a per-charger decision through the adapter.
 
@@ -53,7 +55,19 @@ async def actuate(
         adapter: The brand-specific adapter wrapping this charger.
         power: The charger's current power reading (for the
             self-resume guard).
+        reconciler: Optional :class:`ChargerReconciler`. When
+            supplied, it owns the full convergence decision
+            (idempotent idle/off, drift, heartbeat). The legacy
+            dispatch below is kept only for callers/tests that
+            don't pass one (#392).
     """
+    # Reconciler path (#392): when a per-charger reconciler is supplied,
+    # it owns the full convergence decision (idempotent idle/off, drift,
+    # heartbeat). The legacy per-cycle dispatch below is kept only for
+    # callers/tests that don't pass one, and is retired in Increment 3.
+    if reconciler is not None:
+        await reconciler.reconcile_and_apply(decision, adapter, power, time.monotonic())
+        return
 
     # === Self-resume guard ===
     # Before applying the new intent, check whether the charger is
