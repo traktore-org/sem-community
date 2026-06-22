@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import TYPE_CHECKING, List, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from .charger_types import ChargerDecision, ChargerIntent, ChargerPower
 
@@ -38,6 +38,8 @@ class ActionKind(Enum):
     DISABLE = auto()        # open the contactor (brand disable service)
     WRITE_CURRENT = auto()  # set charging current (amps on the Action)
     START_AND_WRITE = auto()  # open a session + arm failsafe + write (amps)
+    ENABLE = auto()         # re-assert the start/stop switch ON (#536 — Wallbox)
+    REPORT_ENABLE_BLOCKED = auto()  # enable switch unavailable/locked — surface it (#536)
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,15 @@ class ObservedState:
     setpoint_a: int      # the value SEM last believes it set
     self_charging: bool  # adapter.is_self_charging(power)
     power_w: float
+    # #536 — start/stop enable switch reconciliation (Wallbox & friends).
+    enabled: Optional[bool] = None
+    """The ACTUAL enable-switch state. None = charger has no readable
+    start/stop switch (KEBA / service / button control) → enable
+    reconciliation is N/A. True/False = switch on/off."""
+    enable_controllable: bool = True
+    """False when the charger HAS an enable switch but its state is
+    unavailable/unknown (Wallbox locked / eco-smart) — SEM can't drive
+    it, so charging is silently impossible until surfaced (#536)."""
 
 
 def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]:
@@ -124,6 +135,20 @@ class ChargerReconciler:
 
         # desired is CHARGE — reset idle grace.
         self._consecutive_idle_count = 0
+
+        # #536 — enable-switch reconciliation (prepended to the current
+        # action). Keyed on the ACTUAL switch state, NOT on power, so a
+        # full-but-plugged car (switch on, drawing 0 W) does not churn.
+        enable_actions: List[Action] = []
+        if not observed.enable_controllable:
+            # Switch present but unavailable/unknown (locked / eco-smart):
+            # SEM cannot drive it → charging is silently impossible. Surface.
+            enable_actions.append(Action(ActionKind.REPORT_ENABLE_BLOCKED))
+        elif observed.enabled is False:
+            # Switch is OFF while we want to charge — re-assert it (the
+            # #536 fix; idempotent, independent of stale _session_active).
+            enable_actions.append(Action(ActionKind.ENABLE))
+
         if not self._charging_intent_active:
             # Row 5 — TRANSITION into charging: open a session, arm the
             # failsafe, write. Gated on the desired transition (not on
@@ -134,17 +159,18 @@ class ChargerReconciler:
             # failsafe fed) — no re-arm spam needed.
             self._charging_intent_active = True
             self._last_write_at = now
-            return [Action(ActionKind.START_AND_WRITE, amps)]
+            return enable_actions + [Action(ActionKind.START_AND_WRITE, amps)]
         if amps and observed.setpoint_a != amps:
             # Row 6 — target change or drift (failsafe revert) correction.
             self._last_write_at = now
-            return [Action(ActionKind.WRITE_CURRENT, amps)]
+            return enable_actions + [Action(ActionKind.WRITE_CURRENT, amps)]
         if (now - self._last_write_at) >= self._heartbeat_s:
             # Row 7 — refresh to feed the device failsafe watchdog.
             self._last_write_at = now
-            return [Action(ActionKind.WRITE_CURRENT, amps)]
-        # Row 8 — converged and fresh.
-        return [Action(ActionKind.NONE)]
+            return enable_actions + [Action(ActionKind.WRITE_CURRENT, amps)]
+        # Row 8 — current converged; still re-assert the enable switch if
+        # it drifted off (enable_actions is empty in the common case).
+        return enable_actions or [Action(ActionKind.NONE)]
 
     async def reconcile_and_apply(self, decision: ChargerDecision,
                                  adapter: "ChargerAdapter",
@@ -161,7 +187,21 @@ class ChargerReconciler:
         for action in actions:
             if action.kind is ActionKind.NONE:
                 continue
-            if action.kind is ActionKind.DISABLE:
+            if action.kind is ActionKind.ENABLE:
+                # #536 — re-assert the start/stop switch (idempotent).
+                await adapter.ensure_enabled()
+                _LOGGER.info("reconcile(%s): ENABLE — enable switch was off, "
+                             "re-asserting — %s", self.charger_id, decision.reason)
+            elif action.kind is ActionKind.REPORT_ENABLE_BLOCKED:
+                # #536 — switch present but uncontrollable (locked/eco-smart).
+                _LOGGER.warning(
+                    "reconcile(%s): enable switch unavailable/locked — charging "
+                    "cannot start until it's controllable (unlock the charger / "
+                    "leave eco-smart mode) — %s", self.charger_id, decision.reason)
+                report = getattr(adapter, "report_enable_blocked", None)
+                if report is not None:
+                    await report()
+            elif action.kind is ActionKind.DISABLE:
                 await adapter.command_disable()
                 _LOGGER.info("reconcile(%s): DISABLE — %s",
                              self.charger_id, decision.reason)
@@ -183,9 +223,21 @@ class ChargerReconciler:
 def observe(adapter, power) -> ObservedState:
     """Read the observed state from the adapter (brand-agnostic)."""
     setpoint = int(round(float(getattr(getattr(adapter, "_device", None), "_current_setpoint", 0) or 0)))
+    # #536 — actual enable-switch state. enable_state() returns
+    # (enabled, controllable); default (None, True) for chargers with no
+    # readable start/stop switch (KEBA / service / button control).
+    enabled, controllable = None, True
+    _enable_state = getattr(adapter, "enable_state", None)
+    if _enable_state is not None:
+        try:
+            enabled, controllable = _enable_state()
+        except Exception as exc:  # noqa: BLE001 — never let observe() throw
+            _LOGGER.debug("enable_state() failed: %s", exc)
     return ObservedState(
         charging=adapter.actual_charging(power),
         setpoint_a=setpoint,
         self_charging=adapter.is_self_charging(power),
         power_w=float(getattr(power, "power_w", 0.0) or 0.0),
+        enabled=enabled,
+        enable_controllable=controllable,
     )

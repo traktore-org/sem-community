@@ -205,6 +205,56 @@ class ChargerAdapter(ABC):
         brands have no failsafe). KEBA overrides."""
         return None
 
+    # ─── Enable-switch reconciliation (#536) ───────────────────
+    #
+    # Switch-controlled chargers (Wallbox, Heidelberg, …) need an enable
+    # switch ON in addition to the current setpoint. SEM used to assert it
+    # once via start_session (gated by a latched ``_session_active``) and
+    # never re-check it, so a switch that went off (auto-pause / lock /
+    # eco-smart / external toggle) left the charger commanded-but-0 W
+    # (#536). The reconciler now reads the ACTUAL switch state each cycle
+    # and re-asserts it. These defaults work for any brand whose start/stop
+    # is a ``switch.``/``input_boolean.`` entity; brands without a readable
+    # enable switch (KEBA service control, button start) return N/A.
+
+    def enable_state(self):
+        """Return ``(enabled, controllable)`` for the start/stop switch.
+
+        - ``(None, True)``  — no readable enable switch (N/A): KEBA,
+          service control, or a ``button.`` start entity.
+        - ``(None, False)`` — switch present but ``unavailable``/``unknown``
+          (Wallbox locked / eco-smart): SEM cannot drive it → surface.
+        - ``(True/False, True)`` — switch on / off.
+        """
+        dev = self._device
+        ent = getattr(dev, "start_stop_entity", None)
+        if not ent or not str(ent).startswith(("switch.", "input_boolean.")):
+            return (None, True)
+        st = dev.hass.states.get(ent)
+        if st is None or st.state in ("unavailable", "unknown"):
+            return (None, False)
+        return (st.state == "on", True)
+
+    async def ensure_enabled(self) -> None:
+        """Idempotently turn the start/stop switch ON. No-op for chargers
+        without a ``switch.``/``input_boolean.`` enable entity."""
+        dev = self._device
+        ent = getattr(dev, "start_stop_entity", None)
+        if not ent or not str(ent).startswith(("switch.", "input_boolean.")):
+            return
+        await dev.hass.services.async_call(
+            ent.split(".")[0], "turn_on", {"entity_id": ent}, blocking=True,
+        )
+        # Keep SEM's session view consistent with the contactor we just closed.
+        dev._session_active = True
+
+    async def report_enable_blocked(self) -> None:
+        """Surface an uncontrollable enable switch as an actuation failure
+        so the existing repair flow raises it (debounced by the device)."""
+        rec = getattr(self._device, "_record_actuation_failure", None)
+        if rec is not None:
+            rec(RuntimeError("enable switch unavailable/locked — cannot start charging"))
+
     def watts_for_amps(self, amps: int) -> float:
         """How much power ``amps`` corresponds to at this charger's
         phases × voltage."""
