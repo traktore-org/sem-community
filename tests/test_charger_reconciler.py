@@ -197,16 +197,6 @@ async def test_actuate_delegates_to_reconciler_when_provided():
     adapter.command_disable.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_actuate_legacy_path_unchanged_without_reconciler():
-    adapter = _mock_adapter()
-    adapter.is_self_charging = MagicMock(return_value=False)
-    adapter.reset_idle_debounce = MagicMock()
-    # CHARGE_MAX with no reconciler → legacy dispatch calls command_max
-    await actuate(_decision(ChargerIntent.CHARGE_MAX), adapter, _power(0.0))
-    adapter.command_max.assert_awaited_once()
-
-
 def test_off_not_drawing_emits_nothing():
     """mode=off + EV unplugged/contactor open → zero service calls (the
     primary production scenario; must not fall through to DISABLE)."""

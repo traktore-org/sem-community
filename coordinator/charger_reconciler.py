@@ -86,6 +86,14 @@ def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]
     return DesiredState.IDLE, 0
 
 
+# Consecutive IDLE cycles to hold the previous setpoint before
+# converging to idle/disable — absorbs a solar-sensor flicker that
+# would otherwise drive KEBA into "authorization rejected" (PROD
+# 2026-06-02). Was ``ChargerAdapter.IDLE_DEBOUNCE_THRESHOLD`` until
+# Task 11 moved idle ownership wholly into the reconciler.
+DEFAULT_IDLE_DISABLE_THRESHOLD: int = 4
+
+
 class ChargerReconciler:
     """Per-charger convergence engine. One instance per charger, cached
     for the charger's lifetime (it holds transition state). Pure
@@ -94,7 +102,7 @@ class ChargerReconciler:
     """
 
     def __init__(self, charger_id: str, heartbeat_s: float,
-                 idle_disable_threshold: int = 4,
+                 idle_disable_threshold: int = DEFAULT_IDLE_DISABLE_THRESHOLD,
                  max_enable_attempts: int = 5,
                  enable_retry_interval_s: float = 300.0) -> None:
         self.charger_id = charger_id

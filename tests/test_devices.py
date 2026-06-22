@@ -277,8 +277,8 @@ async def test_current_control_start_stop_session(current_device):
     # sequence shipped since v1.5.0. ``keba.authorize`` was tried briefly
     # on 2026-06-02 as a speculative fix for an auth-rejected cascade —
     # reverted same day after confirming git history shows authorize was
-    # never in the sequence; the real fix is the IDLE debounce in
-    # ``actuate.py`` / ``ChargerAdapter.attempt_idle``.
+    # never in the sequence; the real fix is the IDLE flicker-hold, now
+    # owned by ``ChargerReconciler`` (its consecutive-idle threshold).
     assert current_device.hass.services.async_call.call_count == 3
 
     # The KEBA failsafe must be set BENIGN, not "disabled" with an invalid

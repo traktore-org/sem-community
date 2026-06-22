@@ -36,7 +36,7 @@ class GenericAdapter(ChargerAdapter):
     actually stops the contactor."""
 
     def __init__(self, device: "CurrentControlDevice") -> None:
-        super().__init__()  # initialise the IDLE debounce counter
+        super().__init__()
         self._device = device
         self._last_intent: Optional[ChargerIntent] = None
 
