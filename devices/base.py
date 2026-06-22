@@ -756,6 +756,32 @@ class CurrentControlDevice(ControllableDevice):
             current = ent_min
         return current, False
 
+    def effective_max_current(self) -> float:
+        """Highest current SEM can ACTUALLY command — the configured
+        ``max_current`` clamped to the control number entity's own max.
+
+        A charger configured at 32 A whose ``number.*_max_charging_current``
+        entity caps at 16 A can only be driven to 16 A. Resolving CHARGE_MAX
+        to the hardware 32 A made the reconciler command 32, the device clamp
+        to 16, and the two never converge → a perpetual false 'drift' that
+        spammed ``WRITE 32A`` + ``clamping 32 A → 16 A`` every cycle (#536
+        logs). Service-controlled chargers (KEBA) have no current entity, so
+        this returns the configured max unchanged.
+        """
+        eff = float(self.max_current)
+        ent = self.current_entity_id
+        if not ent:
+            return eff
+        attrs = getattr(self.hass.states.get(ent), "attributes", None)
+        if isinstance(attrs, dict):
+            ent_max = attrs.get("max")
+            if ent_max is not None and not isinstance(ent_max, bool):
+                try:
+                    eff = min(eff, float(ent_max))
+                except (TypeError, ValueError):
+                    pass
+        return eff
+
     async def _set_current(self, current: float) -> float:
         """Set charging current via entity or service."""
         current = round(current, 0)

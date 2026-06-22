@@ -542,3 +542,32 @@ def test_charge_uncontrollable_switch_suppresses_charge_actions():
     actions = rec.reconcile(DesiredState.CHARGE, 16,
                             _obs_en(enabled=None, controllable=False), now=0.0)
     assert actions == [Action(_AK.REPORT_ENABLE_BLOCKED)]
+
+
+# ─── #536 effective-max (CHARGE_MAX clamp drift) ───
+def test_effective_max_current_clamps_to_entity_max():
+    """CHARGE_MAX must resolve to the entity-clamped max, not the hardware
+    max — else the reconciler drifts forever (config 32 A, entity caps 16 A)."""
+    from types import SimpleNamespace
+    hass = MagicMock(); hass.services.has_service = MagicMock(return_value=True)
+    hass.states.get = MagicMock(side_effect=lambda eid: SimpleNamespace(
+        attributes={"min": 6, "max": 16}) if eid == "number.wb_current" else None)
+    dev = CurrentControlDevice(
+        hass=hass, device_id="wb", name="WB", priority=5, min_current=6.0,
+        max_current=32.0, phases=3, voltage=230.0, power_entity_id="sensor.p",
+        charger_service=None, charger_service_entity_id=None,
+        current_entity_id="number.wb_current")
+    assert dev.effective_max_current() == 16.0
+    assert adapter_for(dev).max_current_a == 16
+
+
+def test_effective_max_current_no_entity_returns_config_max():
+    """Service-controlled charger (KEBA, no current entity) → config max."""
+    hass = MagicMock(); hass.services.has_service = MagicMock(return_value=True)
+    dev = CurrentControlDevice(
+        hass=hass, device_id="k", name="K", priority=5, min_current=6.0,
+        max_current=32.0, phases=3, voltage=230.0, power_entity_id="sensor.p",
+        charger_service="keba.set_current", charger_service_entity_id=None,
+        current_entity_id=None)
+    assert dev.effective_max_current() == 32.0
+    assert adapter_for(dev).max_current_a == 32
