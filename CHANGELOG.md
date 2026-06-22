@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.51] - 22.06.2026
+
+## 🔌 Wallbox "commanded but 0 W" — SEM now reconciles the enable switch (#536)
+
+A Wallbox (and any charger controlled by a current **number** + a separate
+**enable switch**) could sit at *Connected, Always-max, commanded 16 A, **0 W***
+and never start, in any mode. Cause: SEM turned the enable switch on **once** at
+session start and then never checked it again — if the switch later went off
+(Wallbox auto-pause, locked, eco-smart mode, or an external toggle), SEM kept
+writing the current to a charger whose contactor was open.
+
+The charger reconciler (from beta.50) now treats the **enable switch as observed
+state**: every cycle it reads the switch's *actual* state and re-asserts it when
+charging is wanted and it's off — idempotent, and keyed on the switch state (not
+power) so a full-but-plugged car never causes switch churn. A switch that's
+**unavailable/locked** (e.g. eco-smart mode) is now surfaced as a repair instead
+of silently swallowing every charge command.
+
+> This was **not** the `ev_charger_service: "0"` value some configs show — that's
+> been harmless since beta.43 (it's normalised to "use the number entity"). The
+> real gap was the un-reconciled enable switch.
+
 # [1.7.3-beta.50] - 21.06.2026
 
 ## ⚡ EV charging is now rock-solid in every mode — charger state reconciler
