@@ -111,6 +111,13 @@ class ChargerReconciler:
         self._last_write_at: float = 0.0
         self._consecutive_idle_count: int = 0
         self._charging_intent_active: bool = False
+        """True once we've issued the START for the current charge episode.
+        Gates the START_AND_WRITE action on the *desired-state transition*
+        into CHARGE, NOT on ``observed.charging`` — otherwise a charger
+        that isn't drawing yet (ramp lag, a full-but-plugged car held in a
+        deadline mode, a mock charger) would re-START + re-arm the failsafe
+        every single cycle (the exact spam this whole change removes; caught
+        live on HA-TEST 2026-06-21). Reset whenever desired leaves CHARGE."""
         # #536 enable backoff — a charger in an autonomous mode (Wallbox
         # Eco-Smart, app scheduling) keeps flipping its OWN enable switch
         # back off; re-asserting it every cycle is an infinite tug-of-war
@@ -121,13 +128,6 @@ class ChargerReconciler:
         self._enable_retry_interval_s: float = float(enable_retry_interval_s)
         self._enable_attempts: int = 0
         self._enable_gave_up_at: float = 0.0
-        """True once we've issued the START for the current charge episode.
-        Gates the START_AND_WRITE action on the *desired-state transition*
-        into CHARGE, NOT on ``observed.charging`` — otherwise a charger
-        that isn't drawing yet (ramp lag, a full-but-plugged car held in a
-        deadline mode, a mock charger) would re-START + re-arm the failsafe
-        every single cycle (the exact spam this whole change removes; caught
-        live on HA-TEST 2026-06-21). Reset whenever desired leaves CHARGE."""
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
