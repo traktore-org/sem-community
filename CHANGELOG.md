@@ -13,6 +13,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.52] - 22.06.2026
+
+## 🔌 EV charger reliability hardening (#536) — verified live on HA-TEST
+
+A focused pass on the EV charger control, all confirmed live against a KEBA and a
+switch-controlled Wallbox sim on HA-TEST:
+
+- **Enable-switch backoff.** When a charger keeps flipping its *own* enable switch
+  back off (Wallbox Eco-Smart / Autostart, or a conflicting integration), SEM no
+  longer fights it forever — it re-asserts a few times, then **stops and surfaces a
+  repair** ("charger auto-pausing — disable Autostart/eco-smart"), probing again
+  periodically. This kills the start/stop oscillation.
+- **`input_boolean` start/stop entities** are now driven like `switch.*` ones, so
+  `off`/`idle` reliably open the contactor (previously enable worked but disable
+  didn't).
+- **No more `CHARGE_MAX` clamp-drift.** `always_max` resolves to the charger's
+  *effective* max (config max clamped to the control entity's max) instead of the
+  hardware max, so it stops spamming `WRITE 32A` + `clamping 32 A → 16 A` every
+  cycle and converges cleanly.
+- **Honest charger state.** When SEM is commanding a charge but the car isn't
+  actually drawing (full / not ready), the dashboard now reads **"ready"** instead
+  of "charging at 0 W" (power-based, debounced — never changes the command).
+
+KEBA is unaffected by all of the above (no enable switch). The #392 idempotency
+(no `keba.disable` spam) and the battery "discharge clamped to home load during EV
+charging" protection were both re-verified live.
+
+## 🧹 Internal: charger reconciler is now the sole actuation path
+
+Removed the dead legacy EV-control code (`_execute_ev_control`, the legacy
+`actuate()` body, the unused adapter idle-debounce) now that the desired-vs-observed
+**reconciler** owns all charger actuation — net **−1073 lines**, with the self-resume
+behavior moved to reconciler-native test coverage. No behavior change.
+
 # [1.7.3-beta.51] - 22.06.2026
 
 ## 🔌 Wallbox "commanded but 0 W" — SEM now reconciles the enable switch (#536)
