@@ -1839,6 +1839,31 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                 effective_state = ChargingState.SOLAR_SUPER_CHARGING
                             else:
                                 effective_state = ChargingState.SOLAR_CHARGING_ACTIVE
+                            # Cosmetic: if we're commanding a charge but the car
+                            # isn't actually drawing past a ramp-up grace, show
+                            # "ready" not "charging" so a satisfied/full car
+                            # doesn't read as Charging at 0 W. Power-based — the
+                            # SoC estimate is unreliable, so it's display-only and
+                            # never changes the command.
+                            _no_draw = getattr(self, "_charge_no_draw_since", None)
+                            if _no_draw is None:
+                                _no_draw = {}
+                                self._charge_no_draw_since = _no_draw
+                            if decision.intent in (_CI.CHARGE_AT_AMPS, _CI.CHARGE_MAX):
+                                import time as _t
+                                _hs = float(getattr(adapter, "handshake_power_w", 500.0))
+                                _drawing = float(getattr(view.power, "power_w", 0.0) or 0.0) > _hs
+                                if _drawing:
+                                    _no_draw.pop(cid, None)
+                                else:
+                                    _since = _no_draw.setdefault(cid, _t.monotonic())
+                                    from .decide import solar_charge_display_override
+                                    _ov = solar_charge_display_override(
+                                        decision.intent, _drawing, _t.monotonic() - _since)
+                                    if _ov is not None:
+                                        effective_state = _ov
+                            else:
+                                _no_draw.pop(cid, None)
                         pcc.effective_state = effective_state
 
                         try:
