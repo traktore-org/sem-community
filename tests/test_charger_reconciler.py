@@ -304,3 +304,146 @@ async def test_charge_max_drift_corrects():
     await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_MAX),
                                   adapter, _power(4000.0), now=1.0)
     adapter.command_current.assert_called_once_with(32)
+
+
+# ─────────────────────────────────────────────────────────────────
+# #536 — enable-switch reconciliation (Wallbox: commanded but 0 W)
+# ─────────────────────────────────────────────────────────────────
+#
+# A switch-controlled charger (Wallbox: number current entity +
+# switch.charging_enable) was started once via start_session and the
+# enable switch was never re-asserted: _session_active latched True, so
+# if the switch went off (Wallbox auto-pause / lock / eco-smart) SEM wrote
+# the current forever with the contactor open → commanded 16A, 0W (#536).
+# The reconciler must reconcile the ACTUAL enable-switch state.
+
+from custom_components.solar_energy_management.coordinator.charger_reconciler import (
+    ActionKind as _AK, ObservedState as _OS,
+)
+
+
+def _obs_en(enabled, controllable=True, charging=False, setpoint=0, power=0.0):
+    return _OS(charging=charging, setpoint_a=setpoint, self_charging=False,
+              power_w=power, enabled=enabled, enable_controllable=controllable)
+
+
+def test_charge_reasserts_enable_when_switch_off():
+    """desired CHARGE + enable switch OFF → emit ENABLE (re-assert)."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=100.0)
+    assert any(a.kind is _AK.ENABLE for a in actions), actions
+
+
+def test_charge_no_enable_when_switch_on_even_if_not_drawing():
+    """Full-but-plugged car: switch ON, drawing 0 W → NO ENABLE churn
+    (keys on the switch state, not on power)."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.CHARGE, 16,
+                            _obs_en(enabled=True, charging=False, power=0.0), now=100.0)
+    assert not any(a.kind is _AK.ENABLE for a in actions), actions
+
+
+def test_charge_no_enable_action_when_charger_has_no_switch():
+    """KEBA / service charger (no start-stop switch) → enabled=None → no
+    ENABLE action (existing session/failsafe path unaffected)."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=None), now=100.0)
+    assert not any(a.kind is _AK.ENABLE for a in actions), actions
+
+
+def test_charge_enable_uncontrollable_surfaces_repair():
+    """Switch present but unavailable/unknown (locked / eco-smart) →
+    REPORT_ENABLE_BLOCKED so it's surfaced, not silent."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.CHARGE, 16,
+                            _obs_en(enabled=None, controllable=False), now=100.0)
+    assert any(a.kind is _AK.REPORT_ENABLE_BLOCKED for a in actions), actions
+
+
+def test_idle_does_not_emit_enable():
+    """desired IDLE/OFF never emits ENABLE regardless of switch state."""
+    rec = _rec()
+    a1 = rec.reconcile(DesiredState.IDLE, 0, _obs_en(enabled=False), now=10.0)
+    a2 = rec.reconcile(DesiredState.OFF, 0, _obs_en(enabled=True, charging=True, power=4000), now=20.0)
+    assert not any(a.kind is _AK.ENABLE for a in a1 + a2)
+
+
+@pytest.mark.asyncio
+async def test_apply_enable_calls_adapter_ensure_enabled():
+    """ENABLE action → adapter.ensure_enabled() awaited; then current still written."""
+    rec = _rec()
+    adapter = _mock_adapter()
+    adapter.actual_charging = MagicMock(return_value=False)
+    adapter.is_self_charging = MagicMock(return_value=False)
+    adapter.ensure_enabled = AsyncMock()
+    adapter.enable_state = MagicMock(return_value=(False, True))  # switch off, controllable
+    adapter._device = MagicMock(_current_setpoint=0)
+    await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 16),
+                                  adapter, _power(0.0), now=100.0)
+    adapter.ensure_enabled.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_apply_no_ensure_enabled_when_switch_on():
+    rec = _rec()
+    adapter = _mock_adapter()
+    adapter.actual_charging = MagicMock(return_value=True)
+    adapter.is_self_charging = MagicMock(return_value=False)
+    adapter.ensure_enabled = AsyncMock()
+    adapter.enable_state = MagicMock(return_value=(True, True))  # switch on
+    adapter._device = MagicMock(_current_setpoint=16)
+    await rec.reconcile_and_apply(_decision(ChargerIntent.CHARGE_AT_AMPS, 16),
+                                  adapter, _power(11000.0), now=100.0)
+    adapter.ensure_enabled.assert_not_awaited()
+
+
+# ─── #536 adapter-level enable_state / ensure_enabled (real methods) ───
+from types import SimpleNamespace
+from custom_components.solar_energy_management.devices.base import CurrentControlDevice
+from custom_components.solar_energy_management.coordinator.charger_adapters import adapter_for
+
+
+def _wallbox_device(switch_state):
+    hass = MagicMock()
+    hass.services.async_call = AsyncMock()
+    hass.services.has_service = MagicMock(return_value=True)
+    hass.states.get = MagicMock(
+        side_effect=lambda eid: SimpleNamespace(state=switch_state)
+        if eid == "switch.wb_enable" and switch_state is not None else None)
+    dev = CurrentControlDevice(
+        hass=hass, device_id="wb", name="WB", priority=5, min_current=6.0,
+        max_current=32.0, phases=3, voltage=230.0, power_entity_id="sensor.p",
+        charger_service="0", charger_service_entity_id=None,
+        current_entity_id="number.wb_current")
+    dev.start_stop_entity = "switch.wb_enable"
+    return dev, hass
+
+
+def test_adapter_enable_state_off_on_unavailable():
+    dev_off, _ = _wallbox_device("off")
+    assert adapter_for(dev_off).enable_state() == (False, True)
+    dev_on, _ = _wallbox_device("on")
+    assert adapter_for(dev_on).enable_state() == (True, True)
+    dev_unavail, _ = _wallbox_device("unavailable")
+    assert adapter_for(dev_unavail).enable_state() == (None, False)
+    dev_missing, _ = _wallbox_device(None)  # entity returns no state
+    assert adapter_for(dev_missing).enable_state() == (None, False)
+
+
+def test_adapter_enable_state_none_when_no_switch():
+    hass = MagicMock(); hass.services.has_service = MagicMock(return_value=True)
+    dev = CurrentControlDevice(
+        hass=hass, device_id="keba", name="K", priority=5, min_current=6.0,
+        max_current=32.0, phases=3, voltage=230.0, power_entity_id="sensor.p",
+        charger_service="keba.set_current", charger_service_entity_id=None,
+        current_entity_id=None)
+    # no start_stop_entity → enable reconciliation is N/A
+    assert adapter_for(dev).enable_state() == (None, True)
+
+
+@pytest.mark.asyncio
+async def test_adapter_ensure_enabled_turns_switch_on():
+    dev, hass = _wallbox_device("off")
+    await adapter_for(dev).ensure_enabled()
+    hass.services.async_call.assert_awaited_with(
+        "switch", "turn_on", {"entity_id": "switch.wb_enable"}, blocking=True)
