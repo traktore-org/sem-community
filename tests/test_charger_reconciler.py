@@ -491,3 +491,54 @@ def test_charge_self_charging_does_not_disable_first():
                             _obs(charging=True, setpoint=10, self_charging=True, power=4000.0), now=0.0)
     assert not any(a.kind is ActionKind.DISABLE for a in actions), actions
     assert any(a.kind in (ActionKind.START_AND_WRITE, ActionKind.WRITE_CURRENT) for a in actions), actions
+
+
+# ─────────────────────────────────────────────────────────────────
+# #536 — enable BACKOFF: don't fight a self-pausing charger forever
+# (Wallbox Eco-Smart / Autostart flips its own switch back → oscillation)
+# ─────────────────────────────────────────────────────────────────
+
+
+def _rec_enable(max_attempts=3, retry=300.0):
+    return ChargerReconciler(charger_id="ev_charger", heartbeat_s=5.0,
+                             max_enable_attempts=max_attempts,
+                             enable_retry_interval_s=retry)
+
+
+def test_enable_retries_max_then_backs_off():
+    rec = _rec_enable(max_attempts=3)
+    for c in range(3):  # try hard for max_attempts cycles
+        a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=c*10.0)
+        assert any(x.kind is _AK.ENABLE for x in a), f"cycle {c}: {a}"
+    for c in range(3, 8):  # then stop fighting, surface
+        a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=c*10.0)
+        assert any(x.kind is _AK.REPORT_ENABLE_BLOCKED for x in a), f"cycle {c}: {a}"
+        assert not any(x.kind is _AK.ENABLE for x in a), f"cycle {c}: {a}"
+
+
+def test_enable_probes_once_after_retry_interval():
+    rec = _rec_enable(max_attempts=2, retry=300.0)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=0.0)   # ENABLE
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=10.0)  # ENABLE, gave_up=10
+    a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=200.0)  # within window
+    assert not any(x.kind is _AK.ENABLE for x in a)
+    a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=320.0)  # window elapsed
+    assert any(x.kind is _AK.ENABLE for x in a)
+
+
+def test_enable_backoff_resets_when_switch_sticks():
+    rec = _rec_enable(max_attempts=2)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=0.0)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=10.0)  # exhausted
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=True, charging=True, power=4000), now=20.0)
+    a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=30.0)
+    assert any(x.kind is _AK.ENABLE for x in a)  # fresh round, not immediately backed off
+
+
+def test_enable_backoff_resets_on_idle():
+    rec = _rec_enable(max_attempts=2)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=0.0)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=10.0)  # exhausted
+    rec.reconcile(DesiredState.IDLE, 0, _obs_en(enabled=False), now=20.0)     # leave CHARGE → reset
+    a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=30.0)
+    assert any(x.kind is _AK.ENABLE for x in a)  # fresh round
