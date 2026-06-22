@@ -134,6 +134,17 @@ class ChargerReconciler:
             return [Action(ActionKind.DISABLE)]
 
         # desired is CHARGE — reset idle grace.
+        #
+        # Note on self-resume (#346): unlike the legacy actuator, which
+        # force-disabled before applying ANY intent if the box was drawing
+        # against consent, we do NOT disable-before-charge here. When we
+        # want CHARGE and the box is already drawing (self-resumed during a
+        # prior idle), the desired outcome is already happening — opening
+        # then reclosing the contactor would be pointless churn. The
+        # correct setpoint is asserted by START_AND_WRITE / WRITE below.
+        # ``observed.self_charging`` therefore only drives the OFF/IDLE
+        # rows above (where drawing IS against intent). Pinned by
+        # ``test_charge_self_charging_does_not_disable_first``.
         self._consecutive_idle_count = 0
 
         # #536 — enable-switch reconciliation (prepended to the current

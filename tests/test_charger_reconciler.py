@@ -447,3 +447,47 @@ async def test_adapter_ensure_enabled_turns_switch_on():
     await adapter_for(dev).ensure_enabled()
     hass.services.async_call.assert_awaited_with(
         "switch", "turn_on", {"entity_id": "switch.wb_enable"}, blocking=True)
+
+
+# ─────────────────────────────────────────────────────────────────
+# Task 11 — reconciler-native self-resume coverage (was phantom via
+# the now-dead _execute_ev_control / legacy actuate path: #315/#346/#353)
+# ─────────────────────────────────────────────────────────────────
+
+
+def test_off_self_charging_disables():
+    """#315: box drawing against an OFF intent (self-resume on plug-in)
+    must be force-disabled — even when the power-based `charging` flag is
+    False, `self_charging` (last intent was IDLE/DISABLE + power>handshake)
+    counts as drawing."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.OFF, 0,
+                            _obs(charging=False, self_charging=True, power=4000.0), now=0.0)
+    assert actions == [Action(ActionKind.DISABLE)]
+
+
+def test_idle_self_charging_flicker_then_disable():
+    """#353: self-charging against an IDLE intent gets the flicker hold
+    then a confirmed DISABLE (same path as power-based drawing)."""
+    rec = _rec()
+    for cyc in range(1, 4):  # < threshold → hold
+        a = rec.reconcile(DesiredState.IDLE, 0,
+                          _obs(charging=False, self_charging=True, power=4000.0), now=cyc*10.0)
+        assert a == [Action(ActionKind.NONE)], f"cyc {cyc}: {a}"
+    a = rec.reconcile(DesiredState.IDLE, 0,
+                      _obs(charging=False, self_charging=True, power=4000.0), now=40.0)
+    assert a == [Action(ActionKind.DISABLE)]
+
+
+def test_charge_self_charging_does_not_disable_first():
+    """#346 follow-up / MED gap: when we now WANT to charge and the box is
+    already drawing (self-resumed during a prior idle), the reconciler must
+    NOT disable-then-charge — it proceeds straight to charging (the desired
+    outcome is already happening; interrupting it would be churn). The
+    correct setpoint is asserted by START/WRITE. Pins the intended divergence
+    from the legacy disable-before-any-intent guard."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.CHARGE, 10,
+                            _obs(charging=True, setpoint=10, self_charging=True, power=4000.0), now=0.0)
+    assert not any(a.kind is ActionKind.DISABLE for a in actions), actions
+    assert any(a.kind in (ActionKind.START_AND_WRITE, ActionKind.WRITE_CURRENT) for a in actions), actions
