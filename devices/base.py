@@ -994,9 +994,9 @@ class CurrentControlDevice(ControllableDevice):
                 )
             elif self.start_stop_entity:
                 domain = self.start_stop_entity.split(".")[0]
-                if domain == "switch":
+                if domain in ("switch", "input_boolean"):
                     await self.hass.services.async_call(
-                        "switch", "turn_on",
+                        domain, "turn_on",
                         {"entity_id": self.start_stop_entity}, blocking=True,
                     )
                 elif domain == "button":
@@ -1071,12 +1071,12 @@ class CurrentControlDevice(ControllableDevice):
                 stop_method = f"charge_mode={self.charge_mode_stop}"
             elif self.start_stop_entity:
                 domain = self.start_stop_entity.split(".")[0]
-                if domain == "switch":
+                if domain in ("switch", "input_boolean"):
                     await self.hass.services.async_call(
-                        "switch", "turn_off",
+                        domain, "turn_off",
                         {"entity_id": self.start_stop_entity}, blocking=True,
                     )
-                    stop_method = f"switch.turn_off={self.start_stop_entity}"
+                    stop_method = f"{domain}.turn_off={self.start_stop_entity}"
                 elif domain == "button":
                     # Stop buttons have different entity_ids than start buttons
                     # The stop entity is typically named *_stop_charging*
