@@ -46,6 +46,36 @@ from .charger_types import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def solar_charge_display_override(intent, drawing: bool,
+                                  no_draw_elapsed_s: float,
+                                  grace_s: float = 90.0) -> Optional[str]:
+    """Cosmetic per-charger display state for solar charging.
+
+    When SEM commands a charge but the car isn't actually drawing (power
+    below the handshake threshold) for longer than ``grace_s``, the
+    dashboard should read "ready", not "charging" — otherwise a satisfied /
+    full / not-yet-ready car shows a misleading "Charging" while 0 W flows
+    (observed live: min_plus_solar offering 9 A to a believed-full car).
+
+    Deliberately **power-based, not SoC-estimate based** — SEM's energy
+    estimate drifts (seen reading 100% while the car still drew 4.5 kW), so
+    keying the display (let alone the command) off it would mislabel real
+    charging. The actuator keeps offering current regardless; this only
+    changes the label.
+
+    Returns a ``ChargingState`` string to override with, or ``None`` to keep
+    the normal intent-derived state (drawing, or still within ramp-up grace).
+    """
+    if intent not in (ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX):
+        return None
+    if drawing:
+        return None
+    if no_draw_elapsed_s >= grace_s:
+        from ..consts.states import ChargingState
+        return ChargingState.SOLAR_IDLE
+    return None  # within ramp-up grace — a car can take ~30-60 s to start
+
+
 # ─────────────────────────────────────────────────────────────────
 # Helpers — shared zone math (pure, no state)
 # ─────────────────────────────────────────────────────────────────
