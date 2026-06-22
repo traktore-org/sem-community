@@ -40,13 +40,17 @@ class PerChargerContext:
 
         for cid, ev_dev in sorted_chargers:
             with PerChargerContext.for_charger(
-                coord, cid, ev_dev, budget_per_charger,
+                coord, cid, ev_dev, budget_per_charger, power=power,
             ) as pcc:
                 if pcc.skipped_for_night:
                     continue
-                await coord._execute_ev_control(
-                    pcc.effective_state, power, energy, charging_context,
-                )
+                # Pure decide() → reconciler-driven actuate(). The legacy
+                # imperative ``coord._execute_ev_control`` was removed in
+                # Task 11 — control now flows through this dispatch:
+                adapter = adapter_for(ev_dev)
+                view = build_charger_view(coord, cid, ev_dev, pcc, power)
+                decision = decide(view)
+                await actuate(decision, adapter, view.power, reconciler=reconciler)
 
     The ``__enter__`` hook swaps the coordinator's primary-charger
     attributes (``_ev_device``, ``_ev_stalled_since``, etc.) to this
@@ -97,7 +101,8 @@ class PerChargerContext:
     """The ``PowerReadings`` for the current cycle. Stored so
     ``__enter__`` can compute ``this_power_w`` for THIS charger via
     the coordinator's existing helper. The factory's caller passes
-    the same ``power`` it would pass to ``_execute_ev_control``."""
+    the same ``power`` it passes into ``build_charger_view`` →
+    ``decide`` → ``actuate``."""
 
     this_power_w: Optional[float] = None
     """THIS charger's draw in watts, computed once in ``__enter__``
@@ -297,7 +302,7 @@ class PerChargerContext:
         restore the primary view.
 
         Always runs (including on exceptions raised by
-        ``_execute_ev_control``) so the coordinator's primary view is
+        ``decide`` / ``actuate``) so the coordinator's primary view is
         never left mid-swap. Mirrors the ``finally:`` block at the
         coordinator.py:1242-1258 in the pre-v1.6.7 code.
 
