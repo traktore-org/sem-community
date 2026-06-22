@@ -1738,11 +1738,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             self._charger_reconcilers = rec_cache
                         reconciler = rec_cache.get(cid)
                         if reconciler is None:
-                            from .charger_reconciler import ChargerReconciler
+                            from .charger_reconciler import (
+                                DEFAULT_IDLE_DISABLE_THRESHOLD,
+                                ChargerReconciler,
+                            )
                             reconciler = ChargerReconciler(
                                 charger_id=cid,
                                 heartbeat_s=float(getattr(ev_dev, "watchdog_refresh_interval_s", 5.0)),
-                                idle_disable_threshold=int(getattr(adapter, "IDLE_DEBOUNCE_THRESHOLD", 4)),
+                                idle_disable_threshold=DEFAULT_IDLE_DISABLE_THRESHOLD,
                             )
                             rec_cache[cid] = reconciler
 
@@ -1922,11 +1925,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     self._charger_reconcilers = rec_cache
                 reconciler = rec_cache.get(cid)
                 if reconciler is None:
-                    from .charger_reconciler import ChargerReconciler
+                    from .charger_reconciler import (
+                        DEFAULT_IDLE_DISABLE_THRESHOLD,
+                        ChargerReconciler,
+                    )
                     reconciler = ChargerReconciler(
                         charger_id=cid,
                         heartbeat_s=float(getattr(self._ev_device, "watchdog_refresh_interval_s", 5.0)),
-                        idle_disable_threshold=int(getattr(adapter, "IDLE_DEBOUNCE_THRESHOLD", 4)),
+                        idle_disable_threshold=DEFAULT_IDLE_DISABLE_THRESHOLD,
                     )
                     rec_cache[cid] = reconciler
 

@@ -28,8 +28,13 @@ I6: Per-charger flow sum equals fleet flow
     — Pre-#319 / Step 5: fraction-split lost priority information
 I7: Per-charger priority honored in flow attribution
     — Pre-Step 5: A-on-solar / B-on-grid scenario got 50/50 split
-I8: ``actuate(intent)`` always calls exactly one adapter method
-    — Pre-architecture: silent fallthrough was a real bug mode
+I8: (RETIRED, Task 11) ``actuate(intent)`` calls exactly one adapter
+    method — this was a property of the legacy per-cycle dispatch body.
+    The reconciler may legitimately emit NONE (idempotent idle), ENABLE
+    + WRITE (switch-controlled charger), or DISABLE-then-nothing, so the
+    one-call invariant no longer holds. Intent→desired-state mapping
+    completeness is now pinned by
+    ``test_charger_reconciler.py::test_desired_from_decision_maps_every_intent``.
 I9: ``decide(view)`` is pure (same input → same output)
     — Pre-Step 3: state machine + strategy machine could drift
 I10: Mode resolution is stable — same config → same effective mode
@@ -39,7 +44,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.solar_energy_management.coordinator.actuate import actuate
 from custom_components.solar_energy_management.coordinator.charger_adapters import (
     KebaAdapter,
 )
@@ -321,42 +325,12 @@ class TestI7_PriorityOrderHonored:
 
 
 # ─────────────────────────────────────────────────────────────────
-# I8: actuate dispatches every intent
+# I8: RETIRED (Task 11). The "exactly one adapter method per intent"
+# invariant was a property of the legacy actuate() dispatch body,
+# which has been removed. The reconciler owns convergence and may emit
+# NONE / ENABLE+WRITE / DISABLE. Intent→desired-state completeness is
+# pinned by test_charger_reconciler.py::test_desired_from_decision_maps_every_intent.
 # ─────────────────────────────────────────────────────────────────
-
-class TestI8_ActuateDispatchesEveryIntent:
-    """No silent fallthrough — every ChargerIntent triggers exactly
-    one adapter method."""
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("intent", list(ChargerIntent))
-    async def test_each_intent_dispatches(self, intent):
-        from custom_components.solar_energy_management.coordinator.charger_types import (
-            ChargerDecision,
-        )
-        a = MagicMock()
-        a.command_current = AsyncMock()
-        a.command_idle = AsyncMock()
-        a.command_max = AsyncMock()
-        a.command_disable = AsyncMock()
-        a.is_self_charging = MagicMock(return_value=False)
-        a.last_intent = None
-
-        d = ChargerDecision(
-            charger_id="keba", mode="solar_only",
-            intent=intent,
-            commanded_amps=8 if intent is ChargerIntent.CHARGE_AT_AMPS else 0,
-        )
-        power = ChargerPower("keba", power_w=0.0, connected=True)
-        await actuate(d, a, power)
-
-        total = (
-            a.command_disable.await_count
-            + a.command_idle.await_count
-            + a.command_max.await_count
-            + a.command_current.await_count
-        )
-        assert total >= 1, f"intent {intent} produced 0 adapter calls"
 
 
 # ─────────────────────────────────────────────────────────────────

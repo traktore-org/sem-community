@@ -35,53 +35,11 @@ class ChargerAdapter(ABC):
     (stop_session brand dispatch).
     """
 
-    # ─── Idle debounce — solar-flicker resilience ──────────────
-    #
-    # Per-charger consecutive-idle counter. Incremented each time
-    # the actuator sees ``intent=IDLE`` for this charger, reset on
-    # any non-IDLE intent. The actuator skips ``command_idle()``
-    # while the counter is below ``IDLE_DEBOUNCE_THRESHOLD``,
-    # holding the previous setpoint (which keeps KEBA's contactor
-    # closed + authorization valid).
-    #
-    # Live-confirmed PROD 2026-06-02 15:08+: a single 10-second
-    # solar-sensor flicker drove SEM to ``intent=idle`` for one
-    # cycle, triggering ``keba.disable`` → KEBA stuck in
-    # "authorization rejected" → contactor refused subsequent
-    # ``set_current`` until physical replug. Debouncing for 1 cycle
-    # absorbs the flicker; a real cloud (5-30 minutes) crosses
-    # the threshold on cycle 2 and idle is applied normally.
-    #
-    # The cost during the debounce window: KEBA continues to draw
-    # its prior setpoint (e.g. 6900 W at 10 A) for up to one cycle
-    # while surplus is below 6 A worth of solar — i.e. ~10 s of
-    # grid import. ~0.014 kWh / cycle. Cheap insurance against the
-    # auth-rejected cascade.
-    IDLE_DEBOUNCE_THRESHOLD: int = 4
-
-    def __init__(self) -> None:
-        # Subclasses MUST call ``super().__init__()`` to initialise
-        # the debounce counter. Tracked centrally so the actuator's
-        # ``attempt_idle`` / ``reset_idle_debounce`` dispatch sees
-        # consistent state regardless of brand.
-        self._consecutive_idle_count: int = 0
-
-    def attempt_idle(self) -> bool:
-        """Record an IDLE intent; return True if the actuator should
-        execute ``command_idle()`` this cycle, False to debounce
-        (keep the previous setpoint, contactor closed).
-
-        Default threshold: execute on the 2nd consecutive idle
-        (skip the 1st). Brands without a self-resume / auth-stick
-        quirk can override to return True immediately.
-        """
-        self._consecutive_idle_count += 1
-        return self._consecutive_idle_count >= self.IDLE_DEBOUNCE_THRESHOLD
-
-    def reset_idle_debounce(self) -> None:
-        """Reset the consecutive-idle counter. Called by the actuator
-        on any non-IDLE intent."""
-        self._consecutive_idle_count = 0
+    # Idle flicker-hold (solar-sensor flicker → spurious IDLE) is now
+    # owned by ``ChargerReconciler`` (its own consecutive-idle counter
+    # + ``DEFAULT_IDLE_DISABLE_THRESHOLD``). The adapter no longer
+    # carries idle-debounce state — the legacy actuate() body that
+    # drove it was retired in Task 11.
 
     # ─── Capability properties ────────────────────────────────
 

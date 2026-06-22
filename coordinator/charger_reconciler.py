@@ -86,6 +86,14 @@ def desired_from_decision(decision: ChargerDecision) -> Tuple[DesiredState, int]
     return DesiredState.IDLE, 0
 
 
+# Consecutive IDLE cycles to hold the previous setpoint before
+# converging to idle/disable — absorbs a solar-sensor flicker that
+# would otherwise drive KEBA into "authorization rejected" (PROD
+# 2026-06-02). Was ``ChargerAdapter.IDLE_DEBOUNCE_THRESHOLD`` until
+# Task 11 moved idle ownership wholly into the reconciler.
+DEFAULT_IDLE_DISABLE_THRESHOLD: int = 4
+
+
 class ChargerReconciler:
     """Per-charger convergence engine. One instance per charger, cached
     for the charger's lifetime (it holds transition state). Pure
@@ -94,7 +102,9 @@ class ChargerReconciler:
     """
 
     def __init__(self, charger_id: str, heartbeat_s: float,
-                 idle_disable_threshold: int = 4) -> None:
+                 idle_disable_threshold: int = DEFAULT_IDLE_DISABLE_THRESHOLD,
+                 max_enable_attempts: int = 5,
+                 enable_retry_interval_s: float = 300.0) -> None:
         self.charger_id = charger_id
         self._heartbeat_s = float(heartbeat_s)
         self._idle_disable_threshold = int(idle_disable_threshold)
@@ -108,6 +118,16 @@ class ChargerReconciler:
         deadline mode, a mock charger) would re-START + re-arm the failsafe
         every single cycle (the exact spam this whole change removes; caught
         live on HA-TEST 2026-06-21). Reset whenever desired leaves CHARGE."""
+        # #536 enable backoff — a charger in an autonomous mode (Wallbox
+        # Eco-Smart, app scheduling) keeps flipping its OWN enable switch
+        # back off; re-asserting it every cycle is an infinite tug-of-war
+        # (the start/stop oscillation). Try hard for ``max_enable_attempts``
+        # cycles, then STOP fighting + surface the misconfig, probing once
+        # per ``enable_retry_interval_s`` in case the user fixes it.
+        self._max_enable_attempts: int = int(max_enable_attempts)
+        self._enable_retry_interval_s: float = float(enable_retry_interval_s)
+        self._enable_attempts: int = 0
+        self._enable_gave_up_at: float = 0.0
 
     def reconcile(self, desired: DesiredState, amps: int,
                   observed: ObservedState, now: float) -> List[Action]:
@@ -116,8 +136,11 @@ class ChargerReconciler:
         # OFF / IDLE share the convergence target (contactor open). The
         # only difference is the flicker grace, which OFF never gets.
         if desired in (DesiredState.OFF, DesiredState.IDLE):
-            # Leaving CHARGE — the next CHARGE episode must START + re-arm.
+            # Leaving CHARGE — the next CHARGE episode must START + re-arm,
+            # and gets a fresh round of enable re-asserts (#536 backoff).
             self._charging_intent_active = False
+            self._enable_attempts = 0
+            self._enable_gave_up_at = 0.0
             drawing = observed.charging or observed.self_charging
             if not drawing:
                 # Row 2 — already converged. THE spam fix: issue nothing.
@@ -134,6 +157,17 @@ class ChargerReconciler:
             return [Action(ActionKind.DISABLE)]
 
         # desired is CHARGE — reset idle grace.
+        #
+        # Note on self-resume (#346): unlike the legacy actuator, which
+        # force-disabled before applying ANY intent if the box was drawing
+        # against consent, we do NOT disable-before-charge here. When we
+        # want CHARGE and the box is already drawing (self-resumed during a
+        # prior idle), the desired outcome is already happening — opening
+        # then reclosing the contactor would be pointless churn. The
+        # correct setpoint is asserted by START_AND_WRITE / WRITE below.
+        # ``observed.self_charging`` therefore only drives the OFF/IDLE
+        # rows above (where drawing IS against intent). Pinned by
+        # ``test_charge_self_charging_does_not_disable_first``.
         self._consecutive_idle_count = 0
 
         # #536 — enable-switch reconciliation (prepended to the current
@@ -145,9 +179,37 @@ class ChargerReconciler:
             # SEM cannot drive it → charging is silently impossible. Surface.
             enable_actions.append(Action(ActionKind.REPORT_ENABLE_BLOCKED))
         elif observed.enabled is False:
-            # Switch is OFF while we want to charge — re-assert it (the
-            # #536 fix; idempotent, independent of stale _session_active).
-            enable_actions.append(Action(ActionKind.ENABLE))
+            # Switch is OFF while we want to charge. Re-assert it — but with
+            # BACKOFF so we don't fight a self-pausing charger forever (#536
+            # start/stop oscillation; evcc documents this for the Pulsar's
+            # Autostart/Eco-Smart mode). Try hard for the first
+            # ``max_enable_attempts`` cycles; after that, stop fighting and
+            # surface the misconfig, probing once per retry interval.
+            if self._enable_attempts < self._max_enable_attempts:
+                self._enable_attempts += 1
+                if self._enable_attempts >= self._max_enable_attempts:
+                    self._enable_gave_up_at = now
+                enable_actions.append(Action(ActionKind.ENABLE))
+            elif now - self._enable_gave_up_at >= self._enable_retry_interval_s:
+                # Backed off, retry window elapsed → a single probe.
+                self._enable_gave_up_at = now
+                enable_actions.append(Action(ActionKind.ENABLE))
+            else:
+                # Backed off, within window → surface, don't fight.
+                enable_actions.append(Action(ActionKind.REPORT_ENABLE_BLOCKED))
+        else:
+            # enabled True (it stuck) or None (no readable switch) — the
+            # contactor is where we want it; reset the backoff so a future
+            # drop starts a fresh round of hard re-asserts.
+            self._enable_attempts = 0
+            self._enable_gave_up_at = 0.0
+
+        if enable_actions and enable_actions[0].kind is ActionKind.REPORT_ENABLE_BLOCKED:
+            # Switch is uncontrollable (locked / eco-smart / unavailable) —
+            # SEM cannot drive the contactor, so DON'T also issue charge
+            # commands: a successful command_current would clear the repair
+            # we just raised, flapping it every cycle. Surface only.
+            return enable_actions
 
         if not self._charging_intent_active:
             # Row 5 — TRANSITION into charging: open a session, arm the

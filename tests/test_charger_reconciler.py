@@ -197,16 +197,6 @@ async def test_actuate_delegates_to_reconciler_when_provided():
     adapter.command_disable.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_actuate_legacy_path_unchanged_without_reconciler():
-    adapter = _mock_adapter()
-    adapter.is_self_charging = MagicMock(return_value=False)
-    adapter.reset_idle_debounce = MagicMock()
-    # CHARGE_MAX with no reconciler → legacy dispatch calls command_max
-    await actuate(_decision(ChargerIntent.CHARGE_MAX), adapter, _power(0.0))
-    adapter.command_max.assert_awaited_once()
-
-
 def test_off_not_drawing_emits_nothing():
     """mode=off + EV unplugged/contactor open → zero service calls (the
     primary production scenario; must not fall through to DISABLE)."""
@@ -447,3 +437,108 @@ async def test_adapter_ensure_enabled_turns_switch_on():
     await adapter_for(dev).ensure_enabled()
     hass.services.async_call.assert_awaited_with(
         "switch", "turn_on", {"entity_id": "switch.wb_enable"}, blocking=True)
+
+
+# ─────────────────────────────────────────────────────────────────
+# Task 11 — reconciler-native self-resume coverage (was phantom via
+# the now-dead _execute_ev_control / legacy actuate path: #315/#346/#353)
+# ─────────────────────────────────────────────────────────────────
+
+
+def test_off_self_charging_disables():
+    """#315: box drawing against an OFF intent (self-resume on plug-in)
+    must be force-disabled — even when the power-based `charging` flag is
+    False, `self_charging` (last intent was IDLE/DISABLE + power>handshake)
+    counts as drawing."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.OFF, 0,
+                            _obs(charging=False, self_charging=True, power=4000.0), now=0.0)
+    assert actions == [Action(ActionKind.DISABLE)]
+
+
+def test_idle_self_charging_flicker_then_disable():
+    """#353: self-charging against an IDLE intent gets the flicker hold
+    then a confirmed DISABLE (same path as power-based drawing)."""
+    rec = _rec()
+    for cyc in range(1, 4):  # < threshold → hold
+        a = rec.reconcile(DesiredState.IDLE, 0,
+                          _obs(charging=False, self_charging=True, power=4000.0), now=cyc*10.0)
+        assert a == [Action(ActionKind.NONE)], f"cyc {cyc}: {a}"
+    a = rec.reconcile(DesiredState.IDLE, 0,
+                      _obs(charging=False, self_charging=True, power=4000.0), now=40.0)
+    assert a == [Action(ActionKind.DISABLE)]
+
+
+def test_charge_self_charging_does_not_disable_first():
+    """#346 follow-up / MED gap: when we now WANT to charge and the box is
+    already drawing (self-resumed during a prior idle), the reconciler must
+    NOT disable-then-charge — it proceeds straight to charging (the desired
+    outcome is already happening; interrupting it would be churn). The
+    correct setpoint is asserted by START/WRITE. Pins the intended divergence
+    from the legacy disable-before-any-intent guard."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.CHARGE, 10,
+                            _obs(charging=True, setpoint=10, self_charging=True, power=4000.0), now=0.0)
+    assert not any(a.kind is ActionKind.DISABLE for a in actions), actions
+    assert any(a.kind in (ActionKind.START_AND_WRITE, ActionKind.WRITE_CURRENT) for a in actions), actions
+
+
+# ─────────────────────────────────────────────────────────────────
+# #536 — enable BACKOFF: don't fight a self-pausing charger forever
+# (Wallbox Eco-Smart / Autostart flips its own switch back → oscillation)
+# ─────────────────────────────────────────────────────────────────
+
+
+def _rec_enable(max_attempts=3, retry=300.0):
+    return ChargerReconciler(charger_id="ev_charger", heartbeat_s=5.0,
+                             max_enable_attempts=max_attempts,
+                             enable_retry_interval_s=retry)
+
+
+def test_enable_retries_max_then_backs_off():
+    rec = _rec_enable(max_attempts=3)
+    for c in range(3):  # try hard for max_attempts cycles
+        a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=c*10.0)
+        assert any(x.kind is _AK.ENABLE for x in a), f"cycle {c}: {a}"
+    for c in range(3, 8):  # then stop fighting, surface
+        a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=c*10.0)
+        assert any(x.kind is _AK.REPORT_ENABLE_BLOCKED for x in a), f"cycle {c}: {a}"
+        assert not any(x.kind is _AK.ENABLE for x in a), f"cycle {c}: {a}"
+
+
+def test_enable_probes_once_after_retry_interval():
+    rec = _rec_enable(max_attempts=2, retry=300.0)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=0.0)   # ENABLE
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=10.0)  # ENABLE, gave_up=10
+    a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=200.0)  # within window
+    assert not any(x.kind is _AK.ENABLE for x in a)
+    a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=320.0)  # window elapsed
+    assert any(x.kind is _AK.ENABLE for x in a)
+
+
+def test_enable_backoff_resets_when_switch_sticks():
+    rec = _rec_enable(max_attempts=2)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=0.0)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=10.0)  # exhausted
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=True, charging=True, power=4000), now=20.0)
+    a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=30.0)
+    assert any(x.kind is _AK.ENABLE for x in a)  # fresh round, not immediately backed off
+
+
+def test_enable_backoff_resets_on_idle():
+    rec = _rec_enable(max_attempts=2)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=0.0)
+    rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=10.0)  # exhausted
+    rec.reconcile(DesiredState.IDLE, 0, _obs_en(enabled=False), now=20.0)     # leave CHARGE → reset
+    a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=30.0)
+    assert any(x.kind is _AK.ENABLE for x in a)  # fresh round
+
+
+def test_charge_uncontrollable_switch_suppresses_charge_actions():
+    """Switch unavailable/locked → REPORT_ENABLE_BLOCKED ONLY, no charge
+    action — else a successful command_current clears the repair we just
+    raised, flapping it every cycle (reviewer Warning 2)."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.CHARGE, 16,
+                            _obs_en(enabled=None, controllable=False), now=0.0)
+    assert actions == [Action(_AK.REPORT_ENABLE_BLOCKED)]
