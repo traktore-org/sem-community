@@ -204,6 +204,13 @@ class ChargerReconciler:
             self._enable_attempts = 0
             self._enable_gave_up_at = 0.0
 
+        if enable_actions and enable_actions[0].kind is ActionKind.REPORT_ENABLE_BLOCKED:
+            # Switch is uncontrollable (locked / eco-smart / unavailable) —
+            # SEM cannot drive the contactor, so DON'T also issue charge
+            # commands: a successful command_current would clear the repair
+            # we just raised, flapping it every cycle. Surface only.
+            return enable_actions
+
         if not self._charging_intent_active:
             # Row 5 — TRANSITION into charging: open a session, arm the
             # failsafe, write. Gated on the desired transition (not on

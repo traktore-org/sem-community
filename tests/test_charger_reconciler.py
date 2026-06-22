@@ -532,3 +532,13 @@ def test_enable_backoff_resets_on_idle():
     rec.reconcile(DesiredState.IDLE, 0, _obs_en(enabled=False), now=20.0)     # leave CHARGE → reset
     a = rec.reconcile(DesiredState.CHARGE, 16, _obs_en(enabled=False), now=30.0)
     assert any(x.kind is _AK.ENABLE for x in a)  # fresh round
+
+
+def test_charge_uncontrollable_switch_suppresses_charge_actions():
+    """Switch unavailable/locked → REPORT_ENABLE_BLOCKED ONLY, no charge
+    action — else a successful command_current clears the repair we just
+    raised, flapping it every cycle (reviewer Warning 2)."""
+    rec = _rec()
+    actions = rec.reconcile(DesiredState.CHARGE, 16,
+                            _obs_en(enabled=None, controllable=False), now=0.0)
+    assert actions == [Action(_AK.REPORT_ENABLE_BLOCKED)]
