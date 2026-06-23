@@ -547,6 +547,15 @@ class FleetContext:
     positive-feedback ratchet (home-load spike → more discharge →
     bigger EV budget → higher commanded amps → more discharge)."""
 
+    battery_assist_min_surplus_w: float = 1200.0
+    """Solar-surplus gate for battery assist (``battery_assist_min_surplus``).
+    Battery assist only SUPPLEMENTS real solar — below this much pure
+    solar surplus the battery is off-limits to the EV, so a sunless
+    evening/overnight ``min_plus_solar`` session never drains the home
+    battery into the car. Enforced in ``decide.battery_assist_budget_w``
+    and ``FlowCalculator.calculate_canonical_ev_budget`` (the two layers
+    must agree — the #282 class)."""
+
     min_solar_w: float = 200.0
     """Solar below this is treated as "no meaningful solar" — the
     threshold for skipping the surplus calculation entirely.

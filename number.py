@@ -178,6 +178,19 @@ NUMBER_TYPES = [
         native_step=500,
         mode=NumberMode.SLIDER,
     ),
+    # Solar gate for battery assist: minimum pure solar surplus before
+    # the home battery may help charge the EV. 0 = battery supports the
+    # EV everywhere (incl. overnight); higher = battery protected below
+    # this surplus. Enforced in decide.battery_assist_budget_w +
+    # FlowCalculator + decide_battery's unified discharge clamp.
+    NumberEntityDescription(
+        key="battery_assist_min_surplus",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        native_min_value=0,
+        native_max_value=5000,
+        native_step=100,
+        mode=NumberMode.SLIDER,
+    ),
     # EV Charging Parameters — global night_initial_current + minimum_current removed as
     # per-charger duplicates (#255); ev_stall_cooldown stays a global tuning constant.
     NumberEntityDescription(
@@ -687,6 +700,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             DEFAULT_MAX_GRID_IMPORT,
             DEFAULT_DAILY_EV_TARGET,
             DEFAULT_BATTERY_ASSIST_MAX_POWER,
+            DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
             DEFAULT_REGULATION_OFFSET,
             DEFAULT_DEMAND_CHARGE_RATE,
             DEFAULT_CHEAP_PRICE_THRESHOLD,
@@ -715,6 +729,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "daily_ev_target_max": 100,
             "ev_target_soc_max": 100,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
+            "battery_assist_min_surplus": DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
             "regulation_offset": DEFAULT_REGULATION_OFFSET,
             "demand_charge_rate": DEFAULT_DEMAND_CHARGE_RATE,
             "cheap_price_threshold": DEFAULT_CHEAP_PRICE_THRESHOLD,

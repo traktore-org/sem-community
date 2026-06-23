@@ -13,8 +13,9 @@ Decision tree (precedence top-down):
    charge window.
 2. STOP_FORCE_CHARGE — scheduler decided TARGET_REACHED / NOT_NEEDED /
    IDLE but the adapter is still in FORCE_CHARGE intent.
-3. LIMIT_DISCHARGE — night-charging an EV; clamp battery to home
-   consumption (1:1 protection).
+3. LIMIT_DISCHARGE — EV charging with solar surplus below the
+   ``battery_assist_min_surplus`` gate (any mode/time); clamp battery
+   to home consumption (1:1 protection) so grid+solar fund the car.
 4. NORMAL — default.
 """
 from __future__ import annotations
@@ -29,13 +30,6 @@ if TYPE_CHECKING:  # pragma: no cover
     from .charger_types import BatteryView
 
 _LOGGER = logging.getLogger(__name__)
-
-
-# Charging-state strings that trip LIMIT_DISCHARGE (matches today's
-# BatteryProtectionMixin gate). Compared as strings so the constant
-# doesn't need to import ChargingState.
-_NIGHT_CHARGING_ACTIVE = "night_charging_active"
-_SOLAR_CHARGING_ACTIVE = "solar_charging_active"
 
 
 def decide_battery(view: "BatteryView") -> BatteryDecision:
@@ -169,33 +163,44 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                 reason=f"scheduler {state_value} → ensure not force-charging",
             )
 
-    # ─── LIMIT_DISCHARGE branch ───
-    # The reactive protection that today's BatteryProtectionMixin
-    # applies. Active iff:
-    #   * SEM's global ChargingState is night-charging-active
-    #   * an EV is actually drawing current
-    # OR (opt-in) solar-mode hold during EV charging:
-    #   * battery_hold_solar_ev=true
-    #   * ChargingState is solar-charging-active + ev_charging
-    hold_solar = bool(cfg.get("battery_hold_solar_ev", False))
+    # ─── LIMIT_DISCHARGE branch (unified solar gate) ───
+    # The home battery must NEVER be drained to charge the EV when there
+    # isn't enough real solar surplus — in ANY charging mode
+    # (min_plus_solar, solar_only, solar_plus_cheap, always_max) and at
+    # any time of day/night. One knob governs it: when the EV is drawing
+    # and the pure solar surplus (solar − home) is below
+    # ``battery_assist_min_surplus_w`` (default 1200 W), clamp battery
+    # discharge to the home load so grid+solar fund the car, never the
+    # battery.
+    #
+    # Setting the gate to 0 W lets the battery support the EV everywhere
+    # — including overnight — because surplus ≥ 0 always clears a 0
+    # threshold (the user opt-in path).
+    #
+    # This UNIFIES (supersedes) the old night-only / hold_solar triggers:
+    # at the default the overnight case is unchanged (no solar → surplus
+    # 0 < 1200 → clamp). ``battery_hold_solar_ev`` is now subsumed by the
+    # gate (cloudy solar below the gate clamps regardless) and is no
+    # longer read here — kept as an ignored config key for now.
     protection_enabled = bool(cfg.get("battery_discharge_protection_enabled", True))
-    state = (view.charging_state or "").lower()
 
     if protection_enabled and view.ev_charging:
-        is_night_active = state == _NIGHT_CHARGING_ACTIVE
-        is_solar_active = state == _SOLAR_CHARGING_ACTIVE
-        if is_night_active or (hold_solar and is_solar_active):
+        f = view.fleet
+        surplus_w = max(0.0, float(f.solar_w) - float(f.home_w))
+        gate_w = float(getattr(f, "battery_assist_min_surplus_w", 1200.0))
+        if surplus_w < gate_w:
             # #531: split the home budget across the fleet — N batteries each
             # told to inject the FULL home load over-injects N× and leaks the
             # surplus to the EV, defeating the protection. Each gets home/N.
-            n = max(1, int(getattr(view.fleet, "battery_count", 1) or 1))
+            n = max(1, int(getattr(f, "battery_count", 1) or 1))
             home_w = max(0.0, view.home_consumption_w) / n
             return BatteryDecision(
                 battery_id=rt.battery_id,
                 intent=BatteryIntent.LIMIT_DISCHARGE,
                 discharge_limit_w=home_w,
                 reason=(
-                    f"{state} + ev_charging → discharge limit "
+                    f"ev_charging + solar surplus {surplus_w:.0f}W < gate "
+                    f"{gate_w:.0f}W → discharge limit "
                     f"{home_w:.0f} W (home/{n} across fleet)"
                 ),
             )

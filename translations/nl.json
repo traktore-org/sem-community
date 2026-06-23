@@ -156,6 +156,7 @@
           "max_grid_import": "Maximale netafname (W)",
           "daily_ev_target": "Dagelijkse EV-doel (kWh)",
           "battery_assist_max_power": "Maximaal batterij-ondersteuningsvermogen (W)",
+          "battery_assist_min_surplus": "Min. zonne-overschot voor batterij-ondersteuning (W)",
           "battery_capacity_kwh": "Batterijcapaciteit (kWh)",
           "battery_discharge_protection_enabled": "Batterij ontladingsbescherming inschakelen",
           "battery_max_discharge_power": "Maximaal ontlaadvermogen (W)",
@@ -190,6 +191,7 @@
           "max_grid_import": "Harde limiet voor netafname tijdens laden op zonne-energie. 0 = pure PV-modus (aanbevolen SEM-standaard).",
           "daily_ev_target": "Doelwaarde kWh per dag voor nachtelijk laden via het net. Zet op 0 om nachtelijk laden volledig uit te schakelen.",
           "battery_assist_max_power": "Maximaal vermogen dat de thuisbatterij kan ontladen om de EV te ondersteunen in zone 3/4. Standaard 4500 W.",
+          "battery_assist_min_surplus": "Minimaal echt zonne-overschot voordat de thuisbatterij de EV mag helpen laden — in elke laadmodus. Daaronder blijft de batterij voor het huis (de auto laadt uit net + zon). Standaard 1200 W. Zet op 0 om de batterij de EV overal te laten ondersteunen, ook 's nachts.",
           "battery_capacity_kwh": "Totale bruikbare capaciteit van de thuisbatterij (NIET de EV-batterij — dat is een aparte instelling). Wordt gebruikt voor forecast-gestuurd laden.",
           "battery_discharge_protection_enabled": "Indien AAN, beperkt SEM het ontladingsvermogen van de omvormer tijdens nachtelijk EV-laden zodat de batterij alleen het huis voedt (niet de EV).",
           "battery_max_discharge_power": "Harde bovengrens voor batterijontlading die door de beschermingsfunctie wordt afgedwongen.",
@@ -1057,6 +1059,9 @@
       },
       "battery_assist_max_power": {
         "name": "Batterij Ondersteuning Max"
+      },
+      "battery_assist_min_surplus": {
+        "name": "Batterij Ondersteuning Min. Zonne-overschot"
       },
       "regulation_offset": {
         "name": "Regelingsoffset"

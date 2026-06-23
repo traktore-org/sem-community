@@ -123,6 +123,7 @@ DEFAULT_MIN_SOLAR_POWER: Final = 1000  # Watts
 DEFAULT_MIN_EXCESS_POWER: Final = 500  # Watts
 DEFAULT_MAX_GRID_IMPORT: Final = 0  # Watts during solar charging — 0 = pure-solar mode
 DEFAULT_BATTERY_ASSIST_MAX_POWER: Final = 4500  # Watts — max battery discharge for EV assist
+DEFAULT_BATTERY_ASSIST_MIN_SURPLUS: Final = 1200  # Watts — solar surplus required before battery assists the EV (below this, battery is off-limits to the car)
 DEFAULT_BATTERY_CAPACITY_KWH: Final = 15  # kWh — total usable battery capacity
 
 # ============================================

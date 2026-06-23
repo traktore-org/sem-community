@@ -736,6 +736,67 @@ def test_limit_discharge_two_batteries_split_home():
     assert "home/2" in d.reason
 
 
+# ── Unified solar-gate clamp: protect the battery in ANY EV mode ─────────
+# The discharge clamp no longer keys on a night/solar charging-state
+# string — it fires whenever the EV is drawing and the pure solar surplus
+# (solar − home) is below ``battery_assist_min_surplus_w``. One knob,
+# every mode (incl. always_max) and every time of day. Gate = 0 lets the
+# battery support the EV everywhere (the user opt-in path).
+
+def _gate_view(*, solar_w, home_w, gate_w=1200.0, ev_charging=True,
+               charging_state="solar_charging_active", battery_count=1):
+    return BatteryView(
+        runtime=BatteryRuntime(battery_id="b", last_known_soc=80.0),
+        config={"battery_discharge_protection_enabled": True},
+        fleet=FleetContext(
+            battery_count=battery_count,
+            solar_w=solar_w, home_w=home_w,
+            battery_assist_min_surplus_w=gate_w,
+        ),
+        charging_state=charging_state,
+        ev_charging=ev_charging,
+        home_consumption_w=home_w,
+    )
+
+
+def test_gate_clamps_any_mode_when_surplus_below_gate():
+    # No night state at all (e.g. always_max midday with cloud) — surplus
+    # 200 < 1200 gate → clamp the battery to home, EV draws from grid.
+    d = decide_battery(_gate_view(solar_w=700, home_w=500,
+                                  charging_state="charging"))
+    assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+    assert d.discharge_limit_w == 500.0
+
+
+def test_gate_allows_discharge_when_surplus_above_gate():
+    # Surplus 2000 ≥ 1200 gate → no clamp; battery free to assist the EV.
+    d = decide_battery(_gate_view(solar_w=2500, home_w=500))
+    assert d.intent is not BatteryIntent.LIMIT_DISCHARGE
+
+
+def test_gate_zero_allows_overnight_battery_support():
+    # Gate = 0, no solar, EV charging → NOT clamped (surplus 0 clears a 0
+    # threshold). The user opt-in: battery supports the EV overnight.
+    d = decide_battery(_gate_view(solar_w=0, home_w=600, gate_w=0.0,
+                                  charging_state="night_charging_active"))
+    assert d.intent is not BatteryIntent.LIMIT_DISCHARGE
+
+
+def test_gate_default_protects_overnight():
+    # Default gate (1200), no solar overnight, EV charging → clamp (the
+    # original night-protection behavior, now expressed via the gate).
+    d = decide_battery(_gate_view(solar_w=0, home_w=600,
+                                  charging_state="night_charging_active"))
+    assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+    assert d.discharge_limit_w == 600.0
+
+
+def test_gate_no_clamp_when_ev_not_charging():
+    # EV not drawing → no clamp regardless of surplus.
+    d = decide_battery(_gate_view(solar_w=0, home_w=600, ev_charging=False))
+    assert d.intent is not BatteryIntent.LIMIT_DISCHARGE
+
+
 # ── #2: effective import floor (raw-spot → all-in) ──────────────────────
 
 def test_effective_import_floor_scales_raw_up_to_all_in():

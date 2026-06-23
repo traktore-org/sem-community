@@ -1058,6 +1058,9 @@
       "battery_assist_max_power": {
         "name": "Potencia Máx Asistencia Batería"
       },
+      "battery_assist_min_surplus": {
+        "name": "Asistencia batería – mín. excedente solar"
+      },
       "regulation_offset": {
         "name": "Offset Regulación"
       },

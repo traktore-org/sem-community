@@ -29,6 +29,7 @@ from .const import (
     DEFAULT_MAX_GRID_IMPORT,
     DEFAULT_DAILY_EV_TARGET,
     DEFAULT_BATTERY_ASSIST_MAX_POWER,
+    DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
     DEFAULT_BATTERY_CAPACITY_KWH,
     DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED,
     DEFAULT_BATTERY_MAX_DISCHARGE_POWER,
@@ -492,6 +493,7 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Daily target & battery assist
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
+            "battery_assist_min_surplus": DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
             # Battery discharge protection (entity is auto-detected separately)
             "battery_discharge_protection_enabled": DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED,
             "battery_max_discharge_power": DEFAULT_BATTERY_MAX_DISCHARGE_POWER,
@@ -1423,6 +1425,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("battery_assist_max_power", _c("super_charger_power", DEFAULT_BATTERY_ASSIST_MAX_POWER)),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=1000, max=10000, step=500, unit_of_measurement="W", mode="slider")
+                ),
+                vol.Optional(
+                    "battery_assist_min_surplus",
+                    default=_c("battery_assist_min_surplus", DEFAULT_BATTERY_ASSIST_MIN_SURPLUS),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0, max=5000, step=100, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
                     "battery_discharge_protection_enabled",
