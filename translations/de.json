@@ -156,6 +156,7 @@
           "max_grid_import": "Maximaler Netz-Import (W)",
           "daily_ev_target": "Tägliches EV-Ziel (kWh)",
           "battery_assist_max_power": "Batterie-Unterstützung Max. Leistung (W)",
+          "battery_assist_min_surplus": "Batterie-Unterstützung Min. Solarüberschuss (W)",
           "battery_capacity_kwh": "Batteriekapazität (kWh)",
           "battery_discharge_protection_enabled": "Batterieentladeschutz aktivieren",
           "battery_max_discharge_power": "Maximale Entladeleistung (W)",
@@ -190,6 +191,7 @@
           "max_grid_import": "Hard cap on grid power that SEM will pull while doing solar charging. 0 = pure-PV mode (the recommended SEM default).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
+          "battery_assist_min_surplus": "Mindest-Solarüberschuss, bevor die Hausbatterie das E-Auto laden darf — in jedem Lademodus. Darunter bleibt die Batterie dem Haus vorbehalten (das Auto lädt aus Netz + Solar). Standard 1200 W. Auf 0 setzen, damit die Batterie das E-Auto überall unterstützt, auch nachts.",
           "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
           "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
           "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
@@ -1057,6 +1059,9 @@
       },
       "battery_assist_max_power": {
         "name": "Batterie-Unterstützung Max"
+      },
+      "battery_assist_min_surplus": {
+        "name": "Batterie-Unterstützung Min. Solarüberschuss"
       },
       "regulation_offset": {
         "name": "Regelungsoffset"

@@ -3505,6 +3505,12 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             is_night=self.time_manager.is_night_mode(),
             # #531: split per-battery LIMIT_DISCHARGE across the real fleet.
             battery_count=max(1, len(getattr(power, "batteries", {}) or {})),
+            # Solar gate for the unified discharge clamp (decide_battery):
+            # below this much pure solar surplus the battery is off-limits
+            # to the EV in any mode/time (0 = always allow).
+            battery_assist_min_surplus_w=float(
+                self.config.get("battery_assist_min_surplus", 1200)
+            ),
         )
 
         # 2. Source per-battery iteration. Multi-battery installs
@@ -4411,6 +4417,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             battery_assist_max_power_w=self.config.get(
                 "battery_assist_max_power",
                 self.config.get("super_charger_power", 4500),
+            ),
+            battery_assist_min_surplus_w=self.config.get(
+                "battery_assist_min_surplus", 1200
             ),
             min_power_floor_w=min_power_floor_w,
             override_max_w=override_max_w,

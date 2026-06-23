@@ -787,6 +787,7 @@ class FlowCalculator:
         battery_buffer_soc: float = 70.0,
         battery_assist_floor_soc: float = 60.0,
         battery_assist_max_power_w: float = 4500.0,
+        battery_assist_min_surplus_w: float = 1200.0,
         min_power_floor_w: float = 0.0,
         override_max_w: Optional[float] = None,
         voltage: float = 230.0,
@@ -928,6 +929,12 @@ class FlowCalculator:
                 battery_auto_start_soc, battery_buffer_soc,
                 battery_assist_floor_soc, battery_assist_max_power_w,
             )
+            # Solar gate: assist only SUPPLEMENTS real solar. Below the
+            # configured surplus threshold (default 1200 W) the battery
+            # is off-limits to the EV — a sunless evening/overnight
+            # session must never drain the home battery into the car.
+            if raw_surplus < battery_assist_min_surplus_w:
+                assist = 0.0
             if min_power_floor_w > 0:
                 gap_w = max(0.0, min_power_floor_w - (raw_surplus + redirect))
                 assist = min(assist, gap_w)

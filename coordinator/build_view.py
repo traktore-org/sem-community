@@ -135,6 +135,9 @@ def build_charger_view(
             "battery_assist_max_power",
             config.get("super_charger_power", 4500),
         )),
+        battery_assist_min_surplus_w=float(config.get(
+            "battery_assist_min_surplus", 1200,
+        )),
         solar_committed_w=float(solar_committed_w),
         forecast_remaining_kwh=fleet_state.forecast_remaining_kwh,
         # The user's "Minimum Solar Power" slider (number entity key

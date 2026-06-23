@@ -133,21 +133,25 @@ class TestI18LimitDischargeGate:
         ))
         assert d.intent is BatteryIntent.NORMAL
 
-    def test_solar_charging_active_with_ev_does_not_limit_by_default(self):
+    def test_solar_charging_with_ev_and_surplus_does_not_limit(self):
+        # Real solar surplus ≥ gate (3500 W) → battery free to assist
+        # the EV; the unified clamp does not fire.
         d = decide_battery(_view(
             charging_state="solar_charging_active",
-            ev_charging=True,
-            config={"battery_discharge_protection_enabled": True,
-                    "battery_hold_solar_ev": False},
+            ev_charging=True, home_w=500.0,
+            fleet=FleetContext(solar_w=4000.0, home_w=500.0),
+            config={"battery_discharge_protection_enabled": True},
         ))
         assert d.intent is BatteryIntent.NORMAL
 
-    def test_solar_charging_active_with_ev_limits_when_opted_in(self):
+    def test_solar_charging_with_ev_below_gate_limits(self):
+        # Solar surplus below the gate (cloudy day) → the unified clamp
+        # protects the battery in ANY mode, no opt-in flag needed.
         d = decide_battery(_view(
             charging_state="solar_charging_active",
             ev_charging=True, home_w=800.0,
-            config={"battery_discharge_protection_enabled": True,
-                    "battery_hold_solar_ev": True},
+            fleet=FleetContext(solar_w=300.0, home_w=800.0),
+            config={"battery_discharge_protection_enabled": True},
         ))
         assert d.intent is BatteryIntent.LIMIT_DISCHARGE
         assert d.discharge_limit_w == 800.0

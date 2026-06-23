@@ -156,6 +156,7 @@
           "max_grid_import": "Maximum Grid Import (W)",
           "daily_ev_target": "Daily EV Target (kWh)",
           "battery_assist_max_power": "Battery Assist Max Power (W)",
+          "battery_assist_min_surplus": "Battery Assist Min Solar Surplus (W)",
           "battery_capacity_kwh": "Battery Capacity (kWh)",
           "battery_discharge_protection_enabled": "Enable Battery Discharge Protection",
           "battery_max_discharge_power": "Maximum Discharge Power (W)",
@@ -190,6 +191,7 @@
           "max_grid_import": "Hard cap on grid power that SEM will pull while doing solar charging. 0 = pure-PV mode (the recommended SEM default).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
+          "battery_assist_min_surplus": "Minimum real solar surplus before the home battery may help charge the EV — in any charging mode. Below this the battery is reserved for the house (the car draws from grid + solar). Default 1200 W. Set to 0 to let the battery support the EV everywhere, including overnight.",
           "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
           "battery_discharge_protection_enabled": "When ON, SEM caps the inverter's discharge limit during night EV charging so the home battery only powers the house (not the EV).",
           "battery_max_discharge_power": "Hard upper limit on battery discharge enforced by the protection feature.",
@@ -1057,6 +1059,9 @@
       },
       "battery_assist_max_power": {
         "name": "Battery Assist Max Power"
+      },
+      "battery_assist_min_surplus": {
+        "name": "Battery Assist Min Solar Surplus"
       },
       "regulation_offset": {
         "name": "Regulation Offset"

@@ -156,6 +156,13 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     zone = soc_zone(f.battery_soc, f.auto_start_soc, f.buffer_soc, f.priority_soc)
     if zone < 3:
         return surplus
+    # Solar gate: assist only SUPPLEMENTS real solar. Below the
+    # configured surplus threshold (default 1200 W) the battery is
+    # off-limits to the EV — a sunless evening/overnight session must
+    # never drain the home battery into the car. Falls back to surplus
+    # only (the day path then behaves like solar_only → idle).
+    if surplus < f.battery_assist_min_surplus_w:
+        return surplus
     potential = battery_assist_potential_w(
         f.battery_soc,
         f.battery_assist_floor_soc,

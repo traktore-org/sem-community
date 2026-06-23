@@ -382,6 +382,9 @@
       "battery_assist_max_power": {
         "default": "mdi:battery-heart-variant"
       },
+      "battery_assist_min_surplus": {
+        "default": "mdi:white-balance-sunny"
+      },
       "regulation_offset": {
         "default": "mdi:tune-vertical"
       },

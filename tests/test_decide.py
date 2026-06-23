@@ -49,6 +49,7 @@ def _view(
     deadline_amps: int = 0,
     night_deliverable_kwh: float = float("inf"),
     battery_assist_max_power_w: float = 4500.0,
+    battery_assist_min_surplus_w: float = 1200.0,
     config: dict | None = None,
 ) -> ChargerView:
     return ChargerView(
@@ -67,6 +68,7 @@ def _view(
             battery_soc=battery_soc,
             is_night=is_night, tariff_level=tariff_level,
             battery_assist_max_power_w=battery_assist_max_power_w,
+            battery_assist_min_surplus_w=battery_assist_min_surplus_w,
         ),
         target_kwh=target_kwh,
         deadline_amps=deadline_amps,
@@ -239,16 +241,42 @@ class TestMinPlusSolarZoneAssist:
     tonight's window can deliver.
     """
 
-    def test_zone_4_battery_assist_charges_from_battery(self):
-        """SOC = 95 (Zone 4), solar = 0 (evening), battery
-        discharging 4.5 kW → EV draws from battery."""
+    def test_zone_4_no_battery_assist_without_solar(self):
+        """Solar gate: SOC = 95 (Zone 4) but solar = 0 (evening) →
+        the battery is NOT drained into the EV. Below the 1200 W solar
+        surplus gate the day path collapses to self-consumption-only
+        and idles. (Pre-gate this charged at 6 A from the battery — the
+        overnight-drain bug.)"""
         d = decide(_view(
             mode="min_plus_solar",
             solar_w=0, home_w=500, battery_discharge_w=4500,
             battery_soc=95,
         ))
+        assert d.intent is ChargerIntent.IDLE
+        assert "Zone 4" in d.reason
+
+    def test_zone_4_battery_assist_with_solar_surplus(self):
+        """Solar surplus above the gate (2500 W) → battery assist still
+        tops up to the EV minimum (the intended supplement-solar case)."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=3000, home_w=500, battery_soc=95,
+        ))
+        # surplus 2500 ≥ 1200 gate → assist tops up to ≥6 A
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
-        assert d.commanded_amps == 6   # 4500 W / 690 = 6 A (clamped to min)
+        assert d.commanded_amps >= 6
+        assert "Zone 4" in d.reason
+
+    def test_zone_4_gate_zero_allows_overnight_battery_assist(self):
+        """Gate = 0 → user opt-in: battery supports the EV even with no
+        solar (surplus 0 clears a 0 threshold)."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=0, home_w=500, battery_discharge_w=4500,
+            battery_soc=95, battery_assist_min_surplus_w=0.0,
+        ))
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 6   # full 4500 W assist / 690 = 6 A
         assert "Zone 4" in d.reason
 
     def test_zone_3_battery_assist_when_battery_discharging(self):
@@ -347,12 +375,14 @@ class TestMinPlusSolarSelfMax:
         assert spike.commanded_amps == base.commanded_amps
 
     def test_assist_capped_at_configured_max(self):
-        """Zone 4, no solar: the assist budget is the configured
-        battery_assist_max_power, not the battery's nameplate."""
+        """Zone 4: the assist budget is the configured
+        battery_assist_max_power, not the battery's nameplate. Gate set
+        to 0 to isolate the cap from the solar gate."""
         d = decide(_view(
             mode="min_plus_solar",
             solar_w=0, home_w=500, battery_soc=95,
             battery_assist_max_power_w=3000.0,
+            battery_assist_min_surplus_w=0.0,
             target_kwh=30.0, night_deliverable_kwh=12.0,
         ))
         # potential = 3000 W → 4 A, floor raises to 6 A (floor engaged);
@@ -362,11 +392,13 @@ class TestMinPlusSolarSelfMax:
     def test_zone4_assist_potential_charges_without_flowing_discharge(self):
         """#439 stays fixed: battery NOT yet discharging, Zone 4 →
         the POTENTIAL still funds the budget and charging starts
-        (no chicken-and-egg gate on measured discharge)."""
+        (no chicken-and-egg gate on measured discharge). Gate set to 0
+        to isolate #439 from the solar gate."""
         d = decide(_view(
             mode="min_plus_solar",
             solar_w=0, home_w=500, battery_soc=95,
             battery_discharge_w=0.0,
+            battery_assist_min_surplus_w=0.0,
         ))
         # potential = 4500 W → 6 A
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
