@@ -14,7 +14,17 @@ The EV charger must be controllable via a supported HA integration (KEBA, Easee,
 
 ## Battery discharge protection
 
-Battery discharge protection during night charging requires a Huawei Solar inverter (or compatible) that exposes a `number` entity for the battery discharge power limit. Other inverters without this entity cannot use this feature.
+Battery discharge protection requires a Huawei Solar inverter (or compatible) that exposes a `number` entity for the battery discharge power limit. Other inverters without this entity cannot have their discharge actively clamped.
+
+## Solar Gate (battery → EV assist)
+
+The **Solar Gate** (`battery_assist_min_surplus`, default 1200 W) decides how much *real solar surplus* must exist before the home battery is allowed to assist EV charging, in any mode (set 0 W to allow battery support everywhere, including overnight). Notes:
+- The configurable range is **0–5000 W**, so on a very large PV array you cannot require *more* than 5 kW of surplus before the battery assists.
+- The discharge clamp it drives is a hard limit only on inverters that expose a discharge-power `number` entity (see above); on others the gate still governs SEM's *requested* amps but cannot physically cap the inverter's discharge.
+
+## Battery → grid export arbitrage (disabled in this stable)
+
+Battery → grid export arbitrage (selling stored energy to the grid when the dynamic export price beats the recharge cost) is implemented but **deactivated in v1.7.3 stable** pending more review and soak (#533; re-enable targeted for v1.7.4). The per-battery modes and code remain, but the arbitrage opt-in is hidden in the UI.
 
 ## Sunrise-based meter day
 

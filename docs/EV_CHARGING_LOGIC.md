@@ -21,6 +21,18 @@
 >
 > The behavioural-priority cascade below (Min ▷ Charge by ▷ Cheapest hours ▷ Smart night ▷ Mode ▷ Surplus) still applies — the **intent** moved into the mode selector. A full rewrite of this guide tracking the new model is tracked separately; the historical detail below remains accurate for the pre-v1.6.3 toggle layout but the entity names have changed.
 
+> **Updated for v1.7.3** — two reliability changes on top of the model above:
+> - **Charger state reconciler** (#392): SEM no longer re-issues a hardware command
+>   every cycle. A desired-vs-observed reconciler (`coordinator/charger_reconciler.py`)
+>   issues the minimum commands to converge and then leaves the charger alone — this
+>   ends the KEBA "drops to 6 A" / `keba.disable` spam and adds enable-switch
+>   reconciliation + backoff for switch-driven chargers (Wallbox, #536).
+> - **Solar Gate** (#537): in **every** mode, the home battery only assists EV
+>   charging when the *real* solar surplus is at least `battery_assist_min_surplus`
+>   (default 1200 W; set 0 W to allow battery support everywhere, incl. overnight).
+>   Below the gate the battery is reserved for the house and the car draws from
+>   grid + solar. Distinct from *Min solar power* (the total-PV noise floor).
+
 ---
 
 ## Legacy reference (pre-v1.6.3)
@@ -296,7 +308,7 @@ SEM never knows or cares that it's Modbus underneath. It sees two switches and t
 
 ### Why this design?
 
-evcc and similar tools bundle vendor-specific Modbus templates (e.g. evcc's `nibe-s-series` template writes directly to register 3032). SEM intentionally takes a different shape — it stays in HA's entity-and-services world so it doesn't have to ship a protocol library for every brand, doesn't have to track every firmware revision, and doesn't replace HA integrations the user already trusts. See [ARCHITECTURE.md](ARCHITECTURE.md#architectural-principle--sem-is-not-an-integration) for the full principle.
+Some HEMS tools bundle vendor-specific Modbus templates that write directly to inverter/charger registers. SEM intentionally takes a different shape — it stays in HA's entity-and-services world so it doesn't have to ship a protocol library for every brand, doesn't have to track every firmware revision, and doesn't replace HA integrations the user already trusts. See [ARCHITECTURE.md](ARCHITECTURE.md#architectural-principle--sem-is-not-an-integration) for the full principle.
 
 ### How to tell which path you're on
 

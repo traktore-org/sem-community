@@ -442,6 +442,15 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 
 ## Recent Improvements
 
+### v1.7.3 — Reliable EV charging + battery protection (23.06.2026)
+- **EV charger state reconciler** (#392) — the per-cycle imperative actuator (which spammed `keba.disable` and dropped KEBA to 6 A) is replaced by a desired-vs-observed reconciler that issues the *minimum* commands to converge, then leaves the charger alone. Idempotent idle, heartbeat re-writes, failsafe armed once per session. Plus **enable-switch reconciliation + backoff** (#536) for switch-driven chargers (Wallbox etc.).
+- **Solar Gate** (#537) — the home battery only assists the EV when there's real solar surplus ≥ a configurable gate (default **1200 W**), in *any* charging mode; set it to **0 W** to allow battery support everywhere including overnight. Closes the overnight battery-drain-into-the-car class of bug.
+- **Multi-battery control + per-battery modes** (#523) — per-battery control entities and five modes (`auto`, `self-consumption`, `force-charge`, `force-discharge`, `off`), zero-config Huawei forcible discharge, corrected SG-Ready relay map.
+- **Smarter EV control** — no draining the battery to hold a dead solar session, no charging from expensive grid after the cheap window ends (#461/#524); EV target by daily **kWh** *or* **vehicle SOC %**; per-charger independent surplus vs shed priority (#470).
+- **Robust grid-sign autodetection + one-tap fix** (#461) — solar-anchored detector with `Fix grid sign` / `Reset` buttons and a `flip_grid_sign` service; locks survive restarts (#476).
+- **Idempotent Huawei Modbus write** (#538), **dashboard time labels in the home timezone** (#539), and **full 15-locale dashboard translations** (parity-tested).
+- Battery → grid export arbitrage shipped in beta but is **off in this stable**, pending more soak (#533, re-enable targeted for v1.7.4).
+
 ### v1.7.2 — Hot Water boiler control (08.06.2026)
 - **HotWaterController fully wired** (#454) — setting `hot_water_entity` now actually controls the boiler at runtime (the class existed from day one but was never instantiated). Live status block, Repair issues for unavailable temp sensor / boiler entity, fail-safe semantics (boiler is NOT activated on surplus when the temp sensor is broken), and orphan-repair sweep when the user reconfigures the boiler entity.
 
@@ -449,7 +458,7 @@ All SEM entities are removed automatically. Your Energy Dashboard and hardware s
 - **Slim install flow** (#442) — 3 steps → 2; users without an EV configured can now finish setup without quitting.
 - **In-dashboard Configuration tab** (#442) — every OptionsFlow setting editable inline with `(?)` help, auto-save, and per-section 🩺 Diagnose buttons (#432) that copy focused JSON to the clipboard for sharing in discussions.
 - **EV `ev_target_type` strictly honoured** (#451) — no silent fallback to `estimated_soc` when the SOC sensor isn't configured. Fixes the IDLE-stuck-at-120W stall reported on Huawei+KEBA in PROD.
-- **Bulletproof EV solar-path stability** (#443) — evcc-style smoothing + delta-guard + heartbeat around `_set_current` on the daytime `min_plus_solar` Zone 3/4 path. Stops KEBA-side current oscillation on cloudy days.
+- **Bulletproof EV solar-path stability** (#443) — hysteresis smoothing + delta-guard + heartbeat around `_set_current` on the daytime `min_plus_solar` Zone 3/4 path. Stops KEBA-side current oscillation on cloudy days.
 - **HA Repairs integration** (#440) — persistent sensor / forecast / recorder issues surface in Settings → Repairs instead of growing the log; transient sub-5-min flaps stay silent.
 
 ### v1.7.0 — Audit telemetry + architecture cleanup (04.06.2026)

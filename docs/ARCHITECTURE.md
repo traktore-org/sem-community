@@ -2,6 +2,26 @@
 
 This document covers the internal architecture of Solar Energy Management (SEM) for developers and contributors.
 
+> **v1.7.3 additions** (see [CHANGELOG](../CHANGELOG.md) `[1.7.3]`):
+> - **EV charger state reconciler** — `coordinator/charger_reconciler.py` is now the
+>   sole actuation path. A pure desired-vs-observed decision table (DesiredState
+>   OFF/IDLE/CHARGE → ActionKind) drives an observe/apply layer that issues the
+>   minimum commands to converge, then leaves the charger alone (idempotent idle,
+>   heartbeat re-writes, failsafe armed once, enable-switch reconciliation + backoff
+>   #392/#536). It replaces the legacy per-cycle imperative `actuate()`.
+> - **Pure battery decision** — `coordinator/decide_battery.py`
+>   (`decide_battery(view) → BatteryDecision`, precedence FORCE_CHARGE →
+>   STOP_FORCE_CHARGE → LIMIT_DISCHARGE → NORMAL). The LIMIT_DISCHARGE clamp now
+>   fires on a unified **Solar Gate**: `ev_charging AND max(0, solar−home) <
+>   battery_assist_min_surplus_w` → clamp discharge to `home / battery_count`. This
+>   replaces the old night-only / `hold_solar` triggers (#537).
+> - **Solar Gate budget path** — `decide.battery_assist_budget_w` +
+>   `flow_calculator.calculate_canonical_ev_budget` gate battery-assist on real solar
+>   surplus; config key `battery_assist_min_surplus` (default 1200 W) is plumbed via
+>   `FleetContext.battery_assist_min_surplus_w`.
+> - Hysteresis stability (`coordinator/charge_stability.py`) sits between `decide()`
+>   and the reconciler; per-battery views/decisions feed the canonical EV budget.
+
 ---
 
 ## Architectural principle — SEM is not an integration
@@ -16,7 +36,7 @@ Call services like `switch.turn_on`, `number.set_value`, `climate.set_temperatur
 Express its logic in terms of HA entities | Replace HA's `nibe`, `keba`, `huawei_solar`, `wallbox`, etc. integrations
 Add OptionsFlow fields like `heat_pump_relay1_entity` (entity pickers) | Add OptionsFlow fields like `nibe_modbus_host` / `keba_ip`
 
-**Why this matters:** evcc and similar tools have built-in device drivers for specific brands (e.g. evcc has a `nibe-s-series` template that speaks Modbus directly to a Nibe S-Series). SEM intentionally takes a different shape — it stays in HA's entity-and-services world. The user runs HA's `nibe` / `modbus` / `keba` integration (which owns the protocol), then plugs the resulting entities into SEM via entity pickers.
+**Why this matters:** some HEMS tools ship built-in device drivers for specific brands (e.g. a Modbus template that talks directly to a Nibe S-Series heat pump). SEM intentionally takes a different shape — it stays in HA's entity-and-services world. The user runs HA's `nibe` / `modbus` / `keba` integration (which owns the protocol), then plugs the resulting entities into SEM via entity pickers.
 
 **Practical consequence for Nibe-with-Modbus-SG-Ready:**
 1. User installs HA's `nibe` integration → it exposes the heat pump's Modbus registers as entities.
@@ -270,7 +290,7 @@ The surplus controller is always-on and runs every coordinator update (~10s). Pr
 
 ## SOC Zone Strategy
 
-SEM uses a four-zone model (inspired by [evcc](https://evcc.io)) to decide how the battery and EV share solar energy:
+SEM uses a four-zone SOC model to decide how the battery and EV share solar energy:
 
 ```
 SOC 100% ─────────────────────────────
@@ -435,7 +455,7 @@ The coordinator owns all EV control (`ev.managed_externally = True`). The EV is 
 
 ### Solar Charging
 - Sets current with ramp limiting (+-2A/cycle)
-- evcc-style enable/disable delays
+- Hysteresis enable/disable delays (persistence timers)
 - Budget from `FlowCalculator.calculate_ev_budget()` + optional battery assist
 
 ### Min+PV Mode

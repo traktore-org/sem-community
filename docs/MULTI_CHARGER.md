@@ -4,6 +4,16 @@ This document is the source of truth for **developers** working on SEM's
 multi-charger code paths. For end-user setup with multiple chargers, see
 [`MULTI_DEVICE_GUIDE.md`](MULTI_DEVICE_GUIDE.md).
 
+> **v1.7.3** — actuation is now done by the **charger state reconciler**
+> (`coordinator/charger_reconciler.py`, #392), one instance per charger held across
+> cycles. Each charger has its own desired state (from per-charger `decide()`), its
+> own observed state (contactor / enable switch / setpoint), and converges
+> idempotently — eliminating the per-cycle command spam the old imperative actuator
+> produced. The **enable switch** is treated as observed state and re-asserted with
+> backoff (#536). The per-charger correctness discipline below (fleet-read
+> annotations, `PerChargerContext`) still applies — the reconciler consumes the
+> per-charger `EVBudget`/decision, it does not change how the budget is split.
+
 ---
 
 ## v1.7.0: The bug class is structurally retired

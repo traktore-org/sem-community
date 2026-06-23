@@ -88,10 +88,12 @@ All settings are accessible via **Settings** > **Devices & Services** > **Solar 
 | `battery_buffer_soc` | 70% | Above: battery can discharge for EV |
 | `battery_auto_start_soc` | 90% | Above: start EV even without surplus |
 | `battery_assist_max_power` | 4500W | Maximum battery discharge for EV (1000-10000W) |
+| `battery_assist_min_surplus` | 1200W | **Solar Gate (v1.7.3)** — battery only assists above this real solar surplus (0-5000W) |
 | `battery_capacity_kwh` | — | Total battery capacity (5-100 kWh) |
 | `battery_discharge_protection_enabled` | true | Protect battery during night charging |
 | `battery_max_discharge_power` | 5000W | Maximum battery discharge rate (500-10000W) |
 | `battery_discharge_control_entity` | — | Number entity to control inverter discharge limit |
+| `battery_force_discharge_control_entity` | — | **(v1.7.3)** Number entity to control battery force-discharge power (per-battery, all brands) |
 
 ### Notification Settings
 
@@ -158,9 +160,15 @@ See [Multi-Device Guide](docs/MULTI_DEVICE_GUIDE.md) for examples.
 
 ---
 
-## Hot Water Settings
+## Hot Water and Heat Pump (v1.7.3 hardening)
 
 SEM works alongside your existing heating system — it only boosts with solar surplus, it does NOT replace your boiler or heat pump's normal heating schedule. Your existing system continues to handle baseline heating as usual. SEM adds a solar boost layer on top: when surplus solar power is available, SEM heats the water further to store energy that would otherwise be exported.
+
+**v1.7.3 improvements:**
+- **Surplus activation actually fires** (beta bug fixed)
+- **Boosts on true house surplus**, not just raw solar (correct calculation)
+- **Stands down under peak** (respects load management)
+- **SG-Ready relay map corrected** for heat pumps
 
 Configure these settings under **Settings > Devices & Services > Solar Energy Management > Configure**.
 
@@ -190,38 +198,53 @@ The Legionella prevention cycle is a safety requirement mandated by building cod
 
 ## Charging Modes
 
-SEM supports four EV charging modes, selectable from the **Control tab** on the dashboard:
+SEM supports five EV charging modes (v1.7.3), selectable per charger via **`select.sem_charger_<id>_charge_mode`** on the Control tab or the EV card:
 
 > **Need the full picture?** [docs/EV_CHARGING_LOGIC.md](docs/EV_CHARGING_LOGIC.md) is the canonical reference covering all 6 user controls (mode + Overnight grid + Cheapest hours + Smart night + Charge by + Min/Max), their priority cascade, and every interaction scenario including worked examples.
 
+### Solar Only (`solar_only`)
 
-### Auto (`auto`) — Default
+Charges **exclusively from solar surplus** — no grid power at any time. The EV waits for surplus to appear and pauses when it drops. Best when you have abundant solar and can be flexible about when the car charges.
 
-The smart mode. SEM automatically decides the best strategy based on solar forecast and how much charging the EV still needs:
+| Time | Solar | Surplus | EV State |
+|---|---|---|---|
+| 08:00 | Weak (1 kW) | Below minimum | Paused |
+| 12:00 | Strong (8 kW) | 3 kW available | Charging ~1.7 A |
+| 17:00 | Weak (500 W) | Insufficient | Paused |
+| 22:00 | Night | 0 W | Not charging (night disabled) |
 
-| Situation | What SEM does | Grid import? |
-|---|---|:---:|
-| **Plenty of sun** (forecast >> EV need) | Charge slowly from pure surplus | No |
-| **Enough sun** (forecast ≈ EV need) | Charge with SOC zone strategy + battery assist | Small amount |
-| **Not enough sun** (forecast < EV need) | Charge aggressively with full battery assist | Yes |
+**Daily target is NOT guaranteed.** If solar tomorrow is weak, the car may not reach the Min target. Use **`switch.sem_charger_<id>_night_charging`** to top up with grid overnight if needed.
 
-The decision recalculates every 10 seconds. On a long summer day, the EV charges slowly from pure surplus (zero import). On a short autumn day, it charges fast to capture all available solar before sunset.
+### Min + Solar (`min_plus_solar`) — Default
 
-When battery SOC ≥ 90%: battery charge power is redirected to EV (the battery is full enough).
+Charges at a minimum current from the grid (6A ≈ 4.1 kW on 3-phase), plus any solar surplus on top. The EV always starts, even without sun. Best for: you need the car ready by a specific time and can accept a small grid import.
 
-### Min+PV (`minpv`)
+| Time | Grid + Solar | EV State |
+|---|---|---|
+| 08:00 | 0 W solar, 4.1 kW grid | Charging at 6 A (grid-only) |
+| 12:00 | 3 kW solar surplus | Charging at 8 A (4.1 kW grid + 3 kW solar) |
+| 17:00 | 0.5 kW solar | Charging at ~5 A (4 kW grid + 0.5 kW solar) |
+| 22:00 (night) | Grid only | Continues if `switch.sem_charger_<id>_night_charging` is on |
 
-Guarantees a minimum charging current (6A ≈ 4.1kW) from the grid and adds any solar surplus on top. The EV always charges, even without sun.
+**Daily target is guaranteed.** The Min floor ensures the car charges toward the minimum target at all times, topped up by grid if needed.
 
-Best for: you need the car ready by a specific time.
+### Solar + Cheapest Hours (`solar_plus_cheap`)
 
-### Maximum (`now`)
+**Daytime:** charges from solar surplus (like Solar Only).
 
-Charges at maximum current immediately, regardless of solar.
+**Night:** if tariff mode is "Dynamic", defers charging to the cheapest contiguous price window instead of charging immediately. The Min floor is always guaranteed: if waiting for cheap hours would miss the deadline or there's no price data, SEM charges anyway.
+
+Best for: you have a dynamic tariff (Tibber, Octopus, Amber) and want to optimize cost. Requires `switch.sem_charger_<id>_tariff_optimized` to be **ON**.
+
+### Always Max (`always_max`)
+
+Charges at the charger's maximum current immediately, day or night, regardless of solar or tariff. The entire grid is available to the charger.
+
+Best for: urgent charging (departing soon, road trip, or testing).
 
 ### Off (`off`)
 
-EV charging is disabled. SEM continues monitoring but does not control the charger.
+EV charging is disabled. SEM continues monitoring but does not send any commands to the charger. Use when you want manual control or a charger is offline.
 
 ---
 
@@ -263,6 +286,26 @@ Full battery assist (default 4500W). The EV starts charging even without solar s
 
 Once battery-assist mode activates (Zone 3 or 4), it stays active even if SOC drops back into Zone 2, all the way down to `battery_assist_floor_soc` (default 60%). This prevents on/off cycling when the SOC hovers near a zone boundary.
 
+### Per-Battery Modes (Multi-Battery Systems, v1.7.3)
+
+When you have multiple batteries (e.g. Huawei + Growatt, or split Huawei units), SEM v1.7.3 adds per-battery control:
+
+| Mode | SEM Control | When to use |
+|------|---|---|
+| **Auto** | Normal SOC zone strategy (Zone 1–4) | Default; SEM manages the battery like usual |
+| **Self-Consumption** | Discharge to home only, never export to grid | Night use; battery stays reserved for home |
+| **Force Charge** | Charge from grid (if tariff is cheap) or solar | Deliberate battery top-up before heavy consumption |
+| **Force Discharge** | Discharge at maximum rate | Emergency backup or battery arbitrage |
+| **Off** | SEM ignores this battery | Manual control or testing |
+
+**Per-battery control entities:**
+- `number.sem_battery_<id>_mode` — set the mode (auto/self_consumption/force_charge/force_discharge/off)
+- `number.sem_battery_<id>_force_discharge_power` — control discharge rate in Force Discharge mode
+
+**Zero-config Huawei:** If you have a Huawei inverter, SEM auto-detects the discharge limit entity and uses it to enforce force-discharge at no extra config.
+
+**Other brands:** set `battery_force_discharge_control_entity` in the options flow to a number entity on your inverter (e.g. Growatt's max discharge power, SolaX's force-discharge current).
+
 ### Example: Sunny Day, Battery at 30%, EV Connected
 
 1. **SOC 30-69%** — Battery charges from solar. EV waits (surplus usually below 4140W minimum)
@@ -276,6 +319,49 @@ Once battery-assist mode activates (Zone 3 or 4), it stays active even if SOC dr
 - **Conservative setup** — Set `battery_priority_soc` to 70% to ensure the battery is nearly full before the EV gets anything. Good if you have high evening self-consumption.
 - **Aggressive EV charging** — Lower `battery_priority_soc` to 20% and `battery_buffer_soc` to 50% to start EV charging earlier.
 - **Small battery** — Reduce `battery_assist_max_power` to avoid draining a small battery too quickly.
+
+---
+
+## Solar Gate (Battery Assist Gate)
+
+The **Solar Gate** is a new (v1.7.3) power threshold that protects your home battery from draining into the car when the sun isn't actually shining. It works **in every charging mode** — solar only, min+solar, or always max.
+
+### What it does
+
+The battery **only assists the EV** when there is at least this much **real solar surplus** available. Below the gate, the EV gets grid power or solar alone, never battery power. This prevents the battery from bleeding away overnight, even in `always_max` mode.
+
+| Solar Surplus | Battery Assist | EV Gets From | Typical Scenario |
+|---|---|---|---|
+| ≥ 1200 W (gate) | Enabled | Solar + battery | Sunny morning, battery can help |
+| < 1200 W (below gate) | Disabled | Grid + solar | Overcast day, evening, night |
+| 0 W (night) | Disabled | Grid only (if mode allows) | Night window, no sun |
+
+### Default and configuration
+
+- **Default gate:** 1200 W (safe for most systems — protects battery at dusk/dawn)
+- **Setting:** `number.sem_battery_assist_min_surplus` on the Control tab, or in the options flow under **EV Charging & Solar** as **"Solar Gate"**
+- **Disabled gate:** Set to **0 W** to allow battery support everywhere, including overnight (the pre-v1.7.3 behavior)
+
+### Example
+
+**Tuesday, 5 PM, cloud cover, battery at 85% SOC:**
+- Solar: 600 W (below gate)
+- Battery assist: **OFF** (gate = 1200 W > 600 W)
+- EV charging: paused (min_plus_solar mode uses 4.1 kW grid minimum, which is above what 600 W solar + 0 W battery provide)
+
+**Tuesday, 11 AM, clear skies, battery at 85% SOC:**
+- Solar: 3500 W (above gate)
+- Battery assist: **ON** (gate met)
+- EV charging: active at ~4 kW (2 kW solar + 2 kW battery assist)
+
+### Distinguishing Solar Gate from "Min solar power"
+
+Do not confuse Solar Gate with **Min solar power** (the config floor below which SEM won't attempt to start the charger). They are orthogonal:
+
+| Setting | Purpose | Effect |
+|---|---|---|
+| **Min solar power** (500 W default) | Noise floor — prevent starting on transient spikes | If actual surplus < 500 W, charger never starts |
+| **Solar Gate** (1200 W default, v1.7.3) | Battery protection threshold | If actual surplus < gate, battery cannot assist (but charger can still run on grid + solar) |
 
 ---
 
@@ -309,22 +395,43 @@ When `switch.sem_smart_night_charging` is ON, SEM uses the full EV Intelligence 
 - **Safety net** — maximum 3 consecutive skips to prevent under-charging
 - **Fallback** — when EV Intelligence data is insufficient, SEM falls back to forecast-based reduction (weekday: conservative, weekend: aggressive)
 
-### SOC Target (#215)
+### EV Charge Target Type (v1.7.3 — kWh vs Vehicle SOC %)
 
-If your EV charger integration provides a vehicle battery SOC sensor, you can configure SEM to use it instead of the fixed kWh target:
+Each charger can charge to a **daily kWh target** or a **vehicle state-of-charge (SOC) %**. The choice is made in the **Charge Target** section of the EV charger card, with a unit selector (kWh or %) beside the target value.
 
-1. Set `vehicle_soc_entity` to your car's battery SOC sensor
-2. Set `ev_target_soc` to your desired charge limit (default: 80%)
-3. Set `ev_battery_capacity_kwh` to your car's battery size
+#### kWh target (default)
 
-SEM will then calculate remaining charging need from the SOC gap instead of the kWh counter. This is more accurate and lets you set a percentage-based charge limit for battery longevity.
+Charges to a **daily energy amount**:
 
-**No SOC sensor? SEM uses the EV-intelligence estimate.** If you select % mode without a
-`vehicle_soc_entity`, SEM falls back to the **virtual SOC** from EV intelligence — but only
-once it has a confident anchor (after a detected full charge / taper event). The estimate is
-a *soft* ceiling: taper detection is still the hard "battery full" stop, and the night/grid
-**Min** floor still tops up, so an estimate error stays bounded. Until the estimate is
-anchored, % mode uses the **kWh** daily target instead (so it's never a silent no-op).
+- **Min (guaranteed):** e.g. 10 kWh via night/grid top-up
+- **Max (solar ceiling):** e.g. 100 kWh from surplus (charge freely)
+
+Best for: you know your typical daily consumption (50 km = ~8 kWh, 100 km = ~16 kWh) and want predictable behavior.
+
+#### Vehicle SOC % target (when vehicle sensor is configured)
+
+Charges to a **state-of-charge percentage**, if your EV integration provides a `vehicle_soc_entity`:
+
+1. In the options flow **EV Charger Management** step, select your charger and set **`vehicle_soc_entity`** (e.g. `sensor.tesla_battery_soc`) and **`ev_battery_capacity_kwh`** (e.g. 75 kWh for a Tesla Model 3).
+2. The EV card's **Charge Target** section now offers a **%** unit selector.
+3. Set **Min % = 50%** and **Max % = 80%** to keep battery longevity: grid tops up to 50%, solar stops at 80%.
+
+**Advantages:**
+- Independent of consumption patterns — SOC is absolute
+- Enables battery longevity strategies (e.g. "only charge to 80% from sun")
+- Per-charger values — each car can have its own SOC range
+
+SEM calculates remaining need from the SOC gap: `(target_soc - actual_soc) × battery_capacity = kWh remaining`.
+
+#### No vehicle SOC sensor?
+
+If you do not have a `vehicle_soc_entity`, SEM falls back to the **virtual SOC** from EV intelligence once it has a confident anchor (detected full charge or BMS taper event). The estimate is a *soft* ceiling:
+
+- **Taper detection** is the hard "battery full" stop (SEM stops charging immediately)
+- **Night/grid Min floor** still tops up (e.g. never leaves you stranded)
+- Estimate error stays bounded (it's not a silent no-op)
+
+Until the estimate is anchored (first week), % mode uses the **kWh** daily target instead.
 
 **Driving range.** SEM also publishes `sensor.sem_ev_remaining_range`. If your car
 integration exposes a real range sensor, set `vehicle_range_entity` to it; otherwise SEM
@@ -462,6 +569,31 @@ During night charging, the home battery should only power home consumption — n
 
 ---
 
+## Grid Sign Auto-Detection and Fix (v1.7.3)
+
+SEM automatically detects whether your grid meter reports **positive = import** or **positive = export**. Different inverter brands use opposite conventions:
+
+| Brand | Convention | Example reading |
+|-------|---|---|
+| Huawei, SMA, Victron, Sungrow | + = export, − = import | Exporting 2000 W shows as `+2000` |
+| Fronius, Enphase, Powerwall, Kostal | + = import, − = export | Importing 2000 W shows as `+2000` |
+
+SEM detects this automatically during startup by comparing your grid sensor against the Energy Dashboard import/export counters. In rare cases (P1 meters, CT sensors, or brand-unknown inverters), the auto-detection may guess wrong.
+
+### Symptoms of wrong grid sign
+
+- **Daily Grid Import stays at 0 kWh** while you are clearly drawing from the grid
+- **System diagram shows export when you are importing**
+- **Costs/savings calculations are inverted**
+
+### Fix grid sign button (v1.7.3)
+
+If your sign is wrong, go to **Control tab → Advanced → Grid Sign** and tap **Fix grid sign** (or **Reset sign detection** to re-run auto-detection). A **`flip_grid_sign` service** is also available via Developer Tools.
+
+The fix persists across restarts — SEM locks the correction so a restart won't revert it.
+
+---
+
 ## Device Control Modes
 
 Every device registered in SEM has a **control mode** that determines how SEM is allowed to interact with it. This is the most important setting for each device — it defines the boundary between what SEM controls and what the user controls.
@@ -551,9 +683,10 @@ Set tariff mode to "Dynamic" in the options flow. SEM auto-detects your provider
 - `sensor.sem_tariff_price_level` shows "cheap", "normal", "expensive", "very_cheap", "very_expensive"
 - `sensor.sem_tariff_next_cheap_start` shows next cheap window
 - **Price-responsive surplus**: during cheap/negative price windows, SEM adds virtual surplus to encourage device activation
-- Night charging can be scheduled for cheapest hours
-- **Price card** (#257): the `sem-price-card` shows the current price, level, today's min/avg/max, the next cheap window, and an hourly price strip for the next ~24h (bars colored by level, current hour outlined). A **compact chip** lives at the top of the **Home tab** (glance), the **full panel with chart** on the **Costs tab**. **Self-hides on static tariffs** (no live curve to show).
+- Night charging can be scheduled for cheapest hours (mode `solar_plus_cheap`)
+- **Price card** (v1.7.3): the `sem-price-card` shows the current price, level, today's min/avg/max, the next cheap window, and an hourly price strip for the next ~24h (bars colored by level, current hour outlined). A **compact chip** lives at the top of the **Home tab** (glance), the **full panel with chart** on the **Costs tab**. **Self-hides on static tariffs** (no live curve to show).
 - **`generate_dashboard` reloads live** (v1.5.16+) — adding a charger, changing language, or any other regenerate now reflects immediately on the running dashboard. No HA restart needed; a browser hard-refresh (Ctrl+Shift+R) picks up cached card bundles.
+- **Tibber Grid Reward support** (v1.7.3): if the standard Tibber integration's forecast sensor is unavailable, install the HACS *Tibber Grid Reward* integration and set the dynamic tariff entity to its `sensor.current_price` — SEM parses the `today_raw`/`tomorrow_raw` price arrays directly.
 
 #### Supported providers
 
