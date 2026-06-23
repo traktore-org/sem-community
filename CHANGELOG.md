@@ -13,6 +13,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.53] - 23.06.2026
+
+## 🔋 Battery only assists the EV when the sun is out (#537)
+
+The home battery was draining into the car overnight in `min_plus_solar` (PROD,
+~6.5 kWh in one evening) — and in `always_max` — because battery-assist ran on a
+sunset clock, not on actual solar. A single **Solar Gate** now governs it, in
+**every** charging mode:
+
+- **New "Solar Gate" knob** (`battery_assist_min_surplus`, default **1200 W**) on
+  the Control tab and in the integration options. Below this much real solar
+  surplus the battery is reserved for the house and the car draws from grid + solar.
+- **Set it to 0 W** to let the battery support the EV everywhere, including
+  overnight (opt-in — the previous behaviour).
+- Enforced in two places so it can't leak: the EV budget (`min_plus_solar` /
+  canonical battery-assist) and the battery discharge clamp (`decide_battery`),
+  which now protects the battery in **any** mode incl. `always_max` and replaces
+  the old night-only / `hold_solar` protection (gate = 0 restores it everywhere).
+
+Verified on HA-TEST (deployed decision table correct incl. `always_max`); full
+suite 3797 green.
+
 # [1.7.3-beta.52] - 22.06.2026
 
 ## 🔌 EV charger reliability hardening (#536) — verified live on HA-TEST
