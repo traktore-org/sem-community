@@ -208,7 +208,7 @@ def effective_min_amps(cfg: dict, fallback: int = 6) -> int:
     Combines two SEM-side floors via three-way max (ADR 0010 pattern 3,
     #440):
       * ``ev_min_current`` — the user's chosen SEM-side floor (the
-        "loadpoint min" in evcc terminology).
+        per-charger minimum).
       * ``vehicle_min_current`` — per-vehicle handshake floor (e.g. a
         Renault Zoe needs ~9 A; if the user records that here, SEM
         won't offer 6 A and watch the contactor sit unused).

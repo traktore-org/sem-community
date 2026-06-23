@@ -1249,7 +1249,7 @@ class SEMConfigCard extends SEMLitBase {
             </div>
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_minimum_solar_power', 'min_solar_power', T, 'config_help_min_solar_power')}
-                ${this._renderStepper('number.sem_regulation_offset', 'regulation_offset', T)}
+                ${this._renderStepper('number.sem_regulation_offset', 'regulation_offset', T, 'config_help_regulation_offset')}
             </div>
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_ev_enable_delay_seconds', 'ev_enable_delay', T, 'config_help_ev_enable_delay')}

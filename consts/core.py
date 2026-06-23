@@ -69,7 +69,7 @@ DEFAULT_EV_STALL_COOLDOWN: Final = 120  # Seconds between KEBA re-enable attempt
 # ev_enable_delay_seconds / ev_disable_delay_seconds. Post-v1.7 they are
 # enforced by coordinator/charge_stability.py between decide() and
 # actuate() (the arch rewrite had orphaned the ev_control.py:495 copy —
-# #461 flapping). Defaults below match evcc's guardduration discipline.
+# #461 flapping). Defaults below follow a guard-duration discipline.
 DEFAULT_EV_ENABLE_DELAY_SEC: Final = 60   # Seconds surplus must persist before a charge starts
 DEFAULT_EV_DISABLE_DELAY_SEC: Final = 300  # Seconds deficit must persist before a charge stops
 DEFAULT_EV_MIN_CHANGE_AMPS: Final = 1  # Amps - suppress sub-1A noise (matches night-path L440)

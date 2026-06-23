@@ -1,4 +1,4 @@
-"""Surplus charge stability — evcc-style delays + setpoint smoothing.
+"""Surplus charge stability — hysteresis delays + setpoint smoothing.
 
 The v1.7 ``decide() → actuate()`` pipeline replaced the legacy
 ``_execute_ev_control`` solar path and silently dropped its stability
@@ -33,13 +33,12 @@ This module reintroduces the full layer as a stateful filter between
   (smoothed) deficit must persist before the stop; meanwhile the
   charger ramps down to and holds minimum current.
 
-Timing semantics follow evcc's pv enable/disable timers
-(https://github.com/evcc-io/evcc — loadpoint ``enable.delay`` /
-``disable.delay``). The disable semantics deliberately *improve on*
-the legacy path, which measured from session START (a minimum-run
-time): once a session was older than the window, a single-cycle cloud
-dip stopped it instantly. evcc measures **deficit persistence**,
-which protects the contactor for the whole session.
+Timing semantics use separate pv enable/disable persistence timers.
+The disable semantics deliberately *improve on* the legacy path, which
+measured from session START (a minimum-run time): once a session was
+older than the window, a single-cycle cloud dip stopped it instantly.
+Here the stop is gated on **deficit persistence**, which protects the
+contactor for the whole session.
 
 Scope: daytime surplus modes only (``solar_only`` / ``min_plus_solar``
 / ``solar_plus_cheap``). Night floors, ``always_max``, OFF/DISABLE

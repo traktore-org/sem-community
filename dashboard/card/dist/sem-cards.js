@@ -6295,7 +6295,7 @@ const t=globalThis,e=t.ShadowRoot&&(void 0===t.ShadyCSS||t.ShadyCSS.nativeShadow
             </div>
             <div class="stepper-pair">
                 ${this._renderStepper("number.sem_minimum_solar_power","min_solar_power",t,"config_help_min_solar_power")}
-                ${this._renderStepper("number.sem_regulation_offset","regulation_offset",t)}
+                ${this._renderStepper("number.sem_regulation_offset","regulation_offset",t,"config_help_regulation_offset")}
             </div>
             <div class="stepper-pair">
                 ${this._renderStepper("number.sem_ev_enable_delay_seconds","ev_enable_delay",t,"config_help_ev_enable_delay")}

@@ -383,7 +383,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # (notification dedup itself lives in NotificationManager._notified_flags)
         self._night_plan_per_charger = {}
         # Surplus-mode enable/disable delay timers (#461 flapping) — the
-        # evcc-style stability filter between decide() and actuate().
+        # Hysteresis stability filter between decide() and actuate().
         from .charge_stability import ChargeStability
         self._charge_stability = ChargeStability()
         # Shared night peak budget (#274/H1): watts committed to higher-priority
@@ -1776,7 +1776,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
                         )
                         decision = decide_v2(view)
-                        # evcc-style stability layer (#461 flapping):
+                        # Hysteresis stability layer (#461 flapping):
                         # median smoothing + ramp limit + delta/debounce
                         # guards + enable/disable delays. Applied BEFORE
                         # state display + actuation so the sensor state,
@@ -1954,7 +1954,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     ),
                 )
                 decision = decide_v2(view)
-                # evcc-style stability layer (#461 flapping) — the
+                # Hysteresis stability layer (#461 flapping) — the
                 # single-charger legacy branch needs the same protection.
                 decision = self._charge_stability.filter(
                     decision, view, adapter,

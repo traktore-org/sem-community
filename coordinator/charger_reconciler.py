@@ -181,7 +181,7 @@ class ChargerReconciler:
         elif observed.enabled is False:
             # Switch is OFF while we want to charge. Re-assert it — but with
             # BACKOFF so we don't fight a self-pausing charger forever (#536
-            # start/stop oscillation; evcc documents this for the Pulsar's
+            # start/stop oscillation; common on the Pulsar's
             # Autostart/Eco-Smart mode). Try hard for the first
             # ``max_enable_attempts`` cycles; after that, stop fighting and
             # surface the misconfig, probing once per retry interval.

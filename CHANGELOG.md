@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.54] - 23.06.2026
+
+## 🧹 UI polish
+
+- **Removed all `evcc` references** from the dashboard help texts and the code —
+  the surplus enable/disable delays are now described in plain terms (hysteresis
+  enable/disable timers, deficit-persistence) without the external project name.
+- **Added the missing help text** for **Regulation Offset** in the Advanced section
+  (a small power buffer kept as grid export so SEM doesn't risk importing while
+  regulating surplus charging).
+
 # [1.7.3-beta.53] - 23.06.2026
 
 ## 🔋 Battery only assists the EV when the sun is out (#537)

@@ -201,7 +201,7 @@ NUMBER_TYPES = [
         native_step=10,
         mode=NumberMode.SLIDER,
     ),
-    # Surplus stability delays (#461) — evcc-style enable/disable timers
+    # Surplus stability delays (#461) — hysteresis enable/disable timers
     # enforced by coordinator/charge_stability.py. Global: contactor-wear
     # protection policy, not a per-charger hardware property.
     NumberEntityDescription(

@@ -1,7 +1,7 @@
 """#440 — per-vehicle minimum current (ADR 0010 pattern 3).
 
 Effective per-charger floor is ``max(ev_min_current, vehicle_min_current)``.
-The third leg of evcc's three-way max (the EVSE hardware minimum)
+The third leg of the three-way max (the EVSE hardware minimum)
 is enforced in the adapter and does NOT appear at the decide layer.
 
 Tested:

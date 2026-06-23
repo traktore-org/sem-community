@@ -2,7 +2,7 @@
 
 Mixin class providing all EV charging control logic:
 - Night charging: dynamic peak-aware current every cycle
-- Solar charging: evcc-style enable/disable delays with ramp limiting
+- Solar charging: hysteresis enable/disable delays with ramp limiting
 - Min+PV mode: guaranteed minimum from grid + solar surplus
 - Session cost tracking (per-session energy, cost, solar share)
 - Self-healing via KEBA stall detection

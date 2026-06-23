@@ -1,4 +1,4 @@
-"""#461 — evcc-style enable/disable delays between decide() and actuate().
+"""#461 — hysteresis enable/disable delays between decide() and actuate().
 
 The v1.7 arch rewrite orphaned the v1.7.1-beta.14 stability layer in
 ``ev_control.py`` (``ev_enable_delay_seconds`` / ``ev_disable_delay_seconds``
@@ -12,7 +12,7 @@ contactor every ~20 s in RienduPre's beta.10 logs.
   continuously for ``enable_delay_s`` before it passes.
 * disable — an IDLE decision against a charging EV holds minimum
   current until the deficit has persisted ``disable_delay_s``
-  (evcc deficit-persistence, deliberately NOT the legacy
+  (deficit-persistence, deliberately NOT the legacy
   min-run-time which let an old session die on a 1-cycle dip).
 """
 from pathlib import Path

@@ -1,8 +1,8 @@
 """Heartbeat write to KEBA-style chargers (#392).
 
 KEBA's failsafe watchdog requires periodic *writes* — reads alone don't
-refresh it (confirmed by KEBA Energy Automation support in
-evcc-io/evcc#21093 comment 13094565). SEM's _set_current dedup used to
+refresh it (confirmed by KEBA Energy Automation support). SEM's
+_set_current dedup used to
 suppress writes when the commanded value hadn't changed, which silently
 starved the watchdog during steady-state charging.
 

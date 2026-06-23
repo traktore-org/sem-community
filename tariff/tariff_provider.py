@@ -1062,7 +1062,7 @@ class DynamicTariffProvider(TariffProvider):
         ~13:00 CET), it extends backwards over the most recent past
         slots so it always covers roughly a day of context.
 
-        Rationale (evcc-style): per-calendar-day breaks ignored
+        Rationale: per-calendar-day breaks ignored
         tomorrow's published prices, so at 22:00 a price was bucketed
         against this morning's peak instead of the night ahead — the
         window that actually matters for cheap-window automation.
