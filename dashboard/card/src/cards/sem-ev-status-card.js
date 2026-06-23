@@ -311,11 +311,12 @@ class SEMEVStatusCard extends SEMLitBase {
         const overlayColor = (k) => k === 'cheap' ? '#43a047' : '#f06292';
 
         // Hourly ticks for time labels (every 3h)
+        const _tz = this._hass?.config?.time_zone || undefined;
         const ticks = [];
         for (let h = 0; h <= 12; h += 3) {
             const t = now + h * 3600 * 1000;
             const label = new Date(t).toLocaleTimeString([],
-                { hour: '2-digit', minute: '2-digit' });
+                { hour: '2-digit', minute: '2-digit', timeZone: _tz });
             ticks.push({x: xOf(t), label});
         }
 
@@ -583,7 +584,7 @@ class SEMEVStatusCard extends SEMLitBase {
             try {
                 const d = new Date(ncRaw);
                 if (!isNaN(d)) nextCheapLabel = d.toLocaleTimeString([],
-                    { hour: '2-digit', minute: '2-digit' });
+                    { hour: '2-digit', minute: '2-digit', timeZone: this._hass?.config?.time_zone || undefined });
             } catch (e) { /* ignore */ }
         }
         // Next cheap window only relevant when the mode actually uses

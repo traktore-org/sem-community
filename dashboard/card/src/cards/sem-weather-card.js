@@ -99,16 +99,19 @@ class SEMWeatherCard extends SEMLitBase {
     _updateClock() {
         const now = new Date();
         const locale = this._hass?.language || navigator.language || 'en';
-        this._clockTime = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-        this._clockDate = now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        // Show the home's local time (HA tz, DST-aware), not the viewer's browser tz.
+        const tz = this._hass?.config?.time_zone || undefined;
+        this._clockTime = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+        this._clockDate = now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: tz });
         this.requestUpdate();
     }
 
     _renderForecastRows(forecast, forecastRows) {
         const locale = this._hass?.language || navigator.language || 'en';
+        const tz = this._hass?.config?.time_zone || undefined;
         return forecast.slice(0, forecastRows).map(f => {
             const dt = new Date(f.datetime);
-            const day = dt.toLocaleDateString(locale, { weekday: 'short' });
+            const day = dt.toLocaleDateString(locale, { weekday: 'short', timeZone: tz });
             const fIcon = WEATHER_ICONS[f.condition]?.icon || '❓';
             const low = f.templow != null ? Math.round(f.templow) : '—';
             const high = f.temperature != null ? Math.round(f.temperature) : '—';

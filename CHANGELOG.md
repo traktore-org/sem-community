@@ -15,15 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [1.7.3-beta.56] - 23.06.2026
 
-## 🕐 Chart time-axis fix — show HA's timezone, not the browser's (#539)
+## 🕐 Time labels show HA's timezone, not the browser's (#539)
 
-The time-series charts (EV power, solar, battery, flows…) rendered their x-axis
-labels and tooltip times in the **viewer's browser timezone**. A browser/OS stuck
-on standard time (CET) showed summer-time data **one hour early** (a 12:00 CEST
-bucket displayed as 11:00). The axis and tooltip now format via HA's configured
-home timezone (`hass.config.time_zone`) using the IANA zone name, so they're
-correct and DST-aware regardless of the viewing device. Display-only — the
-underlying data timestamps were already correct.
+Every time label on the dashboard rendered in the **viewer's browser timezone**.
+A browser/OS stuck on standard time (CET) showed summer-time data **one hour
+early** (a 12:00 CEST chart bucket displayed as 11:00). Fixed across the board —
+all now format via HA's configured home timezone (`hass.config.time_zone`, IANA
+zone → DST-aware), correct regardless of the viewing device. Display-only; the
+underlying data timestamps were already right.
+
+- **Time-series charts** (`sem-chart-card`: EV power, solar, battery, flows…) —
+  x-axis labels **and** tooltip times.
+- **Shared `semFormatTime`** helper → fixes the today-plan times and the system
+  diagram's sunrise/sunset.
+- **Price card** tariff-window times, **EV status card** (axis ticks + next-cheap
+  window), **weather card** clock + forecast days.
 
 # [1.7.3-beta.55] - 23.06.2026
 

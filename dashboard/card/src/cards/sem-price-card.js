@@ -56,7 +56,8 @@ class SEMPriceCard extends SEMLitBase {
 
     _hm(iso) {
         if (!iso) return null;
-        try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+        const tz = this._hass?.config?.time_zone || undefined;
+        try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz }); }
         catch (e) { return null; }
     }
 

@@ -79,7 +79,8 @@ class SEMTodayPlanCard extends SEMLitBase {
         if (!iso) return '—';
         try {
             const d = new Date(iso);
-            const time = semFormatTime(iso);  // shared locale-aware HH:MM (#485 K6)
+            const tz = this._hass?.config?.time_zone || undefined;
+            const time = semFormatTime(iso, tz);  // shared locale-aware HH:MM (#485 K6)
 
             // Compare calendar days only — ignore time-of-day.
             const dDay = d.toDateString();
@@ -94,7 +95,7 @@ class SEMTodayPlanCard extends SEMLitBase {
             }
 
             // 2+ days out — show weekday for context.
-            const weekday = d.toLocaleDateString([], { weekday: 'short' });
+            const weekday = d.toLocaleDateString([], { weekday: 'short', timeZone: tz });
             return `${weekday} ${time}`;
         } catch (e) {
             return '—';

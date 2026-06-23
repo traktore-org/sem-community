@@ -39,10 +39,13 @@ export function semFormatEnergy(kwh) {
    One formatter for every card's time labels: a 12-hour-locale user
    used to see "9:33 PM" on the today-plan card next to a hard-coded
    24h "21:33" on the system diagram's sunrise/sunset. */
-export function semFormatTime(iso) {
+export function semFormatTime(iso, tz) {
     if (!iso) return '—';
     try {
-        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // ``tz`` should be ``hass.config.time_zone`` — render the home's
+        // timezone (DST-aware via the IANA zone name), not the viewer's
+        // browser tz. Falls back to browser-local when omitted.
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz || undefined });
     } catch (e) {
         return '—';
     }

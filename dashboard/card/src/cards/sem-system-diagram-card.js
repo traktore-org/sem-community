@@ -518,8 +518,9 @@ class SEMSystemDiagramCard extends SEMLitBase {
 
         // Sun time labels
         const sunAttrs = this._hass?.states['sun.sun']?.attributes;
-        const sunRiseStr = sunAttrs?.next_rising ? semFormatTime(sunAttrs.next_rising) : '';
-        const sunSetStr  = sunAttrs?.next_setting ? semFormatTime(sunAttrs.next_setting) : '';
+        const _tz = this._hass?.config?.time_zone || undefined;
+        const sunRiseStr = sunAttrs?.next_rising ? semFormatTime(sunAttrs.next_rising, _tz) : '';
+        const sunSetStr  = sunAttrs?.next_setting ? semFormatTime(sunAttrs.next_setting, _tz) : '';
 
         // Battery SOC geometry (mirrors _illustrationBattery scale)
         const battS = L.B.r / 50;
