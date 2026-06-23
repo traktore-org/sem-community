@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.56] - 23.06.2026
+
+## 🕐 Chart time-axis fix — show HA's timezone, not the browser's (#539)
+
+The time-series charts (EV power, solar, battery, flows…) rendered their x-axis
+labels and tooltip times in the **viewer's browser timezone**. A browser/OS stuck
+on standard time (CET) showed summer-time data **one hour early** (a 12:00 CEST
+bucket displayed as 11:00). The axis and tooltip now format via HA's configured
+home timezone (`hass.config.time_zone`) using the IANA zone name, so they're
+correct and DST-aware regardless of the viewing device. Display-only — the
+underlying data timestamps were already correct.
+
 # [1.7.3-beta.55] - 23.06.2026
 
 ## ⚡ Idempotent Huawei discharge-limit write (#538)

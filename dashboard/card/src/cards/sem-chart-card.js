@@ -538,6 +538,18 @@ class SEMChartCard extends SEMLitBase {
                         borderWidth: 1, cornerRadius: 10, padding: { top: 10, bottom: 10, left: 14, right: 14 },
                         bodySpacing: 6, displayColors: true, boxPadding: 4,
                         callbacks: {
+                            // Tooltip time in HA's home timezone (DST-aware), not the
+                            // viewer's browser tz — matches the axis labels.
+                            title: (items) => {
+                                if (!items || !items.length) return '';
+                                const d = new Date(items[0].parsed.x);
+                                if (isNaN(d)) return '';
+                                const lang = this._hass?.language || 'en';
+                                const tz = this._hass?.config?.time_zone || undefined;
+                                if (gran === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+                                if (gran === 'month') return d.toLocaleDateString(lang, { month: 'short', year: 'numeric', timeZone: tz });
+                                return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', timeZone: tz });
+                            },
                             label: (item) => {
                                 const val = item.parsed.y;
                                 const unit = item.dataset.yAxisID === 'y1' ? '%' : yLabel;
@@ -569,9 +581,14 @@ class SEMChartCard extends SEMLitBase {
                                 const d = new Date(tick.value);
                                 if (isNaN(d)) return val;
                                 const lang = this._hass?.language || 'en';
-                                if (timeUnit === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
-                                if (timeUnit === 'month') return d.toLocaleDateString(lang, { month: 'short' });
-                                return d.toLocaleDateString(lang, { day: 'numeric', month: 'short' });
+                                // Render in HA's configured home timezone, not the
+                                // viewer's browser tz — and via the IANA zone name so
+                                // it is DST-aware (a browser stuck on CET would otherwise
+                                // show summer times 1 h early).
+                                const tz = this._hass?.config?.time_zone || undefined;
+                                if (timeUnit === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+                                if (timeUnit === 'month') return d.toLocaleDateString(lang, { month: 'short', timeZone: tz });
+                                return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', timeZone: tz });
                             },
                         },
                         stacked,
