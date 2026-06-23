@@ -186,6 +186,11 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
 
     if protection_enabled and view.ev_charging:
         f = view.fleet
+        # Pure solar-vs-house surplus. Intentionally does NOT subtract
+        # battery_charge_w (unlike decide.self_consumption_surplus_w): the
+        # battery view's FleetContext doesn't populate it, and a battery
+        # that is charging cannot simultaneously discharge — so the simpler
+        # formula is safe here (slightly more permissive at worst).
         surplus_w = max(0.0, float(f.solar_w) - float(f.home_w))
         gate_w = float(getattr(f, "battery_assist_min_surplus_w", 1200.0))
         if surplus_w < gate_w:

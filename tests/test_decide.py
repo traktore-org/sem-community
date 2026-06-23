@@ -279,6 +279,18 @@ class TestMinPlusSolarZoneAssist:
         assert d.commanded_amps == 6   # full 4500 W assist / 690 = 6 A
         assert "Zone 4" in d.reason
 
+    def test_zone_4_default_gate_blocks_low_surplus(self):
+        """DEFAULT gate (1200 W), Zone 4, daytime, surplus 300 W (< gate) →
+        no battery assist → idle. Pins the default-gate blocking path
+        (the other gate tests zero the gate to isolate other behavior)."""
+        d = decide(_view(
+            mode="min_plus_solar",
+            solar_w=800, home_w=500, battery_soc=95,
+        ))
+        # surplus = 300 < 1200 default gate → assist blocked → below 6A → idle
+        assert d.intent is ChargerIntent.IDLE
+        assert "Zone 4" in d.reason
+
     def test_zone_3_battery_assist_when_battery_discharging(self):
         """SOC = 75 (Zone 3), some solar + battery → EV charges."""
         d = decide(_view(

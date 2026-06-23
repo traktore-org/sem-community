@@ -399,6 +399,11 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
         # coordinators (transaction-ID mismatches + read timeouts observed
         # on PROD). Compare to the LIVE entity state so an external change
         # is still re-asserted; if the state is unknown/unavailable, write.
+        # Self-heal window: if the inverter silently reverts the register,
+        # the HA entity reflects the stale commanded value until huawei_solar
+        # next polls it (~30-60s / 1-2 SEM cycles); the next cycle sees the
+        # divergence and re-asserts. Bounded, and acceptable vs the per-cycle
+        # Modbus flooding this guard removes.
         st = self._hass.states.get(self._discharge_control_entity)
         if st is not None:
             try:

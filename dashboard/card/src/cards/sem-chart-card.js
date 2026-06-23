@@ -546,9 +546,14 @@ class SEMChartCard extends SEMLitBase {
                                 if (isNaN(d)) return '';
                                 const lang = this._hass?.language || 'en';
                                 const tz = this._hass?.config?.time_zone || undefined;
-                                if (gran === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: tz });
-                                if (gran === 'month') return d.toLocaleDateString(lang, { month: 'short', year: 'numeric', timeZone: tz });
-                                return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', timeZone: tz });
+                                try {
+                                    if (gran === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+                                    if (gran === 'month') return d.toLocaleDateString(lang, { month: 'short', year: 'numeric', timeZone: tz });
+                                    return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', timeZone: tz });
+                                } catch (e) {
+                                    // Bad tz string → fall back to browser-local rather than blank the chart.
+                                    return gran === 'hour' ? d.toLocaleTimeString(lang) : d.toLocaleDateString(lang);
+                                }
                             },
                             label: (item) => {
                                 const val = item.parsed.y;
@@ -586,9 +591,14 @@ class SEMChartCard extends SEMLitBase {
                                 // it is DST-aware (a browser stuck on CET would otherwise
                                 // show summer times 1 h early).
                                 const tz = this._hass?.config?.time_zone || undefined;
-                                if (timeUnit === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: tz });
-                                if (timeUnit === 'month') return d.toLocaleDateString(lang, { month: 'short', timeZone: tz });
-                                return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', timeZone: tz });
+                                try {
+                                    if (timeUnit === 'hour') return d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit', timeZone: tz });
+                                    if (timeUnit === 'month') return d.toLocaleDateString(lang, { month: 'short', timeZone: tz });
+                                    return d.toLocaleDateString(lang, { day: 'numeric', month: 'short', timeZone: tz });
+                                } catch (e) {
+                                    // Bad tz string → fall back to browser-local rather than blank the axis.
+                                    return timeUnit === 'hour' ? d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString(lang, { day: 'numeric', month: 'short' });
+                                }
                             },
                         },
                         stacked,

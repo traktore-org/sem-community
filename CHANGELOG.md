@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+## 🔍 Pre-stable ruflo review fixes
+- **Today-plan card** "Today/Tomorrow/weekday" classification now compares calendar
+  days in HA's timezone, not the browser's (a late-evening event could be labelled
+  a day off for a remote viewer).
+- **Chart axis + tooltip** time formatting is wrapped in try/catch — a corrupt
+  `time_zone` string falls back to browser-local instead of blanking the chart.
+- Clarifying comments on the `decide_battery` surplus formula and the `#538`
+  idempotency self-heal window; added a test pinning the default 1200 W gate
+  blocking battery-assist in Zone 4.
+
 # [1.7.3-beta.56] - 23.06.2026
 
 ## 🕐 Time labels show HA's timezone, not the browser's (#539)

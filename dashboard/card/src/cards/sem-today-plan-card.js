@@ -82,14 +82,16 @@ class SEMTodayPlanCard extends SEMLitBase {
             const tz = this._hass?.config?.time_zone || undefined;
             const time = semFormatTime(iso, tz);  // shared locale-aware HH:MM (#485 K6)
 
-            // Compare calendar days only — ignore time-of-day.
-            const dDay = d.toDateString();
+            // Compare calendar days in HA's timezone, not the browser's —
+            // ``toDateString()`` uses the viewer's tz, so a late-evening
+            // event could be classified a day early/late for a remote viewer.
+            const dayKey = (date) => date.toLocaleDateString('en-CA', { timeZone: tz });
+            const dDay = dayKey(d);
             const today = new Date();
-            if (dDay === today.toDateString()) return time;
+            if (dDay === dayKey(today)) return time;
 
-            const tomorrow = new Date(today);
-            tomorrow.setDate(today.getDate() + 1);
-            if (dDay === tomorrow.toDateString()) {
+            const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+            if (dDay === dayKey(tomorrow)) {
                 const label = this._t('tomorrow') || 'Tomorrow';
                 return `${label} ${time}`;
             }
