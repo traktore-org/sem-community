@@ -235,3 +235,47 @@ def test_forcible_status_ignores_unrelated_sensors():
     ])
     a = _adapter(h)
     assert a._forcible_status_active() is False
+
+
+# ── #538: idempotent discharge-limit write (no redundant Modbus spam) ────
+
+@pytest.mark.asyncio
+async def test_normal_skips_redundant_limit_write_when_already_at_max():
+    """NORMAL re-issues max every cycle; if the control entity is already
+    at max, no Modbus write — the redundant write flooded the bus (#538)."""
+    h = _hass_huawei(forcible_state="Stopped")
+    h.states.get = MagicMock(return_value=_fake_state("number.lim", "5000"))
+    a = _adapter(h)  # battery_max_discharge_power = 5000
+    await a.command_normal()
+    assert _LIMIT not in _calls(h), "entity already at max → skip the write"
+    assert a.last_intent is BatteryIntent.NORMAL
+
+
+@pytest.mark.asyncio
+async def test_normal_writes_when_entity_below_target():
+    """Releasing a clamp (entity at 616) back to max must still write."""
+    h = _hass_huawei(forcible_state="Stopped")
+    h.states.get = MagicMock(return_value=_fake_state("number.lim", "616"))
+    a = _adapter(h)
+    await a.command_normal()
+    assert _LIMIT in _calls(h), "clamped entity → release to max must write"
+
+
+@pytest.mark.asyncio
+async def test_limit_skips_when_entity_already_at_target():
+    """A clamp to a value the entity already holds is a no-op write."""
+    h = _hass_huawei(forcible_state="Stopped")
+    h.states.get = MagicMock(return_value=_fake_state("number.lim", "616"))
+    a = _adapter(h)
+    await a.command_limit_discharge(616.0)
+    assert _LIMIT not in _calls(h), "already clamped → no redundant write"
+
+
+@pytest.mark.asyncio
+async def test_writes_when_entity_state_unknown():
+    """Unknown/unavailable state → re-assert (write), never silently skip."""
+    h = _hass_huawei(forcible_state="Stopped")
+    h.states.get = MagicMock(return_value=_fake_state("number.lim", "unknown"))
+    a = _adapter(h)
+    await a.command_normal()
+    assert _LIMIT in _calls(h), "unknown state → write to be safe"

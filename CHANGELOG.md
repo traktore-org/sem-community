@@ -13,6 +13,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.55] - 23.06.2026
+
+## ⚡ Idempotent Huawei discharge-limit write (#538)
+
+PROD modbus was throwing read **timeouts and out-of-order responses** because
+SEM rewrote the Huawei battery discharge limit (`5000 W`, the unclamped NORMAL
+default) **every coordinator cycle** even though it never changed — a redundant
+write that collided with the huawei_solar read coordinators on the single serial
+connection and ballooned cycle times to 13–28 s.
+
+- `HuaweiBatteryAdapter._apply_discharge_limit` now **skips the write when the
+  control entity is already at the target** (compared against the live entity
+  state, so an external change is still re-asserted; writes when the state is
+  unknown/unavailable). The per-cycle NORMAL spam is gone.
+
+*(PROD-side, separate from the release: the `Huawei … Abfrage` polling
+automation was slowed 10 s → 15 s to further cut modbus read pressure — the
+native huawei_solar update interval is hardcoded at 30 s and not configurable.)*
+
 # [1.7.3-beta.54] - 23.06.2026
 
 ## 🧹 UI polish

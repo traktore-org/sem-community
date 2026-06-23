@@ -392,6 +392,21 @@ class HuaweiBatteryAdapter(BatteryControlAdapter):
             )
             self._last_discharge_limit_w = watts
             return
+        # Idempotency (#538): skip the Modbus write when the control entity
+        # is already at this value. ``command_normal`` re-issues max every
+        # cycle, and a redundant write on the single serial Modbus
+        # connection is not free — it collides with the huawei_solar read
+        # coordinators (transaction-ID mismatches + read timeouts observed
+        # on PROD). Compare to the LIVE entity state so an external change
+        # is still re-asserted; if the state is unknown/unavailable, write.
+        st = self._hass.states.get(self._discharge_control_entity)
+        if st is not None:
+            try:
+                if abs(float(st.state) - watts) < 1.0:
+                    self._last_discharge_limit_w = watts
+                    return
+            except (TypeError, ValueError):
+                pass
         try:
             await self._hass.services.async_call(
                 "number", "set_value",
