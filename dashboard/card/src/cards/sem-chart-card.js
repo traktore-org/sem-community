@@ -159,13 +159,35 @@ class SEMChartCard extends SEMLitBase {
     connectedCallback() {
         super.connectedCallback();
         document.addEventListener('sem-period-change', this._boundPeriodHandler);
+        // #541: a relative window ('today'/'24h'/'7d'/'week') is computed once
+        // and would otherwise freeze on the day it first rendered — a long-open
+        // app then shows yesterday's data this morning. Re-roll it on a timer
+        // and on app resume / tab focus so the window tracks "now".
+        this._rollInterval = setInterval(() => this._rollRelativePeriod(), 5 * 60 * 1000);
+        this._boundVisibility = () => { if (!document.hidden) this._rollRelativePeriod(); };
+        document.addEventListener('visibilitychange', this._boundVisibility);
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
         document.removeEventListener('sem-period-change', this._boundPeriodHandler);
+        if (this._boundVisibility) document.removeEventListener('visibilitychange', this._boundVisibility);
+        clearInterval(this._rollInterval);
         if (this._chart) { this._chart.destroy(); this._chart = null; }
         clearTimeout(this._fetchTimer);
+    }
+
+    /** #541: recompute the card's default relative window from "now" and
+     *  re-fetch, so a long-open app rolls the day boundary instead of showing
+     *  a stale day. Only acts when the card is still showing its OWN default
+     *  window — a user-changed/custom range is left untouched. */
+    _rollRelativePeriod() {
+        if (!this._period || !this._hass) return;
+        const dp = this._config?.default_period || this._preset?.defaultPeriod;
+        const defaultKey = dp === '24h' ? '24h' : dp === '7d' ? '7d'
+            : dp === 'today' ? 'today' : 'week';
+        if (this._period.key !== defaultKey) return;
+        this._setDefaultPeriod();   // recomputes start/end from now + re-fetches
     }
 
     firstUpdated() {

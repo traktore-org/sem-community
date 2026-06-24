@@ -13,15 +13,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-## 🔍 Pre-stable ruflo review fixes
-- **Today-plan card** "Today/Tomorrow/weekday" classification now compares calendar
-  days in HA's timezone, not the browser's (a late-evening event could be labelled
-  a day off for a remote viewer).
-- **Chart axis + tooltip** time formatting is wrapped in try/catch — a corrupt
-  `time_zone` string falls back to browser-local instead of blanking the chart.
-- Clarifying comments on the `decide_battery` surplus formula and the `#538`
-  idempotency self-heal window; added a test pinning the default 1200 W gate
-  blocking battery-assist in Zone 4.
+# [1.7.3] — STABLE
+
+> Rolls up the 1.7.3 beta line (beta.2 → beta.56 + stable prep). The dated
+> `beta.*` sections below are the detailed per-build history; this is the headline
+> summary of what changed since **1.7.2**. The biggest themes: EV charging is
+> reliable in every mode, the home battery is protected from feeding the car
+> without sun, and multi-battery + grid-sign + dashboard all got a major pass.
+
+## ⚡ EV charging — rock-solid in every mode
+- **Charger state reconciler (#392).** The per-cycle imperative actuator (which
+  spammed `keba.disable` 391× and dropped KEBA to 6 A) is replaced by a
+  desired-vs-observed reconciler: it issues the *minimum* commands to converge and
+  then leaves the charger alone. Idempotent idle, heartbeat re-writes, failsafe
+  armed once per session.
+- **Enable-switch reconciliation + backoff (#536).** For switch-driven chargers
+  (Wallbox etc.) SEM reconciles the enable switch and backs off (stops fighting +
+  surfaces a repair) if something keeps toggling it.
+- **No more expensive-grid / dead-solar charging (#461, #524).** The EV no longer
+  drains the battery to hold a dead solar session, and stops pulling from grid after
+  a cheap window ends.
+- **Charge modes:** `solar_only`, `min_plus_solar`, `solar_plus_cheap`,
+  `always_max`, `off` — each with a one-line dashboard hint.
+- **EV target type:** daily **kWh** target or **vehicle SOC %** (when a vehicle SOC
+  sensor is configured). Per-vehicle minimum current (#440), independent **surplus
+  vs shed** priority per charger (#470).
+
+## 🔋 Battery protection & control
+- **Solar Gate (#537).** The home battery only assists the EV when there's real
+  solar surplus ≥ a configurable gate (default **1200 W**) — in *any* mode. Set it
+  to **0 W** to allow battery support everywhere, including overnight. Fixes the
+  overnight battery-drain-into-the-car class of bug.
+- **Multi-battery control + per-battery modes (#523).** Per-battery control entities
+  and five modes — `auto`, `self-consumption`, `force-charge`, `force-discharge`,
+  `off` — plus zero-config Huawei forcible discharge and a corrected SG-Ready relay
+  map for heat pumps.
+- **Idempotent Huawei discharge-limit write (#538).** Stopped re-writing the
+  unchanged discharge limit every cycle, which had been flooding the serial Modbus.
+- **Battery → grid export arbitrage (#523)** shipped in beta but is **deactivated in
+  this stable** pending more soak (#533, re-enable targeted v1.7.4).
+
+## 🧭 Grid sign, heat pump, tariffs
+- **Robust grid-sign autodetection + one-tap fix (#461).** Solar-anchored detector
+  with a `Fix grid sign` / `Reset` button and a `flip_grid_sign` service; locks
+  survive restarts (#476).
+- **Heat pump / hot water (#508).** Surplus activation fires, boosts on the *true*
+  house surplus, stands down under peak; relay-failure safety.
+- **Tibber Grid Reward price arrays (#491)** + forecast dampening with the correct
+  sun window (#416).
+
+## 🖥️ Dashboard & i18n
+- **Solar Gate** stepper, per-charger **plan strip**, price card, config-card
+  cleanups; system-diagram and 7-day-chart fixes.
+- **Time labels render in HA's home timezone**, DST-aware, not the viewer's browser
+  (#539).
+- **Time charts roll the day boundary** (#541) — a long-open app no longer shows
+  *yesterday's* data in *today's* chart; the relative window auto-refreshes on a
+  timer and on app resume / tab focus.
+- **Full 15-locale dashboard translations** — every runtime card string is now
+  translated (previously ~35 keys fell back to English outside en/de/nl), guarded by
+  a new parity test.
+
+## 🔍 Stability & review
+- Pre-stable review batches (#485, #531, #535) — forced-charge restored, per-battery
+  edge cases, robustness; cold-start/restart hardening (#532). Final ruflo pass:
+  today-plan HA-tz day classification, chart tz try/catch, `decide_battery` /
+  `#538` comments, and a default-gate test.
 
 # [1.7.3-beta.56] - 23.06.2026
 
