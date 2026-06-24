@@ -48,34 +48,21 @@ DEFAULT_EV_RAMP_RATE_AMPS: Final = 2  # Max ±2A per 10s cycle during solar/nigh
 DEFAULT_EV_CHARGING_MODE: Final = "auto"  # "auto" (forecast-aware), "pv" (solar+battery), "self_consumption" (true surplus only), "minpv" (min+PV), "now" (max), "off" (disabled)
 DEFAULT_EV_INITIAL_CURRENT: Final = 10  # Amps - starting current for night charging
 DEFAULT_EV_MIN_CURRENT: Final = 6  # Amps - IEC 61851 minimum (increase for sensitive cars)
-DEFAULT_EV_STALL_COOLDOWN: Final = 120  # Seconds between KEBA re-enable attempts
 
-# Solar-path stability layer (v1.7.1-beta.14 — bulletproof EV oscillation fix).
-# The night path already had a delta guard at ev_control.py:440. The solar path
-# at :519 did not — every 10 s cycle re-issued set_current with whatever the
-# Huawei modbus jitter produced this tick. Layered guards stop that:
-#
-#   Layer 1: smooth budget_w with a rolling median so a single-cycle inverter
-#            flicker (e.g. 8 kW -> 0 W -> 8 kW) does not propagate.
-#   Layer 2: delta guard — do not re-issue set_current unless |target - last|
-#            is at least DEFAULT_EV_MIN_CHANGE_AMPS.
-#   Layer 3: time debounce — do not re-issue set_current within
-#            DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC of the last call.
-#   Layer 5: heartbeat — after DEFAULT_EV_STATE_REFRESH_SEC with no command,
-#            re-send the current target so a lost command on a transient
-#            network blip can never strand the charger.
-#
-# Layer 4 (threshold-time-windows on enable/disable transitions) is
-# ev_enable_delay_seconds / ev_disable_delay_seconds. Post-v1.7 they are
-# enforced by coordinator/charge_stability.py between decide() and
-# actuate() (the arch rewrite had orphaned the ev_control.py:495 copy —
-# #461 flapping). Defaults below follow a guard-duration discipline.
+# Solar-path EV current-stability guards. The per-cycle set_current churn
+# guards (median smooth, delta, debounce, enable/disable delays) live in
+# coordinator/charge_stability.py with their own defaults. The
+# v1.7.1-beta.14 ev_control.py copy and its
+# DEFAULT_EV_MIN_CHANGE_AMPS / _MIN_CHANGE_INTERVAL_SEC /
+# _SURPLUS_SMOOTH_WINDOW / _STATE_REFRESH_SEC constants were orphaned by
+# the v1.7 arch rewrite (#461) and have been removed. The matching ev_*
+# config KEYS (ev_min_change_amps, ev_min_change_interval_sec,
+# ev_surplus_smooth_window, ev_ramp_rate_amps, ev_enable_delay_seconds,
+# ev_disable_delay_seconds, ev_deep_deficit_grace_sec) are still honoured —
+# read in coordinator._charge_stability_kwargs() and passed to
+# ChargeStability.filter().
 DEFAULT_EV_ENABLE_DELAY_SEC: Final = 60   # Seconds surplus must persist before a charge starts
 DEFAULT_EV_DISABLE_DELAY_SEC: Final = 300  # Seconds deficit must persist before a charge stops
-DEFAULT_EV_MIN_CHANGE_AMPS: Final = 1  # Amps - suppress sub-1A noise (matches night-path L440)
-DEFAULT_EV_MIN_CHANGE_INTERVAL_SEC: Final = 30  # Seconds between set_current calls
-DEFAULT_EV_SURPLUS_SMOOTH_WINDOW: Final = 3  # Cycles in the rolling median (~30 s)
-DEFAULT_EV_STATE_REFRESH_SEC: Final = 300  # Seconds — heartbeat re-send floor
 DEFAULT_EV_CHARGER_NEEDS_CYCLE: Final = False  # True = disable/enable cycle for session start (sensitive cars)
 DEFAULT_EV_BATTERY_CAPACITY_KWH: Final = 40  # kWh — usable EV battery capacity
 DEFAULT_EV_TARGET_SOC: Final = 80  # % — target SOC for night charging

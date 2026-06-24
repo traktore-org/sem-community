@@ -1085,9 +1085,6 @@
       "ev_min_current": {
         "name": "Courant Minimum VE"
       },
-      "ev_stall_cooldown": {
-        "name": "Temporisation Arrêt VE"
-      },
       "ev_enable_delay_seconds": {
         "name": "Délai de démarrage VE (surplus)"
       },

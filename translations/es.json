@@ -1085,9 +1085,6 @@
       "ev_min_current": {
         "name": "Corriente Mínima VE"
       },
-      "ev_stall_cooldown": {
-        "name": "Enfriamiento Parada VE"
-      },
       "ev_enable_delay_seconds": {
         "name": "Retardo de inicio VE (excedente)"
       },

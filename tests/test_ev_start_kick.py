@@ -162,6 +162,31 @@ class TestStartKick:
         d = _filter(st, view, adapter, now=85.0)
         assert d.commanded_amps == 16  # clamped to ev_max_current
 
+    def test_post_latch_hold_then_gentle_settle(self):
+        """First draw of a SEM-started session anchors the debounce, so the
+        latch current holds for a full ev_min_change_interval_sec (reused as
+        the stabilization hold), then eases toward the budget at the ramp."""
+        st = ChargeStability()
+        adapter = FakeAdapter(min_current_a=6, max_current_a=16)
+        idle = _view(power_w=120.0, ev_min_current=6, initial_current=9)
+        _filter(st, idle, adapter, now=0.0)    # IDLE — surplus must hold
+        _filter(st, idle, adapter, now=60.0)   # gentle start at 6 A
+        adapter.last_intent = ChargerIntent.CHARGE_AT_AMPS
+        _filter(st, idle, adapter, now=85.0)   # escalate to 9 A kick
+        drawing = _view(power_w=4140.0, ev_min_current=6, initial_current=9)
+        # Car latches → hold the 9 A that latched it (debounce anchored).
+        d = st.filter(_charge(), drawing, adapter,
+                      enable_delay_s=60, disable_delay_s=300, now_ts=90.0)
+        assert d.commanded_amps == 9
+        # Still inside the 30 s debounce/hold → unchanged.
+        d = st.filter(_charge(), drawing, adapter,
+                      enable_delay_s=60, disable_delay_s=300, now_ts=110.0)
+        assert d.commanded_amps == 9
+        # Hold elapsed → one gentle ramp step toward the 6 A budget.
+        d = st.filter(_charge(), drawing, adapter,
+                      enable_delay_s=60, disable_delay_s=300, now_ts=125.0)
+        assert d.commanded_amps == 7  # 9 - ramp(2)
+
     def test_sustain_floor_6_does_not_oscillate_on_4140w_budget(self):
         """With ev_min_current=6, a steady 6 A budget keeps charge_wanted
         true — no start/stop flip (the catch-22 that ev_min_current=9

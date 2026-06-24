@@ -252,9 +252,19 @@ class ChargeStability:
             if charging:
                 self._surplus_since.pop(cid, None)
                 if drawing:
-                    # Latched and pulling current → normal sustain. Clear
-                    # the start watch and ramp/hold toward the budget.
-                    self._start_since.pop(cid, None)
+                    # Latched and pulling current. If THIS is the first draw
+                    # of a SEM-initiated start (the car was still in its
+                    # start/kick watch), anchor the debounce clock to the
+                    # latch instant: the existing ``ev_min_change_interval_sec``
+                    # then holds the current that latched the car steady for a
+                    # full interval — post-start stabilization, since a freshly
+                    # latched car (a Zoe especially) is mid-handshake and
+                    # aborts on an immediate re-signal — after which ``_adjust``
+                    # eases toward the budget at ``ev_ramp_rate_amps``. Reuses
+                    # the existing debounce + ramp knobs; no new tunables.
+                    if cid in self._start_since:
+                        self._start_since.pop(cid, None)
+                        self._last_change_ts[cid] = now
                     return self._adjust(
                         decision, cid, target, now,
                         min_change_amps=min_change_amps,

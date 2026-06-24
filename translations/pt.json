@@ -1085,9 +1085,6 @@
       "ev_min_current": {
         "name": "EV Minimum Current"
       },
-      "ev_stall_cooldown": {
-        "name": "EV Stall Cooldown"
-      },
       "ev_enable_delay_seconds": {
         "name": "Atraso de arranque VE (excedente)"
       },
