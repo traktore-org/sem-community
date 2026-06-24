@@ -13,6 +13,8 @@ from custom_components.solar_energy_management.coordinator.charge_stability impo
     ChargeStability,
     START_KICK_GRACE_S,
     START_KICK_STEP_A,
+    START_KICK_MAX_A,
+    START_KICK_GIVEUP_S,
 )
 from custom_components.solar_energy_management.coordinator.charger_types import (
     ChargerDecision,
@@ -124,19 +126,36 @@ class TestStartEscalation:
             assert d.commanded_amps <= 6
             assert "trying" not in d.reason
 
-    def test_escalation_capped_at_charger_max(self):
-        """The climb never exceeds the charger max (16 A here)."""
+    def test_escalation_capped_at_safe_ceiling_not_charger_max(self):
+        """On a 32 A charger the climb must stop at START_KICK_MAX_A (10),
+        NOT the 32 A max — the grid-spike-safety cap."""
         st = ChargeStability()
-        adapter = FakeAdapter(min_current_a=6, max_current_a=16)
-        view = _view(power_w=120.0, ev_min_current=6, ev_max_current=16)
+        adapter = FakeAdapter(min_current_a=6, max_current_a=32)
+        view = _view(power_w=120.0, ev_min_current=6, ev_max_current=32)
         _filter(st, view, adapter, now=0.0)
         _filter(st, view, adapter, now=60.0)
         adapter.last_intent = ChargerIntent.CHARGE_AT_AMPS
-        # Many graces later it must be pinned at 16, never above.
         d = None
-        for i in range(1, 12):
+        for i in range(1, 6):  # climb several graces
             d = _filter(st, view, adapter, now=60.0 + i * (START_KICK_GRACE_S + 1))
-        assert d.commanded_amps == 16
+        assert d.commanded_amps == START_KICK_MAX_A   # 10, capped — never 32
+
+    def test_gives_up_when_car_never_latches(self):
+        """Held at the ceiling past the give-up window with no draw → stop
+        offering (IDLE), don't sit at a high current forever."""
+        st = ChargeStability()
+        adapter = FakeAdapter(min_current_a=6, max_current_a=32)
+        view = _view(power_w=120.0, ev_min_current=6, ev_max_current=32)
+        _filter(st, view, adapter, now=0.0)
+        _filter(st, view, adapter, now=60.0)
+        adapter.last_intent = ChargerIntent.CHARGE_AT_AMPS
+        # Reach the ceiling.
+        for i in range(1, 5):
+            _filter(st, view, adapter, now=60.0 + i * (START_KICK_GRACE_S + 1))
+        # Long past the give-up window, still no draw → IDLE.
+        d = _filter(st, view, adapter, now=60.0 + 6 * START_KICK_GRACE_S + START_KICK_GIVEUP_S + 5)
+        assert d.intent is ChargerIntent.IDLE
+        assert "not latching" in d.reason
 
     def test_post_latch_hold_then_gentle_settle(self):
         """First draw anchors the debounce, so the latch current holds a

@@ -112,10 +112,23 @@ _NOT_CHEAP_LEVELS = frozenset({"normal", "expensive", "very_expensive"})
 START_KICK_GRACE_S = 20.0
 
 # Amps to raise the start offer by each grace when a car won't latch at the
-# minimum. SEM climbs min → min+step → … (capped at the charger max) until
-# the car draws, then settles back to the minimum. Auto-discovers a fussy
-# car's latch current with no user knob.
+# minimum. SEM climbs min → min+step → … until the car draws, then settles
+# back to the target. Auto-discovers a fussy car's latch current, no knob.
 START_KICK_STEP_A = 2
+
+# Ceiling for the start escalation. Bounded WELL below the charger max so a
+# car that suddenly accepts a high offer can't spike the grid, and a
+# full/refusing car is never held at 32 A. Known fussy cars latch under
+# this (a Renault Zoe begins at ~9-10 A). The escalation actually climbs to
+# ``max(target_current, START_KICK_MAX_A)`` so a high deadline target is
+# still reachable.
+START_KICK_MAX_A = 10
+
+# After holding the escalation ceiling this long with the car still drawing
+# nothing, conclude it won't latch (full / refusing / needs more than we'll
+# safely offer) and stop offering — let decide()/the stall detector own the
+# refusal instead of holding a high current forever.
+START_KICK_GIVEUP_S = 90.0
 
 
 class ChargeStability:
@@ -293,12 +306,31 @@ class ChargeStability:
                 # There is NO separate "start amps" knob: SEM discovers the
                 # latch current itself, capped at the charger max. A car that
                 # never draws is stopped by the stall detector (ev_control).
+                # Bounded ceiling: never escalate past max(target, 10 A),
+                # capped at the charger max. Protects the grid from a sudden
+                # high-current latch and stops a refusing car being held at 32 A.
+                kick_ceiling = min(max_amps, max(target, START_KICK_MAX_A))
                 offer = int(self._start_offer.get(cid, min_amps))
                 s0 = self._start_since.setdefault(cid, now)
-                if offer < max_amps and (now - s0) >= START_KICK_GRACE_S:
-                    offer = min(max_amps, offer + START_KICK_STEP_A)
+                if offer < kick_ceiling and (now - s0) >= START_KICK_GRACE_S:
+                    offer = min(kick_ceiling, offer + START_KICK_STEP_A)
                     self._start_offer[cid] = offer
                     self._start_since[cid] = now  # restart the grace per step
+                elif offer >= kick_ceiling and (now - s0) >= START_KICK_GIVEUP_S:
+                    # Held the ceiling, still no draw → the car won't latch.
+                    # Stop offering (don't sit at a high current); the stall
+                    # detector / planner own the refusal.
+                    self._reset(cid)
+                    return replace(
+                        decision,
+                        intent=ChargerIntent.IDLE,
+                        commanded_amps=0,
+                        reason=(
+                            f"stability: no draw at {offer}A after escalation "
+                            f"— car not latching (full/refusing) — "
+                            f"{decision.reason}"
+                        ),
+                    )
                 self._commit_amps(cid, offer, now)
                 if offer > min_amps:
                     reason = (
