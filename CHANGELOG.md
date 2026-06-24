@@ -70,6 +70,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Time charts roll the day boundary** (#541) — a long-open app no longer shows
   *yesterday's* data in *today's* chart; the relative window auto-refreshes on a
   timer and on app resume / tab focus.
+- **EV Power chart no longer magnifies standby noise** (#541) — a plugged-in idle
+  car's ~130 W standby used to auto-scale to fill the whole chart and read like a
+  real charge; the axis now has a 2 kW floor so standby renders flat near zero while
+  real charges still scale up.
 - **Full 15-locale dashboard translations** — every runtime card string is now
   translated (previously ~35 keys fell back to English outside en/de/nl), guarded by
   a new parity test.

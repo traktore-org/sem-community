@@ -109,6 +109,12 @@ const PRESETS = {
         // 24h includes yesterday-evening charges as a "phantom second
         // charge" in the morning view.
         title: 'ev_charging', y_label: 'W', stacked: true, defaultPeriod: 'today',
+        // Anchor the EV power axis at 0 with a 2 kW floor: a plugged-in idle car
+        // draws ~130 W of standby/handshake, which auto-scaling would otherwise
+        // blow up to fill the whole chart and read like a real charge. With a
+        // 2 kW suggestedMax that standby renders flat near zero, while a real
+        // charge (≥ a few kW) still extends the axis normally.
+        y_min: 0, y_suggested_max: 2000,
         hourly:  [
             { suffix: 'flow_solar_to_ev_power',   name: 'solar',   color: C.solar,      type: 'area' },
             { suffix: 'flow_battery_to_ev_power',  name: 'battery', color: C.batteryOut, type: 'area' },
@@ -641,7 +647,10 @@ class SEMChartCard extends SEMLitBase {
                         },
                         title: { display: !!yLabel, text: yLabel, color: T.textSec || '#757575', font: { size: 11, family: "'Segoe UI','Roboto',sans-serif" } },
                         stacked,
-                        beginAtZero: yLabel !== 'W',
+                        beginAtZero: yLabel !== 'W' || this._preset?.y_min === 0,
+                        // Per-preset axis floor (e.g. EV: don't zoom into standby noise).
+                        ...(this._preset?.y_min != null ? { min: this._preset.y_min } : {}),
+                        ...(this._preset?.y_suggested_max != null ? { suggestedMax: this._preset.y_suggested_max } : {}),
                     },
                 },
             },
