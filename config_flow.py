@@ -16,9 +16,6 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
-    DEFAULT_POWER_DELTA,
-    DEFAULT_CURRENT_DELTA,
-    DEFAULT_SOC_DELTA,
     DEFAULT_BATTERY_PRIORITY_SOC,
     DEFAULT_BATTERY_MINIMUM_SOC,
     DEFAULT_BATTERY_RESUME_SOC,
@@ -472,11 +469,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         keys are editable post-install.
         """
         return {
-            # Coordinator deltas / loop
+            # Coordinator loop
             "update_interval": DEFAULT_UPDATE_INTERVAL,
-            "power_delta": DEFAULT_POWER_DELTA,
-            "current_delta": DEFAULT_CURRENT_DELTA,
-            "soc_delta": DEFAULT_SOC_DELTA,
             # 4-zone SOC strategy thresholds (see docs/ARCHITECTURE.md)
             "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
             "battery_buffer_soc": DEFAULT_BATTERY_BUFFER_SOC,
@@ -1630,24 +1624,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("update_interval", DEFAULT_UPDATE_INTERVAL),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=10, max=60, step=5, unit_of_measurement="s", mode="slider")
-                ),
-                vol.Optional(
-                    "power_delta",
-                    default=_c("power_delta", DEFAULT_POWER_DELTA),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=50, max=3000, step=10, unit_of_measurement="W", mode="slider")
-                ),
-                vol.Optional(
-                    "current_delta",
-                    default=_c("current_delta", DEFAULT_CURRENT_DELTA),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=10, step=1, unit_of_measurement="A", mode="slider")
-                ),
-                vol.Optional(
-                    "soc_delta",
-                    default=_c("soc_delta", DEFAULT_SOC_DELTA),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=1, max=20, step=1, unit_of_measurement="%", mode="slider")
                 ),
                 vol.Optional(
                     "grid_import_power_entity",

@@ -12,9 +12,6 @@ DEFAULT_UPDATE_INTERVAL: Final = 10  # seconds - 10 seconds for highly accurate 
 # update cycles while they're still unresolved (source integration not yet registered),
 # then give up. ~40 cycles ≈ 7-20 min depending on update_interval.
 ED_RESOLVE_MAX_ATTEMPTS: Final = 40
-DEFAULT_POWER_DELTA: Final = 1000  # Watts - only major changes
-DEFAULT_CURRENT_DELTA: Final = 5  # Amps - significant current changes only
-DEFAULT_SOC_DELTA: Final = 10  # Percent - battery changes slowly anyway
 
 # Database protection levels
 DATABASE_PROTECTION_MINIMAL: Final = 1   # All sensors enabled, normal updates

@@ -45,30 +45,9 @@ NUMBER_TYPES = [
         native_step=5,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="power_delta",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        native_min_value=50,
-        native_max_value=3000,
-        native_step=50,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="current_delta",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        native_min_value=1,
-        native_max_value=10,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="soc_delta",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=1,
-        native_max_value=20,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
+    # power_delta / current_delta / soc_delta removed — dead knobs: the
+    # values were never read by any control logic (current_delta was only
+    # assigned to self.current_delta and never used).
     # Battery Management
     NumberEntityDescription(
         # 4-zone Zone 1 floor: below this, all solar → battery, EV blocked.
@@ -684,9 +663,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         """Get default value for a setting."""
         from .const import (
             DEFAULT_UPDATE_INTERVAL,
-            DEFAULT_POWER_DELTA,
-            DEFAULT_CURRENT_DELTA,
-            DEFAULT_SOC_DELTA,
             DEFAULT_BATTERY_PRIORITY_SOC,
             DEFAULT_BATTERY_MINIMUM_SOC,
             DEFAULT_BATTERY_RESUME_SOC,
@@ -709,9 +685,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
 
         defaults = {
             "update_interval": DEFAULT_UPDATE_INTERVAL,
-            "power_delta": DEFAULT_POWER_DELTA,
-            "current_delta": DEFAULT_CURRENT_DELTA,
-            "soc_delta": DEFAULT_SOC_DELTA,
             "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
             "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
             "battery_resume_soc": DEFAULT_BATTERY_RESUME_SOC,

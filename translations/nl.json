@@ -146,9 +146,6 @@
         "description": "Pas je SEM optimalisatie instelling aan",
         "data": {
           "update_interval": "Update-interval (seconden)",
-          "power_delta": "Vermogen delta-drempel (W)",
-          "current_delta": "Stroom delta-drempel (A)",
-          "soc_delta": "Batterij SOC delta-drempel (%)",
           "battery_priority_soc": "Batterij prioriteit SOC (%)",
           "battery_minimum_soc": "Minimale batterij SOC (%)",
           "battery_resume_soc": "Batterij hervat SOC (%)",
@@ -180,9 +177,6 @@
         },
         "data_description": {
           "update_interval": "Hoe vaak de coördinator sensoren uitleest en hardware aanstuurt. 10 s geeft de meest nauwkeurige energie-integratie; waarden boven 30 s zullen energie onderschatten. Bereik 10–60 s.",
-          "power_delta": "Drempel voor veranderingdetectie van vermogenssensoren. Lager = meer updates (gevoeliger maar zwaarder voor de recorder). Standaard 1000 W is prima voor de meeste installaties; stel bij naar 100–200 W voor fijnere regeling.",
-          "current_delta": "Minimale verandering in laadstroom (A) voordat SEM de EV-lader bijwerkt. Hoger = minder op- en afregelen.",
-          "soc_delta": "Minimale verandering in batterij SOC (%) voordat SEM reageert. Batterij SOC verandert langzaam, dus 10% is meestal prima.",
           "battery_priority_soc": "Grens tussen zone 1 en zone 2. Onder deze SOC gaat alle zonne-energie naar de batterij en wordt de EV geblokkeerd. Standaard 30%. De vierzone-strategie vereist dat deze waarde LAAG is (5–60%) — verwar dit niet met de oude 3-zonebetekenis waarbij dit een hoge doelwaarde was.",
           "battery_buffer_soc": "Grens tussen zone 2 en zone 3. Boven deze SOC mag de batterij ontladen om tekorten in zonne-energie op te vangen terwijl de EV wordt geladen. Standaard 70%.",
           "battery_auto_start_soc": "Grens tussen zone 3 en zone 4. Boven deze SOC kan de EV beginnen met laden, zelfs zonder zonne-overschot, gebruikmakend van de batterij. Standaard 90%.",
@@ -235,9 +229,6 @@
           "electricity_export_rate": "Exporttarief",
           "demand_charge_rate": "Vermogenstarief",
           "update_interval": "Update-interval (s)",
-          "power_delta": "Drempel vermogenswijziging (W)",
-          "current_delta": "Drempel stroomwijziging (A)",
-          "soc_delta": "Drempel SOC-wijziging (%)",
           "tariff_mode": "Tarief modus",
           "dynamic_tariff_entity": "Dynamische prijsentiteit (automatisch gedetecteerd indien leeg)",
           "dynamic_forecast_entity": "Prognose-entiteit (optioneel, automatisch gedetecteerd indien leeg)",
@@ -251,9 +242,6 @@
           "electricity_export_rate": "Teruglevertarief dat door de energieleverancier wordt vergoed (valuta/kWh).",
           "demand_charge_rate": "Maandelijkse piekvermogensheffing (valuta/kW/maand). Stel in op 0 als uw contract dit niet heeft.",
           "update_interval": "Hoe vaak SEM sensoren uitleest en hardware bijstuurt (seconden). Bereik 10–60 s.",
-          "power_delta": "Minimale vermogenswijziging (W) voordat SEM reageert. Lager = responsiever maar zwaarder voor de recorder.",
-          "current_delta": "Minimale laadstroomwijziging (A) voordat SEM de laadpaal bijwerkt.",
-          "soc_delta": "Minimale accu-SOC-wijziging (%) voordat SEM reageert op wijzigingen in de accu-toestand.",
           "tariff_mode": "Kies 'Statisch' voor vaste tarieven, 'Dynamisch' voor realtime prijzen of 'Kalender' voor tijdsgebonden tariefschema's.",
           "dynamic_tariff_entity": "Sensor die de actuele elektriciteitsinkoopprijs levert. Automatisch gedetecteerd via Tibber, Nordpool, enz.",
           "dynamic_forecast_entity": "Optionele sensor met uurlijkse prijsverwachtingen voor slimme planning.",
@@ -1026,15 +1014,6 @@
     "number": {
       "update_interval": {
         "name": "Update-interval"
-      },
-      "power_delta": {
-        "name": "Vermogensdelta"
-      },
-      "current_delta": {
-        "name": "Stroomdelta"
-      },
-      "soc_delta": {
-        "name": "SOC-delta"
       },
       "battery_priority_soc": {
         "name": "Batterij Prioriteits-SOC"

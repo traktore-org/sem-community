@@ -122,8 +122,7 @@ const WATCHED = [
     'number.sem_battery_minimum_soc', 'number.sem_battery_resume_soc',
     'number.sem_cheap_price_threshold', 'number.sem_expensive_price_threshold',
     'number.sem_minimum_solar_power', 'number.sem_maximum_grid_import',
-    'number.sem_update_interval', 'number.sem_power_delta',
-    'number.sem_current_delta', 'number.sem_soc_delta',
+    'number.sem_update_interval',
     'number.sem_ev_enable_delay_seconds', 'number.sem_ev_disable_delay_seconds',
     // #492: regulation_offset moved here from sem-control-card (Config
     // is the single settings home; Control is live-ops only).
@@ -1241,18 +1240,13 @@ class SEMConfigCard extends SEMLitBase {
             ${this._renderToggle('switch.sem_observer_mode', 'observer_mode', T, 'config_help_observer_mode')}
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_update_interval', 'update_interval', T, 'config_help_update_interval')}
-                ${this._renderStepper('number.sem_power_delta', 'power_delta', T, 'config_help_power_delta')}
-            </div>
-            <div class="stepper-pair">
-                ${this._renderStepper('number.sem_current_delta', 'current_delta', T, 'config_help_current_delta')}
-                ${this._renderStepper('number.sem_soc_delta', 'soc_delta', T, 'config_help_soc_delta')}
-            </div>
-            <div class="stepper-pair">
                 ${this._renderStepper('number.sem_minimum_solar_power', 'min_solar_power', T, 'config_help_min_solar_power')}
-                ${this._renderStepper('number.sem_regulation_offset', 'regulation_offset', T, 'config_help_regulation_offset')}
             </div>
             <div class="stepper-pair">
+                ${this._renderStepper('number.sem_regulation_offset', 'regulation_offset', T, 'config_help_regulation_offset')}
                 ${this._renderStepper('number.sem_ev_enable_delay_seconds', 'ev_enable_delay', T, 'config_help_ev_enable_delay')}
+            </div>
+            <div class="stepper-pair">
                 ${this._renderStepper('number.sem_ev_disable_delay_seconds', 'ev_disable_delay', T, 'config_help_ev_disable_delay')}
             </div>
             ${this._renderGridSignFix(T)}
