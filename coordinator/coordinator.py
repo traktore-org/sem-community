@@ -1458,6 +1458,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                     )
                                     self._night_global_fallback_logged.add(cid)
                             daily = self._daily_ev_per_charger.get(cid, 0.0)
+                            # Single charger: the per-charger integrator is
+                            # REBUILT FROM POWER each restart and under-reports
+                            # after a restart, while the global ``daily_ev`` is
+                            # persisted — the same quantity, and exactly what the
+                            # dashboard "Today" shows (see _per_charger_daily_report).
+                            # Use the persisted global so the night target's
+                            # "delivered" matches the displayed Today figure;
+                            # otherwise repeated restarts make the planner think
+                            # the target isn't reached and it keeps charging past
+                            # it (#536). Multi-charger keeps its own persisted
+                            # per-charger accumulator.
+                            chargers = self.config.get("ev_chargers") or []
+                            if len(chargers) == 1:
+                                daily = float(getattr(energy, "daily_ev", 0.0) or 0.0)
                             self._night_target_per_charger_map[cid] = max(0, target - daily)
 
                     # Backward compat: set the old scalar for single-value reads
