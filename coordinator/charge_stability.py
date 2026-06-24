@@ -101,6 +101,16 @@ _CHARGE_INTENTS = (ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX)
 # keep the full bridge — there grid is cheap or price-agnostic.
 _NOT_CHEAP_LEVELS = frozenset({"normal", "expensive", "very_expensive"})
 
+# Grace after the gentle min-current start before escalating to the
+# ``initial_current`` start-kick when the car still isn't drawing. Some
+# vehicles (e.g. a 3-phase EV that needs ~9 A to begin the handshake)
+# never latch a 6 A offer; SEM starts gently to avoid the documented
+# KEBA cold-start grid overshoot, then — only if no current flows —
+# bumps to the higher start-amps to force the latch. Short enough to
+# beat the stall detector's refusal (~90 s); long enough to let a
+# slightly slow but normal car draw at the minimum first.
+START_KICK_GRACE_S = 20.0
+
 
 class ChargeStability:
     """Per-charger smoothing + enable/disable delay state.
@@ -118,6 +128,9 @@ class ChargeStability:
         self._amps_history: Dict[str, List[int]] = {}
         self._last_amps: Dict[str, int] = {}
         self._last_change_ts: Dict[str, float] = {}
+        # When the current start attempt began (first gentle command),
+        # used to time the escalation to the ``initial_current`` kick.
+        self._start_since: Dict[str, float] = {}
 
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
@@ -126,6 +139,7 @@ class ChargeStability:
         self._amps_history.pop(cid, None)
         self._last_amps.pop(cid, None)
         self._last_change_ts.pop(cid, None)
+        self._start_since.pop(cid, None)
 
     def _median_amps(self, cid: str, raw_amps: int, window: int) -> int:
         """Layer 1 — rolling median of the raw target-amps stream.
@@ -195,6 +209,15 @@ class ChargeStability:
         max_amps = int(cfg.get("ev_max_current", 0) or 0) or int(
             getattr(adapter, "max_current_a", 32) or 32,
         )
+        # Start-kick current ("Vehicle Start Amps" / ``initial_current``):
+        # the current to escalate to when a gentle min-current start
+        # doesn't draw. Clamped to ``[min_amps, max_amps]``; degrades to
+        # ``min_amps`` when unset or not above the floor, in which case the
+        # escalation below is a no-op (legacy gentle-start behaviour).
+        start_cfg = int(cfg.get("initial_current", 0) or 0)
+        start_amps = (
+            max(min_amps, min(max_amps, start_cfg)) if start_cfg else min_amps
+        )
 
         # Raw target this cycle: the decided amps for CHARGE, 0 for
         # IDLE. CHARGE_MAX (not produced by surplus modes, defensive)
@@ -225,13 +248,50 @@ class ChargeStability:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
             target = max(min_amps, min(max_amps, med_amps))
+            drawing = adapter.actual_charging(view.power)
             if charging:
                 self._surplus_since.pop(cid, None)
-                return self._adjust(
-                    decision, cid, target, now,
-                    min_change_amps=min_change_amps,
-                    min_change_interval_s=min_change_interval_s,
-                    ramp_amps=ramp_amps,
+                if drawing:
+                    # Latched and pulling current → normal sustain. Clear
+                    # the start watch and ramp/hold toward the budget.
+                    self._start_since.pop(cid, None)
+                    return self._adjust(
+                        decision, cid, target, now,
+                        min_change_amps=min_change_amps,
+                        min_change_interval_s=min_change_interval_s,
+                        ramp_amps=ramp_amps,
+                    )
+                # Commanded a charge but the car is NOT drawing. Some
+                # vehicles refuse a gentle 6 A handshake and need a brief
+                # higher start-amps kick to latch ("Vehicle Start Amps" /
+                # ``initial_current``). Hold the gentle current through a
+                # short grace, then escalate to ``start_amps`` and keep it
+                # until the car draws. A car that never draws is stopped by
+                # the stall detector (ev_control), not here.
+                s0 = self._start_since.setdefault(cid, now)
+                if start_amps > min_amps and (now - s0) >= START_KICK_GRACE_S:
+                    self._commit_amps(cid, start_amps, now)
+                    return replace(
+                        decision,
+                        intent=ChargerIntent.CHARGE_AT_AMPS,
+                        commanded_amps=start_amps,
+                        reason=(
+                            f"stability: car not drawing — start kick "
+                            f"{start_amps}A (settles to {target}A once "
+                            f"charging) — {decision.reason}"
+                        ),
+                    )
+                self._commit_amps(cid, min_amps, now)
+                return replace(
+                    decision,
+                    intent=ChargerIntent.CHARGE_AT_AMPS,
+                    commanded_amps=min_amps,
+                    reason=(
+                        f"stability: gentle start {min_amps}A"
+                        + (f" (kick to {start_amps}A if no draw)"
+                           if start_amps > min_amps else "")
+                        + f" — {decision.reason}"
+                    ),
                 )
             since = self._surplus_since.setdefault(cid, now)
             held = now - since
@@ -239,8 +299,11 @@ class ChargeStability:
                 # Start gently at minimum current — KEBA's ~30 s
                 # actuator lag overshot a cold 14 A command into
                 # ~4.4 kW of grid import (PROD 2026-05-31); the ramp
-                # climbs from here on subsequent cycles.
+                # climbs from here on subsequent cycles. ``_start_since``
+                # begins the watch that escalates to the start-kick if the
+                # car doesn't draw at the gentle current.
                 self._surplus_since.pop(cid, None)
+                self._start_since[cid] = now
                 self._commit_amps(cid, min_amps, now)
                 return replace(
                     decision,
@@ -263,6 +326,7 @@ class ChargeStability:
 
         # Smoothed deficit.
         self._surplus_since.pop(cid, None)
+        self._start_since.pop(cid, None)
         if not charging:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
