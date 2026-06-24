@@ -507,7 +507,15 @@ class SEMEVStatusCard extends SEMLitBase {
         const sessionInt = this._val(`charger_${id}_session_energy`, 0);
         const session = sessionExt > 0 ? sessionExt : sessionInt;
         const dailyEnergy = this._val(`charger_${id}_daily_energy`, 0);
-        const solar = this._val(`charger_${id}_session_solar_share`, 0);
+        // Solar Share sits under "Today: X kWh", so it must read the DAILY solar
+        // attribution, not the per-cycle session — otherwise a plugged-in idle
+        // car shows "Today 10.9 kWh · Solar Share 2%" where the 2% is just the
+        // standby session (the day's charge was ~100% solar). Matches the
+        // single-charger status-row path (energy_ev_solar_percentage = the
+        // time-integrated daily flow attribution). (No per-charger daily-share
+        // sensor exists yet — on a multi-charger fleet this shows the fleet's
+        // daily share on each tile; a per-charger daily sensor is a follow-up.)
+        const solar = this._val('energy_ev_solar_percentage', 0);
         // Prefer real vehicle SOC over estimated (#193). The per-
         // charger ``sensor.sem_charger_<id>_vehicle_soc`` now exists
         // (#383) — each card reads its own charger's SOC directly
