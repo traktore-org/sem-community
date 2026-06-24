@@ -172,11 +172,11 @@ class TestStartEscalation:
                       enable_delay_s=60, disable_delay_s=300, now_ts=90.0)
         assert d.commanded_amps == 8                   # hold the latch current
         d = st.filter(_charge(), drawing, adapter,
-                      enable_delay_s=60, disable_delay_s=300, now_ts=110.0)
-        assert d.commanded_amps == 8                   # still inside debounce
+                      enable_delay_s=60, disable_delay_s=300, now_ts=150.0)
+        assert d.commanded_amps == 8                   # still inside 90 s debounce
         d = st.filter(_charge(), drawing, adapter,
-                      enable_delay_s=60, disable_delay_s=300, now_ts=125.0)
-        assert d.commanded_amps == 6                   # 8 - ramp(2) → min
+                      enable_delay_s=60, disable_delay_s=300, now_ts=185.0)
+        assert d.commanded_amps == 6                   # debounce elapsed → settle
 
     def test_sustain_floor_does_not_oscillate_on_budget(self):
         """A steady 6 A budget keeps charge_wanted true — no start/stop flip."""

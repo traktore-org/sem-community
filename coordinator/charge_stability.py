@@ -67,9 +67,15 @@ SURPLUS_DAY_MODES = frozenset({"solar_only", "min_plus_solar", "solar_plus_cheap
 
 DEFAULT_ENABLE_DELAY_S = 60
 DEFAULT_DISABLE_DELAY_S = 300
-DEFAULT_SMOOTH_WINDOW = 3
-DEFAULT_MIN_CHANGE_AMPS = 1
-DEFAULT_MIN_CHANGE_INTERVAL_S = 30
+# Stability defaults tuned for a calm, steady charge (cars — a Zoe
+# especially — drop a session when the current keeps moving). "Balanced":
+# change the offered current at most ~every 90 s and only for a ≥2 A move,
+# over a 5-cycle (~50 s) median. Once charging it should look like a
+# staircase with rare gentle steps, not a sawtooth. Peak management is the
+# only thing allowed to override this and reduce promptly.
+DEFAULT_SMOOTH_WINDOW = 5
+DEFAULT_MIN_CHANGE_AMPS = 2
+DEFAULT_MIN_CHANGE_INTERVAL_S = 90
 DEFAULT_RAMP_AMPS = 2
 
 # #461 part 2 — deep-deficit escape from the disable hold. The 300 s

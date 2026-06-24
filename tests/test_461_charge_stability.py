@@ -356,27 +356,32 @@ class TestMidSessionSmoothing:
         assert d.commanded_amps == 10
         assert not st._deficit_since
 
+    # These pin the mechanism at the classic 3-window / 30 s / 1 A timing
+    # so they stay meaningful independent of the production defaults (now
+    # tuned steadier: 5-window / 90 s / 2 A).
+    _G = dict(smooth_window=3, min_change_amps=1, min_change_interval_s=30)
+
     def test_ramp_limits_step_size(self):
         # A surplus jump from 10 A to 16 A worth of sun moves the
         # setpoint by at most ramp_amps per change.
         st, adapter, view = self._charging_setup()
-        st.filter(_charge(amps=10), view, adapter, now_ts=0.0)
-        st.filter(_charge(amps=10), view, adapter, now_ts=10.0)
-        d = st.filter(_charge(amps=16), view, adapter, now_ts=40.0)
+        st.filter(_charge(amps=10), view, adapter, now_ts=0.0, **self._G)
+        st.filter(_charge(amps=10), view, adapter, now_ts=10.0, **self._G)
+        d = st.filter(_charge(amps=16), view, adapter, now_ts=40.0, **self._G)
         # median of [10, 10, 16] = 10 → still 10; feed another 16.
-        d = st.filter(_charge(amps=16), view, adapter, now_ts=80.0)
+        d = st.filter(_charge(amps=16), view, adapter, now_ts=80.0, **self._G)
         assert d.commanded_amps == 12  # 10 + ramp(2), not 16
 
     def test_debounce_one_change_per_interval(self):
         st, adapter, view = self._charging_setup()
-        st.filter(_charge(amps=10), view, adapter, now_ts=0.0)   # adopt 10
-        st.filter(_charge(amps=16), view, adapter, now_ts=10.0)
-        d = st.filter(_charge(amps=16), view, adapter, now_ts=20.0)
+        st.filter(_charge(amps=10), view, adapter, now_ts=0.0, **self._G)   # adopt 10
+        st.filter(_charge(amps=16), view, adapter, now_ts=10.0, **self._G)
+        d = st.filter(_charge(amps=16), view, adapter, now_ts=20.0, **self._G)
         # Median has reached 16 by t=20, but the last change was at
         # t=0 — within the 30 s debounce the setpoint must not move.
         assert d.commanded_amps == 10
         assert "debounce" in d.reason
-        d = st.filter(_charge(amps=16), view, adapter, now_ts=45.0)
+        d = st.filter(_charge(amps=16), view, adapter, now_ts=45.0, **self._G)
         assert d.commanded_amps == 12  # debounce expired → one ramp step
 
     def test_steady_state_is_untouched(self):
