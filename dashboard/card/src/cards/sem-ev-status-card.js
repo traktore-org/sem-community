@@ -539,18 +539,10 @@ class SEMEVStatusCard extends SEMLitBase {
         const isCharging = power > 50;
         const statusText = isCharging ? this._t('charging') : isConnected ? this._t('connected') : this._t('idle');
 
+        // ONE current knob (#536): "Min Amps" (ev_min_current). SEM starts
+        // here and auto-raises the offer until a fussy car latches, then
+        // settles back — no separate Start/Vehicle-min knobs.
         const minAmps = this._entityVal(`number.sem_charger_${id}_minimum_current`, 6);
-        // Start kick (initial_current) — live again since the solar start-kick
-        // fix (#536): SEM offers this to LATCH a car that won't start at the
-        // gentle Min Amps (e.g. a Zoe needs ~9-10 A to begin), then settles to
-        // Min Amps. Re-shown on the card.
-        const startAmps = this._entityVal(`number.sem_charger_${id}_initial_current`, 10);
-        // Vehicle Min Amps is OPTIONAL. When unset the effective floor is just
-        // Min Amps — don't display it as a hard "6 A" (that read as a second,
-        // duplicate minimum). Show it only when the user actually set it.
-        const _vmRaw = this._hass?.states[`number.sem_charger_${id}_vehicle_min_current`]?.state;
-        const vehicleMinSet = _vmRaw != null && _vmRaw !== '' && !isNaN(parseFloat(_vmRaw));
-        const vehicleMinAmps = vehicleMinSet ? parseFloat(_vmRaw) : null;
         const capacityKwh = this._entityVal(`number.sem_charger_${id}_ev_battery_capacity_kwh`, 40);
         const consumption = this._entityVal(`number.sem_charger_${id}_ev_kwh_per_100km`, 18);
 
@@ -758,12 +750,8 @@ class SEMEVStatusCard extends SEMLitBase {
                 </div>
 
                 <div class="charger-settings ${this._showHelp ? 'help-mode' : ''}">
-                    ${''/* Three amp knobs, each distinct:
-                       • Min Amps      — YOUR sustain floor (lowest SEM charges at)
-                       • Start Amps    — the kick to LATCH a fussy car (#536), then
-                                         it settles back to Min Amps
-                       • Vehicle Min   — OPTIONAL hard car floor; shown only if set.
-                                         Effective floor = max(Min, Vehicle Min). */}
+                    ${''/* ONE current knob: Min Amps. SEM auto-finds a fussy
+                       car's start current and settles back here (#536). */}
                     <div class="setting-cell">
                         <div
                             class="setting-item clickable"
@@ -776,32 +764,6 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span class="setting-value">${this._fmt(minAmps, 0)}A</span>
                         </div>
                         ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_min_amps')}</div>` : nothing}
-                    </div>
-                    <div class="setting-cell">
-                        <div
-                            class="setting-item clickable"
-                            @click=${() => {
-                                const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_initial_current` } });
-                                this.dispatchEvent(event);
-                            }}
-                        >
-                            <ha-icon icon="mdi:flash" style="--mdc-icon-size:16px;color:#5BC8D8"></ha-icon>
-                            <span class="setting-value">${this._fmt(startAmps, 0)}A</span>
-                        </div>
-                        ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_start_amps')}</div>` : nothing}
-                    </div>
-                    <div class="setting-cell">
-                        <div
-                            class="setting-item clickable"
-                            @click=${() => {
-                                const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_vehicle_min_current` } });
-                                this.dispatchEvent(event);
-                            }}
-                        >
-                            <ha-icon icon="mdi:car-electric" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
-                            <span class="setting-value">${vehicleMinSet ? this._fmt(vehicleMinAmps, 0) + 'A' : '—'}</span>
-                        </div>
-                        ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_vehicle_min_amps')}</div>` : nothing}
                     </div>
                     <div class="setting-cell">
                         <div

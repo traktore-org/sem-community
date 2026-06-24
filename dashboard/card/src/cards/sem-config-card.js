@@ -567,12 +567,11 @@ class SEMConfigCard extends SEMLitBase {
                     ${this._renderPickerNested(idx, cid, 'vehicle_soc_entity', 'config_ev_vehicle_soc',
                         'sensor', null, opts, 'config_help_ev_vehicle_soc')}
                     ${this._renderTargetTypeSelectNested(idx, cid, charger, opts)}
+                    ${''/* ONE current knob (#536): Min Amps. SEM auto-finds a
+                       fussy car's start current (day AND night) and settles
+                       back here — no Start Amps / Vehicle Min Amps knobs. */}
                     <div class="stepper-pair">
                         ${this._renderStepper(`number.sem_charger_${cid}_minimum_current`, 'min_amps', T, 'tile_help_min_amps')}
-                        ${this._renderStepper(`number.sem_charger_${cid}_vehicle_min_current`, 'vehicle_min_current', T, 'tile_help_vehicle_min_amps')}
-                    </div>
-                    <div class="stepper-pair">
-                        ${this._renderStepper(`number.sem_charger_${cid}_initial_current`, 'initial_current', T, 'tile_help_start_amps')}
                         ${this._renderStepper(`number.sem_charger_${cid}_ev_battery_capacity_kwh`, 'capacity_kwh', T, 'tile_help_capacity')}
                     </div>
                     <div class="stepper-pair">

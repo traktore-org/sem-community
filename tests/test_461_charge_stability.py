@@ -139,7 +139,7 @@ class TestEnableDelay:
                           enable_delay_s=60, disable_delay_s=300, now_ts=t)
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
         assert d.commanded_amps == 6
-        assert "ramping toward 16A" in d.reason
+        assert "starting at 6A" in d.reason and "auto-raises" in d.reason
 
     def test_zero_delay_starts_immediately(self):
         st = ChargeStability()
@@ -390,11 +390,14 @@ class TestMidSessionSmoothing:
 
 @pytest.mark.unit
 class TestScope:
-    def test_night_passes_through(self):
+    def test_night_is_processed_and_starts_immediately(self):
+        # Night is no longer skipped — it shares the day latch/hold/escalation
+        # and starts at once (no surplus enable-delay to wait on).
         st = ChargeStability()
         d = st.filter(_charge(), _view(is_night=True), FakeAdapter(),
                       enable_delay_s=60, disable_delay_s=300, now_ts=0.0)
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+        assert d.commanded_amps == 6
 
     def test_always_max_passes_through(self):
         st = ChargeStability()
