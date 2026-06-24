@@ -236,6 +236,27 @@ class TestNightUnified:
                           enable_delay_s=60, disable_delay_s=300, now_ts=t)
         assert d.commanded_amps == 6                       # deadline current
 
+    def test_transient_dip_holds_steady_no_restart(self):
+        """Once latched, a single 0 W reading must NOT trigger a re-start at a
+        different current — it holds steady through the dip (the oscillation
+        that made the Zoe drop). Day or night."""
+        st = ChargeStability()
+        adapter = FakeAdapter(min_current_a=6, max_current_a=16,
+                              last_intent=ChargerIntent.CHARGE_AT_AMPS)
+        drawing = _view(power_w=4140.0, is_night=True)
+        # Establish a steady charge at the latched current.
+        for t in (0.0, 90.0, 180.0):
+            d = st.filter(_charge(amps=6), drawing, adapter,
+                          enable_delay_s=60, disable_delay_s=300, now_ts=t)
+        held = d.commanded_amps
+        # A transient 0 W blip — must hold the same current, not escalate.
+        dip = _view(power_w=0.0, is_night=True)
+        d = st.filter(_charge(amps=6), dip, adapter,
+                      enable_delay_s=60, disable_delay_s=300, now_ts=200.0)
+        assert d.commanded_amps == held
+        assert "trying" not in d.reason          # did NOT re-start/escalate
+        assert d.intent is ChargerIntent.CHARGE_AT_AMPS
+
     def test_night_idle_passes_through(self):
         # Target reached → planner says IDLE → no day deficit-bridge hold.
         st = ChargeStability()
