@@ -29,6 +29,21 @@ class SEMEVStatusCard extends SEMLitBase {
         this._chargers = [];
         this._lastStateCount = 0;
         this._showHelp = false;
+        // #541: this card's plan strip ("next 12h from now") computes its time
+        // axis from a per-render `now`. It re-renders on EV state changes, but
+        // snap it fresh on app resume / tab focus so the axis can't lag after a
+        // long background.
+        this._boundVisibility = () => { if (!document.hidden) this.requestUpdate(); };
+    }
+
+    connectedCallback() {
+        super.connectedCallback();
+        document.addEventListener('visibilitychange', this._boundVisibility);
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        document.removeEventListener('visibilitychange', this._boundVisibility);
     }
 
     _toggleHelp() {

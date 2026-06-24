@@ -29,6 +29,25 @@ const LEVELS = {
 };
 
 class SEMPriceCard extends SEMLitBase {
+    constructor() {
+        super();
+        // #541: the hourly price strip's "current hour" marker is derived from a
+        // per-render `now`; the card re-renders when the price/level changes, but
+        // snap it fresh on app resume / tab focus so the marker can't lag after a
+        // long background.
+        this._boundVisibility = () => { if (!document.hidden) this.requestUpdate(); };
+    }
+
+    connectedCallback() {
+        super.connectedCallback();
+        document.addEventListener('visibilitychange', this._boundVisibility);
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        document.removeEventListener('visibilitychange', this._boundVisibility);
+    }
+
     setConfig(config) {
         super.setConfig(config);
         this._entity = config.entity || DEFAULT_ENTITY;
