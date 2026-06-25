@@ -269,7 +269,10 @@ async def test_current_control_min_max_clamp(current_device):
 
 @pytest.mark.asyncio
 async def test_current_control_start_stop_session(current_device):
-    """Test KEBA session management."""
+    """Test KEBA session management (with the managed failsafe opted in)."""
+    # #546 — SEM no longer arms the failsafe by default (evcc-style); opt in to
+    # exercise the full arming sequence here.
+    current_device.arm_failsafe_enabled = True
     await current_device.start_session(energy_target_kwh=10.0)
     assert current_device._session_active is True
     # Should have called set_failsafe, set_energy, and enable (no disable
@@ -304,8 +307,20 @@ async def test_current_control_start_stop_session(current_device):
 
 
 @pytest.mark.asyncio
+async def test_failsafe_not_armed_by_default(current_device):
+    """#546 — evcc-style default: SEM does NOT arm the charger failsafe."""
+    assert current_device.arm_failsafe_enabled is False  # default
+    current_device.hass.services.async_call.reset_mock()
+    await current_device.arm_failsafe()
+    fs = [c for c in current_device.hass.services.async_call.await_args_list
+          if len(c.args) >= 2 and c.args[1] == "set_failsafe"]
+    assert not fs, "default must NOT call set_failsafe (evcc-style hold)"
+
+
+@pytest.mark.asyncio
 async def test_failsafe_steady_vs_legacy_persist(current_device):
-    """#546 gate — steady_failsafe persists (overwrites box 6A); legacy doesn't."""
+    """#546 gate — when armed, steady_failsafe persists (overwrites box 6A)."""
+    current_device.arm_failsafe_enabled = True  # opt in to arming
     # Steady (default) → persist=1
     current_device.steady_failsafe = True
     current_device.hass.services.async_call.reset_mock()

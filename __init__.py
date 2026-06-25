@@ -1535,8 +1535,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
                 current_entity_id=ev_current_entity,
             )
             ev_device.needs_pilot_cycle = _cfg("ev_charger_needs_cycle", False)
-            # #546 — persist the benign failsafe (overwrite the box's 6 A). Gate
-            # off (False) to revert to the legacy non-persistent failsafe.
+            # #546 — failsafe: evcc-style, SEM does NOT arm it by default (a
+            # Repair guides disabling the box's own failsafe). keba_arm_failsafe
+            # opts back in to a SEM-managed (persisted) failsafe.
+            ev_device.arm_failsafe_enabled = bool(_cfg("keba_arm_failsafe", False))
             ev_device.steady_failsafe = bool(_cfg("keba_steady_failsafe", True))
             # #546 — live offered-current sensor for the EV-OFFER-PROBE.
             ev_device.current_sensor_entity_id = str(_cfg("ev_current_sensor", "") or "")

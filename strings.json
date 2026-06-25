@@ -1223,6 +1223,10 @@
     "soc_cap_unenforceable": {
       "title": "Can't enforce the {target}% charge limit: {name}",
       "description": "**{name}** is set to a percentage charge target, but your vehicle isn't reporting its state of charge right now, so SEM can't stop at **{target}%** — it will keep charging until the car itself tapers (near full).\n\nIf your dashboard shows a battery %, that's SEM's *estimated* SOC, which it deliberately ignores for the hard limit (it can drift). To enforce the cap, wire a **real vehicle SOC sensor** for this charger (Configuration → EV → Vehicle SOC entity). This repair clears automatically as soon as a real SOC reading is available again."
+    },
+    "keba_failsafe_active": {
+      "title": "KEBA failsafe is enabled — disable it for steady charging",
+      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
     }
   }
 }

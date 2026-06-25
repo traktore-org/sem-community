@@ -1203,6 +1203,10 @@
     "hot_water_temperature_sensor_unavailable": {
       "title": "Hot water temperature sensor unavailable",
       "description": "The configured hot-water temperature sensor `{entity_id}` has been unavailable/unknown for {minutes}+ minutes. SEM fails safe when this sensor is broken — the boiler is NOT activated on surplus until a real temperature reading returns, to avoid running the heater past its target without feedback. Check the sensor's upstream integration. The issue clears automatically when the sensor recovers."
+    },
+    "keba_failsafe_active": {
+      "title": "KEBA failsafe is enabled — disable it for steady charging",
+      "description": "Your KEBA charger \"{name}\" has its failsafe watchdog enabled. SEM (like evcc) no longer relies on it, but while it's on the charger keeps dropping the offered current to its 6 A fallback between commands, which makes charging oscillate (6↔9 A) and some cars (e.g. Renault Zoe) refuse to charge steadily.\n\nHome Assistant's KEBA service can't switch it off (it won't accept a timeout of 0), so you need to disable it at the charger itself: set the **failsafe timeout to 0** (KEBA UDP `failsafe 0 0 1`, or via KEBA's KeContact tooling). See the linked guide for step-by-step instructions. This Repair clears automatically once the failsafe is off."
     }
   }
 }

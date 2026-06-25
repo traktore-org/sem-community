@@ -3157,6 +3157,29 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             hot_water_legionella_path=_hw_attr("_last_legionella_path"),
         )
 
+        # #546 — KEBA failsafe Repair. SEM no longer arms the failsafe
+        # (evcc-style hold), but the box keeps its OWN failsafe until the user
+        # disables it at the charger — which HA's keba.set_failsafe can't do
+        # (rejects timeout 0). Surface an actionable Repair while a KEBA charger
+        # is configured AND its failsafe reads on; clear it the moment it's off.
+        try:
+            from . import repair_issues as _ri_fs
+            _has_keba = any(
+                str(getattr(d, "charger_service", "") or "").lower().startswith("keba.")
+                for d in (self._ev_devices or {}).values()
+            ) or str(getattr(self._ev_device, "charger_service", "") or "").lower().startswith("keba.")
+            if _has_keba:
+                _fs_on = _ri_fs.detect_keba_failsafe_state(self.hass)
+                if _fs_on is True:
+                    _name = next(
+                        (d.name for d in (self._ev_devices or {}).values()), None,
+                    ) or getattr(self._ev_device, "name", "KEBA")
+                    _ri_fs.raise_keba_failsafe_active(self.hass, charger_name=_name)
+                elif _fs_on is False:
+                    _ri_fs.clear_keba_failsafe_active(self.hass)
+        except Exception as _e_fs:  # noqa: BLE001 — never fail the cycle over a repair
+            _LOGGER.debug("KEBA failsafe repair check failed: %s", _e_fs)
+
         # #432 — relay unavailability tracking + Repair issue. Mirrors the
         # SensorReader pattern (``_sensor_unavailable_since``). Per-relay
         # outage timer; if a configured relay stays unavailable past the
