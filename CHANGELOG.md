@@ -13,11 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
-### 🔌 EV charging — steady offer (hold the box, like evcc)
-- 🐛 **The offered current flapped 6↔9 A every few seconds**, so a steady-needing car (Renault Zoe) sat in standby. Root cause: the KEBA reverts to its built-in **6 A failsafe** between SEM's writes and SEM re-wrote 9 A every 5 s — a sawtooth the car can't charge through. **evcc** (the reference EV controller) hits the same problem and **disables the KEBA failsafe** rather than fight it — so SEM now does the same: it **no longer arms the failsafe** and simply holds the current it sets, like a plain script. (#546)
-- 🛠️ Because Home Assistant's `keba.set_failsafe` service can't turn the failsafe *off* (it rejects timeout 0), SEM raises an actionable **Repair** (Settings → Repairs) when it sees a KEBA failsafe still enabled, with a step-by-step guide to disable it at the charger. The Repair clears automatically once it's off. (#546)
-- ⚡ Once the box holds the offer, the current tracks surplus **evcc-style** — a ≈30 s cadence with a 2 A deadband (not a multi-minute freeze), with evcc-aligned **1 min start / 3 min stop** delays (disable delay 300→180 s). (#546)
-- ⚙️ `keba_arm_failsafe` (default **off**) opts back in to a SEM-*managed* failsafe (persisted, fallback at your charging floor) for users who can't disable it at the charger. (#546)
+### 🔌 EV charging — steady offer (neutralize the failsafe, then track like evcc)
+- 🐛 **The offered current flapped 6↔9 A every few seconds**, so a steady-needing car (Renault Zoe) sat in standby. Root cause: the KEBA reverts to its built-in **6 A failsafe** between SEM's writes and SEM re-wrote 9 A every 5 s — a sawtooth the car can't charge through. Live testing on a real P30 showed the failsafe **can't be disabled** over UDP (the box keeps it — likely a safety design). So SEM now **neutralizes** it: it arms a **long (10-min) non-tripping, persisted** failsafe with the fallback at your **charging floor** — it overwrites the box's short built-in one, the per-cycle writes keep it from ever tripping, and a genuine controller-death lands the car on the floor (not 6 A). No more flap. (#546)
+- ⚡ With the offer steady, the current tracks surplus **evcc-style** — a ≈30 s cadence with a 2 A deadband (not a multi-minute freeze), with evcc-aligned **1 min start / 3 min stop** delays (disable delay 300→180 s). (#546)
+- ⚙️ `keba_arm_failsafe` (default **on** = managed-neutralize). Set it **off** for boxes that *can* disable the failsafe at the charger (evcc-style); SEM then leaves it alone and raises a **Repair** (Settings → Repairs) guiding you to disable it, with a step-by-step link. (#546)
 - 🔭 The `EV-OFFER-PROBE` diagnostic now reads the **live** offered-current sensor (`ev_current_sensor`) instead of the static config cap, so it can actually show hardware drift. (#546)
 
 ### 🛡️ Observer mode / wiring

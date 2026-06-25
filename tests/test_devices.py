@@ -307,36 +307,33 @@ async def test_current_control_start_stop_session(current_device):
 
 
 @pytest.mark.asyncio
-async def test_failsafe_not_armed_by_default(current_device):
-    """#546 — evcc-style default: SEM does NOT arm the charger failsafe."""
-    assert current_device.arm_failsafe_enabled is False  # default
+async def test_failsafe_managed_nontripping_by_default(current_device):
+    """#546 managed-neutralize default: SEM arms a LONG non-tripping persisted
+    failsafe (overwrites the box's short built-in one, which a real P30 won't
+    let us disable over UDP)."""
+    from custom_components.solar_energy_management.devices.base import (
+        FAILSAFE_TIMEOUT_S,
+    )
+    assert current_device.arm_failsafe_enabled is True  # default = managed
+    current_device.hass.services.async_call.reset_mock()
+    await current_device.arm_failsafe()
+    fs = [c for c in current_device.hass.services.async_call.await_args_list
+          if len(c.args) >= 2 and c.args[1] == "set_failsafe"][0].args[2]
+    assert fs["failsafe_timeout"] == FAILSAFE_TIMEOUT_S == 600  # never trips
+    assert fs["failsafe_persist"] == 1                          # overwrite the box
+    assert fs["failsafe_fallback"] >= 6                         # at the floor
+
+
+@pytest.mark.asyncio
+async def test_failsafe_not_armed_when_disabled(current_device):
+    """#546 — keba_arm_failsafe off (don't-arm, evcc-style): SEM doesn't touch
+    the failsafe (a Repair guides the user to disable it at the box)."""
+    current_device.arm_failsafe_enabled = False
     current_device.hass.services.async_call.reset_mock()
     await current_device.arm_failsafe()
     fs = [c for c in current_device.hass.services.async_call.await_args_list
           if len(c.args) >= 2 and c.args[1] == "set_failsafe"]
-    assert not fs, "default must NOT call set_failsafe (evcc-style hold)"
-
-
-@pytest.mark.asyncio
-async def test_failsafe_steady_vs_legacy_persist(current_device):
-    """#546 gate — when armed, steady_failsafe persists (overwrites box 6A)."""
-    current_device.arm_failsafe_enabled = True  # opt in to arming
-    # Steady (default) → persist=1
-    current_device.steady_failsafe = True
-    current_device.hass.services.async_call.reset_mock()
-    await current_device.arm_failsafe()
-    fs = [c for c in current_device.hass.services.async_call.await_args_list
-          if len(c.args) >= 2 and c.args[1] == "set_failsafe"][0].args[2]
-    assert fs["failsafe_persist"] == 1
-    assert fs["failsafe_fallback"] >= 6  # at the charging floor, never below IEC
-
-    # Legacy (gate off) → persist=0 (the revertible old behaviour)
-    current_device.steady_failsafe = False
-    current_device.hass.services.async_call.reset_mock()
-    await current_device.arm_failsafe()
-    fs = [c for c in current_device.hass.services.async_call.await_args_list
-          if len(c.args) >= 2 and c.args[1] == "set_failsafe"][0].args[2]
-    assert fs["failsafe_persist"] == 0
+    assert not fs, "don't-arm mode must NOT call set_failsafe"
 
 
 @pytest.mark.asyncio

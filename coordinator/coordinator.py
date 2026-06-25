@@ -3157,35 +3157,42 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             hot_water_legionella_path=_hw_attr("_last_legionella_path"),
         )
 
-        # #546 — KEBA failsafe Repair. SEM no longer arms the failsafe
-        # (evcc-style hold), but the box keeps its OWN failsafe until the user
-        # disables it at the charger — which HA's keba.set_failsafe can't do
-        # (rejects timeout 0). Surface an actionable Repair while a KEBA charger
-        # is configured AND its failsafe reads on; clear it the moment it's off.
+        # #546 — KEBA failsafe Repair, ONLY in don't-arm mode
+        # (``keba_arm_failsafe`` off). Default is managed-neutralize: SEM arms a
+        # long non-tripping failsafe itself, so there's nothing for the user to
+        # fix → no Repair. In don't-arm mode SEM leaves the box's failsafe alone,
+        # so surface a Repair while it reads on (guides disabling it at the box).
         try:
             from . import repair_issues as _ri_fs
-            _keba_devs = [
-                d for d in (self._ev_devices or {}).values()
-                if str(getattr(d, "charger_service", "") or "").lower().startswith("keba.")
-            ]
-            if not _keba_devs and str(
-                getattr(self._ev_device, "charger_service", "") or ""
-            ).lower().startswith("keba."):
-                _keba_devs = [self._ev_device]
-            if _keba_devs:
-                _fs_on = _ri_fs.detect_keba_failsafe_state(self.hass)
-                if _fs_on is True:
-                    # H1 — name the KEBA device, not just the first charger.
-                    _ri_fs.raise_keba_failsafe_active(
-                        self.hass, charger_name=_keba_devs[0].name,
-                    )
-                elif _fs_on is False:
-                    _ri_fs.clear_keba_failsafe_active(self.hass)
-                # _fs_on is None (sensor absent/unavailable) → hold, don't clear.
-            else:
-                # M1 — no KEBA configured (anymore) → clear any stale Repair so
-                # it doesn't stick after the charger is removed (orphan class).
+            if bool(self.config.get("keba_arm_failsafe", True)):
+                # Managed mode (default) → SEM arms the failsafe itself; nothing
+                # for the user to fix. Clear any stale Repair from a prior
+                # don't-arm config.
                 _ri_fs.clear_keba_failsafe_active(self.hass)
+            else:
+                # Don't-arm mode → SEM leaves the box's failsafe alone; surface a
+                # Repair while it reads on so the user disables it at the charger.
+                _keba_devs = [
+                    d for d in (self._ev_devices or {}).values()
+                    if str(getattr(d, "charger_service", "") or "").lower().startswith("keba.")
+                ]
+                if not _keba_devs and str(
+                    getattr(self._ev_device, "charger_service", "") or ""
+                ).lower().startswith("keba."):
+                    _keba_devs = [self._ev_device]
+                if _keba_devs:
+                    _fs_on = _ri_fs.detect_keba_failsafe_state(self.hass)
+                    if _fs_on is True:
+                        # H1 — name the KEBA device, not just the first charger.
+                        _ri_fs.raise_keba_failsafe_active(
+                            self.hass, charger_name=_keba_devs[0].name,
+                        )
+                    elif _fs_on is False:
+                        _ri_fs.clear_keba_failsafe_active(self.hass)
+                    # _fs_on None (sensor absent/unavailable) → hold, don't clear.
+                else:
+                    # M1 — no KEBA configured (anymore) → clear stale Repair.
+                    _ri_fs.clear_keba_failsafe_active(self.hass)
         except Exception as _e_fs:  # noqa: BLE001 — never fail the cycle over a repair
             _LOGGER.debug("KEBA failsafe repair check failed: %s", _e_fs)
 
