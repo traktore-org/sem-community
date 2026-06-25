@@ -1411,6 +1411,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if not self._ev_device and not self._ev_devices:
                 await self._retry_ev_device_with_backoff()
 
+            # Observer mode = read-only: command NOTHING to the chargers. The
+            # decide/actuate blocks below are already gated by observer_mode,
+            # but the published ``commanded_current`` is derived from each
+            # device's ``_current_setpoint`` (sensor at coordinator.py:2230),
+            # which would go STALE in observer mode — and anything acting on
+            # that sensor (an external current-control bridge automation, a
+            # second SEM instance) would keep driving the charger. So zero
+            # every setpoint here: SEM then clearly publishes "not commanding"
+            # while it observes. (#536 — HA-TEST's keba bridge automation drove
+            # the real KEBA via the stale setpoint despite observer mode.)
+            if self._observer_mode:
+                _obs_evs = list(self._ev_devices or [])
+                if self._ev_device is not None and self._ev_device not in _obs_evs:
+                    _obs_evs.append(self._ev_device)
+                for _ev in _obs_evs:
+                    if _ev is not None:
+                        _ev._current_setpoint = 0.0
+
             if self._ev_devices and not self._observer_mode:
                 # Multi-charger (#112): distribute budget + night target
                 ev_budget_per_charger = {}
