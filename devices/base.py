@@ -1065,8 +1065,9 @@ class CurrentControlDevice(ControllableDevice):
                 # 2. KEBA-style fallback: probe for enable/disable services
                 domain = self.charger_service.split(".", 1)[0]
 
-                # Arm a benign failsafe so a controller-death keeps the car
-                # charging at the floor instead of pausing (#392).
+                # Failsafe: a no-op by default now (#546, evcc-style — SEM
+                # doesn't arm the KEBA failsafe; a Repair guides disabling it at
+                # the box). Only arms when opted in via ``keba_arm_failsafe``.
                 await self.arm_failsafe()
 
                 # Set energy target if supported (KEBA)

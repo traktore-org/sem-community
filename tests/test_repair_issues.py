@@ -308,3 +308,13 @@ def test_detect_keba_failsafe_state_on_off_none():
         _fs_state("binary_sensor.keba_p30_plug", "on"),
     ]
     assert ri.detect_keba_failsafe_state(hass) is None
+    # M4 — unavailable/unknown → None (hold the Repair, don't clear on outage)
+    hass.states.async_all.return_value = [
+        _fs_state("binary_sensor.keba_p30_failsafe_mode", "unavailable"),
+    ]
+    assert ri.detect_keba_failsafe_state(hass) is None
+    # M3 — a non-KEBA *_failsafe sensor must NOT match (no spurious Repair)
+    hass.states.async_all.return_value = [
+        _fs_state("binary_sensor.fronius_inverter_failsafe", "on"),
+    ]
+    assert ri.detect_keba_failsafe_state(hass) is None

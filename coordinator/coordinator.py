@@ -3164,19 +3164,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # is configured AND its failsafe reads on; clear it the moment it's off.
         try:
             from . import repair_issues as _ri_fs
-            _has_keba = any(
-                str(getattr(d, "charger_service", "") or "").lower().startswith("keba.")
-                for d in (self._ev_devices or {}).values()
-            ) or str(getattr(self._ev_device, "charger_service", "") or "").lower().startswith("keba.")
-            if _has_keba:
+            _keba_devs = [
+                d for d in (self._ev_devices or {}).values()
+                if str(getattr(d, "charger_service", "") or "").lower().startswith("keba.")
+            ]
+            if not _keba_devs and str(
+                getattr(self._ev_device, "charger_service", "") or ""
+            ).lower().startswith("keba."):
+                _keba_devs = [self._ev_device]
+            if _keba_devs:
                 _fs_on = _ri_fs.detect_keba_failsafe_state(self.hass)
                 if _fs_on is True:
-                    _name = next(
-                        (d.name for d in (self._ev_devices or {}).values()), None,
-                    ) or getattr(self._ev_device, "name", "KEBA")
-                    _ri_fs.raise_keba_failsafe_active(self.hass, charger_name=_name)
+                    # H1 — name the KEBA device, not just the first charger.
+                    _ri_fs.raise_keba_failsafe_active(
+                        self.hass, charger_name=_keba_devs[0].name,
+                    )
                 elif _fs_on is False:
                     _ri_fs.clear_keba_failsafe_active(self.hass)
+                # _fs_on is None (sensor absent/unavailable) → hold, don't clear.
+            else:
+                # M1 — no KEBA configured (anymore) → clear any stale Repair so
+                # it doesn't stick after the charger is removed (orphan class).
+                _ri_fs.clear_keba_failsafe_active(self.hass)
         except Exception as _e_fs:  # noqa: BLE001 — never fail the cycle over a repair
             _LOGGER.debug("KEBA failsafe repair check failed: %s", _e_fs)
 

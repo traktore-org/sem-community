@@ -623,19 +623,28 @@ def clear_keba_failsafe_active(hass: HomeAssistant) -> None:
 
 def detect_keba_failsafe_state(hass: HomeAssistant) -> Optional[bool]:
     """Best-effort read of the KEBA failsafe state from the keba integration's
-    ``binary_sensor.*failsafe*`` entity.
+    failsafe binary sensor (e.g. ``binary_sensor.keba_p30_failsafe_mode``).
 
-    Returns True (on / armed), False (off), or None when no such sensor exists
-    (can't tell → stay silent). Brand-agnostic by entity-id match so it works
-    regardless of the charger's HA name.
+    Returns:
+      * True  — failsafe is ON (armed).
+      * False — failsafe is OFF.
+      * None  — no such sensor, or it's ``unavailable``/``unknown`` (KEBA offline).
+                "Can't tell" → the caller HOLDS the current Repair state rather
+                than clearing it on a transient outage.
+
+    Scoped to entity ids containing BOTH ``keba`` and ``failsafe`` (M3) so an
+    unrelated integration's ``*_failsafe`` binary sensor (UPS, inverter battery
+    protection) can't trigger a spurious KEBA Repair.
     """
     try:
         for state in hass.states.async_all("binary_sensor"):
-            if "failsafe" in state.entity_id:
+            eid = state.entity_id
+            if "keba" in eid and "failsafe" in eid:
                 if state.state == "on":
                     return True
                 if state.state == "off":
                     return False
+                # unavailable/unknown → can't tell; keep looking, else None.
         return None
     except Exception as e:  # noqa: BLE001
         _LOGGER.debug("detect_keba_failsafe_state failed: %s", e)

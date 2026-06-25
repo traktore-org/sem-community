@@ -56,12 +56,17 @@ set the **failsafe timeout to 0**.
 Once the charger reports the failsafe **off**, this Repair clears automatically,
 SEM holds a steady offer, and the car charges smoothly. No SEM restart needed.
 
-## If you'd rather SEM manage it instead
+## If you can't disable it at the charger
 
-If you can't disable it at the charger, set the SEM option `keba_arm_failsafe`
-on: SEM will then arm a **managed** failsafe that drops to your **charging floor**
-(not 6 A) and persists, so it can't cause the flap. This keeps a controller-death
-safety net at the cost of the extra moving part. The default (off) matches evcc.
+There's an **advanced** opt-in, `keba_arm_failsafe` (default **off**). When on,
+SEM arms a *managed* failsafe that drops to your **charging floor** (not 6 A) and
+persists, so it can't cause the flap — keeping a controller-death safety net at
+the cost of an extra moving part.
+
+It has **no UI toggle yet** — it's a config-entry option for advanced users. The
+recommended path is still to disable the failsafe at the charger (above), which
+matches evcc. If you need the managed option, ask in the project's issues for the
+current way to set it.
 
 ---
 References: [evcc — KEBA failsafe out-of-sync](https://github.com/evcc-io/evcc/discussions/21093) ·
