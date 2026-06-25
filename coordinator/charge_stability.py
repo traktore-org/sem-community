@@ -29,9 +29,9 @@ This module reintroduces the full layer as a stateful filter between
   minimum current (the 2026-05-31 PROD grid-overshoot fix) and climbs.
 * **Enable delay** (``ev_enable_delay_seconds``, default 60 s): a
   start needs the (smoothed) surplus to hold continuously first.
-* **Disable delay** (``ev_disable_delay_seconds``, default 300 s): a
-  (smoothed) deficit must persist before the stop; meanwhile the
-  charger ramps down to and holds minimum current.
+* **Disable delay** (``ev_disable_delay_seconds``, default 180 s — evcc
+  disable.delay = 3 min): a (smoothed) deficit must persist before the
+  stop; meanwhile the charger ramps down to and holds minimum current.
 
 Timing semantics use separate pv enable/disable persistence timers.
 The disable semantics deliberately *improve on* the legacy path, which

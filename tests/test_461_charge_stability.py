@@ -297,7 +297,10 @@ class TestDeepDeficitEscape:
                   deep_deficit_grace_s=45, now_ts=0.0)
         st.filter(_idle(), dark, adapter, disable_delay_s=600,
                   deep_deficit_grace_s=45, now_ts=10.0)
-        # Surplus returns → the (non-deep) bridge-hold clears the deep timer.
+        # Surplus returns: the view is no longer DEEP (solar 5000 ≥ min_solar),
+        # so the short-grace `else` branch pops _deep_deficit_since. (The
+        # decision is still a bridge-hold CHARGE because the 5-cycle median
+        # hasn't recovered above min and the general deficit hasn't expired.)
         sunny = _view(power_w=4500.0, solar_w=5000.0)
         d = st.filter(_charge(amps=10), sunny, adapter, disable_delay_s=600,
                       deep_deficit_grace_s=45, now_ts=20.0)
