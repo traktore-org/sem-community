@@ -16,10 +16,15 @@ These tests would have turned that bug into a red build:
 """
 import re
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
 from custom_components.solar_energy_management.consts import core as C
+from custom_components.solar_energy_management.coordinator.coordinator import (
+    SEMCoordinator,
+)
 
 
 # Map each entity-id constant to the platform its real entity registers under.
@@ -88,3 +93,46 @@ class TestNoEntityIdReprefix:
             "coordinator.py re-prefixes an entity-id constant — this rebuilds "
             f"the dead three-segment lookup bug: {bad}"
         )
+
+
+@pytest.mark.unit
+class TestObserverPullDoesNotClobber:
+    """The per-cycle pull must hold the observer flag across transient
+    switch ``unavailable``/``unknown`` and only move on a real on/off.
+
+    The switch is a CoordinatorEntity whose ``available`` flaps to False on any
+    failed update, so its state momentarily reads ``unavailable``. An earlier
+    fix that did ``_observer_mode = (state == 'on')`` clobbered the pushed value
+    to False every cycle — silently re-enabling hardware control on a box that
+    shares real PROD hardware. This locks the guard.
+    """
+
+    @staticmethod
+    def _pull(switch_state, start):
+        hass = MagicMock()
+        hass.states.get.return_value = (
+            None if switch_state is None else SimpleNamespace(state=switch_state)
+        )
+        fake = SimpleNamespace(hass=hass, _observer_mode=start)
+        SEMCoordinator._sync_observer_mode_from_switch(fake)
+        return fake._observer_mode
+
+    def test_on_enables(self):
+        assert self._pull("on", False) is True
+
+    def test_off_disables(self):
+        assert self._pull("off", True) is False
+
+    def test_unavailable_holds_true(self):
+        # The actual bug: transient unavailable must NOT disable observation.
+        assert self._pull("unavailable", True) is True
+
+    def test_unknown_holds_true(self):
+        assert self._pull("unknown", True) is True
+
+    def test_missing_entity_holds_true(self):
+        assert self._pull(None, True) is True
+
+    def test_unavailable_holds_false_too(self):
+        # Symmetric: it must not spuriously enable, either.
+        assert self._pull("unavailable", False) is False

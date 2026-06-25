@@ -990,6 +990,21 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         sem_data = SEMData()
         return sem_data.to_dict()
 
+    def _sync_observer_mode_from_switch(self) -> None:
+        """Backstop the observer flag from the switch entity each cycle.
+
+        Only a DEFINITE ``on``/``off`` updates ``_observer_mode``. The switch is
+        a CoordinatorEntity whose ``available`` flaps to False on any single
+        failed update, so its state transiently reads ``unavailable``/``unknown``.
+        Treating that as "not on" would clobber the value the switch pushed
+        directly (see switch.py) back to False every cycle — silently
+        re-enabling hardware control. So we hold the last known value across
+        transient unavailability and only move on a real on/off.
+        """
+        observer_state = self.hass.states.get(ENTITY_OBSERVER_MODE_SWITCH)
+        if observer_state is not None and observer_state.state in ("on", "off"):
+            self._observer_mode = observer_state.state == "on"
+
     async def _async_update_data(self) -> Dict[str, Any]:
         """Update data from sensors and calculate derived values."""
         # Initialize storage on first update
@@ -1142,9 +1157,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # The switch ALSO pushes its state straight onto ``self._observer_mode``
         # (see switch.py) so a toggle takes effect immediately and even if this
         # entity_id ever changes; this per-cycle pull is the backstop.
-        observer_state = self.hass.states.get(ENTITY_OBSERVER_MODE_SWITCH)
-        if observer_state is not None:
-            self._observer_mode = observer_state.state == "on"
+        self._sync_observer_mode_from_switch()
 
         try:
             # Per-cycle caches — avoid redundant lookups within one 10s cycle (#52)
