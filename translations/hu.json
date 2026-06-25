@@ -148,9 +148,7 @@
           "update_interval": "Update Interval (seconds)",
           "battery_priority_soc": "Battery Priority SOC (%)",
           "battery_minimum_soc": "Battery Minimum SOC (%)",
-          "battery_resume_soc": "Battery Resume SOC (%)",
           "min_solar_power": "Minimum Solar Power (W)",
-          "max_grid_import": "Maximum Grid Import (W)",
           "daily_ev_target": "Daily EV Target (kWh)",
           "battery_assist_max_power": "Battery Assist Max Power (W)",
           "battery_capacity_kwh": "Battery Capacity (kWh)",
@@ -181,7 +179,6 @@
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
           "battery_assist_floor_soc": "Hysteresis floor — once battery assist is active, it stays active until SOC drops below this value. Default 60 %.",
           "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
-          "max_grid_import": "Hard cap on grid power that SEM will pull while doing solar charging. 0 = pure-PV mode (the recommended SEM default).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
           "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",
@@ -206,14 +203,12 @@
         "data": {
           "daily_ev_target": "Night charge target (kWh)",
           "min_solar_power": "Minimum solar power to start EV charging (W)",
-          "max_grid_import": "Max grid import during solar charging (W, 0 = pure solar)",
           "observer_mode": "Observer mode (read-only, no hardware control)",
           "smart_night_charging": "Reduce night target based on tomorrow's forecast"
         },
         "data_description": {
           "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
           "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "max_grid_import": "Maximum grid power (W) SEM may use during solar charging. Set to 0 for pure-solar mode.",
           "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
           "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
         }
@@ -256,7 +251,6 @@
           "target_peak_limit": "Target Peak Limit (kW)",
           "warning_peak_level": "Warning Peak Level (kW)",
           "emergency_peak_level": "Emergency Peak Level (kW)",
-          "critical_device_protection": "Protect Critical Devices",
           "vehicle_soc_entity": "Vehicle Battery SOC",
           "ev_battery_capacity_kwh": "EV Battery Capacity (kWh)",
           "ev_target_soc": "EV Target SOC (%)"
@@ -266,7 +260,6 @@
           "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
           "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
           "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "critical_device_protection": "When enabled, devices marked as critical are never shed regardless of peak level.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
@@ -1019,20 +1012,11 @@
       "battery_minimum_soc": {
         "name": "Battery Minimum SOC"
       },
-      "battery_resume_soc": {
-        "name": "Battery Resume SOC"
-      },
       "minimum_solar_power": {
         "name": "Minimum Solar Power"
       },
-      "maximum_grid_import": {
-        "name": "Maximum Grid Import"
-      },
       "daily_ev_target": {
         "name": "Daily EV Target"
-      },
-      "public_charging_rate": {
-        "name": "Public Charging Rate"
       },
       "battery_assist_max_power": {
         "name": "Battery Assist Max Power"

@@ -23,7 +23,6 @@ DATABASE_PROTECTION_AGGRESSIVE: Final = 3  # Essential sensors only, max delays
 # ============================================
 DEFAULT_BATTERY_PRIORITY_SOC: Final = 30  # % - SOC zone floor: below this, all solar → battery, EV blocked
 DEFAULT_BATTERY_MINIMUM_SOC: Final = 20  # % - Hard stop: SOC below this halts EV charging entirely
-DEFAULT_BATTERY_RESUME_SOC: Final = 50  # % - Hysteresis: resume EV charging once SOC recovers above this
 DEFAULT_BATTERY_SAFETY_SOC: Final = 60  # % - Safety threshold for discharge calculations
 # 4-zone SOC strategy thresholds (see docs/ARCHITECTURE.md "SOC Zone Strategy")
 DEFAULT_BATTERY_BUFFER_SOC: Final = 70  # % - Above: battery can discharge to help the EV (Zone 3 begins)
@@ -105,7 +104,6 @@ DEFAULT_ENERGY_SOURCE_AUTO: Final = True  # Auto-select best available energy so
 # ============================================
 DEFAULT_MIN_SOLAR_POWER: Final = 1000  # Watts
 DEFAULT_MIN_EXCESS_POWER: Final = 500  # Watts
-DEFAULT_MAX_GRID_IMPORT: Final = 0  # Watts during solar charging — 0 = pure-solar mode
 DEFAULT_BATTERY_ASSIST_MAX_POWER: Final = 4500  # Watts — max battery discharge for EV assist
 DEFAULT_BATTERY_ASSIST_MIN_SURPLUS: Final = 1200  # Watts — solar surplus required before battery assists the EV (below this, battery is off-limits to the car)
 DEFAULT_BATTERY_CAPACITY_KWH: Final = 15  # kWh — total usable battery capacity
@@ -244,7 +242,6 @@ DEFAULT_INVERTER_MAX_POWER_W: Final = 10000
 # site (that produced a dead three-segment id and silently broke the lookup).
 ENTITY_OBSERVER_MODE_SWITCH: Final = "switch.sem_observer_mode"
 ENTITY_SOLAR_POWER: Final = "sensor.sem_solar_power"
-ENTITY_SMART_NIGHT_CHARGING: Final = "switch.sem_smart_night_charging"
 
 # HA state constants (avoid magic strings)
 STATE_UNKNOWN: Final = "unknown"

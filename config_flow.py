@@ -18,12 +18,10 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_PRIORITY_SOC,
     DEFAULT_BATTERY_MINIMUM_SOC,
-    DEFAULT_BATTERY_RESUME_SOC,
     DEFAULT_BATTERY_BUFFER_SOC,
     DEFAULT_BATTERY_AUTO_START_SOC,
     DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
     DEFAULT_MIN_SOLAR_POWER,
-    DEFAULT_MAX_GRID_IMPORT,
     DEFAULT_DAILY_EV_TARGET,
     DEFAULT_BATTERY_ASSIST_MAX_POWER,
     DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
@@ -39,7 +37,6 @@ from .const import (
     DEFAULT_WARNING_PEAK_LEVEL,
     DEFAULT_EMERGENCY_PEAK_LEVEL,
     DEFAULT_LOAD_MANAGEMENT_ENABLED,
-    DEFAULT_CRITICAL_DEVICE_PROTECTION,
     DEFAULT_OBSERVER_MODE,
 )
 from .ha_energy_reader import read_energy_dashboard_config, EnergyDashboardConfig
@@ -480,10 +477,8 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # in coordinator.py that haven't been migrated to the 4-zone
             # strategy yet (battery_too_low check, hysteresis resume).
             "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
-            "battery_resume_soc": DEFAULT_BATTERY_RESUME_SOC,
             # Solar / power gates
             "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
-            "max_grid_import": DEFAULT_MAX_GRID_IMPORT,
             # Daily target & battery assist
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
             "battery_assist_max_power": DEFAULT_BATTERY_ASSIST_MAX_POWER,
@@ -505,7 +500,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "load_management_enabled": DEFAULT_LOAD_MANAGEMENT_ENABLED,
             "warning_peak_level": DEFAULT_WARNING_PEAK_LEVEL,
             "emergency_peak_level": DEFAULT_EMERGENCY_PEAK_LEVEL,
-            "critical_device_protection": DEFAULT_CRITICAL_DEVICE_PROTECTION,
             # #442 slim install: explicit empty EV chargers list so
             # downstream code reading ``config["ev_chargers"]`` always
             # finds a list (even though ``.get("ev_chargers") or []``
@@ -1494,12 +1488,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     selector.NumberSelectorConfig(min=0, max=5000, step=100, unit_of_measurement="W", mode="slider")
                 ),
                 vol.Optional(
-                    "max_grid_import",
-                    default=_c("max_grid_import", DEFAULT_MAX_GRID_IMPORT),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=0, max=2000, step=100, unit_of_measurement="W", mode="slider")
-                ),
-                vol.Optional(
                     "observer_mode",
                     default=_c("observer_mode", DEFAULT_OBSERVER_MODE),
                 ): selector.BooleanSelector(),
@@ -1658,7 +1646,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             "target_peak_limit": _c("target_peak_limit", DEFAULT_TARGET_PEAK_LIMIT),
             "warning_peak_level": _c("warning_peak_level", DEFAULT_WARNING_PEAK_LEVEL),
             "emergency_peak_level": _c("emergency_peak_level", DEFAULT_EMERGENCY_PEAK_LEVEL),
-            "critical_device_protection": _c("critical_device_protection", DEFAULT_CRITICAL_DEVICE_PROTECTION),
         }
 
         return self.async_show_form(
@@ -1692,10 +1679,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         min=1.0, max=20.0, step=0.5, unit_of_measurement="kW", mode="slider"
                     )
                 ),
-                vol.Required(
-                    "critical_device_protection",
-                    default=data_defaults["critical_device_protection"],
-                ): selector.BooleanSelector(),
             }),
             errors=errors
         )

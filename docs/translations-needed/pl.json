@@ -235,7 +235,6 @@
   "legionella_target_label": "Legionella Target",
   "lifetime_ev_stats": "Lifetime EV Statistics",
   "load_management": "Load Management",
-  "max_grid_import": "Max Grid Import (W)",
   "max_temperature": "Max Temperature",
   "min_current": "Min Current (A)",
   "min_solar": "Min Solar (W)",

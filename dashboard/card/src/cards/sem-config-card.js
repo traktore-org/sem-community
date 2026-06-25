@@ -119,9 +119,9 @@ const WATCHED = [
     'number.sem_battery_priority_soc', 'number.sem_battery_buffer_soc',
     'number.sem_battery_auto_start_soc', 'number.sem_battery_assist_floor_soc',
     'number.sem_battery_assist_min_surplus', 'number.sem_battery_assist_max_power',
-    'number.sem_battery_minimum_soc', 'number.sem_battery_resume_soc',
+    'number.sem_battery_minimum_soc',
     'number.sem_cheap_price_threshold', 'number.sem_expensive_price_threshold',
-    'number.sem_minimum_solar_power', 'number.sem_maximum_grid_import',
+    'number.sem_minimum_solar_power',
     'number.sem_update_interval',
     'number.sem_ev_enable_delay_seconds', 'number.sem_ev_disable_delay_seconds',
     // #492: regulation_offset moved here from sem-control-card (Config
@@ -607,7 +607,6 @@ class SEMConfigCard extends SEMLitBase {
             </div>
             <div class="stepper-pair">
                 ${this._renderStepper('number.sem_battery_minimum_soc', 'minimum_soc', T, 'setting_help_minimum_soc')}
-                ${this._renderStepper('number.sem_battery_resume_soc', 'resume_soc', T, 'setting_help_resume_soc')}
             </div>
         `;
     }
@@ -1194,9 +1193,6 @@ class SEMConfigCard extends SEMLitBase {
                 { min: 1.0, max: 15.0, step: 0.5, unit: 'kW', default: 4.5 }, opts, 'config_help_lm_warning_peak')}
             ${this._renderOptionSlider('emergency_peak_level', 'config_lm_emergency_peak',
                 { min: 1.0, max: 20.0, step: 0.5, unit: 'kW', default: 6.0 }, opts, 'config_help_lm_emergency_peak')}
-            ${this._renderOptionToggle('critical_device_protection', 'config_lm_critical_protection',
-                opts, 'config_help_lm_critical_protection', true)}
-            ${this._renderStepper('number.sem_maximum_grid_import', 'max_grid_import', T, 'tile_help_max_grid_import')}
         `;
     }
 

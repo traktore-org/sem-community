@@ -32,7 +32,6 @@ from custom_components.solar_energy_management.coordinator.coordinator import (
 _ENTITY_ID_CONSTANTS = {
     "ENTITY_OBSERVER_MODE_SWITCH": "switch",
     "ENTITY_SOLAR_POWER": "sensor",
-    "ENTITY_SMART_NIGHT_CHARGING": "switch",
 }
 
 _VALID_PLATFORMS = {
