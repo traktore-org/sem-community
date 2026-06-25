@@ -35,6 +35,21 @@ _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0  # Coordinator handles all updates
 
+# Entity keys that differ from the config/option key they persist to. Single
+# source of truth for both the read (init) and write (async_set_native_value)
+# paths — and asserted by tests/test_knob_wiring.py so every user-facing knob
+# resolves to a key some decision actually reads (no more dead steppers).
+CONFIG_KEY_MAP = {
+    "battery_capacity": "battery_capacity_kwh",
+    "ev_minimum_current": "ev_min_current",
+    # The HotWaterController reads the hot_water_-prefixed config keys
+    # (__init__.py); the sliders persisted the bare names, so the values never
+    # reached the controller (#542 census). Map them so read+write use the
+    # canonical key.
+    "legionella_target_temp": "hot_water_legionella_target",
+    "legionella_interval_hours": "hot_water_legionella_interval_hours",
+}
+
 NUMBER_TYPES = [
     # Delta Thresholds
     NumberEntityDescription(
@@ -618,18 +633,8 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
 
         # Set initial value from config.
         # Some entity keys differ from config keys for dashboard compatibility.
-        _CONFIG_KEY_MAP = {
-            "battery_capacity": "battery_capacity_kwh",
-            "ev_minimum_current": "ev_min_current",
-            # The HotWaterController reads the hot_water_-prefixed config keys
-            # (__init__.py); the sliders persisted the bare names, so the values
-            # never reached the controller (#542 census). Map them so read+write
-            # use the canonical key.
-            "legionella_target_temp": "hot_water_legionella_target",
-            "legionella_interval_hours": "hot_water_legionella_interval_hours",
-        }
         config = {**entry.data, **entry.options}
-        config_key = _CONFIG_KEY_MAP.get(description.key, description.key)
+        config_key = CONFIG_KEY_MAP.get(description.key, description.key)
         # Null-safe: config may store None explicitly, which makes the
         # entity unavailable.  Fall through to the default in that case.
         # Note: don't use `or` — 0 is a valid value (e.g. minimum_solar_power=0).
@@ -716,16 +721,9 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         """Update the setting value."""
         self._attr_native_value = value
 
-        # Map entity key back to config key if they differ
-        _CONFIG_KEY_MAP = {
-            "battery_capacity": "battery_capacity_kwh",
-            "ev_minimum_current": "ev_min_current",
-            # See the matching map in __init__ — the controller reads the
-            # hot_water_-prefixed keys (#542 census).
-            "legionella_target_temp": "hot_water_legionella_target",
-            "legionella_interval_hours": "hot_water_legionella_interval_hours",
-        }
-        config_key = _CONFIG_KEY_MAP.get(self.entity_description.key, self.entity_description.key)
+        # Map entity key back to config key if they differ (single source of
+        # truth at module level).
+        config_key = CONFIG_KEY_MAP.get(self.entity_description.key, self.entity_description.key)
 
         # Update coordinator config (immediate, in-memory)
         await self.coordinator.async_update_config({config_key: value})
