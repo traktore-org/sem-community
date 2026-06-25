@@ -990,6 +990,28 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         sem_data = SEMData()
         return sem_data.to_dict()
 
+    def _zero_charger_setpoints(self) -> None:
+        """Observer mode: command nothing — zero every charger's setpoint.
+
+        ``commanded_current`` is published from each device's
+        ``_current_setpoint``; left stale in observer mode, anything acting on
+        that sensor (an external current-control bridge, a second SEM instance)
+        would keep driving the charger. Zeroing makes SEM publish "not
+        commanding" while it observes.
+
+        ``_ev_devices`` is a ``{charger_id: device}`` dict — iterate VALUES, not
+        keys. ``list(dict)`` yields the id strings, which have no
+        ``_current_setpoint`` and crashed the whole update cycle (#542). The bug
+        lay latent because this block never executed until the observer switch
+        was un-broken.
+        """
+        devices = list((self._ev_devices or {}).values())
+        if self._ev_device is not None and self._ev_device not in devices:
+            devices.append(self._ev_device)
+        for dev in devices:
+            if dev is not None:
+                dev._current_setpoint = 0.0
+
     def _sync_observer_mode_from_switch(self) -> None:
         """Backstop the observer flag from the switch entity each cycle.
 
@@ -1438,12 +1460,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             # while it observes. (#536 — HA-TEST's keba bridge automation drove
             # the real KEBA via the stale setpoint despite observer mode.)
             if self._observer_mode:
-                _obs_evs = list(self._ev_devices or [])
-                if self._ev_device is not None and self._ev_device not in _obs_evs:
-                    _obs_evs.append(self._ev_device)
-                for _ev in _obs_evs:
-                    if _ev is not None:
-                        _ev._current_setpoint = 0.0
+                self._zero_charger_setpoints()
 
             if self._ev_devices and not self._observer_mode:
                 # Multi-charger (#112): distribute budget + night target

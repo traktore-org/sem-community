@@ -136,3 +136,37 @@ class TestObserverPullDoesNotClobber:
     def test_unavailable_holds_false_too(self):
         # Symmetric: it must not spuriously enable, either.
         assert self._pull("unavailable", False) is False
+
+
+@pytest.mark.unit
+class TestObserverZeroesSetpoints:
+    """Observer mode zeroes every charger setpoint WITHOUT crashing on the
+    multi-charger dict. ``_ev_devices`` is a {id: device} dict; iterating it as
+    a list yields id strings (no ``_current_setpoint``) and took down the whole
+    update cycle (#542) — latent until the observer switch was un-broken.
+    """
+
+    @staticmethod
+    def _device(initial=6.0):
+        d = SimpleNamespace(_current_setpoint=initial)
+        return d
+
+    def test_multi_charger_dict_zeroes_values_not_keys(self):
+        a, b = self._device(), self._device()
+        fake = SimpleNamespace(
+            _ev_devices={"charger_a": a, "charger_b": b}, _ev_device=None
+        )
+        # Must not raise (the bug raised 'str' object has no attribute ...).
+        SEMCoordinator._zero_charger_setpoints(fake)
+        assert a._current_setpoint == 0.0
+        assert b._current_setpoint == 0.0
+
+    def test_single_charger_zeroed(self):
+        single = self._device()
+        fake = SimpleNamespace(_ev_devices=None, _ev_device=single)
+        SEMCoordinator._zero_charger_setpoints(fake)
+        assert single._current_setpoint == 0.0
+
+    def test_no_chargers_is_noop(self):
+        fake = SimpleNamespace(_ev_devices=None, _ev_device=None)
+        SEMCoordinator._zero_charger_setpoints(fake)  # must not raise
