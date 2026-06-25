@@ -1130,7 +1130,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 issues.append("No EV charger registered")
             if not self._storage or not self._storage.is_loaded:
                 issues.append("Storage not loaded")
-            if self.hass.states.get(f"sensor.{ENTITY_SOLAR_POWER}") is None:
+            if self.hass.states.get(ENTITY_SOLAR_POWER) is None:
                 issues.append("Solar power sensor missing")
             if issues:
                 _LOGGER.warning("SEM health check: %s", "; ".join(issues))
@@ -1138,8 +1138,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 charger_names = [d.name for d in self._ev_devices.values()] if self._ev_devices else [self._ev_device.name if self._ev_device else "none"]
                 _LOGGER.info("SEM health check: all OK (EV chargers: %s)", ", ".join(charger_names))
 
-        # Read observer mode from switch entity (allows runtime toggle)
-        observer_state = self.hass.states.get(f"switch.{ENTITY_OBSERVER_MODE_SWITCH}")
+        # Read observer mode from switch entity (allows runtime toggle).
+        # The switch ALSO pushes its state straight onto ``self._observer_mode``
+        # (see switch.py) so a toggle takes effect immediately and even if this
+        # entity_id ever changes; this per-cycle pull is the backstop.
+        observer_state = self.hass.states.get(ENTITY_OBSERVER_MODE_SWITCH)
         if observer_state is not None:
             self._observer_mode = observer_state.state == "on"
 

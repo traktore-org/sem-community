@@ -238,9 +238,13 @@ DEFAULT_INVERTER_MAX_POWER_W: Final = 10000
 # ENTITY ID REFERENCES
 # ============================================
 # Used for internal state lookups — avoids magic strings scattered across modules.
-ENTITY_OBSERVER_MODE_SWITCH: Final = f"{DOMAIN}.observer_mode"  # switch.sem_observer_mode
-ENTITY_SOLAR_POWER: Final = f"{DOMAIN}.solar_power"  # sensor.sem_solar_power
-ENTITY_SMART_NIGHT_CHARGING: Final = f"{DOMAIN}.smart_night_charging"  # switch.sem_smart_night_charging
+# Full entity_ids — match the ids the entities force in their __init__
+# (``switch.sem_<key>`` / ``sensor.sem_<key>``). These are looked up verbatim
+# via ``hass.states.get(...)`` — do NOT prepend a platform prefix at the call
+# site (that produced a dead three-segment id and silently broke the lookup).
+ENTITY_OBSERVER_MODE_SWITCH: Final = "switch.sem_observer_mode"
+ENTITY_SOLAR_POWER: Final = "sensor.sem_solar_power"
+ENTITY_SMART_NIGHT_CHARGING: Final = "switch.sem_smart_night_charging"
 
 # HA state constants (avoid magic strings)
 STATE_UNKNOWN: Final = "unknown"

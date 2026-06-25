@@ -107,6 +107,45 @@ class TestSEMSwitches:
         mock_coordinator.async_request_refresh.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_observer_switch_turn_on_drives_coordinator(self, mock_coordinator):
+        """Toggling observer_mode ON must set coordinator._observer_mode True
+        immediately — independent of the per-cycle entity lookup. (The lookup was
+        broken for a long time; this push is the safety contract that makes
+        observation mode actually hands-off.)"""
+        mock_coordinator._observer_mode = False
+        description = create_switch_description("observer_mode")
+        switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
+        switch.async_write_ha_state = MagicMock()
+
+        await switch.async_turn_on()
+
+        assert mock_coordinator._observer_mode is True
+
+    @pytest.mark.asyncio
+    async def test_observer_switch_turn_off_drives_coordinator(self, mock_coordinator):
+        """Toggling observer_mode OFF must clear coordinator._observer_mode."""
+        mock_coordinator._observer_mode = True
+        description = create_switch_description("observer_mode")
+        switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
+        switch.async_write_ha_state = MagicMock()
+
+        await switch.async_turn_off()
+
+        assert mock_coordinator._observer_mode is False
+
+    @pytest.mark.asyncio
+    async def test_non_observer_switch_does_not_touch_observer_flag(self, mock_coordinator):
+        """A non-observer switch must NOT clobber the coordinator's observer flag."""
+        mock_coordinator._observer_mode = True
+        description = create_switch_description("night_charging")
+        switch = SEMSolarSwitch(mock_coordinator, description, "test_entry_id")
+        switch.async_write_ha_state = MagicMock()
+
+        await switch.async_turn_on()
+
+        assert mock_coordinator._observer_mode is True  # untouched
+
+    @pytest.mark.asyncio
     async def test_switch_unique_ids(self, mock_coordinator):
         """Test switch unique ID generation."""
         night = SEMSolarSwitch(

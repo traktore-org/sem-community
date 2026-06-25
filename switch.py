@@ -150,6 +150,14 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         else:
             _LOGGER.info("No previous state for %s, using default: %s", self.entity_description.key, 'ON' if self._is_on else 'OFF')
 
+        # Observer mode must take hold the instant the entity restores — push the
+        # restored state straight onto the coordinator so the very first control
+        # cycle is hands-off if the switch was last ON (the per-cycle pull is only
+        # a backstop). Without this, the startup config option (often unset →
+        # False) won the race and SEM controlled hardware despite the switch.
+        if self.entity_description.key == "observer_mode":
+            self.coordinator._observer_mode = self._is_on
+
     @property
     def is_on(self) -> bool:
         """Return true if switch is on."""
@@ -159,6 +167,10 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         """Turn the switch on."""
         _LOGGER.info("Turning on %s", self.entity_description.key)
         self._is_on = True
+        # Drive the coordinator flag directly so observer mode flips this instant,
+        # independent of the per-cycle entity lookup.
+        if self.entity_description.key == "observer_mode":
+            self.coordinator._observer_mode = True
         # Push the new state immediately (#259): otherwise the UI only reflects the
         # toggle on the next coordinator push, and a swallowed refresh error below
         # would silently leave HA showing the old state.
@@ -173,6 +185,8 @@ class SEMSolarSwitch(CoordinatorEntity, SwitchEntity, RestoreEntity):
         """Turn the switch off."""
         _LOGGER.info("Turning off %s", self.entity_description.key)
         self._is_on = False
+        if self.entity_description.key == "observer_mode":
+            self.coordinator._observer_mode = False
         self.async_write_ha_state()  # reflect immediately (#259)
 
         try:
