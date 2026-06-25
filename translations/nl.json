@@ -148,9 +148,7 @@
           "update_interval": "Update-interval (seconden)",
           "battery_priority_soc": "Batterij prioriteit SOC (%)",
           "battery_minimum_soc": "Minimale batterij SOC (%)",
-          "battery_resume_soc": "Batterij hervat SOC (%)",
           "min_solar_power": "Minimaal zonnevermogen (W)",
-          "max_grid_import": "Maximale netafname (W)",
           "daily_ev_target": "Dagelijkse EV-doel (kWh)",
           "battery_assist_max_power": "Maximaal batterij-ondersteuningsvermogen (W)",
           "battery_assist_min_surplus": "Min. zonne-overschot voor batterij-ondersteuning (W)",
@@ -182,7 +180,6 @@
           "battery_auto_start_soc": "Grens tussen zone 3 en zone 4. Boven deze SOC kan de EV beginnen met laden, zelfs zonder zonne-overschot, gebruikmakend van de batterij. Standaard 90%.",
           "battery_assist_floor_soc": "Hysterese-ondergrens — zodra batterijondersteuning actief is, blijft deze actief totdat de SOC onder deze waarde zakt. Standaard 60%.",
           "min_solar_power": "Ondergrens voor overschot waarbij laden van de EV op zonne-energie niet wordt gestart. Houd dit ruim onder het minimum van de EV-lader (~4140 W bij 3-fase, ~1380 W bij 1-fase).",
-          "max_grid_import": "Harde limiet voor netafname tijdens laden op zonne-energie. 0 = pure PV-modus (aanbevolen SEM-standaard).",
           "daily_ev_target": "Doelwaarde kWh per dag voor nachtelijk laden via het net. Zet op 0 om nachtelijk laden volledig uit te schakelen.",
           "battery_assist_max_power": "Maximaal vermogen dat de thuisbatterij kan ontladen om de EV te ondersteunen in zone 3/4. Standaard 4500 W.",
           "battery_assist_min_surplus": "Minimaal echt zonne-overschot voordat de thuisbatterij de EV mag helpen laden — in elke laadmodus. Daaronder blijft de batterij voor het huis (de auto laadt uit net + zon). Standaard 1200 W. Zet op 0 om de batterij de EV overal te laten ondersteunen, ook 's nachts.",
@@ -208,14 +205,12 @@
         "data": {
           "daily_ev_target": "Nachtlaaddoel (kWh)",
           "min_solar_power": "Minimaal zonnevermogen om EV-laden te starten (W)",
-          "max_grid_import": "Max. netimport tijdens zonneladen (W, 0 = alleen zon)",
           "observer_mode": "Observatiemodus (alleen lezen, geen hardwarebesturing)",
           "smart_night_charging": "Nachtdoel verlagen op basis van voorspelling van morgen"
         },
         "data_description": {
           "daily_ev_target": "Doelverbruik in kWh dat elke nacht van het net wordt geladen. Stel in op 0 om nachtelijk laden via het net uit te schakelen.",
           "min_solar_power": "Minimaal zonne-energieoverschot (W) dat vereist is voordat SEM begint met zonneladen voor de EV.",
-          "max_grid_import": "Maximaal netvermogen (W) dat SEM mag gebruiken tijdens zonneladen. Stel in op 0 voor puur-zonne-modus.",
           "observer_mode": "Wanneer AAN, bewaakt SEM alles maar stuurt nooit opdrachten naar hardware.",
           "smart_night_charging": "Wanneer AAN, verlaagt SEM het nachtlaaddoel wanneer de zonne-energieprognose voor morgen voldoende is."
         }
@@ -258,7 +253,6 @@
           "target_peak_limit": "Doel piekvermogen (kW)",
           "warning_peak_level": "Waarschuwingsniveau piekvermogen (kW)",
           "emergency_peak_level": "Noodniveau piekvermogen (kW)",
-          "critical_device_protection": "Bescherming van kritische apparaten",
           "vehicle_soc_entity": "Voertuig batterij SOC",
           "ev_battery_capacity_kwh": "EV batterijcapaciteit (kWh)",
           "ev_target_soc": "EV doel SOC (%)"
@@ -268,7 +262,6 @@
           "target_peak_limit": "Maximaal netvermogen (kW) waarna SEM begint met het afschakelen van regelbare verbruikers.",
           "warning_peak_level": "Vermogensniveau (kW) waarbij SEM een waarschuwing geeft voordat actie wordt ondernomen.",
           "emergency_peak_level": "Vermogensniveau (kW) waarbij SEM agressief verbruikers afschakelt om piekkosten te vermijden.",
-          "critical_device_protection": "Wanneer ingeschakeld, worden apparaten die als kritiek zijn gemarkeerd nooit afgeschakeld, ongeacht het pieklevel.",
           "vehicle_soc_entity": "Optionele sensor die het huidige laadniveau van het voertuig toont (0–100%).",
           "ev_battery_capacity_kwh": "Totale bruikbare capaciteit van de EV-accu in kWh.",
           "ev_target_soc": "Doellaadniveau (%) waarbij SEM de EV als volledig geladen beschouwt."
@@ -1021,20 +1014,11 @@
       "battery_minimum_soc": {
         "name": "Batterij Minimum-SOC"
       },
-      "battery_resume_soc": {
-        "name": "Batterij Hervatting-SOC"
-      },
       "minimum_solar_power": {
         "name": "Minimum Zonne-vermogen"
       },
-      "maximum_grid_import": {
-        "name": "Maximum Netimport"
-      },
       "daily_ev_target": {
         "name": "Dagelijks EV-doel"
-      },
-      "public_charging_rate": {
-        "name": "Openbaar Laadtarief"
       },
       "battery_assist_max_power": {
         "name": "Batterij Ondersteuning Max"

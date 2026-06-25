@@ -125,7 +125,6 @@ SEM_BINARY_SENSORS: Final = {
 EMS_INPUT_NUMBERS: Final = {
     "min_solar_power": "input_number.min_solar_power",
     "daily_ev_target": "input_number.daily_ev_target",
-    "max_grid_import": "input_number.max_grid_import",
     "min_charging_current": "input_number.min_charging_current",
     "keba_charging_current": "input_number.keba_charging_current",
 }

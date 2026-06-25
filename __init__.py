@@ -3566,7 +3566,7 @@ async def _async_register_phase_services(
     # Battery zones
     _DIAGNOSE_BATTERY_ZONES_OPTION = {
         "battery_priority_soc", "battery_buffer_soc", "battery_auto_start_soc",
-        "battery_assist_floor_soc", "battery_minimum_soc", "battery_resume_soc",
+        "battery_assist_floor_soc", "battery_minimum_soc",
         "battery_capacity_kwh",
     }
     _DIAGNOSE_BATTERY_ZONES_STATE = {
@@ -3592,7 +3592,6 @@ async def _async_register_phase_services(
     _DIAGNOSE_LOAD_MGMT_OPTION = {
         "load_management_enabled", "target_peak_limit",
         "warning_peak_level", "emergency_peak_level",
-        "critical_device_protection", "maximum_grid_import",
     }
     _DIAGNOSE_LOAD_MGMT_STATE = {
         "load_management_status", "load_management_recommendation",

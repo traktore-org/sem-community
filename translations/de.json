@@ -148,9 +148,7 @@
           "update_interval": "Aktualisierungsintervall (Sekunden)",
           "battery_priority_soc": "Batterie-Prioritäts-SOC (%)",
           "battery_minimum_soc": "Batterie-Minimum-SOC (%)",
-          "battery_resume_soc": "Batterie-Wiederaufnahme-SOC (%)",
           "min_solar_power": "Minimale Solarleistung (W)",
-          "max_grid_import": "Maximaler Netz-Import (W)",
           "daily_ev_target": "Tägliches EV-Ziel (kWh)",
           "battery_assist_max_power": "Batterie-Unterstützung Max. Leistung (W)",
           "battery_assist_min_surplus": "Batterie-Unterstützung Min. Solarüberschuss (W)",
@@ -182,7 +180,6 @@
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
           "battery_assist_floor_soc": "Hysteresis floor — once battery assist is active, it stays active until SOC drops below this value. Default 60 %.",
           "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
-          "max_grid_import": "Hard cap on grid power that SEM will pull while doing solar charging. 0 = pure-PV mode (the recommended SEM default).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
           "battery_assist_min_surplus": "Mindest-Solarüberschuss, bevor die Hausbatterie das E-Auto laden darf — in jedem Lademodus. Darunter bleibt die Batterie dem Haus vorbehalten (das Auto lädt aus Netz + Solar). Standard 1200 W. Auf 0 setzen, damit die Batterie das E-Auto überall unterstützt, auch nachts.",
@@ -208,14 +205,12 @@
         "data": {
           "daily_ev_target": "Nacht-Ladeziel (kWh)",
           "min_solar_power": "Minimale Solarleistung zum Starten der EV-Ladung (W)",
-          "max_grid_import": "Max. Netzimport während Solarladen (W, 0 = reiner Solarbetrieb)",
           "observer_mode": "Beobachtermodus (nur lesen, keine Hardwaresteuerung)",
           "smart_night_charging": "Nachtziel basierend auf Prognose von morgen reduzieren"
         },
         "data_description": {
           "daily_ev_target": "Target kWh to charge from the grid each night. Set to 0 to disable night grid charging.",
           "min_solar_power": "Minimum surplus solar power (W) required before SEM starts solar EV charging.",
-          "max_grid_import": "Maximum grid power (W) SEM may use during solar charging. Set to 0 for pure-solar mode.",
           "observer_mode": "When ON, SEM monitors everything but never sends commands to hardware.",
           "smart_night_charging": "When ON, SEM reduces the night charge target when tomorrow's solar forecast is sufficient."
         }
@@ -258,7 +253,6 @@
           "target_peak_limit": "Ziel-Spitzenlastgrenze (kW)",
           "warning_peak_level": "Warn-Spitzenlaststufe (kW)",
           "emergency_peak_level": "Notfall-Spitzenlaststufe (kW)",
-          "critical_device_protection": "Kritische Geräte schützen",
           "vehicle_soc_entity": "Fahrzeug-Batterie SOC",
           "ev_battery_capacity_kwh": "EV-Batteriekapazität (kWh)",
           "ev_target_soc": "EV-Ziel-SOC (%)"
@@ -268,7 +262,6 @@
           "target_peak_limit": "Maximum grid power (kW) before SEM starts shedding controllable loads.",
           "warning_peak_level": "Power level (kW) at which SEM issues a warning before taking action.",
           "emergency_peak_level": "Power level (kW) at which SEM aggressively sheds loads to avoid demand charges.",
-          "critical_device_protection": "When enabled, devices marked as critical are never shed regardless of peak level.",
           "vehicle_soc_entity": "Optional sensor reporting the vehicle's current state of charge (0–100%).",
           "ev_battery_capacity_kwh": "Total usable capacity of the EV battery in kWh.",
           "ev_target_soc": "Target SOC (%) at which SEM considers the EV fully charged."
@@ -1021,20 +1014,11 @@
       "battery_minimum_soc": {
         "name": "Batterie-Minimum-SOC"
       },
-      "battery_resume_soc": {
-        "name": "Batterie-Wiederaufnahme-SOC"
-      },
       "minimum_solar_power": {
         "name": "Minimale Solarleistung"
       },
-      "maximum_grid_import": {
-        "name": "Maximaler Netzimport"
-      },
       "daily_ev_target": {
         "name": "Tägliches EV-Ziel"
-      },
-      "public_charging_rate": {
-        "name": "Öffentlicher Ladetarif"
       },
       "battery_assist_max_power": {
         "name": "Batterie-Unterstützung Max"

@@ -69,14 +69,6 @@ NUMBER_TYPES = [
         native_step=5,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="battery_resume_soc",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=30,
-        native_max_value=80,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-    ),
     # SOC Zone Thresholds
     NumberEntityDescription(
         key="battery_buffer_soc",
@@ -127,28 +119,11 @@ NUMBER_TYPES = [
         native_step=100,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="maximum_grid_import",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        native_min_value=0,
-        native_max_value=2000,
-        native_step=100,
-        mode=NumberMode.SLIDER,
-    ),
     # EV charge-target / consumption settings (daily_ev_target[_max], ev_target_soc[_max],
     # ev_kwh_per_100km) are PER-CHARGER only (#255) — global duplicates removed; see the
     # per-charger descriptions in async_setup_entry. Stale registry entities are
     # auto-removed by _cleanup_stale_entities; values were seeded per-charger by the v3→v4
     # migration so nothing resets.
-    NumberEntityDescription(
-        key="public_charging_rate",
-        native_unit_of_measurement="CHF/kWh",
-        native_min_value=0,
-        native_max_value=2,
-        native_step=0.01,
-        mode=NumberMode.BOX,
-        entity_category=EntityCategory.CONFIG,
-    ),
     NumberEntityDescription(
         key="battery_assist_max_power",
         native_unit_of_measurement=UnitOfPower.WATT,
@@ -646,12 +621,18 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         _CONFIG_KEY_MAP = {
             "battery_capacity": "battery_capacity_kwh",
             "ev_minimum_current": "ev_min_current",
+            # The HotWaterController reads the hot_water_-prefixed config keys
+            # (__init__.py); the sliders persisted the bare names, so the values
+            # never reached the controller (#542 census). Map them so read+write
+            # use the canonical key.
+            "legionella_target_temp": "hot_water_legionella_target",
+            "legionella_interval_hours": "hot_water_legionella_interval_hours",
         }
         config = {**entry.data, **entry.options}
         config_key = _CONFIG_KEY_MAP.get(description.key, description.key)
         # Null-safe: config may store None explicitly, which makes the
         # entity unavailable.  Fall through to the default in that case.
-        # Note: don't use `or` — 0 is a valid value (e.g. max_grid_import=0).
+        # Note: don't use `or` — 0 is a valid value (e.g. minimum_solar_power=0).
         value = config.get(config_key)
         if value is None:
             value = config.get(description.key)
@@ -665,9 +646,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             DEFAULT_UPDATE_INTERVAL,
             DEFAULT_BATTERY_PRIORITY_SOC,
             DEFAULT_BATTERY_MINIMUM_SOC,
-            DEFAULT_BATTERY_RESUME_SOC,
             DEFAULT_MIN_SOLAR_POWER,
-            DEFAULT_MAX_GRID_IMPORT,
             DEFAULT_DAILY_EV_TARGET,
             DEFAULT_BATTERY_ASSIST_MAX_POWER,
             DEFAULT_BATTERY_ASSIST_MIN_SURPLUS,
@@ -687,9 +666,7 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "update_interval": DEFAULT_UPDATE_INTERVAL,
             "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
             "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
-            "battery_resume_soc": DEFAULT_BATTERY_RESUME_SOC,
             "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
-            "maximum_grid_import": DEFAULT_MAX_GRID_IMPORT,
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
             # Ceiling defaults to full (charge freely from sun until capped) (#245)
             "daily_ev_target_max": 100,
@@ -712,7 +689,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "ev_disable_delay_seconds": 300,
             "ev_phases": 3,
             "ev_kwh_per_100km": 18,
-            "public_charging_rate": 0.55,
             "electricity_import_rate": 0.3387,
             "electricity_export_rate": 0.075,
             "battery_buffer_soc": 70,
@@ -744,6 +720,10 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         _CONFIG_KEY_MAP = {
             "battery_capacity": "battery_capacity_kwh",
             "ev_minimum_current": "ev_min_current",
+            # See the matching map in __init__ — the controller reads the
+            # hot_water_-prefixed keys (#542 census).
+            "legionella_target_temp": "hot_water_legionella_target",
+            "legionella_interval_hours": "hot_water_legionella_interval_hours",
         }
         config_key = _CONFIG_KEY_MAP.get(self.entity_description.key, self.entity_description.key)
 

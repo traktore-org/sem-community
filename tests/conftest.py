@@ -17,9 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 TEST_CONFIG_DATA = {
     "battery_priority_soc": 90,
     "battery_minimum_soc": 30,
-    "battery_resume_soc": 50,
     "min_solar_power": 1000,
-    "max_grid_import": 100,
     "super_charger_min_soc": 70,  # DEPRECATED — kept for backward compat
     "super_charger_power": 4500,  # DEPRECATED — use battery_assist_max_power
     "battery_assist_max_power": 4500,
@@ -639,9 +637,7 @@ def sem_config_entry():
             "ev_total_energy_sensor": "sensor.test_ev_total_energy",
             "battery_priority_soc": 90,
             "battery_minimum_soc": 30,
-            "battery_resume_soc": 50,
             "min_solar_power": 1000,
-            "max_grid_import": 100,
             "battery_assist_max_power": 4500,
             "daily_ev_target": 31,
             "battery_capacity_kwh": 10.0,
@@ -726,9 +722,7 @@ def sem_multi_wallbox_config_entry():
             "solar_power_sensor": "sensor.test_solar_power",
             "battery_priority_soc": 90,
             "battery_minimum_soc": 30,
-            "battery_resume_soc": 50,
             "min_solar_power": 1000,
-            "max_grid_import": 100,
             "battery_capacity_kwh": 15.0,
             "peak_load": 6000,
             "update_interval": 30,

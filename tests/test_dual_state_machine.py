@@ -41,7 +41,6 @@ def config():
         "battery_priority_soc": 90,
         "battery_minimum_soc": 30,
         "minimum_solar_power": 2400,
-        "maximum_grid_import": 300,
         "current_delta": 1,
         "ev_chargers": [
             {"id": "ev_charger", "charge_mode": "min_plus_solar"},

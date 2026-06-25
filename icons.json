@@ -367,14 +367,8 @@
       "battery_minimum_soc": {
         "default": "mdi:battery-low"
       },
-      "battery_resume_soc": {
-        "default": "mdi:battery-medium"
-      },
       "minimum_solar_power": {
         "default": "mdi:solar-panel"
-      },
-      "maximum_grid_import": {
-        "default": "mdi:transmission-tower"
       },
       "daily_ev_target": {
         "default": "mdi:target"
