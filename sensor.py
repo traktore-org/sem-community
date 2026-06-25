@@ -1402,6 +1402,14 @@ SENSOR_TYPES = [
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
+        # #545 observe-only: withheld battery-assist headroom (W) in Zone 3/4.
+        # State charts the chicken-and-egg; attributes carry the full loop
+        # (offered vs drawn, battery soc/power, potential vs used).
+        key="diag_ev_assist_headroom",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
         key="diag_sensors_unavailable",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -1871,6 +1879,7 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
         "pv_degradation_trend", "energy_tip", "energy_tip_category",
         "utility_signal_source",
         "ev_taper_trend",
+        "diag_ev_assist_headroom",
     }
 
     def __init__(
@@ -2389,6 +2398,11 @@ class SEMSolarSensor(CoordinatorEntity, RestoreSensor):
             schedule = self.coordinator.data.get("battery_scheduler_schedule", {})
             if schedule:
                 attrs["schedule"] = schedule
+
+        # #545 — EV battery-assist chicken-and-egg: the full loop in one place.
+        if self.entity_description.key == "diag_ev_assist_headroom":
+            ead = self.coordinator.data.get("diag_ev_assist", {}) or {}
+            attrs.update(ead)
 
         return attrs
 

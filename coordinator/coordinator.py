@@ -2447,6 +2447,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             result["diag_battery_capacity"] = self.config.get("battery_capacity_kwh", 0)
             result["diag_update_interval"] = self.update_interval.total_seconds()
             result["diag_observer_mode"] = self._observer_mode
+            # EV battery-assist chicken-and-egg diagnostic (#545, observe-only):
+            # state = withheld assist headroom (W); attributes = the full loop.
+            _ead = getattr(self, "_cycle_ev_assist_diag", None) or {}
+            result["diag_ev_assist_headroom"] = _ead.get("headroom_w", 0)
+            result["diag_ev_assist"] = _ead
             unavail_count = sum(1 for eid in self._sensor_reader._sensor_unavailable)
             result["diag_sensors_unavailable"] = unavail_count
             result["diag_health_violations"] = self._health_check.total_violations
@@ -4500,6 +4505,41 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         self._cycle_ev_budget = ev_budget_obj
         ev_budget = ev_budget_obj.net_w
         ev_current = ev_budget_obj.current_a
+
+        # OBSERVE-ONLY diagnostic (#545): the chicken-and-egg. In Zone 3/4 the
+        # battery-assist budget is capped at "reach the EV minimum"
+        # (decide.battery_assist_budget_w), so even at full SOC SEM never offers
+        # MORE amps — the car never draws more, so the inverter's native
+        # self-consumption never ramps the battery. This surfaces the WITHHELD
+        # assist headroom (potential − used) + offered-vs-drawn + battery power
+        # so the whole loop can be watched over evenings. NO control change.
+        try:
+            from .flow_calculator import battery_assist_potential_w as _bap
+            _assist_used = float(getattr(ev_budget_obj, "battery_assist", 0.0) or 0.0)
+            _assist_potential = _bap(
+                power.battery_soc,
+                self.config.get("battery_assist_floor_soc", 60),
+                self.config.get("battery_buffer_soc", 70),
+                self.config.get("battery_auto_start_soc", 90),
+                self.config.get(
+                    "battery_assist_max_power",
+                    self.config.get("super_charger_power", 4500),
+                ),
+            )
+            self._cycle_ev_assist_diag = {
+                "headroom_w": round(max(0.0, _assist_potential - _assist_used), 0),
+                "potential_w": round(_assist_potential, 0),
+                "used_w": round(_assist_used, 0),
+                "solar_surplus_w": round(float(getattr(ev_budget_obj, "solar_surplus", 0.0) or 0.0), 0),
+                "offered_a": int(getattr(ev_budget_obj, "current_a", 0) or 0),
+                "offered_w": round(float(getattr(ev_budget_obj, "net_w", 0.0) or 0.0), 0),
+                "drawn_w": round(float(getattr(power, "ev_power", 0.0) or 0.0), 0),
+                "battery_soc": round(float(power.battery_soc or 0.0), 1),
+                "battery_power_w": round(float(getattr(power, "battery_power", 0.0) or 0.0), 0),
+                "strategy": getattr(ev_budget_obj, "strategy", ""),
+            }
+        except Exception:  # diagnostic must never break the cycle
+            self._cycle_ev_assist_diag = {}
 
         _LOGGER.debug(
             "Charging strategy: %s — %s",
