@@ -138,5 +138,5 @@ def test_phase4_globals_removed_from_descriptions():
     from custom_components.solar_energy_management.select import SELECT_TYPES
     assert "ev_phases" not in {n.key for n in NUMBER_TYPES}
     assert "ev_charging_mode" not in {s.key for s in SELECT_TYPES}
-    # ev_stall_cooldown stays global (tuning constant)
-    assert "ev_stall_cooldown" in {n.key for n in NUMBER_TYPES}
+    # ev_stall_cooldown removed (dead: value never read)
+    assert "ev_stall_cooldown" not in {n.key for n in NUMBER_TYPES}

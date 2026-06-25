@@ -146,9 +146,6 @@
         "description": "Update your SEM optimization parameters",
         "data": {
           "update_interval": "Update Interval (seconds)",
-          "power_delta": "Power Delta Threshold (W)",
-          "current_delta": "Current Delta Threshold (A)",
-          "soc_delta": "Battery SOC Delta Threshold (%)",
           "battery_priority_soc": "Battery Priority SOC (%)",
           "battery_minimum_soc": "Battery Minimum SOC (%)",
           "battery_resume_soc": "Battery Resume SOC (%)",
@@ -179,9 +176,6 @@
         },
         "data_description": {
           "update_interval": "How often the coordinator reads sensors and adjusts hardware. 10 s gives the most accurate energy integration; values above 30 s will under-count energy. Range 10–60 s.",
-          "power_delta": "Change-detection threshold for power sensors. Lower = more updates (more sensitive but heavier on the recorder). Default 1000 W is fine for most installs; tune down to 100–200 W for finer control.",
-          "current_delta": "Minimum charging-current change (A) before SEM updates the EV charger. Higher = less ramping.",
-          "soc_delta": "Minimum battery SOC change (%) before SEM reacts. Battery SOC moves slowly so 10 % is usually fine.",
           "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
           "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
@@ -233,9 +227,6 @@
           "electricity_export_rate": "Eksportpris",
           "demand_charge_rate": "Demand charge rate",
           "update_interval": "Update interval (s)",
-          "power_delta": "Effektændringsgrænse (W)",
-          "current_delta": "Current change threshold (A)",
-          "soc_delta": "SOC change threshold (%)",
           "tariff_mode": "Tariff mode",
           "dynamic_tariff_entity": "Dynamic price entity (auto-detected if empty)",
           "dynamic_forecast_entity": "Forecast entity (optional, auto-detected if empty)",
@@ -249,9 +240,6 @@
           "electricity_export_rate": "Feed-in rate paid by the utility (currency/kWh).",
           "demand_charge_rate": "Monthly peak-demand charge (currency/kW/month). Set to 0 if your contract has none.",
           "update_interval": "How often SEM reads sensors and adjusts hardware (seconds). Range 10–60 s.",
-          "power_delta": "Minimum power change (W) before SEM reacts. Lower = more responsive but heavier on the recorder.",
-          "current_delta": "Minimum charging-current change (A) before SEM updates the EV charger.",
-          "soc_delta": "Minimum battery SOC change (%) before SEM reacts to battery state changes.",
           "tariff_mode": "Choose 'Static' for fixed rates, 'Dynamic' for real-time pricing, or 'Calendar' for time-of-use schedules.",
           "dynamic_tariff_entity": "Sensor providing the current electricity import price. Auto-detected from Tibber, Nordpool, etc.",
           "dynamic_forecast_entity": "Optional sensor with hourly price forecasts used for smart scheduling.",
@@ -1025,15 +1013,6 @@
       "update_interval": {
         "name": "Update Interval"
       },
-      "power_delta": {
-        "name": "Power Delta"
-      },
-      "current_delta": {
-        "name": "Current Delta"
-      },
-      "soc_delta": {
-        "name": "SOC Delta"
-      },
       "battery_priority_soc": {
         "name": "Battery Priority SOC"
       },
@@ -1084,9 +1063,6 @@
       },
       "ev_min_current": {
         "name": "EV Minimum Current"
-      },
-      "ev_stall_cooldown": {
-        "name": "EV Stall Cooldown"
       },
       "ev_enable_delay_seconds": {
         "name": "EV-startforsinkelse (overskud)"

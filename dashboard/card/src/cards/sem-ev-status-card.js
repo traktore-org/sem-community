@@ -107,6 +107,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 `charger_${id}_session_energy_external`,
                 `charger_${id}_daily_energy`, `charger_${id}_session_solar_share`,
                 `charger_${id}_estimated_soc`, `charger_${id}_vehicle_soc`,
+                `charger_${id}_commanded_current`,
                 // (#440) charger_*_nights_until_charge / _charge_needed removed
             ].map(s => hass.states[`${prefix}${s}`]?.state || '').join(':')).join('|');
 
@@ -538,9 +539,15 @@ class SEMEVStatusCard extends SEMLitBase {
         const isConnected = perChargerConnected?.state === 'on';
         const isCharging = power > 50;
         const statusText = isCharging ? this._t('charging') : isConnected ? this._t('connected') : this._t('idle');
+        // What SEM actually commanded to the charger (the set current), shown
+        // next to the status so you can see SEM's transmitted A vs the car's
+        // real draw — e.g. "CHARGING (8 A)".
+        const commandedAmps = this._val(`charger_${id}_commanded_current`, 0);
 
+        // ONE current knob (#536): "Min Amps" (ev_min_current). SEM starts
+        // here and auto-raises the offer until a fussy car latches, then
+        // settles back — no separate Start/Vehicle-min knobs.
         const minAmps = this._entityVal(`number.sem_charger_${id}_minimum_current`, 6);
-        const vehicleMinAmps = this._entityVal(`number.sem_charger_${id}_vehicle_min_current`, minAmps);
         const capacityKwh = this._entityVal(`number.sem_charger_${id}_ev_battery_capacity_kwh`, 40);
         const consumption = this._entityVal(`number.sem_charger_${id}_ev_kwh_per_100km`, 18);
 
@@ -638,7 +645,7 @@ class SEMEVStatusCard extends SEMLitBase {
                 <div class="charger-header">
                     <div class="charger-dot" style="background:${color}"></div>
                     <span class="charger-name">${name}</span>
-                    <span class="charger-status" style="color:${isCharging ? color : ''}">${statusText}</span>
+                    <span class="charger-status" style="color:${isCharging ? color : ''}">${statusText}${commandedAmps > 0 ? html` <span class="charger-set">(${Math.round(commandedAmps)}&nbsp;A)</span>` : nothing}</span>
                 </div>
 
                 <div class="charger-body">
@@ -748,11 +755,8 @@ class SEMEVStatusCard extends SEMLitBase {
                 </div>
 
                 <div class="charger-settings ${this._showHelp ? 'help-mode' : ''}">
-                    ${''/* "Vehicle Start Amps" (initial_current) tile removed:
-                       it's unused by the live decide/stability charging path
-                       (the night start uses Min Amps), so showing a settable
-                       10 A tile that does nothing just confused the current
-                       knobs ("three values, one 10A two 9A"). */}
+                    ${''/* ONE current knob: Min Amps. SEM auto-finds a fussy
+                       car's start current and settles back here (#536). */}
                     <div class="setting-cell">
                         <div
                             class="setting-item clickable"
@@ -765,25 +769,6 @@ class SEMEVStatusCard extends SEMLitBase {
                             <span class="setting-value">${this._fmt(minAmps, 0)}A</span>
                         </div>
                         ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_min_amps')}</div>` : nothing}
-                    </div>
-                    ${''/* Two distinct minimums, both kept (a charger legitimately
-                       has both): "Min Amps" is YOUR floor (the lowest current SEM
-                       bothers charging at); "Vehicle Min Amps" is YOUR CAR's floor
-                       (some cars won't charge below ~8-9A). Effective floor =
-                       max(min, vehicle_min). Only the genuinely-dead "Start Amps"
-                       tile is hidden. */}
-                    <div class="setting-cell">
-                        <div
-                            class="setting-item clickable"
-                            @click=${() => {
-                                const event = new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: `number.sem_charger_${id}_vehicle_min_current` } });
-                                this.dispatchEvent(event);
-                            }}
-                        >
-                            <ha-icon icon="mdi:car-electric" style="--mdc-icon-size:16px;color:#8DC892"></ha-icon>
-                            <span class="setting-value">${this._fmt(vehicleMinAmps, 0)}A</span>
-                        </div>
-                        ${this._showHelp ? html`<div class="setting-help">${this._t('tile_help_vehicle_min_amps')}</div>` : nothing}
                     </div>
                     <div class="setting-cell">
                         <div
@@ -827,8 +812,16 @@ class SEMEVStatusCard extends SEMLitBase {
         if (!this._config || !this._hass) return nothing;
 
         const connected = this._binaryState('ev_connected');
-        const charging = this._binaryState('ev_charging');
-        const power = this._val('ev_power', 0);
+        // Header power + charging derived from the SAME per-charger power the
+        // tiles use (summed across the fleet) so the header can never contradict
+        // the per-charger card. They previously read SEPARATE sensors — the
+        // header `ev_power`/`ev_charging`, the tiles `charger_<id>_power` — which
+        // lag independently and produced opposite snapshots (header CHARGING/4kW
+        // while the card said Connected/0W, and vice-versa).
+        const power = (this._chargers && this._chargers.length)
+            ? this._chargers.reduce((s, id) => s + this._val(`charger_${id}_power`, 0), 0)
+            : this._val('ev_power', 0);
+        const charging = power > 50;
         const current = this._val('calculated_current', 0);
         const sessionEnergy = this._val('session_energy', 0);
         // Solar Share sits next to 'Today: X kWh' in the status row, so it
@@ -1169,6 +1162,10 @@ class SEMEVStatusCard extends SEMLitBase {
                 font-size: 0.8em; font-weight: 500;
                 text-transform: uppercase; letter-spacing: 0.05em;
                 color: var(--secondary-text-color, #999);
+            }
+            .charger-set {
+                font-weight: 400; opacity: 0.85;
+                font-variant-numeric: tabular-nums;
             }
             .charger-body {
                 display: flex; align-items: center; gap: 12px;

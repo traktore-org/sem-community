@@ -67,9 +67,15 @@ SURPLUS_DAY_MODES = frozenset({"solar_only", "min_plus_solar", "solar_plus_cheap
 
 DEFAULT_ENABLE_DELAY_S = 60
 DEFAULT_DISABLE_DELAY_S = 300
-DEFAULT_SMOOTH_WINDOW = 3
-DEFAULT_MIN_CHANGE_AMPS = 1
-DEFAULT_MIN_CHANGE_INTERVAL_S = 30
+# Stability defaults tuned for a calm, steady charge (cars — a Zoe
+# especially — drop a session when the current keeps moving). "Balanced":
+# change the offered current at most ~every 90 s and only for a ≥2 A move,
+# over a 5-cycle (~50 s) median. Once charging it should look like a
+# staircase with rare gentle steps, not a sawtooth. Peak management is the
+# only thing allowed to override this and reduce promptly.
+DEFAULT_SMOOTH_WINDOW = 5
+DEFAULT_MIN_CHANGE_AMPS = 2
+DEFAULT_MIN_CHANGE_INTERVAL_S = 90
 DEFAULT_RAMP_AMPS = 2
 
 # #461 part 2 — deep-deficit escape from the disable hold. The 300 s
@@ -101,6 +107,42 @@ _CHARGE_INTENTS = (ChargerIntent.CHARGE_AT_AMPS, ChargerIntent.CHARGE_MAX)
 # keep the full bridge — there grid is cheap or price-agnostic.
 _NOT_CHEAP_LEVELS = frozenset({"normal", "expensive", "very_expensive"})
 
+# Grace after the gentle min-current start before escalating to the
+# ``initial_current`` start-kick when the car still isn't drawing. Some
+# vehicles (e.g. a 3-phase EV that needs ~9 A to begin the handshake)
+# never latch a 6 A offer; SEM starts gently to avoid the documented
+# KEBA cold-start grid overshoot, then — only if no current flows —
+# bumps to the higher start-amps to force the latch. Short enough to
+# beat the stall detector's refusal (~90 s); long enough to let a
+# slightly slow but normal car draw at the minimum first.
+START_KICK_GRACE_S = 20.0
+
+# Amps to raise the start offer by each grace when a car won't latch at the
+# minimum. SEM climbs min → min+step → … until the car draws, then settles
+# back to the target. Auto-discovers a fussy car's latch current, no knob.
+START_KICK_STEP_A = 2
+
+# Ceiling for the start escalation. Bounded WELL below the charger max so a
+# car that suddenly accepts a high offer can't spike the grid, and a
+# full/refusing car is never held at 32 A. Known fussy cars latch under
+# this (a Renault Zoe begins at ~9-10 A). The escalation actually climbs to
+# ``max(target_current, START_KICK_MAX_A)`` so a high deadline target is
+# still reachable.
+START_KICK_MAX_A = 10
+
+# After holding the escalation ceiling this long with the car still drawing
+# nothing, conclude it won't latch (full / refusing / needs more than we'll
+# safely offer) and stop offering — let decide()/the stall detector own the
+# refusal instead of holding a high current forever.
+START_KICK_GIVEUP_S = 90.0
+
+# Once a car has drawn, treat a low/zero power reading as a transient and
+# HOLD the steady current for this long before concluding it really stopped.
+# Bridges the brief 0 W blips that would otherwise trigger a re-start at a
+# different current — the change that makes a Zoe drop the session. Longer
+# than a couple of cycles, shorter than a real "car finished / unplugged".
+LATCH_HOLD_S = 60.0
+
 
 class ChargeStability:
     """Per-charger smoothing + enable/disable delay state.
@@ -118,6 +160,12 @@ class ChargeStability:
         self._amps_history: Dict[str, List[int]] = {}
         self._last_amps: Dict[str, int] = {}
         self._last_change_ts: Dict[str, float] = {}
+        # When the current start step began (times the auto-escalation), and
+        # the current start offer being climbed toward a latch.
+        self._start_since: Dict[str, float] = {}
+        self._start_offer: Dict[str, int] = {}
+        # Last time the car was observed drawing — latch hysteresis.
+        self._latched: Dict[str, float] = {}
 
     def _reset(self, cid: str) -> None:
         self._surplus_since.pop(cid, None)
@@ -126,6 +174,9 @@ class ChargeStability:
         self._amps_history.pop(cid, None)
         self._last_amps.pop(cid, None)
         self._last_change_ts.pop(cid, None)
+        self._start_since.pop(cid, None)
+        self._start_offer.pop(cid, None)
+        self._latched.pop(cid, None)
 
     def _median_amps(self, cid: str, raw_amps: int, window: int) -> int:
         """Layer 1 — rolling median of the raw target-amps stream.
@@ -174,13 +225,19 @@ class ChargeStability:
         """
         cid = decision.charger_id
         now = now_ts if now_ts is not None else time.monotonic()
+        # Day vs night differ ONLY in how the target current is decided
+        # (solar surplus vs the night planner's deadline) and in the
+        # day-only guards (surplus enable-delay, solar-deficit bridge).
+        # The latch/hold/escalation below is SHARED — one charging
+        # behaviour for both, so a fussy car (a Zoe that won't start at
+        # 6 A) is handled identically day or night.
+        night = bool(view.fleet.is_night)
 
         # Out of scope → transparent. DISABLE (user off / self-resume
         # guard) and disconnects also clear all state: the next
         # session starts a fresh window with a cold history.
         if (
             view.mode not in SURPLUS_DAY_MODES
-            or view.fleet.is_night
             or not view.power.connected
             or decision.intent is ChargerIntent.DISABLE
         ):
@@ -225,44 +282,134 @@ class ChargeStability:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
             target = max(min_amps, min(max_amps, med_amps))
-            if charging:
+            drawing = adapter.actual_charging(view.power)
+            if drawing:
+                self._latched[cid] = now
+            # Latch hysteresis: once a car has drawn, a single low/zero power
+            # reading is almost always a transient (the car blips, a sensor
+            # hiccup) — NOT a reason to re-start at a different current. Any
+            # current change re-signals the pilot and many cars (Zoe) drop the
+            # session on it, so a naive re-start oscillates forever. Hold the
+            # steady current through dips up to LATCH_HOLD_S; only a sustained
+            # outage past that falls through to a real re-start.
+            held_recently = (
+                cid in self._latched and (now - self._latched[cid]) <= LATCH_HOLD_S
+            )
+            if charging and (drawing or held_recently):
                 self._surplus_since.pop(cid, None)
+                # First real draw of a SEM-initiated start → adopt the latch
+                # current as the steady hold and anchor the debounce clock so
+                # the existing ``ev_min_change_interval_sec`` holds it for a
+                # full interval before ``_adjust`` eases toward the target.
+                if cid in self._start_since:
+                    self._start_since.pop(cid, None)
+                    self._start_offer.pop(cid, None)
+                    self._last_change_ts[cid] = now
+                # ``_adjust`` ramp/delta/debounce keep changes rare and gentle.
+                # During a dip (held_recently, not drawing) it re-sends the held
+                # value — steady — because the target hasn't meaningfully moved.
                 return self._adjust(
                     decision, cid, target, now,
                     min_change_amps=min_change_amps,
                     min_change_interval_s=min_change_interval_s,
                     ramp_amps=ramp_amps,
                 )
-            since = self._surplus_since.setdefault(cid, now)
-            held = now - since
-            if held >= max(0.0, float(enable_delay_s)):
-                # Start gently at minimum current — KEBA's ~30 s
-                # actuator lag overshot a cold 14 A command into
-                # ~4.4 kW of grid import (PROD 2026-05-31); the ramp
-                # climbs from here on subsequent cycles.
-                self._surplus_since.pop(cid, None)
-                self._commit_amps(cid, min_amps, now)
+            if not charging:
+                # Fresh start (no prior charge command). Day waits for the
+                # surplus to persist enable_delay_s (anti-flap); night starts
+                # at once (the planner already decided). Begin gently at min;
+                # the auto-escalation below climbs from here if no draw.
+                since = self._surplus_since.setdefault(cid, now)
+                held = now - since
+                if night or held >= max(0.0, float(enable_delay_s)):
+                    self._surplus_since.pop(cid, None)
+                    self._start_since[cid] = now
+                    self._start_offer[cid] = min_amps
+                    self._commit_amps(cid, min_amps, now)
+                    return replace(
+                        decision, intent=ChargerIntent.CHARGE_AT_AMPS,
+                        commanded_amps=min_amps,
+                        reason=(f"stability: starting at {min_amps}A "
+                                f"(auto-raises if no draw) — {decision.reason}"),
+                    )
+                return replace(
+                    decision, intent=ChargerIntent.IDLE, commanded_amps=0,
+                    reason=(f"stability: surplus must hold {enable_delay_s:.0f}s "
+                            f"before start ({held:.0f}s elapsed) — {decision.reason}"),
+                )
+            # Commanded a charge but the car is NOT drawing. Some
+            # vehicles refuse a gentle 6 A handshake and need a brief
+            # higher start-amps kick to latch ("Vehicle Start Amps" /
+            # ``initial_current``). Hold the gentle current through a
+            # short grace, then escalate to ``start_amps`` and keep it
+            # until the car draws. A car that never draws is stopped by
+            # the stall detector (ev_control), not here.
+            # Commanded a charge but the car is NOT drawing. Most cars
+            # draw at the minimum immediately; a fussy one (a Zoe needs
+            # ~9-10 A to begin the handshake) won't. So if no current
+            # flows after a short grace, automatically raise the offer one
+            # step and wait again — climbing until the car latches, then
+            # settling back to the minimum (the drawing branch above).
+            # There is NO separate "start amps" knob: SEM discovers the
+            # latch current itself, capped at the charger max. A car that
+            # never draws is stopped by the stall detector (ev_control).
+            # Bounded ceiling: never escalate past max(target, 10 A),
+            # capped at the charger max. Protects the grid from a sudden
+            # high-current latch and stops a refusing car being held at 32 A.
+            kick_ceiling = min(max_amps, max(target, START_KICK_MAX_A))
+            offer = int(self._start_offer.get(cid, min_amps))
+            s0 = self._start_since.setdefault(cid, now)
+            if offer < kick_ceiling and (now - s0) >= START_KICK_GRACE_S:
+                offer = min(kick_ceiling, offer + START_KICK_STEP_A)
+                self._start_offer[cid] = offer
+                self._start_since[cid] = now  # restart the grace per step
+            elif offer >= kick_ceiling and (now - s0) >= START_KICK_GIVEUP_S:
+                # Held the ceiling, still no draw → the car won't latch.
+                # Stop offering (don't sit at a high current); the stall
+                # detector / planner own the refusal.
+                self._reset(cid)
                 return replace(
                     decision,
-                    intent=ChargerIntent.CHARGE_AT_AMPS,
-                    commanded_amps=min_amps,
+                    intent=ChargerIntent.IDLE,
+                    commanded_amps=0,
                     reason=(
-                        f"stability: starting at {min_amps}A "
-                        f"(ramping toward {target}A) — {decision.reason}"
+                        f"stability: no draw at {offer}A after escalation "
+                        f"— car not latching (full/refusing) — "
+                        f"{decision.reason}"
                     ),
+                )
+            self._commit_amps(cid, offer, now)
+            if offer > min_amps:
+                reason = (
+                    f"stability: car not drawing — trying {offer}A to "
+                    f"start (settles to {target}A) — {decision.reason}"
+                )
+            else:
+                reason = (
+                    f"stability: starting at {offer}A "
+                    f"(auto-raises if no draw) — {decision.reason}"
                 )
             return replace(
                 decision,
-                intent=ChargerIntent.IDLE,
-                commanded_amps=0,
-                reason=(
-                    f"stability: surplus must hold {enable_delay_s:.0f}s "
-                    f"before start ({held:.0f}s elapsed) — {decision.reason}"
-                ),
+                intent=ChargerIntent.CHARGE_AT_AMPS,
+                commanded_amps=offer,
+                reason=reason,
             )
 
-        # Smoothed deficit.
+        # charge no longer wanted (smoothed target below the floor).
         self._surplus_since.pop(cid, None)
+        self._start_since.pop(cid, None)
+        self._start_offer.pop(cid, None)
+        self._latched.pop(cid, None)
+        if night:
+            # Night: no solar-deficit bridge — the night planner owns the
+            # start/stop decision (target reached, tariff wait, etc.). Honour
+            # whatever it decided (IDLE here) without imposing the day's
+            # deficit-persistence hold.
+            self._deficit_since.pop(cid, None)
+            self._deep_deficit_since.pop(cid, None)
+            return decision
+        # Smoothed deficit (day).
         if not charging:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)

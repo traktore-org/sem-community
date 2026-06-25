@@ -13,6 +13,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+# [1.7.3-beta.57] — 25.06.2026
+
+> Stable (1.7.3) stays **on hold** — the EV-charging rework below needs PROD soak.
+
+### 🔌 EV charging — steady, unified, honest
+- 🚗 **Rock-steady charging.** A Renault Zoe R that oscillated 5 kW↔0 now holds a flat 5 kW. Four root causes: single-charger **draw-detection** bug (`build_view` now falls back to the fleet `ev_power`, so SEM actually sees the car drawing); **latch hysteresis** (hold the current through transient 0 W dips instead of re-starting); **steadier guards** (90 s change interval / 2 A deadband / 5-cycle median); and the config insight that this Zoe's *sustain* floor is **~10 A, not 6** (it drops at 6 A). The oscillation was SEM *changing* the current, not the level. (#536)
+- ☀️🌙 **Day + night unified.** One charging behaviour (latch → hold → auto-escalate) across solar and night, with a **bounded** start-escalation (caps at `max(target, 10 A)`, gives up after 90 s on a refusing car — no more climbing to 32 A). (#536)
+- 🔢 **Night-target counter fix.** The planner over-charged past the target after restarts (it used a restart-volatile per-charger integrator); it now uses the persisted `daily_ev` — the figure the dashboard shows. (#536)
+- 🛑 **Observer mode now hands-off for the EV too.** Zeroes the published commanded current so an external bridge automation or a second SEM instance can't drive the charger while observing. (#536)
+
+### 📊 Dashboard
+- ⚡ EV card shows the **commanded current** next to CHARGING (e.g. `CHARGING (8 A)`) — what SEM transmitted vs the car's real draw. (#536)
+- 🩹 Header and EV-card power/state no longer contradict (both derive from the same per-charger power). (#536)
+
+### 🧹 Cleanup
+- Removed dead Advanced settings `current_delta` / `power_delta` / `soc_delta` and the dead `ev_stall_cooldown` entity, plus the orphaned solar-stability layer. (#536)
+
+> **Known / open:** a self-starting KEBA still auto-tops a not-full car past the kWh target (proper fix: `keba.set_energy` so the box enforces its own stop); a test instance must never point at production hardware.
+
 # [1.7.3] — STABLE
 
 > Rolls up the 1.7.3 beta line (beta.2 → beta.56 + stable prep). The dated

@@ -45,30 +45,9 @@ NUMBER_TYPES = [
         native_step=5,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        key="power_delta",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        native_min_value=50,
-        native_max_value=3000,
-        native_step=50,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="current_delta",
-        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
-        native_min_value=1,
-        native_max_value=10,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="soc_delta",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=1,
-        native_max_value=20,
-        native_step=1,
-        mode=NumberMode.SLIDER,
-    ),
+    # power_delta / current_delta / soc_delta removed — dead knobs: the
+    # values were never read by any control logic (current_delta was only
+    # assigned to self.current_delta and never used).
     # Battery Management
     NumberEntityDescription(
         # 4-zone Zone 1 floor: below this, all solar → battery, EV blocked.
@@ -191,16 +170,10 @@ NUMBER_TYPES = [
         native_step=100,
         mode=NumberMode.SLIDER,
     ),
-    # EV Charging Parameters — global night_initial_current + minimum_current removed as
-    # per-charger duplicates (#255); ev_stall_cooldown stays a global tuning constant.
-    NumberEntityDescription(
-        key="ev_stall_cooldown",
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        native_min_value=30,
-        native_max_value=300,
-        native_step=10,
-        mode=NumberMode.SLIDER,
-    ),
+    # EV Charging Parameters — global night_initial_current + minimum_current
+    # removed as per-charger duplicates (#255). ev_stall_cooldown removed
+    # (dead: the entity value was never read; the stall detector uses a
+    # hardcoded grace + ev_max_reenable_attempts).
     # Surplus stability delays (#461) — hysteresis enable/disable timers
     # enforced by coordinator/charge_stability.py. Global: contactor-wear
     # protection policy, not a per-charger hardware property.
@@ -690,9 +663,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         """Get default value for a setting."""
         from .const import (
             DEFAULT_UPDATE_INTERVAL,
-            DEFAULT_POWER_DELTA,
-            DEFAULT_CURRENT_DELTA,
-            DEFAULT_SOC_DELTA,
             DEFAULT_BATTERY_PRIORITY_SOC,
             DEFAULT_BATTERY_MINIMUM_SOC,
             DEFAULT_BATTERY_RESUME_SOC,
@@ -710,15 +680,11 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             DEFAULT_SYSTEM_SIZE_KWP,
             DEFAULT_EV_INITIAL_CURRENT,
             DEFAULT_EV_MIN_CURRENT,
-            DEFAULT_EV_STALL_COOLDOWN,
             DEFAULT_BATTERY_CAPACITY_KWH,
         )
 
         defaults = {
             "update_interval": DEFAULT_UPDATE_INTERVAL,
-            "power_delta": DEFAULT_POWER_DELTA,
-            "current_delta": DEFAULT_CURRENT_DELTA,
-            "soc_delta": DEFAULT_SOC_DELTA,
             "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
             "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
             "battery_resume_soc": DEFAULT_BATTERY_RESUME_SOC,
@@ -742,7 +708,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "system_size_kwp": DEFAULT_SYSTEM_SIZE_KWP,
             "initial_current": DEFAULT_EV_INITIAL_CURRENT,
             "ev_minimum_current": DEFAULT_EV_MIN_CURRENT,
-            "ev_stall_cooldown": DEFAULT_EV_STALL_COOLDOWN,
             "ev_enable_delay_seconds": 60,
             "ev_disable_delay_seconds": 300,
             "ev_phases": 3,

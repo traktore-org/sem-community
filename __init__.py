@@ -3618,12 +3618,10 @@ async def _async_register_phase_services(
     _DIAGNOSE_NOTIFICATIONS_STATE = set()  # notifications are fire-and-forget; no state surface
     # Advanced
     _DIAGNOSE_ADVANCED_OPTION = {
-        "observer_mode", "update_interval", "power_delta",
-        "current_delta", "soc_delta", "minimum_solar_power",
+        "observer_mode", "update_interval", "minimum_solar_power",
     }
     _DIAGNOSE_ADVANCED_STATE = {
-        "observer_mode", "update_interval", "power_delta",
-        "current_delta", "soc_delta", "minimum_solar_power",
+        "observer_mode", "update_interval", "minimum_solar_power",
         "last_update", "delta_triggered",
     }
 

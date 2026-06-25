@@ -1411,6 +1411,24 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             if not self._ev_device and not self._ev_devices:
                 await self._retry_ev_device_with_backoff()
 
+            # Observer mode = read-only: command NOTHING to the chargers. The
+            # decide/actuate blocks below are already gated by observer_mode,
+            # but the published ``commanded_current`` is derived from each
+            # device's ``_current_setpoint`` (sensor at coordinator.py:2230),
+            # which would go STALE in observer mode — and anything acting on
+            # that sensor (an external current-control bridge automation, a
+            # second SEM instance) would keep driving the charger. So zero
+            # every setpoint here: SEM then clearly publishes "not commanding"
+            # while it observes. (#536 — HA-TEST's keba bridge automation drove
+            # the real KEBA via the stale setpoint despite observer mode.)
+            if self._observer_mode:
+                _obs_evs = list(self._ev_devices or [])
+                if self._ev_device is not None and self._ev_device not in _obs_evs:
+                    _obs_evs.append(self._ev_device)
+                for _ev in _obs_evs:
+                    if _ev is not None:
+                        _ev._current_setpoint = 0.0
+
             if self._ev_devices and not self._observer_mode:
                 # Multi-charger (#112): distribute budget + night target
                 ev_budget_per_charger = {}
@@ -1458,6 +1476,20 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                                     )
                                     self._night_global_fallback_logged.add(cid)
                             daily = self._daily_ev_per_charger.get(cid, 0.0)
+                            # Single charger: the per-charger integrator is
+                            # REBUILT FROM POWER each restart and under-reports
+                            # after a restart, while the global ``daily_ev`` is
+                            # persisted — the same quantity, and exactly what the
+                            # dashboard "Today" shows (see _per_charger_daily_report).
+                            # Use the persisted global so the night target's
+                            # "delivered" matches the displayed Today figure;
+                            # otherwise repeated restarts make the planner think
+                            # the target isn't reached and it keeps charging past
+                            # it (#536). Multi-charger keeps its own persisted
+                            # per-charger accumulator.
+                            chargers = self.config.get("ev_chargers") or []
+                            if len(chargers) == 1:
+                                daily = float(getattr(energy, "daily_ev", 0.0) or 0.0)
                             self._night_target_per_charger_map[cid] = max(0, target - daily)
 
                     # Backward compat: set the old scalar for single-value reads

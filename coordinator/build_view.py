@@ -79,9 +79,19 @@ def build_charger_view(
     power_reading = fleet_state.power
     config = fleet_state.config
 
-    # Per-charger power slice
+    # Per-charger power slice. ``ev_power_per_charger`` is only populated for
+    # MULTI-charger fleets (sensor_reader.py only splits when len > 1). For a
+    # single charger it's empty, so fall back to the fleet ``ev_power`` — which
+    # IS this charger's draw, in watts. Without this fallback ``this_charger_w``
+    # was always 0 on single-charger setups, so ``actual_charging`` never saw
+    # the car drawing and the start escalation never settled (#536).
     ev_power_per_charger = getattr(power_reading, "ev_power_per_charger", None) or {}
-    this_charger_w = float(ev_power_per_charger.get(charger_id, 0.0))
+    if charger_id in ev_power_per_charger:
+        this_charger_w = float(ev_power_per_charger[charger_id])
+    else:
+        # FLEET-READ: single-charger fallback — the fleet sum is this one
+        # charger's draw (W). Multi-charger always has a per-charger entry above.
+        this_charger_w = float(getattr(power_reading, "ev_power", 0.0) or 0.0)
 
     # Per-charger connected state — when no per-charger sensor is
     # configured, fall back to the fleet OR (the legacy behaviour).
