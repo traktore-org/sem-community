@@ -591,6 +591,12 @@ class CurrentControlDevice(ControllableDevice):
         # #546 — persist SEM's benign failsafe so it overwrites the box's own
         # 6 A failsafe (the 6↔9 A flap source). Set from config after build.
         self.steady_failsafe: bool = True
+        # #546 — HA entity reporting the LIVE offered current (e.g.
+        # sensor.keba_p30_max_current). Service-controlled chargers (KEBA) have
+        # no in-SEM live-offer value — ``max_current`` is the static config cap.
+        # Plumbed from the ``ev_current_sensor`` config; read by the
+        # EV-OFFER-PROBE (observe-only). "" = no live source (probe shows "?").
+        self.current_sensor_entity_id: str = ""
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start

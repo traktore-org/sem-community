@@ -1538,6 +1538,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> bool:
             # #546 — persist the benign failsafe (overwrite the box's 6 A). Gate
             # off (False) to revert to the legacy non-persistent failsafe.
             ev_device.steady_failsafe = bool(_cfg("keba_steady_failsafe", True))
+            # #546 — live offered-current sensor for the EV-OFFER-PROBE.
+            ev_device.current_sensor_entity_id = str(_cfg("ev_current_sensor", "") or "")
             # Per-integration charger profile (#82)
             if _cfg("ev_service_param_name"):
                 ev_device.service_param_name = _cfg("ev_service_param_name")
