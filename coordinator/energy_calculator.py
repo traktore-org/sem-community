@@ -76,6 +76,9 @@ class EnergyCalculator:
         self._lifetime_seeded: bool = False
         self._yearly_seeded: bool = False
         self._yearly_seed_attempts: int = 0
+        # Separate flag for the yearly COST backfill so it can correct installs
+        # whose ENERGY was already seeded before the cost backfill existed.
+        self._yearly_cost_seeded: bool = False
         # Auto-detected from recorder statistics (first solar energy entry)
         self._install_year_decimal: Optional[float] = None
 
@@ -492,6 +495,14 @@ class EnergyCalculator:
         This reads cumulative energy stats from the HA recorder for
         Jan 1 to now and seeds the yearly accumulators. Runs once.
         """
+        # Yearly COST backfill — runs INDEPENDENTLY of the energy seed (own
+        # flag) so it also corrects installs whose ENERGY was seeded BEFORE
+        # this cost backfill existed: those had yearly_cost == monthly_cost
+        # ("month and year are the same"). Needs the yearly energy present, so
+        # it's a no-op until that's seeded; for a fresh install it runs from
+        # the success path below instead.
+        self._maybe_seed_yearly_cost(str(dt_util.now().year))
+
         if self._yearly_seeded:
             return
         if not ed_config:
@@ -611,6 +622,9 @@ class EnergyCalculator:
             self._yearly_accumulators[f"ev_{year_key}"] = ev_total
             seeded["ev"] = ev_total
 
+        # Now that the yearly ENERGY is seeded, derive the yearly COST too.
+        self._maybe_seed_yearly_cost(year_key)
+
         self._yearly_seeded = True
         _LOGGER.info(
             "Yearly accumulators seeded from recorder: solar=%.1f import=%.1f export=%.1f "
@@ -618,6 +632,52 @@ class EnergyCalculator:
             seeded.get("solar", 0), seeded.get("grid_import", 0), seeded.get("grid_export", 0),
             seeded.get("battery_charge", 0), seeded.get("battery_discharge", 0),
             home, ev_total,
+        )
+
+    def _maybe_seed_yearly_cost(self, year_key: str) -> None:
+        """Backfill the yearly COST accumulators from the (seeded) yearly
+        ENERGY × average rate — once.
+
+        Without this, yearly cost only held the live-accumulated portion (since
+        cost tracking started this month) and therefore equalled the MONTHLY
+        cost ('month and year are the same'). The recorder has historical
+        energy but NOT SEM's historical hourly prices, so the backfill is
+        valued at an AVERAGE rate (7-day rolling, falling back to the
+        current/config rate) — an ESTIMATE for the pre-tracking period on a
+        dynamic tariff; the live portion since install stays exact.
+
+        SET (not add): the seeded energy spans Jan→now, so this is the
+        full-year cost up to now and live accumulation continues from here
+        (disjoint — no double count), exactly like the energy seed. Idempotent
+        (``_yearly_cost_seeded`` flag); a no-op until the yearly energy exists.
+        """
+        if self._yearly_cost_seeded:
+            return
+        ya = self._yearly_accumulators
+        grid_import = float(ya.get(f"grid_import_{year_key}", 0.0) or 0.0)
+        solar = float(ya.get(f"solar_{year_key}", 0.0) or 0.0)
+        if grid_import <= 0 and solar <= 0:
+            return  # yearly energy not seeded yet — retry on a later call
+        grid_export = float(ya.get(f"grid_export_{year_key}", 0.0) or 0.0)
+        batt_charge = float(ya.get(f"battery_charge_{year_key}", 0.0) or 0.0)
+        batt_discharge = float(ya.get(f"battery_discharge_{year_key}", 0.0) or 0.0)
+        imp_rate = self._get_avg_import_rate()
+        exp_rate = self._get_avg_export_rate()
+        # Avoided-import savings split to mirror the live accumulators and avoid
+        # double counting: solar used DIRECTLY (not exported, not stored) +
+        # battery discharged to load (stored solar is counted there, not here).
+        solar_direct = max(0.0, solar - grid_export - batt_charge)
+        ca = self._yearly_cost_accumulators
+        ca[f"cost_import_{year_key}"] = round(grid_import * imp_rate, 4)
+        ca[f"cost_export_{year_key}"] = round(grid_export * exp_rate, 4)
+        ca[f"cost_savings_{year_key}"] = round(solar_direct * imp_rate, 4)
+        ca[f"cost_batt_savings_{year_key}"] = round(batt_discharge * imp_rate, 4)
+        self._yearly_cost_seeded = True
+        _LOGGER.info(
+            "Yearly COST seeded (estimate @ avg import %.4f / export %.4f): "
+            "import=%.2f export=%.2f solar_savings=%.2f batt_savings=%.2f CHF",
+            imp_rate, exp_rate, grid_import * imp_rate, grid_export * exp_rate,
+            solar_direct * imp_rate, batt_discharge * imp_rate,
         )
 
     def _reconcile_ev_energy(self, today: date, month_key: str) -> None:
@@ -1105,6 +1165,7 @@ class EnergyCalculator:
             "yearly_cost_accumulators": self._yearly_cost_accumulators.copy(),
             "last_update": self._last_update.isoformat() if self._last_update else None,
             "yearly_seeded": self._yearly_seeded,
+            "yearly_cost_seeded": self._yearly_cost_seeded,
             "rate_history": list(self._rate_history),
             "accumulated_savings": self._accumulated_savings,
             "accumulated_battery_savings": self._accumulated_battery_savings,
@@ -1126,6 +1187,7 @@ class EnergyCalculator:
             self._monthly_cost_accumulators = state.get("monthly_cost_accumulators", {})
             self._yearly_cost_accumulators = state.get("yearly_cost_accumulators", {})
             self._yearly_seeded = state.get("yearly_seeded", False)
+            self._yearly_cost_seeded = state.get("yearly_cost_seeded", False)
             self._rate_history = deque(state.get("rate_history", []), maxlen=30)
             self._accumulated_savings = state.get("accumulated_savings", 0.0)
             self._accumulated_battery_savings = state.get("accumulated_battery_savings", 0.0)

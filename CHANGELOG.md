@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+### 💰 Costs
+- 🐛 **Monthly and Yearly costs were identical.** The yearly seeding backfilled the year's *energy* from the recorder but never the *cost* accumulators, so yearly cost only held the live (this-month) portion and equalled the monthly figure. Now the yearly cost is seeded from the seeded yearly energy × the average rate — and an already-seeded install (where only the cost was missing) is backfilled too. The pre-tracking backfill is an **estimate** on a dynamic tariff (the recorder has historical energy, not historical hourly prices); the live portion stays exact. Confirmed the live per-cycle cost is already tariff-correct (static/dynamic/calendar all priced at the current rate each cycle). (#536)
+
 # [1.7.3-beta.57] — 25.06.2026
 
 > Stable (1.7.3) stays **on hold** — the EV-charging rework below needs PROD soak.

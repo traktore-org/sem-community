@@ -2076,7 +2076,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     _LOGGER.debug("Install date detection skipped: %s", e)
 
             # Step 9b: Seed yearly accumulators from recorder statistics (runs once)
-            if self._energy_dashboard_config and not self._energy_calculator._yearly_seeded:
+            # Also fire when only the COST backfill is outstanding (energy already
+            # seeded on an older install) — the method no-ops the energy seed but
+            # backfills the yearly cost so it stops equalling the monthly cost.
+            if self._energy_dashboard_config and (
+                not self._energy_calculator._yearly_seeded
+                or not self._energy_calculator._yearly_cost_seeded
+            ):
                 try:
                     await self._energy_calculator.seed_yearly_from_statistics(
                         self.hass, self._energy_dashboard_config

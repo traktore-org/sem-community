@@ -114,6 +114,58 @@ class TestYearlySeeding:
         assert calculator._yearly_accumulators.get(f"ev_{year}") == 80
 
     @pytest.mark.asyncio
+    async def test_seed_also_seeds_cost_accumulators(self, calculator, ed_config):
+        """The seed must ALSO backfill the yearly COST accumulators — else
+        yearly cost == monthly cost ('month and year are the same' bug). Valued
+        at the avg rate (no history → config rate: import 0.30 / export 0.08)."""
+        hass = MagicMock()
+        stats = _make_full_stats(solar=500, grid_import=300, grid_export=200,
+                                 batt_charge=150, batt_discharge=120, ev=80)
+        mock_module = MagicMock()
+        mock_module.statistics_during_period = AsyncMock(return_value=stats)
+        with patch.dict("sys.modules", {
+            "homeassistant.components.recorder": MagicMock(),
+            "homeassistant.components.recorder.statistics": mock_module,
+        }):
+            await calculator.seed_yearly_from_statistics(hass, ed_config)
+
+        year = str(datetime.now().year)
+        cc = calculator._yearly_cost_accumulators
+        assert cc.get(f"cost_import_{year}") == round(300 * 0.30, 4)   # 90.0
+        assert cc.get(f"cost_export_{year}") == round(200 * 0.08, 4)   # 16.0
+        # solar_direct = max(0, 500 - 200 - 150) = 150
+        assert cc.get(f"cost_savings_{year}") == round(150 * 0.30, 4)  # 45.0
+        assert cc.get(f"cost_batt_savings_{year}") == round(120 * 0.30, 4)  # 36.0
+        # And it must NOT equal the (empty) monthly cost → yearly != monthly.
+        assert cc.get(f"cost_import_{year}") > 0
+
+    @pytest.mark.asyncio
+    async def test_cost_backfill_when_energy_already_seeded(self, calculator, ed_config):
+        """The PROD case: an install whose ENERGY was already seeded (before the
+        cost backfill existed) still gets its yearly COST backfilled from the
+        existing energy — without re-querying the recorder."""
+        year = str(datetime.now().year)
+        # Energy already seeded (like PROD), cost NOT — the 'month==year' state.
+        calculator._yearly_accumulators[f"grid_import_{year}"] = 195.0
+        calculator._yearly_accumulators[f"grid_export_{year}"] = 50.0
+        calculator._yearly_accumulators[f"solar_{year}"] = 400.0
+        calculator._yearly_accumulators[f"battery_charge_{year}"] = 100.0
+        calculator._yearly_accumulators[f"battery_discharge_{year}"] = 90.0
+        calculator._yearly_seeded = True
+        calculator._yearly_cost_seeded = False
+
+        hass = MagicMock()
+        await calculator.seed_yearly_from_statistics(hass, ed_config)
+
+        assert calculator._yearly_cost_seeded is True
+        cc = calculator._yearly_cost_accumulators
+        assert cc.get(f"cost_import_{year}") == round(195.0 * 0.30, 4)  # 58.5
+        assert cc.get(f"cost_export_{year}") == round(50.0 * 0.08, 4)   # 4.0
+        # solar_direct = max(0, 400 - 50 - 100) = 250
+        assert cc.get(f"cost_savings_{year}") == round(250.0 * 0.30, 4)  # 75.0
+        assert cc.get(f"cost_batt_savings_{year}") == round(90.0 * 0.30, 4)  # 27.0
+
+    @pytest.mark.asyncio
     async def test_skip_when_already_seeded(self, calculator, ed_config):
         """Should return immediately when _yearly_seeded is True."""
         calculator._yearly_seeded = True
