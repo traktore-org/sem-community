@@ -588,6 +588,9 @@ class CurrentControlDevice(ControllableDevice):
             charger_service = None
         self.charger_service = charger_service
         self.charger_service_entity_id = charger_service_entity_id
+        # #546 — persist SEM's benign failsafe so it overwrites the box's own
+        # 6 A failsafe (the 6↔9 A flap source). Set from config after build.
+        self.steady_failsafe: bool = True
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
@@ -982,14 +985,24 @@ class CurrentControlDevice(ControllableDevice):
             return
         try:
             fallback_a = max(6, int(round(self.min_current)))
+            # #546 — steady mode persists SEM's benign failsafe (fallback at the
+            # charging FLOOR) so it OVERWRITES the box's built-in 6 A failsafe.
+            # With persist=0 (legacy) the box kept its own 6 A and dropped to it
+            # mid-charge → the 6↔9 A flap (Guido PROD 2026-06-24). persist=1
+            # writes SEM's fallback into the box's stored config so a drop goes
+            # to the floor, not 6 A. The 5 s heartbeat writes still keep the 30 s
+            # timeout from ever tripping in normal operation. Gated
+            # (``steady_failsafe`` config, default on) so it can be reverted.
+            steady = bool(getattr(self, "steady_failsafe", True))
+            persist = 1 if steady else 0
             await self.hass.services.async_call(
                 domain, "set_failsafe",
                 {"failsafe_timeout": 30, "failsafe_fallback": fallback_a,
-                 "failsafe_persist": 0},
+                 "failsafe_persist": persist},
                 blocking=True,
             )
-            _LOGGER.info("%s: KEBA failsafe set benign (timeout=30s, fallback=%dA)",
-                         self.name, fallback_a)
+            _LOGGER.info("%s: KEBA failsafe set (%s: timeout=30s, fallback=%dA, persist=%d)",
+                         self.name, "steady" if steady else "legacy", fallback_a, persist)
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("Failed to set charger failsafe: %s", e)
 

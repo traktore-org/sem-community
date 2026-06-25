@@ -293,11 +293,35 @@ async def test_current_control_start_stop_session(current_device):
     fs = fs_calls[0].args[2]
     assert fs["failsafe_timeout"] >= 1, "timeout must be valid (service min=1)"
     assert fs["failsafe_fallback"] >= 6, "fallback at/above the IEC floor"
+    # #546 — steady mode (default) PERSISTS the benign failsafe so it overwrites
+    # the box's built-in 6 A (the 6↔9 A flap source). persist=1 by default.
+    assert fs["failsafe_persist"] == 1, "steady mode must persist (overwrite box 6A)"
 
     current_device.hass.services.async_call.reset_mock()
     await current_device.stop_session()
     assert current_device._session_active is False
     assert current_device._status.state == DeviceState.IDLE
+
+
+@pytest.mark.asyncio
+async def test_failsafe_steady_vs_legacy_persist(current_device):
+    """#546 gate — steady_failsafe persists (overwrites box 6A); legacy doesn't."""
+    # Steady (default) → persist=1
+    current_device.steady_failsafe = True
+    current_device.hass.services.async_call.reset_mock()
+    await current_device.arm_failsafe()
+    fs = [c for c in current_device.hass.services.async_call.await_args_list
+          if len(c.args) >= 2 and c.args[1] == "set_failsafe"][0].args[2]
+    assert fs["failsafe_persist"] == 1
+    assert fs["failsafe_fallback"] >= 6  # at the charging floor, never below IEC
+
+    # Legacy (gate off) → persist=0 (the revertible old behaviour)
+    current_device.steady_failsafe = False
+    current_device.hass.services.async_call.reset_mock()
+    await current_device.arm_failsafe()
+    fs = [c for c in current_device.hass.services.async_call.await_args_list
+          if len(c.args) >= 2 and c.args[1] == "set_failsafe"][0].args[2]
+    assert fs["failsafe_persist"] == 0
 
 
 @pytest.mark.asyncio
