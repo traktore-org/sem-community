@@ -246,6 +246,42 @@ class ChargerReconciler:
         observed = observe(adapter, power)
         actions = self.reconcile(desired, amps, observed, now)
 
+        # ── #546 OFFER-STEADINESS PROBE (observe-only) ───────────────────
+        # The 6↔9 A flap on the KEBA wire makes a steady-needing car (Zoe)
+        # refuse to charge. SEM reads its OWN belief (``observed.setpoint_a``
+        # = ``_current_setpoint``), NOT the hardware, so it is blind to the
+        # box drifting back to its 6 A floor between writes. This logs the
+        # three values side by side every charging cycle so one session
+        # reveals WHO is shaking the hand:
+        #   desired  = what SEM wants (this decision)
+        #   believed = what SEM thinks it set (drives drift detection)
+        #   hardware = the ACTUAL KEBA max_current sensor (ground truth)
+        # BLIND_DRIFT = hardware ≠ believed → the box reverted and SEM didn't
+        # see it (Row 6 never fired). MIND_CHANGE = believed ≠ desired → SEM
+        # itself moved the target. No control change — pure telemetry.
+        if desired is DesiredState.CHARGE:
+            try:
+                _dev = getattr(adapter, "_device", None)
+                _hw = getattr(_dev, "max_current", None)
+                _fs = getattr(_dev, "failsafe", getattr(_dev, "failsafe_mode", None))
+                _tags = []
+                if _hw is not None and int(_hw) != int(observed.setpoint_a):
+                    _tags.append(f"BLIND_DRIFT(hw{int(_hw)}≠belief{observed.setpoint_a})")
+                if int(observed.setpoint_a) != int(amps):
+                    _tags.append(f"MIND_CHANGE(belief{observed.setpoint_a}≠desired{amps})")
+                _LOGGER.info(
+                    "EV-OFFER-PROBE(%s): desired=%dA believed=%dA hardware=%sA "
+                    "drawn=%.0fW charging=%s failsafe=%s actions=%s %s",
+                    self.charger_id, int(amps), int(observed.setpoint_a),
+                    ("?" if _hw is None else int(_hw)),
+                    float(getattr(power, "power_w", 0.0) or 0.0),
+                    observed.charging, _fs,
+                    [a.kind.name + (f"@{a.amps}" if a.amps else "") for a in actions],
+                    " ".join(_tags),
+                )
+            except Exception:  # the probe must never break actuation
+                pass
+
         for action in actions:
             if action.kind is ActionKind.NONE:
                 continue
