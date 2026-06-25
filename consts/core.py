@@ -57,8 +57,8 @@ DEFAULT_EV_MIN_CURRENT: Final = 6  # Amps - IEC 61851 minimum (increase for sens
 # ev_disable_delay_seconds, ev_deep_deficit_grace_sec) are still honoured —
 # read in coordinator._charge_stability_kwargs() and passed to
 # ChargeStability.filter().
-DEFAULT_EV_ENABLE_DELAY_SEC: Final = 60   # Seconds surplus must persist before a charge starts
-DEFAULT_EV_DISABLE_DELAY_SEC: Final = 300  # Seconds deficit must persist before a charge stops
+DEFAULT_EV_ENABLE_DELAY_SEC: Final = 60   # Seconds surplus must persist before a charge starts (evcc enable.delay = 1 min)
+DEFAULT_EV_DISABLE_DELAY_SEC: Final = 180  # Seconds deficit must persist before a charge stops (evcc disable.delay = 3 min; was 300)
 DEFAULT_EV_CHARGER_NEEDS_CYCLE: Final = False  # True = disable/enable cycle for session start (sensitive cars)
 DEFAULT_EV_BATTERY_CAPACITY_KWH: Final = 40  # kWh — usable EV battery capacity
 DEFAULT_EV_TARGET_SOC: Final = 80  # % — target SOC for night charging

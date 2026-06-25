@@ -283,21 +283,32 @@ class TestDeepDeficitEscape:
     def test_surplus_recovery_clears_deep_timer(self):
         # Deep timer must reset when a real CHARGE decision returns, so a
         # later deep deficit gets its own fresh grace.
+        # NB this isolates the DEEP-grace mechanism (subject of this test) from
+        # the general disable-delay timer by passing an explicit long
+        # disable_delay_s=600: the t=20 "sunny" blip is a transient BRIDGE-hold
+        # (the 5-cycle median never recovers above min), not a real charge, so
+        # the general _deficit_since correctly keeps counting from t=0. With the
+        # evcc-aligned 180 s default that long-running deficit would itself stop
+        # the session at t=200 — correct, but it's not what this test checks.
         st = ChargeStability()
         adapter = self._charging()
         dark = _view(power_w=4500.0, solar_w=0.0)
-        st.filter(_idle(), dark, adapter, deep_deficit_grace_s=45, now_ts=0.0)
-        st.filter(_idle(), dark, adapter, deep_deficit_grace_s=45, now_ts=10.0)
-        # Surplus returns → CHARGE clears the deep timer.
+        st.filter(_idle(), dark, adapter, disable_delay_s=600,
+                  deep_deficit_grace_s=45, now_ts=0.0)
+        st.filter(_idle(), dark, adapter, disable_delay_s=600,
+                  deep_deficit_grace_s=45, now_ts=10.0)
+        # Surplus returns → the (non-deep) bridge-hold clears the deep timer.
         sunny = _view(power_w=4500.0, solar_w=5000.0)
-        d = st.filter(_charge(amps=10), sunny, adapter,
+        d = st.filter(_charge(amps=10), sunny, adapter, disable_delay_s=600,
                       deep_deficit_grace_s=45, now_ts=20.0)
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
         assert not st._deep_deficit_since
-        # New deep deficit at t=200 → fresh grace, not an instant stop.
-        d = st.filter(_idle(), dark, adapter, deep_deficit_grace_s=45, now_ts=200.0)
+        # New deep deficit at t=200 → fresh deep grace, not an instant stop.
+        d = st.filter(_idle(), dark, adapter, disable_delay_s=600,
+                      deep_deficit_grace_s=45, now_ts=200.0)
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
-        d = st.filter(_idle(), dark, adapter, deep_deficit_grace_s=45, now_ts=250.0)
+        d = st.filter(_idle(), dark, adapter, disable_delay_s=600,
+                      deep_deficit_grace_s=45, now_ts=250.0)
         assert d.intent is ChargerIntent.IDLE
 
     def test_deep_deficit_holds_at_vehicle_min_then_stops(self):
@@ -543,3 +554,27 @@ class TestNotCheapTariffDeficit:
             d = st.filter(_idle(), view, adapter, enable_delay_s=60,
                           disable_delay_s=300, deep_deficit_grace_s=45, now_ts=t)
             assert d.intent is ChargerIntent.CHARGE_AT_AMPS, f"stopped early at {t}"
+
+
+@pytest.mark.unit
+class TestEvccAlignedDefaults:
+    """#546 — defaults aligned to evcc: track surplus on a ~30 s cadence (NOT a
+    multi-minute freeze) with a 2 A deadband, and 1-min start / 3-min stop
+    delays. evcc proves a steady-needing car charges THROUGH smooth current
+    changes once the box holds the offer (Phase A: persisted failsafe, no 6 A
+    revert). The 30 s-debounce mechanism itself is covered by
+    ``test_debounce_one_change_per_interval``; this locks the chosen DEFAULTS."""
+
+    def test_cadence_and_delay_defaults(self):
+        from custom_components.solar_energy_management.coordinator import (
+            charge_stability as cs,
+        )
+        assert cs.DEFAULT_MIN_CHANGE_INTERVAL_S == 30   # evcc cadence (was 90)
+        assert cs.DEFAULT_MIN_CHANGE_AMPS == 2          # deadband = anti-flap
+        assert cs.DEFAULT_ENABLE_DELAY_S == 60          # evcc enable.delay 1 min
+        assert cs.DEFAULT_DISABLE_DELAY_S == 180        # evcc disable.delay 3 min (was 300)
+
+    def test_consts_delay_defaults(self):
+        from custom_components.solar_energy_management.consts import core as C
+        assert C.DEFAULT_EV_ENABLE_DELAY_SEC == 60
+        assert C.DEFAULT_EV_DISABLE_DELAY_SEC == 180    # was 300
