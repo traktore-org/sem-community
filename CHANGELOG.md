@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 # [Unreleased]
 
+### 🛡️ Observer mode / wiring
+- 🐛 **The observer-mode switch was a silent no-op.** Its entity-id constant held the `domain.object` form and the coordinator re-prefixed it (`f"switch.{…}"`) into a dead three-segment id, so the lookup always returned `None` and toggling the switch never made SEM hands-off. On a test bench that shares the *same physical* inverter/battery as production, this meant the test instance kept driving the real hardware while the switch showed "on". Fixed the lookup, made the switch push its state straight onto the coordinator, and guarded the per-cycle pull so a transient `unavailable` switch state can't clobber it back on. Two follow-on bugs surfaced once the switch finally engaged — most notably the read-only setpoint-zeroing iterated the multi-charger **dict keys** (crashing the whole update cycle) — and are fixed. Contract tests lock the class: every entity-id constant must be a valid 2-segment id, the coordinator must not re-prefix one, and observer mode must hold across transient unavailability. (#542)
+
 ### 💰 Costs
 - 🐛 **Monthly and Yearly costs were identical.** The yearly seeding backfilled the year's *energy* from the recorder but never the *cost* accumulators, so yearly cost only held the live (this-month) portion and equalled the monthly figure. Now the yearly cost is seeded from the seeded yearly energy × the average rate — and an already-seeded install (where only the cost was missing) is backfilled too. The pre-tracking backfill is an **estimate** on a dynamic tariff (the recorder has historical energy, not historical hourly prices); the live portion stays exact. Confirmed the live per-cycle cost is already tariff-correct (static/dynamic/calendar all priced at the current rate each cycle). (#536)
 
