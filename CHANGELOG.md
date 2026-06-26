@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.62] — 26.06.2026
+
+> The home battery now empties into the EV at high SoC instead of sitting idle.
+
+### 🔋 EV — max out the battery into the car (#545)
+- ⚡ **"Max out till self-consumption":** when the home battery is in the assist band (SoC ≥ the Buffer SoC) and there's real solar surplus past the Solar Gate, SEM now offers the **full** battery-assist potential — it raises the offered amps so the inverter discharges the battery **into the car, down to the Buffer SoC** (the self-consumption reserve floor), instead of only topping the car up to the charger minimum. This fixes the chicken-and-egg where a **full battery sat idle while the EV grid-charged** (observed live: at 100% SoC, SEM offered only ~8 A, the car drew ~3 kW from solar, the battery never assisted, and a grid night-charge was still needed). The assist self-tapers as SoC falls toward the Buffer and is off-limits below it, so the battery is never drained past the floor. Solar-gated; pure amps — SEM commands no battery directly, the inverter's self-consumption does the discharge. Aligned across both budget layers (`decide.battery_assist_budget_w` + the canonical `calculate_canonical_ev_budget`) so they agree (#282). Docs updated (EV_CHARGING_LOGIC, ARCHITECTURE). (by @guidoeberle in #545)
+
 # [1.7.3-beta.61] — 26.06.2026
 
 > Fixes EV charging running past the configured max SOC during solar charging.
