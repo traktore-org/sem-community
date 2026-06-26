@@ -48,6 +48,7 @@ def _view(
     target_kwh: float | None = None,
     deadline_amps: int = 0,
     night_deliverable_kwh: float = float("inf"),
+    soc_ceiling_reached: bool = False,
     battery_assist_max_power_w: float = 4500.0,
     battery_assist_min_surplus_w: float = 1200.0,
     config: dict | None = None,
@@ -73,7 +74,49 @@ def _view(
         target_kwh=target_kwh,
         deadline_amps=deadline_amps,
         night_deliverable_kwh=night_deliverable_kwh,
+        soc_ceiling_reached=soc_ceiling_reached,
     )
+
+
+class TestMaxSocCeiling548:
+    """#548 — the max-SOC ceiling stops charging in EVERY mode.
+
+    Regression: the ceiling (`soc_limit_active`) only reached the retired
+    ChargingStateMachine, which the per-charger decision clobbered, so the
+    EV charged past the configured max SOC during solar surplus. ``decide()``
+    now honours ``view.soc_ceiling_reached`` before mode dispatch.
+    """
+
+    @pytest.mark.parametrize("mode", [
+        "solar_only", "min_plus_solar", "always_max", "solar_plus_cheap",
+    ])
+    def test_ceiling_reached_idles_every_mode(self, mode):
+        # Plenty of surplus (would otherwise charge), but max SOC reached.
+        d = decide(_view(mode=mode, solar_w=8000, home_w=500,
+                         battery_soc=80, soc_ceiling_reached=True))
+        assert d.intent is ChargerIntent.IDLE, (
+            f"{mode}: must stop at max SOC, got {d.intent}"
+        )
+        assert "max SOC" in d.reason or "target reached" in d.reason.lower()
+
+    def test_below_ceiling_still_charges(self):
+        # Same surplus, ceiling NOT reached → charges as normal.
+        d = decide(_view(mode="always_max", solar_w=8000, home_w=500,
+                         soc_ceiling_reached=False))
+        assert d.intent is not ChargerIntent.IDLE
+
+    def test_ceiling_ignored_when_disconnected(self):
+        # A stale ceiling must not mask the "disconnected" reason.
+        d = decide(_view(mode="solar_only", connected=False,
+                         soc_ceiling_reached=True))
+        assert d.intent is ChargerIntent.IDLE
+        assert "disconnect" in d.reason.lower()
+
+    def test_default_view_does_not_block(self):
+        # Default soc_ceiling_reached=False — kWh users (effectively
+        # unlimited max) keep surplus-charging freely.
+        d = decide(_view(mode="solar_only", solar_w=8000, home_w=500))
+        assert d.intent is not ChargerIntent.IDLE
 
 
 class TestHelpers:

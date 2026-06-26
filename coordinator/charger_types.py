@@ -681,6 +681,17 @@ class ChargerView:
     compute it get the self-consumption-maximizing behaviour rather
     than silent grid pull."""
 
+    soc_ceiling_reached: bool = False
+    """The car has reached its configured MAX target (SOC % ceiling, or
+    the max-kWh ceiling) — stop charging in EVERY mode, including solar
+    surplus (#548). Computed upstream as ``_calculate_remaining_need(
+    bound="max") <= 0.1``. This is the surplus-charging stop that used to
+    live only in the retired ChargingStateMachine (``soc_limit_active →
+    SOLAR_TARGET_REACHED``); that state was clobbered by the per-charger
+    decision, so the EV charged past the max SOC. ``decide()`` now reads
+    this directly. Default ``False`` (kWh-mode default max is effectively
+    unlimited, so surplus charging stays 'free' for kWh users)."""
+
 
 # ─────────────────────────────────────────────────────────────────
 # Fleet view (computed from per-charger dict)

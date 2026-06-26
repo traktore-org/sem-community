@@ -37,6 +37,7 @@ def build_charger_view(
     tariff_wait: bool = False,
     solar_committed_w: float = 0.0,
     night_deliverable_kwh: float = float("inf"),
+    soc_ceiling_reached: bool = False,
 ) -> ChargerView:
     """Construct a ChargerView from a per-cycle FleetCycleState +
     per-charger overrides.
@@ -178,4 +179,5 @@ def build_charger_view(
         target_soc=target_soc,
         deadline_amps=deadline_amps,
         night_deliverable_kwh=night_deliverable_kwh,
+        soc_ceiling_reached=soc_ceiling_reached,
     )
