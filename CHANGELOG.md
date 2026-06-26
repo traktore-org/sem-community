@@ -11,7 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
-# [Unreleased]
+# [1.7.3-beta.58] — 26.06.2026
+
+> Steady EV charging — live-confirmed on a real KEBA P30 + Renault Zoe: the
+> offered current went from **366 changes/evening** (6↔9 A sawtooth, car in
+> standby) to **0 changes in 25 min** (rock-steady 8 A, car drawing ~3.1 kW).
 
 ### 🔌 EV charging — steady offer (neutralize the failsafe, then track like evcc)
 - 🐛 **The offered current flapped 6↔9 A every few seconds**, so a steady-needing car (Renault Zoe) sat in standby. Root cause: the KEBA reverts to its built-in **6 A failsafe** between SEM's writes and SEM re-wrote 9 A every 5 s — a sawtooth the car can't charge through. Live testing on a real P30 showed the failsafe **can't be disabled** over UDP (the box keeps it — likely a safety design). So SEM now **neutralizes** it: it arms a **long (10-min) non-tripping, persisted** failsafe with the fallback at your **charging floor** — it overwrites the box's short built-in one, the per-cycle writes keep it from ever tripping, and a genuine controller-death lands the car on the floor (not 6 A). No more flap. (#546)
