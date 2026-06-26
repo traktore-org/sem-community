@@ -470,33 +470,15 @@ SENSOR_TYPES = [
     # ============================================================================
     # FORECAST ACCURACY
     # ============================================================================
-    SensorEntityDescription(
-        key="forecast_accuracy_today",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="%",
-        icon="mdi:chart-timeline-variant-shimmer",
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="forecast_accuracy_7d",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="%",
-        icon="mdi:chart-timeline-variant-shimmer",
-        suggested_display_precision=0,
-    ),
+    # (#544) forecast_accuracy_today / forecast_accuracy_7d removed — dead
+    # (written by forecast_tracker, read by no card/decision).
     SensorEntityDescription(
         key="forecast_correction_factor",
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:tune-vertical",
         suggested_display_precision=2,
     ),
-    SensorEntityDescription(
-        key="forecast_deviation_kwh",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        icon="mdi:swap-vertical",
-        suggested_display_precision=1,
-    ),
+    # (#544) forecast_deviation_kwh removed — dead.
     SensorEntityDescription(
         key="forecast_corrected_today",
         device_class=SensorDeviceClass.ENERGY,
@@ -505,14 +487,7 @@ SENSOR_TYPES = [
         icon="mdi:crystal-ball",
         suggested_display_precision=1,
     ),
-    SensorEntityDescription(
-        key="forecast_corrected_tomorrow",
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        icon="mdi:crystal-ball",
-        suggested_display_precision=1,
-    ),
+    # (#544) forecast_corrected_tomorrow removed — dead.
     SensorEntityDescription(
         key="forecast_history_days",
         state_class=SensorStateClass.MEASUREMENT,
@@ -933,20 +908,7 @@ SENSOR_TYPES = [
         state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
     ),
-    SensorEntityDescription(
-        key="forecast_power_now_w",
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfPower.WATT,
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="forecast_power_next_hour_w",
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfPower.WATT,
-        suggested_display_precision=0,
-    ),
+    # (#544) forecast_power_now_w / forecast_power_next_hour_w removed — dead.
     SensorEntityDescription(
         key="forecast_peak_power_today_w",
         device_class=SensorDeviceClass.POWER,
@@ -1133,27 +1095,8 @@ SENSOR_TYPES = [
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    SensorEntityDescription(
-        key="predicted_consumption_next_hour",
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfPower.WATT,
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="predicted_consumption_today_kwh",
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        suggested_display_precision=1,
-    ),
-    SensorEntityDescription(
-        key="predicted_solar_next_hour",
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfPower.WATT,
-        suggested_display_precision=0,
-    ),
+    # (#544) predicted_consumption_next_hour / predicted_consumption_today_kwh
+    # / predicted_solar_next_hour removed — published, never charted/read.
     SensorEntityDescription(
         key="predicted_surplus_window",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1314,53 +1257,11 @@ SENSOR_TYPES = [
     SensorEntityDescription(
         key="ev_taper_trend",
     ),
-    SensorEntityDescription(
-        key="ev_taper_ratio",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=PERCENTAGE,
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="ev_taper_minutes_to_full",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="min",
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="ev_estimated_soc",
-        device_class=SensorDeviceClass.BATTERY,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=PERCENTAGE,
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="ev_last_full_charge",
-        device_class=SensorDeviceClass.TIMESTAMP,
-    ),
-    SensorEntityDescription(
-        key="ev_energy_since_full",
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        suggested_display_precision=1,
-    ),
-    SensorEntityDescription(
-        key="ev_predicted_daily_consumption",
-        device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        suggested_display_precision=1,
-    ),
-    # (#440) ev_nights_until_charge / ev_charge_needed / ev_charge_skip_reason
-    # were removed — the skip-decision wiring is gone, charge mode is the
-    # sole authority on whether to charge at night. ev_battery_health
-    # stays (display-only, no decision impact).
-    SensorEntityDescription(
-        key="ev_battery_health",
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=PERCENTAGE,
-        suggested_display_precision=0,
-    ),
+    # (#544) Dead fleet EV-intelligence sensors removed — written but read
+    # by no card / generator / decision: ev_taper_ratio,
+    # ev_taper_minutes_to_full, ev_estimated_soc, ev_last_full_charge,
+    # ev_energy_since_full, ev_predicted_daily_consumption,
+    # ev_battery_health. (ev_taper_trend kept — it's a DIAGNOSTIC_SENSOR.)
     # Multi-charger (#112)
     SensorEntityDescription(
         key="ev_charger_count",

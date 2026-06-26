@@ -631,23 +631,11 @@
       "roi_annual_savings": {
         "name": "ROI Ahorro Anual"
       },
-      "forecast_accuracy_today": {
-        "name": "Precisión Previsión Hoy"
-      },
-      "forecast_accuracy_7d": {
-        "name": "Precisión Previsión 7d"
-      },
       "forecast_correction_factor": {
         "name": "Factor Corrección Previsión"
       },
-      "forecast_deviation_kwh": {
-        "name": "Desviación Previsión"
-      },
       "forecast_corrected_today": {
         "name": "Previsión Corregida Hoy"
-      },
-      "forecast_corrected_tomorrow": {
-        "name": "Previsión Corregida Mañana"
       },
       "forecast_history_days": {
         "name": "Historial Previsión Días"
@@ -727,9 +715,6 @@
       "forecast_remaining_today_kwh": {
         "name": "Previsión Restante Hoy"
       },
-      "forecast_power_now_w": {
-        "name": "Potencia Prevista Ahora"
-      },
       "forecast_source": {
         "name": "Fuente Previsión"
       },
@@ -793,15 +778,6 @@
       "predictor_model_accuracy": {
         "name": "Precisión Predictor"
       },
-      "predicted_consumption_next_hour": {
-        "name": "Consumo Previsto (Próx. Hora)"
-      },
-      "predicted_consumption_today_kwh": {
-        "name": "Consumo Previsto Hoy"
-      },
-      "predicted_solar_next_hour": {
-        "name": "Solar Previsto (Próx. Hora)"
-      },
       "predicted_surplus_window": {
         "name": "Ventana Excedente Prevista"
       },
@@ -856,9 +832,6 @@
       "forecast_peak_time_today": {
         "name": "Hora Pico Prevista Hoy"
       },
-      "forecast_power_next_hour_w": {
-        "name": "Potencia Prevista Próx. Hora"
-      },
       "forecast_surplus_kwh": {
         "name": "Excedente Previsto"
       },
@@ -877,32 +850,11 @@
       "battery_scheduler_reason": {
         "name": "Razón planificador"
       },
-      "ev_estimated_soc": {
-        "name": "SOC estimado VE"
-      },
-      "ev_last_full_charge": {
-        "name": "Última carga completa VE"
-      },
-      "ev_energy_since_full": {
-        "name": "Energía desde carga completa"
-      },
-      "ev_predicted_daily_consumption": {
-        "name": "Consumo diario previsto"
-      },
-      "ev_battery_health": {
-        "name": "Salud batería VE"
-      },
       "ev_charger_count": {
         "name": "EV Charger Count"
       },
       "ev_taper_trend": {
         "name": "EV Taper Trend"
-      },
-      "ev_taper_ratio": {
-        "name": "EV Taper Ratio"
-      },
-      "ev_taper_minutes_to_full": {
-        "name": "EV Minutes to Full"
       },
       "diag_version": {
         "name": "Versión SEM"

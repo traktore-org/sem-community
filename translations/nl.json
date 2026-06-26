@@ -633,23 +633,11 @@
       "roi_annual_savings": {
         "name": "ROI Jaarlijkse Besparing"
       },
-      "forecast_accuracy_today": {
-        "name": "Voorspelling Nauwkeurigheid Vandaag"
-      },
-      "forecast_accuracy_7d": {
-        "name": "Voorspelling Nauwkeurigheid 7d"
-      },
       "forecast_correction_factor": {
         "name": "Voorspelling Correctiefactor"
       },
-      "forecast_deviation_kwh": {
-        "name": "Voorspelling Afwijking"
-      },
       "forecast_corrected_today": {
         "name": "Gecorrigeerde Voorspelling Vandaag"
-      },
-      "forecast_corrected_tomorrow": {
-        "name": "Gecorrigeerde Voorspelling Morgen"
       },
       "forecast_history_days": {
         "name": "Voorspelling Historiedagen"
@@ -729,9 +717,6 @@
       "forecast_remaining_today_kwh": {
         "name": "Voorspelling Resterend Vandaag"
       },
-      "forecast_power_now_w": {
-        "name": "Voorspeld Vermogen Nu"
-      },
       "forecast_source": {
         "name": "Voorspellingsbron"
       },
@@ -795,15 +780,6 @@
       "predictor_model_accuracy": {
         "name": "Voorspeller Nauwkeurigheid"
       },
-      "predicted_consumption_next_hour": {
-        "name": "Voorspeld Verbruik (Volgend Uur)"
-      },
-      "predicted_consumption_today_kwh": {
-        "name": "Voorspeld Verbruik Vandaag"
-      },
-      "predicted_solar_next_hour": {
-        "name": "Voorspeld Zon (Volgend Uur)"
-      },
       "predicted_surplus_window": {
         "name": "Voorspeld Overschotvenster"
       },
@@ -858,9 +834,6 @@
       "forecast_peak_time_today": {
         "name": "Voorspeld Piektijd Vandaag"
       },
-      "forecast_power_next_hour_w": {
-        "name": "Voorspeld Vermogen Volgend Uur"
-      },
       "forecast_surplus_kwh": {
         "name": "Voorspeld Overschot"
       },
@@ -879,32 +852,11 @@
       "battery_scheduler_reason": {
         "name": "Batterijplanner Reden"
       },
-      "ev_estimated_soc": {
-        "name": "EV Geschatte SOC"
-      },
-      "ev_last_full_charge": {
-        "name": "EV Laatste Volle Lading"
-      },
-      "ev_energy_since_full": {
-        "name": "EV Energie sinds vol"
-      },
-      "ev_predicted_daily_consumption": {
-        "name": "EV Voorspeld dagverbruik"
-      },
-      "ev_battery_health": {
-        "name": "EV Batterijgezondheid"
-      },
       "ev_charger_count": {
         "name": "Aantal EV-laders"
       },
       "ev_taper_trend": {
         "name": "EV Taper Trend"
-      },
-      "ev_taper_ratio": {
-        "name": "EV Taper Ratio"
-      },
-      "ev_taper_minutes_to_full": {
-        "name": "EV Minuten tot Vol"
       },
       "diag_version": {
         "name": "SEM-versie"

@@ -621,13 +621,12 @@ class ForecastTracker:
     def get_data(self) -> Dict[str, Any]:
         """Return current tracker data for sensors."""
         return {
-            "forecast_accuracy_today": self.accuracy_today,
-            "forecast_accuracy_7d": self.accuracy_7d,
+            # (#544) forecast_accuracy_today/_7d, forecast_deviation_kwh,
+            # forecast_corrected_tomorrow removed — dead sensors. correction_factor
+            # and history_days stay (read by the dampening/correction sensor attrs).
             "forecast_correction_factor": self.correction_factor,
-            "forecast_deviation_kwh": self.deviation_today,
             "forecast_weather_category": self.weather_category,
             "forecast_corrected_today": self.apply_correction(self._today_forecast),
-            "forecast_corrected_tomorrow": 0.0,  # Set by caller
             "forecast_history_days": len(self._history),
             "forecast_dampening_factor": self.dampening_factor,
             # #416 — diagnostics surface, consumed by the

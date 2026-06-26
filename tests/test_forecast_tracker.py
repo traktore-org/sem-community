@@ -78,20 +78,23 @@ def test_correction_factor_adjusts(mock_dt, tracker):
 
 @patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")
 def test_get_data_returns_accuracy(mock_dt, tracker):
-    """Test get_data returns a dict with expected keys."""
+    """Test get_data returns a dict with the kept keys.
+
+    (#544) forecast_accuracy_today/_7d and forecast_deviation_kwh were
+    removed as dead sensors — get_data no longer publishes them. The
+    accuracy is still computed internally (``tracker.accuracy_today``);
+    only the dead sensor surface is gone. correction_factor and
+    history_days stay (read by the dampening/correction sensor attrs)."""
     mock_dt.now.return_value = _freeze_dt()
     tracker.update(forecast_today_kwh=30.0, actual_solar_kwh=27.0)
 
     data = tracker.get_data()
-    assert "forecast_accuracy_today" in data
-    assert "forecast_accuracy_7d" in data
     assert "forecast_correction_factor" in data
-    assert "forecast_deviation_kwh" in data
     assert "forecast_weather_category" in data
     assert "forecast_history_days" in data
 
-    # accuracy_today = 27/30 * 100 = 90%
-    assert data["forecast_accuracy_today"] == pytest.approx(90.0)
+    # accuracy_today = 27/30 * 100 = 90% (computed, no longer published)
+    assert tracker.accuracy_today == pytest.approx(90.0)
 
 
 @patch("custom_components.solar_energy_management.coordinator.forecast_tracker.dt_util")

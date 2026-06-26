@@ -65,8 +65,7 @@ class ForecastData:
             "forecast_today_kwh": round(self.forecast_today_kwh, 2),
             "forecast_tomorrow_kwh": round(self.forecast_tomorrow_kwh, 2),
             "forecast_remaining_today_kwh": round(self.forecast_remaining_today_kwh, 2),
-            "forecast_power_now_w": round(self.power_now_w, 0),
-            "forecast_power_next_hour_w": round(self.power_next_hour_w, 0),
+            # (#544) forecast_power_now_w / forecast_power_next_hour_w removed — dead sensors.
             "forecast_peak_power_today_w": round(self.peak_power_today_w, 0),
             "forecast_peak_time_today": self.peak_time_today,
             "forecast_source": self.source,

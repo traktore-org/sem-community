@@ -11,6 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.60] — 26.06.2026
+
+> Census cleanup, continued: removed dead published sensors and added a CI guard
+> so the dead-surface class can't regrow. Each removal re-verified live (3 of 19
+> candidates turned out to have a consumer and were kept).
+
+### 🧹 Dead sensors removed (#544)
+- 🗑️ **Removed 16 orphan sensors** — published, enabled-by-default, but read by no card, generator, or decision (pure entity clutter): the fleet EV-intelligence cluster (`ev_taper_ratio`, `ev_taper_minutes_to_full`, `ev_estimated_soc`, `ev_last_full_charge`, `ev_energy_since_full`, `ev_predicted_daily_consumption`, `ev_battery_health`), the forecast-accuracy cluster (`forecast_accuracy_today`, `forecast_accuracy_7d`, `forecast_deviation_kwh`, `forecast_corrected_tomorrow`, `forecast_power_now_w`, `forecast_power_next_hour_w`), and the predictor outputs (`predicted_consumption_next_hour`, `predicted_consumption_today_kwh`, `predicted_solar_next_hour`). Swept descriptions + population + metadata across `strings.json`/`icons.json`/15 translations. **Breaking** for any custom dashboard/automation that referenced these. Kept (verified live): `ev_taper_trend` (diagnostic), `forecast_correction_factor` & `forecast_history_days` (read by the dampening/correction sensor attributes). (by @guidoeberle in #544)
+
+### 🔒 Knob-reader contract (#543)
+- ✅ **Added a contract lint** — every user-facing NUMBER knob must have a config reader (following the entity→stored-key map), so a future dead stepper fails CI. Closes the "obsolete settings" class from the 2026-06-25 wiring census. (by @guidoeberle in #543)
+
 # [1.7.3-beta.59] — 26.06.2026
 
 > EV-decision coherence: the overnight battery-drain root cause is fixed, and a

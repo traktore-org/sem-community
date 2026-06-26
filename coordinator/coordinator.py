@@ -2784,15 +2784,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             result["predictor_training_status"] = self._predictor.training_status
             result["predictor_model_accuracy"] = self._predictor.model_accuracy_pct
             now = dt_util.now()
-            consumption_24h = self._predictor.predict_consumption_24h(now)
-            if consumption_24h:
-                result["predicted_consumption_next_hour"] = round(consumption_24h[0], 0)
-                result["predicted_consumption_today_kwh"] = round(
-                    self._predictor.predict_consumption_today_kwh(now), 2
-                )
-            solar_24h = self._predictor.predict_solar_24h(now)
-            if solar_24h:
-                result["predicted_solar_next_hour"] = round(solar_24h[0], 0)
+            # (#544) predicted_consumption_next_hour / _today_kwh /
+            # predicted_solar_next_hour removed — published, never charted/read.
             surplus_window = self._predictor.predict_surplus_window(now)
             if surplus_window:
                 result["predicted_surplus_window"] = surplus_window
@@ -2855,9 +2848,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 forecast_data.forecast_today_kwh, energy.daily_solar, weather_condition,
             )
             tracker_data = self._forecast_tracker.get_data()
-            tracker_data["forecast_corrected_tomorrow"] = self._forecast_tracker.apply_correction(
-                forecast_data.forecast_tomorrow_kwh
-            )
+            # (#544) forecast_corrected_tomorrow removed — dead sensor.
         except (ValueError, TypeError, AttributeError) as e:
             _LOGGER.debug("Forecast tracker update failed: %s", e)
 
