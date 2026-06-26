@@ -1839,6 +1839,9 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             tariff_wait=bool(charging_context.night_tariff_wait),
                             solar_committed_w=self._solar_committed_w_per_cycle,
                             night_deliverable_kwh=self._night_deliverable_kwh(charger_cfg),
+                            # #548 — max-SOC ceiling (bound="max"); stops surplus
+                            # charging at the car's max SOC, in every mode.
+                            soc_ceiling_reached=per_target_reached,
                         )
                         decision = decide_v2(view)
                         # Hysteresis stability layer (#461 flapping):
@@ -1902,7 +1905,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                             if decision.intent is _CI.DISABLE:
                                 effective_state = ChargingState.SOLAR_IDLE
                             elif decision.intent is _CI.IDLE:
-                                effective_state = ChargingState.SOLAR_IDLE
+                                # #548 — an IDLE caused by the max-SOC ceiling
+                                # reads as "Target reached", not a bare "Idle".
+                                effective_state = (
+                                    ChargingState.SOLAR_TARGET_REACHED
+                                    if getattr(view, "soc_ceiling_reached", False)
+                                    else ChargingState.SOLAR_IDLE
+                                )
                             elif decision.intent is _CI.CHARGE_MAX:
                                 effective_state = ChargingState.SOLAR_SUPER_CHARGING
                             else:
@@ -2016,6 +2025,10 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     tariff_wait=bool(getattr(charging_context, "night_tariff_wait", False)),
                     night_deliverable_kwh=self._night_deliverable_kwh(
                         self._primary_charger_cfg()
+                    ),
+                    # #548 — max-SOC ceiling; stop surplus charging at the car's max.
+                    soc_ceiling_reached=bool(
+                        getattr(charging_context, "soc_limit_active", False)
                     ),
                 )
                 decision = decide_v2(view)
@@ -4464,6 +4477,8 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             tariff_wait=tariff_wait,
             deadline_amps=deadline_amps,
             night_deliverable_kwh=self._night_deliverable_kwh(_primary_cfg),
+            # #548 — max-SOC ceiling; stop surplus charging at the car's max.
+            soc_ceiling_reached=soc_limit_active,
         )
         _primary_decision = _decide(_primary_view)
         strategy = _primary_decision.intent.value

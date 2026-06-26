@@ -657,6 +657,22 @@ def decide(view: ChargerView) -> ChargerDecision:
     (DISABLE) — loud failure mode is preferable to charging from
     grid when the user didn't ask for it.
     """
+    # Max-SOC ceiling — stop in EVERY mode once the car hits its
+    # configured max target (#548). The ceiling is computed upstream
+    # (``_calculate_remaining_need(bound="max")``); previously it only
+    # reached the retired ChargingStateMachine (soc_limit_active →
+    # SOLAR_TARGET_REACHED), which the per-charger decision clobbered, so
+    # the EV charged past the max SOC during solar surplus. Guard before
+    # mode dispatch so solar_only / min_plus_solar / always_max /
+    # solar_plus_cheap all honour it. Skip while disconnected so a stale
+    # ceiling can't suppress the "idle — disconnected" reason.
+    if view.soc_ceiling_reached and view.power.connected:
+        return ChargerDecision(
+            charger_id=view.power.charger_id, mode=view.mode,
+            intent=ChargerIntent.IDLE,
+            reason=f"{view.mode}: max SOC/target reached — stop charging (#548)",
+        )
+
     strategy = MODE_STRATEGIES.get(view.mode)
     if strategy is None:
         _LOGGER.error(

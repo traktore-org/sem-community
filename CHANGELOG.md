@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.61] — 26.06.2026
+
+> Fixes EV charging running past the configured max SOC during solar charging.
+
+### 🔌 EV — stop at max SOC (#548)
+- 🐛 **The EV charged past its configured max SOC** in solar/surplus charging (reported by @RienduPre, Wallbox Pulsar Plus). The max-SOC ceiling (`soc_limit_active`) only reached the retired ChargingStateMachine (→ `SOLAR_TARGET_REACHED`), and that state was then **overwritten by the per-charger decision** — while the `decide()` day path has no max-SOC check of its own, charging whenever surplus ≥ min. So nothing actually stopped the charge at the ceiling. Now the ceiling is plumbed into `ChargerView.soc_ceiling_reached` (from the value the coordinator already computes) and **guarded in `decide()` before mode dispatch**, so **every** mode (`solar_only`/`min_plus_solar`/`always_max`/`solar_plus_cheap`) stops at the max SOC. kWh-target users are unaffected (their max is effectively unlimited). The stop now reads as **"Target reached"**. (by @guidoeberle in #548)
+
 # [1.7.3-beta.60] — 26.06.2026
 
 > Census cleanup, continued: removed dead published sensors and added a CI guard
