@@ -182,9 +182,18 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     # 0 < 1200 → clamp). ``battery_hold_solar_ev`` is now subsumed by the
     # gate (cloudy solar below the gate clamps regardless) and is no
     # longer read here — kept as an ignored config key for now.
+    #
+    # GATE ON ev_connected (plugged in), NOT ev_charging (drawing now):
+    # a bursty car (e.g. Renault Zoe) toggles ev_charging on/off every
+    # few seconds. Keying the clamp on ev_charging means it drops in the
+    # gaps → the battery discharges freely → that energy feeds the next
+    # pull → the battery drains overnight (PROD 2026-06-24, 93→41 %).
+    # While a car is plugged in and surplus is below the gate, the
+    # protection must HOLD regardless of the instantaneous draw. Fall
+    # back to ev_charging so older views (no ev_connected) still gate.
     protection_enabled = bool(cfg.get("battery_discharge_protection_enabled", True))
 
-    if protection_enabled and view.ev_charging:
+    if protection_enabled and (view.ev_connected or view.ev_charging):
         f = view.fleet
         # Pure solar-vs-house surplus. Intentionally does NOT subtract
         # battery_charge_w (unlike decide.self_consumption_surplus_w): the
@@ -204,7 +213,7 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
                 intent=BatteryIntent.LIMIT_DISCHARGE,
                 discharge_limit_w=home_w,
                 reason=(
-                    f"ev_charging + solar surplus {surplus_w:.0f}W < gate "
+                    f"ev plugged in + solar surplus {surplus_w:.0f}W < gate "
                     f"{gate_w:.0f}W → discharge limit "
                     f"{home_w:.0f} W (home/{n} across fleet)"
                 ),

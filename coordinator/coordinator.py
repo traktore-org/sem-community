@@ -3732,6 +3732,7 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                 fleet=fleet,
                 charging_state=getattr(charging_state, "value", str(charging_state)),
                 ev_charging=bool(getattr(power, "ev_charging", False)),
+                ev_connected=bool(getattr(power, "ev_connected", False)),
                 home_consumption_w=float(
                     getattr(power, "home_consumption_power", 0.0) or 0.0
                 ),

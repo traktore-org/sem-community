@@ -375,12 +375,20 @@ class BatteryView:
     """Current SEM ChargingState (string form). Drives the
     LIMIT_DISCHARGE gate (active iff NIGHT_CHARGING_ACTIVE)."""
     ev_charging: bool
-    """Whether any charger in the fleet is currently drawing.
-    Combined with ``charging_state == NIGHT_CHARGING_ACTIVE`` for
-    the protection gate."""
+    """Whether any charger in the fleet is currently *drawing* power.
+    This flag flaps with bursty cars (e.g. a Renault Zoe that pulses
+    on/off), so it is NOT used alone to gate the discharge protection
+    — see ``ev_connected``."""
     home_consumption_w: float
     """Used as the discharge limit when LIMIT_DISCHARGE fires
     (the 1:1 protection)."""
+    ev_connected: bool = False
+    """Whether any charger in the fleet has a vehicle plugged in
+    (cable connected), regardless of whether it is drawing right now.
+    The discharge-protection gate keys off this so the clamp HOLDS
+    steady through a bursty car's on/off pulses instead of flickering
+    with ``ev_charging`` — which would let the battery drain between
+    bursts and then feed the next pull. See decide_battery."""
     scheduler_decision: "Any" = None
     """The output of today's ``BatteryChargeScheduler.evaluate()``.
     Typed as ``Any`` so importing scheduler types in this module
