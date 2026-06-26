@@ -93,13 +93,18 @@ def _ev_view(
 def _battery_view(
     *, charging_state: str, ev_charging: bool,
     home_w: float = 500.0, soc: float = 50.0, solar_w: float = 0.0,
+    buffer_soc: float = 0.0,
 ) -> BatteryView:
+    # buffer_soc defaults to 0 so these tests exercise the SURPLUS gate arm of
+    # the clamp in isolation. The buffer-floor arm (clamp when SoC < buffer
+    # regardless of surplus) is covered in test_inverter_battery_arch.py.
     return BatteryView(
         runtime=BatteryRuntime(
             battery_id="primary", last_known_soc=soc, capacity_kwh=15.0,
         ),
         config={"battery_discharge_protection_enabled": True},
-        fleet=FleetContext(battery_soc=soc, solar_w=solar_w, home_w=home_w),
+        fleet=FleetContext(battery_soc=soc, buffer_soc=buffer_soc,
+                           solar_w=solar_w, home_w=home_w),
         charging_state=charging_state,
         ev_charging=ev_charging,
         home_consumption_w=home_w,

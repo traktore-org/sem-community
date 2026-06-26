@@ -138,12 +138,39 @@ class TestI18LimitDischargeGate:
         assert d.intent is BatteryIntent.NORMAL
 
     def test_solar_charging_with_ev_and_surplus_does_not_limit(self):
-        # Real solar surplus ≥ gate (3500 W) → battery free to assist
-        # the EV; the unified clamp does not fire.
+        # Real solar surplus ≥ gate (3500 W) AND SoC ≥ buffer → battery
+        # free to assist the EV; the unified clamp does not fire.
         d = decide_battery(_view(
             charging_state="solar_charging_active",
             ev_charging=True, home_w=500.0,
-            fleet=FleetContext(solar_w=4000.0, home_w=500.0),
+            fleet=FleetContext(solar_w=4000.0, home_w=500.0,
+                               battery_soc=80.0, buffer_soc=70.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.NORMAL
+
+    def test_below_buffer_limits_even_with_surplus(self):
+        # PROD 2026-06-26: SoC below the buffer floor but surplus ≥ gate.
+        # The battery must NOT feed the car below the self-consumption
+        # reserve, in any zone — clamp via the buffer arm.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=True, home_w=600.0,
+            fleet=FleetContext(solar_w=2000.0, home_w=600.0,   # surplus 1400 ≥ gate
+                               battery_soc=83.0, buffer_soc=85.0),
+            config={"battery_discharge_protection_enabled": True},
+        ))
+        assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+        assert d.discharge_limit_w == 600.0
+        assert "buffer" in d.reason
+
+    def test_at_buffer_with_surplus_does_not_limit(self):
+        # Exactly at the buffer (SoC == buffer) → in the assist band → free.
+        d = decide_battery(_view(
+            charging_state="solar_charging_active",
+            ev_charging=True, home_w=600.0,
+            fleet=FleetContext(solar_w=2000.0, home_w=600.0,
+                               battery_soc=85.0, buffer_soc=85.0),
             config={"battery_discharge_protection_enabled": True},
         ))
         assert d.intent is BatteryIntent.NORMAL

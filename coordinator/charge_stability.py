@@ -404,7 +404,10 @@ class ChargeStability:
         self._surplus_since.pop(cid, None)
         self._start_since.pop(cid, None)
         self._start_offer.pop(cid, None)
-        self._latched.pop(cid, None)
+        # NB: do NOT drop the draw latch here — the deficit-bridge below needs
+        # it to survive a bursty car's blips (else the stop timer resets every
+        # blip and never fires; PROD 2026-06-26). The bridge refreshes it on
+        # each real draw and clears it on a genuine (no-draw) stop.
         if night:
             # Night: no solar-deficit bridge — the night planner owns the
             # start/stop decision (target reached, tariff wait, etc.). Honour
@@ -414,9 +417,25 @@ class ChargeStability:
             self._deep_deficit_since.pop(cid, None)
             return decision
         # Smoothed deficit (day).
-        if not charging:
+        # A bursty car (Zoe) blips ``charging`` False between pulses. Without
+        # the latch, every blip reset the deficit timer (line below) so the
+        # disable-bridge NEVER reached its threshold — the contactor stayed on
+        # and the battery kept feeding the car below the buffer floor (PROD
+        # 2026-06-26: timer cycled 170→99→20s, never 180s). Refresh the latch
+        # whenever the car actually draws during the bridge (the charge-path
+        # latch at line ~291 doesn't run here), then hold the deficit state
+        # through a recent draw (LATCH_HOLD_S) so the bridge accumulates to its
+        # stop instead of resetting on a transient blip. A car that genuinely
+        # stops (no draw for LATCH_HOLD_S) still falls through to the reset.
+        if adapter.actual_charging(view.power):
+            self._latched[cid] = now
+        held_recently = (
+            cid in self._latched and (now - self._latched[cid]) <= LATCH_HOLD_S
+        )
+        if not charging and not held_recently:
             self._deficit_since.pop(cid, None)
             self._deep_deficit_since.pop(cid, None)
+            self._latched.pop(cid, None)  # genuine stop — drop the latch
             return decision
         since = self._deficit_since.setdefault(cid, now)
         held = now - since

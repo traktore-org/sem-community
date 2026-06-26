@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.64] — 26.06.2026
+
+> The battery now stops feeding the EV at the buffer SoC floor — cleanly.
+
+### 🔋 Battery — enforce the buffer SoC floor (#536 follow-up to #545)
+- 🐛 **The battery drained into the EV below the buffer SoC.** With #545's aggressive assist, a high house load kept surplus just above the gate while SoC fell below the buffer (PROD: 83% with an 85% buffer), and the discharge clamp — which keyed only on `surplus < gate`, never on SoC — let the inverter keep feeding the car well below the user's reserve. The clamp now also fires when **`SoC < buffer_soc`**, so below the buffer the battery is reserved for the house **in every zone, regardless of surplus**. Above the buffer the #545 assist is unchanged. (A zone-by-zone audit confirmed the EV engine was already correct in all four zones — the gap was isolated to the battery clamp.) (by @guidoeberle in #536)
+- 🐛 **The EV stop-bridge never fired with a bursty car.** The disable-bridge stop timer only accumulated while the car drew continuously, and the draw-latch was wiped every deficit cycle — so a Renault Zoe blipping between pulses reset the timer each cycle (170→99→20 s, never reaching 180 s) and the contactor never opened. The latch now persists through the bridge (refreshed on each real draw, cleared only on a genuine stop), so the car stops cleanly instead of grid-charging indefinitely. (by @guidoeberle in #536)
+
 # [1.7.3-beta.63] — 26.06.2026
 
 > Cleanup: retire the EV-charging diagnostic instrumentation now that #545/#546 are fixed.

@@ -166,6 +166,52 @@ class TestDisableDelay:
                          enable_delay_s=60, disable_delay_s=300, now_ts=301.0)
         assert d301.intent is ChargerIntent.IDLE
 
+    def test_deficit_timer_survives_charging_blip(self):
+        # Regression (PROD 2026-06-26): a bursty car (Zoe) blips power to 0
+        # between pulses. With ``last_intent`` not a charge intent, a blip
+        # flipped ``charging`` False and RESET the deficit timer — so the
+        # disable-bridge never reached its stop, the contactor stayed on, and
+        # the battery drained below the buffer floor. The latch (refreshed on
+        # every real draw) must hold the deficit through the blips so the
+        # bridge still stops at disable_delay.
+        st = ChargeStability()
+        adapter = FakeAdapter(last_intent=None)  # charging follows actual draw
+        drawing = _view(power_w=4500.0)
+        blip = _view(power_w=0.0)
+        st.filter(_idle(), drawing, adapter,
+                  enable_delay_s=0, disable_delay_s=300, now_ts=0.0)
+        # Blip at t=30 (car drew at t=0, within LATCH_HOLD_S) — must NOT reset.
+        st.filter(_idle(), blip, adapter,
+                  enable_delay_s=0, disable_delay_s=300, now_ts=30.0)
+        # Draw again (latch refreshed), blip again — still no reset.
+        st.filter(_idle(), drawing, adapter,
+                  enable_delay_s=0, disable_delay_s=300, now_ts=60.0)
+        st.filter(_idle(), blip, adapter,
+                  enable_delay_s=0, disable_delay_s=300, now_ts=90.0)
+        # Still holding just before the window (timer anchored at t=0, blips
+        # didn't reset it).
+        d290 = st.filter(_idle(), drawing, adapter,
+                         enable_delay_s=0, disable_delay_s=300, now_ts=290.0)
+        assert d290.intent is ChargerIntent.CHARGE_AT_AMPS
+        # Stops at the window — the blips did NOT push the stop out.
+        d301 = st.filter(_idle(), drawing, adapter,
+                         enable_delay_s=0, disable_delay_s=300, now_ts=301.0)
+        assert d301.intent is ChargerIntent.IDLE
+
+    def test_deficit_resets_after_sustained_no_draw(self):
+        # The latch must NOT keep a genuinely-stopped car alive: no draw for
+        # longer than LATCH_HOLD_S → the deficit resets and it idles.
+        st = ChargeStability()
+        adapter = FakeAdapter(last_intent=None)
+        drawing = _view(power_w=4500.0)
+        stopped = _view(power_w=0.0)
+        st.filter(_idle(), drawing, adapter,
+                  enable_delay_s=0, disable_delay_s=300, now_ts=0.0)
+        # No draw since t=0; at t=70 (> LATCH_HOLD_S=60) the blip resets → idle.
+        d70 = st.filter(_idle(), stopped, adapter,
+                        enable_delay_s=0, disable_delay_s=300, now_ts=70.0)
+        assert d70.intent is ChargerIntent.IDLE
+
     def test_surplus_recovery_resets_deficit_window(self):
         st = ChargeStability()
         adapter = FakeAdapter(last_intent=ChargerIntent.CHARGE_AT_AMPS)

@@ -3630,6 +3630,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             battery_assist_min_surplus_w=float(
                 self.config.get("battery_assist_min_surplus", 1200)
             ),
+            # Buffer SoC = the self-consumption reserve floor. Below it the
+            # battery is off-limits to the EV in EVERY zone (the discharge
+            # clamp keys on it so Zone 1/2 protect the battery regardless of
+            # surplus — the surplus gate alone left it draining below buffer).
+            buffer_soc=float(self.config.get("battery_buffer_soc", 70)),
         )
 
         # 2. Source per-battery iteration. Multi-battery installs
