@@ -543,7 +543,6 @@ class FleetContext:
     auto_start_soc: float = 90.0
     buffer_soc: float = 70.0
     priority_soc: float = 30.0
-    battery_assist_floor_soc: float = 60.0
     battery_capacity_kwh: float = 15.0
 
     battery_assist_max_power_w: float = 4500.0

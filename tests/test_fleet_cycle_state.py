@@ -159,7 +159,6 @@ def test_two_views_built_from_same_fleet_state_share_fleet_context() -> None:
             "battery_buffer_soc": 70,
             "battery_auto_start_soc": 90,
             "battery_priority_soc": 30,
-            "battery_assist_floor_soc": 60,
         },
         is_night=False,
         tariff_level="normal",

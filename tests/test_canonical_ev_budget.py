@@ -247,19 +247,21 @@ class TestBatteryAssist:
             battery_soc=80,
             battery_auto_start_soc=90,
             battery_buffer_soc=70,
-            battery_assist_floor_soc=60,
             battery_assist_max_power_w=4500,
         )
         assert b.battery_assist == 3375
 
-    def test_no_assist_below_assist_floor(self):
-        """SOC below the assist floor → no assist contribution."""
+    def test_no_assist_below_buffer_soc(self):
+        """SOC below the buffer floor → no assist contribution.
+
+        ``buffer_soc`` is the single assist floor (the redundant
+        ``battery_assist_floor_soc`` knob was removed)."""
         fc = FlowCalculator()
         b = fc.calculate_canonical_ev_budget(
             _power(solar=800, home=500, batt_soc=50),
             strategy=EVBudgetStrategy.BATTERY_ASSIST,
             battery_soc=50,
-            battery_assist_floor_soc=60,
+            battery_buffer_soc=70,
         )
         assert b.battery_assist == 0
 

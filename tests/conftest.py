@@ -16,7 +16,6 @@ from homeassistant.config_entries import ConfigEntry
 # Test constants
 TEST_CONFIG_DATA = {
     "battery_priority_soc": 90,
-    "battery_minimum_soc": 30,
     "min_solar_power": 1000,
     "super_charger_min_soc": 70,  # DEPRECATED — kept for backward compat
     "super_charger_power": 4500,  # DEPRECATED — use battery_assist_max_power
@@ -267,11 +266,12 @@ def mock_coordinator():
         async def _calculate_sem_logic(self, values):
             """Mock SEM logic calculation."""
             min_solar_power = self.config.get("min_solar_power", 1000)
-            battery_minimum_soc = self.config.get("battery_minimum_soc", 30)
             battery_priority_soc = self.config.get("battery_priority_soc", 90)
 
             return {
-                "battery_too_low": values.get("battery_soc", 50) < battery_minimum_soc,
+                # battery_minimum_soc retired — battery_too_low now keys off
+                # the canonical zone floor (battery_priority_soc).
+                "battery_too_low": values.get("battery_soc", 50) < battery_priority_soc,
                 "battery_needs_priority": values.get("battery_soc", 50) < battery_priority_soc,
                 "solar_sufficient": values.get("solar_power", 0) > min_solar_power,
                 "available_power": max(0, values.get("solar_power", 0) - values.get("home_consumption_total", 0)),
@@ -636,7 +636,6 @@ def sem_config_entry():
             "solar_power_sensor": "sensor.test_solar_power",
             "ev_total_energy_sensor": "sensor.test_ev_total_energy",
             "battery_priority_soc": 90,
-            "battery_minimum_soc": 30,
             "min_solar_power": 1000,
             "battery_assist_max_power": 4500,
             "daily_ev_target": 31,
@@ -721,7 +720,6 @@ def sem_multi_wallbox_config_entry():
             "battery_soc_sensor": "sensor.test_battery_soc",
             "solar_power_sensor": "sensor.test_solar_power",
             "battery_priority_soc": 90,
-            "battery_minimum_soc": 30,
             "min_solar_power": 1000,
             "battery_capacity_kwh": 15.0,
             "peak_load": 6000,

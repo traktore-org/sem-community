@@ -466,9 +466,11 @@ The battery is nearly full. Full battery assist is active. EV charging starts
 even without solar surplus — a nearly full battery has little additional value
 and the energy is better used in the car.
 
-**Hysteresis**: Once battery assist activates, it stays on until SOC drops
-below `battery_assist_floor_soc` (default 60%). This prevents rapid on/off
-cycling that would stress both the battery and the charger.
+**Assist floor**: Battery assist only engages while SOC is above
+`battery_buffer_soc` (default 70%) — below the buffer the battery is
+off-limits to the EV. (The buffer is the single assist floor; the
+former separate `battery_assist_floor_soc` knob was redundant and has
+been removed.)
 
 ### When to adjust zone thresholds
 
@@ -477,7 +479,7 @@ cycling that would stress both the battery and the charger.
 | Protect the battery more aggressively | Raise `battery_priority_soc` (e.g. 30% to 40%) |
 | Start EV charging sooner from the battery | Lower `battery_buffer_soc` (e.g. 70% to 60%) |
 | Battery rarely reaches auto-start threshold | Lower `battery_auto_start_soc` (e.g. 90% to 80%) |
-| Too much on/off cycling of battery assist | Raise `battery_assist_floor_soc` (e.g. 60% to 70%) |
+| Too much on/off cycling of battery assist | Raise `battery_buffer_soc` (e.g. 70% to 75%) |
 | Battery is small and you want EV to get more priority | Lower all three zone thresholds by 5–10% |
 
 ---

@@ -95,7 +95,6 @@ async def test_v1_to_v2_seeds_missing_4zone_defaults(hass) -> None:
     for key in (
         "battery_buffer_soc",
         "battery_auto_start_soc",
-        "battery_assist_floor_soc",
     ):
         assert updated.data.get(key) is not None
         assert isinstance(updated.data[key], (int, float))

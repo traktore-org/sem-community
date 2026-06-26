@@ -139,7 +139,6 @@ def build_charger_view(
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),
-        battery_assist_floor_soc=float(config.get("battery_assist_floor_soc", 60)),
         battery_capacity_kwh=float(config.get("battery_capacity_kwh", 15)),
         battery_assist_max_power_w=float(config.get(
             "battery_assist_max_power",

@@ -30,7 +30,6 @@ config:
   battery_buffer_soc: 70
   battery_auto_start_soc: 90
   battery_priority_soc: 30
-  battery_assist_floor_soc: 60
   battery_assist_max_power: 4500
   # Force pv mode so the zone dispatch picks battery_assist directly.
   # (Pre-#305 the legacy ``auto`` mode wrapped this in

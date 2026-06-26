@@ -117,9 +117,8 @@ const WATCHED = [
     'sensor.sem_load_management_status',
     'sensor.sem_battery_soc', 'sensor.sem_battery_status',
     'number.sem_battery_priority_soc', 'number.sem_battery_buffer_soc',
-    'number.sem_battery_auto_start_soc', 'number.sem_battery_assist_floor_soc',
+    'number.sem_battery_auto_start_soc',
     'number.sem_battery_assist_min_surplus', 'number.sem_battery_assist_max_power',
-    'number.sem_battery_minimum_soc',
     'number.sem_cheap_price_threshold', 'number.sem_expensive_price_threshold',
     'number.sem_minimum_solar_power',
     'number.sem_update_interval',
@@ -598,15 +597,11 @@ class SEMConfigCard extends SEMLitBase {
                 ${this._renderStepper('number.sem_battery_buffer_soc', 'buffer_soc', T, 'zone_help_buffer')}
             </div>
             <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_assist_floor_soc', 'assist_floor', T, 'zone_help_floor')}
                 ${this._renderStepper('number.sem_battery_priority_soc', 'priority_soc', T, 'zone_help_priority')}
-            </div>
-            <div class="stepper-pair">
                 ${this._renderStepper('number.sem_battery_assist_min_surplus', 'assist_min_surplus', T, 'zone_help_assist_min_surplus')}
-                ${this._renderStepper('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
             </div>
             <div class="stepper-pair">
-                ${this._renderStepper('number.sem_battery_minimum_soc', 'minimum_soc', T, 'setting_help_minimum_soc')}
+                ${this._renderStepper('number.sem_battery_assist_max_power', 'assist_max_power', T, 'zone_help_assist_max_power')}
             </div>
         `;
     }

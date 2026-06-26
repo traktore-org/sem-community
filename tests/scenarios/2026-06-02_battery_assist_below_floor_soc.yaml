@@ -11,7 +11,8 @@ description: |
   HAPPY path at SOC=92). This file covers the SOC-protection
   branch:
 
-    * battery_assist_floor_soc = 60
+    * battery_buffer_soc = 70 (the single assist floor; the
+      redundant battery_assist_floor_soc knob was removed)
     * battery_soc = 45 (well BELOW the floor)
     * Zone is normally "battery assist" territory by SOC banding
       logic, BUT the floor must override → no assist drain.
@@ -33,7 +34,6 @@ config:
   battery_buffer_soc: 70
   battery_auto_start_soc: 90
   battery_priority_soc: 30
-  battery_assist_floor_soc: 60       # protection floor
   battery_assist_max_power: 4500
   ev_charging_mode: "min_plus_solar"
   ev_min_current: 6

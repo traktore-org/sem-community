@@ -37,7 +37,6 @@ config:
   battery_buffer_soc: 70
   battery_auto_start_soc: 90
   battery_priority_soc: 30
-  battery_assist_floor_soc: 60
   battery_assist_max_power: 4500
   # Force pv mode so the strategy decision goes through the main zone
   # logic (Zone 3 → solar_only with redirect, Zone 4 → battery_assist).

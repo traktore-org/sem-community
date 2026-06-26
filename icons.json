@@ -364,9 +364,6 @@
       "battery_priority_soc": {
         "default": "mdi:battery-high"
       },
-      "battery_minimum_soc": {
-        "default": "mdi:battery-low"
-      },
       "minimum_solar_power": {
         "default": "mdi:solar-panel"
       },

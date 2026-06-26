@@ -179,9 +179,8 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     #
     # This UNIFIES (supersedes) the old night-only / hold_solar triggers:
     # at the default the overnight case is unchanged (no solar → surplus
-    # 0 < 1200 → clamp). ``battery_hold_solar_ev`` is now subsumed by the
-    # gate (cloudy solar below the gate clamps regardless) and is no
-    # longer read here — kept as an ignored config key for now.
+    # 0 < 1200 → clamp). The retired ``battery_hold_solar_ev`` knob is
+    # subsumed by this gate (cloudy solar below the gate clamps regardless).
     #
     # GATE ON ev_connected (plugged in), NOT ev_charging (drawing now):
     # a bursty car (e.g. Renault Zoe) toggles ev_charging on/off every

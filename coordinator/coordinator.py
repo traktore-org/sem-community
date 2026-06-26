@@ -2571,7 +2571,11 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
                     _bat_kw = (power.battery_power or 0.0) / 1000.0
                     _bat_cap = self.config.get("battery_capacity_kwh", 15.0)
                     _bat_soc = power.battery_soc if power.battery_soc is not None else None
-                    _bat_floor = self.config.get("battery_minimum_soc", 20)
+                    # The battery-empty ETA references the real discharge
+                    # floor — the SOC-zone priority floor — not the retired
+                    # ``battery_minimum_soc`` knob (which never stopped
+                    # discharge; it was a misleading "hard stop" label).
+                    _bat_floor = self.config.get("battery_priority_soc", 30)
                     if _bat_soc is not None and _bat_cap > 0:
                         if _bat_kw > _MIN_USEFUL_RATE_KW and _bat_soc < 99:
                             remaining_kwh = (100 - _bat_soc) / 100 * _bat_cap
@@ -4363,10 +4367,14 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # canonical: SOC below this = "all solar to battery, EV blocked".
         # The legacy "needs priority" check is just a safety gate and works
         # correctly with the 30 default too (it just unblocks earlier).
-        battery_min_soc = self.config.get("battery_minimum_soc", 20)
+        # ``battery_minimum_soc`` retired (misleading "hard stop" — never
+        # gated discharge). The legacy ``battery_too_low`` safety flag now
+        # references the canonical zone floor ``battery_priority_soc``
+        # (this whole legacy state-machine feed is removed in the legacy
+        # retirement; the repoint keeps it sane until then).
         battery_priority_soc = self.config.get("battery_priority_soc", 30)
 
-        battery_too_low = power.battery_soc < battery_min_soc
+        battery_too_low = power.battery_soc < battery_priority_soc
         battery_needs_priority = power.battery_soc < battery_priority_soc
         # Ceiling (Max, default full) gates the surplus stop; floor (Min) drives
         # night top-up (#245). Resolve the (primary) charger's config so the base
@@ -4529,7 +4537,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             forecast_remaining_kwh=forecast_remaining,
             battery_auto_start_soc=self.config.get("battery_auto_start_soc", 90),
             battery_buffer_soc=self.config.get("battery_buffer_soc", 70),
-            battery_assist_floor_soc=self.config.get("battery_assist_floor_soc", 60),
             battery_assist_max_power_w=self.config.get(
                 "battery_assist_max_power",
                 self.config.get("super_charger_power", 4500),
@@ -4558,7 +4565,6 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
             _assist_used = float(getattr(ev_budget_obj, "battery_assist", 0.0) or 0.0)
             _assist_potential = _bap(
                 power.battery_soc,
-                self.config.get("battery_assist_floor_soc", 60),
                 self.config.get("battery_buffer_soc", 70),
                 self.config.get("battery_auto_start_soc", 90),
                 self.config.get(

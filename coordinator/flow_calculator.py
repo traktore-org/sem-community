@@ -197,7 +197,6 @@ def battery_redirect_w(
 
 def battery_assist_potential_w(
     battery_soc: float,
-    battery_assist_floor_soc: float,
     battery_buffer_soc: float,
     battery_auto_start_soc: float,
     battery_assist_max_power_w: float,
@@ -220,14 +219,13 @@ def battery_assist_potential_w(
       more discharge → bigger EV budget → higher amps) and silently
       bypassed the user's ``battery_assist_max_power`` cap (#501).
 
-    Shape:
-      * SOC ≤ assist floor          → 0 (battery off-limits)
+    Shape (``battery_buffer_soc`` is the single floor — the separate
+    ``battery_assist_floor_soc`` knob was redundant since any SOC below
+    buffer already returns 0, so it was removed and folded into buffer):
       * SOC ≥ auto_start (Zone 4)   → full ``battery_assist_max_power_w``
       * buffer ≤ SOC < auto_start   → ramp 0.5 → 1.0 × cap across the band
-      * SOC < buffer (Zone 1/2)     → 0
+      * SOC < buffer (Zone 1/2)     → 0 (battery off-limits)
     """
-    if battery_soc <= battery_assist_floor_soc:
-        return 0.0
     if battery_soc >= battery_auto_start_soc:
         return battery_assist_max_power_w
     if battery_soc >= battery_buffer_soc:
@@ -785,7 +783,6 @@ class FlowCalculator:
         forecast_remaining_kwh: float = 0.0,
         battery_auto_start_soc: float = 90.0,
         battery_buffer_soc: float = 70.0,
-        battery_assist_floor_soc: float = 60.0,
         battery_assist_max_power_w: float = 4500.0,
         battery_assist_min_surplus_w: float = 1200.0,
         min_power_floor_w: float = 0.0,
@@ -808,7 +805,7 @@ class FlowCalculator:
             battery_soc, battery_capacity_kwh, forecast_remaining_kwh:
                 Inputs to the redirect/assist sub-calculations.
             battery_auto_start_soc, battery_buffer_soc,
-                battery_assist_floor_soc, battery_assist_max_power_w:
+                battery_assist_max_power_w:
                 Strategy thresholds, normally read from config. Defaults
                 match the SEM-wide defaults so calls without overrides
                 still produce sensible numbers.
@@ -927,7 +924,7 @@ class FlowCalculator:
             assist = self._calculate_battery_assist_w(
                 power, battery_soc,
                 battery_auto_start_soc, battery_buffer_soc,
-                battery_assist_floor_soc, battery_assist_max_power_w,
+                battery_assist_max_power_w,
             )
             # Solar gate: assist only SUPPLEMENTS real solar. Below the
             # configured surplus threshold (default 1200 W) the battery
@@ -993,7 +990,6 @@ class FlowCalculator:
         battery_soc: float,
         battery_auto_start_soc: float,
         battery_buffer_soc: float,
-        battery_assist_floor_soc: float,
         battery_assist_max_power_w: float,
     ) -> float:
         """How much battery power to attribute to EV in battery_assist mode.
@@ -1011,7 +1007,6 @@ class FlowCalculator:
         del power  # #501 — measured discharge intentionally unused
         return battery_assist_potential_w(
             battery_soc,
-            battery_assist_floor_soc,
             battery_buffer_soc,
             battery_auto_start_soc,
             battery_assist_max_power_w,

@@ -11,7 +11,6 @@ import { semTheme, semDefineCard } from '../base/sem-shared.js';
 const ZONES = [
     { id: 'autostart', entity: 'number.sem_battery_auto_start_soc', icon: 'mdi:play-circle',        labelKey: 'auto_start_soc', helpKey: 'zone_help_autostart', color: '#4db6ac' },
     { id: 'buffer',    entity: 'number.sem_battery_buffer_soc',    icon: 'mdi:shield-half-full',    labelKey: 'buffer_soc',    helpKey: 'zone_help_buffer',    color: '#ff9800' },
-    { id: 'floor',     entity: 'number.sem_battery_assist_floor_soc', icon: 'mdi:arrow-collapse-down', labelKey: 'assist_floor', helpKey: 'zone_help_floor',    color: '#488fc2' },
     { id: 'priority',  entity: 'number.sem_battery_priority_soc',  icon: 'mdi:shield-alert',       labelKey: 'priority_soc',  helpKey: 'zone_help_priority', color: '#f44336' },
 ];
 
