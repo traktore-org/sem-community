@@ -167,14 +167,17 @@ class TestStartEscalation:
         _filter(st, idle, adapter, now=60.0)
         adapter.last_intent = ChargerIntent.CHARGE_AT_AMPS
         _filter(st, idle, adapter, now=85.0)           # climbed to 8
+        # Pin min_change_interval_s=90 to test the latch-hold MECHANISM (hold
+        # for a full interval, then settle) independent of the default cadence
+        # (which #546 lowered 90→30 for evcc-style tracking).
         drawing = _view(power_w=4140.0, ev_min_current=6)
-        d = st.filter(_charge(), drawing, adapter,
+        d = st.filter(_charge(), drawing, adapter, min_change_interval_s=90,
                       enable_delay_s=60, disable_delay_s=300, now_ts=90.0)
         assert d.commanded_amps == 8                   # hold the latch current
-        d = st.filter(_charge(), drawing, adapter,
+        d = st.filter(_charge(), drawing, adapter, min_change_interval_s=90,
                       enable_delay_s=60, disable_delay_s=300, now_ts=150.0)
-        assert d.commanded_amps == 8                   # still inside 90 s debounce
-        d = st.filter(_charge(), drawing, adapter,
+        assert d.commanded_amps == 8                   # still inside the 90 s debounce
+        d = st.filter(_charge(), drawing, adapter, min_change_interval_s=90,
                       enable_delay_s=60, disable_delay_s=300, now_ts=185.0)
         assert d.commanded_amps == 6                   # debounce elapsed → settle
 

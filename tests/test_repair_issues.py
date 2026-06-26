@@ -257,3 +257,64 @@ def test_clear_soc_cap_unenforceable_deletes_issue():
     with patch.object(ri.ir, "async_delete_issue") as delete:
         ri.clear_soc_cap_unenforceable(hass, "ev_charger")
     delete.assert_called_once_with(hass, ri.DOMAIN, "soc_cap_unenforceable_ev_charger")
+
+
+# ──────────────────────────────────────────────
+# #546 — KEBA failsafe-active repair
+# ──────────────────────────────────────────────
+
+
+def test_raise_keba_failsafe_active_creates_issue():
+    hass = MagicMock()
+    with patch.object(ri.ir, "async_create_issue") as create:
+        ri.raise_keba_failsafe_active(hass, charger_name="KEBA P30")
+    assert create.called
+    kwargs = create.call_args.kwargs
+    assert kwargs["issue_id"] == "keba_failsafe_active"
+    assert kwargs["translation_key"] == "keba_failsafe_active"
+    assert kwargs["translation_placeholders"] == {"name": "KEBA P30"}
+    assert kwargs["severity"] is ri.ir.IssueSeverity.WARNING
+    assert kwargs["learn_more_url"] == ri.KEBA_FAILSAFE_DOC_URL
+
+
+def test_clear_keba_failsafe_active_deletes_issue():
+    hass = MagicMock()
+    with patch.object(ri.ir, "async_delete_issue") as delete:
+        ri.clear_keba_failsafe_active(hass)
+    delete.assert_called_once_with(hass, ri.DOMAIN, "keba_failsafe_active")
+
+
+def _fs_state(entity_id, state):
+    s = MagicMock()
+    s.entity_id = entity_id
+    s.state = state
+    return s
+
+
+def test_detect_keba_failsafe_state_on_off_none():
+    hass = MagicMock()
+    # ON
+    hass.states.async_all.return_value = [
+        _fs_state("binary_sensor.keba_p30_failsafe_mode", "on"),
+    ]
+    assert ri.detect_keba_failsafe_state(hass) is True
+    # OFF
+    hass.states.async_all.return_value = [
+        _fs_state("binary_sensor.keba_p30_failsafe_mode", "off"),
+    ]
+    assert ri.detect_keba_failsafe_state(hass) is False
+    # No failsafe sensor → None (can't tell, stay silent)
+    hass.states.async_all.return_value = [
+        _fs_state("binary_sensor.keba_p30_plug", "on"),
+    ]
+    assert ri.detect_keba_failsafe_state(hass) is None
+    # M4 — unavailable/unknown → None (hold the Repair, don't clear on outage)
+    hass.states.async_all.return_value = [
+        _fs_state("binary_sensor.keba_p30_failsafe_mode", "unavailable"),
+    ]
+    assert ri.detect_keba_failsafe_state(hass) is None
+    # M3 — a non-KEBA *_failsafe sensor must NOT match (no spurious Repair)
+    hass.states.async_all.return_value = [
+        _fs_state("binary_sensor.fronius_inverter_failsafe", "on"),
+    ]
+    assert ri.detect_keba_failsafe_state(hass) is None

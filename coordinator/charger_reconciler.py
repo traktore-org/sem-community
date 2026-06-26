@@ -262,7 +262,22 @@ class ChargerReconciler:
         if desired is DesiredState.CHARGE:
             try:
                 _dev = getattr(adapter, "_device", None)
-                _hw = getattr(_dev, "max_current", None)
+                # LIVE offered current from the configured current sensor
+                # (#546). ``_dev.max_current`` is the static CONFIG CAP (32), not
+                # the live offer — never use it here. KEBA's only live source is
+                # the external sensor entity; None when unconfigured ("?").
+                _hw = None
+                _sensor = getattr(_dev, "current_sensor_entity_id", "") or ""
+                _hass = getattr(_dev, "hass", None)
+                if _sensor and _hass is not None:
+                    _st = _hass.states.get(_sensor)
+                    if _st is not None and _st.state not in (
+                        "unknown", "unavailable", None, "",
+                    ):
+                        try:
+                            _hw = int(round(float(_st.state)))
+                        except (ValueError, TypeError):
+                            _hw = None
                 _fs = getattr(_dev, "failsafe", getattr(_dev, "failsafe_mode", None))
                 _tags = []
                 if _hw is not None and int(_hw) != int(observed.setpoint_a):
@@ -304,9 +319,10 @@ class ChargerReconciler:
                 _LOGGER.info("reconcile(%s): DISABLE — %s",
                              self.charger_id, decision.reason)
             elif action.kind is ActionKind.START_AND_WRITE:
+                # arm_failsafe() is a no-op unless opted in (#546, evcc-style).
                 await adapter.arm_failsafe()
                 await adapter.command_current(action.amps)
-                _LOGGER.info("reconcile(%s): START %dA (failsafe armed) — %s",
+                _LOGGER.info("reconcile(%s): START %dA — %s",
                              self.charger_id, action.amps, decision.reason)
             elif action.kind is ActionKind.WRITE_CURRENT:
                 await adapter.command_current(action.amps)

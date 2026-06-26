@@ -571,3 +571,81 @@ def clear_heat_pump_partial_sg_ready(hass: HomeAssistant) -> None:
         _LOGGER.debug(
             "issue_registry.delete heat_pump_partial_sg_ready failed: %s", e,
         )
+
+
+# ---------------------------------------------------------------------------
+# KEBA failsafe enabled (#546)
+# ---------------------------------------------------------------------------
+
+# Where the user is sent to fix it (how + why to disable the KEBA failsafe).
+KEBA_FAILSAFE_DOC_URL = (
+    "https://github.com/traktore-org/sem-community/blob/main/docs/KEBA_FAILSAFE.md"
+)
+
+
+def raise_keba_failsafe_active(
+    hass: HomeAssistant, *, charger_name: str,
+) -> None:
+    """File a repair when a KEBA charger's failsafe watchdog is enabled (#546).
+
+    The KEBA failsafe drops the offered current to a fallback (6 A) when the
+    controller goes quiet; SEM re-asserts the target every cycle, producing the
+    6↔9 A flap a steady-needing car can't charge through. evcc (the reference
+    implementation) DISABLES the KEBA failsafe for exactly this reason — and so
+    does SEM now (it no longer arms it). But the box keeps its OWN failsafe
+    until the user turns it off at the charger, which HA's keba.set_failsafe
+    service can't do (it rejects timeout 0). So surface an actionable Repair
+    that walks them through it. Cleared the moment the failsafe reads off.
+    """
+    try:
+        ir.async_create_issue(
+            hass,
+            domain=DOMAIN,
+            issue_id="keba_failsafe_active",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="keba_failsafe_active",
+            translation_placeholders={"name": charger_name},
+            learn_more_url=KEBA_FAILSAFE_DOC_URL,
+        )
+    except Exception as e:  # noqa: BLE001 — never fail the cycle over a repair
+        _LOGGER.debug("issue_registry.create keba_failsafe_active failed: %s", e)
+
+
+def clear_keba_failsafe_active(hass: HomeAssistant) -> None:
+    """Clear the KEBA-failsafe Repair once the failsafe reads off."""
+    try:
+        ir.async_delete_issue(hass, DOMAIN, "keba_failsafe_active")
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("issue_registry.delete keba_failsafe_active failed: %s", e)
+
+
+def detect_keba_failsafe_state(hass: HomeAssistant) -> Optional[bool]:
+    """Best-effort read of the KEBA failsafe state from the keba integration's
+    failsafe binary sensor (e.g. ``binary_sensor.keba_p30_failsafe_mode``).
+
+    Returns:
+      * True  — failsafe is ON (armed).
+      * False — failsafe is OFF.
+      * None  — no such sensor, or it's ``unavailable``/``unknown`` (KEBA offline).
+                "Can't tell" → the caller HOLDS the current Repair state rather
+                than clearing it on a transient outage.
+
+    Scoped to entity ids containing BOTH ``keba`` and ``failsafe`` (M3) so an
+    unrelated integration's ``*_failsafe`` binary sensor (UPS, inverter battery
+    protection) can't trigger a spurious KEBA Repair.
+    """
+    try:
+        for state in hass.states.async_all("binary_sensor"):
+            eid = state.entity_id
+            if "keba" in eid and "failsafe" in eid:
+                if state.state == "on":
+                    return True
+                if state.state == "off":
+                    return False
+                # unavailable/unknown → can't tell; keep looking, else None.
+        return None
+    except Exception as e:  # noqa: BLE001
+        _LOGGER.debug("detect_keba_failsafe_state failed: %s", e)
+        return None

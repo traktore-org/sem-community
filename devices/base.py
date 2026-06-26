@@ -47,6 +47,13 @@ _BRAND_WATCHDOG_REFRESH_S = {
     "keba": 5.0,
 }
 
+# #546 — managed-neutralize failsafe timeout. Long enough that the per-cycle
+# current writes never let it trip during normal charging (vs the old 30 s that
+# the box out-reverted to 6 A → the 6↔9 A flap), short enough that a genuine
+# controller-death still lands the car on the charging floor within 10 min.
+# Persisted so it overwrites the box's short built-in failsafe.
+FAILSAFE_TIMEOUT_S = 600
+
 from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
@@ -588,6 +595,20 @@ class CurrentControlDevice(ControllableDevice):
             charger_service = None
         self.charger_service = charger_service
         self.charger_service_entity_id = charger_service_entity_id
+        # #546 — failsafe handling (managed-neutralize, default). SEM arms a
+        # LONG non-tripping failsafe that overwrites the box's short built-in one
+        # (which can't be disabled over UDP on a real P30). Set False
+        # (``keba_arm_failsafe``) for boxes that CAN disable it at the charger
+        # (evcc-style) — then a Repair guides the user. ``steady_failsafe``
+        # (default on) controls persistence of the managed failsafe.
+        self.arm_failsafe_enabled: bool = True
+        self.steady_failsafe: bool = True
+        # #546 — HA entity reporting the LIVE offered current (e.g.
+        # sensor.keba_p30_max_current). Service-controlled chargers (KEBA) have
+        # no in-SEM live-offer value — ``max_current`` is the static config cap.
+        # Plumbed from the ``ev_current_sensor`` config; read by the
+        # EV-OFFER-PROBE (observe-only). "" = no live source (probe shows "?").
+        self.current_sensor_entity_id: str = ""
         self.service_param_name: str = "current"  # Overridden per integration (#82)
         self.service_device_id: Optional[str] = None  # For Easee/Zaptec device_id
         self.needs_pilot_cycle: bool = False  # True = disable/enable cycle for session start
@@ -962,34 +983,47 @@ class CurrentControlDevice(ControllableDevice):
             _LOGGER.debug("actuation-failure repair clear failed: %s", exc)
 
     async def arm_failsafe(self) -> None:
-        """Set a benign device failsafe (timeout 30 s, fallback = charging
-        floor) so a controller-death keeps the car at the floor instead of
-        pausing, and per-cycle writes keep it from ever tripping (#392).
+        """Arm a NON-TRIPPING managed failsafe (#546 — managed-neutralize).
 
-        KEBA failsafe rationale: the HA keba.set_failsafe service has
-        failsafe_timeout min=1 (no 0/disable) and failsafe_fallback min=6 —
-        so the old ``timeout=0`` raised a validation error, the call failed,
-        and the box was LEFT with its existing failsafe (a 6 A fallback that
-        tripped mid-charge and paused the car to ~120 W, the 6↔9 A
-        oscillation the user saw). Instead set a real failsafe that can't
-        bite: a generous timeout the per-cycle ``curr`` writes (#392) keep
-        resetting so it never trips in normal operation, and a fallback at
-        the CHARGING FLOOR (the configured min, not 6 A) so a trip on
-        genuine controller-death keeps the car charging at the floor instead
-        of pausing."""
+        Background: SEM's old failsafe (30 s, persist=0) left the box reverting
+        to its built-in 6 A floor mid-charge → the 6↔9 A flap (Guido PROD
+        2026-06-24). evcc avoids this by DISABLING the KEBA failsafe — but live
+        testing on a real P30 showed the failsafe can't be disabled over UDP
+        (``timeout=0`` is accepted but the box keeps it on; likely a safety
+        design — you can't switch off the watchdog that guards UDP control). So
+        SEM NEUTRALISES it instead: a **long** timeout (``FAILSAFE_TIMEOUT_S``,
+        600 s) the per-cycle current writes keep feeding, **persisted** so it
+        OVERWRITES the box's short built-in failsafe, with the fallback at the
+        charging FLOOR (not 6 A). It can't trip during normal charging, and a
+        genuine 10-min controller-death lands the car on the floor, not 6 A.
+
+        ``arm_failsafe_enabled`` (config ``keba_arm_failsafe``, default True)
+        can be set False for boxes that CAN disable the failsafe at the charger
+        (evcc-style); then SEM doesn't touch it and a Repair guides the user to
+        disable it. ``steady_failsafe`` (default on) controls persistence."""
+        if not bool(getattr(self, "arm_failsafe_enabled", True)):
+            _LOGGER.debug(
+                "%s: not arming the charger failsafe (keba_arm_failsafe off) — "
+                "a Repair guides disabling the box's own failsafe", self.name,
+            )
+            return
         domain = (self.charger_service or "").split(".", 1)[0]
         if not domain or not self.hass.services.has_service(domain, "set_failsafe"):
             return
         try:
             fallback_a = max(6, int(round(self.min_current)))
+            steady = bool(getattr(self, "steady_failsafe", True))
+            persist = 1 if steady else 0
             await self.hass.services.async_call(
                 domain, "set_failsafe",
-                {"failsafe_timeout": 30, "failsafe_fallback": fallback_a,
-                 "failsafe_persist": 0},
+                {"failsafe_timeout": FAILSAFE_TIMEOUT_S,
+                 "failsafe_fallback": fallback_a, "failsafe_persist": persist},
                 blocking=True,
             )
-            _LOGGER.info("%s: KEBA failsafe set benign (timeout=30s, fallback=%dA)",
-                         self.name, fallback_a)
+            _LOGGER.info(
+                "%s: KEBA failsafe set non-tripping (timeout=%ds, fallback=%dA, "
+                "persist=%d)", self.name, FAILSAFE_TIMEOUT_S, fallback_a, persist,
+            )
         except Exception as e:  # noqa: BLE001
             _LOGGER.warning("Failed to set charger failsafe: %s", e)
 
@@ -1034,8 +1068,9 @@ class CurrentControlDevice(ControllableDevice):
                 # 2. KEBA-style fallback: probe for enable/disable services
                 domain = self.charger_service.split(".", 1)[0]
 
-                # Arm a benign failsafe so a controller-death keeps the car
-                # charging at the floor instead of pausing (#392).
+                # Failsafe: a no-op by default now (#546, evcc-style — SEM
+                # doesn't arm the KEBA failsafe; a Repair guides disabling it at
+                # the box). Only arms when opted in via ``keba_arm_failsafe``.
                 await self.arm_failsafe()
 
                 # Set energy target if supported (KEBA)
