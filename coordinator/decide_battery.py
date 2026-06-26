@@ -201,20 +201,38 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
         # formula is safe here (slightly more permissive at worst).
         surplus_w = max(0.0, float(f.solar_w) - float(f.home_w))
         gate_w = float(getattr(f, "battery_assist_min_surplus_w", 1200.0))
-        if surplus_w < gate_w:
+        # Buffer SoC = the self-consumption reserve floor (the EV
+        # battery-assist band only opens at/above it). Below the buffer the
+        # battery must NOT feed the car in ANY zone, regardless of surplus —
+        # otherwise (PROD 2026-06-26) at SoC 83 % with surplus ~1150 W > gate
+        # the inverter freely discharged the battery into the car well below
+        # the user's 85 % floor. So clamp when surplus is short OR SoC has
+        # fallen below the buffer. Above the buffer with real surplus the
+        # battery is free to assist (#545). buffer=0 disables the SoC arm.
+        buffer_soc = float(getattr(f, "buffer_soc", 70.0))
+        below_buffer = float(f.battery_soc) < buffer_soc
+        if surplus_w < gate_w or below_buffer:
             # #531: split the home budget across the fleet — N batteries each
             # told to inject the FULL home load over-injects N× and leaks the
             # surplus to the EV, defeating the protection. Each gets home/N.
             n = max(1, int(getattr(f, "battery_count", 1) or 1))
             home_w = max(0.0, view.home_consumption_w) / n
+            if below_buffer:
+                why = (
+                    f"ev plugged in + battery SoC {f.battery_soc:.0f}% < buffer "
+                    f"{buffer_soc:.0f}% (self-consumption floor)"
+                )
+            else:
+                why = (
+                    f"ev plugged in + solar surplus {surplus_w:.0f}W < gate "
+                    f"{gate_w:.0f}W"
+                )
             return BatteryDecision(
                 battery_id=rt.battery_id,
                 intent=BatteryIntent.LIMIT_DISCHARGE,
                 discharge_limit_w=home_w,
                 reason=(
-                    f"ev plugged in + solar surplus {surplus_w:.0f}W < gate "
-                    f"{gate_w:.0f}W → discharge limit "
-                    f"{home_w:.0f} W (home/{n} across fleet)"
+                    f"{why} → discharge limit {home_w:.0f} W (home/{n} across fleet)"
                 ),
             )
 

@@ -744,13 +744,19 @@ def test_limit_discharge_two_batteries_split_home():
 # battery support the EV everywhere (the user opt-in path).
 
 def _gate_view(*, solar_w, home_w, gate_w=1200.0, ev_charging=True,
-               charging_state="solar_charging_active", battery_count=1):
+               charging_state="solar_charging_active", battery_count=1,
+               battery_soc=90.0, buffer_soc=70.0):
+    # battery_soc >= buffer_soc by default so these tests isolate the SURPLUS
+    # gate arm of the clamp. Below the buffer the clamp also fires regardless
+    # of surplus (the self-consumption floor) — a separate protection covered
+    # in test_inverter_battery_arch.py.
     return BatteryView(
         runtime=BatteryRuntime(battery_id="b", last_known_soc=80.0),
         config={"battery_discharge_protection_enabled": True},
         fleet=FleetContext(
             battery_count=battery_count,
             solar_w=solar_w, home_w=home_w,
+            battery_soc=battery_soc, buffer_soc=buffer_soc,
             battery_assist_min_surplus_w=gate_w,
         ),
         charging_state=charging_state,
