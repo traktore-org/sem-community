@@ -781,11 +781,24 @@ def test_gate_allows_discharge_when_surplus_above_gate():
 
 
 def test_gate_zero_allows_overnight_battery_support():
-    # Gate = 0, no solar, EV charging → NOT clamped (surplus 0 clears a 0
-    # threshold). The user opt-in: battery supports the EV overnight.
+    # Gate = 0, no solar, EV charging, SoC above the buffer → NOT clamped
+    # (surplus 0 clears a 0 threshold). The user opt-in: battery supports
+    # the EV overnight, but only while above the self-consumption floor.
     d = decide_battery(_gate_view(solar_w=0, home_w=600, gate_w=0.0,
+                                  battery_soc=90.0, buffer_soc=70.0,
                                   charging_state="night_charging_active"))
     assert d.intent is not BatteryIntent.LIMIT_DISCHARGE
+
+
+def test_gate_zero_still_honours_buffer_floor():
+    # Gate = 0 bypasses the SURPLUS arm, but the buffer SoC floor is a HARD
+    # constraint: below the buffer the battery is still clamped even with
+    # gate=0 (reviewer #536 follow-up). SoC 65 < buffer 70 → LIMIT_DISCHARGE.
+    d = decide_battery(_gate_view(solar_w=0, home_w=600, gate_w=0.0,
+                                  battery_soc=65.0, buffer_soc=70.0,
+                                  charging_state="night_charging_active"))
+    assert d.intent is BatteryIntent.LIMIT_DISCHARGE
+    assert "buffer" in d.reason
 
 
 def test_gate_default_protects_overnight():

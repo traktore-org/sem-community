@@ -13,9 +13,10 @@ Decision tree (precedence top-down):
    charge window.
 2. STOP_FORCE_CHARGE — scheduler decided TARGET_REACHED / NOT_NEEDED /
    IDLE but the adapter is still in FORCE_CHARGE intent.
-3. LIMIT_DISCHARGE — EV charging with solar surplus below the
-   ``battery_assist_min_surplus`` gate (any mode/time); clamp battery
-   to home consumption (1:1 protection) so grid+solar fund the car.
+3. LIMIT_DISCHARGE — EV charging AND either solar surplus is below the
+   ``battery_assist_min_surplus`` gate OR battery SoC is below the
+   ``battery_buffer_soc`` floor (any mode/time); clamp battery to home
+   consumption (1:1 protection) so grid+solar fund the car.
 4. NORMAL — default.
 """
 from __future__ import annotations
@@ -173,9 +174,12 @@ def decide_battery(view: "BatteryView") -> BatteryDecision:
     # discharge to the home load so grid+solar fund the car, never the
     # battery.
     #
-    # Setting the gate to 0 W lets the battery support the EV everywhere
-    # — including overnight — because surplus ≥ 0 always clears a 0
-    # threshold (the user opt-in path).
+    # Setting the gate to 0 W bypasses the SURPLUS arm (surplus ≥ 0 always
+    # clears a 0 threshold), letting the battery support the EV without a
+    # surplus requirement. The ``buffer_soc`` floor is still honoured as a
+    # HARD constraint, though: gate=0 does NOT let the battery discharge
+    # into the car below the self-consumption reserve — set ``buffer_soc``
+    # low (or 0) for that.
     #
     # This UNIFIES (supersedes) the old night-only / hold_solar triggers:
     # at the default the overnight case is unchanged (no solar → surplus
