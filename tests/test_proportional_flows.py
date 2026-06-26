@@ -300,33 +300,10 @@ class TestProportionalComparison:
         assert result.battery_to_ev > 0
 
 
-class TestEnergyFlows:
-    """Test energy flow calculations for Sankey charts."""
-
-    def test_energy_flows_proportional(self, flow_calculator):
-        """Test energy flow calculation from energy totals."""
-        energy = EnergyTotals()
-        energy.daily_solar = 10.0  # 10 kWh solar
-        energy.daily_grid_import = 5.0  # 5 kWh imported
-        energy.daily_grid_export = 2.0  # 2 kWh exported
-        energy.daily_battery_charge = 3.0  # 3 kWh charged
-        energy.daily_battery_discharge = 2.0  # 2 kWh discharged
-        energy.daily_home = 8.0  # 8 kWh home
-        energy.daily_ev = 4.0  # 4 kWh EV
-
-        result = flow_calculator.calculate_energy_flows(energy)
-
-        # Total demand = home + ev + battery_charge + grid_export = 8 + 4 + 3 + 2 = 17 kWh
-        # home_pct = 8/17 = 47.06%, ev_pct = 4/17 = 23.53%
-
-        # Solar (10 kWh) distributed proportionally
-        assert result.solar_to_home > 0
-        assert result.solar_to_ev > 0
-        assert result.solar_to_grid > 0
-
-        # Grid import (5 kWh) distributed to home, ev, battery (not grid)
-        assert result.grid_to_home > 0
-        assert result.grid_to_ev > 0
+# TestEnergyFlows removed in the legacy retirement (#536) — it exercised
+# the deprecated proportional ``calculate_energy_flows`` (misleading
+# attribution). Sankey/overview flows now come from the timing-aware
+# ``integrate_energy_flows`` (see ``test_flow_integration.py``).
 
 
 # TestAvailablePower and TestEvBudget removed in Phase D.2 (#282) along

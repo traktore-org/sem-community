@@ -766,13 +766,16 @@ class TestUmbrellaStructure:
             "missing in coordinator.py."
         )
 
-    def test_l2_anchor_present_in_flow_calculator(self) -> None:
+    def test_l2_legacy_calculate_energy_flows_is_removed(self) -> None:
+        # Acceptable fix shape #2 (legacy retirement #536): the deprecated
+        # proportional ``calculate_energy_flows`` was removed entirely. The
+        # method must NOT come back — production must use the timing-aware
+        # ``integrate_energy_flows``.
         from pathlib import Path
         fc_path = Path(__file__).parent.parent / "coordinator" / "flow_calculator.py"
         body = fc_path.read_text()
-        # L2 anchors at the legacy method.
-        assert "def calculate_energy_flows" in body, (
-            "Umbrella L2 anchor `calculate_energy_flows` is gone — "
-            "update the test to acknowledge the removal (acceptable "
-            "fix shape #2)."
+        assert "def calculate_energy_flows" not in body, (
+            "Legacy proportional `calculate_energy_flows` reappeared in "
+            "flow_calculator.py — it was removed in #536 (misleading "
+            "attribution). Use `integrate_energy_flows` instead."
         )

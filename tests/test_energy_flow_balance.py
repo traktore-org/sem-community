@@ -397,16 +397,17 @@ class TestEnergyCalculatorIntegration:
         # Calculate energy from power integration
         energy = energy_calculator.calculate_energy(readings)
 
-        # Calculate flows
+        # Calculate flows (instantaneous power flows; the legacy
+        # proportional energy-flow aggregate was removed in #536 — the
+        # timing-aware integrate_energy_flows is covered separately).
         power_flows = flow_calculator.calculate_power_flows(readings)
-        energy_flows = flow_calculator.calculate_energy_flows(energy)
 
         # Verify energy totals exist
         assert energy.daily_solar >= 0
         assert energy.daily_home >= 0
 
-        # Verify energy flows exist
-        assert energy_flows.solar_to_home >= 0
+        # Verify power flows exist
+        assert power_flows.solar_to_home >= 0
 
 
 class TestSensorAvailability:
