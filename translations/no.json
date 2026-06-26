@@ -147,7 +147,7 @@
         "data": {
           "update_interval": "Update Interval (seconds)",
           "battery_priority_soc": "Battery Priority SOC (%)",
-          "min_solar_power": "Minimum Solar Power (W)",
+          "min_solar_power": "Minimum soleffekt — rå PV-produksjon (W)",
           "daily_ev_target": "Daily EV Target (kWh)",
           "battery_assist_max_power": "Battery Assist Max Power (W)",
           "battery_capacity_kwh": "Battery Capacity (kWh)",
@@ -175,7 +175,7 @@
           "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
           "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
-          "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
+          "min_solar_power": "Nedre grense for rå PV-produksjon — paneleffekten der „solen er aktiv“ er usann: solar_only starter ikke, og vernet mot dypt underskudd behandler det som mørke (ladingen stopper altså raskt i stedet for å bygge bro via strømnettet). Dette er RÅ produksjon, IKKE overskudd — i motsetning til „Batteristøtte – min. soloverskudd“ (sol − hjem), som avgjør når hjemmebatteriet kan hjelpe. Standard 1000 W; hold den under EV-laderens maskinvareminimum (~4140 W ved 3-fase, ~1380 W ved 1-fase).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
           "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",

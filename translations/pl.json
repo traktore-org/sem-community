@@ -147,7 +147,7 @@
         "data": {
           "update_interval": "Update Interval (seconds)",
           "battery_priority_soc": "Battery Priority SOC (%)",
-          "min_solar_power": "Minimum Solar Power (W)",
+          "min_solar_power": "Minimalna moc solarna — surowa produkcja PV (W)",
           "daily_ev_target": "Daily EV Target (kWh)",
           "battery_assist_max_power": "Battery Assist Max Power (W)",
           "battery_capacity_kwh": "Battery Capacity (kWh)",
@@ -175,7 +175,7 @@
           "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
           "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
-          "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
+          "min_solar_power": "Dolny próg surowej produkcji PV — moc paneli, poniżej której „słońce jest aktywne” jest fałszem: solar_only nie startuje, a zabezpieczenie przed głębokim deficytem traktuje to jak ciemność (ładowanie szybko się zatrzymuje zamiast mostkować z sieci). To jest SUROWA produkcja, NIE nadwyżka — w przeciwieństwie do „Wsparcie baterii – min. nadwyżka solarna” (słońce − dom), która decyduje, kiedy bateria domowa może pomóc. Domyślnie 1000 W; utrzymuj poniżej minimum sprzętowego ładowarki EV (~4140 W przy 3 fazach, ~1380 W przy 1 fazie).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
           "battery_capacity_kwh": "Total usable home battery capacity (NOT the EV battery — that's a separate field on the EV step). Used by the forecast-driven charging strategy.",

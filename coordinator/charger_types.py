@@ -563,11 +563,13 @@ class FleetContext:
     and ``FlowCalculator.calculate_canonical_ev_budget`` (the two layers
     must agree — the #282 class)."""
 
-    min_solar_w: float = 200.0
-    """Solar below this is treated as "no meaningful solar" — the
-    threshold for skipping the surplus calculation entirely.
-    Same constant as ``_zone_based_strategy`` uses at
-    ``coordinator.py:2709``."""
+    min_solar_w: float = 1000.0
+    """Raw PV below this is treated as "no meaningful solar / sun not
+    up" — the floor that gates solar_only entry and the deep-deficit
+    darkness detector. Default matches DEFAULT_MIN_SOLAR_POWER (1000 W)
+    so the dataclass default agrees with the seeded config default.
+    Distinct from ``battery_assist_min_surplus_w`` (an export-surplus
+    floor, solar − home); this one is raw production."""
 
     forecast_remaining_kwh: float = 0.0
     """Solar forecast remaining today (kWh), dampened by the

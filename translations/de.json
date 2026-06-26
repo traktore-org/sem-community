@@ -147,7 +147,7 @@
         "data": {
           "update_interval": "Aktualisierungsintervall (Sekunden)",
           "battery_priority_soc": "Batterie-Prioritäts-SOC (%)",
-          "min_solar_power": "Minimale Solarleistung (W)",
+          "min_solar_power": "Minimale Solarleistung — reine PV-Erzeugung (W)",
           "daily_ev_target": "Tägliches EV-Ziel (kWh)",
           "battery_assist_max_power": "Batterie-Unterstützung Max. Leistung (W)",
           "battery_assist_min_surplus": "Batterie-Unterstützung Min. Solarüberschuss (W)",
@@ -176,7 +176,7 @@
           "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
           "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
-          "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
+          "min_solar_power": "Untergrenze der reinen PV-Erzeugung — die Modulleistung, unterhalb derer „Solar ist aktiv“ als falsch gilt: solar_only startet nicht und der Tiefdefizit-Schutz behandelt es wie Dunkelheit (das Laden stoppt also schnell, statt mit Netzstrom zu überbrücken). Dies ist die REINE Erzeugung, NICHT der Überschuss — im Gegensatz zu „Batterie-Unterstützung Min. Solarüberschuss“ (Solar − Haus), das entscheidet, wann die Hausbatterie helfen darf. Standard 1000 W; unter dem Hardware-Minimum des Ladegeräts halten (~4140 W 3-phasig, ~1380 W 1-phasig).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
           "battery_assist_min_surplus": "Mindest-Solarüberschuss, bevor die Hausbatterie das E-Auto laden darf — in jedem Lademodus. Darunter bleibt die Batterie dem Haus vorbehalten (das Auto lädt aus Netz + Solar). Standard 1200 W. Auf 0 setzen, damit die Batterie das E-Auto überall unterstützt, auch nachts.",
