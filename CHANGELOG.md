@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.63] — 26.06.2026
+
+> Cleanup: retire the EV-charging diagnostic instrumentation now that #545/#546 are fixed.
+
+### 🧹 Instrumentation retired (#545 / #546)
+- 🧹 The `EV-OFFER-PROBE` reconciler log is **downgraded to DEBUG** (and gated on DEBUG, so it does no per-cycle work on a normal INFO PROD) — it served its purpose pinning the KEBA 6↔9 A flap (#546, fixed). Re-enable with debug logging if a future flap needs re-diagnosing.
+- 🗑️ Removed the observe-only **`sensor.sem_diag_ev_assist_headroom`** diagnostic and its per-cycle computation — instrumentation for the #545 chicken-and-egg, now fixed and closed. (Swept the sensor description + population + strings/15 translations.)
+
 # [1.7.3-beta.62] — 26.06.2026
 
 > The home battery now empties into the EV at high SoC instead of sitting idle.
