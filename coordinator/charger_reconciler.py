@@ -246,20 +246,18 @@ class ChargerReconciler:
         observed = observe(adapter, power)
         actions = self.reconcile(desired, amps, observed, now)
 
-        # ── #546 OFFER-STEADINESS PROBE (observe-only) ───────────────────
-        # The 6↔9 A flap on the KEBA wire makes a steady-needing car (Zoe)
-        # refuse to charge. SEM reads its OWN belief (``observed.setpoint_a``
-        # = ``_current_setpoint``), NOT the hardware, so it is blind to the
-        # box drifting back to its 6 A floor between writes. This logs the
-        # three values side by side every charging cycle so one session
-        # reveals WHO is shaking the hand:
+        # ── #546 OFFER-STEADINESS PROBE (observe-only, DEBUG) ────────────
+        # Diagnostic that pinned the 6↔9 A KEBA flap (#546, now resolved by
+        # the managed-neutralize failsafe + delta-guard). Kept as a DEBUG
+        # tool — logs desired/believed/hardware side by side so a future
+        # flap can be re-diagnosed; gated on DEBUG so it's silent (and does
+        # no per-cycle sensor read) on a normal INFO PROD.
         #   desired  = what SEM wants (this decision)
         #   believed = what SEM thinks it set (drives drift detection)
         #   hardware = the ACTUAL KEBA max_current sensor (ground truth)
         # BLIND_DRIFT = hardware ≠ believed → the box reverted and SEM didn't
-        # see it (Row 6 never fired). MIND_CHANGE = believed ≠ desired → SEM
-        # itself moved the target. No control change — pure telemetry.
-        if desired is DesiredState.CHARGE:
+        # see it. MIND_CHANGE = believed ≠ desired → SEM moved the target.
+        if desired is DesiredState.CHARGE and _LOGGER.isEnabledFor(logging.DEBUG):
             try:
                 _dev = getattr(adapter, "_device", None)
                 # LIVE offered current from the configured current sensor
@@ -284,7 +282,7 @@ class ChargerReconciler:
                     _tags.append(f"BLIND_DRIFT(hw{int(_hw)}≠belief{observed.setpoint_a})")
                 if int(observed.setpoint_a) != int(amps):
                     _tags.append(f"MIND_CHANGE(belief{observed.setpoint_a}≠desired{amps})")
-                _LOGGER.info(
+                _LOGGER.debug(
                     "EV-OFFER-PROBE(%s): desired=%dA believed=%dA hardware=%sA "
                     "drawn=%.0fW charging=%s failsafe=%s actions=%s %s",
                     self.charger_id, int(amps), int(observed.setpoint_a),
