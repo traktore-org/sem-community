@@ -750,6 +750,13 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
     HOME_HOLD_MAX_CYCLES = 10                  # ~100 s @ 10 s coordinator cycle
     HOME_HOLD_INCONSISTENT_MAX = 30            # ~5 min when raw balance is strongly negative
     SENSOR_INCONSISTENCY_THRESHOLD_W = -100.0  # raw_balance < this = guaranteed stale sensor
+    # Spike guard (symmetric to the dip hold): a fast EV load ramp makes the
+    # grid meter lead the KEBA ev_power sensor by a cycle, so home transiently
+    # inflates by ~the EV draw. A one-cycle jump above last + this threshold is
+    # treated as that lag and the last value is held — keeps the battery
+    # discharge-protection limit (home/n) from briefly over-allowing discharge.
+    HOME_SPIKE_THRESHOLD_W = 2000.0            # >2 kW one-cycle jump = likely sensor lag
+    HOME_HOLD_SPIKE_MAX = 2                    # hold at most 2 cycles; a real rise is then accepted
 
     def _smooth_home_consumption(self, power) -> None:
         """Hold the last positive home-consumption value through transient dips to 0 (#237, #444).
@@ -777,6 +784,34 @@ class SEMCoordinator(DataUpdateCoordinator, EVControlMixin, BatteryProtectionMix
         # must not count those cycles as violations.
         self._home_hold_active = False
         if power.home_consumption_power > 0:
+            last = getattr(self, "_last_home_consumption", 0.0)
+            held = getattr(self, "_home_hold_count", 0)
+            # Upward-spike guard (symmetric to the dip hold below). A fast EV
+            # load ramp makes the grid meter register the car's draw a cycle
+            # before the KEBA ev_power sensor does, so ``grid_import`` counts
+            # the car while ``ev`` doesn't → home inflates by ~the EV draw for
+            # 1-2 cycles. That would inflate the discharge-protection limit
+            # (home/n) and briefly let the inverter feed the battery into the
+            # car below the buffer (PROD 2026-06-26, always_max ramp: limit
+            # spiked to 9213 W). Hold the last good value through the brief
+            # spike; a genuine, persistent rise (an appliance) is accepted
+            # once the short hold window expires.
+            if (
+                last > 0
+                and power.home_consumption_power > last + self.HOME_SPIKE_THRESHOLD_W
+                and held < self.HOME_HOLD_SPIKE_MAX
+            ):
+                self._home_hold_count = held + 1
+                self._home_hold_active = True
+                _spike = power.home_consumption_power
+                power.home_consumption_power = last
+                _LOGGER.debug(
+                    "Home consumption spike %.0fW (> last %.0fW + %.0f) — "
+                    "holding %.0fW (%d/%d) — likely EV/grid sensor lag",
+                    _spike, last, self.HOME_SPIKE_THRESHOLD_W, last,
+                    self._home_hold_count, self.HOME_HOLD_SPIKE_MAX,
+                )
+                return
             self._last_home_consumption = power.home_consumption_power
             self._home_hold_count = 0
             return

@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.65] — 26.06.2026
+
+> Hardens the battery-protection limit against an EV-ramp sensor-lag spike.
+
+### 🔋 Battery — spike-proof the discharge-protection limit (#536)
+- 🐛 **A fast EV load ramp could briefly over-allow battery discharge.** When the car ramps hard (e.g. `always_max` to 10 kW), the grid meter registers the import a cycle before the KEBA `ev_power` sensor reports the draw, so the energy-balance `home_consumption_power` transiently inflates by ~the car's draw (seen on PROD: spiked to 9213 W). Since the discharge-protection clamp limits the battery to the home load, that spike briefly raised the limit and let the inverter feed a little battery into the car below the buffer. `_smooth_home_consumption` now has a **symmetric upward-spike guard** (it already held the *dip* direction): a one-cycle jump above the last value + 2 kW is treated as the EV/grid sensor lag and the last good value is held for up to 2 cycles; a genuine, persistent rise (an appliance) is accepted once the short window expires. (by @guidoeberle in #536)
+
 # [1.7.3-beta.64] — 26.06.2026
 
 > The battery now stops feeding the EV at the buffer SoC floor — cleanly.
