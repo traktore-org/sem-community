@@ -75,15 +75,6 @@ NUMBER_TYPES = [
         native_step=5,
         mode=NumberMode.SLIDER,
     ),
-    NumberEntityDescription(
-        # Hard stop: SOC below this halts EV charging entirely (safety).
-        key="battery_minimum_soc",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=5,
-        native_max_value=50,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-    ),
     # SOC Zone Thresholds
     NumberEntityDescription(
         key="battery_buffer_soc",
@@ -98,14 +89,6 @@ NUMBER_TYPES = [
         native_unit_of_measurement=PERCENTAGE,
         native_min_value=70,
         native_max_value=100,
-        native_step=5,
-        mode=NumberMode.SLIDER,
-    ),
-    NumberEntityDescription(
-        key="battery_assist_floor_soc",
-        native_unit_of_measurement=PERCENTAGE,
-        native_min_value=30,
-        native_max_value=80,
         native_step=5,
         mode=NumberMode.SLIDER,
     ),
@@ -650,7 +633,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         from .const import (
             DEFAULT_UPDATE_INTERVAL,
             DEFAULT_BATTERY_PRIORITY_SOC,
-            DEFAULT_BATTERY_MINIMUM_SOC,
             DEFAULT_MIN_SOLAR_POWER,
             DEFAULT_DAILY_EV_TARGET,
             DEFAULT_BATTERY_ASSIST_MAX_POWER,
@@ -670,7 +652,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
         defaults = {
             "update_interval": DEFAULT_UPDATE_INTERVAL,
             "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
-            "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
             "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
             "daily_ev_target": DEFAULT_DAILY_EV_TARGET,
             # Ceiling defaults to full (charge freely from sun until capped) (#245)
@@ -698,7 +679,6 @@ class SEMNumberEntity(CoordinatorEntity, NumberEntity):
             "electricity_export_rate": 0.075,
             "battery_buffer_soc": 70,
             "battery_auto_start_soc": 90,
-            "battery_assist_floor_soc": 60,
             "battery_capacity": DEFAULT_BATTERY_CAPACITY_KWH,
             "night_earliest_start": 20.5,
             "night_latest_end": 7.0,

@@ -163,42 +163,11 @@ def test_priority_allocation(calc):
 
 
 # ──────────────────────────────────────────────
-# Energy flow tests
+# ``test_calculate_energy_flows`` / ``..._empty`` removed in the legacy
+# retirement (#536): the deprecated proportional ``calculate_energy_flows``
+# they exercised is gone. Timing-aware energy flows are covered by the
+# ``integrate_energy_flows`` tests in ``test_flow_integration.py``.
 # ──────────────────────────────────────────────
-
-def test_calculate_energy_flows(calc):
-    """Test energy flow calculation from daily energy totals."""
-    energy = EnergyTotals(
-        daily_solar=10.0,
-        daily_grid_import=3.0,
-        daily_battery_discharge=2.0,
-        daily_home=8.0,
-        daily_ev=3.0,
-        daily_battery_charge=2.0,
-        daily_grid_export=2.0,
-    )
-    flows = calc.calculate_energy_flows(energy)
-
-    # Total demand = 8 + 3 + 2 + 2 = 15
-    # Solar splits: home_pct = 8/15
-    assert flows.solar_to_home > 0
-    assert flows.solar_to_grid > 0
-
-    # Energy balance: solar flows should sum to ~solar total
-    total_solar = (
-        flows.solar_to_home + flows.solar_to_ev +
-        flows.solar_to_battery + flows.solar_to_grid
-    )
-    # Proportional allocation may not perfectly sum due to rounding
-    assert total_solar == pytest.approx(10.0, abs=1.0)
-
-
-def test_calculate_energy_flows_empty(calc):
-    """Test energy flows with zero totals."""
-    energy = EnergyTotals()
-    flows = calc.calculate_energy_flows(energy)
-    assert flows.solar_to_home == 0.0
-    assert flows.grid_to_home == 0.0
 
 
 # ──────────────────────────────────────────────

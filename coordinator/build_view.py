@@ -139,7 +139,6 @@ def build_charger_view(
         auto_start_soc=float(config.get("battery_auto_start_soc", 90)),
         buffer_soc=float(config.get("battery_buffer_soc", 70)),
         priority_soc=float(config.get("battery_priority_soc", 30)),
-        battery_assist_floor_soc=float(config.get("battery_assist_floor_soc", 60)),
         battery_capacity_kwh=float(config.get("battery_capacity_kwh", 15)),
         battery_assist_max_power_w=float(config.get(
             "battery_assist_max_power",
@@ -152,13 +151,14 @@ def build_charger_view(
         forecast_remaining_kwh=fleet_state.forecast_remaining_kwh,
         # The user's "Minimum Solar Power" slider (number entity key
         # ``minimum_solar_power``) — the floor below which solar_only won't
-        # charge and the deep-deficit guard treats solar as "none". Was never
-        # wired in, so decide()/charge_stability always saw the 200 W default
-        # regardless of the slider. Honour the configured value; keep the 200 W
-        # fallback so a config without the key is unchanged.
+        # charge and the deep-deficit guard treats solar as "none". The
+        # fallback matches the seeded default (DEFAULT_MIN_SOLAR_POWER =
+        # 1000 W) so a legacy config missing the key gates the same as a
+        # fresh install — fixes the old 200-vs-1000 inconsistency where a
+        # keyless config silently used 200 W.
         min_solar_w=float(
             config.get("minimum_solar_power",
-                       config.get("min_solar_power", 200))
+                       config.get("min_solar_power", 1000))
         ),
     )
 

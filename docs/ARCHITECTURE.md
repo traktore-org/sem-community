@@ -312,16 +312,15 @@ SOC  0%  ───────────────────────�
 
 **Zone 4 — Full Assist** (SOC >= 90%): Full battery assist (default 4500W). EV starts even without surplus.
 
-**Hysteresis**: Once battery-assist activates (Zone 3/4), it stays active down to `battery_assist_floor_soc` (default 60%) to prevent cycling.
+**Assist floor**: Battery assist is off-limits below `battery_buffer_soc` (default 70%) — the buffer is the single assist floor. (A separate `battery_assist_floor_soc` knob was redundant — assist potential is already 0 below the buffer — and has been removed.)
 
 ### SOC Zone Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `battery_priority_soc` | 30% | Below: all solar to battery, EV blocked |
-| `battery_buffer_soc` | 70% | Above: battery can discharge for EV |
+| `battery_buffer_soc` | 70% | Above: battery can discharge for EV (assist floor) |
 | `battery_auto_start_soc` | 90% | Above: start EV without surplus |
-| `battery_assist_floor_soc` | 60% | Hysteresis floor for battery assist |
 | `battery_assist_max_power` | 4500W | Max battery discharge for EV |
 
 ---
@@ -568,7 +567,7 @@ discharge. The assist component uses the measured discharge if the
 battery is already discharging ≥ 100 W, otherwise estimates a
 proportional ramp `(battery_soc − battery_buffer_soc) / (auto_start_soc
 − battery_buffer_soc) × battery_assist_max_power_w` scaled to 50–100 %
-of max. Below `battery_assist_floor_soc` (default 60 %) the assist is
+of max. Below `battery_buffer_soc` (default 70 %) the assist is
 zero. **Note**: proportional flow attribution may transiently show a
 small `flow_grid_to_ev_power` during the battery's discharge ramp-up
 window (LFP BMSes take seconds to ramp). That's the physics of the

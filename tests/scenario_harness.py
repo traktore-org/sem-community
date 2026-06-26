@@ -259,7 +259,6 @@ def _build_coordinator(scenario: Dict[str, Any]):
         "battery_buffer_soc": 70,
         "battery_auto_start_soc": 90,
         "battery_priority_soc": 30,
-        "battery_assist_floor_soc": 60,
         "ev_charging_mode": "auto",
         "ev_min_current": 6,
         "ev_max_current": 16,

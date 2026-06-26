@@ -52,7 +52,6 @@ def config():
         "ev_power_sensor": "sensor.keba_p30_charging_power",
         "ev_plug_sensor": "binary_sensor.keba_p30_plug",
         "ev_charging_sensor": "binary_sensor.keba_p30_charging_state",
-        "battery_minimum_soc": 20,
         "battery_priority_soc": 80,
         "daily_ev_target": 10,
         "electricity_import_rate": 0.30,

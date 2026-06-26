@@ -22,12 +22,10 @@ DATABASE_PROTECTION_AGGRESSIVE: Final = 3  # Essential sensors only, max delays
 # BATTERY MANAGEMENT DEFAULTS
 # ============================================
 DEFAULT_BATTERY_PRIORITY_SOC: Final = 30  # % - SOC zone floor: below this, all solar → battery, EV blocked
-DEFAULT_BATTERY_MINIMUM_SOC: Final = 20  # % - Hard stop: SOC below this halts EV charging entirely
 DEFAULT_BATTERY_SAFETY_SOC: Final = 60  # % - Safety threshold for discharge calculations
 # 4-zone SOC strategy thresholds (see docs/ARCHITECTURE.md "SOC Zone Strategy")
 DEFAULT_BATTERY_BUFFER_SOC: Final = 70  # % - Above: battery can discharge to help the EV (Zone 3 begins)
 DEFAULT_BATTERY_AUTO_START_SOC: Final = 90  # % - Above: EV starts even without solar surplus (Zone 4)
-DEFAULT_BATTERY_ASSIST_FLOOR_SOC: Final = 60  # % - Hysteresis floor for battery assist (drop-out below this)
 
 # Battery Discharge Protection
 DEFAULT_BATTERY_DISCHARGE_PROTECTION_ENABLED: Final = True  # Enable discharge protection during night charging

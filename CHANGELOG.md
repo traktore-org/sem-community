@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > `(by @author in #PR)` attribution. Older entries (≤ beta.13) stay in the
 > prose-paragraph style they were written in.
 
+# [1.7.3-beta.59] — 26.06.2026
+
+> EV-decision coherence: the overnight battery-drain root cause is fixed, and a
+> verify-first audit retired/clarified the confusing knobs around it. Live-confirmed
+> on PROD (KEBA P30 + Renault Zoe) across all four charging modes.
+
+### 🔋 Battery — overnight drain root cause (#536)
+- 🐛 **The home battery drained overnight to feed the EV** (PROD 93→41 %). The discharge-protection clamp gated on the *instantaneous* draw flag (`ev_charging`), which a bursty car (Renault Zoe) toggles on/off every few seconds — so the clamp dropped in the gaps, the battery discharged freely, and that energy fed the next pull. The clamp now gates on **`ev_connected`** (vehicle plugged in), so it **holds steady** through the car's pulses. Live-verified: `battery→ev = 0 W` in every solar mode all afternoon. (by @guidoeberle in #536)
+
+### 🧹 Config — verify-first knob cleanup (#536)
+- 🧹 **Removed three dead/redundant battery knobs** after auditing each live (two of the original four turned out to be live and were handled, not blindly cut): `battery_minimum_soc` (labelled "hard stop" but never gated discharge — its only live use, the empty-ETA, now references the real floor `battery_priority_soc`), `battery_assist_floor_soc` (shadowed by `buffer_soc` — folded in as the single assist floor), and the comment-only `battery_hold_solar_ev`. (by @guidoeberle in #536)
+- 🐛 **Fixed the `minimum_solar_power` default inconsistency** — a legacy config missing the key silently used 200 W while a fresh install seeded 1000 W; the fallback now matches the seeded default. (by @guidoeberle in #536)
+- 📝 **Corrected the misleading "Surplus floor" help text** — `minimum_solar_power` gates **raw PV production** ("is the sun up"), distinct from `battery_assist_min_surplus` (export surplus); clarified in English + 15 translations. The two were *not* collapsed — they measure different quantities and both feed the #461 deep-deficit logic. (by @guidoeberle in #536)
+
+### 🗑️ Internal — legacy retirement, stage 1 (#536)
+- 🗑️ Removed the deprecated proportional `FlowCalculator.calculate_energy_flows` (zero production callers since #282; the timing-aware `integrate_energy_flows` is canonical). (by @guidoeberle in #536)
+
+**Thanks** to @guidoeberle for the PROD live-testing across all four charging modes.
+
 # [1.7.3-beta.58] — 26.06.2026
 
 > Steady EV charging — live-confirmed on a real KEBA P30 + Renault Zoe: the

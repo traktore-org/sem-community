@@ -147,8 +147,7 @@
         "data": {
           "update_interval": "Update-interval (seconden)",
           "battery_priority_soc": "Batterij prioriteit SOC (%)",
-          "battery_minimum_soc": "Minimale batterij SOC (%)",
-          "min_solar_power": "Minimaal zonnevermogen (W)",
+          "min_solar_power": "Minimaal zonnevermogen — ruwe PV-productie (W)",
           "daily_ev_target": "Dagelijkse EV-doel (kWh)",
           "battery_assist_max_power": "Maximaal batterij-ondersteuningsvermogen (W)",
           "battery_assist_min_surplus": "Min. zonne-overschot voor batterij-ondersteuning (W)",
@@ -166,7 +165,6 @@
           "ev_target_soc": "EV doel SOC (%)",
           "battery_buffer_soc": "Zone 2/3 grens — batterijbuffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 grens — batterij auto-start SOC (%)",
-          "battery_assist_floor_soc": "Batterij ondersteuning hysterese ondergrens (%)",
           "battery_discharge_control_entity": "Batterij ontladingsregel-entiteit (optioneel)",
           "hot_water_solar_target": "Doeltemperatuur zonneboiler (°C)",
           "legionella_target_temp": "Legionella desinfectie doeltemperatuur (°C)",
@@ -178,8 +176,7 @@
           "battery_priority_soc": "Grens tussen zone 1 en zone 2. Onder deze SOC gaat alle zonne-energie naar de batterij en wordt de EV geblokkeerd. Standaard 30%. De vierzone-strategie vereist dat deze waarde LAAG is (5–60%) — verwar dit niet met de oude 3-zonebetekenis waarbij dit een hoge doelwaarde was.",
           "battery_buffer_soc": "Grens tussen zone 2 en zone 3. Boven deze SOC mag de batterij ontladen om tekorten in zonne-energie op te vangen terwijl de EV wordt geladen. Standaard 70%.",
           "battery_auto_start_soc": "Grens tussen zone 3 en zone 4. Boven deze SOC kan de EV beginnen met laden, zelfs zonder zonne-overschot, gebruikmakend van de batterij. Standaard 90%.",
-          "battery_assist_floor_soc": "Hysterese-ondergrens — zodra batterijondersteuning actief is, blijft deze actief totdat de SOC onder deze waarde zakt. Standaard 60%.",
-          "min_solar_power": "Ondergrens voor overschot waarbij laden van de EV op zonne-energie niet wordt gestart. Houd dit ruim onder het minimum van de EV-lader (~4140 W bij 3-fase, ~1380 W bij 1-fase).",
+          "min_solar_power": "Ondergrens voor ruwe PV-productie — het paneelvermogen waaronder 'zon is actief' onwaar is: solar_only start niet en de diepe-tekort-bewaking behandelt het als duisternis (laden stopt dus snel in plaats van te overbruggen op het net). Dit is RUWE productie, GEEN overschot — in tegenstelling tot 'Min. zonne-overschot voor batterij-ondersteuning' (zon − huis), dat bepaalt wanneer de thuisbatterij mag helpen. Standaard 1000 W; houd dit onder het hardware-minimum van de EV-lader (~4140 W bij 3-fase, ~1380 W bij 1-fase).",
           "daily_ev_target": "Doelwaarde kWh per dag voor nachtelijk laden via het net. Zet op 0 om nachtelijk laden volledig uit te schakelen.",
           "battery_assist_max_power": "Maximaal vermogen dat de thuisbatterij kan ontladen om de EV te ondersteunen in zone 3/4. Standaard 4500 W.",
           "battery_assist_min_surplus": "Minimaal echt zonne-overschot voordat de thuisbatterij de EV mag helpen laden — in elke laadmodus. Daaronder blijft de batterij voor het huis (de auto laadt uit net + zon). Standaard 1200 W. Zet op 0 om de batterij de EV overal te laten ondersteunen, ook 's nachts.",
@@ -1014,9 +1011,6 @@
       "battery_priority_soc": {
         "name": "Batterij Prioriteits-SOC"
       },
-      "battery_minimum_soc": {
-        "name": "Batterij Minimum-SOC"
-      },
       "minimum_solar_power": {
         "name": "Minimum Zonne-vermogen"
       },
@@ -1064,9 +1058,6 @@
       },
       "battery_auto_start_soc": {
         "name": "Batterij Auto-start-SOC"
-      },
-      "battery_assist_floor_soc": {
-        "name": "Batterij Ondersteuning Min-SOC"
       },
       "battery_capacity_kwh": {
         "name": "Batterij capaciteit"

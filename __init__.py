@@ -470,7 +470,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             from .consts.core import (
                 DEFAULT_BATTERY_BUFFER_SOC,
                 DEFAULT_BATTERY_AUTO_START_SOC,
-                DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
             )
 
             new_data = {**accumulated_data}
@@ -493,7 +492,6 @@ async def async_migrate_entry(hass: HomeAssistant, entry: SEMConfigEntry) -> boo
             for key, default in (
                 ("battery_buffer_soc", DEFAULT_BATTERY_BUFFER_SOC),
                 ("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
-                ("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
             ):
                 if new_data.get(key) is None:
                     new_data[key] = default
@@ -3575,7 +3573,6 @@ async def _async_register_phase_services(
     # Battery zones
     _DIAGNOSE_BATTERY_ZONES_OPTION = {
         "battery_priority_soc", "battery_buffer_soc", "battery_auto_start_soc",
-        "battery_assist_floor_soc", "battery_minimum_soc",
         "battery_capacity_kwh",
     }
     _DIAGNOSE_BATTERY_ZONES_STATE = {

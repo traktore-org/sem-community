@@ -246,8 +246,7 @@
           "battery_priority_soc": "Zone 1 ceiling — Battery priority SOC (%)",
           "battery_buffer_soc": "Zone 2/3 boundary — Battery buffer SOC (%)",
           "battery_auto_start_soc": "Zone 3/4 boundary — Battery auto-start SOC (%)",
-          "battery_assist_floor_soc": "Battery assist hysteresis floor (%)",
-          "min_solar_power": "Minimum solar power threshold (W)",
+          "min_solar_power": "Minimum solar power — raw PV production (W)",
           "daily_ev_target": "Daily EV charge target (kWh)",
           "battery_assist_max_power": "Battery assist maximum power (W)",
           "battery_assist_min_surplus": "Battery assist minimum solar surplus (W)",
@@ -271,8 +270,7 @@
           "battery_priority_soc": "Zone 1 → Zone 2 boundary. Below this SOC all solar goes to the battery and the EV is blocked. Default 30 %. The four-zone strategy (Architecture docs) needs this LOW (5–60 %) — do NOT confuse with the legacy 3-zone meaning where this was a high target.",
           "battery_buffer_soc": "Zone 2 → Zone 3 boundary. Above this SOC the battery may discharge to bridge solar deficits while charging the EV. Default 70 %.",
           "battery_auto_start_soc": "Zone 3 → Zone 4 boundary. Above this SOC the EV can start charging even with no solar surplus, drawing from the battery. Default 90 %.",
-          "battery_assist_floor_soc": "Hysteresis floor — once battery assist is active, it stays active until SOC drops below this value. Default 60 %.",
-          "min_solar_power": "Surplus floor below which solar EV charging will not even attempt to start. Keep well below the EV charger's hardware minimum (~4140 W on 3-phase, ~1380 W on 1-phase).",
+          "min_solar_power": "Raw PV-production floor — the panel output below which 'solar is up' is false: solar_only won't start and the deep-deficit guard treats it as darkness (so charging stops quickly instead of bridging on grid). This is RAW production, NOT surplus — contrast 'Battery assist minimum solar surplus' (solar − home), which decides when the home battery may help. Default 1000 W; keep below the EV charger's hardware minimum (~4140 W 3-phase, ~1380 W 1-phase).",
           "daily_ev_target": "Target kWh per day for night-grid charging. Set to 0 to disable night charging entirely.",
           "battery_assist_max_power": "Maximum power the home battery can discharge to assist the EV in Zone 3/4. Default 4500 W.",
           "battery_assist_min_surplus": "Minimum real solar surplus before the home battery may help charge the EV — in any charging mode. Below this the battery is reserved for the house (the car draws from grid + solar). Default 1200 W. Set to 0 to let the battery support the EV everywhere, including overnight.",
@@ -1035,9 +1033,6 @@
       "battery_priority_soc": {
         "name": "Battery Priority SOC (Zone 1 floor)"
       },
-      "battery_minimum_soc": {
-        "name": "Battery Minimum SOC"
-      },
       "minimum_solar_power": {
         "name": "Minimum Solar Power"
       },
@@ -1115,9 +1110,6 @@
       },
       "battery_auto_start_soc": {
         "name": "Battery Auto Start SOC"
-      },
-      "battery_assist_floor_soc": {
-        "name": "Battery Assist Floor SOC"
       },
       "battery_capacity": {
         "name": "Battery Capacity"

@@ -39,7 +39,6 @@ def config():
     return {
         "daily_ev_target": 7.0,
         "battery_priority_soc": 90,
-        "battery_minimum_soc": 30,
         "minimum_solar_power": 2400,
         "current_delta": 1,
         "ev_chargers": [

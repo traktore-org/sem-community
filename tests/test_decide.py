@@ -156,7 +156,9 @@ class TestSolarOnlyMode:
     def test_solar_only_low_solar_is_idle(self):
         d = decide(_view(mode="solar_only", solar_w=100))
         assert d.intent is ChargerIntent.IDLE
-        assert "200W threshold" in d.reason
+        # Default min_solar_w now matches the seeded DEFAULT_MIN_SOLAR_POWER
+        # (1000 W) — was 200 W before the keyless-fallback fix (#536).
+        assert "1000W threshold" in d.reason
 
     def test_solar_only_high_solar_charges(self):
         """Solar = 8 kW, home = 500 W, no battery charge → surplus

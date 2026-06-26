@@ -375,12 +375,20 @@ class BatteryView:
     """Current SEM ChargingState (string form). Drives the
     LIMIT_DISCHARGE gate (active iff NIGHT_CHARGING_ACTIVE)."""
     ev_charging: bool
-    """Whether any charger in the fleet is currently drawing.
-    Combined with ``charging_state == NIGHT_CHARGING_ACTIVE`` for
-    the protection gate."""
+    """Whether any charger in the fleet is currently *drawing* power.
+    This flag flaps with bursty cars (e.g. a Renault Zoe that pulses
+    on/off), so it is NOT used alone to gate the discharge protection
+    — see ``ev_connected``."""
     home_consumption_w: float
     """Used as the discharge limit when LIMIT_DISCHARGE fires
     (the 1:1 protection)."""
+    ev_connected: bool = False
+    """Whether any charger in the fleet has a vehicle plugged in
+    (cable connected), regardless of whether it is drawing right now.
+    The discharge-protection gate keys off this so the clamp HOLDS
+    steady through a bursty car's on/off pulses instead of flickering
+    with ``ev_charging`` — which would let the battery drain between
+    bursts and then feed the next pull. See decide_battery."""
     scheduler_decision: "Any" = None
     """The output of today's ``BatteryChargeScheduler.evaluate()``.
     Typed as ``Any`` so importing scheduler types in this module
@@ -535,7 +543,6 @@ class FleetContext:
     auto_start_soc: float = 90.0
     buffer_soc: float = 70.0
     priority_soc: float = 30.0
-    battery_assist_floor_soc: float = 60.0
     battery_capacity_kwh: float = 15.0
 
     battery_assist_max_power_w: float = 4500.0
@@ -556,11 +563,13 @@ class FleetContext:
     and ``FlowCalculator.calculate_canonical_ev_budget`` (the two layers
     must agree — the #282 class)."""
 
-    min_solar_w: float = 200.0
-    """Solar below this is treated as "no meaningful solar" — the
-    threshold for skipping the surplus calculation entirely.
-    Same constant as ``_zone_based_strategy`` uses at
-    ``coordinator.py:2709``."""
+    min_solar_w: float = 1000.0
+    """Raw PV below this is treated as "no meaningful solar / sun not
+    up" — the floor that gates solar_only entry and the deep-deficit
+    darkness detector. Default matches DEFAULT_MIN_SOLAR_POWER (1000 W)
+    so the dataclass default agrees with the seeded config default.
+    Distinct from ``battery_assist_min_surplus_w`` (an export-surplus
+    floor, solar − home); this one is raw production."""
 
     forecast_remaining_kwh: float = 0.0
     """Solar forecast remaining today (kWh), dampened by the

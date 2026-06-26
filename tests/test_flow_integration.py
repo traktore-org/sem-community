@@ -65,19 +65,19 @@ class TestIntegrateEnergyFlows:
         assert abs(result.battery_to_ev - 0.333) < 0.005
         assert result.grid_to_ev == 0.0
 
-    def test_legacy_proportional_allocation_diverges_from_integration(self):
-        """Pin the bug-and-fix: with the EV unplugged in the morning and
-        a brief afternoon session, the legacy ``calculate_energy_flows``
-        credits solar to EV proportionally to daily totals — inflating the
-        attribution. The new method does NOT.
+    def test_integration_does_not_inflate_solar_to_ev(self):
+        """Pin the fix: with the EV unplugged in the morning and a brief
+        afternoon session, the timing-aware ``integrate_energy_flows``
+        credits the EV ZERO solar (the sun went to the grid at noon while
+        the EV was idle). The old proportional ``calculate_energy_flows``
+        used to inflate this by spreading daily totals by demand ratio —
+        that method has been removed (legacy retirement #536); this test
+        now pins only the correct integrated behaviour.
 
         This is the user-reported scenario behind #282."""
-        from custom_components.solar_energy_management.coordinator.types import (
-            EnergyTotals,
-        )
         fc = FlowCalculator()
 
-        # Step 1: morning — 50 kWh solar export, no EV
+        # Step 1: morning — solar export, no EV
         morning = PowerFlows()
         morning.solar_to_grid = 5000.0  # would integrate to 5 kWh per hour
         # 1 hour at 5 kW
@@ -98,25 +98,6 @@ class TestIntegrateEnergyFlows:
         # Battery+grid took the EV load
         assert integrated.battery_to_ev > 3.9    # 8 kW * 0.5 h = 4 kWh
         assert integrated.grid_to_ev > 0.9       # 2 kW * 0.5 h = 1 kWh
-
-        # Legacy method called with the SAME daily totals would inflate
-        # solar→ev. Build EnergyTotals from the same integration:
-        legacy = fc.calculate_energy_flows(EnergyTotals(
-            daily_solar=5.0,           # the 1h export
-            daily_grid_import=1.0,     # the EV grid sip
-            daily_battery_discharge=4.0,  # the EV battery feed
-            daily_home=0.0,
-            daily_ev=5.0,              # total EV intake
-            daily_battery_charge=0.0,
-            daily_grid_export=4.99,    # almost all of the morning solar
-        ))
-        # The legacy proportional formula spreads solar across EV + export by
-        # demand ratio (ev / (ev + export)) ≈ 5/(5+4.99) ≈ 0.5. So legacy
-        # claims ~2.5 kWh solar→ev — fictional, the EV got 0 kWh of direct
-        # solar in this scenario.
-        assert legacy.solar_to_ev > 1.5  # legacy says > 1.5 kWh
-        # And the new method says 0.
-        assert integrated.solar_to_ev < 0.1
 
 
 class TestFlowAccumulatorPersistence:

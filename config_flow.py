@@ -17,10 +17,8 @@ from .const import (
     DOMAIN,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_BATTERY_PRIORITY_SOC,
-    DEFAULT_BATTERY_MINIMUM_SOC,
     DEFAULT_BATTERY_BUFFER_SOC,
     DEFAULT_BATTERY_AUTO_START_SOC,
-    DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
     DEFAULT_MIN_SOLAR_POWER,
     DEFAULT_DAILY_EV_TARGET,
     DEFAULT_BATTERY_ASSIST_MAX_POWER,
@@ -472,11 +470,6 @@ class SolarEnergyManagementConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "battery_priority_soc": DEFAULT_BATTERY_PRIORITY_SOC,
             "battery_buffer_soc": DEFAULT_BATTERY_BUFFER_SOC,
             "battery_auto_start_soc": DEFAULT_BATTERY_AUTO_START_SOC,
-            "battery_assist_floor_soc": DEFAULT_BATTERY_ASSIST_FLOOR_SOC,
-            # Legacy 3-zone hard-stop / resume — kept for the safety gates
-            # in coordinator.py that haven't been migrated to the 4-zone
-            # strategy yet (battery_too_low check, hysteresis resume).
-            "battery_minimum_soc": DEFAULT_BATTERY_MINIMUM_SOC,
             # Solar / power gates
             "minimum_solar_power": DEFAULT_MIN_SOLAR_POWER,
             # Daily target & battery assist
@@ -1395,12 +1388,6 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     default=_c("battery_auto_start_soc", DEFAULT_BATTERY_AUTO_START_SOC),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=70, max=100, step=5, unit_of_measurement="%", mode="slider")
-                ),
-                vol.Optional(
-                    "battery_assist_floor_soc",
-                    default=_c("battery_assist_floor_soc", DEFAULT_BATTERY_ASSIST_FLOOR_SOC),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(min=30, max=80, step=5, unit_of_measurement="%", mode="slider")
                 ),
                 vol.Optional(
                     "battery_capacity_kwh",

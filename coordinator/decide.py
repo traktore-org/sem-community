@@ -165,7 +165,6 @@ def battery_assist_budget_w(view: ChargerView) -> float:
         return surplus
     potential = battery_assist_potential_w(
         f.battery_soc,
-        f.battery_assist_floor_soc,
         f.buffer_soc,
         f.auto_start_soc,
         f.battery_assist_max_power_w,
