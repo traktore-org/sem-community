@@ -129,15 +129,18 @@ def battery_assist_budget_w(view: ChargerView) -> float:
     home battery is high enough (Zone 3 or 4), it can discharge to
     bridge the gap between solar surplus and EV demand.
 
-    #501: the assist component is the shared SOC-based POTENTIAL
+    The assist component is the shared SOC-based POTENTIAL
     (``flow_calculator.battery_assist_potential_w``) — capped by the
-    user's ``battery_assist_max_power``, zeroed below the assist
-    floor SOC, and bounded to the GAP between surplus and the
-    charger minimum. Assist exists to make the min current
-    *reachable* when surplus falls just short (scenario-matrix row 4:
-    "battery assists, tops up to EV minimum") — never to boost past
-    surplus, which would cycle the battery for no self-consumption
-    gain.
+    user's ``battery_assist_max_power`` and zeroed below the buffer SOC.
+
+    #545 / "max out till self-consumption": in the assist band (Zone 3/4,
+    SOC >= buffer, surplus past the solar gate) the FULL potential is
+    offered — the inverter discharges the battery into the car down to the
+    buffer (the self-consumption reserve floor). The potential ramps with
+    SOC (full at auto_start, 0.5x at buffer, 0 below), so the discharge
+    self-tapers toward the floor and never crosses it. This supersedes the
+    #501 "top up to EV minimum only" cap, which left a full battery idle
+    while the EV grid-charged (the #545 chicken-and-egg).
 
     The pre-#501 formula added ``f.battery_discharge_w`` (the
     battery's TOTAL measured discharge, house share included), which
@@ -169,14 +172,24 @@ def battery_assist_budget_w(view: ChargerView) -> float:
         f.auto_start_soc,
         f.battery_assist_max_power_w,
     )
-    cfg = view.config if isinstance(view.config, dict) else {}
-    min_power_w = (
-        effective_min_amps(cfg, 6)
-        * int(cfg.get("ev_phases", 3))
-        * int(cfg.get("ev_voltage", 230))
-    )
-    gap_w = max(0.0, min_power_w - surplus)
-    return surplus + min(potential, gap_w)
+    # #545 / "max out till self-consumption" (user 2026-06-26): once past
+    # the solar gate and in the assist band (Zone 3/4, SOC >= buffer),
+    # OFFER THE FULL assist potential — let the inverter discharge the
+    # battery into the car all the way down to the buffer (the
+    # self-consumption reserve floor), not just enough to reach the EV
+    # minimum. This raises the offered amps so the car draws more and the
+    # otherwise-idle/exporting battery empties into the car, avoiding a
+    # grid night-charge (#545 chicken-and-egg, observed live: a full
+    # battery sat idle while the EV grid-charged). The potential
+    # self-tapers as SOC falls toward the buffer (the ramp in
+    # battery_assist_potential_w) and zeroes below it (zone < 3 returns
+    # surplus above), so the battery is never drained past the
+    # self-consumption floor. Solar-gated (real surplus required); pure
+    # amps — SEM issues no battery command, the actuator clamps to the
+    # charger max. Supersedes the #501 "top up to EV minimum only" cap.
+    # Confirmed live 2026-06-26 that the car follows a higher offer
+    # (Zoe: 8A→3.4kW vs 10A→5.3kW).
+    return surplus + potential
 
 
 def _relabel(decision: ChargerDecision, mode: str, prefix: str) -> ChargerDecision:

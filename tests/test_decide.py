@@ -26,6 +26,7 @@ from custom_components.solar_energy_management.coordinator.charger_types import 
 from custom_components.solar_energy_management.coordinator.decide import (
     MODE_STRATEGIES,
     amps_from_watts,
+    battery_assist_budget_w,
     decide,
     self_consumption_surplus_w,
     soc_zone,
@@ -76,6 +77,45 @@ def _view(
         night_deliverable_kwh=night_deliverable_kwh,
         soc_ceiling_reached=soc_ceiling_reached,
     )
+
+
+class TestMaxOutTillSelfConsumption545:
+    """#545 — at high SOC, offer the FULL battery-assist potential so the
+    battery empties into the car down to the buffer (self-consumption
+    floor), not just enough to reach the EV minimum. ("Max out till
+    self-consumption", user 2026-06-26.)
+    """
+
+    def test_zone4_offers_full_potential(self):
+        # SOC 95 (Zone 4), surplus 4500 >= gate → surplus + FULL potential.
+        v = _view(battery_soc=95, solar_w=5000, home_w=500,
+                  battery_assist_max_power_w=4500,
+                  battery_assist_min_surplus_w=1200)
+        # surplus = 4500 (>= auto_start, no battery-charge subtract);
+        # potential at >= auto_start = full 4500.
+        assert battery_assist_budget_w(v) == pytest.approx(9000)
+
+    def test_zone3_also_offers_full_ramped_potential(self):
+        # SOC 80 (Zone 3) — used to cap at the EV min; now offers the
+        # ramped potential (no min-gap cap).
+        v = _view(battery_soc=80, solar_w=5000, home_w=500,
+                  battery_assist_max_power_w=4500,
+                  battery_assist_min_surplus_w=1200)
+        # surplus 4500; potential at 80% = 4500*(0.5+0.5*0.5)=3375.
+        assert battery_assist_budget_w(v) == pytest.approx(7875)
+
+    def test_solar_gate_still_protects(self):
+        # Zone 4 but surplus below the gate → surplus only, no battery drain.
+        v = _view(battery_soc=95, solar_w=900, home_w=500,
+                  battery_assist_min_surplus_w=1200)
+        # surplus = 400 < 1200 gate.
+        assert battery_assist_budget_w(v) == pytest.approx(400)
+
+    def test_below_buffer_no_assist(self):
+        # SOC 65 (< buffer 70) → zone < 3 → surplus only (self-consumption
+        # floor protects the battery).
+        v = _view(battery_soc=65, solar_w=5000, home_w=500)
+        assert battery_assist_budget_w(v) == pytest.approx(4500)
 
 
 class TestMaxSocCeiling548:
@@ -241,13 +281,16 @@ class TestSolarOnlyMode:
 class TestMinPlusSolarMode:
     """Day path = same as solar_only. Night path = top-up to Min."""
 
-    def test_min_plus_solar_day_high_solar_is_solar_only(self):
+    def test_min_plus_solar_day_zone4_adds_full_battery_assist(self):
+        # #545 — Zone 4 (SOC 95) now offers surplus + FULL assist potential,
+        # not surplus only. surplus 7500 + potential 4500 = 12000W → 17A
+        # (was 10A pre-#545, surplus-only).
         d = decide(_view(
             mode="min_plus_solar", solar_w=8000, home_w=500,
             battery_charge_w=0, battery_soc=95,
         ))
         assert d.intent is ChargerIntent.CHARGE_AT_AMPS
-        assert d.commanded_amps == 10
+        assert d.commanded_amps == 17
 
     def test_min_plus_solar_night_below_target_charges_at_min(self):
         d = decide(_view(

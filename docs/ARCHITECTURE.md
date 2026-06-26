@@ -308,11 +308,13 @@ SOC  0%  ───────────────────────�
 
 **Zone 2 — Surplus Only** (SOC 30-70%): EV gets only pure solar surplus (power that would be exported). Battery is not discharged.
 
-**Zone 3 — Discharge Assist** (SOC 70-90%): Battery supplements solar for EV. Assist ramps from 50% at SOC 70% to 100% at SOC 90%.
+**Zone 3 — Discharge Assist** (SOC 70-90%): Battery supplements solar for EV. The assist **potential** ramps from 50% at SOC 70% to 100% at SOC 90%.
 
 **Zone 4 — Full Assist** (SOC >= 90%): Full battery assist (default 4500W). EV starts even without surplus.
 
-**Assist floor**: Battery assist is off-limits below `battery_buffer_soc` (default 70%) — the buffer is the single assist floor. (A separate `battery_assist_floor_soc` knob was redundant — assist potential is already 0 below the buffer — and has been removed.)
+**Assist offered (#545 — "max out till self-consumption"):** in the assist band (Zone 3/4, with real surplus past the Solar Gate) SEM offers the **full** potential — it raises the offered amps so the inverter discharges the battery **into the car down to the buffer SoC** (the self-consumption reserve floor), emptying a near-full battery into the car rather than leaving it idle. The potential ramp (above) self-tapers the discharge toward the buffer. This supersedes the older #501 cap that only topped the car up to the charger minimum. SEM commands no battery directly — it's pure offered amps; the inverter's self-consumption does the discharge.
+
+**Assist floor**: Battery assist is off-limits below `battery_buffer_soc` (default 70%) — the buffer is the single assist floor and the discharge-into-car stops here. (A separate `battery_assist_floor_soc` knob was redundant — assist potential is already 0 below the buffer — and has been removed.)
 
 ### SOC Zone Configuration
 
