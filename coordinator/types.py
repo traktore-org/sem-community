@@ -1053,8 +1053,7 @@ class SEMData:
             "forecast_today_kwh": self.forecast.forecast_today_kwh,
             "forecast_tomorrow_kwh": self.forecast.forecast_tomorrow_kwh,
             "forecast_remaining_today_kwh": self.forecast.forecast_remaining_today_kwh,
-            "forecast_power_now_w": self.forecast.forecast_power_now_w,
-            "forecast_power_next_hour_w": self.forecast.forecast_power_next_hour_w,
+            # (#544) forecast_power_now_w / forecast_power_next_hour_w removed — dead.
             "forecast_peak_power_today_w": self.forecast.forecast_peak_power_today_w,
             "forecast_peak_time_today": self.forecast.forecast_peak_time_today,
             "forecast_source": self.forecast.forecast_source,
@@ -1228,15 +1227,10 @@ class SEMData:
         # EV intelligence — access safely in case taper data is incomplete
         try:
             _ei = self.ev_intelligence
+            # (#544) only ev_taper_trend remains (DIAGNOSTIC_SENSOR); the rest
+            # of the fleet EV-intelligence sensors were dead and removed.
             data.update({
                 "ev_taper_trend": _ei.taper.trend,
-                "ev_taper_ratio": _ei.taper.taper_ratio_pct,
-                "ev_taper_minutes_to_full": _ei.taper.minutes_to_full,
-                "ev_estimated_soc": _ei.estimated_soc_pct,
-                "ev_last_full_charge": _ei.last_full_charge,
-                "ev_energy_since_full": _ei.energy_since_full_kwh,
-                "ev_predicted_daily_consumption": _ei.predicted_daily_ev_kwh,
-                "ev_battery_health": _ei.ev_battery_health_pct,
             })
         except Exception as e:
             _LOGGER.warning("EV intelligence to_dict failed: %s", e)

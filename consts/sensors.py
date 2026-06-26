@@ -96,16 +96,10 @@ SEM_SENSORS: Final = {
 
     # EV Intelligence Sensors
     "ev_taper_trend": "sensor.sem_ev_taper_trend",
-    "ev_taper_ratio": "sensor.sem_ev_taper_ratio",
-    "ev_taper_minutes_to_full": "sensor.sem_ev_taper_minutes_to_full",
-    "ev_estimated_soc": "sensor.sem_ev_estimated_soc",
-    "ev_last_full_charge": "sensor.sem_ev_last_full_charge",
-    "ev_energy_since_full": "sensor.sem_ev_energy_since_full",
-    "ev_predicted_daily_consumption": "sensor.sem_ev_predicted_daily_consumption",
-    # (#440) ev_nights_until_charge / ev_charge_needed / ev_charge_skip_reason
-    # removed — skip-decision wiring is gone, charge mode is the sole
-    # authority on whether to charge at night.
-    "ev_battery_health": "sensor.sem_ev_battery_health",
+    # (#544) dead fleet EV-intelligence sensors removed (ev_taper_ratio,
+    # ev_taper_minutes_to_full, ev_estimated_soc, ev_last_full_charge,
+    # ev_energy_since_full, ev_predicted_daily_consumption,
+    # ev_battery_health) — written but read by no card/decision.
 
     # Multi-charger Sensors (#112)
     "ev_charger_count": "sensor.sem_ev_charger_count",
