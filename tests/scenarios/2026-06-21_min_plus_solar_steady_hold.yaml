@@ -71,10 +71,11 @@ timeline:
 
 expect:
   # Steady inputs → the charger keeps charging the whole run; it must NEVER
-  # flip to idle (the "EV starts/stops" flicker the user feared).
+  # flip to idle (the "EV starts/stops" flicker the user feared). Steady
+  # deterministic inputs → a steady command (the no-flicker invariant).
   strategy_not_substring: "idle"
-  # Never commands above the surplus ceiling (surplus − margin) / (3φ × 230).
-  actuator_current_a:
-    when_strategy: ""
-    formula: "solar_power - home_consumption_power"
-    max_w_minus_margin: 0
+  # NOTE: the old "never command above the solar surplus" ceiling was
+  # REMOVED in #545 ("max out till self-consumption"). At SOC 99 (Zone 4)
+  # min_plus_solar now deliberately commands ABOVE the solar surplus,
+  # discharging the near-full battery into the car (up to the charger max),
+  # so a surplus-ceiling actuator check no longer applies here.

@@ -827,14 +827,16 @@ class FlowCalculator:
             )
 
         # ─── BATTERY_ASSIST ─────────────────────────────────────────
-        # Surplus + redirect + battery assist. #501: the assist is the
-        # capped SOC-based POTENTIAL, bounded to the gap between
-        # surplus+redirect and the charger minimum (``min_power_floor_w``
-        # — callers pass it for this strategy too). Assist makes the
-        # min current REACHABLE when solar falls just short; it never
-        # boosts past surplus (that would cycle the battery for no
-        # self-consumption gain). With ``min_power_floor_w`` unset the
-        # full potential applies (legacy callers/tests).
+        # Surplus + redirect + battery assist. #545 / "max out till
+        # self-consumption": the assist is the full SOC-based POTENTIAL
+        # (``_calculate_battery_assist_w`` → ramps with SOC, zero below the
+        # buffer), so the battery empties into the car down to the buffer
+        # (self-consumption floor) rather than only topping up to the EV
+        # minimum (the #501 cap, which left a full battery idle while the
+        # EV grid-charged — the #545 chicken-and-egg). Kept in lock-step
+        # with ``decide.battery_assist_budget_w`` so the two layers agree
+        # (#282). Solar-gated below. ``min_power_floor_w`` is no longer
+        # consumed here (it stays the MIN_PV floor).
         if strategy == EVBudgetStrategy.BATTERY_ASSIST:
             redirect = self._calculate_battery_redirect(
                 power.battery_charge_power, battery_soc,
@@ -851,9 +853,6 @@ class FlowCalculator:
             # session must never drain the home battery into the car.
             if raw_surplus < battery_assist_min_surplus_w:
                 assist = 0.0
-            if min_power_floor_w > 0:
-                gap_w = max(0.0, min_power_floor_w - (raw_surplus + redirect))
-                assist = min(assist, gap_w)
             net_w = raw_surplus + redirect + assist
             return EVBudget(
                 strategy=strategy,
