@@ -933,9 +933,6 @@
       },
       "diag_ed_config": {
         "name": "Energy Dashboard Config"
-      },
-      "diag_ev_assist_headroom": {
-        "name": "EV Assist Headroom"
       }
     },
     "binary_sensor": {

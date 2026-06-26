@@ -911,9 +911,6 @@
       },
       "heat_pump_registration_status": {
         "name": "Warmtepomp Registratie Status"
-      },
-      "diag_ev_assist_headroom": {
-        "name": "EV Assist Headroom"
       }
     },
     "binary_sensor": {
