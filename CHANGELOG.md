@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🧹 Dead sensors removed (#544)
 - 🗑️ **Removed 16 orphan sensors** — published, enabled-by-default, but read by no card, generator, or decision (pure entity clutter): the fleet EV-intelligence cluster (`ev_taper_ratio`, `ev_taper_minutes_to_full`, `ev_estimated_soc`, `ev_last_full_charge`, `ev_energy_since_full`, `ev_predicted_daily_consumption`, `ev_battery_health`), the forecast-accuracy cluster (`forecast_accuracy_today`, `forecast_accuracy_7d`, `forecast_deviation_kwh`, `forecast_corrected_tomorrow`, `forecast_power_now_w`, `forecast_power_next_hour_w`), and the predictor outputs (`predicted_consumption_next_hour`, `predicted_consumption_today_kwh`, `predicted_solar_next_hour`). Swept descriptions + population + metadata across `strings.json`/`icons.json`/15 translations. **Breaking** for any custom dashboard/automation that referenced these. Kept (verified live): `ev_taper_trend` (diagnostic), `forecast_correction_factor` & `forecast_history_days` (read by the dampening/correction sensor attributes). (by @guidoeberle in #544)
 
-### 🔒 Knob-reader contract (#543)
-- ✅ **Added a contract lint** — every user-facing NUMBER knob must have a config reader (following the entity→stored-key map), so a future dead stepper fails CI. Closes the "obsolete settings" class from the 2026-06-25 wiring census. (by @guidoeberle in #543)
+### 🔒 Census cleanup closed (#543)
+- ✅ With #544 done, the census cleanup (#543) is complete — the knob-reader contract lint (`tests/test_knob_wiring.py`) was already in place from the 2026-06-25 chunk and confirms all 26 NUMBER knobs are wired. The one remaining item (knobs read only at controller construction don't apply until reload) is a behavioral fix, split to #547.
 
 # [1.7.3-beta.59] — 26.06.2026
 
